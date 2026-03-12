@@ -108,16 +108,16 @@ class WeaviateVectorStore:
         payloads = payloads or [{}] * len(vectors)
         ids = ids or [str(uuid.uuid4()) for _ in vectors]
 
-        with collection.batch.dynamic() as batch:
-            for vid, vec, payload in zip(ids, vectors, payloads):
-                batch.add_object(
-                    properties={
-                        "record_id": vid,
-                        "payload_json": json.dumps(payload, default=str),
-                    },
-                    vector=vec,
-                    uuid=weaviate_uuid_from_str(vid),
-                )
+        # Use batch insertion with async context manager
+        for vid, vec, payload in zip(ids, vectors, payloads):
+            await collection.data.insert(
+                properties={
+                    "record_id": vid,
+                    "payload_json": json.dumps(payload, default=str),
+                },
+                vector=vec,
+                uuid=weaviate_uuid_from_str(vid),
+            )
 
     async def search(
         self,

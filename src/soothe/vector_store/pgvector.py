@@ -120,23 +120,23 @@ class PGVectorStore:
         pool = await self._ensure_pool()
 
         where_clause = ""
-        params: list[Any] = [str(vector), limit]
+        params: list[Any] = []
         if filters:
             conditions = []
             for k, v in filters.items():
-                import json
-
-                params.append(json.dumps(v))
+                # Pass raw value, not JSON-serialized
+                params.append(str(v))
                 conditions.append(f"payload->>'{k}' = %s")
             where_clause = "WHERE " + " AND ".join(conditions)
 
         async with pool.connection() as conn:
-            rows = await conn.execute(
-                f"SELECT id, payload, 1 - (embedding <=> %s) as score "
-                f"FROM {self._collection} {where_clause} "
-                f"ORDER BY embedding <=> %s LIMIT %s",
-                (*params[:1], *params[1:], str(vector)),
-            )
+            # Build the query with proper parameter ordering
+            sql = f"SELECT id, payload, 1 - (embedding <=> %s) as score FROM {self._collection} {where_clause} ORDER BY embedding <=> %s LIMIT %s"
+
+            # Parameters: vector for score, filter params, vector for ordering, limit
+            sql_params = [str(vector)] + params + [str(vector), limit]
+
+            rows = await conn.execute(sql, sql_params)
             results = await rows.fetchall()
             return [VectorRecord(id=r[0], payload=r[1] or {}, score=float(r[2])) for r in results]
 

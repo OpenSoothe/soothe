@@ -1,6 +1,6 @@
 # Makefile for soothe project
 
-.PHONY: sync sync-dev format lint test build clean help
+.PHONY: sync sync-dev format lint test test-unit test-integration test-coverage build clean help
 
 # Default target
 help:
@@ -9,7 +9,10 @@ help:
 	@echo "  make sync-dev   - Sync dev dependencies"
 	@echo "  make format     - Format code with ruff"
 	@echo "  make lint       - Lint code with ruff"
-	@echo "  make test       - Run tests with pytest"
+	@echo "  make test       - Run all tests with pytest"
+	@echo "  make test-unit  - Run unit tests only"
+	@echo "  make test-integration - Run integration tests (requires --run-integration)"
+	@echo "  make test-coverage - Run tests with coverage report"
 	@echo "  make build      - Build the package"
 	@echo "  make clean      - Clean build artifacts"
 
@@ -37,11 +40,31 @@ lint:
 	uv run ruff check src/ tests/
 	@echo "✓ Linting complete"
 
-# Run tests
+# Run all tests
 test:
-	@echo "Running tests..."
+	@echo "Running all tests..."
 	uv run pytest tests/ -v
 	@echo "✓ Tests complete"
+
+# Run unit tests only
+test-unit:
+	@echo "Running unit tests..."
+	uv run pytest tests/unit_tests/ -v
+	@echo "✓ Unit tests complete"
+
+# Run integration tests (requires external services)
+test-integration:
+	@echo "Running integration tests..."
+	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate)"
+	@echo "Use: pytest tests/integration_tests/ --run-integration"
+	uv run pytest tests/integration_tests/ --run-integration -v
+	@echo "✓ Integration tests complete"
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
+	@echo "✓ Coverage report generated in htmlcov/"
 
 # Build package
 build:
