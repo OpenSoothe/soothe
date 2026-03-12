@@ -1,7 +1,7 @@
 """Main CLI entry point using Typer."""
 
 import sys
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -17,11 +17,11 @@ app = typer.Typer(
 @app.command()
 def run(
     prompt: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Prompt to send to the agent. If not provided, interactive mode will be used."),
     ] = None,
     config: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
     ] = None,
 ) -> None:
@@ -30,11 +30,10 @@ def run(
         from soothe.agent import create_soothe_agent
         from soothe.config import SootheConfig
 
-        # Load config - either from file or environment/default
         if config:
             import json
 
-            with open(config, "r") as f:
+            with open(config) as f:
                 if config.endswith(".json"):
                     config_data = json.load(f)
                 elif config.endswith(".yaml") or config.endswith(".yml"):
@@ -55,19 +54,15 @@ def run(
         else:
             cfg = SootheConfig()
 
-        # Create the agent
         agent = create_soothe_agent(cfg)
 
         if prompt:
-            # Single-shot mode
             result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
-            # Extract and print the response
             for item in reversed(result.get("messages", [])):
                 if item.get("role") == "assistant":
                     typer.echo(item.get("content", ""))
                     break
         else:
-            # Interactive mode
             typer.echo("Soothe Agent Interactive Mode (type 'quit' or 'exit' to stop)")
             typer.echo("=" * 50)
             while True:
@@ -81,7 +76,6 @@ def run(
 
                     result = agent.invoke({"messages": [{"role": "user", "content": user_input}]})
 
-                    # Print assistant responses
                     for item in reversed(result.get("messages", [])):
                         if item.get("role") == "assistant":
                             content = item.get("content", "")
@@ -102,16 +96,14 @@ def list_subagents() -> None:
     try:
         cfg = SootheConfig()
 
-        # Get available subagent types from agent module
         from soothe.agent import _SUBAGENT_FACTORIES
 
         typer.echo("\nAvailable Subagents:")
         typer.echo("-" * 50)
 
-        # Show configured subagents
         for name, sub_cfg in cfg.subagents.items():
-            status = "✓ enabled" if sub_cfg.enabled else "✗ disabled"
-            model = sub_cfg.model or cfg.resolve_model_string()
+            status = "enabled" if sub_cfg.enabled else "disabled"
+            model = sub_cfg.model or cfg.resolve_model("default")
             typer.echo(f"  {name}: {status}")
             typer.echo(f"    Model: {model}")
 
@@ -138,36 +130,38 @@ def config(
         typer.echo("\nSoothe Configuration:")
         typer.echo("=" * 50)
 
-        # Core settings
-        typer.echo("\n[Core Settings]")
-        typer.echo(f"  model: {cfg.model or '(not set)'}")
-        typer.echo(f"  llm_provider: {cfg.llm_provider}")
-        typer.echo(f"  llm_chat_model: {cfg.llm_chat_model}")
-        typer.echo(f"  debug: {cfg.debug}")
+        typer.echo("\n[Model Router]")
+        typer.echo(f"  default: {cfg.router.default}")
+        for role in ("think", "fast", "image", "embedding", "web_search"):
+            value = getattr(cfg.router, role, None)
+            if value:
+                typer.echo(f"  {role}: {value}")
 
-        if show_sensitive:
-            typer.echo(f"  llm_api_key: {'***SET***' if cfg.llm_api_key else '(not set)'}")
-            if cfg.llm_base_url:
-                typer.echo(f"  llm_base_url: {cfg.llm_base_url}")
-        else:
-            typer.echo(f"  llm_api_key: {'[REDACTED]' if cfg.llm_api_key else '(not set)'}")
-
-        # Tools
-        typer.echo(f"\n[Tools]")
-        if cfg.tools:
-            for tool in cfg.tools:
-                typer.echo(f"  ✓ {tool}")
+        typer.echo("\n[Providers]")
+        if cfg.providers:
+            for p in cfg.providers:
+                key_display = "[REDACTED]" if p.api_key and not show_sensitive else (p.api_key or "(not set)")
+                typer.echo(
+                    f"  {p.name}: type={p.provider_type}, url={p.api_base_url or '(default)'}, key={key_display}"
+                )
         else:
             typer.echo("  (none)")
 
-        # Subagents
-        typer.echo(f"\n[Subagents]")
+        typer.echo(f"  debug: {cfg.debug}")
+
+        typer.echo("\n[Tools]")
+        if cfg.tools:
+            for tool in cfg.tools:
+                typer.echo(f"  - {tool}")
+        else:
+            typer.echo("  (none)")
+
+        typer.echo("\n[Subagents]")
         for name, sub_cfg in cfg.subagents.items():
             status = "enabled" if sub_cfg.enabled else "disabled"
             typer.echo(f"  {name}: {status}")
 
-        # MCP servers
-        typer.echo(f"\n[MCP Servers]")
+        typer.echo("\n[MCP Servers]")
         if cfg.mcp_servers:
             for i, server in enumerate(cfg.mcp_servers, 1):
                 if server.command:
@@ -177,24 +171,11 @@ def config(
         else:
             typer.echo("  (none)")
 
-        # Skills & Memory
-        typer.echo(f"\n[Skills]")
-        if cfg.skills:
-            for skill in cfg.skills:
-                typer.echo(f"  {skill}")
-        else:
-            typer.echo("  (none)")
-
-        typer.echo(f"\n[Memory]")
-        if cfg.memory:
-            for mem in cfg.memory:
-                typer.echo(f"  {mem}")
-        else:
-            typer.echo("  (none)")
-
-        # Workspace
-        typer.echo(f"\n[Workspace]")
-        typer.echo(f"  workspace_dir: {cfg.workspace_dir or '(ephemeral)'}")
+        typer.echo("\n[Protocols]")
+        typer.echo(f"  context_backend: {cfg.context_backend}")
+        typer.echo(f"  memory_backend: {cfg.memory_backend}")
+        typer.echo(f"  planner_routing: {cfg.planner_routing}")
+        typer.echo(f"  vector_store_provider: {cfg.vector_store_provider}")
 
         typer.echo("\n" + "=" * 50)
 

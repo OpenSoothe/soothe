@@ -1,22 +1,26 @@
 """Tests for SootheConfig."""
 
-from soothe.config import MCPServerConfig, SootheConfig, SubagentConfig
+from soothe.config import (
+    MCPServerConfig,
+    ModelProviderConfig,
+    ModelRouter,
+    SootheConfig,
+    SubagentConfig,
+    _resolve_env,
+)
 
 
 class TestSootheConfig:
     def test_defaults(self):
         cfg = SootheConfig()
-        assert cfg.model is None
-        assert cfg.llm_provider == "openai"
-        assert cfg.llm_chat_model == "qwen3.5-flash"
-        assert cfg.llm_api_key is None
-        assert cfg.llm_base_url is None
-        assert cfg.llm_vision_model is None
         assert cfg.debug is False
         assert cfg.tools == []
         assert cfg.mcp_servers == []
         assert cfg.skills == []
         assert cfg.memory == []
+        assert cfg.providers == []
+        assert cfg.router.default == "openai:gpt-4o-mini"
+        assert cfg.embedding_dims == 1536
 
     def test_default_subagents(self):
         cfg = SootheConfig()
@@ -62,32 +66,96 @@ class TestSootheConfig:
         assert len(cfg.memory) == 1
 
 
-class TestResolveModelString:
-    def test_explicit_model_takes_precedence(self):
-        cfg = SootheConfig(model="anthropic:claude-sonnet-4-6")
-        assert cfg.resolve_model_string() == "anthropic:claude-sonnet-4-6"
+class TestModelRouter:
+    def test_resolve_default(self):
+        cfg = SootheConfig(router=ModelRouter(default="dashscope:qwen3.5-flash"))
+        assert cfg.resolve_model("default") == "dashscope:qwen3.5-flash"
 
-    def test_builds_from_provider_and_chat_model(self):
-        cfg = SootheConfig(llm_provider="openai", llm_chat_model="gpt-4o")
-        assert cfg.resolve_model_string() == "openai:gpt-4o"
+    def test_resolve_role_fallback(self):
+        cfg = SootheConfig(router=ModelRouter(default="dashscope:qwen3.5-flash"))
+        assert cfg.resolve_model("think") == "dashscope:qwen3.5-flash"
 
-    def test_default_resolution(self):
+    def test_resolve_explicit_role(self):
+        cfg = SootheConfig(
+            router=ModelRouter(
+                default="dashscope:qwen3.5-flash",
+                think="idealab:glm-4.7",
+            )
+        )
+        assert cfg.resolve_model("think") == "idealab:glm-4.7"
+        assert cfg.resolve_model("default") == "dashscope:qwen3.5-flash"
+
+    def test_resolve_all_roles(self):
+        cfg = SootheConfig(
+            router=ModelRouter(
+                default="a:b",
+                think="c:d",
+                fast="e:f",
+                image="g:h",
+                embedding="i:j",
+                web_search="k:l",
+            )
+        )
+        assert cfg.resolve_model("default") == "a:b"
+        assert cfg.resolve_model("think") == "c:d"
+        assert cfg.resolve_model("fast") == "e:f"
+        assert cfg.resolve_model("image") == "g:h"
+        assert cfg.resolve_model("embedding") == "i:j"
+        assert cfg.resolve_model("web_search") == "k:l"
+
+    def test_unknown_role_fallback(self):
+        cfg = SootheConfig(router=ModelRouter(default="test:model"))
+        assert cfg.resolve_model("nonexistent") == "test:model"
+
+
+class TestModelProvider:
+    def test_find_provider(self):
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="dashscope",
+                    api_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    api_key="test-key",
+                    provider_type="openai",
+                ),
+            ]
+        )
+        p = cfg._find_provider("dashscope")
+        assert p is not None
+        assert p.name == "dashscope"
+        assert p.api_base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+    def test_find_provider_missing(self):
         cfg = SootheConfig()
-        assert cfg.resolve_model_string() == "openai:qwen3.5-flash"
+        assert cfg._find_provider("nonexistent") is None
 
-    def test_custom_provider(self):
-        cfg = SootheConfig(llm_provider="google-genai", llm_chat_model="gemini-2.0-flash")
-        assert cfg.resolve_model_string() == "google-genai:gemini-2.0-flash"
+
+class TestResolveEnv:
+    def test_env_var_substitution(self, monkeypatch):
+        monkeypatch.setenv("MY_KEY", "resolved-value")
+        assert _resolve_env("${MY_KEY}") == "resolved-value"
+
+    def test_passthrough_literal(self):
+        assert _resolve_env("literal-key") == "literal-key"
+
+    def test_missing_env_returns_original(self, monkeypatch):
+        monkeypatch.delenv("MISSING_KEY", raising=False)
+        assert _resolve_env("${MISSING_KEY}") == "${MISSING_KEY}"
 
 
 class TestPropagateEnv:
-    def test_propagate_openai_env(self, monkeypatch):
+    def test_propagate_openai_provider(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         cfg = SootheConfig(
-            llm_provider="openai",
-            llm_api_key="test-key",
-            llm_base_url="https://test.example.com",
+            providers=[
+                ModelProviderConfig(
+                    name="myopenai",
+                    api_base_url="https://test.example.com",
+                    api_key="test-key",
+                    provider_type="openai",
+                ),
+            ]
         )
         cfg.propagate_env()
         import os
@@ -98,10 +166,53 @@ class TestPropagateEnv:
     def test_no_propagate_non_openai(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         cfg = SootheConfig(
-            llm_provider="anthropic",
-            llm_api_key="test-key",
+            providers=[
+                ModelProviderConfig(
+                    name="anthropic",
+                    api_key="test-key",
+                    provider_type="anthropic",
+                ),
+            ]
         )
         cfg.propagate_env()
         import os
 
         assert "OPENAI_API_KEY" not in os.environ
+
+    def test_no_providers_no_propagate(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        cfg = SootheConfig()
+        cfg.propagate_env()
+        import os
+
+        assert "OPENAI_API_KEY" not in os.environ
+
+
+class TestProtocolConfig:
+    def test_context_backend_options(self):
+        for backend in ("keyword", "vector", "none"):
+            cfg = SootheConfig(context_backend=backend)
+            assert cfg.context_backend == backend
+
+    def test_memory_backend_options(self):
+        for backend in ("store", "vector", "none"):
+            cfg = SootheConfig(memory_backend=backend)
+            assert cfg.memory_backend == backend
+
+    def test_persist_backend_options(self):
+        cfg = SootheConfig(
+            context_persist_backend="rocksdb",
+            memory_persist_backend="rocksdb",
+        )
+        assert cfg.context_persist_backend == "rocksdb"
+        assert cfg.memory_persist_backend == "rocksdb"
+
+    def test_vector_store_config(self):
+        cfg = SootheConfig(
+            vector_store_provider="pgvector",
+            vector_store_collection="my_collection",
+            vector_store_config={"dsn": "postgresql://localhost/test"},
+        )
+        assert cfg.vector_store_provider == "pgvector"
+        assert cfg.vector_store_collection == "my_collection"
+        assert cfg.vector_store_config["dsn"] == "postgresql://localhost/test"

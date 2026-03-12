@@ -16,3 +16,6 @@
 [submodule "thirdparty/browser-use"]
 	path = thirdparty/browser-use
 	url = https://github.com/browser-use/browser-use.git
+[submodule "thirdparty/memU"]
+	path = thirdparty/memU
+	url = https://github.com/NevaMind-AI/memU.git

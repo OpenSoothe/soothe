@@ -52,8 +52,18 @@ media = [
     "pillow>=10.0.0",
     "openai>=1.0.0",
 ]
+rocksdb = [
+    "rocksdict>=0.3",
+]
+pgvector = [
+    "psycopg[pool]>=3.1",
+    "pgvector>=0.3",
+]
+weaviate = [
+    "weaviate-client>=4.0",
+]
 all = [
-    "soothe[research,browser,claude,serper,jina,media]",
+    "soothe[research,browser,claude,serper,jina,media,rocksdb,pgvector,weaviate]",
 ]
 
 [dependency-groups]
@@ -105,7 +115,19 @@ convention = "google"
 ignore-var-parameters = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN001", "ANN201", "ANN202", "ARG002", "D1", "PLR2004", "PT018", "S101", "S311"]
+"tests/**" = ["ANN001", "ANN201", "ANN202", "ARG002", "D1", "PLC0415", "PLR2004", "PT018", "S101", "S311"]
+"src/soothe/protocols/**" = ["TC003", "ANN401"]
+"src/soothe/planning/**" = ["ANN401", "BLE001", "D107", "TRY300"]
+"src/soothe/policy/**" = ["D107", "PLR0911"]
+"src/soothe/durability/**" = ["ANN401"]
+"src/soothe/remote/**" = ["ANN401", "ARG002", "PLC0415", "TC003"]
+"src/soothe/config.py" = ["ANN401", "PLC0415", "TC002"]
+"src/soothe/agent.py" = ["ARG001", "PLC0415", "SIM108", "TC001", "TC002", "TC003"]
+"src/soothe/vector_store/**" = ["ANN401", "ARG002", "B905", "BLE001", "PLC0415", "S608", "TC001"]
+"src/soothe/persistence/**" = ["ANN401", "PLC0415", "SIM105"]
+"src/soothe/context/vector_context.py" = ["BLE001"]
+"src/soothe/memory_store/vector_memory.py" = ["BLE001"]
+"src/soothe/cli/**" = ["ANN", "BLE001", "C901", "E501", "FBT002", "PIE810", "PLC0415", "PLR0912", "PLR0915", "PTH123"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

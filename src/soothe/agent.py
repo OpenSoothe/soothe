@@ -18,6 +18,10 @@ from langgraph.store.base import BaseStore
 from langgraph.types import Checkpointer
 
 from soothe.config import SootheConfig
+from soothe.protocols.context import ContextProtocol
+from soothe.protocols.memory import MemoryProtocol
+from soothe.protocols.planner import PlannerProtocol
+from soothe.protocols.policy import PolicyProtocol
 from soothe.subagents.browser import create_browser_subagent
 from soothe.subagents.claude import create_claude_subagent
 from soothe.subagents.planner import create_planner_subagent
@@ -96,10 +100,129 @@ def _resolve_subagents(
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
-        model_override = sub_cfg.model or default_model or config.resolve_model_string()
+        model_override = sub_cfg.model or default_model or config.resolve_model("default")
         spec = factory(model=model_override, **sub_cfg.config)
         subagents.append(spec)
     return subagents
+
+
+def _resolve_context(config: SootheConfig) -> ContextProtocol | None:
+    """Instantiate the ContextProtocol implementation from config.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        A ContextProtocol instance, or None if disabled.
+    """
+    if config.context_backend == "none":
+        return None
+
+    if config.context_backend == "vector":
+        from soothe.context.vector_context import VectorContext
+        from soothe.vector_store import create_vector_store
+
+        if config.vector_store_provider == "none":
+            logger.warning("vector context requires vector_store_provider; falling back to keyword")
+        else:
+            vs = create_vector_store(
+                config.vector_store_provider,
+                f"{config.vector_store_collection}_context",
+                config.vector_store_config,
+            )
+            embeddings = config.create_embedding_model()
+            return VectorContext(vector_store=vs, embeddings=embeddings)
+
+    from soothe.context.keyword import KeywordContext
+
+    return KeywordContext(
+        persist_dir=config.context_persist_dir,
+        persist_backend=config.context_persist_backend,
+    )
+
+
+def _resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
+    """Instantiate the MemoryProtocol implementation from config.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        A MemoryProtocol instance, or None if disabled.
+    """
+    if config.memory_backend == "none":
+        return None
+
+    if config.memory_backend == "vector":
+        from soothe.memory_store.vector_memory import VectorMemory
+        from soothe.vector_store import create_vector_store
+
+        if config.vector_store_provider == "none":
+            logger.warning("vector memory requires vector_store_provider; falling back to store")
+        else:
+            vs = create_vector_store(
+                config.vector_store_provider,
+                f"{config.vector_store_collection}_memory",
+                config.vector_store_config,
+            )
+            embeddings = config.create_embedding_model()
+            return VectorMemory(vector_store=vs, embeddings=embeddings)
+
+    from soothe.memory_store.store_backed import StoreBackedMemory
+
+    return StoreBackedMemory(
+        persist_path=config.memory_persist_path,
+        persist_backend=config.memory_persist_backend,
+    )
+
+
+def _resolve_planner(
+    config: SootheConfig,
+    model: BaseChatModel | None,
+) -> PlannerProtocol | None:
+    """Instantiate the PlannerProtocol implementation from config.
+
+    Args:
+        config: Soothe configuration.
+        model: The resolved chat model.
+
+    Returns:
+        A PlannerProtocol instance, or None if disabled.
+    """
+    if config.planner_routing == "none":
+        return None
+
+    planner_model = model
+    if planner_model is None:
+        try:
+            planner_model = config.create_chat_model("think")
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to create think model for planner")
+            return None
+
+    if config.planner_routing in ("always_direct", "auto"):
+        from soothe.planning.direct import DirectPlanner
+
+        return DirectPlanner(model=planner_model)
+
+    logger.warning("Planner routing '%s' not yet implemented, using direct", config.planner_routing)
+    from soothe.planning.direct import DirectPlanner
+
+    return DirectPlanner(model=planner_model)
+
+
+def _resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
+    """Instantiate the PolicyProtocol implementation from config.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        A PolicyProtocol instance.
+    """
+    from soothe.policy.config_driven import ConfigDrivenPolicy
+
+    return ConfigDrivenPolicy()
 
 
 def create_soothe_agent(
@@ -113,15 +236,19 @@ def create_soothe_agent(
     store: BaseStore | None = None,
     backend: BackendProtocol | BackendFactory | None = None,
     interrupt_on: dict[str, bool | InterruptOnConfig] | None = None,
+    context: ContextProtocol | None = None,
+    memory_store: MemoryProtocol | None = None,
+    planner: PlannerProtocol | None = None,
+    policy: PolicyProtocol | None = None,
 ) -> CompiledStateGraph:
     """Create a Soothe agent.
 
-    Thin wrapper around `create_deep_agent()` that wires up Soothe-specific
-    subagents, tools, MCP servers, and skills from `SootheConfig`.
+    Wraps ``create_deep_agent()`` and wires up Soothe-specific protocols,
+    subagents, tools, MCP servers, and skills from ``SootheConfig``.
 
     Args:
-        config: Soothe configuration. If `None`, uses defaults.
-        model: Override the model from config. Passed to `create_deep_agent`.
+        config: Soothe configuration. If ``None``, uses defaults.
+        model: Override the model from config. Passed to ``create_deep_agent``.
         tools: Additional tools beyond what config specifies.
         subagents: Additional subagents beyond what config specifies.
         middleware: Additional middleware appended after the standard stack.
@@ -129,6 +256,10 @@ def create_soothe_agent(
         store: LangGraph store for persistent storage.
         backend: deepagents backend for file/execution operations.
         interrupt_on: Tool interrupt configuration for human-in-the-loop.
+        context: Override ContextProtocol implementation. None uses config.
+        memory_store: Override MemoryProtocol implementation. None uses config.
+        planner: Override PlannerProtocol implementation. None uses config.
+        policy: Override PolicyProtocol implementation. None uses config.
 
     Returns:
         Compiled LangGraph agent.
@@ -142,14 +273,28 @@ def create_soothe_agent(
     if model is not None:
         resolved_model = model
     else:
-        resolved_model = config.create_chat_model()
+        resolved_model = config.create_chat_model("default")
+
+    default_model_instance = resolved_model if isinstance(resolved_model, BaseChatModel) else None
+    resolved_context = context or _resolve_context(config)
+    resolved_memory = memory_store or _resolve_memory(config)
+    resolved_planner = planner or _resolve_planner(config, default_model_instance)
+    resolved_policy = policy or _resolve_policy(config)
+
+    if resolved_context:
+        logger.info("Context: %s", type(resolved_context).__name__)
+    if resolved_memory:
+        logger.info("Memory: %s", type(resolved_memory).__name__)
+    if resolved_planner:
+        logger.info("Planner: %s", type(resolved_planner).__name__)
+    if resolved_policy:
+        logger.info("Policy: %s", type(resolved_policy).__name__)
 
     config_tools = _resolve_tools(config.tools)
     all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools]
     if tools:
         all_tools.extend(tools)
 
-    default_model_instance = resolved_model if isinstance(resolved_model, BaseChatModel) else None
     config_subagents = _resolve_subagents(config, default_model=default_model_instance)
     all_subagents: list[SubAgent | CompiledSubAgent] = [*config_subagents]
     if subagents:
@@ -164,7 +309,7 @@ def create_soothe_agent(
             virtual_mode=True,
         )
 
-    return create_deep_agent(
+    agent = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
         system_prompt=config.system_prompt,
@@ -178,3 +323,11 @@ def create_soothe_agent(
         interrupt_on=interrupt_on,
         debug=config.debug,
     )
+
+    agent.soothe_context = resolved_context  # type: ignore[attr-defined]
+    agent.soothe_memory = resolved_memory  # type: ignore[attr-defined]
+    agent.soothe_planner = resolved_planner  # type: ignore[attr-defined]
+    agent.soothe_policy = resolved_policy  # type: ignore[attr-defined]
+    agent.soothe_config = config  # type: ignore[attr-defined]
+
+    return agent
