@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage
 
 from soothe import SootheConfig, create_soothe_agent
 
-from _streaming import run_with_streaming
+from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
 
