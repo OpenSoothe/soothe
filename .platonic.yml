@@ -1,0 +1,20 @@
+# Project Configuration for Platonic Coding System
+
+project:
+  name: "soothe"
+  description: "A soothing application"
+  language: "Python"
+  framework: "LangChain/LangGraph/DeepAgents"
+
+specs:
+  directory: "docs/specs"
+  impl_directory: "docs/impl"
+  drafts_directory: "docs/drafts"
+  
+  # RFC numbering starts at 0001
+  # RFC-0001 is always Conceptual Design
+  # RFC-0002+ are Architecture Design or Impl Interface Design
+  
+recovery:
+  enabled: false
+  max_rfc_count: 5
