@@ -33,21 +33,14 @@ async def main() -> None:
         print("Please set it in your .env file or export it directly.")
         sys.exit(1)
 
-    config = SootheConfig(
-        workspace_dir=PROJECT_ROOT,
-        subagents={
-            "planner": {"enabled": False},
-            "scout": {"enabled": False},
-            "research": {"enabled": False},
-            "browser": {"enabled": False},
-            "claude": {
-                "enabled": True,
-                "config": {
-                    "cwd": PROJECT_ROOT,
-                },
-            },
-        },
-    )
+    config = SootheConfig.from_yaml_file("config.dev.yml")
+    config.workspace_dir = PROJECT_ROOT
+    config.subagents["planner"].enabled = False
+    config.subagents["scout"].enabled = False
+    config.subagents["research"].enabled = False
+    config.subagents["browser"].enabled = False
+    config.subagents["claude"].enabled = True
+    config.subagents["claude"].config = {"cwd": PROJECT_ROOT}
 
     agent = create_soothe_agent(config=config)
 

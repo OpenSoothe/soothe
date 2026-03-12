@@ -1,0 +1,184 @@
+# =============================================================================
+# Soothe Configuration Example
+# =============================================================================
+# Usage: soothe run --config config/config.yml
+#
+# This file mirrors every field in SootheConfig. All values shown are defaults
+# unless noted otherwise. Remove or comment out sections you don't need.
+
+# =============================================================================
+# Model Providers
+# =============================================================================
+# Define LLM API providers. The api_key field supports ${ENV_VAR} syntax
+# for referencing environment variables without hardcoding secrets.
+# At minimum, configure one provider with its API key.
+
+providers:
+  - name: openai
+    provider_type: openai
+    api_key: "${OPENAI_API_KEY}"
+    # api_base_url: https://api.openai.com/v1    # uncomment for custom endpoint
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
+
+  # Example: OpenAI-compatible provider (e.g. DashScope, OpenRouter, vLLM)
+  # - name: dashscope
+  #   provider_type: openai
+  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key: "${DASHSCOPE_API_KEY}"
+  #   models:
+  #     - qwen-max
+
+  # Example: Ollama (local models, requires: pip install soothe[ollama])
+  # - name: ollama
+  #   provider_type: ollama
+  #   api_base_url: http://localhost:11434
+  #   models:
+  #     - llama3.2
+  #     - qwen3:8b
+  #     - deepseek-r1:14b
+  #     - nomic-embed-text:latest
+
+  # Example: Anthropic provider
+  # - name: anthropic
+  #   provider_type: anthropic
+  #   api_key: "${ANTHROPIC_API_KEY}"
+  #   models:
+  #     - claude-sonnet-4-20250514
+
+# =============================================================================
+# Model Router
+# =============================================================================
+# Maps purpose-based roles to "provider_name:model_name" strings.
+# Unset roles fall back to "default".
+
+router:
+  default: "openai:gpt-4o-mini"
+  # think: "openai:o3-mini"                      # stronger model for planning
+  # fast: "openai:gpt-4o-mini"                   # cheap model for classification
+  # image: "openai:gpt-4o"                       # vision-capable model
+  # embedding: "openai:text-embedding-3-small"    # embedding model
+  # web_search: "openai:gpt-4o-mini"             # model for web search tasks
+
+# =============================================================================
+# Embedding
+# =============================================================================
+
+embedding_dims: 1536                             # must match the embedding model output (e.g., 1536 for OpenAI, 768 for Ollama nomic-embed-text)
+
+# =============================================================================
+# Agent Behaviour
+# =============================================================================
+
+# system_prompt: "You are a helpful assistant."  # prepended to the agent prompt
+# workspace_dir: "."                             # root for filesystem operations
+debug: false
+
+# =============================================================================
+# Subagents
+# =============================================================================
+# Set enabled: false to disable a subagent. Each can override the model.
+
+subagents:
+  research:
+    enabled: true
+    # model: "openai:gpt-4o-mini"                # override default model
+  planner:
+    enabled: true
+  scout:
+    enabled: true
+  browser:
+    enabled: false                               # requires: pip install soothe[browser]
+    # config:
+    #   disable_extensions: true
+    #   disable_cloud: true
+    #   disable_telemetry: true
+  claude:
+    enabled: false                               # requires: pip install soothe[claude]
+    # model: "anthropic:claude-sonnet-4-20250514"
+
+  # Example: remote subagent via A2A / ACP / LangGraph
+  # remote_analyst:
+  #   enabled: true
+  #   transport: a2a                              # local | acp | a2a | langgraph
+  #   url: "http://analyst-agent:8000"
+
+# =============================================================================
+# Tools
+# =============================================================================
+# Tool group names to enable. Each may require extra dependencies or API keys.
+# Tool groups: serper, jina, image, audio, video, tabular
+
+tools: []
+  # - serper                                     # requires: SERPER_API_KEY
+  # - jina                                       # requires: JINA_API_KEY
+  # - image                                      # requires: openai SDK
+  # - audio
+  # - video
+  # - tabular
+
+# =============================================================================
+# MCP Servers
+# =============================================================================
+# Claude Desktop .mcp.json compatible format.
+
+mcp_servers: []
+  # Stdio example:
+  # - command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  #   transport: stdio
+
+  # HTTP/SSE example:
+  # - url: http://localhost:3000/mcp
+  #   transport: sse
+
+# =============================================================================
+# Skills and Memory (deepagents middleware)
+# =============================================================================
+
+skills: []                                       # SKILL.md file paths
+memory: []                                       # AGENTS.md file paths
+
+# =============================================================================
+# Protocol Configuration (RFC-0002)
+# =============================================================================
+
+# --- Context Protocol ---
+context_backend: keyword                         # keyword | vector | none
+# context_persist_dir: ~/.soothe/context         # directory for persistence
+# context_persist_backend: json                   # json | rocksdb
+
+# --- Memory Protocol ---
+memory_backend: none                             # store | vector | none
+# memory_persist_path: ~/.soothe/memory.json
+# memory_persist_backend: json                    # json | rocksdb
+
+# --- Planner Protocol ---
+planner_routing: none                            # auto | always_direct | always_subagent | none
+
+# --- Policy Protocol ---
+policy_profile: standard                         # named policy profile
+
+# --- Concurrency ---
+concurrency:
+  max_parallel_subagents: 1
+  max_parallel_tools: 3
+  max_parallel_steps: 1
+  step_parallelism: dependency                   # sequential | dependency | max
+
+# =============================================================================
+# Vector Store (for vector-backed context/memory)
+# =============================================================================
+
+vector_store_provider: none                      # pgvector | weaviate | none
+vector_store_collection: soothe_default
+
+# PGVector example:
+# vector_store_config:
+#   dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
+
+# Weaviate example:
+# vector_store_config:
+#   url: "http://localhost:8080"

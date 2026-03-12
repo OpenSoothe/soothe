@@ -15,6 +15,7 @@ This document provides an index of all RFCs in this project.
 | RFC | Title | Status | Dependencies |
 |-----|-------|--------|--------------|
 | [RFC-0002](./RFC-0002.md) | Core Modules Architecture Design | Draft | RFC-0001 |
+| [RFC-0003](./RFC-0003.md) | CLI TUI Architecture Design | Draft | RFC-0001, RFC-0002 |
 
 ### Implementation Interface Design
 

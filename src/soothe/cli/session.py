@@ -1,0 +1,225 @@
+"""Session logging and input history for the Soothe TUI."""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Session logger
+# ---------------------------------------------------------------------------
+
+
+class SessionLogger:
+    """Append-only JSONL writer for stream and conversation records.
+
+    Captures structured event records for offline replay and audit, plus
+    user/assistant conversation turns for lightweight in-terminal review.
+
+    Args:
+        session_dir: Directory for session logs.
+        thread_id: Thread ID for the log file name.
+    """
+
+    def __init__(  # noqa: D107
+        self,
+        session_dir: str = "~/.soothe/sessions",
+        thread_id: str | None = None,
+    ) -> None:
+        self._session_dir = Path(session_dir).expanduser()
+        self._thread_id = thread_id or "default"
+        self._initialized = False
+
+    @property
+    def session_dir(self) -> Path:
+        """Root directory for session JSONL files."""
+        return self._session_dir
+
+    @property
+    def log_path(self) -> Path:
+        """Path to the current thread's JSONL file."""
+        return self._session_dir / f"{self._thread_id}.jsonl"
+
+    def set_thread_id(self, thread_id: str) -> None:
+        """Update the thread ID (and thus the log file)."""
+        self._thread_id = thread_id
+        self._initialized = False
+
+    def log(
+        self,
+        namespace: tuple[str, ...],
+        mode: str,
+        data: Any,
+    ) -> None:
+        """Log a stream chunk if it is a custom event.
+
+        Args:
+            namespace: Stream namespace (empty tuple for main agent).
+            mode: Stream mode (``messages``, ``updates``, ``custom``).
+            data: Stream data payload.
+        """
+        if mode != "custom" or not isinstance(data, dict):
+            return
+
+        self._write_record(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "kind": "event",
+                "namespace": list(namespace),
+                "data": data,
+            }
+        )
+
+    def log_user_input(self, text: str) -> None:
+        """Log a user turn for later session review.
+
+        Args:
+            text: User-entered prompt text.
+        """
+        cleaned = text.strip()
+        if not cleaned:
+            return
+        self._write_record(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "kind": "conversation",
+                "role": "user",
+                "text": cleaned,
+            }
+        )
+
+    def log_assistant_response(self, text: str) -> None:
+        """Log an assistant turn for later session review.
+
+        Args:
+            text: Final assistant response text.
+        """
+        cleaned = text.strip()
+        if not cleaned:
+            return
+        self._write_record(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "kind": "conversation",
+                "role": "assistant",
+                "text": cleaned,
+            }
+        )
+
+    def read_recent_records(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Read the most recent session records from disk.
+
+        Args:
+            limit: Maximum number of records to return.
+
+        Returns:
+            Parsed JSONL records in chronological order.
+        """
+        if limit <= 0 or not self.log_path.exists():
+            return []
+
+        try:
+            with open(self.log_path, encoding="utf-8") as fh:
+                lines = fh.readlines()[-limit:]
+        except OSError:
+            logger.debug("SessionLogger read failed", exc_info=True)
+            return []
+
+        records: list[dict[str, Any]] = []
+        for line in lines:
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                logger.debug("Skipping invalid session log line", exc_info=True)
+                continue
+            if isinstance(parsed, dict):
+                records.append(parsed)
+        return records
+
+    def recent_conversation(self, limit: int = 6) -> list[dict[str, Any]]:
+        """Return recent conversation turns from the current session log."""
+        records = self.read_recent_records(limit=max(limit * 4, limit))
+        items = [record for record in records if record.get("kind") == "conversation"]
+        return items[-limit:]
+
+    def recent_actions(self, limit: int = 12) -> list[dict[str, Any]]:
+        """Return recent action/event records from the current session log."""
+        records = self.read_recent_records(limit=max(limit * 4, limit))
+        items = [record for record in records if record.get("kind") == "event"]
+        return items[-limit:]
+
+    def _write_record(self, record: dict[str, Any]) -> None:
+        """Append a single JSONL record to the session log."""
+        try:
+            self._ensure_dir()
+            with open(self.log_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, default=str) + "\n")
+        except OSError:
+            logger.debug("SessionLogger write failed", exc_info=True)
+
+    def _ensure_dir(self) -> None:
+        if not self._initialized:
+            try:
+                self._session_dir.mkdir(parents=True, exist_ok=True)
+                self._initialized = True
+            except OSError:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Input history
+# ---------------------------------------------------------------------------
+
+
+class InputHistory:
+    """Persistent command history backed by a JSON file.
+
+    Args:
+        history_file: Path to the history JSON file.
+        max_size: Maximum number of history entries to retain.
+    """
+
+    def __init__(  # noqa: D107
+        self,
+        history_file: str = "~/.soothe/history.json",
+        max_size: int = 1000,
+    ) -> None:
+        self.history_file = Path(history_file).expanduser()
+        self.max_size = max_size
+        self.history: list[str] = []
+        self._load()
+
+    def _load(self) -> None:
+        if self.history_file.exists():
+            try:
+                with open(self.history_file) as f:
+                    self.history = json.load(f)
+            except Exception:
+                self.history = []
+
+    def _save(self) -> None:
+        try:
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_file, "w") as f:
+                json.dump(self.history[-self.max_size :], f, indent=2)
+        except Exception:
+            logger.debug("InputHistory save failed", exc_info=True)
+
+    def add(self, line: str) -> None:
+        """Add a line to history (deduplicates consecutive entries).
+
+        Args:
+            line: The input line to record.
+        """
+        stripped = line.strip()
+        if stripped and (not self.history or self.history[-1] != stripped):
+            self.history.append(stripped)
+            if len(self.history) > self.max_size:
+                self.history = self.history[-self.max_size :]
+            self._save()

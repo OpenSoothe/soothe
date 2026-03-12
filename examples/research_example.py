@@ -22,16 +22,13 @@ PROJECT_ROOT = str(Path(__file__).parent.parent.resolve())
 
 
 async def main() -> None:
-    config = SootheConfig(
-        workspace_dir=PROJECT_ROOT,
-        subagents={
-            "planner": {"enabled": False},
-            "scout": {"enabled": False},
-            "research": {"enabled": True},
-            "browser": {"enabled": False},
-            "claude": {"enabled": False},
-        },
-    )
+    config = SootheConfig.from_yaml_file("config.dev.yml")
+    config.workspace_dir = PROJECT_ROOT
+    config.subagents["planner"].enabled = False
+    config.subagents["scout"].enabled = False
+    config.subagents["research"].enabled = True
+    config.subagents["browser"].enabled = False
+    config.subagents["claude"].enabled = False
 
     agent = create_soothe_agent(config=config)
 

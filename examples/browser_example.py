@@ -37,15 +37,12 @@ load_dotenv()
 
 
 async def main() -> None:
-    config = SootheConfig(
-        subagents={
-            "planner": {"enabled": False},
-            "scout": {"enabled": False},
-            "research": {"enabled": False},
-            "browser": {"enabled": True},
-            "claude": {"enabled": False},
-        },
-    )
+    config = SootheConfig.from_yaml_file("config.dev.yml")
+    config.subagents["planner"].enabled = False
+    config.subagents["scout"].enabled = False
+    config.subagents["research"].enabled = False
+    config.subagents["browser"].enabled = True
+    config.subagents["claude"].enabled = False
 
     agent = create_soothe_agent(config=config)
 

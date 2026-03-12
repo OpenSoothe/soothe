@@ -97,6 +97,22 @@ class SootheConfig(BaseSettings):
 
     model_config = {"env_prefix": "SOOTHE_"}
 
+    @classmethod
+    def from_yaml_file(cls, path: str) -> "SootheConfig":
+        """Load configuration from a YAML file.
+
+        Args:
+            path: Path to the YAML configuration file.
+
+        Returns:
+            A configured SootheConfig instance.
+        """
+        import yaml
+
+        with open(path) as f:
+            config_data = yaml.safe_load(f) or {}
+        return cls(**config_data)
+
     # --- Multi-provider model config ---
 
     providers: list[ModelProviderConfig] = Field(default_factory=list)
@@ -232,7 +248,8 @@ class SootheConfig(BaseSettings):
             provider_type = provider.provider_type
             if provider.api_base_url:
                 kwargs["base_url"] = provider.api_base_url
-                kwargs["use_responses_api"] = False
+                if provider_type == "openai":
+                    kwargs["use_responses_api"] = False
             if provider.api_key:
                 kwargs["api_key"] = _resolve_env(provider.api_key)
         return provider_type, kwargs
@@ -283,8 +300,8 @@ class SootheConfig(BaseSettings):
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.
 
-        Examines providers for an ``openai``-typed provider and sets
-        ``OPENAI_API_KEY`` / ``OPENAI_BASE_URL`` if not already present.
+        Examines providers and sets conventional env vars
+        (``OPENAI_API_KEY``, ``OLLAMA_HOST``, etc.) if not already present.
         """
         for provider in self.providers:
             if provider.provider_type == "openai" and provider.api_key:
@@ -292,4 +309,5 @@ class SootheConfig(BaseSettings):
                 os.environ.setdefault("OPENAI_API_KEY", resolved_key)
                 if provider.api_base_url:
                     os.environ.setdefault("OPENAI_BASE_URL", provider.api_base_url)
-                break
+            elif provider.provider_type == "ollama" and provider.api_base_url:
+                os.environ.setdefault("OLLAMA_HOST", provider.api_base_url)
