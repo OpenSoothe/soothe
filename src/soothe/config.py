@@ -170,8 +170,8 @@ class SootheConfig(BaseSettings):
 
     # --- Agent behaviour ---
 
-    system_prompt: str | None = None
-    """Optional system prompt prepended before the base deep agent prompt."""
+    system_prompt: str | None = "You are Soothe, a helpful AI assistant powered by the Soothe multi-agent framework. You have access to various tools and subagents to help users with complex tasks. Be concise, helpful, and honest in your responses."
+    """System prompt that identifies you as Soothe agent. Prepended before base agent capabilities."""
 
     subagents: dict[str, SubagentConfig] = Field(
         default_factory=lambda: {

@@ -44,8 +44,49 @@ def pid_path() -> Path:
 # ---------------------------------------------------------------------------
 
 
+def _serialize_for_json(obj: Any) -> Any:
+    """Serialize objects for JSON, handling LangChain messages specially."""
+    # Handle None and primitives
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+
+    # Handle lists and tuples
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_for_json(item) for item in obj]
+
+    # Handle dicts
+    if isinstance(obj, dict):
+        return {str(k): _serialize_for_json(v) for k, v in obj.items()}
+
+    # Handle Pydantic models (including LangChain messages)
+    if hasattr(obj, "model_dump"):
+        try:
+            dumped = obj.model_dump()
+            return _serialize_for_json(dumped)
+        except Exception:
+            pass
+
+    # Handle objects with dict() method
+    if hasattr(obj, "dict"):
+        try:
+            return _serialize_for_json(obj.dict())
+        except Exception:
+            pass
+
+    # Handle objects with __dict__
+    if hasattr(obj, "__dict__"):
+        try:
+            return _serialize_for_json(obj.__dict__)
+        except Exception:
+            pass
+
+    # Fallback to string representation
+    return str(obj)
+
+
 def _encode(msg: dict[str, Any]) -> bytes:
-    return (json.dumps(msg, default=str) + "\n").encode()
+    serialized = _serialize_for_json(msg)
+    return (json.dumps(serialized) + "\n").encode()
 
 
 def _decode(line: bytes) -> dict[str, Any] | None:

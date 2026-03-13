@@ -267,12 +267,14 @@ class SootheApp(App):
         # Handle deserialized dict (after JSON transport)
         elif isinstance(msg, dict):
             msg_id = msg.get("id", "")
-            content_blocks = msg.get("content_blocks", [])
 
             # Track seen messages
             chunks = msg.get("chunks", [])
+            tool_call_chunks = msg.get("tool_call_chunks", [])
             is_chunk = isinstance(chunks, list) and len(chunks) > 0
-            if not is_chunk:
+            has_tool_chunks = isinstance(tool_call_chunks, list) and len(tool_call_chunks) > 0
+
+            if not is_chunk and not has_tool_chunks:
                 if msg_id and msg_id in self._state.seen_message_ids:
                     return
                 if msg_id:
@@ -280,24 +282,44 @@ class SootheApp(App):
             elif msg_id:
                 self._state.seen_message_ids.add(msg_id)
 
-            # Extract text from content blocks
-            for block in content_blocks:
-                if not isinstance(block, dict):
-                    continue
-                btype = block.get("type")
-                if btype == "text":
-                    text = block.get("text", "")
-                    if text:
-                        self._state.full_response.append(text)
-                        self._append_conversation(text)
-                elif btype in ("tool_call_chunk", "tool_call"):
-                    name = block.get("name", "")
-                    if name:
-                        _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                        self._refresh_activity()
+            # Extract text - prefer content_blocks, fall back to content field
+            content_blocks = msg.get("content_blocks", [])
+            if content_blocks:
+                # Use content_blocks if available
+                for i, block in enumerate(content_blocks):
+                    if not isinstance(block, dict):
+                        continue
+                    btype = block.get("type")
+                    if btype == "text":
+                        text = block.get("text", "")
+                        if text:
+                            self._state.full_response.append(text)
+                            self._append_conversation(text)
+                    elif btype in ("tool_call_chunk", "tool_call"):
+                        name = block.get("name", "")
+                        if name:
+                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                            self._refresh_activity()
+            else:
+                # Use content field directly (from serialized messages)
+                content = msg.get("content", "")
+                if content:
+                    self._state.full_response.append(content)
+                    self._append_conversation(content)
+
+                # Handle tool calls
+                if has_tool_chunks:
+                    for tc in tool_call_chunks:
+                        if isinstance(tc, dict):
+                            name = tc.get("name", "")
+                            if name:
+                                _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                                self._refresh_activity()
+        else:
+            pass
 
         # Handle ToolMessage objects
-        elif isinstance(msg, ToolMessage):
+        if isinstance(msg, ToolMessage):
             tool_name = getattr(msg, "name", "tool")
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
             brief = content.replace("\n", " ")[:80]

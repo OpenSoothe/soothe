@@ -19,6 +19,58 @@ app = typer.Typer(
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 
 
+# ---------------------------------------------------------------------------
+# soothe list-subagents
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def list_subagents(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
+    ] = None,
+) -> None:
+    """List available subagents and their enabled/disabled status."""
+    try:
+        cfg = _load_config(config)
+
+        from rich.table import Table
+
+        from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES, BUILTIN_SUBAGENT_NAMES
+
+        table = Table(title="Available Subagents")
+        table.add_column("Name", style="cyan")
+        table.add_column("Technical ID", style="yellow")
+        table.add_column("Status", justify="center")
+
+        for subagent_id in BUILTIN_SUBAGENT_NAMES:
+            display_name = SUBAGENT_DISPLAY_NAMES[subagent_id]
+            enabled = True
+            if subagent_id in cfg.subagents:
+                enabled = cfg.subagents[subagent_id].enabled
+            status = "[green]✓ enabled[/green]" if enabled else "[red]✗ disabled[/red]"
+            table.add_row(display_name, subagent_id, status)
+
+        typer.echo(table)
+
+        # Also show custom subagents if any
+        custom_subagents = set(cfg.subagents.keys()) - set(BUILTIN_SUBAGENT_NAMES)
+        if custom_subagents:
+            typer.echo("\nCustom subagents:")
+            for subagent_id in sorted(custom_subagents):
+                enabled = cfg.subagents[subagent_id].enabled
+                status = "enabled" if enabled else "disabled"
+                typer.echo(f"  - {subagent_id}: {status}")
+
+    except KeyboardInterrupt:
+        typer.echo("\nInterrupted.")
+        sys.exit(0)
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 def _load_config(config_path: str | None) -> SootheConfig:
     """Load SootheConfig from a file path or defaults.
 
@@ -193,6 +245,89 @@ def _run_headless(
 
     exit_code = asyncio.run(_stream())
     sys.exit(exit_code)
+
+
+# ---------------------------------------------------------------------------
+# soothe config
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def config(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
+    ] = None,
+    format_output: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: json or summary."),
+    ] = "summary",
+) -> None:
+    """Display current configuration."""
+    try:
+        cfg = _load_config(config)
+
+        if format_output == "json":
+            # Output full config as JSON
+            import json as json_module
+
+            config_dict = cfg.model_dump(mode="python", exclude_unset=True)
+            typer.echo(json_module.dumps(config_dict, indent=2, default=str))
+        else:
+            # Summary output
+            from rich.panel import Panel
+            from rich.table import Table
+
+            # Providers summary
+            providers_table = Table(title="Model Providers")
+            providers_table.add_column("Name", style="cyan")
+            providers_table.add_column("Models", style="yellow")
+            providers_table.add_column("Default", justify="center")
+
+            for provider in cfg.providers:
+                model_count = len(provider.models)
+                default_models = [m for m in provider.models if m in [cfg.router.default, getattr(cfg.router, role, None)]]
+                is_default = "✓" if any(p.name in cfg.router.default or p.name in (getattr(cfg.router, role, None) or "").split(":")[0] for p in [provider] if p.name == (cfg.router.default or "").split(":")[0]) else ""
+                providers_table.add_row(provider.name, f"{model_count} models", "✓" if cfg.router.default.startswith(f"{provider.name}:") else "")
+
+            if not cfg.providers:
+                providers_table.add_row("None configured", "", "")
+
+            # Subagents summary
+            from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES, BUILTIN_SUBAGENT_NAMES
+
+            subagents_table = Table(title="Subagents")
+            subagents_table.add_column("Name", style="cyan")
+            subagents_table.add_column("Status", justify="center")
+
+            for subagent_id in BUILTIN_SUBAGENT_NAMES:
+                display_name = SUBAGENT_DISPLAY_NAMES.get(subagent_id, subagent_id.replace("_", " ").title())
+                enabled = True
+                if subagent_id in cfg.subagents:
+                    enabled = cfg.subagents[subagent_id].enabled
+                status = "[green]Enabled[/green]" if enabled else "[red]Disabled[/red]"
+                subagents_table.add_row(display_name, status)
+
+            # General info
+            general_table = Table(title="General Configuration")
+            general_table.add_column("Setting", style="cyan")
+            general_table.add_column("Value", style="yellow")
+            general_table.add_row("Debug Mode", "[green]Yes[/green]" if cfg.debug else "[red]No[/red]")
+            general_table.add_row("Context Backend", cfg.context_backend.title())
+            general_table.add_row("Memory Backend", cfg.memory_backend.title())
+            general_table.add_row("Policy Profile", cfg.policy_profile)
+            general_table.add_row("Vector Store Provider", cfg.vector_store_provider.title())
+
+            typer.echo(Panel(providers_table, border_style="blue"))
+            typer.echo(Panel(subagents_table, border_style="blue"))
+            typer.echo(Panel(general_table, border_style="blue"))
+
+    except KeyboardInterrupt:
+        typer.echo("\nInterrupted.")
+        sys.exit(0)
+    except Exception as e:
+        typer.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
 
 def _render_progress_event(data: dict) -> None:
