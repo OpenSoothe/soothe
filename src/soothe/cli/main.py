@@ -286,9 +286,23 @@ def config(
 
             for provider in cfg.providers:
                 model_count = len(provider.models)
-                default_models = [m for m in provider.models if m in [cfg.router.default, getattr(cfg.router, role, None)]]
-                is_default = "✓" if any(p.name in cfg.router.default or p.name in (getattr(cfg.router, role, None) or "").split(":")[0] for p in [provider] if p.name == (cfg.router.default or "").split(":")[0]) else ""
-                providers_table.add_row(provider.name, f"{model_count} models", "✓" if cfg.router.default.startswith(f"{provider.name}:") else "")
+                default_models = [
+                    m for m in provider.models if m in [cfg.router.default, getattr(cfg.router, role, None)]
+                ]
+                is_default = (
+                    "✓"
+                    if any(
+                        p.name in cfg.router.default or p.name in (getattr(cfg.router, role, None) or "").split(":")[0]
+                        for p in [provider]
+                        if p.name == (cfg.router.default or "").split(":")[0]
+                    )
+                    else ""
+                )
+                providers_table.add_row(
+                    provider.name,
+                    f"{model_count} models",
+                    "✓" if cfg.router.default.startswith(f"{provider.name}:") else "",
+                )
 
             if not cfg.providers:
                 providers_table.add_row("None configured", "", "")

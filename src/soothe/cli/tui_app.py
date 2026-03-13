@@ -137,6 +137,7 @@ class SootheApp(App):
         self._client: DaemonClient | None = None
         self._state = TuiState()
         self._connected = False
+        self._conversation_history: list[str] = []
 
     def compose(self) -> ComposeResult:
         """Build the widget tree."""
@@ -192,6 +193,9 @@ class SootheApp(App):
                 self._log_conversation("[dim]Daemon connection closed.[/dim]")
                 break
             self._process_daemon_event(event)
+            # Yield to the event loop so Textual's render cycle can
+            # repaint the screen between rapidly arriving socket events.
+            await asyncio.sleep(0)
 
     # -- event processing ---------------------------------------------------
 
@@ -267,14 +271,11 @@ class SootheApp(App):
         # Handle deserialized dict (after JSON transport)
         elif isinstance(msg, dict):
             msg_id = msg.get("id", "")
+            is_chunk = msg.get("type") == "AIMessageChunk"
 
-            # Track seen messages
-            chunks = msg.get("chunks", [])
-            tool_call_chunks = msg.get("tool_call_chunks", [])
-            is_chunk = isinstance(chunks, list) and len(chunks) > 0
-            has_tool_chunks = isinstance(tool_call_chunks, list) and len(tool_call_chunks) > 0
-
-            if not is_chunk and not has_tool_chunks:
+            # Streaming chunks share the same id; only deduplicate
+            # complete AIMessage objects to avoid suppressing streamed text.
+            if not is_chunk:
                 if msg_id and msg_id in self._state.seen_message_ids:
                     return
                 if msg_id:
@@ -282,39 +283,43 @@ class SootheApp(App):
             elif msg_id:
                 self._state.seen_message_ids.add(msg_id)
 
-            # Extract text - prefer content_blocks, fall back to content field
-            content_blocks = msg.get("content_blocks", [])
-            if content_blocks:
-                # Use content_blocks if available
-                for i, block in enumerate(content_blocks):
-                    if not isinstance(block, dict):
-                        continue
-                    btype = block.get("type")
-                    if btype == "text":
-                        text = block.get("text", "")
-                        if text:
-                            self._state.full_response.append(text)
-                            self._append_conversation(text)
-                    elif btype in ("tool_call_chunk", "tool_call"):
-                        name = block.get("name", "")
-                        if name:
-                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                            self._refresh_activity()
-            else:
-                # Use content field directly (from serialized messages)
+            tool_call_chunks = msg.get("tool_call_chunks", [])
+            has_tool_chunks = isinstance(tool_call_chunks, list) and len(tool_call_chunks) > 0
+
+            # Extract text blocks from content_blocks or content field.
+            # model_dump() may omit content_blocks; content can be a str
+            # or a list of block dicts.
+            blocks = msg.get("content_blocks") or []
+            if not blocks:
                 content = msg.get("content", "")
-                if content:
+                if isinstance(content, list):
+                    blocks = content
+                elif isinstance(content, str) and content:
                     self._state.full_response.append(content)
                     self._append_conversation(content)
 
-                # Handle tool calls
-                if has_tool_chunks:
-                    for tc in tool_call_chunks:
-                        if isinstance(tc, dict):
-                            name = tc.get("name", "")
-                            if name:
-                                _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                                self._refresh_activity()
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype == "text":
+                    text = block.get("text", "")
+                    if text:
+                        self._state.full_response.append(text)
+                        self._append_conversation(text)
+                elif btype in ("tool_call_chunk", "tool_call"):
+                    name = block.get("name", "")
+                    if name:
+                        _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                        self._refresh_activity()
+
+            if has_tool_chunks:
+                for tc in tool_call_chunks:
+                    if isinstance(tc, dict):
+                        name = tc.get("name", "")
+                        if name:
+                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                            self._refresh_activity()
         else:
             pass
 
@@ -331,6 +336,7 @@ class SootheApp(App):
     # -- UI helpers ---------------------------------------------------------
 
     def _log_conversation(self, text: str) -> None:
+        self._conversation_history.append(text)
         try:
             panel = self.query_one("#conversation", ConversationPanel)
             panel.write(text)
@@ -338,9 +344,16 @@ class SootheApp(App):
             pass
 
     def _append_conversation(self, text: str) -> None:
+        """Rewrite the conversation panel with history + accumulated streaming text."""
         try:
             panel = self.query_one("#conversation", ConversationPanel)
-            panel.write(text, scroll_end=True)
+            response_text = "".join(self._state.full_response)
+            if not response_text:
+                return
+            panel.clear()
+            for entry in self._conversation_history:
+                panel.write(entry)
+            panel.write(response_text, scroll_end=True)
         except Exception:
             pass
 
@@ -396,6 +409,10 @@ class SootheApp(App):
         if not text:
             return
         event.input.clear()
+
+        # Save previous streaming response to history before clearing
+        if self._state.full_response:
+            self._conversation_history.append("".join(self._state.full_response))
 
         self._log_conversation(f"\n[bold cyan]User:[/bold cyan] {text}")
         self._state.full_response.clear()
@@ -469,6 +486,8 @@ def _start_daemon_in_background(config: SootheConfig) -> None:
             loop.run_until_complete(_daemon_instance.serve_forever())
         except (KeyboardInterrupt, asyncio.CancelledError):
             pass
+        except Exception:
+            logger.exception("Daemon thread error")
         finally:
             try:
                 loop.run_until_complete(_daemon_instance.stop())
