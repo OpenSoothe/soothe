@@ -30,7 +30,18 @@ Each implementation guide follows the template in `templates/impl-guide-template
 
 ## Current Guides
 
-- [Soothe Setup and Noesium Migration](soothe-setup-migration.md) -- Project scaffold, architecture, tool/subagent migration plan
+- [IG-001: Soothe Setup and Migration](001-soothe-setup-migration.md)
+- [IG-002: Soothe Polish](002-soothe-polish.md)
+- [IG-003: Streaming Examples](003-streaming-examples.md)
+- [IG-004: Ecosystem Capability Analysis](004-ecosystem-capability-analysis.md)
+- [IG-005: Core Protocols Implementation](005-core-protocols-implementation.md)
+- [IG-006: VectorStore, Router, Persistence](006-vectorstore-router-persistence.md)
+- [IG-007: CLI TUI Implementation](007-cli-tui-implementation.md)
+- [IG-008: Config and Docs Revision](008-config-docs-revision.md)
+- [IG-009: Ollama Provider](009-ollama-provider.md)
+- [IG-010: TUI Layout History Refresh](010-tui-layout-history-refresh.md)
+- [IG-011: Skillify Agent Implementation](011-skillify-agent-implementation.md)
+- [IG-012: Weaver Agent Implementation](012-weaver-agent-implementation.md)
 
 ## Related Documents
 
