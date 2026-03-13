@@ -226,15 +226,20 @@ class SootheApp(App):
                         self._refresh_activity()
 
     def _handle_messages_event(self, data: Any) -> None:
-        if not isinstance(data, tuple) or len(data) != _MSG_PAIR_LEN:
-            if isinstance(data, dict):
-                return
+        # Data may be a tuple/list after JSON deserialization
+        if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
+            msg, metadata = data
+        elif isinstance(data, dict):
+            # Handle dict case
+            return
+        else:
             return
 
-        msg, metadata = data
+        # Check metadata for summarization
         if metadata and isinstance(metadata, dict) and metadata.get("lc_source") == "summarization":
             return
 
+        # Handle LangChain objects (when running in same process)
         if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
             msg_id = msg.id or ""
             if not isinstance(msg, AIMessageChunk):
@@ -259,6 +264,39 @@ class SootheApp(App):
                         _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
                         self._refresh_activity()
 
+        # Handle deserialized dict (after JSON transport)
+        elif isinstance(msg, dict):
+            msg_id = msg.get("id", "")
+            content_blocks = msg.get("content_blocks", [])
+
+            # Track seen messages
+            chunks = msg.get("chunks", [])
+            is_chunk = isinstance(chunks, list) and len(chunks) > 0
+            if not is_chunk:
+                if msg_id and msg_id in self._state.seen_message_ids:
+                    return
+                if msg_id:
+                    self._state.seen_message_ids.add(msg_id)
+            elif msg_id:
+                self._state.seen_message_ids.add(msg_id)
+
+            # Extract text from content blocks
+            for block in content_blocks:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype == "text":
+                    text = block.get("text", "")
+                    if text:
+                        self._state.full_response.append(text)
+                        self._append_conversation(text)
+                elif btype in ("tool_call_chunk", "tool_call"):
+                    name = block.get("name", "")
+                    if name:
+                        _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                        self._refresh_activity()
+
+        # Handle ToolMessage objects
         elif isinstance(msg, ToolMessage):
             tool_name = getattr(msg, "name", "tool")
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
