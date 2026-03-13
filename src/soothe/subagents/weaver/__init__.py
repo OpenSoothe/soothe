@@ -45,16 +45,9 @@ WEAVER_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    """Emit a progress event via stream writer, with logging fallback."""
-    try:
-        from langgraph.config import get_stream_writer
+    from soothe.utils._progress import emit_progress
 
-        writer = get_stream_writer()
-        if writer:
-            writer(event)
-    except (ImportError, RuntimeError):
-        pass
-    logger.info("Weaver progress: %s", event)
+    emit_progress(event, logger)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +81,6 @@ def _build_weaver_graph(
              hit: load_existing -> execute
              miss: fetch_skills -> compose -> generate -> register -> execute
     """
-
     # -- Shared async helpers -----------------------------------------------
 
     async def _analyze_and_route(state: dict[str, Any]) -> dict[str, Any]:
@@ -130,13 +122,24 @@ def _build_weaver_graph(
         best_conf = 0.0
         _emit_progress({"type": "soothe.weaver.reuse.miss", "best_confidence": round(best_conf, 3)})
 
-        # Step 3: Fetch skills
+        # Step 3: Fetch skills (with indexing-not-ready tolerance)
         from soothe.subagents.skillify.models import SkillBundle
 
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_retriever:
+            if hasattr(skillify_retriever, "is_ready") and not skillify_retriever.is_ready:
+                _emit_progress({"type": "soothe.weaver.skillify_pending"})
+                ready_event = getattr(skillify_retriever, "_ready_event", None)
+                if ready_event is not None:
+                    try:
+                        await asyncio.wait_for(ready_event.wait(), timeout=30.0)
+                    except TimeoutError:
+                        logger.warning("Skillify index not ready after 30s, proceeding best-effort")
             try:
                 skill_bundle = await skillify_retriever.retrieve(capability.description)
+                if skill_bundle.query.startswith("[Indexing in progress]"):
+                    logger.warning("Skillify still indexing; Weaver proceeding with empty skills")
+                    skill_bundle = SkillBundle(query=capability.description)
             except Exception:
                 logger.warning("Skillify retrieval failed", exc_info=True)
 
@@ -316,7 +319,7 @@ def create_weaver_subagent(
             "(e.g. 'openai:gpt-4o-mini') or a BaseChatModel instance."
         )
         raise ValueError(msg)
-    elif isinstance(model, str):
+    if isinstance(model, str):
         model_kwargs: dict[str, Any] = {}
         base_url = os.environ.get("OPENAI_BASE_URL")
         if base_url:
@@ -383,7 +386,7 @@ def _resolve_dependencies(cfg: Any, collection: str) -> tuple[Any, Any]:
             cfg.vector_store_config,
         )
     else:
-        from soothe.subagents.skillify._in_memory_vs import InMemoryVectorStore
+        from soothe.vector_store.in_memory import InMemoryVectorStore
 
         vs = InMemoryVectorStore(collection)
 
@@ -396,8 +399,8 @@ def _get_skillify_retriever(cfg: Any) -> Any | None:
     try:
         skillify_cfg = cfg.skillify if hasattr(cfg, "skillify") else None
         if skillify_cfg and getattr(skillify_cfg, "enabled", False):
-            from soothe.subagents.skillify._in_memory_vs import InMemoryVectorStore
             from soothe.subagents.skillify.retriever import SkillRetriever
+            from soothe.vector_store.in_memory import InMemoryVectorStore
 
             collection = getattr(skillify_cfg, "index_collection", "soothe_skillify")
             if cfg.vector_store_provider != "none":

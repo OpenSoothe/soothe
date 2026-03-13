@@ -77,8 +77,7 @@ def _build_browser_graph(
             os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
         # Now import browser-use (will read env vars during initialization)
-        from browser_use import Agent as BrowserAgent
-        from browser_use import BrowserSession
+        from browser_use import Agent as BrowserAgent, BrowserSession
         from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
 
         try:

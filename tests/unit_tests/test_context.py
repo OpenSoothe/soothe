@@ -1,9 +1,7 @@
 """Tests for context implementations (KeywordContext and VectorContext)."""
 
-import tempfile
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -200,7 +198,6 @@ class TestKeywordContext:
         context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
 
         # Write invalid data
-        import json
 
         data_file = tmp_path / "context_thread_123.json"
         data_file.write_text("invalid json {{{")
@@ -336,9 +333,8 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_with_results(self, mock_vector_store, mock_embeddings):
         """Test projection with vector search results."""
-        from soothe.protocols.vector_store import VectorRecord
-
         from soothe.context.vector_context import VectorContext
+        from soothe.protocols.vector_store import VectorRecord
 
         # Mock search results
         entry1 = ContextEntry(source="test", content="python programming")
@@ -373,9 +369,8 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_respects_token_budget(self, mock_vector_store, mock_embeddings):
         """Test that projection respects token budget."""
-        from soothe.protocols.vector_store import VectorRecord
-
         from soothe.context.vector_context import VectorContext
+        from soothe.protocols.vector_store import VectorRecord
 
         # Create large entries
         entries = [ContextEntry(source="test", content=" ".join(["word"] * 100)) for _ in range(5)]
@@ -397,9 +392,8 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_handles_invalid_payload(self, mock_vector_store, mock_embeddings):
         """Test that projection handles invalid payloads gracefully."""
-        from soothe.protocols.vector_store import VectorRecord
-
         from soothe.context.vector_context import VectorContext
+        from soothe.protocols.vector_store import VectorRecord
 
         # Mock results with invalid payload
         mock_vector_store.search = AsyncMock(
@@ -483,9 +477,8 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_restore_from_vector_store(self, mock_vector_store, mock_embeddings):
         """Test restore loads entries from vector store."""
-        from soothe.protocols.vector_store import VectorRecord
-
         from soothe.context.vector_context import VectorContext
+        from soothe.protocols.vector_store import VectorRecord
 
         entry1 = ContextEntry(source="test", content="content 1")
         entry2 = ContextEntry(source="test", content="content 2")

@@ -22,6 +22,7 @@ from soothe.protocols import (
 )
 
 __all__ = [
+    "SOOTHE_HOME",
     "ConcurrencyPolicy",
     "ContextEntry",
     "ContextProjection",
@@ -38,7 +39,6 @@ __all__ = [
     "PlannerProtocol",
     "PolicyProtocol",
     "RemoteAgentProtocol",
-    "SOOTHE_HOME",
     "SkillifyConfig",
     "SootheConfig",
     "VectorRecord",

@@ -99,6 +99,26 @@ subagents:
     enabled: false                               # requires: pip install soothe[claude]
     # model: "anthropic:claude-sonnet-4-20250514"
 
+  # --- Skillify (RFC-0004) ---
+  skillify:
+    enabled: false
+    # config:
+    #   warehouse_paths: []                        # paths to scan for SKILL.md files
+    #   index_interval_seconds: 300                # background indexing interval
+    #   index_collection: soothe_skillify          # vector store collection name
+    #   retrieval_top_k: 10                        # max results per query
+
+  # --- Weaver (RFC-0005) ---
+  weaver:
+    enabled: false
+    # config:
+    #   generated_agents_dir: ~/.soothe/generated_agents
+    #   reuse_threshold: 0.85
+    #   reuse_collection: soothe_weaver_reuse
+    #   max_generation_attempts: 2
+    #   allowed_tool_groups: []
+    #   allowed_mcp_servers: []
+
   # Example: remote subagent via A2A / ACP / LangGraph
   # remote_analyst:
   #   enabled: true
@@ -109,15 +129,28 @@ subagents:
 # Tools
 # =============================================================================
 # Tool group names to enable. Each may require extra dependencies or API keys.
-# Tool groups: serper, jina, image, audio, video, tabular
+#
+# --- Custom tools (ported from noesium) ---
+# serper, jina, image, audio, video, tabular
+#
+# --- Langchain ecosystem tools ---
+# tavily, duckduckgo, arxiv, wikipedia, github, python_repl
 
 tools: []
-  # - serper                                     # requires: SERPER_API_KEY
-  # - jina                                       # requires: JINA_API_KEY
-  # - image                                      # requires: openai SDK
-  # - audio
-  # - video
-  # - tabular
+  # --- Custom tools ---
+  # - serper                                     # Multi-type search (requires: SERPER_API_KEY)
+  # - jina                                       # Web content extraction (requires: JINA_API_KEY)
+  # - image                                      # Vision-model image analysis
+  # - audio                                      # Audio transcription (Whisper)
+  # - video                                      # Video analysis
+  # - tabular                                    # Tabular data inspection
+  # --- Langchain ecosystem tools ---
+  # - tavily                                     # Web search (requires: TAVILY_API_KEY)
+  # - duckduckgo                                 # Web search (free, no API key)
+  # - arxiv                                      # ArXiv paper search
+  # - wikipedia                                  # Wikipedia lookup
+  # - github                                     # GitHub operations (requires: GITHUB_TOKEN)
+  # - python_repl                                # Python code execution (CAUTION: runs arbitrary code)
 
 # =============================================================================
 # MCP Servers

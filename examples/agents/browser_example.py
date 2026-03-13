@@ -1,31 +1,27 @@
-"""Scout agent example.
-
-Creates a Soothe agent with the scout subagent for codebase exploration.
-Streams tool calls and AI text in real-time.
-"""
+"""Browser agent example -- SOOTHE_HOME aware."""
 
 import asyncio
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
-from soothe import SootheConfig, create_soothe_agent
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from _config_helper import load_example_config
 
+from soothe import create_soothe_agent
 from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
 
-PROJECT_ROOT = str(Path(__file__).parent.parent.resolve())
-
 
 async def main() -> None:
-    config = SootheConfig.from_yaml_file("config.dev.yml")
-    config.workspace_dir = PROJECT_ROOT
+    config = load_example_config()
     config.subagents["planner"].enabled = False
-    config.subagents["scout"].enabled = True
+    config.subagents["scout"].enabled = False
     config.subagents["research"].enabled = False
-    config.subagents["browser"].enabled = False
+    config.subagents["browser"].enabled = True
     config.subagents["claude"].enabled = False
 
     agent = create_soothe_agent(config=config)
@@ -33,8 +29,9 @@ async def main() -> None:
     await run_with_streaming(
         agent,
         [HumanMessage(
-            content="Explore the src/soothe/ directory and summarise the project architecture."
+            content="Go to https://news.ycombinator.com and summarize the top 5 stories."
         )],
+        show_subagents=True,
     )
 
 

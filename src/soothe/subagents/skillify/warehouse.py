@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from soothe.subagents.skillify.models import SkillRecord
@@ -70,7 +70,7 @@ class SkillWarehouse:
             path=skill_dir,
             tags=[str(t) for t in tags],
             status="indexed",
-            indexed_at=datetime.now(timezone.utc),
+            indexed_at=datetime.now(UTC),
             content_hash=chash,
         )
 

@@ -142,7 +142,7 @@ class SootheConfig(BaseSettings):
     model_config = {"env_prefix": "SOOTHE_"}
 
     @classmethod
-    def from_yaml_file(cls, path: str) -> "SootheConfig":
+    def from_yaml_file(cls, path: str) -> SootheConfig:
         """Load configuration from a YAML file.
 
         Args:

@@ -1,0 +1,116 @@
+# =============================================================================
+# Soothe Home Configuration Template
+# =============================================================================
+# This file is installed to ~/.soothe/config/config.yml by `soothe init`.
+# It provides reasonable defaults with common features enabled.
+# See docs/user_guide.md for the full configuration reference.
+
+# =============================================================================
+# Model Providers
+# =============================================================================
+
+providers:
+  - name: openai
+    provider_type: openai
+    api_key: "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
+
+# =============================================================================
+# Model Router
+# =============================================================================
+
+router:
+  default: "openai:gpt-4o-mini"
+  # think: "openai:o3-mini"
+  # fast: "openai:gpt-4o-mini"
+  # embedding: "openai:text-embedding-3-small"
+
+# =============================================================================
+# Embedding
+# =============================================================================
+
+embedding_dims: 1536
+
+# =============================================================================
+# Agent Behaviour
+# =============================================================================
+
+debug: false
+
+# =============================================================================
+# Subagents
+# =============================================================================
+
+subagents:
+  planner:
+    enabled: true
+  scout:
+    enabled: true
+  research:
+    enabled: true
+  browser:
+    enabled: false
+  claude:
+    enabled: false
+  skillify:
+    enabled: false
+    # config:
+    #   warehouse_paths: []
+    #   index_interval_seconds: 300
+    #   index_collection: soothe_skillify
+    #   retrieval_top_k: 10
+  weaver:
+    enabled: false
+    # config:
+    #   generated_agents_dir: ~/.soothe/generated_agents
+    #   reuse_threshold: 0.85
+
+# =============================================================================
+# Tools
+# =============================================================================
+
+tools: []
+  # - tavily
+  # - duckduckgo
+  # - arxiv
+  # - wikipedia
+  # - serper
+  # - jina
+
+# =============================================================================
+# MCP Servers
+# =============================================================================
+
+mcp_servers: []
+
+# =============================================================================
+# Skills and Memory
+# =============================================================================
+
+skills: []
+memory: []
+
+# =============================================================================
+# Protocols
+# =============================================================================
+
+context_backend: keyword
+memory_backend: none
+planner_routing: none
+policy_profile: standard
+
+concurrency:
+  max_parallel_subagents: 1
+  max_parallel_tools: 3
+  max_parallel_steps: 1
+  step_parallelism: dependency
+
+# =============================================================================
+# Vector Store
+# =============================================================================
+
+vector_store_provider: none
+vector_store_collection: soothe_default

@@ -28,22 +28,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _get_progress_writer() -> Any:
-    """Get a stream writer for progress reporting, or None if unavailable."""
-    try:
-        from langgraph.config import get_stream_writer
-
-        return get_stream_writer()
-    except (ImportError, RuntimeError):
-        return None
-
-
 def _emit_progress(event: dict[str, Any]) -> None:
-    """Emit a progress event via stream writer, with logging fallback."""
-    writer = _get_progress_writer()
-    if writer:
-        writer(event)
-    logger.info("Research progress: %s", event)
+    from soothe.utils._progress import emit_progress
+
+    emit_progress(event, logger)
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +129,7 @@ def _generate_query(state: dict[str, Any], model: BaseChatModel) -> dict[str, An
     )
 
     prompt = QUERY_WRITER_INSTRUCTIONS.format(
-        current_date=datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d"),
+        current_date=datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d"),
         research_topic=research_topic,
     )
     resp = model.invoke([{"role": "user", "content": prompt}])
@@ -251,7 +239,7 @@ def _finalize_answer(state: dict[str, Any], model: BaseChatModel) -> dict[str, A
 
     summaries = "\n\n".join(state.get("search_summaries", []))
     prompt = ANSWER_INSTRUCTIONS.format(
-        current_date=datetime.datetime.now(tz=datetime.timezone.utc).strftime("%Y-%m-%d"),
+        current_date=datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d"),
         research_topic=research_topic,
         summaries=summaries,
     )
@@ -382,7 +370,7 @@ def create_research_subagent(
             "(e.g. 'openai:qwen3.5-flash') or a BaseChatModel instance."
         )
         raise ValueError(msg)
-    elif isinstance(model, str):
+    if isinstance(model, str):
         model_kwargs: dict[str, Any] = {}
         base_url = os.environ.get("OPENAI_BASE_URL")
         if base_url:

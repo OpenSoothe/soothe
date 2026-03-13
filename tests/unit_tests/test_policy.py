@@ -1,13 +1,11 @@
 """Tests for policy implementation (ConfigDrivenPolicy)."""
 
-import pytest
-
 from soothe.policy.config_driven import (
-    ConfigDrivenPolicy,
     DEFAULT_PROFILES,
     PRIVILEGED_PROFILE,
     READONLY_PROFILE,
     STANDARD_PROFILE,
+    ConfigDrivenPolicy,
     _extract_required_permission,
 )
 from soothe.protocols.policy import (

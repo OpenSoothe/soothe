@@ -39,7 +39,7 @@ Each implementation guide follows the template in `templates/impl-guide-template
 - [IG-007: CLI TUI Implementation](007-cli-tui-implementation.md)
 - [IG-008: Config and Docs Revision](008-config-docs-revision.md)
 - [IG-009: Ollama Provider](009-ollama-provider.md)
-- [IG-010: TUI Layout History Refresh](010-tui-layout-history-refresh.md)
+- [IG-010: Textual TUI and Daemon Implementation](010-tui-layout-history-refresh.md)
 - [IG-011: Skillify Agent Implementation](011-skillify-agent-implementation.md)
 - [IG-012: Weaver Agent Implementation](012-weaver-agent-implementation.md)
 

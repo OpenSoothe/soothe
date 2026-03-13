@@ -1,6 +1,6 @@
 # Makefile for soothe project
 
-.PHONY: sync sync-dev format lint test test-unit test-integration test-coverage build clean help
+.PHONY: sync sync-dev format lint lint-fix test test-unit test-integration test-coverage build clean help
 
 # Default target
 help:
@@ -9,6 +9,7 @@ help:
 	@echo "  make sync-dev   - Sync dev dependencies"
 	@echo "  make format     - Format code with ruff"
 	@echo "  make lint       - Lint code with ruff"
+	@echo "  make lint-fix   - Auto-fix linting issues with ruff"
 	@echo "  make test       - Run all tests with pytest"
 	@echo "  make test-unit  - Run unit tests only"
 	@echo "  make test-integration - Run integration tests (requires --run-integration)"
@@ -35,25 +36,31 @@ format: sync-dev
 	@echo "✓ Code formatted"
 
 # Lint code
-lint:
+lint: sync-dev
 	@echo "Linting code..."
 	uv run ruff check src/ tests/
 	@echo "✓ Linting complete"
 
+# Auto-fix linting issues
+lint-fix: sync-dev
+	@echo "Auto-fixing linting issues..."
+	uv run ruff check --fix src/ tests/
+	@echo "✓ Linting issues fixed"
+
 # Run all tests
-test:
+test: sync-dev
 	@echo "Running all tests..."
 	uv run pytest tests/ -v
 	@echo "✓ Tests complete"
 
 # Run unit tests only
-test-unit:
+test-unit: sync-dev
 	@echo "Running unit tests..."
 	uv run pytest tests/unit_tests/ -v
 	@echo "✓ Unit tests complete"
 
 # Run integration tests (requires external services)
-test-integration:
+test-integration: sync-dev
 	@echo "Running integration tests..."
 	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate)"
 	@echo "Use: pytest tests/integration_tests/ --run-integration"
@@ -61,13 +68,13 @@ test-integration:
 	@echo "✓ Integration tests complete"
 
 # Run tests with coverage
-test-coverage:
+test-coverage: sync-dev
 	@echo "Running tests with coverage..."
 	uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
 	@echo "✓ Coverage report generated in htmlcov/"
 
 # Build package
-build:
+build: sync
 	@echo "Building package..."
 	uv build
 	@echo "✓ Package built"

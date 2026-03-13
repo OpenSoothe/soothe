@@ -156,6 +156,7 @@ class TestClaudeSubagent:
 class TestResearchSubagent:
     def test_requires_model(self):
         import pytest
+
         from soothe.subagents.research import create_research_subagent
 
         with pytest.raises(ValueError, match="requires a model"):

@@ -1,4 +1,4 @@
-"""Minimal in-memory VectorStore for Skillify when no external provider is configured."""
+"""In-memory VectorStore fallback when no external provider is configured."""
 
 from __future__ import annotations
 

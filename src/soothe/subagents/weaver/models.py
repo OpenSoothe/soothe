@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -48,7 +48,7 @@ class AgentManifest(BaseModel):
     skills: list[str] = Field(default_factory=list)
     tools: list[str] = Field(default_factory=list)
     capabilities: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     version: int = 1
 
 

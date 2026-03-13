@@ -94,8 +94,9 @@ def parse_subagent_prefix_from_input(user_input: str) -> tuple[list[str], str]:
 # ---------------------------------------------------------------------------
 
 SLASH_COMMANDS: dict[str, str] = {
-    "/exit": "Exit the TUI",
-    "/quit": "Exit the TUI",
+    "/exit": "Stop daemon and exit",
+    "/quit": "Stop daemon and exit",
+    "/detach": "Detach TUI; daemon keeps running (reconnect with 'soothe attach')",
     "/plan": "Show current task plan",
     "/memory": "Show memory stats",
     "/context": "Show context stats",
@@ -103,6 +104,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/history": "Show recent prompt history",
     "/review": "Review recent conversation and action history",
     "/thread list": "List active threads",
+    "/thread resume <id>": "Resume a thread",
+    "/thread archive <id>": "Archive a thread",
     "/clear": "Clear the screen",
     "/config": "Show active configuration summary",
     "/session": "Show current session log path",

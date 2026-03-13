@@ -1,11 +1,8 @@
 """Integration tests for vector store implementations with external databases."""
 
 import uuid
-from typing import Generator
 
 import pytest
-
-from soothe.protocols.vector_store import VectorRecord
 
 
 # Fixtures for PostgreSQL/pgvector

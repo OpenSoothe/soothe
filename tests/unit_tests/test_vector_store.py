@@ -1,11 +1,9 @@
 """Unit tests for vector store implementations (PGVectorStore and WeaviateVectorStore)."""
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.protocols.vector_store import VectorRecord
 
 
 class TestPGVectorStoreUnit:

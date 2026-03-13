@@ -1,6 +1,6 @@
 """Tests for durability implementation (InMemoryDurability)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -188,13 +188,13 @@ class TestInMemoryDurability:
         thread = await durability.create_thread(metadata)
 
         # Filter after creation (using timezone-aware datetime)
-        filter_after = ThreadFilter(created_after=datetime.now(timezone.utc) - timedelta(hours=1))
+        filter_after = ThreadFilter(created_after=datetime.now(UTC) - timedelta(hours=1))
         recent_threads = await durability.list_threads(filter=filter_after)
 
         assert len(recent_threads) == 1
 
         # Filter before creation
-        filter_before = ThreadFilter(created_before=datetime.now(timezone.utc) - timedelta(hours=1))
+        filter_before = ThreadFilter(created_before=datetime.now(UTC) - timedelta(hours=1))
         old_threads = await durability.list_threads(filter=filter_before)
 
         assert len(old_threads) == 0

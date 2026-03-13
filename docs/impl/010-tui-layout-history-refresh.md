@@ -1,23 +1,14 @@
-# TUI Layout and History Review Refresh Guide
+# Textual TUI and Daemon Implementation
 
 **Guide**: IG-010
-**Title**: TUI Layout, Streaming, and Reviewable History Refresh
+**Title**: Textual TUI and Daemon Implementation
 **Created**: 2026-03-13
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003
-**Supersedes**: Refines the UX portions of IG-007
+**Related RFCs**: RFC-0003
+**Supersedes**: Original IG-010 (TUI Layout, Streaming, and Reviewable History Refresh)
 
 ## Overview
 
-This guide documents a conservative redesign of the Soothe CLI TUI so it remains aligned with
-RFC-0003 while becoming substantially more usable during long-running sessions. The redesign keeps
-the native `(namespace, mode, data)` stream contract and Rich-based rendering model, but changes
-the presentation from a single stacked status feed into a persistent dashboard.
-
-The refresh has three primary goals:
-
-1. Show the assistant response live while work is still in progress.
-2. Preserve operational visibility for plans, subagents, and protocol/tool events.
-3. Make both conversation history and action history reviewable inside the CLI.
+This guide documents the implementation of the new Textual-based TUI and daemon architecture for Soothe, as specified in RFC-0003. The implementation replaces the Rich Live-based stack with a daemon process that serves events over a Unix domain socket, a Textual TUI client that connects to the daemon, and a headless client for single-prompt execution.
 
 ## Prerequisites
 
@@ -26,213 +17,169 @@ The refresh has three primary goals:
 - [x] RFC-0003 accepted (CLI TUI Architecture Design)
 - [x] IG-007 completed (CLI TUI Implementation)
 
-## Scope
+## Module Scope
 
-This guide covers the following files:
+This guide covers the following modules:
 
-- `src/soothe/cli/tui.py`
-- `src/soothe/cli/session.py`
-- `src/soothe/cli/commands.py`
-- `src/soothe/cli/runner.py`
-- `src/soothe/cli/main.py`
-- `tests/unit_tests/test_cli_session.py`
+| Module | Purpose |
+|--------|---------|
+| `src/soothe/cli/daemon.py` | SootheDaemon, DaemonClient, IPC protocol |
+| `src/soothe/cli/tui_app.py` | SootheApp (Textual TUI) |
+| `src/soothe/cli/main.py` | CLI commands, _run_tui, _run_headless |
+| `src/soothe/cli/commands.py` | Slash commands, subagent routing |
+| `src/soothe/cli/tui.py` | Legacy Rich TUI fallback, TuiState, render helpers |
 
-## Architectural Position
+## Daemon Implementation
 
-The redesign does not introduce a new event system. It refines how the existing runner and TUI
-cooperate.
+### SootheDaemon Class
 
-```mermaid
-flowchart LR
-    user[UserInput] --> mainCli[main.py]
-    mainCli --> tui[tui.py]
-    tui --> runner[runner.py]
-    runner --> stream["(namespace,mode,data) stream"]
-    stream --> tui
-    tui --> session[session.py]
-    commands[commands.py] --> tui
-    session --> review["/history and /review"]
-```
+The daemon wraps `SootheRunner` and accepts TUI/headless clients over a Unix domain socket.
 
-Key invariants preserved from RFC-0003:
+**Key responsibilities:**
+- Socket server loop: `asyncio.start_unix_server()` on `~/.soothe/soothe.sock`
+- Client connection handling: `_handle_client()` accepts connections, reads newline-delimited JSON
+- Event serialization: `_encode()` / `_decode()` for JSON lines
+- Broadcast: all connected clients receive events; `_broadcast()` sends to all, removes dead clients
+- Input queue: `_current_input_queue` with latest-client-wins semantics (single input consumer)
 
-- `SootheRunner` remains the orchestration layer.
-- The TUI remains presentation-oriented and does not call protocols directly.
-- `soothe.*` custom events remain the only Soothe-specific stream extension.
-- Final answer rendering still happens after the live block, but live answer preview is now
-  visible during streaming.
+**Lifecycle:**
+- `start()`: Create socket, start server, write PID file, broadcast initial status
+- `serve_forever()`: Run until SIGTERM/SIGINT; spawns `_input_loop()` task
+- `stop()`: Broadcast stopped status, close clients, close server, remove socket, cleanup PID
 
-## UX Design
+**PID file:**
+- Path: `~/.soothe/soothe.pid`
+- Written on start; removed on stop
+- `is_running()`: Check PID file and `os.kill(pid, 0)` to verify process
+- `stop_running()`: Send SIGTERM to PID from file
 
-### Layout
+**Graceful shutdown:**
+- SIGTERM and SIGINT handlers set `stop_event`
+- `_input_loop()` cancelled on shutdown
+- `stop()` called in `finally` block
 
-Replace the old `Group`-based stacked output with a persistent two-column `rich.layout.Layout`:
+### DaemonClient Class
 
-- Left column: `Conversation` panel
-- Right column: `Plan`, `Subagents`, and `Recent Actions`
-- Bottom row: compact status/footer panel
+Async client for TUI and headless connections to the daemon.
 
-The left column is the primary reading surface. The right column is the operator dashboard.
+**Methods:**
+- `connect()`: `asyncio.open_unix_connection()` to socket path
+- `close()`: Close writer, wait for closed
+- `send_input(text)`: Send `{"type": "input", "text": "..."}`
+- `send_command(cmd)`: Send `{"type": "command", "cmd": "/help"}`
+- `send_detach()`: Send `{"type": "detach"}`
+- `read_event()`: Read next newline-delimited JSON; returns dict or None on EOF
 
-### Streaming answer behavior
+### Input Queue Semantics
 
-The assistant text should be visible as tokens arrive instead of being hidden until the stream
-ends. To keep the layout stable on long answers:
+- Single `asyncio.Queue` for all client input
+- Any connected client can send `input` or `command`; messages are queued
+- `_input_loop()` consumes from queue; processes commands (e.g. `/exit` stops daemon) or runs query via `_run_query()`
+- Latest-client-wins: multiple clients can send input; all are queued and processed sequentially
 
-- accumulate the canonical full response in memory
-- render only the most recent bounded window of lines in the live panel
-- preserve full post-run Markdown rendering after the live session completes
+## Textual App Implementation
 
-### Reviewable history
+### SootheApp (App)
 
-Two distinct histories should be surfaced:
+Textual application with CSS grid layout.
 
-- Conversation history: user prompts and assistant replies
-- Action history: protocol events and subagent/tool activity
+**Widget hierarchy:**
+- `Header` — App title
+- `ConversationPanel` (id=conversation) — RichLog, full-width, scrollable chat
+- `PlanPanel` (id=plan-panel) — RichLog, plan tree
+- `SubagentPanel` (id=subagent-panel) — RichLog, subagent status
+- `ActivityPanel` (id=right-sidebar) — RichLog, activity lines
+- `StatusBar` (id=status-bar) — Static, thread/events/state
+- `ChatInput` (id=chat-input) — Input, placeholder "soothe> Type a message or /help"
+- `Footer` — Key bindings
 
-This is intentionally separate from the on-screen live panels:
+**CSS layout:**
+- `#main-layout`: grid 2x2, columns 3fr 2fr, rows 3fr 2fr
+- `#conversation`: row-span 1, column-span 2
+- `#left-sidebar`: Plan + Subagent stacked
+- `#right-sidebar`: Activity panel
+- `#status-bar`, `#chat-input`: dock bottom
 
-- live panels optimize for current execution
-- review commands optimize for retrospective inspection
+### Event Handling: Daemon Event → Widget Update
 
-## Module Changes
+| Daemon message | Handler | Widget update |
+|----------------|---------|---------------|
+| `type: status` | `_process_daemon_event` | StatusBar (state, thread_id) |
+| `type: event`, mode=messages | `_handle_messages_event` | ConversationPanel (AIMessage text), ActivityPanel (tool calls) |
+| `type: event`, mode=custom, soothe.* | `_handle_protocol_event` | ActivityPanel, PlanPanel (if plan.*) |
+| `type: event`, mode=custom, subagent | `_handle_subagent_custom` | SubagentPanel, ActivityPanel |
 
-### 1. `session.py`
+**Shared state:** `TuiState` from `tui.py` holds `full_response`, `activity_lines`, `current_plan`, `subagent_tracker`, `thread_id`, etc. The Textual app reuses `_handle_protocol_event`, `_handle_subagent_custom`, `_add_activity`, `render_plan_tree` from the legacy TUI.
 
-Extend `SessionLogger` from an event-only JSONL writer into a lightweight session record store.
+### Connection Management
 
-Add:
+- **Auto-start daemon:** `_ensure_daemon()` checks `SootheDaemon.is_running()`; if not, spawns `soothe server start` via subprocess, polls for socket existence (up to 5 seconds)
+- **Reconnection:** On `read_event()` returning None (EOF), app sets `_connected = False` and displays "Daemon connection closed"; no automatic reconnect in current implementation
 
-- `log_user_input(text)`
-- `log_assistant_response(text)`
-- `read_recent_records(limit)`
-- `recent_conversation(limit)`
-- `recent_actions(limit)`
+## CLI Integration
 
-Record format:
+### New Commands
 
-- `kind: "conversation"` for user/assistant turns
-- `kind: "event"` for existing `custom`-mode event records
+| Command | Implementation |
+|---------|----------------|
+| `soothe attach` | Check daemon running; launch Textual TUI (no auto-start) |
+| `soothe server start` | Start daemon; `--foreground` runs in current process |
+| `soothe server stop` | `SootheDaemon.stop_running()` sends SIGTERM |
+| `soothe server status` | `SootheDaemon.is_running()` + PID from file |
+| `soothe init` | Create `~/.soothe/config`, `sessions`, `generated_agents`, `logs`; copy config template |
 
-This keeps the implementation append-only and audit-friendly while enabling in-terminal review.
+### Expanded Thread Management
 
-### 2. `commands.py`
+| Command | Implementation |
+|--------|----------------|
+| `soothe thread inspect <id>` | List threads, find match, show details + SessionLogger stats |
+| `soothe thread delete <id>` | Archive + delete session file; `--yes` skips confirm |
+| `soothe thread export <id>` | SessionLogger.read_recent_records; output jsonl or md |
 
-Add review-oriented slash commands:
+### Headless Mode
 
-- `/history` -- show recent prompt history from `InputHistory`
-- `/review` -- show recent conversation and recent actions together
-- `/review conversation` -- conversation-only review
-- `/review actions` -- action-only review
+- `_run_headless(cfg, prompt, thread_id, output_format)` uses `SootheRunner.astream()` directly (no daemon)
+- `--format jsonl`: Each stream chunk written as JSON line to stdout
+- `--format text` (default): Protocol events to stderr via `_render_progress_event()`; AIMessage text to stdout
 
-These commands should use existing Rich tables/panels and avoid introducing a modal/full-screen
-browser-like interaction model.
+## Migration Notes
 
-### 3. `tui.py`
-
-Refactor the display builder into panel-specific rendering helpers:
-
-- `_render_answer_panel()`
-- `_render_plan_panel()`
-- `_render_subagent_panel()`
-- `_render_activity_panel()`
-- `_render_status_panel()`
-
-`TuiState` should include enough persistent state to support stable panels:
-
-- `full_response`
-- `activity_lines`
-- `current_plan`
-- `subagent_tracker`
-- `thread_id`
-- `last_user_input`
-- `errors`
-
-The TUI should also:
-
-- log user input once the session starts
-- log final assistant responses after a run completes
-- update the session logger thread ID as soon as `soothe.thread.created`,
-  `soothe.thread.resumed`, or `soothe.session.started` is observed
-
-### 4. `runner.py`
-
-The review model is only trustworthy if thread identity is trustworthy.
-
-Refine thread handling so:
-
-- requested thread IDs are honored
-- existing threads are resumed when possible
-- `soothe.thread.resumed` is emitted for true resume flows
-- a new thread is only created when no valid resume target exists
-
-Also expose a public setter for the active thread ID:
-
-- `set_current_thread_id(thread_id)`
-
-This avoids external mutation of `_current_thread_id`.
-
-### 5. `main.py`
-
-Use the runner setter rather than direct private-state mutation when launching TUI mode with a
-preselected thread.
-
-## Event Coverage Expectations
-
-The refreshed TUI should visibly handle these event families:
-
-- `soothe.session.*`
-- `soothe.thread.*`
-- `soothe.context.*`
-- `soothe.memory.*`
-- `soothe.plan.*`
-- `soothe.policy.*`
-- `soothe.error`
-
-Minimum layout-visible improvements:
-
-- `soothe.thread.saved` should appear in the activity/review surfaces
-- `soothe.thread.resumed` should be distinct from thread creation
-- `soothe.plan.step_started` and `soothe.plan.step_completed` should update plan state if emitted
+- **Legacy TUI preserved:** `tui.py` remains as fallback when Textual is unavailable (`ImportError` on `from soothe.cli.tui_app import run_textual_tui`)
+- **Shared components:** `TuiState`, `SubagentTracker`, `DynamicThinkingText`, `_add_activity`, `_handle_protocol_event`, `_handle_subagent_custom`, `render_plan_tree` are imported by both `tui.py` and `tui_app.py`
+- **Stream handlers:** The legacy TUI consumes `SootheRunner.astream()` directly; the Textual TUI consumes the same stream via daemon IPC (events serialized/deserialized)
 
 ## Testing Strategy
 
-### Unit tests
+### Unit Tests
 
-Add focused tests for the new reviewability behavior:
+- **Daemon protocol:** Encode/decode round-trip; message type parsing
+- **DaemonClient:** Mock socket; verify send/read formats
+- **SootheDaemon.is_running/stop_running:** PID file presence, stale PID handling
 
-- `SessionLogger` writes and reads mixed conversation/event records
-- `/history` renders recent prompt history
-- `/review` renders both conversation and action summaries
+### Integration Tests
 
-### Regression tests
+- **TUI lifecycle:** Start daemon, connect client, send input, receive events, disconnect
+- **Headless jsonl:** Run with `--format jsonl`, assert valid JSON lines on stdout
 
-Retain or add coverage confirming:
+### Regression Tests
 
-- thread resume semantics still work
-- durability behavior remains unchanged for create/resume/archive flows
-- the new public runner setter can replace direct private-field mutation
+- Thread resume semantics
+- Durability create/resume/archive flows
+- Slash command handling in both legacy and Textual TUI
 
-## Verification
+## Verification Checklist
 
-- [ ] Live TUI shows assistant output incrementally during streaming
-- [ ] Conversation panel remains readable during long tool-heavy runs
-- [ ] Recent action panel shows bounded, compact operational summaries
-- [ ] `/history` shows recent prompts from persistent input history
-- [ ] `/review` shows both user/assistant turns and custom event history
-- [ ] Resumed threads emit `soothe.thread.resumed`
-- [ ] `soothe.thread.saved` is visible in activity history
-- [ ] No private `runner._current_thread_id` mutation remains in main TUI launch flow
+- [ ] Daemon starts on `soothe run` when not running
+- [ ] `soothe attach` connects to running daemon
+- [ ] `soothe server start|stop|status` work correctly
+- [ ] `soothe init` creates ~/.soothe structure
+- [ ] Textual TUI displays conversation, plan, activity, subagent panels
+- [ ] Events from daemon update correct widgets
+- [ ] Slash commands (e.g. /help, /detach) work
+- [ ] Headless `--format jsonl` emits valid JSONL
+- [ ] Legacy TUI fallback works when Textual unavailable
 - [ ] `ruff check` passes on touched files
-- [ ] Targeted CLI/session tests pass
-
-## Compatibility Notes
-
-- This guide is a presentation-layer refinement, not a protocol redesign.
-- Existing session logs remain append-only JSONL; new records simply add `kind`, `role`, and
-  `text` fields for conversation entries.
-- The redesign is intentionally conservative: it does not replace Rich, the native stream format,
-  or the post-run Markdown answer rendering.
+- [ ] Targeted CLI/daemon tests pass
 
 ## Related Documents
 

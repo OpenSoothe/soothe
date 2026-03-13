@@ -1,5 +1,7 @@
 """Main CLI entry point using Typer."""
 
+import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -35,9 +37,8 @@ def _load_config(config_path: str | None) -> SootheConfig:
     if not config_path:
         return SootheConfig()
 
-    import json
-
-    with open(config_path) as f:
+    path = Path(config_path)
+    with path.open() as f:
         if config_path.endswith(".json"):
             config_data = json.load(f)
         elif config_path.endswith((".yaml", ".yml")):
@@ -58,6 +59,11 @@ def _load_config(config_path: str | None) -> SootheConfig:
     return SootheConfig(**config_data)
 
 
+# ---------------------------------------------------------------------------
+# soothe run
+# ---------------------------------------------------------------------------
+
+
 @app.command()
 def run(
     prompt: Annotated[
@@ -76,13 +82,17 @@ def run(
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
     ] = False,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
+    ] = "text",
 ) -> None:
     """Run the Soothe agent with a prompt or in interactive TUI mode."""
     try:
         cfg = _load_config(config)
 
         if prompt or no_tui:
-            _run_headless(cfg, prompt or "", thread_id=thread)
+            _run_headless(cfg, prompt or "", thread_id=thread, output_format=output_format)
         else:
             _run_tui(cfg, thread_id=thread)
 
@@ -95,14 +105,19 @@ def run(
 
 
 def _run_tui(cfg: SootheConfig, *, thread_id: str | None = None) -> None:
-    """Launch the interactive Rich TUI."""
-    from soothe.cli.runner import SootheRunner
-    from soothe.cli.tui import run_agent_tui
+    """Launch the Textual TUI (with daemon auto-start)."""
+    try:
+        from soothe.cli.tui_app import run_textual_tui
 
-    runner = SootheRunner(cfg)
-    if thread_id:
-        runner.set_current_thread_id(thread_id)
-    run_agent_tui(runner)
+        run_textual_tui(config=cfg, thread_id=thread_id)
+    except ImportError:
+        from soothe.cli.runner import SootheRunner
+        from soothe.cli.tui import run_agent_tui
+
+        runner = SootheRunner(cfg)
+        if thread_id:
+            runner.set_current_thread_id(thread_id)
+        run_agent_tui(runner)
 
 
 def _run_headless(
@@ -110,8 +125,9 @@ def _run_headless(
     prompt: str,
     *,
     thread_id: str | None = None,
+    output_format: str = "text",
 ) -> None:
-    """Run a single prompt with streaming output."""
+    """Run a single prompt with streaming output and progress events."""
     import asyncio
 
     from soothe.cli.runner import SootheRunner
@@ -120,16 +136,35 @@ def _run_headless(
 
     _chunk_len = 3
     _msg_pair_len = 2
+    exit_code = 0
 
-    async def _stream() -> None:
+    async def _stream() -> int:
+        nonlocal exit_code
         from langchain_core.messages import AIMessage, AIMessageChunk
 
         full_response: list[str] = []
         seen_message_ids: set[str] = set()
+        has_error = False
+
         async for chunk in runner.astream(prompt, thread_id=thread_id):
             if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
                 continue
             namespace, mode, data = chunk
+
+            if output_format == "jsonl":
+                sys.stdout.write(
+                    json.dumps({"namespace": list(namespace), "mode": mode, "data": data}, default=str) + "\n"
+                )
+                sys.stdout.flush()
+                continue
+
+            if mode == "custom" and isinstance(data, dict):
+                etype = data.get("type", "")
+                if etype.startswith("soothe."):
+                    _render_progress_event(data)
+                if etype == "soothe.error":
+                    has_error = True
+
             if mode == "messages" and not namespace:
                 if not isinstance(data, tuple) or len(data) != _msg_pair_len:
                     continue
@@ -138,7 +173,6 @@ def _run_headless(
                     continue
                 if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
                     msg_id = msg.id or ""
-                    # Complete (non-chunk) messages duplicate the streaming chunks
                     if not isinstance(msg, AIMessageChunk):
                         if msg_id in seen_message_ids:
                             continue
@@ -155,12 +189,177 @@ def _run_headless(
         if full_response:
             sys.stdout.write("\n")
             sys.stdout.flush()
+        return 1 if has_error else 0
 
-    asyncio.run(_stream())
+    exit_code = asyncio.run(_stream())
+    sys.exit(exit_code)
+
+
+def _render_progress_event(data: dict) -> None:
+    """Render a soothe.* event as a structured progress line to stderr."""
+    etype = data.get("type", "")
+    tag = etype.replace("soothe.", "").split(".")[0] if "." in etype else "soothe"
+    parts: list[str] = []
+
+    if etype == "soothe.context.projected":
+        parts = [f"{data.get('entries', 0)} entries, {data.get('tokens', 0)} tokens"]
+    elif etype == "soothe.memory.recalled":
+        parts = [f"{data.get('count', 0)} items recalled"]
+    elif etype == "soothe.plan.created":
+        steps = data.get("steps", [])
+        parts = [f"{len(steps)} steps created"]
+    elif etype == "soothe.policy.checked":
+        parts = [data.get("verdict", "?")]
+    elif etype == "soothe.session.started" or etype == "soothe.session.ended":
+        parts = [f"thread={data.get('thread_id', '?')}"]
+    elif etype == "soothe.error":
+        parts = [data.get("error", "unknown")]
+    else:
+        summary_keys = ("query", "topic", "agent_name", "message", "skill_count", "result_count")
+        for k in summary_keys:
+            v = data.get(k)
+            if v is not None:
+                parts.append(f"{k}={v}")
+                break
+
+    detail = " ".join(parts) if parts else etype
+    sys.stderr.write(f"[{tag}] {detail}\n")
+    sys.stderr.flush()
 
 
 # ---------------------------------------------------------------------------
-# Thread management subcommands
+# soothe attach
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def attach(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Attach the TUI to an already-running Soothe daemon."""
+    from soothe.cli.daemon import SootheDaemon
+
+    if not SootheDaemon.is_running():
+        typer.echo("Error: No Soothe daemon is running. Use 'soothe run' or 'soothe server start'.", err=True)
+        sys.exit(1)
+
+    cfg = _load_config(config)
+    try:
+        from soothe.cli.tui_app import run_textual_tui
+
+        run_textual_tui(config=cfg)
+    except ImportError:
+        typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# soothe init
+# ---------------------------------------------------------------------------
+
+
+@app.command("init")
+def init_soothe() -> None:
+    """Initialize ~/.soothe with a default configuration."""
+    home = Path(SOOTHE_HOME).expanduser()
+    target = home / "config" / "config.yml"
+
+    if target.exists():
+        typer.echo(f"Config already exists at {target}")
+        return
+
+    template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "soothe_home_config.yml"
+    if not template.exists():
+        template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "config.yml"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if template.exists():
+        shutil.copy2(template, target)
+        typer.echo(f"Created {target}")
+    else:
+        target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
+        typer.echo(f"Created minimal {target}")
+
+    for subdir in ("sessions", "generated_agents", "logs"):
+        (home / subdir).mkdir(parents=True, exist_ok=True)
+
+    typer.echo(f"Soothe home initialized at {home}")
+
+
+# ---------------------------------------------------------------------------
+# soothe server
+# ---------------------------------------------------------------------------
+
+server_app = typer.Typer(name="server", help="Manage the Soothe daemon process.")
+app.add_typer(server_app)
+
+
+@server_app.command("start")
+def server_start(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    foreground: Annotated[
+        bool,
+        typer.Option("--foreground", help="Run in foreground (don't daemonize)."),
+    ] = False,
+) -> None:
+    """Start the Soothe daemon."""
+    from soothe.cli.daemon import SootheDaemon, run_daemon
+
+    if SootheDaemon.is_running():
+        typer.echo("Soothe daemon is already running.")
+        return
+
+    cfg = _load_config(config)
+
+    if foreground:
+        run_daemon(cfg)
+    else:
+        import subprocess
+
+        cmd = [sys.executable, "-m", "soothe.cli.daemon"]
+        if config:
+            cmd.extend(["--config", config])
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        typer.echo("Soothe daemon started in background.")
+
+
+@server_app.command("stop")
+def server_stop() -> None:
+    """Stop the running Soothe daemon."""
+    from soothe.cli.daemon import SootheDaemon
+
+    if SootheDaemon.stop_running():
+        typer.echo("Soothe daemon stopped.")
+    else:
+        typer.echo("No Soothe daemon is running.")
+
+
+@server_app.command("status")
+def server_status() -> None:
+    """Show Soothe daemon status."""
+    from soothe.cli.daemon import SootheDaemon, pid_path
+
+    if SootheDaemon.is_running():
+        pf = pid_path()
+        pid = pf.read_text().strip() if pf.exists() else "?"
+        typer.echo(f"Soothe daemon is running (PID: {pid})")
+    else:
+        typer.echo("Soothe daemon is not running.")
+
+
+# ---------------------------------------------------------------------------
+# soothe thread
 # ---------------------------------------------------------------------------
 
 thread_app = typer.Typer(name="thread", help="Thread lifecycle management.")
@@ -173,6 +372,10 @@ def thread_list(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    status: Annotated[
+        str | None,
+        typer.Option("--status", "-s", help="Filter by status (active, archived)."),
+    ] = None,
 ) -> None:
     """List all agent threads."""
     import asyncio
@@ -184,16 +387,31 @@ def thread_list(
 
     async def _list() -> None:
         threads = await runner.list_threads()
+        if status:
+            threads = [t for t in threads if t.get("status") == status]
         if not threads:
             typer.echo("No threads.")
             return
         for t in threads:
             tid = t.get("thread_id", "?")
-            status = t.get("status", "?")
+            t_status = t.get("status", "?")
             created = str(t.get("created_at", "?"))[:19]
-            typer.echo(f"  {tid}  {status}  {created}")
+            typer.echo(f"  {tid}  {t_status}  {created}")
 
     asyncio.run(_list())
+
+
+@thread_app.command("resume")
+def thread_resume(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to resume.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Resume a thread in the next soothe run."""
+    cfg = _load_config(config)
+    _run_tui(cfg, thread_id=thread_id)
 
 
 @thread_app.command("archive")
@@ -217,6 +435,130 @@ def thread_archive(
         typer.echo(f"Archived thread {thread_id}.")
 
     asyncio.run(_archive())
+
+
+@thread_app.command("inspect")
+def thread_inspect(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to inspect.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Inspect thread details."""
+    import asyncio
+
+    from soothe.cli.runner import SootheRunner
+    from soothe.cli.session import SessionLogger
+
+    cfg = _load_config(config)
+    runner = SootheRunner(cfg)
+
+    async def _inspect() -> None:
+        threads = await runner.list_threads()
+        match = [t for t in threads if t.get("thread_id") == thread_id]
+        if not match:
+            typer.echo(f"Thread {thread_id} not found.")
+            return
+        t = match[0]
+        typer.echo(f"Thread ID:    {t.get('thread_id')}")
+        typer.echo(f"Status:       {t.get('status')}")
+        typer.echo(f"Created:      {t.get('created_at')}")
+
+        logger = SessionLogger(thread_id=thread_id)
+        records = logger.read_recent_records(limit=200)
+        conversations = [r for r in records if r.get("kind") == "conversation"]
+        events = [r for r in records if r.get("kind") == "event"]
+        typer.echo(f"Messages:     {len(conversations)}")
+        typer.echo(f"Events:       {len(events)}")
+        if conversations:
+            last = conversations[-1]
+            role = last.get("role", "?")
+            text = str(last.get("text", ""))[:120]
+            typer.echo(f"Last message: [{role}] {text}")
+
+    asyncio.run(_inspect())
+
+
+@thread_app.command("delete")
+def thread_delete(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to delete.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation."),
+    ] = False,
+) -> None:
+    """Permanently delete a thread."""
+    import asyncio
+
+    from soothe.cli.runner import SootheRunner
+
+    if not yes:
+        confirm = typer.confirm(f"Permanently delete thread {thread_id}?")
+        if not confirm:
+            typer.echo("Cancelled.")
+            return
+
+    cfg = _load_config(config)
+    runner = SootheRunner(cfg)
+
+    async def _delete() -> None:
+        try:
+            await runner._durability.archive_thread(thread_id)
+        except Exception:
+            pass
+        session_file = Path(SOOTHE_HOME).expanduser() / "sessions" / f"{thread_id}.jsonl"
+        if session_file.exists():
+            session_file.unlink()
+        typer.echo(f"Deleted thread {thread_id}.")
+
+    asyncio.run(_delete())
+
+
+@thread_app.command("export")
+def thread_export(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to export.")],
+    output: Annotated[
+        str | None,
+        typer.Option("--output", "-o", help="Output file path."),
+    ] = None,
+    export_format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Export format: jsonl or md."),
+    ] = "jsonl",
+) -> None:
+    """Export thread conversation to a file."""
+    from soothe.cli.session import SessionLogger
+
+    logger = SessionLogger(thread_id=thread_id)
+    records = logger.read_recent_records(limit=10000)
+
+    if not records:
+        typer.echo(f"No records found for thread {thread_id}.")
+        return
+
+    out_path = output or f"{thread_id}.{export_format}"
+
+    if export_format == "jsonl":
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(r, default=str) + "\n" for r in records)
+    elif export_format == "md":
+        conversations = [r for r in records if r.get("kind") == "conversation"]
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(f"# Thread {thread_id}\n\n")
+            for c in conversations:
+                role = c.get("role", "unknown").title()
+                text = c.get("text", "")
+                f.write(f"## {role}\n\n{text}\n\n")
+    else:
+        typer.echo(f"Unknown format: {export_format}. Use 'jsonl' or 'md'.", err=True)
+        sys.exit(1)
+
+    typer.echo(f"Exported to {out_path}")
 
 
 # ---------------------------------------------------------------------------

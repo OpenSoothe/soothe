@@ -1,27 +1,25 @@
-"""Planner agent example.
-
-Creates a Soothe agent with the planner subagent for structured task planning.
-The planner analyses context, identifies dependencies, and produces actionable
-step-by-step plans. Streams tool calls and AI text in real-time.
-"""
+"""Planner agent example -- SOOTHE_HOME aware."""
 
 import asyncio
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
-from soothe import SootheConfig, create_soothe_agent
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from _config_helper import load_example_config
 
+from soothe import create_soothe_agent
 from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
 
-PROJECT_ROOT = str(Path(__file__).parent.parent.resolve())
+PROJECT_ROOT = str(Path(__file__).parent.parent.parent.resolve())
 
 
 async def main() -> None:
-    config = SootheConfig.from_yaml_file("config.dev.yml")
+    config = load_example_config()
     config.workspace_dir = PROJECT_ROOT
     config.subagents["planner"].enabled = True
     config.subagents["scout"].enabled = True

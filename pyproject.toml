@@ -31,6 +31,7 @@ dependencies = [
     "langchain-tavily>=0.2.17",
     "typer[all]>=0.9.0,<1.0.0",
     "pyyaml>=6.0.0,<7.0.0",
+    "textual>=0.40.0",
 ]
 
 [project.optional-dependencies]
@@ -126,12 +127,12 @@ ignore-var-parameters = true
 "src/soothe/durability/**" = ["ANN401"]
 "src/soothe/remote/**" = ["ANN401", "ARG002", "PLC0415", "TC003"]
 "src/soothe/config.py" = ["ANN401", "PLC0415", "TC002"]
-"src/soothe/agent.py" = ["ARG001", "PLC0415", "SIM108", "TC001", "TC002", "TC003"]
-"src/soothe/vector_store/**" = ["ANN401", "ARG002", "B905", "BLE001", "PLC0415", "S608", "TC001"]
+"src/soothe/agent.py" = ["ARG001", "C901", "PLC0415", "PLR0911", "SIM108", "TC001", "TC002", "TC003"]
+"src/soothe/vector_store/**" = ["ANN401", "ARG002", "B905", "BLE001", "D107", "PLC0415", "S608", "TC001"]
 "src/soothe/persistence/**" = ["ANN401", "PLC0415", "SIM105"]
 "src/soothe/context/vector_context.py" = ["BLE001"]
 "src/soothe/memory_store/vector_memory.py" = ["BLE001"]
-"src/soothe/cli/**" = ["ANN", "BLE001", "C901", "E501", "FBT002", "PIE810", "PLC0415", "PLR0912", "PLR0915", "PTH123"]
+"src/soothe/cli/**" = ["ANN", "ASYNC240", "BLE001", "C901", "D107", "E501", "FBT002", "G201", "PIE810", "PLC0415", "PLR0912", "PLR0915", "PLR1714", "PLR2004", "PTH123", "RUF012", "S110", "S603", "S607", "SIM102", "SIM105", "TCH003", "TRY300"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

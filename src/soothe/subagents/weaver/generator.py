@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
@@ -86,7 +86,7 @@ class AgentGenerator:
             skills=copied_skills,
             tools=blueprint.tools,
             capabilities=blueprint.capability.required_capabilities,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
         manifest_path = output_dir / "manifest.yml"

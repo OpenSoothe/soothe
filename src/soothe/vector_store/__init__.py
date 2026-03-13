@@ -15,7 +15,7 @@ def create_vector_store(
     """Factory for vector store backends.
 
     Args:
-        provider: Backend name (``pgvector`` or ``weaviate``).
+        provider: Backend name (``pgvector``, ``weaviate``, ``in_memory``, or ``none``).
         collection: Collection / table name.
         config: Provider-specific configuration.
 
@@ -27,6 +27,11 @@ def create_vector_store(
     """
     config = config or {}
 
+    if provider in ("in_memory", "none"):
+        from soothe.vector_store.in_memory import InMemoryVectorStore
+
+        return InMemoryVectorStore(collection=collection)
+
     if provider == "pgvector":
         from soothe.vector_store.pgvector import PGVectorStore
 
@@ -37,5 +42,5 @@ def create_vector_store(
 
         return WeaviateVectorStore(collection=collection, **config)
 
-    msg = f"Unknown vector store provider: {provider!r}. Use 'pgvector' or 'weaviate'."
+    msg = f"Unknown vector store provider: {provider!r}. Use 'pgvector', 'weaviate', 'in_memory', or 'none'."
     raise ValueError(msg)

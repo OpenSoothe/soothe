@@ -42,16 +42,9 @@ SKILLIFY_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    """Emit a progress event via stream writer, with logging fallback."""
-    try:
-        from langgraph.config import get_stream_writer
+    from soothe.utils._progress import emit_progress
 
-        writer = get_stream_writer()
-        if writer:
-            writer(event)
-    except (ImportError, RuntimeError):
-        pass
-    logger.info("Skillify progress: %s", event)
+    emit_progress(event, logger)
 
 
 # ---------------------------------------------------------------------------
@@ -91,9 +84,16 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             last = messages[-1]
             query = last.content if hasattr(last, "content") else str(last)
 
+        if not retriever.is_ready:
+            _emit_progress({"type": "soothe.skillify.indexing_pending", "query": query[:200]})
+
         _emit_progress({"type": "soothe.skillify.retrieve.started", "query": query[:200]})
 
         bundle: SkillBundle = await retriever.retrieve(query)
+
+        if bundle.query.startswith("[Indexing in progress]"):
+            _emit_progress({"type": "soothe.skillify.retrieve.not_ready", "message": bundle.query})
+            return {"messages": [AIMessage(content=bundle.query)]}
 
         top_score = bundle.results[0].score if bundle.results else 0.0
         _emit_progress(
@@ -200,6 +200,7 @@ def create_skillify_subagent(
         vector_store=vector_store,
         embeddings=embeddings,
         top_k=top_k,
+        ready_event=indexer.ready_event,
     )
 
     _start_background_indexer(indexer)
@@ -232,7 +233,7 @@ def _resolve_dependencies(
             cfg.vector_store_config,
         )
     else:
-        from soothe.subagents.skillify._in_memory_vs import InMemoryVectorStore
+        from soothe.vector_store.in_memory import InMemoryVectorStore
 
         vs = InMemoryVectorStore(collection)
 

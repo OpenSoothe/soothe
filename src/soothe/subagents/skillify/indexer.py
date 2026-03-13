@@ -49,11 +49,22 @@ class SkillIndexer:
         self._task: asyncio.Task[None] | None = None
         self._initialized = False
         self._total_indexed = 0
+        self._ready_event = asyncio.Event()
 
     @property
     def total_indexed(self) -> int:
         """Number of skills currently indexed."""
         return self._total_indexed
+
+    @property
+    def ready_event(self) -> asyncio.Event:
+        """Event that is set once the first indexing pass completes."""
+        return self._ready_event
+
+    @property
+    def is_ready(self) -> bool:
+        """Whether the first indexing pass has completed."""
+        return self._ready_event.is_set()
 
     async def start(self) -> None:
         """Start the background indexing loop as an asyncio.Task."""
@@ -170,6 +181,7 @@ class SkillIndexer:
 
     async def _index_loop(self) -> None:
         """Perpetual loop: run_once() then sleep(interval)."""
+        first_pass = True
         while True:
             try:
                 stats = await self.run_once()
@@ -184,9 +196,16 @@ class SkillIndexer:
                     )
                 else:
                     logger.debug("Skillify index pass: no changes (total=%d)", self._total_indexed)
+                if first_pass:
+                    self._ready_event.set()
+                    first_pass = False
+                    logger.info("Skillify index ready (total=%d)", self._total_indexed)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.error("Skillify index pass failed", exc_info=True)
+                if first_pass:
+                    self._ready_event.set()
+                    first_pass = False
 
             await asyncio.sleep(self._interval)

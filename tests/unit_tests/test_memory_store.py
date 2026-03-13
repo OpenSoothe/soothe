@@ -1,8 +1,7 @@
 """Tests for memory store implementations (StoreBackedMemory and VectorMemory)."""
 
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -281,7 +280,6 @@ class TestVectorMemory:
     async def test_recall_by_semantic_search(self, mock_vector_store, mock_embeddings):
         """Test recall uses semantic search."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         # Mock search results
@@ -311,7 +309,6 @@ class TestVectorMemory:
     async def test_recall_handles_invalid_payloads(self, mock_vector_store, mock_embeddings):
         """Test recall handles invalid payloads gracefully."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         # Mock results with invalid payload
@@ -333,7 +330,6 @@ class TestVectorMemory:
     async def test_recall_by_tags(self, mock_vector_store, mock_embeddings):
         """Test recall_by_tags filters by tags."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         item1 = MemoryItem(id="1", content="item 1", tags=["python", "programming"])
@@ -360,7 +356,6 @@ class TestVectorMemory:
     async def test_recall_by_tags_respects_limit(self, mock_vector_store, mock_embeddings):
         """Test recall_by_tags respects limit."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         items = [MemoryItem(id=str(i), content=f"item {i}", tags=["test"]) for i in range(10)]
@@ -404,7 +399,6 @@ class TestVectorMemory:
     async def test_update_existing_item(self, mock_vector_store, mock_embeddings):
         """Test updating an existing item."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         existing_item = MemoryItem(id="test_id", content="original content")
@@ -445,7 +439,6 @@ class TestVectorMemory:
     async def test_update_handles_corrupt_data(self, mock_vector_store, mock_embeddings):
         """Test that update raises KeyError for corrupt data."""
         from soothe.memory_store.vector_memory import VectorMemory
-
         from soothe.protocols.vector_store import VectorRecord
 
         mock_vector_store.get = AsyncMock(return_value=VectorRecord(id="test_id", payload={"invalid": "data"}))

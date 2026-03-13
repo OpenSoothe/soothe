@@ -46,6 +46,10 @@ _SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 def _resolve_tools(tool_names: list[str]) -> list[BaseTool]:
     """Resolve tool group names to instantiated langchain BaseTool lists.
 
+    Supports both custom Soothe tools (jina, serper, image, audio, video,
+    tabular) and langchain ecosystem tools (tavily, duckduckgo, arxiv,
+    wikipedia, github, python_repl).
+
     Args:
         tool_names: Enabled tool group names from config.
 
@@ -54,33 +58,71 @@ def _resolve_tools(tool_names: list[str]) -> list[BaseTool]:
     """
     tools: list[BaseTool] = []
     for name in tool_names:
-        if name == "jina":
-            from soothe.tools.jina import create_jina_tools
-
-            tools.extend(create_jina_tools())
-        elif name == "serper":
-            from soothe.tools.serper import create_serper_tools
-
-            tools.extend(create_serper_tools())
-        elif name == "image":
-            from soothe.tools.image import create_image_tools
-
-            tools.extend(create_image_tools())
-        elif name == "audio":
-            from soothe.tools.audio import create_audio_tools
-
-            tools.extend(create_audio_tools())
-        elif name == "video":
-            from soothe.tools.video import create_video_tools
-
-            tools.extend(create_video_tools())
-        elif name == "tabular":
-            from soothe.tools.tabular import create_tabular_tools
-
-            tools.extend(create_tabular_tools())
-        else:
-            logger.warning("Unknown tool group '%s', skipping.", name)
+        try:
+            resolved = _resolve_single_tool_group(name)
+            tools.extend(resolved)
+        except Exception:  # noqa: BLE001
+            logger.warning("Failed to load tool group '%s'", name, exc_info=True)
     return tools
+
+
+def _resolve_single_tool_group(name: str) -> list[BaseTool]:
+    """Resolve a single tool group name to a list of BaseTool instances."""
+    if name == "jina":
+        from soothe.tools.jina import create_jina_tools
+
+        return list(create_jina_tools())
+    if name == "serper":
+        from soothe.tools.serper import create_serper_tools
+
+        return list(create_serper_tools())
+    if name == "image":
+        from soothe.tools.image import create_image_tools
+
+        return list(create_image_tools())
+    if name == "audio":
+        from soothe.tools.audio import create_audio_tools
+
+        return list(create_audio_tools())
+    if name == "video":
+        from soothe.tools.video import create_video_tools
+
+        return list(create_video_tools())
+    if name == "tabular":
+        from soothe.tools.tabular import create_tabular_tools
+
+        return list(create_tabular_tools())
+
+    # --- Langchain ecosystem tools (inherited from noesium) ---
+    if name == "tavily":
+        from langchain_tavily import TavilySearchResults
+
+        return [TavilySearchResults()]
+    if name == "duckduckgo":
+        from langchain_community.tools import DuckDuckGoSearchRun
+
+        return [DuckDuckGoSearchRun()]
+    if name == "arxiv":
+        from langchain_community.tools import ArxivQueryRun
+
+        return [ArxivQueryRun()]
+    if name == "wikipedia":
+        from langchain_community.tools import WikipediaQueryRun
+        from langchain_community.utilities import WikipediaAPIWrapper
+
+        return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
+    if name == "github":
+        from langchain_community.utilities import GitHubAPIWrapper
+
+        wrapper = GitHubAPIWrapper()
+        return wrapper.get_tools()
+    if name == "python_repl":
+        from langchain_community.tools import PythonREPLTool
+
+        return [PythonREPLTool()]
+
+    logger.warning("Unknown tool group '%s', skipping.", name)
+    return []
 
 
 def _resolve_subagents(

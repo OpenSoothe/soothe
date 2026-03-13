@@ -1,7 +1,5 @@
 """Tests for persistence layer (JsonPersistStore and RocksDBPersistStore)."""
 
-import json
-import tempfile
 from pathlib import Path
 
 import pytest

@@ -103,9 +103,10 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
-| `cli/` | `main`, `runner`, `tui`, `commands`, `session` | Typer CLI + Rich TUI + SootheRunner |
-| `vector_store/` | `PGVectorStore`, `WeaviateVectorStore` | VectorStoreProtocol implementations |
+| `cli/` | `main`, `runner`, `tui`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon + SootheRunner |
+| `vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
 | `persistence/` | `JsonStore`, `RocksDbStore` | Persistence backends for context/memory |
+| `utils/` | `_streaming`, `_progress` | Shared streaming and progress helpers |
 
 ## What deepagents Provides (DO NOT reimplement)
 
@@ -137,7 +138,12 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
   with HITL interrupt loop, post-stream (ingestion, reflection, persistence).
 - Protocol events are `((), "custom", {"type": "soothe.*", ...})` plain dicts
   in the deepagents-canonical `(namespace, mode, data)` stream format.
-- TUI uses `rich.live.Live` with `Group` renderables and is a pure renderer.
+- **Daemon mode**: `SootheDaemon` in `daemon.py` runs `SootheRunner` in background,
+  serves events over Unix domain socket (`~/.soothe/soothe.sock`).
+- **Textual TUI**: `SootheApp` in `tui_app.py` connects to daemon, provides always-on
+  two-column layout with ChatInput, ConversationPanel, PlanPanel, ActivityPanel.
+- **Legacy TUI**: `tui.py` provides Rich Live-based fallback when Textual unavailable.
+- **Headless**: `_run_headless` renders `soothe.*` events as progress, supports `--format jsonl`.
 - Slash commands and subagent routing in `commands.py`.
 - Session logging (JSONL) and input history in `session.py`.
 
@@ -166,9 +172,10 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-007](docs/impl/007-cli-tui-implementation.md) | CLI TUI Implementation |
 | [IG-008](docs/impl/008-config-docs-revision.md) | Config and Docs Revision |
 | [IG-009](docs/impl/009-ollama-provider.md) | Ollama Provider |
-| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | TUI Layout History Refresh |
+| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | Textual TUI and Daemon Implementation |
 | [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
 | [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
+| [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
 
 ### Configuration Reference
 
