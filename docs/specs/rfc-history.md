@@ -8,6 +8,8 @@ This document tracks the change history of all RFCs in this project.
 |------|-----|--------|-------------|
 | 2026-03-12 | RFC-0001 | Draft | Initial Conceptual Design (Platonic Init) |
 | 2026-03-12 | RFC-0003 | Draft | CLI TUI Architecture Design |
+| 2026-03-13 | RFC-0004 | Draft | Skillify Agent Architecture Design |
+| 2026-03-13 | RFC-0005 | Draft | Weaver Agent Architecture Design |
 
 ## Notes
 

@@ -16,6 +16,8 @@ This document provides an index of all RFCs in this project.
 |-----|-------|--------|--------------|
 | [RFC-0002](./RFC-0002.md) | Core Modules Architecture Design | Draft | RFC-0001 |
 | [RFC-0003](./RFC-0003.md) | CLI TUI Architecture Design | Draft | RFC-0001, RFC-0002 |
+| [RFC-0004](./RFC-0004.md) | Skillify Agent Architecture Design | Draft | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0005](./RFC-0005.md) | Weaver Agent Architecture Design | Draft | RFC-0001, RFC-0002, RFC-0003, RFC-0004 |
 
 ### Implementation Interface Design
 
