@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import signal
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,7 @@ class SootheDaemon:
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
         self._running = False
+        self._thread_stop = threading.Event()
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     # -- lifecycle ----------------------------------------------------------
@@ -112,22 +114,32 @@ class SootheDaemon:
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
 
+    def request_stop(self) -> None:
+        """Thread-safe method to request daemon shutdown from any thread."""
+        self._thread_stop.set()
+
     async def serve_forever(self) -> None:
-        """Block until the daemon is stopped."""
+        """Block until the daemon is stopped.
+
+        Supports both signal-based shutdown (main thread) and thread-safe
+        shutdown via ``request_stop()`` (background thread).
+        """
         if not self._server:
             return
+
         loop = asyncio.get_running_loop()
-        stop_event = asyncio.Event()
 
-        def _signal_handler() -> None:
-            stop_event.set()
-
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, _signal_handler)
+        # Signal handlers only work on the main thread; skip when embedded.
+        try:
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, self._thread_stop.set)
+        except RuntimeError:
+            logger.debug("Cannot set signal handlers (not main thread)")
 
         input_task = asyncio.create_task(self._input_loop())
         try:
-            await stop_event.wait()
+            while not self._thread_stop.is_set():  # noqa: ASYNC110 -- threading.Event, not asyncio.Event
+                await asyncio.sleep(0.5)
         finally:
             input_task.cancel()
             await self.stop()

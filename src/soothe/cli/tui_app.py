@@ -153,6 +153,13 @@ class SootheApp(App):
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
+        # Focus the chat input so users can start typing immediately
+        try:
+            chat_input = self.query_one("#chat-input", Input)
+            chat_input.focus()
+        except Exception:
+            pass
+
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
     async def _connect_and_listen(self) -> None:
@@ -424,10 +431,10 @@ def _stop_background_daemon() -> None:
     """Stop the in-process daemon if we started one."""
     global _daemon_thread, _daemon_instance  # noqa: PLW0603
     if _daemon_instance is not None:
-        SootheDaemon.stop_running()
+        _daemon_instance.request_stop()
         _daemon_instance = None
     if _daemon_thread is not None:
-        _daemon_thread.join(timeout=3)
+        _daemon_thread.join(timeout=5)
         _daemon_thread = None
 
 
