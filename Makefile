@@ -29,7 +29,7 @@ sync-dev:
 	@echo "✓ Dev dependencies synced"
 
 # Format code
-format:
+format: sync-dev
 	@echo "Formatting code..."
 	uv run ruff format src/ tests/
 	@echo "✓ Code formatted"

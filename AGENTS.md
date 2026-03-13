@@ -100,7 +100,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `durability/` | `InMemoryDurability` | DurabilityProtocol implementations |
 | `remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
 | `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
-| `subagents/` | `planner`, `scout`, `research`, `browser`, `claude` | deepagents SubAgent/CompiledSubAgent |
+| `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
 | `cli/` | `main`, `runner`, `tui`, `commands`, `session` | Typer CLI + Rich TUI + SootheRunner |
@@ -150,6 +150,8 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design |
 | [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture Design |
 | [RFC-0003](docs/specs/RFC-0003.md) | CLI TUI Architecture Design |
+| [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
+| [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
 
 ### Implementation Guides
 
@@ -163,6 +165,10 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-006](docs/impl/006-vectorstore-router-persistence.md) | VectorStore, Router, Persistence |
 | [IG-007](docs/impl/007-cli-tui-implementation.md) | CLI TUI Implementation |
 | [IG-008](docs/impl/008-config-docs-revision.md) | Config and Docs Revision |
+| [IG-009](docs/impl/009-ollama-provider.md) | Ollama Provider |
+| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | TUI Layout History Refresh |
+| [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
+| [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
 
 ### Configuration Reference
 

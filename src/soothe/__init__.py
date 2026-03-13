@@ -1,7 +1,7 @@
 """Soothe: Protocol-driven orchestration framework built on deepagents."""
 
 from soothe.agent import create_soothe_agent
-from soothe.config import ModelProviderConfig, ModelRouter, SootheConfig
+from soothe.config import SOOTHE_HOME, ModelProviderConfig, ModelRouter, SkillifyConfig, SootheConfig, WeaverConfig
 from soothe.protocols import (
     ConcurrencyPolicy,
     ContextEntry,
@@ -38,8 +38,11 @@ __all__ = [
     "PlannerProtocol",
     "PolicyProtocol",
     "RemoteAgentProtocol",
+    "SOOTHE_HOME",
+    "SkillifyConfig",
     "SootheConfig",
     "VectorRecord",
     "VectorStoreProtocol",
+    "WeaverConfig",
     "create_soothe_agent",
 ]

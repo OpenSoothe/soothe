@@ -17,7 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import Checkpointer
 
-from soothe.config import SootheConfig
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.memory import MemoryProtocol
 from soothe.protocols.planner import PlannerProtocol
@@ -27,6 +27,8 @@ from soothe.subagents.claude import create_claude_subagent
 from soothe.subagents.planner import create_planner_subagent
 from soothe.subagents.research import create_research_subagent
 from soothe.subagents.scout import create_scout_subagent
+from soothe.subagents.skillify import create_skillify_subagent
+from soothe.subagents.weaver import create_weaver_subagent
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,8 @@ _SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
     "research": create_research_subagent,
     "browser": create_browser_subagent,
     "claude": create_claude_subagent,
+    "skillify": create_skillify_subagent,
+    "weaver": create_weaver_subagent,
 }
 
 
@@ -85,6 +89,9 @@ def _resolve_subagents(
 ) -> list[SubAgent | CompiledSubAgent]:
     """Build subagent specs from config.
 
+    Includes both built-in subagents and dynamically loaded generated agents
+    from the Weaver registry.
+
     Args:
         config: Soothe configuration.
         default_model: Pre-configured model instance to use as default.
@@ -101,8 +108,52 @@ def _resolve_subagents(
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
         model_override = sub_cfg.model or default_model or config.resolve_model("default")
-        spec = factory(model=model_override, **sub_cfg.config)
+        extra_kwargs = dict(sub_cfg.config)
+        if name in ("skillify", "weaver"):
+            extra_kwargs["config"] = config
+        spec = factory(model=model_override, **extra_kwargs)
         subagents.append(spec)
+
+    generated = _resolve_generated_subagents(config)
+    if generated:
+        logger.info("Loaded %d generated agent(s) from registry", len(generated))
+        subagents.extend(generated)
+
+    return subagents
+
+
+def _resolve_generated_subagents(config: SootheConfig) -> list[SubAgent]:
+    """Load generated agents from Weaver's registry at startup.
+
+    Scans ``generated_agents_dir`` for ``*/manifest.yml`` files and
+    constructs ``SubAgent`` dicts from their manifests and system prompts.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        List of ``SubAgent`` dicts for generated agents.
+    """
+    from pathlib import Path
+
+    generated_dir = config.weaver.generated_agents_dir or str(Path(SOOTHE_HOME) / "generated_agents")
+    base = Path(generated_dir).expanduser().resolve()
+    if not base.is_dir():
+        return []
+
+    try:
+        from soothe.subagents.weaver.registry import GeneratedAgentRegistry
+
+        registry = GeneratedAgentRegistry(base_dir=base)
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to initialise generated agent registry", exc_info=True)
+        return []
+
+    subagents: list[SubAgent] = []
+    for manifest in registry.list_agents():
+        agent = registry.load_as_subagent(manifest.name)
+        if agent:
+            subagents.append(agent)
     return subagents
 
 

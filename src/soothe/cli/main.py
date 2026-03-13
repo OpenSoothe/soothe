@@ -1,11 +1,12 @@
 """Main CLI entry point using Typer."""
 
 import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from soothe.config import SootheConfig
+from soothe.config import SOOTHE_HOME, SootheConfig
 
 app = typer.Typer(
     name="soothe",
@@ -13,9 +14,14 @@ app = typer.Typer(
     add_completion=False,
 )
 
+_DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+
 
 def _load_config(config_path: str | None) -> SootheConfig:
     """Load SootheConfig from a file path or defaults.
+
+    When no ``config_path`` is provided, automatically checks
+    ``~/.soothe/config/config.yml`` and loads it if present.
 
     Args:
         config_path: Path to a YAML/JSON config file, or ``None`` for defaults.
@@ -23,6 +29,9 @@ def _load_config(config_path: str | None) -> SootheConfig:
     Returns:
         A ``SootheConfig`` instance.
     """
+    if not config_path and _DEFAULT_CONFIG_PATH.is_file():
+        config_path = str(_DEFAULT_CONFIG_PATH)
+
     if not config_path:
         return SootheConfig()
 

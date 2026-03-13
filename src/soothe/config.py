@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Any, Literal
 
 from langchain_core.embeddings import Embeddings
@@ -12,6 +13,9 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
+
+SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
+"""Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
 
@@ -89,6 +93,46 @@ class MCPServerConfig(BaseModel):
     transport: str = "stdio"
 
 
+class SkillifyConfig(BaseModel):
+    """Configuration for the Skillify subagent (RFC-0004).
+
+    Args:
+        enabled: Whether Skillify is active.
+        warehouse_paths: Additional warehouse paths beyond the default.
+        index_interval_seconds: Seconds between background indexing passes.
+        index_collection: Vector store collection name for skill embeddings.
+        retrieval_top_k: Default number of results for retrieval queries.
+    """
+
+    enabled: bool = False
+    warehouse_paths: list[str] = Field(default_factory=list)
+    index_interval_seconds: int = 300
+    index_collection: str = "soothe_skillify"
+    retrieval_top_k: int = 10
+
+
+class WeaverConfig(BaseModel):
+    """Configuration for the Weaver subagent (RFC-0005).
+
+    Args:
+        enabled: Whether Weaver is active.
+        generated_agents_dir: Directory for generated agent packages.
+        reuse_threshold: Minimum confidence for reuse-first matching.
+        reuse_collection: Vector store collection for reuse index.
+        max_generation_attempts: Maximum retries for agent generation.
+        allowed_tool_groups: Tool groups available to generated agents.
+        allowed_mcp_servers: MCP servers available to generated agents.
+    """
+
+    enabled: bool = False
+    generated_agents_dir: str = ""
+    reuse_threshold: float = 0.85
+    reuse_collection: str = "soothe_weaver_reuse"
+    max_generation_attempts: int = 2
+    allowed_tool_groups: list[str] = Field(default_factory=list)
+    allowed_mcp_servers: list[str] = Field(default_factory=list)
+
+
 class SootheConfig(BaseSettings):
     """Top-level configuration for a Soothe agent.
 
@@ -136,6 +180,8 @@ class SootheConfig(BaseSettings):
             "scout": SubagentConfig(),
             "browser": SubagentConfig(enabled=False),
             "claude": SubagentConfig(enabled=False),
+            "skillify": SubagentConfig(enabled=False),
+            "weaver": SubagentConfig(enabled=False),
         }
     )
     """Subagent name to config mapping. Set ``enabled: false`` to disable."""
@@ -153,10 +199,18 @@ class SootheConfig(BaseSettings):
     """AGENTS.md file paths passed to deepagents MemoryMiddleware."""
 
     workspace_dir: str | None = None
-    """Root directory for filesystem operations."""
+    """Root directory for filesystem operations. Defaults to ``SOOTHE_HOME``."""
 
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""
+
+    # --- Skillify and Weaver config (RFC-0004, RFC-0005) ---
+
+    skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
+    """Skillify subagent configuration."""
+
+    weaver: WeaverConfig = Field(default_factory=WeaverConfig)
+    """Weaver subagent configuration."""
 
     # --- Protocol config (RFC-0002) ---
 
