@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from soothe.config import SOOTHE_HOME
+
 logger = logging.getLogger(__name__)
+
+_LOG_CONTENT_LIMIT = 2000
+
+
+def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "..."
 
 
 # ---------------------------------------------------------------------------
@@ -23,16 +34,16 @@ class SessionLogger:
     user/assistant conversation turns for lightweight in-terminal review.
 
     Args:
-        session_dir: Directory for session logs.
+        session_dir: Directory for session logs. Defaults to ``SOOTHE_HOME/sessions/``.
         thread_id: Thread ID for the log file name.
     """
 
     def __init__(  # noqa: D107
         self,
-        session_dir: str = "~/.soothe/sessions",
+        session_dir: str | None = None,
         thread_id: str | None = None,
     ) -> None:
-        self._session_dir = Path(session_dir).expanduser()
+        self._session_dir = Path(session_dir or os.path.join(SOOTHE_HOME, "sessions")).expanduser()
         self._thread_id = thread_id or "default"
         self._initialized = False
 
@@ -57,24 +68,24 @@ class SessionLogger:
         mode: str,
         data: Any,
     ) -> None:
-        """Log a stream chunk if it is a custom event.
+        """Log a stream chunk: custom events and tool-related messages.
 
         Args:
             namespace: Stream namespace (empty tuple for main agent).
             mode: Stream mode (``messages``, ``updates``, ``custom``).
             data: Stream data payload.
         """
-        if mode != "custom" or not isinstance(data, dict):
-            return
-
-        self._write_record(
-            {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "kind": "event",
-                "namespace": list(namespace),
-                "data": data,
-            }
-        )
+        if mode == "custom" and isinstance(data, dict):
+            self._write_record(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "kind": "event",
+                    "namespace": list(namespace),
+                    "data": data,
+                }
+            )
+        elif mode == "messages" and isinstance(data, (tuple, list)) and len(data) == 2:
+            self._log_message_event(namespace, data)
 
     def log_user_input(self, text: str) -> None:
         """Log a user turn for later session review.
@@ -111,6 +122,43 @@ class SessionLogger:
                 "text": cleaned,
             }
         )
+
+    def _log_message_event(
+        self,
+        namespace: tuple[str, ...],
+        data: Any,
+    ) -> None:
+        """Log tool calls and tool results from messages-mode chunks."""
+        try:
+            from langchain_core.messages import AIMessage, ToolMessage
+
+            msg, _metadata = data
+            if isinstance(msg, ToolMessage):
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                self._write_record(
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "kind": "tool_result",
+                        "namespace": list(namespace),
+                        "tool_name": getattr(msg, "name", "unknown"),
+                        "content": _truncate_for_log(content),
+                    }
+                )
+            elif isinstance(msg, AIMessage):
+                tool_calls = getattr(msg, "tool_calls", None) or []
+                for tc in tool_calls:
+                    if isinstance(tc, dict) and tc.get("name"):
+                        self._write_record(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "kind": "tool_call",
+                                "namespace": list(namespace),
+                                "tool_name": tc["name"],
+                                "args_preview": _truncate_for_log(str(tc.get("args", {})), 500),
+                            }
+                        )
+        except Exception:
+            logger.debug("Failed to log message event", exc_info=True)
 
     def read_recent_records(self, limit: int = 100) -> list[dict[str, Any]]:
         """Read the most recent session records from disk.
@@ -187,10 +235,10 @@ class InputHistory:
 
     def __init__(  # noqa: D107
         self,
-        history_file: str = "~/.soothe/history.json",
+        history_file: str | None = None,
         max_size: int = 1000,
     ) -> None:
-        self.history_file = Path(history_file).expanduser()
+        self.history_file = Path(history_file or os.path.join(SOOTHE_HOME, "history.json")).expanduser()
         self.max_size = max_size
         self.history: list[str] = []
         self._load()

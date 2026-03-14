@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 _THINKING_ROTATE_SEC = 1.5
-_ACTIVITY_MAX = 50
+_ACTIVITY_MAX = 300
 _ACTIVITY_DISPLAY = 10
 _SUBAGENT_DISPLAY = 5
 _ANSWER_LINE_WINDOW = 28
@@ -427,11 +427,44 @@ def _handle_subagent_custom(
     data: dict[str, Any],
     state: TuiState,
 ) -> None:
-    """Render a subagent custom event as an activity line."""
+    """Render a subagent custom event as an activity line with type-specific detail."""
     state.subagent_tracker.update_from_custom(namespace, data)
     tag = namespace[-1] if namespace else "subagent"
     etype = data.get("type", "")
-    summary = etype.replace("research_", "").replace("_", " ")[:40]
+
+    if etype == "browser_step":
+        step = data.get("step", "?")
+        action = _truncate(str(data.get("action", "")), 50)
+        url = _truncate(str(data.get("url", "")), 35)
+        summary = f"Step {step}"
+        if action:
+            summary += f": {action}"
+        if url:
+            summary += f" @ {url}"
+    elif etype.startswith("research_"):
+        label = etype.replace("research_", "").replace("_", " ")
+        query = data.get("query", data.get("topic", ""))
+        summary = label
+        if query:
+            summary += f": {_truncate(str(query), 40)}"
+    elif etype in ("claude_tool_use",):
+        summary = f"Tool: {data.get('name', etype)}"
+    elif etype in ("claude_text",):
+        summary = f"Text: {_truncate(str(data.get('text', '')), 50)}"
+    elif etype.startswith("soothe.skillify."):
+        summary = etype.replace("soothe.skillify.", "").replace("_", " ")
+        detail = data.get("skill", data.get("query", ""))
+        if detail:
+            summary += f": {_truncate(str(detail), 40)}"
+    elif etype.startswith("soothe.weaver."):
+        summary = etype.replace("soothe.weaver.", "").replace("_", " ")
+        detail = data.get("agent_name", data.get("task", ""))
+        if detail:
+            summary += f": {_truncate(str(detail), 40)}"
+    else:
+        summary = etype.replace("_", " ")[:50]
+
+    logger.info("Subagent event [%s]: %s  data=%s", tag, etype, data)
     _add_activity(
         state,
         Text.assemble(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from langchain_core.embeddings import Embeddings
 
@@ -13,6 +13,32 @@ from soothe.subagents.skillify.models import SkillRecord
 from soothe.subagents.skillify.warehouse import SkillWarehouse
 
 logger = logging.getLogger(__name__)
+
+
+class LazyEmbeddings:
+    """Wrapper that creates fresh embedding instances per event loop."""
+
+    def __init__(self, factory: Callable[[], Embeddings]):
+        self._factory = factory
+        self._instances: dict[int, Embeddings] = {}
+
+    def _get_instance(self) -> Embeddings:
+        loop_id = id(asyncio.get_running_loop())
+        if loop_id not in self._instances:
+            self._instances[loop_id] = self._factory()
+        return self._instances[loop_id]
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await self._get_instance().aembed_documents(texts)
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return await self._get_instance().aembed_query(text)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._get_instance().embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._get_instance().embed_query(text)
 
 
 class SkillIndexer:
@@ -34,14 +60,17 @@ class SkillIndexer:
         self,
         warehouse: SkillWarehouse,
         vector_store: VectorStoreProtocol,
-        embeddings: Embeddings,
+        embeddings: Embeddings | Callable[[], Embeddings],
         interval_seconds: int = 300,
         collection: str = "soothe_skillify",
         embedding_dims: int = 1536,
     ) -> None:
         self._warehouse = warehouse
         self._vector_store = vector_store
-        self._embeddings = embeddings
+        if callable(embeddings):
+            self._embeddings = LazyEmbeddings(embeddings)
+        else:
+            self._embeddings = embeddings
         self._interval = interval_seconds
         self._collection = collection
         self._embedding_dims = embedding_dims
@@ -49,7 +78,7 @@ class SkillIndexer:
         self._task: asyncio.Task[None] | None = None
         self._initialized = False
         self._total_indexed = 0
-        self._ready_event = asyncio.Event()
+        self._ready_event: asyncio.Event | None = None
 
     @property
     def total_indexed(self) -> int:
@@ -59,11 +88,15 @@ class SkillIndexer:
     @property
     def ready_event(self) -> asyncio.Event:
         """Event that is set once the first indexing pass completes."""
+        if self._ready_event is None:
+            self._ready_event = asyncio.Event()
         return self._ready_event
 
     @property
     def is_ready(self) -> bool:
         """Whether the first indexing pass has completed."""
+        if self._ready_event is None:
+            return False
         return self._ready_event.is_set()
 
     async def start(self) -> None:
@@ -84,6 +117,14 @@ class SkillIndexer:
         except asyncio.CancelledError:
             pass
         self._task = None
+
+        # Close the vector store connection pool
+        if hasattr(self._vector_store, "close"):
+            try:
+                await self._vector_store.close()
+            except Exception:
+                logger.debug("Failed to close vector store", exc_info=True)
+
         logger.info("Skillify background indexer stopped")
 
     async def run_once(self) -> dict[str, int]:
@@ -197,7 +238,8 @@ class SkillIndexer:
                 else:
                     logger.debug("Skillify index pass: no changes (total=%d)", self._total_indexed)
                 if first_pass:
-                    self._ready_event.set()
+                    if self._ready_event:
+                        self._ready_event.set()
                     first_pass = False
                     logger.info("Skillify index ready (total=%d)", self._total_indexed)
             except asyncio.CancelledError:
@@ -205,7 +247,8 @@ class SkillIndexer:
             except Exception:
                 logger.error("Skillify index pass failed", exc_info=True)
                 if first_pass:
-                    self._ready_event.set()
+                    if self._ready_event:
+                        self._ready_event.set()
                     first_pass = False
 
             await asyncio.sleep(self._interval)

@@ -1,4 +1,8 @@
-"""Browser agent example -- SOOTHE_HOME aware."""
+"""Browser subagent example -- runs the browser CompiledSubAgent directly.
+
+The browser subagent is a CompiledSubAgent with its own runnable graph.
+We extract the runnable and stream it directly.
+"""
 
 import asyncio
 import sys
@@ -10,7 +14,7 @@ from langchain_core.messages import HumanMessage
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
-from soothe import create_soothe_agent
+from soothe.subagents.browser import create_browser_subagent
 from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
@@ -18,16 +22,12 @@ load_dotenv()
 
 async def main() -> None:
     config = load_example_config()
-    config.subagents["planner"].enabled = False
-    config.subagents["scout"].enabled = False
-    config.subagents["research"].enabled = False
-    config.subagents["browser"].enabled = True
-    config.subagents["claude"].enabled = False
 
-    agent = create_soothe_agent(config=config)
+    spec = create_browser_subagent(headless=True, max_steps=50)
+    runnable = spec["runnable"]
 
     await run_with_streaming(
-        agent,
+        runnable,
         [HumanMessage(
             content="Go to https://news.ycombinator.com and summarize the top 5 stories."
         )],

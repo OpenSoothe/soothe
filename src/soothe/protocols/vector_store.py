@@ -130,3 +130,11 @@ class VectorStoreProtocol(Protocol):
     async def reset(self) -> None:
         """Clear all records from the collection without deleting it."""
         ...
+
+    async def close(self) -> None:
+        """Close connections and release resources.
+
+        Should be called during shutdown to cleanly close connection pools
+        and background tasks.
+        """
+        ...

@@ -38,21 +38,23 @@ def _format_custom_event(data: Any) -> str | None:
 
 def _handle_ai_message(message_obj: AIMessage) -> None:
     """Render AI message content blocks: text tokens and tool call names."""
-    if not hasattr(message_obj, "content_blocks"):
-        return
-    for block in message_obj.content_blocks:
-        if not isinstance(block, dict):
-            continue
-        block_type = block.get("type")
-        if block_type == "text":
-            text = block.get("text", "")
-            if text:
-                sys.stdout.write(text)
-                sys.stdout.flush()
-        elif block_type in {"tool_call_chunk", "tool_call"}:
-            name = block.get("name")
-            if name:
-                print(f"\n  [tool] Calling: {name}", flush=True)
+    if hasattr(message_obj, "content_blocks") and message_obj.content_blocks:
+        for block in message_obj.content_blocks:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "text":
+                text = block.get("text", "")
+                if text:
+                    sys.stdout.write(text)
+                    sys.stdout.flush()
+            elif block_type in {"tool_call_chunk", "tool_call"}:
+                name = block.get("name")
+                if name:
+                    print(f"\n  [tool] Calling: {name}", flush=True)
+    elif isinstance(message_obj.content, str) and message_obj.content:
+        sys.stdout.write(message_obj.content)
+        sys.stdout.flush()
 
 
 def _handle_tool_message(message_obj: ToolMessage) -> None:

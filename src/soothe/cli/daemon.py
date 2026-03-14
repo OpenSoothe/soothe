@@ -189,6 +189,14 @@ class SootheDaemon:
         """Shut down the daemon gracefully."""
         self._running = False
         await self._broadcast({"type": "status", "state": "stopped"})
+
+        # Clean up runner resources
+        if self._runner and hasattr(self._runner, "cleanup"):
+            try:
+                await self._runner.cleanup()
+            except Exception:
+                logger.debug("Failed to cleanup runner", exc_info=True)
+
         for client in self._clients:
             try:
                 client.writer.close()
@@ -487,4 +495,11 @@ if __name__ == "__main__":
     cfg: SootheConfig | None = None
     if args.config:
         cfg = SootheConfig.from_yaml_file(args.config)
+    else:
+        # Try to load from default config location
+        from pathlib import Path
+
+        default_config = Path(SOOTHE_HOME) / "config" / "config.yml"
+        if default_config.exists():
+            cfg = SootheConfig.from_yaml_file(str(default_config))
     run_daemon(cfg)

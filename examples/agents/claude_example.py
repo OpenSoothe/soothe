@@ -1,4 +1,8 @@
-"""Claude agent example -- SOOTHE_HOME aware."""
+"""Claude subagent example -- runs the Claude CompiledSubAgent directly.
+
+The Claude subagent is a CompiledSubAgent with its own runnable graph.
+We extract the runnable and stream it directly.
+"""
 
 import asyncio
 import os
@@ -11,7 +15,7 @@ from langchain_core.messages import HumanMessage
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
-from soothe import create_soothe_agent
+from soothe.subagents.claude import create_claude_subagent
 from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
@@ -24,19 +28,11 @@ async def main() -> None:
         print("Error: ANTHROPIC_API_KEY environment variable is not set.")
         sys.exit(1)
 
-    config = load_example_config()
-    config.workspace_dir = PROJECT_ROOT
-    config.subagents["planner"].enabled = False
-    config.subagents["scout"].enabled = False
-    config.subagents["research"].enabled = False
-    config.subagents["browser"].enabled = False
-    config.subagents["claude"].enabled = True
-    config.subagents["claude"].config = {"cwd": PROJECT_ROOT}
-
-    agent = create_soothe_agent(config=config)
+    spec = create_claude_subagent(cwd=PROJECT_ROOT)
+    runnable = spec["runnable"]
 
     await run_with_streaming(
-        agent,
+        runnable,
         [HumanMessage(
             content="Analyze the src/soothe/ directory and provide a summary of the project "
             "architecture, listing all modules and their responsibilities."

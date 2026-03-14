@@ -206,6 +206,19 @@ class SootheConfig(BaseSettings):
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""
 
+    # --- Logging ---
+
+    log_level: str = "INFO"
+    """Python logging level for the ``soothe`` logger hierarchy."""
+
+    log_file: str | None = None
+    """Log file path. Defaults to ``SOOTHE_HOME/logs/soothe.log``."""
+
+    # --- TUI ---
+
+    activity_max_lines: int = 300
+    """Maximum number of activity lines retained in the TUI Activity Panel."""
+
     # --- Skillify and Weaver config (RFC-0004, RFC-0005) ---
 
     skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
@@ -217,22 +230,25 @@ class SootheConfig(BaseSettings):
     # --- Protocol config (RFC-0002) ---
 
     context_backend: Literal["keyword", "vector", "none"] = "keyword"
-    """ContextProtocol implementation."""
+    """ContextProtocol implementation: ``keyword`` (tag/keyword matching),
+    ``vector`` (semantic via VectorStore), or ``none`` (disabled)."""
 
     context_persist_dir: str | None = None
-    """Directory for context persistence. None for in-memory only."""
+    """Directory for context persistence. Defaults to ``SOOTHE_HOME/context/``."""
 
     context_persist_backend: Literal["json", "rocksdb"] = "json"
-    """Persistence backend for KeywordContext."""
+    """Persistence backend for context data."""
 
-    memory_backend: Literal["store", "vector", "none"] = "none"
-    """MemoryProtocol implementation."""
+    memory_backend: Literal["store", "vector", "none"] = "store"
+    """MemoryProtocol implementation: ``store`` (keyword matching with
+    JSON/RocksDB persistence), ``vector`` (semantic via VectorStore),
+    or ``none`` (disabled)."""
 
     memory_persist_path: str | None = None
-    """Path for memory persistence. None for in-memory only."""
+    """Directory for memory persistence. Defaults to ``SOOTHE_HOME/memory/``."""
 
     memory_persist_backend: Literal["json", "rocksdb"] = "json"
-    """Persistence backend for StoreBackedMemory."""
+    """Persistence backend for memory data."""
 
     planner_routing: Literal["auto", "always_direct", "always_subagent", "none"] = "none"
     """PlannerProtocol routing strategy."""

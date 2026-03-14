@@ -226,10 +226,13 @@ def _resolve_context(config: SootheConfig) -> ContextProtocol | None:
             embeddings = config.create_embedding_model()
             return VectorContext(vector_store=vs, embeddings=embeddings)
 
+    from pathlib import Path
+
     from soothe.context.keyword import KeywordContext
 
+    persist_dir = config.context_persist_dir or str(Path(SOOTHE_HOME) / "context")
     return KeywordContext(
-        persist_dir=config.context_persist_dir,
+        persist_dir=persist_dir,
         persist_backend=config.context_persist_backend,
     )
 
@@ -261,10 +264,13 @@ def _resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
             embeddings = config.create_embedding_model()
             return VectorMemory(vector_store=vs, embeddings=embeddings)
 
+    from pathlib import Path
+
     from soothe.memory_store.store_backed import StoreBackedMemory
 
+    persist_path = config.memory_persist_path or str(Path(SOOTHE_HOME) / "memory")
     return StoreBackedMemory(
-        persist_path=config.memory_persist_path,
+        persist_path=persist_path,
         persist_backend=config.memory_persist_backend,
     )
 

@@ -245,6 +245,12 @@ class WeaviateVectorStore:
         """Delete and recreate the collection to clear all data."""
         await self.delete_collection()
 
+    async def close(self) -> None:
+        """Close the Weaviate client connection."""
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+
 
 def weaviate_uuid_from_str(s: str) -> str:
     """Generate a deterministic UUID5 from a string for Weaviate.

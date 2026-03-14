@@ -1,4 +1,4 @@
-"""Weaver agent example -- SOOTHE_HOME aware.
+"""Weaver subagent example -- runs the Weaver CompiledSubAgent directly.
 
 Demonstrates the Weaver subagent for generating task-specific agents from skills.
 """
@@ -13,27 +13,23 @@ from langchain_core.messages import HumanMessage
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
-from soothe import create_soothe_agent
+from soothe.subagents.weaver import create_weaver_subagent
 from soothe.utils._streaming import run_with_streaming
 
 load_dotenv()
 
-PROJECT_ROOT = str(Path(__file__).parent.parent.parent.resolve())
-
 
 async def main() -> None:
     config = load_example_config()
-    config.workspace_dir = PROJECT_ROOT
 
-    for name in config.subagents:
-        config.subagents[name].enabled = False
-    config.subagents["skillify"].enabled = True
-    config.subagents["weaver"].enabled = True
-
-    agent = create_soothe_agent(config=config)
+    spec = create_weaver_subagent(
+        model=config.create_chat_model("default"),
+        config=config,
+    )
+    runnable = spec["runnable"]
 
     await run_with_streaming(
-        agent,
+        runnable,
         [HumanMessage(
             content="Generate a specialized agent that can perform comprehensive code review "
             "with security analysis, focusing on Python projects."

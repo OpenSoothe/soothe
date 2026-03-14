@@ -161,6 +161,21 @@ class SootheRunner:
         threads = await self._durability.list_threads()
         return [t.model_dump() for t in threads]
 
+    async def cleanup(self) -> None:
+        """Clean up resources during shutdown.
+
+        Stops background indexer tasks and closes connection pools.
+        """
+        # Check for skillify indexer in subagents
+        if hasattr(self._agent, "subagents"):
+            for subagent in getattr(self._agent, "subagents", []):
+                if isinstance(subagent, dict) and "_skillify_indexer" in subagent:
+                    indexer = subagent["_skillify_indexer"]
+                    try:
+                        await indexer.stop()
+                    except Exception:
+                        logger.debug("Failed to stop skillify indexer", exc_info=True)
+
     # -- main stream --------------------------------------------------------
 
     async def astream(
@@ -295,6 +310,15 @@ class SootheRunner:
             state.thread_id = requested_thread_id or _generate_thread_id()
             self._current_thread_id = state.thread_id
 
+        # Context restoration (when resuming a thread)
+        if self._context and hasattr(self._context, "restore") and requested_thread_id:
+            try:
+                restored = await self._context.restore(state.thread_id)
+                if restored:
+                    logger.info("Context restored for thread %s", state.thread_id)
+            except Exception:
+                logger.debug("Context restore failed", exc_info=True)
+
         protocols = self.protocol_summary()
         yield _custom(
             {
@@ -416,6 +440,35 @@ class SootheRunner:
             except Exception:
                 logger.debug("Context ingestion failed", exc_info=True)
 
+        # Context persistence
+        if self._context and hasattr(self._context, "persist"):
+            try:
+                await self._context.persist(state.thread_id)
+            except Exception:
+                logger.debug("Context persistence failed", exc_info=True)
+
+        # Memory storage for significant responses
+        if self._memory and response_text and len(response_text) > 50:
+            try:
+                from soothe.protocols.memory import MemoryItem
+
+                await self._memory.remember(
+                    MemoryItem(
+                        content=response_text[:500],
+                        tags=["agent_response"],
+                        source_thread=state.thread_id,
+                    )
+                )
+                yield _custom(
+                    {
+                        "type": "soothe.memory.stored",
+                        "id": "auto",
+                        "source_thread": state.thread_id,
+                    }
+                )
+            except Exception:
+                logger.debug("Memory storage failed", exc_info=True)
+
         # Plan reflection
         if self._planner and state.plan and response_text:
             try:
@@ -482,11 +535,10 @@ class SootheRunner:
         msg, metadata = data
         if metadata and metadata.get("lc_source") == "summarization":
             return
-        if not isinstance(msg, AIMessage) or not hasattr(msg, "content_blocks"):
+        if not isinstance(msg, AIMessage):
             return
 
         msg_id = msg.id or ""
-        # Complete (non-chunk) messages duplicate the streaming chunks
         if not isinstance(msg, AIMessageChunk):
             if msg_id in state.seen_message_ids:
                 return
@@ -494,11 +546,14 @@ class SootheRunner:
         elif msg_id:
             state.seen_message_ids.add(msg_id)
 
-        for block in msg.content_blocks:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                if text:
-                    state.full_response.append(text)
+        if hasattr(msg, "content_blocks") and msg.content_blocks:
+            for block in msg.content_blocks:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    if text:
+                        state.full_response.append(text)
+        elif isinstance(msg.content, str) and msg.content:
+            state.full_response.append(msg.content)
 
     @staticmethod
     def _auto_approve(pending_interrupts: dict[str, Any]) -> dict[str, Any]:

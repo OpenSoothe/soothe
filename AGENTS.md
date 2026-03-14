@@ -158,6 +158,8 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0003](docs/specs/RFC-0003.md) | CLI TUI Architecture Design |
 | [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
 | [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
+| [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
+| [RFC-0007](docs/specs/RFC-0007.md) | Code Structure Revision for Extensibility |
 
 ### Implementation Guides
 

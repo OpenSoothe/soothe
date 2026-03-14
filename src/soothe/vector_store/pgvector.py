@@ -228,3 +228,9 @@ class PGVectorStore:
         pool = await self._ensure_pool()
         async with pool.connection() as conn:
             await conn.execute(f"TRUNCATE TABLE {self._collection}")
+
+    async def close(self) -> None:
+        """Close the connection pool and release resources."""
+        if self._pool is not None:
+            await self._pool.close()
+            self._pool = None

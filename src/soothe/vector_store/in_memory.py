@@ -97,6 +97,9 @@ class InMemoryVectorStore:
         """Clear all data."""
         self._records.clear()
 
+    async def close(self) -> None:
+        """No-op for in-memory store (no resources to release)."""
+
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:
         """Compute cosine similarity between two vectors."""

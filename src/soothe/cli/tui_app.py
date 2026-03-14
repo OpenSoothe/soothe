@@ -1,11 +1,13 @@
 """Textual-based TUI for Soothe (RFC-0003 revised).
 
-Always-on two-column layout with integrated chat input, conversation history,
-plan/activity/subagent panels.  Connects to the Soothe daemon over a Unix
-domain socket for event streaming and user input.
+Three-row layout:
+  Row 1 -- Conversation (left) | Plan + Activity (right)
+  Row 2 -- Info bar (thread, events, subagent status)
+  Row 3 -- Chat input with UP/DOWN history navigation
 
-When the daemon is not already running, ``run_textual_tui`` starts it
-in-process on a background thread so no external ``soothe`` binary is needed.
+Connects to the Soothe daemon over a Unix domain socket for event
+streaming and user input.  When the daemon is not already running,
+``run_textual_tui`` starts it in-process on a background thread.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
+from textual.events import Key
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
@@ -53,15 +56,57 @@ class PlanPanel(RichLog):
 
 
 class ActivityPanel(RichLog):
-    """Recent action lines."""
+    """Scrollable activity log with configurable max lines."""
 
 
-class SubagentPanel(RichLog):
-    """Active subagent status."""
+class InfoBar(Static):
+    """Compact status bar showing thread, events, subagent status."""
 
 
-class StatusBar(Static):
-    """Bottom status line."""
+class ChatInput(Input):
+    """Chat input with UP/DOWN arrow key history navigation."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._history: list[str] = []
+        self._history_index: int = -1
+        self._saved_input: str = ""
+
+    def set_history(self, history: list[str]) -> None:
+        """Load input history (oldest first)."""
+        self._history = list(history)
+        self._history_index = -1
+
+    def add_to_history(self, text: str) -> None:
+        """Append a new entry to the input history."""
+        stripped = text.strip()
+        if stripped and (not self._history or self._history[-1] != stripped):
+            self._history.append(stripped)
+        self._history_index = -1
+
+    async def _on_key(self, event: Key) -> None:
+        if event.key == "up":
+            event.prevent_default()
+            if not self._history:
+                return
+            if self._history_index == -1:
+                self._saved_input = self.value
+                self._history_index = len(self._history) - 1
+            elif self._history_index > 0:
+                self._history_index -= 1
+            self.value = self._history[self._history_index]
+            self.cursor_position = len(self.value)
+        elif event.key == "down":
+            event.prevent_default()
+            if self._history_index == -1:
+                return
+            if self._history_index < len(self._history) - 1:
+                self._history_index += 1
+                self.value = self._history[self._history_index]
+            else:
+                self._history_index = -1
+                self.value = self._saved_input
+            self.cursor_position = len(self.value)
 
 
 # ---------------------------------------------------------------------------
@@ -70,45 +115,35 @@ class StatusBar(Static):
 
 
 class SootheApp(App):
-    """Textual application for the Soothe TUI.
-
-    Args:
-        config: Soothe configuration.
-        thread_id: Optional thread ID to resume.
-    """
+    """Textual application for the Soothe TUI."""
 
     TITLE = "Soothe"
     CSS = """
     #main-layout {
         layout: grid;
-        grid-size: 2 2;
+        grid-size: 2 1;
         grid-columns: 3fr 2fr;
-        grid-rows: 3fr 2fr;
+        grid-rows: 1fr;
+        height: 1fr;
     }
     #conversation {
-        row-span: 1;
-        column-span: 2;
         border: solid $primary;
     }
-    #left-sidebar {
-        border: solid $accent;
-    }
-    #right-sidebar {
-        border: solid $accent;
+    #right-col {
+        height: 100%;
     }
     #plan-panel {
-        height: 1fr;
+        height: 2fr;
+        border: solid $accent;
         border-bottom: dashed $surface;
     }
-    #subagent-panel {
-        height: 1fr;
-    }
     #activity-panel {
-        height: 1fr;
+        height: 3fr;
+        border: solid $accent;
     }
-    #status-bar {
+    #info-bar {
         dock: bottom;
-        height: 1;
+        height: 2;
         background: $surface;
         color: $text-muted;
         padding: 0 1;
@@ -138,25 +173,41 @@ class SootheApp(App):
         self._state = TuiState()
         self._connected = False
         self._conversation_history: list[str] = []
+        self._last_activity_count = 0
 
     def compose(self) -> ComposeResult:
-        """Build the widget tree."""
+        """Build the widget tree: 3-row layout."""
+        max_lines = self._config.activity_max_lines
         yield Header()
         with Container(id="main-layout"):
-            yield ConversationPanel(id="conversation", highlight=True, markup=True, wrap=True)
-            with Vertical(id="left-sidebar"):
-                yield PlanPanel(id="plan-panel", highlight=True, markup=True, wrap=True)
-                yield SubagentPanel(id="subagent-panel", highlight=True, markup=True, wrap=True)
-            yield ActivityPanel(id="right-sidebar", highlight=True, markup=True, wrap=True)
-        yield StatusBar("Thread: -  Events: 0  Idle", id="status-bar")
-        yield Input(placeholder="soothe> Type a message or /help", id="chat-input")
+            yield ConversationPanel(
+                id="conversation",
+                highlight=True,
+                markup=True,
+                wrap=True,
+            )
+            with Vertical(id="right-col"):
+                yield PlanPanel(
+                    id="plan-panel",
+                    highlight=True,
+                    markup=True,
+                    wrap=True,
+                )
+                yield ActivityPanel(
+                    id="activity-panel",
+                    highlight=True,
+                    markup=True,
+                    wrap=True,
+                    max_lines=max_lines,
+                )
+        yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
+        yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
         yield Footer()
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
-        # Focus the chat input so users can start typing immediately
         try:
-            chat_input = self.query_one("#chat-input", Input)
+            chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
         except Exception:
             pass
@@ -164,11 +215,7 @@ class SootheApp(App):
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
     async def _connect_and_listen(self) -> None:
-        """Connect to daemon and process events.
-
-        Retries a few times to allow the daemon (which may have been started
-        on a background thread) to bind its socket.
-        """
+        """Connect to daemon and process events."""
         self._client = DaemonClient()
         max_retries = 40
         for attempt in range(max_retries):
@@ -193,8 +240,6 @@ class SootheApp(App):
                 self._log_conversation("[dim]Daemon connection closed.[/dim]")
                 break
             self._process_daemon_event(event)
-            # Yield to the event loop so Textual's render cycle can
-            # repaint the screen between rapidly arriving socket events.
             await asyncio.sleep(0)
 
     # -- event processing ---------------------------------------------------
@@ -221,30 +266,27 @@ class SootheApp(App):
                     etype = data.get("type", "")
                     if etype.startswith("soothe."):
                         _handle_protocol_event(data, self._state)
-                        self._refresh_activity()
+                        self._flush_new_activity()
                         if "plan" in etype:
                             self._refresh_plan()
                     elif not is_main:
                         _handle_subagent_custom(namespace, data, self._state)
-                        self._refresh_subagents()
-                        self._refresh_activity()
+                        self._flush_new_activity()
+                        self._update_status("Running")
 
     def _handle_messages_event(self, data: Any) -> None:
-        # Data may be a tuple/list after JSON deserialization
         if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
             msg, metadata = data
         elif isinstance(data, dict):
-            # Handle dict case
             return
         else:
             return
 
-        # Check metadata for summarization
         if metadata and isinstance(metadata, dict) and metadata.get("lc_source") == "summarization":
             return
 
-        # Handle LangChain objects (when running in same process)
-        if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
+        # Handle LangChain objects (in-process)
+        if isinstance(msg, AIMessage):
             msg_id = msg.id or ""
             if not isinstance(msg, AIMessageChunk):
                 if msg_id in self._state.seen_message_ids:
@@ -253,28 +295,30 @@ class SootheApp(App):
             elif msg_id:
                 self._state.seen_message_ids.add(msg_id)
 
-            for block in msg.content_blocks:
-                if not isinstance(block, dict):
-                    continue
-                btype = block.get("type")
-                if btype == "text":
-                    text = block.get("text", "")
-                    if text:
-                        self._state.full_response.append(text)
-                        self._append_conversation(text)
-                elif btype in ("tool_call_chunk", "tool_call"):
-                    name = block.get("name", "")
-                    if name:
-                        _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                        self._refresh_activity()
+            if hasattr(msg, "content_blocks") and msg.content_blocks:
+                for block in msg.content_blocks:
+                    if not isinstance(block, dict):
+                        continue
+                    btype = block.get("type")
+                    if btype == "text":
+                        text = block.get("text", "")
+                        if text:
+                            self._state.full_response.append(text)
+                            self._append_conversation(text)
+                    elif btype in ("tool_call_chunk", "tool_call"):
+                        name = block.get("name", "")
+                        if name:
+                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+                            self._flush_new_activity()
+            elif isinstance(msg.content, str) and msg.content:
+                self._state.full_response.append(msg.content)
+                self._append_conversation(msg.content)
 
         # Handle deserialized dict (after JSON transport)
         elif isinstance(msg, dict):
             msg_id = msg.get("id", "")
             is_chunk = msg.get("type") == "AIMessageChunk"
 
-            # Streaming chunks share the same id; only deduplicate
-            # complete AIMessage objects to avoid suppressing streamed text.
             if not is_chunk:
                 if msg_id and msg_id in self._state.seen_message_ids:
                     return
@@ -286,9 +330,6 @@ class SootheApp(App):
             tool_call_chunks = msg.get("tool_call_chunks", [])
             has_tool_chunks = isinstance(tool_call_chunks, list) and len(tool_call_chunks) > 0
 
-            # Extract text blocks from content_blocks or content field.
-            # model_dump() may omit content_blocks; content can be a str
-            # or a list of block dicts.
             blocks = msg.get("content_blocks") or []
             if not blocks:
                 content = msg.get("content", "")
@@ -311,7 +352,7 @@ class SootheApp(App):
                     name = block.get("name", "")
                     if name:
                         _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                        self._refresh_activity()
+                        self._flush_new_activity()
 
             if has_tool_chunks:
                 for tc in tool_call_chunks:
@@ -319,9 +360,7 @@ class SootheApp(App):
                         name = tc.get("name", "")
                         if name:
                             _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                            self._refresh_activity()
-        else:
-            pass
+                            self._flush_new_activity()
 
         # Handle ToolMessage objects
         if isinstance(msg, ToolMessage):
@@ -331,7 +370,7 @@ class SootheApp(App):
             _add_activity(
                 self._state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim"))
             )
-            self._refresh_activity()
+            self._flush_new_activity()
 
     # -- UI helpers ---------------------------------------------------------
 
@@ -357,12 +396,14 @@ class SootheApp(App):
         except Exception:
             pass
 
-    def _refresh_activity(self) -> None:
+    def _flush_new_activity(self) -> None:
+        """Append only new activity lines (append-only, no clear)."""
         try:
-            panel = self.query_one("#right-sidebar", ActivityPanel)
-            panel.clear()
-            for line in self._state.activity_lines[-15:]:
+            panel = self.query_one("#activity-panel", ActivityPanel)
+            new_lines = self._state.activity_lines[self._last_activity_count :]
+            for line in new_lines:
                 panel.write(line)
+            self._last_activity_count = len(self._state.activity_lines)
         except Exception:
             pass
 
@@ -378,25 +419,17 @@ class SootheApp(App):
         except Exception:
             pass
 
-    def _refresh_subagents(self) -> None:
-        try:
-            panel = self.query_one("#subagent-panel", SubagentPanel)
-            panel.clear()
-            lines = self._state.subagent_tracker.render()
-            if lines:
-                for line in lines[-5:]:
-                    panel.write(line)
-            else:
-                panel.write("[dim]No active subagents.[/dim]")
-        except Exception:
-            pass
-
     def _update_status(self, state: str) -> None:
         try:
-            bar = self.query_one("#status-bar", StatusBar)
+            bar = self.query_one("#info-bar", InfoBar)
             tid = self._state.thread_id or "-"
             events = len(self._state.activity_lines)
-            bar.update(f"Thread: {tid}  Events: {events}  {state.title()}")
+            subagent_lines = self._state.subagent_tracker.render()
+            sub_summary = ""
+            if subagent_lines:
+                last = subagent_lines[-1]
+                sub_summary = f"  |  {last.plain}" if hasattr(last, "plain") else ""
+            bar.update(f"Thread: {tid}  Events: {events}  {state.title()}{sub_summary}")
         except Exception:
             pass
 
@@ -410,7 +443,12 @@ class SootheApp(App):
             return
         event.input.clear()
 
-        # Save previous streaming response to history before clearing
+        try:
+            chat_input = self.query_one("#chat-input", ChatInput)
+            chat_input.add_to_history(text)
+        except Exception:
+            pass
+
         if self._state.full_response:
             self._conversation_history.append("".join(self._state.full_response))
 
@@ -464,11 +502,7 @@ _daemon_instance: SootheDaemon | None = None
 
 
 def _start_daemon_in_background(config: SootheConfig) -> None:
-    """Start the daemon on a background thread if not already running.
-
-    Uses an in-process asyncio event loop on a daemon thread so no external
-    ``soothe`` binary needs to be installed on PATH.
-    """
+    """Start the daemon on a background thread if not already running."""
     global _daemon_thread, _daemon_instance  # noqa: PLW0603
 
     if SootheDaemon.is_running():
@@ -528,9 +562,6 @@ def run_textual_tui(
     thread_id: str | None = None,
 ) -> None:
     """Launch the Textual-based TUI.
-
-    Starts the Soothe daemon in-process on a background thread if not
-    already running, then launches the Textual app.
 
     Args:
         config: Soothe configuration.

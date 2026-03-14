@@ -220,7 +220,7 @@ def create_skillify_subagent(
 def _resolve_dependencies(
     cfg: Any,
     skillify_cfg: Any,
-) -> tuple[Any, Embeddings]:
+) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings from config."""
     from soothe.vector_store import create_vector_store
 
@@ -237,8 +237,9 @@ def _resolve_dependencies(
 
         vs = InMemoryVectorStore(collection)
 
-    embeddings = cfg.create_embedding_model()
-    return vs, embeddings
+    # Return a factory function to create fresh embedding instances
+    embeddings_factory = cfg.create_embedding_model
+    return vs, embeddings_factory
 
 
 def _start_background_indexer(indexer: SkillIndexer) -> None:

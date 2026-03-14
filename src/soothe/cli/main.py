@@ -1,8 +1,10 @@
 """Main CLI entry point using Typer."""
 
 import json
+import logging
 import shutil
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Annotated
 
@@ -15,6 +17,34 @@ app = typer.Typer(
     help="Multi-agent harness built on deepagents and langchain/langgraph.",
     add_completion=False,
 )
+
+
+def setup_logging(config: SootheConfig | None = None) -> None:
+    """Configure the ``soothe`` logger hierarchy with a file handler.
+
+    Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 10 MB max, 3 backups).
+
+    Args:
+        config: Optional config to read ``log_level`` and ``log_file`` from.
+    """
+    cfg = config or SootheConfig()
+    log_dir = Path(SOOTHE_HOME) / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = cfg.log_file or str(log_dir / "soothe.log")
+    level_name = cfg.log_level.upper() if cfg.log_level else "INFO"
+    if cfg.debug:
+        level_name = "DEBUG"
+    level = getattr(logging, level_name, logging.INFO)
+
+    root_logger = logging.getLogger("soothe")
+    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        handler = RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s"))
+        handler.setLevel(level)
+        root_logger.addHandler(handler)
+    root_logger.setLevel(level)
+
 
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 
@@ -142,6 +172,7 @@ def run(
     """Run the Soothe agent with a prompt or in interactive TUI mode."""
     try:
         cfg = _load_config(config)
+        setup_logging(cfg)
 
         if prompt or no_tui:
             _run_headless(cfg, prompt or "", thread_id=thread, output_format=output_format)
@@ -198,50 +229,53 @@ def _run_headless(
         seen_message_ids: set[str] = set()
         has_error = False
 
-        async for chunk in runner.astream(prompt, thread_id=thread_id):
-            if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
-                continue
-            namespace, mode, data = chunk
+        try:
+            async for chunk in runner.astream(prompt, thread_id=thread_id):
+                if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
+                    continue
+                namespace, mode, data = chunk
 
-            if output_format == "jsonl":
-                sys.stdout.write(
-                    json.dumps({"namespace": list(namespace), "mode": mode, "data": data}, default=str) + "\n"
-                )
+                if output_format == "jsonl":
+                    sys.stdout.write(
+                        json.dumps({"namespace": list(namespace), "mode": mode, "data": data}, default=str) + "\n"
+                    )
+                    sys.stdout.flush()
+                    continue
+
+                if mode == "custom" and isinstance(data, dict):
+                    etype = data.get("type", "")
+                    if etype.startswith("soothe."):
+                        _render_progress_event(data)
+                    if etype == "soothe.error":
+                        has_error = True
+
+                if mode == "messages" and not namespace:
+                    if not isinstance(data, tuple) or len(data) != _msg_pair_len:
+                        continue
+                    msg, metadata = data
+                    if metadata and metadata.get("lc_source") == "summarization":
+                        continue
+                    if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
+                        msg_id = msg.id or ""
+                        if not isinstance(msg, AIMessageChunk):
+                            if msg_id in seen_message_ids:
+                                continue
+                            seen_message_ids.add(msg_id)
+                        elif msg_id:
+                            seen_message_ids.add(msg_id)
+                        for block in msg.content_blocks:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text = block.get("text", "")
+                                if text:
+                                    sys.stdout.write(text)
+                                    sys.stdout.flush()
+                                    full_response.append(text)
+            if full_response:
+                sys.stdout.write("\n")
                 sys.stdout.flush()
-                continue
-
-            if mode == "custom" and isinstance(data, dict):
-                etype = data.get("type", "")
-                if etype.startswith("soothe."):
-                    _render_progress_event(data)
-                if etype == "soothe.error":
-                    has_error = True
-
-            if mode == "messages" and not namespace:
-                if not isinstance(data, tuple) or len(data) != _msg_pair_len:
-                    continue
-                msg, metadata = data
-                if metadata and metadata.get("lc_source") == "summarization":
-                    continue
-                if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
-                    msg_id = msg.id or ""
-                    if not isinstance(msg, AIMessageChunk):
-                        if msg_id in seen_message_ids:
-                            continue
-                        seen_message_ids.add(msg_id)
-                    elif msg_id:
-                        seen_message_ids.add(msg_id)
-                    for block in msg.content_blocks:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text = block.get("text", "")
-                            if text:
-                                sys.stdout.write(text)
-                                sys.stdout.flush()
-                                full_response.append(text)
-        if full_response:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        return 1 if has_error else 0
+            return 1 if has_error else 0
+        finally:
+            await runner.cleanup()
 
     exit_code = asyncio.run(_stream())
     sys.exit(exit_code)
@@ -465,6 +499,7 @@ def server_start(
         return
 
     cfg = _load_config(config)
+    setup_logging(cfg)
 
     if foreground:
         run_daemon(cfg)

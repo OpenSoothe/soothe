@@ -113,11 +113,24 @@ def _build_browser_graph(
         async def on_step_end(agent: Any) -> None:
             step_num = agent.state.n_steps
             last = agent.history.history[-1] if agent.history.history else None
+            action_desc = ""
+            page_title = ""
+            url = None
+            if last:
+                if hasattr(last, "model_output") and last.model_output:
+                    action = getattr(last.model_output, "action", None)
+                    if action:
+                        action_desc = str(action)[:80]
+                if hasattr(last, "state"):
+                    url = getattr(last.state, "url", None)
+                    page_title = getattr(last.state, "title", "")[:60]
             emit_progress(
                 {
                     "type": "browser_step",
                     "step": step_num,
-                    "url": last.state.url if last and hasattr(last, "state") else None,
+                    "url": url,
+                    "action": action_desc,
+                    "title": page_title,
                     "is_done": agent.history.is_done(),
                 }
             )

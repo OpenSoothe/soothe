@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Callable
 
 from langchain_core.embeddings import Embeddings
 
@@ -14,6 +15,32 @@ from soothe.subagents.skillify.models import SkillBundle, SkillRecord, SkillSear
 logger = logging.getLogger(__name__)
 
 _INDEXING_WAIT_TIMEOUT = 10.0
+
+
+class LazyEmbeddings:
+    """Wrapper that creates fresh embedding instances per event loop."""
+
+    def __init__(self, factory: Callable[[], Embeddings]):
+        self._factory = factory
+        self._instances: dict[int, Embeddings] = {}
+
+    def _get_instance(self) -> Embeddings:
+        loop_id = id(asyncio.get_running_loop())
+        if loop_id not in self._instances:
+            self._instances[loop_id] = self._factory()
+        return self._instances[loop_id]
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await self._get_instance().aembed_documents(texts)
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return await self._get_instance().aembed_query(text)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._get_instance().embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._get_instance().embed_query(text)
 
 
 class SkillRetriever:
@@ -34,12 +61,15 @@ class SkillRetriever:
     def __init__(
         self,
         vector_store: VectorStoreProtocol,
-        embeddings: Embeddings,
+        embeddings: Embeddings | Callable[[], Embeddings],
         top_k: int = 10,
         ready_event: asyncio.Event | None = None,
     ) -> None:
         self._vector_store = vector_store
-        self._embeddings = embeddings
+        if callable(embeddings):
+            self._embeddings = LazyEmbeddings(embeddings)
+        else:
+            self._embeddings = embeddings
         self._top_k = top_k
         self._ready_event = ready_event
 
