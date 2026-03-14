@@ -194,7 +194,7 @@ def _run_tui(cfg: SootheConfig, *, thread_id: str | None = None) -> None:
 
         run_textual_tui(config=cfg, thread_id=thread_id)
     except ImportError:
-        from soothe.cli.runner import SootheRunner
+        from soothe.core.runner import SootheRunner
         from soothe.cli.tui import run_agent_tui
 
         runner = SootheRunner(cfg)
@@ -213,7 +213,7 @@ def _run_headless(
     """Run a single prompt with streaming output and progress events."""
     import asyncio
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
 
@@ -564,7 +564,7 @@ def thread_list(
     """List all agent threads."""
     import asyncio
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
     runner = SootheRunner(cfg)
@@ -609,7 +609,7 @@ def thread_archive(
     """Archive a thread."""
     import asyncio
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
     runner = SootheRunner(cfg)
@@ -632,7 +632,7 @@ def thread_inspect(
     """Inspect thread details."""
     import asyncio
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
     from soothe.cli.session import SessionLogger
 
     cfg = _load_config(config)
@@ -679,7 +679,7 @@ def thread_delete(
     """Permanently delete a thread."""
     import asyncio
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
 
     if not yes:
         confirm = typer.confirm(f"Permanently delete thread {thread_id}?")
@@ -755,7 +755,7 @@ def list_subagents() -> None:
     """List all available subagents and their status."""
     try:
         cfg = SootheConfig()
-        from soothe.agent import _SUBAGENT_FACTORIES
+        from soothe.core.resolver import SUBAGENT_FACTORIES as _SUBAGENT_FACTORIES
 
         typer.echo("\nAvailable Subagents:")
         typer.echo("-" * 50)

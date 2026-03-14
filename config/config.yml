@@ -77,6 +77,19 @@ embedding_dims: 1536                             # must match the embedding mode
 debug: false
 
 # =============================================================================
+# Logging
+# =============================================================================
+
+log_level: INFO                                  # DEBUG, INFO, WARNING, ERROR
+# log_file: ~/.soothe/logs/soothe.log            # log file (default: SOOTHE_HOME/logs/soothe.log)
+
+# =============================================================================
+# TUI Settings
+# =============================================================================
+
+activity_max_lines: 300                          # max activity history lines in TUI
+
+# =============================================================================
 # Subagents
 # =============================================================================
 # Set enabled: false to disable a subagent. Each can override the model.
@@ -180,12 +193,12 @@ memory: []                                       # AGENTS.md file paths
 
 # --- Context Protocol ---
 context_backend: keyword                         # keyword | vector | none
-# context_persist_dir: ~/.soothe/context         # directory for persistence
+# context_persist_dir: ~/.soothe/context          # directory for persistence (default: SOOTHE_HOME/context)
 # context_persist_backend: json                   # json | rocksdb
 
 # --- Memory Protocol ---
-memory_backend: none                             # store | vector | none
-# memory_persist_path: ~/.soothe/memory.json
+memory_backend: store                            # store | vector | none
+# memory_persist_path: ~/.soothe/memory            # directory for persistence (default: SOOTHE_HOME/memory)
 # memory_persist_backend: json                    # json | rocksdb
 
 # --- Planner Protocol ---

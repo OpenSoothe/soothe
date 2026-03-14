@@ -1,7 +1,7 @@
 """Soothe: Protocol-driven orchestration framework built on deepagents."""
 
-from soothe.agent import create_soothe_agent
 from soothe.config import SOOTHE_HOME, ModelProviderConfig, ModelRouter, SkillifyConfig, SootheConfig, WeaverConfig
+from soothe.core.agent import create_soothe_agent
 from soothe.protocols import (
     ConcurrencyPolicy,
     ContextEntry,

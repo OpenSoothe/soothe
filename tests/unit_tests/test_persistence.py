@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from soothe.persistence import PersistStore, create_persist_store
-from soothe.persistence.json_store import JsonPersistStore
+from soothe.backends.persistence.json_store import JsonPersistStore
 
 
 class TestJsonPersistStore:
@@ -155,7 +155,7 @@ class TestRocksDBPersistStore:
         monkeypatch.setattr(builtins, "__import__", mock_import)
 
         with pytest.raises(ImportError, match="rocksdict is required"):
-            from soothe.persistence.rocksdb_store import RocksDBPersistStore
+            from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
             RocksDBPersistStore(str(tmp_path))
 
@@ -165,7 +165,7 @@ class TestRocksDBPersistStore:
     )
     def test_save_and_load_data(self, tmp_path: Path):
         """Test saving and loading data with RocksDB."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = RocksDBPersistStore(str(tmp_path))
 
@@ -183,7 +183,7 @@ class TestRocksDBPersistStore:
     )
     def test_load_nonexistent_key_returns_none(self, tmp_path: Path):
         """Test that loading a nonexistent key returns None."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = RocksDBPersistStore(str(tmp_path))
 
@@ -199,7 +199,7 @@ class TestRocksDBPersistStore:
     )
     def test_delete_key(self, tmp_path: Path):
         """Test deleting a key from RocksDB."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = RocksDBPersistStore(str(tmp_path))
 
@@ -218,7 +218,7 @@ class TestRocksDBPersistStore:
     )
     def test_delete_nonexistent_key_no_error(self, tmp_path: Path):
         """Test that deleting a nonexistent key doesn't raise an error."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = RocksDBPersistStore(str(tmp_path))
 
@@ -233,7 +233,7 @@ class TestRocksDBPersistStore:
     )
     def test_overwrite_existing_key(self, tmp_path: Path):
         """Test that saving with an existing key overwrites the data."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = RocksDBPersistStore(str(tmp_path))
 
@@ -273,7 +273,7 @@ class TestCreatePersistStore:
     )
     def test_creates_rocksdb_store(self, tmp_path: Path):
         """Test that RocksDB store is created when backend='rocksdb'."""
-        from soothe.persistence.rocksdb_store import RocksDBPersistStore
+        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
         store = create_persist_store(str(tmp_path), "rocksdb")
 

@@ -25,7 +25,7 @@ from rich.text import Text
 from rich.tree import Tree
 
 if TYPE_CHECKING:
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
     from soothe.cli.session import InputHistory, SessionLogger
     from soothe.protocols.planner import Plan
 

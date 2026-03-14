@@ -137,7 +137,7 @@ class SootheDaemon:
 
     async def start(self) -> None:
         """Start the daemon server on the Unix socket."""
-        from soothe.cli.runner import SootheRunner
+        from soothe.core.runner import SootheRunner
 
         sock = socket_path()
         sock.parent.mkdir(parents=True, exist_ok=True)

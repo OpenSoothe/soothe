@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
 from soothe.subagents.claude import create_claude_subagent
-from soothe.utils._streaming import run_with_streaming
+from soothe.utils.streaming import run_with_streaming
 
 load_dotenv()
 

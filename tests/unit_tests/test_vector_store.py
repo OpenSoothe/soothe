@@ -12,7 +12,7 @@ class TestPGVectorStoreUnit:
     def test_class_can_be_imported(self):
         """Test that PGVectorStore class can be imported."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             assert PGVectorStore is not None
         except ImportError:
@@ -23,7 +23,7 @@ class TestPGVectorStoreUnit:
         try:
             import inspect
 
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             init_sig = inspect.signature(PGVectorStore.__init__)
             params = list(init_sig.parameters.keys())
@@ -44,7 +44,7 @@ class TestPGVectorStoreUnit:
     def test_required_methods_exist(self):
         """Test that all required methods exist on the class."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             required_methods = [
                 "create_collection",
@@ -69,7 +69,7 @@ class TestPGVectorStoreUnit:
     async def test_can_instantiate_without_connection(self):
         """Test that class can be instantiated without immediate connection."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(
                 collection="test_collection",
@@ -91,7 +91,7 @@ class TestPGVectorStoreUnit:
     async def test_create_collection_creates_table(self):
         """Test create_collection creates the table and index."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -119,7 +119,7 @@ class TestPGVectorStoreUnit:
     async def test_insert_vectors(self):
         """Test inserting vectors with payloads."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -149,7 +149,7 @@ class TestPGVectorStoreUnit:
     async def test_search_vectors(self):
         """Test searching for vectors."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -184,7 +184,7 @@ class TestPGVectorStoreUnit:
     async def test_delete_record(self):
         """Test deleting a record."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -209,7 +209,7 @@ class TestPGVectorStoreUnit:
     async def test_update_record(self):
         """Test updating a record."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -238,7 +238,7 @@ class TestPGVectorStoreUnit:
     async def test_get_record(self):
         """Test retrieving a record by ID."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -267,7 +267,7 @@ class TestPGVectorStoreUnit:
     async def test_get_nonexistent_record(self):
         """Test retrieving a nonexistent record returns None."""
         try:
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = PGVectorStore(collection="test_vectors")
 
@@ -297,7 +297,7 @@ class TestWeaviateVectorStoreUnit:
     def test_class_can_be_imported(self):
         """Test that WeaviateVectorStore class can be imported."""
         try:
-            from soothe.vector_store.weaviate import WeaviateVectorStore
+            from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             assert WeaviateVectorStore is not None
         except ImportError:
@@ -308,7 +308,7 @@ class TestWeaviateVectorStoreUnit:
         try:
             import inspect
 
-            from soothe.vector_store.weaviate import WeaviateVectorStore
+            from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             init_sig = inspect.signature(WeaviateVectorStore.__init__)
             params = list(init_sig.parameters.keys())
@@ -329,7 +329,7 @@ class TestWeaviateVectorStoreUnit:
     def test_required_methods_exist(self):
         """Test that all required methods exist on the class."""
         try:
-            from soothe.vector_store.weaviate import WeaviateVectorStore
+            from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             required_methods = [
                 "create_collection",
@@ -353,7 +353,7 @@ class TestWeaviateVectorStoreUnit:
     def test_can_instantiate_without_connection(self):
         """Test that class can be instantiated without immediate connection."""
         try:
-            from soothe.vector_store.weaviate import WeaviateVectorStore
+            from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             store = WeaviateVectorStore(
                 collection="test_collection",
@@ -374,7 +374,7 @@ class TestWeaviateVectorStoreUnit:
     def test_weaviate_uuid_generation(self):
         """Test deterministic UUID generation."""
         try:
-            from soothe.vector_store.weaviate import weaviate_uuid_from_str
+            from soothe.backends.vector_store.weaviate import weaviate_uuid_from_str
 
             uuid1 = weaviate_uuid_from_str("test_string")
             uuid2 = weaviate_uuid_from_str("test_string")
@@ -400,7 +400,7 @@ class TestVectorStoreFactory:
         """Test that factory creates PGVectorStore."""
         try:
             from soothe.vector_store import create_vector_store
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = create_vector_store(
                 provider="pgvector",
@@ -417,7 +417,7 @@ class TestVectorStoreFactory:
         """Test that factory creates WeaviateVectorStore."""
         try:
             from soothe.vector_store import create_vector_store
-            from soothe.vector_store.weaviate import WeaviateVectorStore
+            from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             store = create_vector_store(
                 provider="weaviate",
@@ -444,7 +444,7 @@ class TestVectorStoreFactory:
         """Test that factory creates store with default config."""
         try:
             from soothe.vector_store import create_vector_store
-            from soothe.vector_store.pgvector import PGVectorStore
+            from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = create_vector_store(
                 provider="pgvector",

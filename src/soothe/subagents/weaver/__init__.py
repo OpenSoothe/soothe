@@ -45,7 +45,7 @@ WEAVER_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe.utils._progress import emit_progress
+    from soothe.utils.progress import emit_progress
 
     emit_progress(event, logger)
 
@@ -378,7 +378,7 @@ def create_weaver_subagent(
 def _resolve_dependencies(cfg: Any, collection: str) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings for the reuse index."""
     if cfg.vector_store_provider != "none":
-        from soothe.vector_store import create_vector_store
+        from soothe.backends.vector_store import create_vector_store
 
         vs = create_vector_store(
             cfg.vector_store_provider,
@@ -386,7 +386,7 @@ def _resolve_dependencies(cfg: Any, collection: str) -> tuple[Any, Any]:
             cfg.vector_store_config,
         )
     else:
-        from soothe.vector_store.in_memory import InMemoryVectorStore
+        from soothe.backends.vector_store.in_memory import InMemoryVectorStore
 
         vs = InMemoryVectorStore(collection)
 
@@ -400,11 +400,11 @@ def _get_skillify_retriever(cfg: Any) -> Any | None:
         skillify_cfg = cfg.skillify if hasattr(cfg, "skillify") else None
         if skillify_cfg and getattr(skillify_cfg, "enabled", False):
             from soothe.subagents.skillify.retriever import SkillRetriever
-            from soothe.vector_store.in_memory import InMemoryVectorStore
+            from soothe.backends.vector_store.in_memory import InMemoryVectorStore
 
             collection = getattr(skillify_cfg, "index_collection", "soothe_skillify")
             if cfg.vector_store_provider != "none":
-                from soothe.vector_store import create_vector_store
+                from soothe.backends.vector_store import create_vector_store
 
                 vs = create_vector_store(cfg.vector_store_provider, collection, cfg.vector_store_config)
             else:

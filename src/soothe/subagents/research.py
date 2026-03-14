@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe.utils._progress import emit_progress
+    from soothe.utils.progress import emit_progress
 
     emit_progress(event, logger)
 

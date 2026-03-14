@@ -1,5 +1,5 @@
-"""Planner implementations for PlannerProtocol."""
+"""Backward-compatible re-export -- canonical location is ``soothe.backends.planning``."""
 
-from soothe.planning.direct import DirectPlanner
+from soothe.backends.planning.direct import DirectPlanner
 
 __all__ = ["DirectPlanner"]

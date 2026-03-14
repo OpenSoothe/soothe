@@ -1,5 +1,5 @@
-"""Memory implementations for MemoryProtocol."""
+"""Backward-compatible re-export -- canonical location is ``soothe.backends.memory``."""
 
-from soothe.memory_store.store_backed import StoreBackedMemory
+from soothe.backends.memory.store import StoreBackedMemory
 
 __all__ = ["StoreBackedMemory"]

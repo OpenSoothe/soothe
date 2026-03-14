@@ -42,7 +42,7 @@ SKILLIFY_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe.utils._progress import emit_progress
+    from soothe.utils.progress import emit_progress
 
     emit_progress(event, logger)
 
@@ -222,7 +222,7 @@ def _resolve_dependencies(
     skillify_cfg: Any,
 ) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings from config."""
-    from soothe.vector_store import create_vector_store
+    from soothe.backends.vector_store import create_vector_store
 
     collection = getattr(skillify_cfg, "index_collection", "soothe_skillify") if skillify_cfg else "soothe_skillify"
 
@@ -233,7 +233,7 @@ def _resolve_dependencies(
             cfg.vector_store_config,
         )
     else:
-        from soothe.vector_store.in_memory import InMemoryVectorStore
+        from soothe.backends.vector_store.in_memory import InMemoryVectorStore
 
         vs = InMemoryVectorStore(collection)
 

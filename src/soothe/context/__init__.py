@@ -1,5 +1,5 @@
-"""Context implementations for ContextProtocol."""
+"""Backward-compatible re-export -- canonical location is ``soothe.backends.context``."""
 
-from soothe.context.keyword import KeywordContext
+from soothe.backends.context.keyword import KeywordContext
 
 __all__ = ["KeywordContext"]

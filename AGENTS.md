@@ -47,24 +47,25 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 ```
 +--------------------------------------------------------------+
 |  CLI Layer                                                    |
-|  main.py (Typer), runner.py (SootheRunner),                  |
-|  tui.py (Rich TUI), commands.py, session.py                 |
+|  cli/main.py (Typer), cli/daemon.py,                        |
+|  cli/tui_app.py, cli/tui.py, cli/commands.py, cli/session.py|
 +--------------------------------------------------------------+
-|  Agent Factory                                                |
-|  create_soothe_agent() wraps create_deep_agent()             |
-|  SootheConfig drives all wiring                               |
+|  Core Framework (no CLI deps)                                |
+|  core/agent.py (factory), core/runner.py (SootheRunner),    |
+|  core/resolver.py (protocol resolution), core/events.py     |
 +--------------------------------------------------------------+
 |  Protocol Layer                                               |
-|  Context, Memory, Planner, Policy, Durability,               |
+|  protocols/: Context, Memory, Planner, Policy, Durability,  |
 |  RemoteAgent, Concurrency, VectorStore                        |
 +--------------------------------------------------------------+
-|  Implementation Layer                                         |
-|  context/, memory_store/, planning/, policy/,                |
-|  durability/, remote/, middleware/, vector_store/,            |
-|  persistence/                                                 |
+|  Backends Layer                                               |
+|  backends/context/, backends/memory/, backends/planning/,    |
+|  backends/policy/, backends/durability/, backends/remote/,   |
+|  backends/persistence/, backends/vector_store/               |
 +--------------------------------------------------------------+
 |  Capability Layer                                             |
-|  subagents/ (planner, scout, research, browser, claude)      |
+|  subagents/ (planner, scout, research, browser, claude,     |
+|              skillify, weaver)                                |
 |  tools/ (jina, serper, image, audio, video, tabular)         |
 |  mcp/ (MCP server loading)                                   |
 +--------------------------------------------------------------+
@@ -74,10 +75,10 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 
 ### Entry Points
 
-- `create_soothe_agent()` in `agent.py` -- main factory, returns `CompiledStateGraph`
+- `create_soothe_agent()` in `core/agent.py` -- main factory, returns `CompiledStateGraph`
 - `SootheConfig` in `config.py` -- declarative configuration (pydantic-settings, `SOOTHE_` prefix)
 - `soothe` CLI in `cli/main.py` -- Typer app, entry point `soothe.cli:app`
-- `SootheRunner` in `cli/runner.py` -- protocol orchestration + streaming wrapper
+- `SootheRunner` in `core/runner.py` -- protocol orchestration + streaming wrapper
 
 ### Configuration System
 
@@ -92,21 +93,22 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 
 | Package | Contents | Purpose |
 |---------|----------|---------|
+| `core/` | `agent`, `runner`, `resolver`, `events` | Framework logic (factory, orchestration, resolution) |
 | `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
-| `context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
-| `memory_store/` | `StoreBackedMemory`, `VectorMemory` | MemoryProtocol implementations |
-| `planning/` | `DirectPlanner` | PlannerProtocol implementations |
-| `policy/` | `ConfigDrivenPolicy` | PolicyProtocol implementations |
-| `durability/` | `InMemoryDurability` | DurabilityProtocol implementations |
-| `remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
-| `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
+| `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
+| `backends/memory/` | `StoreBackedMemory`, `VectorMemory` | MemoryProtocol implementations |
+| `backends/planning/` | `DirectPlanner` | PlannerProtocol implementations |
+| `backends/policy/` | `ConfigDrivenPolicy` | PolicyProtocol implementations |
+| `backends/durability/` | `InMemoryDurability` | DurabilityProtocol implementations |
+| `backends/remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
+| `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore` | Persistence backends for context/memory |
+| `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
-| `cli/` | `main`, `runner`, `tui`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon + SootheRunner |
-| `vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
-| `persistence/` | `JsonStore`, `RocksDbStore` | Persistence backends for context/memory |
-| `utils/` | `_streaming`, `_progress` | Shared streaming and progress helpers |
+| `cli/` | `main`, `tui`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |
+| `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
+| `utils/` | `streaming`, `progress` | Shared streaming and progress helpers |
 
 ## What deepagents Provides (DO NOT reimplement)
 
@@ -159,7 +161,6 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
 | [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
 | [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
-| [RFC-0007](docs/specs/RFC-0007.md) | Code Structure Revision for Extensibility |
 
 ### Implementation Guides
 
@@ -178,6 +179,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
 | [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
 | [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
+| [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
 
 ### Configuration Reference
 

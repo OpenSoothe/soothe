@@ -12,7 +12,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from soothe.cli.runner import SootheRunner
+    from soothe.core.runner import SootheRunner
     from soothe.cli.session import InputHistory, SessionLogger
     from soothe.protocols.planner import Plan
 
