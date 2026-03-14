@@ -81,13 +81,11 @@ class SootheRunner:
     """
 
     def __init__(self, config: SootheConfig | None = None) -> None:  # noqa: D107
-        from langgraph.checkpoint.memory import MemorySaver
-
-        from soothe.backends.durability.in_memory import InMemoryDurability
         from soothe.core.agent import create_soothe_agent
+        from soothe.core.resolver import resolve_checkpointer, resolve_durability
 
         self._config = config or SootheConfig()
-        self._checkpointer = MemorySaver()
+        self._checkpointer = resolve_checkpointer(self._config)
         self._agent: CompiledStateGraph = create_soothe_agent(
             self._config,
             checkpointer=self._checkpointer,
@@ -97,7 +95,7 @@ class SootheRunner:
         self._memory: MemoryProtocol | None = getattr(self._agent, "soothe_memory", None)
         self._planner: PlannerProtocol | None = getattr(self._agent, "soothe_planner", None)
         self._policy: PolicyProtocol | None = getattr(self._agent, "soothe_policy", None)
-        self._durability = InMemoryDurability()
+        self._durability = resolve_durability(self._config)
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
 
@@ -166,15 +164,43 @@ class SootheRunner:
 
         Stops background indexer tasks and closes connection pools.
         """
-        # Check for skillify indexer in subagents
-        if hasattr(self._agent, "subagents"):
-            for subagent in getattr(self._agent, "subagents", []):
-                if isinstance(subagent, dict) and "_skillify_indexer" in subagent:
-                    indexer = subagent["_skillify_indexer"]
-                    try:
-                        await indexer.stop()
-                    except Exception:
-                        logger.debug("Failed to stop skillify indexer", exc_info=True)
+        # Close context / memory backend stores when they expose async close().
+        await self._close_attached_store(self._context)
+        await self._close_attached_store(self._memory)
+
+        # Stop subagent-owned resources.
+        subagents = getattr(self._agent, "soothe_subagents", None) or getattr(self._agent, "subagents", [])
+        for subagent in subagents:
+            if not isinstance(subagent, dict):
+                continue
+            indexer = subagent.get("_skillify_indexer")
+            if indexer is not None:
+                try:
+                    await indexer.stop()
+                except Exception:
+                    logger.debug("Failed to stop skillify indexer", exc_info=True)
+
+            reuse_index = subagent.get("_weaver_reuse_index")
+            if reuse_index is not None:
+                await self._safe_close(reuse_index)
+
+    async def _close_attached_store(self, owner: Any | None) -> None:
+        """Close a nested `_store` field when available."""
+        if owner is None:
+            return
+        store = getattr(owner, "_store", None)
+        if store is not None:
+            await self._safe_close(store)
+
+    async def _safe_close(self, obj: Any) -> None:
+        """Close an object that exposes an async close method."""
+        close_method = getattr(obj, "close", None)
+        if not callable(close_method):
+            return
+        try:
+            await close_method()
+        except Exception:
+            logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
 
     # -- main stream --------------------------------------------------------
 
@@ -211,7 +237,7 @@ class SootheRunner:
             state.recalled_memories,
         )
         stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": state.thread_id}}
 
         hitl_iterations = 0
         while True:
@@ -359,7 +385,32 @@ class SootheRunner:
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
 
-        # Context projection
+        # Memory recall
+        if self._memory:
+            try:
+                items = await self._memory.recall(user_input, limit=5)
+                state.recalled_memories = items
+                if self._context and items:
+                    for item in items:
+                        await self._context.ingest(
+                            ContextEntry(
+                                source="memory",
+                                content=item.content[:2000],
+                                tags=["recalled_memory", *item.tags],
+                                importance=item.importance,
+                            )
+                        )
+                yield _custom(
+                    {
+                        "type": "soothe.memory.recalled",
+                        "count": len(items),
+                        "query": user_input[:100],
+                    }
+                )
+            except Exception:
+                logger.debug("Memory recall failed", exc_info=True)
+
+        # Context projection (after memory recall/ingestion)
         if self._context:
             try:
                 projection = await self._context.project(user_input, token_budget=4000)
@@ -373,21 +424,6 @@ class SootheRunner:
                 )
             except Exception:
                 logger.debug("Context projection failed", exc_info=True)
-
-        # Memory recall
-        if self._memory:
-            try:
-                items = await self._memory.recall(user_input, limit=5)
-                state.recalled_memories = items
-                yield _custom(
-                    {
-                        "type": "soothe.memory.recalled",
-                        "count": len(items),
-                        "query": user_input[:100],
-                    }
-                )
-            except Exception:
-                logger.debug("Memory recall failed", exc_info=True)
 
         # Plan creation
         if self._planner and self._config.planner_routing != "none":
@@ -408,6 +444,14 @@ class SootheRunner:
                         "steps": [{"id": s.id, "description": s.description, "status": s.status} for s in plan.steps],
                     }
                 )
+                if plan.steps:
+                    yield _custom(
+                        {
+                            "type": "soothe.plan.step_started",
+                            "index": 0,
+                            "description": plan.steps[0].description,
+                        }
+                    )
             except Exception:
                 logger.debug("Plan creation failed", exc_info=True)
 
@@ -472,6 +516,15 @@ class SootheRunner:
         # Plan reflection
         if self._planner and state.plan and response_text:
             try:
+                if state.plan.steps:
+                    first_step_success = bool(response_text.strip())
+                    yield _custom(
+                        {
+                            "type": "soothe.plan.step_completed",
+                            "index": 0,
+                            "success": first_step_success,
+                        }
+                    )
                 step_results = [
                     StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
                     for s in state.plan.steps

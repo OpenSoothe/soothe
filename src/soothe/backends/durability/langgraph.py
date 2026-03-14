@@ -1,31 +1,32 @@
-"""InMemoryDurability -- lightweight in-memory thread lifecycle management."""
+"""LangGraphDurability -- file-backed thread metadata durability."""
 
 from __future__ import annotations
 
-import logging
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
-logger = logging.getLogger(__name__)
 
+class LangGraphDurability:
+    """DurabilityProtocol implementation with JSON-backed thread metadata.
 
-class InMemoryDurability:
-    """DurabilityProtocol implementation using in-memory storage.
-
-    Suitable for development and testing. Production deployments should use
-    a persistent backend (e.g., LangGraphDurability with Checkpointer).
+    This backend complements LangGraph checkpoint persistence by storing thread
+    lifecycle metadata and lightweight per-thread state in a local JSON file.
     """
 
-    def __init__(self) -> None:
-        """Initialize with empty thread registry."""
+    def __init__(self, metadata_path: str) -> None:
+        self._path = Path(metadata_path).expanduser().resolve()
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._threads: dict[str, ThreadInfo] = {}
         self._state: dict[str, Any] = {}
+        self._load()
 
     async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
-        """Create a new thread."""
+        """Create a new thread and persist metadata."""
         now = datetime.now(tz=UTC)
         info = ThreadInfo(
             thread_id=str(uuid4()),
@@ -35,6 +36,7 @@ class InMemoryDurability:
             metadata=metadata,
         )
         self._threads[info.thread_id] = info
+        self._save()
         return info
 
     async def resume_thread(self, thread_id: str) -> ThreadInfo:
@@ -45,6 +47,7 @@ class InMemoryDurability:
             raise KeyError(msg)
         info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
         self._threads[thread_id] = info
+        self._save()
         return info
 
     async def suspend_thread(self, thread_id: str) -> None:
@@ -53,6 +56,7 @@ class InMemoryDurability:
         if info is None:
             return
         self._threads[thread_id] = info.model_copy(update={"status": "suspended", "updated_at": datetime.now(tz=UTC)})
+        self._save()
 
     async def archive_thread(self, thread_id: str) -> None:
         """Archive a thread."""
@@ -60,6 +64,7 @@ class InMemoryDurability:
         if info is None:
             return
         self._threads[thread_id] = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
+        self._save()
 
     async def list_threads(
         self,
@@ -81,9 +86,28 @@ class InMemoryDurability:
         return results
 
     async def save_state(self, thread_id: str, state: Any) -> None:
-        """Persist state for a thread (in memory)."""
+        """Persist arbitrary state for a thread."""
         self._state[thread_id] = state
+        self._save()
 
     async def load_state(self, thread_id: str) -> Any | None:
         """Load persisted state for a thread."""
         return self._state.get(thread_id)
+
+    def _save(self) -> None:
+        payload = {
+            "threads": {tid: info.model_dump(mode="json") for tid, info in self._threads.items()},
+            "state": self._state,
+        }
+        self._path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+
+    def _load(self) -> None:
+        if not self._path.exists():
+            return
+        raw = self._path.read_text(encoding="utf-8").strip()
+        if not raw:
+            return
+        data = json.loads(raw)
+        threads = data.get("threads", {})
+        self._threads = {tid: ThreadInfo.model_validate(item) for tid, item in threads.items()}
+        self._state = data.get("state", {})

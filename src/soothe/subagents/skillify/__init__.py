@@ -169,6 +169,7 @@ def create_skillify_subagent(
         ``CompiledSubAgent`` dict compatible with deepagents.
     """
     from soothe.config import SOOTHE_HOME, SootheConfig
+    from soothe.backends.policy.config_driven import ConfigDrivenPolicy
 
     cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
 
@@ -194,6 +195,7 @@ def create_skillify_subagent(
         interval_seconds=interval,
         collection=collection,
         embedding_dims=cfg.embedding_dims,
+        event_callback=_emit_progress,
     )
 
     retriever = SkillRetriever(
@@ -201,6 +203,8 @@ def create_skillify_subagent(
         embeddings=embeddings,
         top_k=top_k,
         ready_event=indexer.ready_event,
+        policy=ConfigDrivenPolicy(),
+        policy_profile=cfg.policy_profile,
     )
 
     _start_background_indexer(indexer)

@@ -195,7 +195,7 @@ class TestProtocolConfig:
             assert cfg.context_backend == backend
 
     def test_memory_backend_options(self):
-        for backend in ("store", "vector", "none"):
+        for backend in ("keyword", "vector", "none"):
             cfg = SootheConfig(memory_backend=backend)
             assert cfg.memory_backend == backend
 

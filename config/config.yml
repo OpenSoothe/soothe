@@ -197,7 +197,7 @@ context_backend: keyword                         # keyword | vector | none
 # context_persist_backend: json                   # json | rocksdb
 
 # --- Memory Protocol ---
-memory_backend: store                            # store | vector | none
+memory_backend: keyword                          # keyword | vector | none
 # memory_persist_path: ~/.soothe/memory            # directory for persistence (default: SOOTHE_HOME/memory)
 # memory_persist_backend: json                    # json | rocksdb
 

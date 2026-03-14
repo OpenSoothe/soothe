@@ -9,9 +9,11 @@ from typing import Any
 from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
+from langgraph.types import Checkpointer
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.protocols.context import ContextProtocol
+from soothe.protocols.durability import DurabilityProtocol
 from soothe.protocols.memory import MemoryProtocol
 from soothe.protocols.planner import PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -229,7 +231,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
         from soothe.backends.vector_store import create_vector_store
 
         if config.vector_store_provider == "none":
-            logger.warning("vector memory requires vector_store_provider; falling back to store")
+            logger.warning("vector memory requires vector_store_provider; falling back to keyword")
         else:
             vs = create_vector_store(
                 config.vector_store_provider,
@@ -297,3 +299,96 @@ def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
     from soothe.backends.policy.config_driven import ConfigDrivenPolicy
 
     return ConfigDrivenPolicy()
+
+
+def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
+    """Instantiate the DurabilityProtocol implementation from config."""
+    if config.durability_backend == "langgraph":
+        from pathlib import Path
+
+        from soothe.backends.durability.langgraph import LangGraphDurability
+
+        metadata_path = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "threads.json")
+        return LangGraphDurability(metadata_path=metadata_path)
+
+    from soothe.backends.durability.in_memory import InMemoryDurability
+
+    return InMemoryDurability()
+
+
+def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
+    """Resolve a LangGraph checkpointer from config.
+
+    Falls back to ``MemorySaver`` when an optional backend dependency is
+    unavailable or misconfigured.
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+
+    backend = config.checkpointer_backend
+    if backend == "memory":
+        return MemorySaver()
+
+    if backend == "sqlite":
+        return _resolve_sqlite_checkpointer(config) or MemorySaver()
+
+    if backend == "postgres":
+        return _resolve_postgres_checkpointer(config) or MemorySaver()
+
+    logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
+    return MemorySaver()
+
+
+def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
+    """Try to initialize a SQLite-based checkpointer."""
+    from pathlib import Path
+
+    sqlite_path = config.checkpointer_sqlite_path or str(Path(SOOTHE_HOME) / "checkpoints.sqlite")
+    Path(sqlite_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
+
+    candidates = [
+        ("langgraph.checkpoint.sqlite.aio", "AsyncSqliteSaver"),
+        ("langgraph.checkpoint.sqlite", "SqliteSaver"),
+    ]
+    for module_name, class_name in candidates:
+        try:
+            module = __import__(module_name, fromlist=[class_name])
+            saver_cls = getattr(module, class_name)
+            if hasattr(saver_cls, "from_conn_string"):
+                return saver_cls.from_conn_string(sqlite_path)
+            return saver_cls(sqlite_path)
+        except Exception:
+            continue
+
+    logger.warning(
+        "SQLite checkpointer requested but sqlite checkpoint package is unavailable; "
+        "install langgraph sqlite checkpoint support. Falling back to memory."
+    )
+    return None
+
+
+def _resolve_postgres_checkpointer(config: SootheConfig) -> Checkpointer | None:
+    """Try to initialize a Postgres-based checkpointer."""
+    dsn = config.checkpointer_postgres_dsn
+    if not dsn:
+        logger.warning("Postgres checkpointer requested but checkpointer_postgres_dsn is not set; using memory.")
+        return None
+
+    candidates = [
+        ("langgraph.checkpoint.postgres.aio", "AsyncPostgresSaver"),
+        ("langgraph.checkpoint.postgres", "PostgresSaver"),
+    ]
+    for module_name, class_name in candidates:
+        try:
+            module = __import__(module_name, fromlist=[class_name])
+            saver_cls = getattr(module, class_name)
+            if hasattr(saver_cls, "from_conn_string"):
+                return saver_cls.from_conn_string(dsn)
+            return saver_cls(dsn)
+        except Exception:
+            continue
+
+    logger.warning(
+        "Postgres checkpointer requested but postgres checkpoint package is unavailable; "
+        "install langgraph postgres checkpoint support. Falling back to memory."
+    )
+    return None

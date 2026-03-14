@@ -270,11 +270,11 @@ context_persist_dir: ~/.soothe/context
 ### Memory Protocol
 
 Cross-thread long-term memory. Stores important findings that survive beyond a single
-conversation. Retrieved by semantic relevance at the start of new threads.
+conversation. Retrieved by keyword or semantic relevance at the start of new threads.
 
 ```yaml
-memory_backend: store        # store (keyword) | vector (semantic) | none
-memory_persist_path: ~/.soothe/memory.json
+memory_backend: keyword      # keyword | vector (semantic) | none
+memory_persist_path: ~/.soothe/memory/
 ```
 
 ### Planner Protocol

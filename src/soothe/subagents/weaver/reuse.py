@@ -132,3 +132,9 @@ class ReuseIndex:
             )
         except Exception:
             logger.error("Failed to index agent in reuse store", exc_info=True)
+
+    async def close(self) -> None:
+        """Close the underlying vector store if supported."""
+        close_method = getattr(self._vector_store, "close", None)
+        if callable(close_method):
+            await close_method()

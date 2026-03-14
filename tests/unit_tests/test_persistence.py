@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.persistence import PersistStore, create_persist_store
+from soothe.backends.persistence import PersistStore, create_persist_store
 from soothe.backends.persistence.json_store import JsonPersistStore
 
 

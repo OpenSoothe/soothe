@@ -847,4 +847,8 @@ def run_agent_tui(runner: SootheRunner) -> None:
             except Exception as exc:
                 console.print(Text(f"  ! {exc}", style="bold red"))
     finally:
+        try:
+            loop.run_until_complete(runner.cleanup())
+        except Exception:
+            logger.debug("Runner cleanup failed during TUI shutdown", exc_info=True)
         loop.close()

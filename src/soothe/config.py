@@ -239,8 +239,8 @@ class SootheConfig(BaseSettings):
     context_persist_backend: Literal["json", "rocksdb"] = "json"
     """Persistence backend for context data."""
 
-    memory_backend: Literal["store", "vector", "none"] = "store"
-    """MemoryProtocol implementation: ``store`` (keyword matching with
+    memory_backend: Literal["keyword", "vector", "none"] = "keyword"
+    """MemoryProtocol implementation: ``keyword`` (keyword matching with
     JSON/RocksDB persistence), ``vector`` (semantic via VectorStore),
     or ``none`` (disabled)."""
 
@@ -258,6 +258,21 @@ class SootheConfig(BaseSettings):
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     """Concurrency limits for parallel execution."""
+
+    durability_backend: Literal["in_memory", "langgraph"] = "in_memory"
+    """Durability backend for thread lifecycle and metadata persistence."""
+
+    checkpointer_backend: Literal["memory", "sqlite", "postgres"] = "memory"
+    """LangGraph checkpoint backend."""
+
+    checkpointer_sqlite_path: str | None = None
+    """SQLite checkpoint file path when ``checkpointer_backend=sqlite``."""
+
+    checkpointer_postgres_dsn: str | None = None
+    """Postgres DSN when ``checkpointer_backend=postgres``."""
+
+    durability_metadata_path: str | None = None
+    """Metadata/state path for durability backends that persist locally."""
 
     # --- Vector store config ---
 

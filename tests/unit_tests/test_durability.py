@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from soothe.durability.in_memory import InMemoryDurability
+from soothe.backends.durability.in_memory import InMemoryDurability
 from soothe.protocols.durability import ThreadFilter, ThreadMetadata
 
 

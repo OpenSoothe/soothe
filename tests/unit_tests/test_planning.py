@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.planning.direct import DirectPlanner
+from soothe.backends.planning.direct import DirectPlanner
 from soothe.protocols.planner import Plan, PlanContext, PlanStep, StepResult
 
 

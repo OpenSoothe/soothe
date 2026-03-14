@@ -27,6 +27,8 @@ from soothe.core.resolver import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.middleware.policy import SoothePolicyMiddleware
+from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.memory import MemoryProtocol
 from soothe.protocols.planner import PlannerProtocol
@@ -121,11 +123,24 @@ def create_soothe_agent(
             virtual_mode=True,
         )
 
+    default_middleware: list[AgentMiddleware] = []
+    if resolved_policy:
+        default_middleware.append(
+            SoothePolicyMiddleware(
+                policy=resolved_policy,
+                profile_name=config.policy_profile,
+            )
+        )
+    if resolved_context:
+        default_middleware.append(SubagentContextMiddleware(context=resolved_context))
+
+    all_middleware: tuple[AgentMiddleware, ...] = tuple([*default_middleware, *middleware])
+
     agent = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
         system_prompt=config.system_prompt,
-        middleware=middleware,
+        middleware=all_middleware,
         subagents=all_subagents or None,
         skills=config.skills or None,
         memory=config.memory or None,
@@ -141,5 +156,6 @@ def create_soothe_agent(
     agent.soothe_planner = resolved_planner  # type: ignore[attr-defined]
     agent.soothe_policy = resolved_policy  # type: ignore[attr-defined]
     agent.soothe_config = config  # type: ignore[attr-defined]
+    agent.soothe_subagents = all_subagents  # type: ignore[attr-defined]
 
     return agent

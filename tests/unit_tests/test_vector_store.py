@@ -399,7 +399,7 @@ class TestVectorStoreFactory:
     def test_creates_pgvector_store(self):
         """Test that factory creates PGVectorStore."""
         try:
-            from soothe.vector_store import create_vector_store
+            from soothe.backends.vector_store import create_vector_store
             from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = create_vector_store(
@@ -416,7 +416,7 @@ class TestVectorStoreFactory:
     def test_creates_weaviate_store(self):
         """Test that factory creates WeaviateVectorStore."""
         try:
-            from soothe.vector_store import create_vector_store
+            from soothe.backends.vector_store import create_vector_store
             from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
             store = create_vector_store(
@@ -432,7 +432,7 @@ class TestVectorStoreFactory:
 
     def test_raises_error_for_unknown_provider(self):
         """Test that factory raises error for unknown provider."""
-        from soothe.vector_store import create_vector_store
+        from soothe.backends.vector_store import create_vector_store
 
         with pytest.raises(ValueError, match="Unknown vector store provider"):
             create_vector_store(
@@ -443,7 +443,7 @@ class TestVectorStoreFactory:
     def test_creates_with_defaults(self):
         """Test that factory creates store with default config."""
         try:
-            from soothe.vector_store import create_vector_store
+            from soothe.backends.vector_store import create_vector_store
             from soothe.backends.vector_store.pgvector import PGVectorStore
 
             store = create_vector_store(

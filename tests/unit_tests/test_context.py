@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.context.keyword import KeywordContext
+from soothe.backends.context.keyword import KeywordContext
 from soothe.protocols.context import ContextEntry, ContextProjection
 
 
@@ -289,7 +289,7 @@ class TestVectorContext:
 
     def test_initialization(self, mock_vector_store, mock_embeddings):
         """Test VectorContext initialization."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -300,7 +300,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_ingest_embeds_and_stores(self, mock_vector_store, mock_embeddings):
         """Test that ingest embeds content and stores in vector store."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -320,7 +320,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_empty_ledger(self, mock_vector_store, mock_embeddings):
         """Test projection on empty ledger."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -333,7 +333,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_with_results(self, mock_vector_store, mock_embeddings):
         """Test projection with vector search results."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
 
         # Mock search results
@@ -369,7 +369,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_respects_token_budget(self, mock_vector_store, mock_embeddings):
         """Test that projection respects token budget."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
 
         # Create large entries
@@ -392,7 +392,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_handles_invalid_payload(self, mock_vector_store, mock_embeddings):
         """Test that projection handles invalid payloads gracefully."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
 
         # Mock results with invalid payload
@@ -413,7 +413,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_project_for_subagent(self, mock_vector_store, mock_embeddings):
         """Test project_for_subagent delegates to project."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -424,7 +424,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_summarize_empty_ledger(self, mock_vector_store, mock_embeddings):
         """Test summarize on empty ledger."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -435,7 +435,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_summarize_with_entries(self, mock_vector_store, mock_embeddings):
         """Test summarize with cached entries."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -450,7 +450,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_summarize_with_scope(self, mock_vector_store, mock_embeddings):
         """Test summarize with scope filter."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -467,7 +467,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_persist_is_noop(self, mock_vector_store, mock_embeddings):
         """Test that persist is a no-op for vector context."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         context = VectorContext(mock_vector_store, mock_embeddings)
 
@@ -477,7 +477,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_restore_from_vector_store(self, mock_vector_store, mock_embeddings):
         """Test restore loads entries from vector store."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
 
         entry1 = ContextEntry(source="test", content="content 1")
@@ -500,7 +500,7 @@ class TestVectorContext:
     @pytest.mark.asyncio
     async def test_restore_handles_errors(self, mock_vector_store, mock_embeddings):
         """Test restore handles errors gracefully."""
-        from soothe.context.vector_context import VectorContext
+        from soothe.backends.context.vector import VectorContext
 
         mock_vector_store.list_records = AsyncMock(side_effect=Exception("DB error"))
 

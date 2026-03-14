@@ -19,7 +19,7 @@ def pgvector_config():
 def pgvector_store(pgvector_config):
     """Create a PGVectorStore instance for testing."""
     try:
-        from soothe.vector_store.pgvector import PGVectorStore
+        from soothe.backends.vector_store.pgvector import PGVectorStore
 
         collection = f"test_collection_{uuid.uuid4().hex[:8]}"
         store = PGVectorStore(
@@ -57,7 +57,7 @@ def weaviate_config():
 def weaviate_store(weaviate_config):
     """Create a WeaviateVectorStore instance for testing."""
     try:
-        from soothe.vector_store.weaviate import WeaviateVectorStore
+        from soothe.backends.vector_store.weaviate import WeaviateVectorStore
 
         collection = f"TestCollection_{uuid.uuid4().hex[:8]}"
         store = WeaviateVectorStore(

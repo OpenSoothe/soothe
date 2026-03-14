@@ -23,6 +23,7 @@ from soothe.subagents.weaver.composer import AgentComposer
 from soothe.subagents.weaver.generator import AgentGenerator
 from soothe.subagents.weaver.models import (
     AgentManifest,
+    CapabilitySignature,
     ReuseCandidate,
 )
 from soothe.subagents.weaver.registry import GeneratedAgentRegistry
@@ -74,6 +75,8 @@ def _build_weaver_graph(
     registry: GeneratedAgentRegistry,
     skillify_retriever: Any | None,
     model: BaseChatModel,
+    policy: Any | None = None,
+    policy_profile: str = "standard",
 ) -> Any:
     """Build and compile the Weaver LangGraph.
 
@@ -82,6 +85,47 @@ def _build_weaver_graph(
              miss: fetch_skills -> compose -> generate -> register -> execute
     """
     # -- Shared async helpers -----------------------------------------------
+
+    def _check_policy(action: str, tool_name: str, tool_args: dict[str, Any] | None = None) -> None:
+        if policy is None:
+            return
+        from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+
+        permissions = PermissionSet(frozenset())
+        get_profile = getattr(policy, "get_profile", None)
+        if callable(get_profile):
+            profile = get_profile(policy_profile)
+            if profile is not None:
+                permissions = profile.permissions
+
+        decision = policy.check(
+            ActionRequest(action_type=action, tool_name=tool_name, tool_args=tool_args or {}),
+            PolicyContext(active_permissions=permissions, thread_id=None),
+        )
+        if decision.verdict == "deny":
+            msg = f"Policy denied {action}:{tool_name} - {decision.reason}"
+            raise ValueError(msg)
+
+    async def _validate_package(
+        manifest: AgentManifest,
+        output_dir: Path,
+        capability: CapabilitySignature,
+    ) -> None:
+        if not manifest.name.strip():
+            raise ValueError("Generated manifest has empty name")
+        if not manifest.system_prompt_file.strip():
+            raise ValueError("Generated manifest has empty system_prompt_file")
+        prompt_path = output_dir / manifest.system_prompt_file
+        if not prompt_path.is_file():
+            raise ValueError("Generated package missing system prompt file")
+        prompt_text = prompt_path.read_text(encoding="utf-8").strip()
+        if not prompt_text:
+            raise ValueError("Generated system prompt is empty")
+
+        # Validate tool usage against policy before registration.
+        for tool in manifest.tools:
+            _check_policy(action="tool_call", tool_name=tool, tool_args={"path": "*"})
+        _check_policy(action="subagent_spawn", tool_name=manifest.name, tool_args={"goal": capability.description})
 
     async def _analyze_and_route(state: dict[str, Any]) -> dict[str, Any]:
         """Analyse request, check reuse, and either load or generate."""
@@ -161,6 +205,7 @@ def _build_weaver_graph(
         )
 
         # Step 5: Generate
+        _check_policy(action="subagent_spawn", tool_name="weaver.generate", tool_args={"goal": capability.description})
         _emit_progress({"type": "soothe.weaver.generate.started", "agent_name": blueprint.agent_name})
         output_dir = registry.base_dir / blueprint.agent_name
         manifest = await generator.generate(blueprint, output_dir)
@@ -172,7 +217,13 @@ def _build_weaver_graph(
             }
         )
 
+        # Step 5.5: Validate package (hard-fail on validation/policy errors)
+        _emit_progress({"type": "soothe.weaver.validate.started", "agent_name": manifest.name})
+        await _validate_package(manifest, output_dir, capability)
+        _emit_progress({"type": "soothe.weaver.validate.completed", "agent_name": manifest.name})
+
         # Step 6: Register and index
+        _check_policy(action="subagent_spawn", tool_name="weaver.register", tool_args={"agent_name": manifest.name})
         registry.register(manifest, output_dir)
         await reuse_index.index_agent(manifest, str(output_dir))
         _emit_progress(
@@ -312,6 +363,7 @@ def create_weaver_subagent(
     from soothe.config import SOOTHE_HOME, SootheConfig
 
     cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
+    from soothe.backends.policy.config_driven import ConfigDrivenPolicy
 
     if model is None:
         msg = (
@@ -366,13 +418,17 @@ def create_weaver_subagent(
         registry=registry_inst,
         skillify_retriever=skillify_retriever,
         model=resolved_model,
+        policy=ConfigDrivenPolicy(),
+        policy_profile=cfg.policy_profile,
     )
 
-    return {
+    spec: CompiledSubAgent = {
         "name": "weaver",
         "description": WEAVER_DESCRIPTION,
         "runnable": runnable,
     }
+    spec["_weaver_reuse_index"] = reuse_inst  # type: ignore[typeddict-unknown-key]
+    return spec
 
 
 def _resolve_dependencies(cfg: Any, collection: str) -> tuple[Any, Any]:

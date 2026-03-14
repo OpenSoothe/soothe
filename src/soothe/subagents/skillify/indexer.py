@@ -64,6 +64,7 @@ class SkillIndexer:
         interval_seconds: int = 300,
         collection: str = "soothe_skillify",
         embedding_dims: int = 1536,
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self._warehouse = warehouse
         self._vector_store = vector_store
@@ -79,6 +80,7 @@ class SkillIndexer:
         self._initialized = False
         self._total_indexed = 0
         self._ready_event: asyncio.Event | None = None
+        self._event_callback = event_callback
 
     @property
     def total_indexed(self) -> int:
@@ -104,6 +106,8 @@ class SkillIndexer:
         if self._task is not None:
             return
         await self._ensure_collection()
+        await self._bootstrap_hash_cache()
+        self._emit({"type": "soothe.skillify.index.started", "collection": self._collection})
         self._task = asyncio.create_task(self._index_loop())
         logger.info("Skillify background indexer started (interval=%ds)", self._interval)
 
@@ -228,6 +232,15 @@ class SkillIndexer:
                 stats = await self.run_once()
                 total_changes = stats["new"] + stats["changed"] + stats["deleted"]
                 if total_changes > 0:
+                    self._emit(
+                        {
+                            "type": "soothe.skillify.index.updated",
+                            "new": stats["new"],
+                            "changed": stats["changed"],
+                            "deleted": stats["deleted"],
+                            "total": self._total_indexed,
+                        }
+                    )
                     logger.info(
                         "Skillify index pass: new=%d changed=%d deleted=%d total=%d",
                         stats["new"],
@@ -236,6 +249,12 @@ class SkillIndexer:
                         self._total_indexed,
                     )
                 else:
+                    self._emit(
+                        {
+                            "type": "soothe.skillify.index.unchanged",
+                            "total": self._total_indexed,
+                        }
+                    )
                     logger.debug("Skillify index pass: no changes (total=%d)", self._total_indexed)
                 if first_pass:
                     if self._ready_event:
@@ -245,6 +264,7 @@ class SkillIndexer:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                self._emit({"type": "soothe.skillify.index.error"})
                 logger.error("Skillify index pass failed", exc_info=True)
                 if first_pass:
                     if self._ready_event:
@@ -252,3 +272,27 @@ class SkillIndexer:
                     first_pass = False
 
             await asyncio.sleep(self._interval)
+
+    async def _bootstrap_hash_cache(self) -> None:
+        """Warm hash cache from existing vector records."""
+        try:
+            records = await self._vector_store.list_records(limit=10000)
+        except Exception:
+            logger.debug("Skillify hash cache bootstrap failed", exc_info=True)
+            return
+
+        for record in records:
+            payload = record.payload or {}
+            skill_id = payload.get("skill_id")
+            content_hash = payload.get("content_hash")
+            if isinstance(skill_id, str) and isinstance(content_hash, str) and skill_id and content_hash:
+                self._hash_cache[skill_id] = content_hash
+
+    def _emit(self, event: dict[str, Any]) -> None:
+        """Emit index lifecycle events via callback."""
+        if self._event_callback is None:
+            return
+        try:
+            self._event_callback(event)
+        except Exception:
+            logger.debug("Skillify event callback failed", exc_info=True)

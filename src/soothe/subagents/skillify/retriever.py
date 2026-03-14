@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Callable
+from typing import Any, Callable
 
 from langchain_core.embeddings import Embeddings
 
@@ -64,6 +64,8 @@ class SkillRetriever:
         embeddings: Embeddings | Callable[[], Embeddings],
         top_k: int = 10,
         ready_event: asyncio.Event | None = None,
+        policy: Any | None = None,
+        policy_profile: str = "standard",
     ) -> None:
         self._vector_store = vector_store
         if callable(embeddings):
@@ -72,6 +74,8 @@ class SkillRetriever:
             self._embeddings = embeddings
         self._top_k = top_k
         self._ready_event = ready_event
+        self._policy = policy
+        self._policy_profile = policy_profile
 
     @property
     def is_ready(self) -> bool:
@@ -93,6 +97,8 @@ class SkillRetriever:
         Returns:
             A ``SkillBundle`` with ranked results.
         """
+        self._check_policy(query)
+
         if self._ready_event and not self._ready_event.is_set():
             logger.info("Skillify index not ready, waiting up to %.0fs", _INDEXING_WAIT_TIMEOUT)
             try:
@@ -143,6 +149,31 @@ class SkillRetriever:
             results=results,
             total_indexed=total_records,
         )
+
+    def _check_policy(self, query: str) -> None:
+        """Apply PolicyProtocol guard to retrieval actions."""
+        if self._policy is None:
+            return
+        from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+
+        permissions = PermissionSet(frozenset())
+        get_profile = getattr(self._policy, "get_profile", None)
+        if callable(get_profile):
+            profile = get_profile(self._policy_profile)
+            if profile is not None:
+                permissions = profile.permissions
+
+        decision = self._policy.check(
+            ActionRequest(
+                action_type="skillify_retrieve",
+                tool_name="skillify.retrieve",
+                tool_args={"query": query[:200]},
+            ),
+            PolicyContext(active_permissions=permissions, thread_id=None),
+        )
+        if decision.verdict == "deny":
+            msg = f"Policy denied skill retrieval: {decision.reason}"
+            raise ValueError(msg)
 
     async def _count_indexed(self) -> int:
         """Estimate total indexed skills via list_records."""
