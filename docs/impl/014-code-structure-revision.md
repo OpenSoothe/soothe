@@ -59,6 +59,6 @@ No deprecation warnings are added yet -- that is a future phase.
 ## Migration Notes
 
 - `soothe.agent.create_soothe_agent` still works (re-exports from `core/agent.py`)
-- `soothe.cli.runner.SootheRunner` still works (re-exports from `core/runner.py`)
+- Legacy `soothe.cli.runner.SootheRunner` re-export removed; use `soothe.core.runner.SootheRunner`
 - All `soothe.context`, `soothe.memory_store`, etc. paths still work
 - Internal code uses new paths; external code can use either

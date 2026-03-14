@@ -71,7 +71,7 @@ Update `create_vector_store()` factory to support `"in_memory"` and `"none"` pro
 
 ```python
 if provider in ("in_memory", "none"):
-    from soothe.vector_store.in_memory import InMemoryVectorStore
+    from soothe.backends.vector_store.in_memory import InMemoryVectorStore
     return InMemoryVectorStore(collection=collection)
 ```
 
@@ -182,7 +182,7 @@ Rewrite IG-010 as the TUI implementation guide.
 
 ## Verification
 
-- [ ] `InMemoryVectorStore` importable from `soothe.vector_store.in_memory`
+- [ ] `InMemoryVectorStore` importable from `soothe.backends.vector_store.in_memory`
 - [ ] `create_vector_store("in_memory", ...)` works
 - [ ] Old `_in_memory_vs.py` deleted
 - [ ] `emit_progress` shared across research, skillify, weaver

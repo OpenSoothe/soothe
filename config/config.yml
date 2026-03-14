@@ -207,6 +207,13 @@ planner_routing: none                            # auto | always_direct | always
 # --- Policy Protocol ---
 policy_profile: standard                         # named policy profile
 
+# --- Durability / Checkpoint ---
+durability_backend: in_memory                   # in_memory | langgraph
+checkpointer_backend: memory                    # memory | sqlite | postgres
+# checkpointer_sqlite_path: ~/.soothe/checkpoints.sqlite
+# checkpointer_postgres_dsn: postgresql://user:pass@localhost:5432/soothe
+# durability_metadata_path: ~/.soothe/durability/threads.json
+
 # --- Concurrency ---
 concurrency:
   max_parallel_subagents: 1
