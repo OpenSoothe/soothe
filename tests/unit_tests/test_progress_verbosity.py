@@ -1,6 +1,10 @@
 """Tests for progress verbosity filtering helpers."""
 
-from soothe.cli.progress_verbosity import classify_custom_event, should_show
+from soothe.cli.progress_verbosity import (
+    _SUBAGENT_PREFIXES,
+    classify_custom_event,
+    should_show,
+)
 
 
 class TestProgressVerbosity:
@@ -40,12 +44,33 @@ class TestProgressVerbosity:
 
     def test_classify_custom_event_protocol(self):
         assert classify_custom_event((), {"type": "soothe.plan.created"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.context.projected"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.policy.checked"}) == "protocol"
 
     def test_classify_custom_event_error(self):
         assert classify_custom_event((), {"type": "soothe.error"}) == "error"
 
-    def test_classify_custom_event_subagent(self):
-        assert classify_custom_event(("tools:abc",), {"type": "browser_step"}) == "subagent_custom"
+    def test_classify_custom_event_subagent_from_namespace(self):
+        assert classify_custom_event(("tools:abc",), {"type": "some_event"}) == "subagent_custom"
+
+    def test_classify_custom_event_subagent_from_soothe_prefix(self):
+        assert classify_custom_event((), {"type": "soothe.browser.step"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.research.web_search"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.claude.text"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.claude.tool_use"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.claude.result"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.skillify.search"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.weaver.generate"}) == "subagent_custom"
 
     def test_classify_custom_event_thinking(self):
         assert classify_custom_event((), {"type": "soothe.thinking.heartbeat"}) == "thinking"
+
+    def test_subagent_prefixes_complete(self):
+        expected = {
+            "soothe.research.",
+            "soothe.browser.",
+            "soothe.claude.",
+            "soothe.skillify.",
+            "soothe.weaver.",
+        }
+        assert _SUBAGENT_PREFIXES == expected

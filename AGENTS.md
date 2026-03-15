@@ -182,6 +182,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
 | [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility Hard-Cut |
 | [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
+| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
 
 ## Interaction Rules
 

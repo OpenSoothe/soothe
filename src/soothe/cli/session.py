@@ -76,14 +76,16 @@ class SessionLogger:
             data: Stream data payload.
         """
         if mode == "custom" and isinstance(data, dict):
-            self._write_record(
-                {
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "kind": "event",
-                    "namespace": list(namespace),
-                    "data": data,
-                }
-            )
+            from soothe.cli.progress_verbosity import classify_custom_event
+
+            record: dict[str, Any] = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "kind": "event",
+                "namespace": list(namespace),
+                "classification": classify_custom_event(namespace, data),
+                "data": data,
+            }
+            self._write_record(record)
         elif mode == "messages" and isinstance(data, (tuple, list)) and len(data) == 2:
             self._log_message_event(namespace, data)
 

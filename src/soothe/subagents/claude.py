@@ -70,17 +70,7 @@ def _build_claude_graph(
             query,
         )
 
-        try:
-            from langgraph.config import get_stream_writer
-
-            writer = get_stream_writer()
-        except (ImportError, RuntimeError):
-            writer = None
-
-        def emit_progress(event: dict[str, Any]) -> None:
-            if writer:
-                writer(event)
-            logger.info("Claude progress: %s", event)
+        from soothe.utils.progress import emit_progress as _emit
 
         messages = state.get("messages", [])
         task = messages[-1].content if messages else ""
@@ -109,27 +99,30 @@ def _build_claude_graph(
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             collected_text.append(block.text)
-                            emit_progress(
+                            _emit(
                                 {
-                                    "type": "claude_text",
+                                    "type": "soothe.claude.text",
                                     "text": block.text[:200],
-                                }
+                                },
+                                logger,
                             )
                         elif isinstance(block, ToolUseBlock):
-                            emit_progress(
+                            _emit(
                                 {
-                                    "type": "claude_tool_use",
+                                    "type": "soothe.claude.tool_use",
                                     "tool": block.name,
-                                }
+                                },
+                                logger,
                             )
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
-                    emit_progress(
+                    _emit(
                         {
-                            "type": "claude_result",
+                            "type": "soothe.claude.result",
                             "cost_usd": cost_usd,
                             "duration_ms": message.duration_ms,
-                        }
+                        },
+                        logger,
                     )
         except Exception:
             logger.exception("Claude agent failed")

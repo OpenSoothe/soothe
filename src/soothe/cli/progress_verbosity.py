@@ -16,6 +16,17 @@ ProgressCategory = Literal[
 ]
 
 
+_SUBAGENT_PREFIXES = frozenset(
+    {
+        "soothe.research.",
+        "soothe.browser.",
+        "soothe.claude.",
+        "soothe.skillify.",
+        "soothe.weaver.",
+    }
+)
+
+
 def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> ProgressCategory:
     """Classify a custom event into a verbosity category."""
     etype = str(data.get("type", ""))
@@ -24,6 +35,8 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     if etype.startswith("soothe."):
         if "thinking" in etype or "heartbeat" in etype:
             return "thinking"
+        if any(etype.startswith(prefix) for prefix in _SUBAGENT_PREFIXES):
+            return "subagent_custom"
         return "protocol"
     if namespace:
         if "thinking" in etype or "heartbeat" in etype:

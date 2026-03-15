@@ -2,6 +2,7 @@
 
 import pytest
 
+from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
 from soothe.tools.jina import JinaReaderTool, create_jina_tools
 from soothe.tools.serper import SerperSearchTool, create_serper_tools
 from soothe.tools.tabular import (
@@ -16,6 +17,35 @@ from soothe.tools.wizsearch import (
     WizsearchSearchTool,
     create_wizsearch_tools,
 )
+
+
+class TestDatetimeTools:
+    def test_create_returns_list(self):
+        tools = create_datetime_tools()
+        assert len(tools) == 1
+        assert isinstance(tools[0], CurrentDateTimeTool)
+
+    def test_tool_metadata(self):
+        tool = CurrentDateTimeTool()
+        assert tool.name == "current_datetime"
+        assert "date" in tool.description.lower()
+        assert "time" in tool.description.lower()
+
+    def test_returns_expected_keys(self):
+        tool = CurrentDateTimeTool()
+        result = tool._run()
+        assert "date" in result
+        assert "time" in result
+        assert "day" in result
+        assert "timezone" in result
+        assert "iso" in result
+
+    def test_date_format(self):
+        tool = CurrentDateTimeTool()
+        result = tool._run()
+        parts = result["date"].split("-")
+        assert len(parts) == 3
+        assert len(parts[0]) == 4
 
 
 class TestJinaTools:
@@ -69,7 +99,7 @@ class TestWizsearchTools:
         with pytest.raises(ImportError, match="wizsearch package is not installed"):
             tool._run(query="latest ai research")
 
-    def test_default_engine_is_tavily(self, monkeypatch):
+    def test_default_engines(self, monkeypatch):
         import soothe.tools.wizsearch as wizsearch_mod
 
         captured: dict[str, object] = {}
@@ -100,7 +130,7 @@ class TestWizsearchTools:
         tool = WizsearchSearchTool()
         _ = tool._run(query="ai agents")
 
-        assert captured["enabled_engines"] == ["tavily"]
+        assert captured["enabled_engines"] == ["tavily", "duckduckgo", "wechat"]
 
 
 class TestVideoTools:

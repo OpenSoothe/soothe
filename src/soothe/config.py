@@ -239,7 +239,7 @@ class SootheConfig(BaseSettings):
     )
     """Subagent name to config mapping. Set ``enabled: false`` to disable."""
 
-    tools: list[str] = Field(default_factory=list)
+    tools: list[str] = Field(default_factory=lambda: ["datetime", "arxiv", "wikipedia", "wizsearch"])
     """Enabled tool group names (e.g. ``["jina", "serper", "image"]``)."""
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)

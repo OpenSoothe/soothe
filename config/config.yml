@@ -119,9 +119,23 @@ subagents:
 # =============================================================================
 # Enable tool groups. Some require API keys (see config/env.example).
 
-tools: []
-  # Custom: serper, wizsearch, jina, image, audio, video, tabular
-  # LangChain: tavily, duckduckgo, arxiv, wikipedia, github, python_repl
+tools:
+  - datetime       # Current date/time (no API key)
+  - arxiv          # Academic paper search (no API key)
+  - wikipedia      # Encyclopedia lookup (no API key)
+  - wizsearch      # Multi-engine web search (engines: tavily, duckduckgo, wechat)
+  # Optional (require API keys or dependencies):
+  # - serper        # Google search via Serper (SERPER_API_KEY)
+  # - jina          # Web page reader via Jina (JINA_API_KEY)
+  # - image         # Image analysis (OpenAI)
+  # - audio         # Audio transcription (OpenAI)
+  # - video         # Video info extraction
+  # - tabular       # Tabular data tools
+  # LangChain community:
+  # - arxiv         # ArxivQueryRun (no API key)
+  # - wikipedia     # WikipediaQueryRun (no API key)
+  # - github        # GitHub API (GITHUB_TOKEN)
+  # - python_repl   # Python REPL (security risk)
 
 # =============================================================================
 # MCP Servers

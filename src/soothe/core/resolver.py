@@ -71,6 +71,10 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
         from soothe.tools.wizsearch import create_wizsearch_tools
 
         return list(create_wizsearch_tools())
+    if name == "datetime":
+        from soothe.tools.datetime import create_datetime_tools
+
+        return list(create_datetime_tools())
     if name == "image":
         from soothe.tools.image import create_image_tools
 
@@ -88,14 +92,6 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 
         return list(create_tabular_tools())
 
-    if name == "tavily":
-        from langchain_tavily import TavilySearchResults
-
-        return [TavilySearchResults()]
-    if name == "duckduckgo":
-        from langchain_community.tools import DuckDuckGoSearchRun
-
-        return [DuckDuckGoSearchRun()]
     if name == "arxiv":
         from langchain_community.tools import ArxivQueryRun
 

@@ -121,7 +121,7 @@ def _generate_query(state: dict[str, Any], model: BaseChatModel) -> dict[str, An
     research_topic = _extract_research_topic(state)
     _emit_progress(
         {
-            "type": "research_generate_query",
+            "type": "soothe.research.generate_query",
             "topic": research_topic[:200],
         }
     )
@@ -141,7 +141,7 @@ def _generate_query(state: dict[str, Any], model: BaseChatModel) -> dict[str, An
 
     _emit_progress(
         {
-            "type": "research_queries_generated",
+            "type": "soothe.research.queries_generated",
             "queries": queries,
         }
     )
@@ -153,7 +153,7 @@ def _web_research(state: dict[str, Any], search_tool: Any) -> dict[str, Any]:
     query = state.get("search_query", "")
     _emit_progress(
         {
-            "type": "research_web_search",
+            "type": "soothe.research.web_search",
             "query": query,
         }
     )
@@ -167,7 +167,7 @@ def _web_research(state: dict[str, Any], search_tool: Any) -> dict[str, Any]:
 
     _emit_progress(
         {
-            "type": "research_search_done",
+            "type": "soothe.research.search_done",
             "query": query,
             "result_length": len(summary),
         }
@@ -183,7 +183,7 @@ def _reflect(state: dict[str, Any], model: BaseChatModel) -> dict[str, Any]:
 
     _emit_progress(
         {
-            "type": "research_reflect",
+            "type": "soothe.research.reflect",
             "loop": loop_count + 1,
             "summaries_so_far": num_summaries,
         }
@@ -207,7 +207,7 @@ def _reflect(state: dict[str, Any], model: BaseChatModel) -> dict[str, Any]:
 
     _emit_progress(
         {
-            "type": "research_reflection_done",
+            "type": "soothe.research.reflection_done",
             "loop": loop_count + 1,
             "is_sufficient": is_sufficient,
             "follow_up_queries": follow_ups,
@@ -228,7 +228,7 @@ def _finalize_answer(state: dict[str, Any], model: BaseChatModel) -> dict[str, A
 
     _emit_progress(
         {
-            "type": "research_synthesize",
+            "type": "soothe.research.synthesize",
             "topic": research_topic[:200],
             "total_summaries": num_summaries,
             "total_sources": num_sources,
@@ -246,7 +246,7 @@ def _finalize_answer(state: dict[str, Any], model: BaseChatModel) -> dict[str, A
 
     _emit_progress(
         {
-            "type": "research_complete",
+            "type": "soothe.research.complete",
             "answer_length": len(answer),
         }
     )

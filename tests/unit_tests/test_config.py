@@ -15,7 +15,7 @@ class TestSootheConfig:
     def test_defaults(self):
         cfg = SootheConfig()
         assert cfg.debug is False
-        assert cfg.tools == []
+        assert cfg.tools == ["datetime", "arxiv", "wikipedia", "wizsearch"]
         assert cfg.mcp_servers == []
         assert cfg.skills == []
         assert cfg.memory == []

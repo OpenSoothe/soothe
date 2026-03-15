@@ -17,6 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.types import Checkpointer
 
+from soothe.built_in_skills import get_built_in_skills_paths
 from soothe.config import SootheConfig
 from soothe.core.resolver import (
     SUBAGENT_FACTORIES,
@@ -140,13 +141,18 @@ def create_soothe_agent(
 
     all_middleware: tuple[AgentMiddleware, ...] = tuple([*default_middleware, *middleware])
 
+    # Merge built-in skills with user-provided skills
+    all_skills = get_built_in_skills_paths()
+    if config.skills:
+        all_skills.extend(config.skills)
+
     agent = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
         system_prompt=config.resolve_system_prompt(),
         middleware=all_middleware,
         subagents=all_subagents or None,
-        skills=config.skills or None,
+        skills=all_skills or None,
         memory=config.memory or None,
         checkpointer=checkpointer,
         store=store,

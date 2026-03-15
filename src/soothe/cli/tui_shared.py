@@ -113,8 +113,11 @@ def _display_subagent_name(name: str) -> str:
     return SUBAGENT_DISPLAY_NAMES.get(name.lower(), name.replace("_", " ").title())
 
 
-def _update_name_map_from_ai_message(state: TuiState, message_obj: object) -> None:
-    """Update tool-call-id -> display name mapping from AIMessage/tool calls."""
+def update_name_map_from_tool_calls(message_obj: object, name_map: dict[str, str]) -> None:
+    """Update tool-call-id -> display name mapping from AIMessage/tool calls.
+
+    This is the shared implementation used by both TUI and headless modes.
+    """
     tool_calls = getattr(message_obj, "tool_calls", None) or []
     for tc in tool_calls:
         if not isinstance(tc, dict):
@@ -131,24 +134,37 @@ def _update_name_map_from_ai_message(state: TuiState, message_obj: object) -> No
             if match:
                 raw_name = match.group(1)
         if call_id and raw_name:
-            state.name_map[call_id] = _display_subagent_name(raw_name)
+            name_map[call_id] = _display_subagent_name(raw_name)
 
 
-def _resolve_namespace_label(namespace: tuple[str, ...], state: TuiState) -> str:
-    """Resolve namespace tuple to friendly display label."""
+def _update_name_map_from_ai_message(state: TuiState, message_obj: object) -> None:
+    """Update name mapping from AIMessage (TuiState wrapper)."""
+    update_name_map_from_tool_calls(message_obj, state.name_map)
+
+
+def resolve_namespace_label(namespace: tuple[str, ...], name_map: dict[str, str]) -> str:
+    """Resolve namespace tuple to friendly display label.
+
+    This is the shared implementation used by both TUI and headless modes.
+    """
     if not namespace:
         return "main"
     parts: list[str] = []
     for segment in namespace:
         seg_str = str(segment)
-        if seg_str in state.name_map:
-            parts.append(state.name_map[seg_str])
+        if seg_str in name_map:
+            parts.append(name_map[seg_str])
         elif seg_str.startswith("tools:"):
             tool_id = seg_str.split(":", 1)[1] if ":" in seg_str else seg_str
-            parts.append(state.name_map.get(tool_id, seg_str))
+            parts.append(name_map.get(tool_id, seg_str))
         else:
             parts.append(seg_str)
     return "/".join(parts)
+
+
+def _resolve_namespace_label(namespace: tuple[str, ...], state: TuiState) -> str:
+    """Resolve namespace tuple to friendly display label (TuiState wrapper)."""
+    return resolve_namespace_label(namespace, state.name_map)
 
 
 def _add_activity(state: TuiState, line: Text) -> None:
@@ -278,7 +294,7 @@ def _handle_subagent_custom(
     tag = label if label else "subagent"
     etype = data.get("type", "")
 
-    if etype == "browser_step":
+    if etype == "soothe.browser.step":
         step = data.get("step", "?")
         action = _truncate(str(data.get("action", "")), 50)
         url = _truncate(str(data.get("url", "")), 35)
@@ -287,16 +303,20 @@ def _handle_subagent_custom(
             summary += f": {action}"
         if url:
             summary += f" @ {url}"
-    elif etype.startswith("research_"):
-        label = etype.replace("research_", "").replace("_", " ")
+    elif etype.startswith("soothe.research."):
+        label = etype.replace("soothe.research.", "").replace("_", " ")
         query = data.get("query", data.get("topic", ""))
         summary = label
         if query:
             summary += f": {_truncate(str(query), 40)}"
-    elif etype in ("claude_tool_use",):
-        summary = f"Tool: {data.get('name', etype)}"
-    elif etype in ("claude_text",):
+    elif etype == "soothe.claude.tool_use":
+        summary = f"Tool: {data.get('tool', data.get('name', etype))}"
+    elif etype == "soothe.claude.text":
         summary = f"Text: {_truncate(str(data.get('text', '')), 50)}"
+    elif etype == "soothe.claude.result":
+        cost = data.get("cost_usd", 0)
+        duration = data.get("duration_ms", 0)
+        summary = f"Done (${cost:.4f}, {duration}ms)" if cost else "Done"
     elif etype.startswith("soothe.skillify."):
         summary = etype.replace("soothe.skillify.", "").replace("_", " ")
         detail = data.get("skill", data.get("query", ""))

@@ -96,17 +96,7 @@ def _build_browser_graph(
 
         _suppress_external_browser_loggers()
 
-        try:
-            from langgraph.config import get_stream_writer
-
-            writer = get_stream_writer()
-        except (ImportError, RuntimeError):
-            writer = None
-
-        def emit_progress(event: dict[str, Any]) -> None:
-            if writer:
-                writer(event)
-            logger.debug("Browser progress: %s", event)
+        from soothe.utils.progress import emit_progress as _emit
 
         try:
             # Suppress browser-use stdout/stderr noise and rely on structured events.
@@ -147,15 +137,16 @@ def _build_browser_graph(
                             if hasattr(last, "state"):
                                 url = getattr(last.state, "url", None)
                                 page_title = getattr(last.state, "title", "")[:60]
-                        emit_progress(
+                        _emit(
                             {
-                                "type": "browser_step",
+                                "type": "soothe.browser.step",
                                 "step": step_num,
                                 "url": url,
                                 "action": action_desc,
                                 "title": page_title,
                                 "is_done": agent.history.is_done(),
-                            }
+                            },
+                            logger,
                         )
 
                     agent = BrowserAgent(

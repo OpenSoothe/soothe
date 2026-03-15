@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 import shutil
 import sys
 from logging.handlers import RotatingFileHandler
@@ -46,54 +45,22 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         root_logger.addHandler(handler)
     root_logger.setLevel(level)
 
+    noisy_third_party = (
+        "httpx",
+        "httpcore",
+        "openai",
+        "anthropic",
+        "langchain_core",
+        "langgraph",
+        "browser_use",
+        "bubus",
+        "cdp_use",
+    )
+    for name in noisy_third_party:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
-_TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
-
-
-def _display_subagent_name(name: str) -> str:
-    """Return a friendly display name for a subagent id."""
-    from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES
-
-    return SUBAGENT_DISPLAY_NAMES.get(name.lower(), name.replace("_", " ").title())
-
-
-def _update_name_map_from_tool_calls(message_obj: object, name_map: dict[str, str]) -> None:
-    """Update tool-call-id -> subagent display name mapping from AIMessage."""
-    tool_calls = getattr(message_obj, "tool_calls", None) or []
-    for tc in tool_calls:
-        if not isinstance(tc, dict):
-            continue
-        if tc.get("name") != "task":
-            continue
-        call_id = str(tc.get("id", ""))
-        args = tc.get("args", {})
-        raw_name = ""
-        if isinstance(args, dict):
-            raw_name = str(args.get("agent", "") or args.get("name", ""))
-        elif args:
-            match = _TASK_NAME_RE.search(str(args))
-            if match:
-                raw_name = match.group(1)
-        if call_id and raw_name:
-            name_map[call_id] = _display_subagent_name(raw_name)
-
-
-def _resolve_namespace_label(namespace: tuple[object, ...], name_map: dict[str, str]) -> str:
-    """Resolve a namespace tuple to a friendly display label."""
-    if not namespace:
-        return "main"
-    parts: list[str] = []
-    for segment in namespace:
-        seg_str = str(segment)
-        if seg_str in name_map:
-            parts.append(name_map[seg_str])
-        elif seg_str.startswith("tools:"):
-            tool_id = seg_str.split(":", 1)[1] if ":" in seg_str else seg_str
-            parts.append(name_map.get(tool_id, seg_str))
-        else:
-            parts.append(seg_str)
-    return "/".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +233,7 @@ def _run_headless(
 
     from soothe.cli.progress_verbosity import classify_custom_event, should_show
     from soothe.cli.session import SessionLogger
+    from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
     from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
@@ -305,7 +273,7 @@ def _run_headless(
                 if mode == "custom" and isinstance(data, dict):
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
-                        prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
                         _render_progress_event(data, prefix=prefix)
                     if category == "error":
                         has_error = True
@@ -318,7 +286,7 @@ def _run_headless(
                     if metadata and metadata.get("lc_source") == "summarization":
                         continue
                     if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
-                        _update_name_map_from_tool_calls(msg, name_map)
+                        update_name_map_from_tool_calls(msg, name_map)
                         msg_id = msg.id or ""
                         if not isinstance(msg, AIMessageChunk):
                             if msg_id in seen_message_ids:
@@ -339,7 +307,7 @@ def _run_headless(
                             elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
                                 name = block.get("name", "")
                                 if name:
-                                    prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                                    prefix = resolve_namespace_label(namespace, name_map) if namespace else None
                                     if prefix:
                                         sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
                                     else:
@@ -349,7 +317,7 @@ def _run_headless(
                         tool_name = getattr(msg, "name", "tool")
                         content = msg.content if isinstance(msg.content, str) else str(msg.content)
                         brief = content.replace("\n", " ")[:120]
-                        prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
                         if prefix:
                             sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
                         else:
@@ -497,7 +465,7 @@ def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
         parts = [reason]
         if profile:
             parts.append(f"(profile={profile})")
-    elif etype == "soothe.session.started" or etype == "soothe.session.ended":
+    elif etype in ("soothe.session.started", "soothe.session.ended"):
         parts = [f"thread={data.get('thread_id', '?')}"]
     elif etype == "soothe.error":
         parts = [data.get("error", "unknown")]

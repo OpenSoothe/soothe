@@ -96,7 +96,7 @@ class WizsearchSearchTool(BaseTool):
     )
     default_max_results_per_engine: int = Field(default=10)
     default_timeout: int = Field(default=30)
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo", "wechat"])
 
     def _build_result_payload(self, result: object) -> dict[str, object]:
         """Build a stable JSON-serializable output payload."""
