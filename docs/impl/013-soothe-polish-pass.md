@@ -30,7 +30,7 @@ This guide covers a comprehensive polish pass across several Soothe subsystems:
 - `src/soothe/utils/_progress.py`
 - `src/soothe/cli/daemon.py`
 - `src/soothe/cli/tui_app.py`
-- `config/soothe_home_config.yml`
+- `config/config.yml`
 - `examples/agents/` (new subfolder with moved + new examples)
 - `examples/batch_tasks_example.py`
 
@@ -163,7 +163,7 @@ Add skillify, weaver, and batch task examples.
 ### 5.2 Update config files
 
 Add Skillify/Weaver/ecosystem tools to `config/config.yml`.
-Create `config/soothe_home_config.yml` template.
+Use `config/config.yml` as the home config template.
 Update `config/env.example`.
 
 ### 5.3 Update specs

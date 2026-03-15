@@ -150,6 +150,7 @@ def create_skillify_subagent(
     model: str | BaseChatModel | None = None,
     *,
     config: Any | None = None,
+    cwd: str | None = None,
     **kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Skillify subagent (CompiledSubAgent with background indexer).
@@ -163,6 +164,8 @@ def create_skillify_subagent(
             interface consistency with other subagent factories.
         config: ``SootheConfig`` instance for warehouse paths, vector store,
             and embedding model resolution.
+        cwd: Workspace directory for runtime consistency across subagents.
+            Skillify storage is based on Soothe config paths.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:

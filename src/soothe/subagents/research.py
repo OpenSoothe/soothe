@@ -345,6 +345,7 @@ RESEARCH_DESCRIPTION = (
 def create_research_subagent(
     model: str | BaseChatModel | None = None,
     max_loops: int = 2,
+    cwd: str | None = None,
     **kwargs: object,
 ) -> CompiledSubAgent:
     """Create a Research subagent (CompiledSubAgent with LangGraph workflow).
@@ -355,6 +356,8 @@ def create_research_subagent(
     Args:
         model: LLM model string or instance.
         max_loops: Maximum research reflection loops.
+        cwd: Workspace directory for runtime consistency across subagents.
+            Research does not perform local filesystem operations directly.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:

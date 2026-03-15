@@ -138,6 +138,8 @@ def resolve_subagents(
             continue
         model_override = sub_cfg.model or default_model or config.resolve_model("default")
         extra_kwargs = dict(sub_cfg.config)
+        if "cwd" not in extra_kwargs and config.workspace_dir:
+            extra_kwargs["cwd"] = config.workspace_dir
         if name in ("skillify", "weaver"):
             extra_kwargs["config"] = config
         spec = factory(model=model_override, **extra_kwargs)

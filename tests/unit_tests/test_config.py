@@ -7,6 +7,7 @@ from soothe.config import (
     SootheConfig,
     SubagentConfig,
     _resolve_env,
+    _resolve_provider_env,
 )
 
 
@@ -142,6 +143,32 @@ class TestResolveEnv:
         monkeypatch.delenv("MISSING_KEY", raising=False)
         assert _resolve_env("${MISSING_KEY}") == "${MISSING_KEY}"
 
+    def test_resolve_provider_env_success(self, monkeypatch):
+        monkeypatch.setenv("MY_BASE_URL", "https://example.test/v1")
+        assert (
+            _resolve_provider_env(
+                "${MY_BASE_URL}",
+                provider_name="openai",
+                field_name="api_base_url",
+            )
+            == "https://example.test/v1"
+        )
+
+    def test_resolve_provider_env_missing_raises(self, monkeypatch):
+        monkeypatch.delenv("MISSING_PROVIDER_KEY", raising=False)
+        try:
+            _resolve_provider_env(
+                "${MISSING_PROVIDER_KEY}",
+                provider_name="dashscope",
+                field_name="api_key",
+            )
+            assert False, "Expected unresolved env var to raise ValueError"
+        except ValueError as exc:
+            message = str(exc)
+            assert "dashscope" in message
+            assert "MISSING_PROVIDER_KEY" in message
+            assert "providers[].api_key" in message
+
 
 class TestPropagateEnv:
     def test_propagate_openai_provider(self, monkeypatch):
@@ -162,6 +189,82 @@ class TestPropagateEnv:
 
         assert os.environ["OPENAI_API_KEY"] == "test-key"
         assert os.environ["OPENAI_BASE_URL"] == "https://test.example.com"
+
+    def test_propagate_openai_provider_base_url_from_env(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "https://proxy.example.com/v1")
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="myopenai",
+                    api_base_url="${OPENAI_COMPAT_BASE_URL}",
+                    api_key="test-key",
+                    provider_type="openai",
+                ),
+            ]
+        )
+        cfg.propagate_env()
+        import os
+
+        assert os.environ["OPENAI_API_KEY"] == "test-key"
+        assert os.environ["OPENAI_BASE_URL"] == "https://proxy.example.com/v1"
+
+    def test_propagate_openai_provider_missing_api_key_env_raises(self, monkeypatch):
+        monkeypatch.delenv("MISSING_OPENAI_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="myopenai",
+                    api_key="${MISSING_OPENAI_KEY}",
+                    provider_type="openai",
+                ),
+            ]
+        )
+        try:
+            cfg.propagate_env()
+            assert False, "Expected unresolved API key env var to raise ValueError"
+        except ValueError as exc:
+            message = str(exc)
+            assert "myopenai" in message
+            assert "MISSING_OPENAI_KEY" in message
+            assert "providers[].api_key" in message
+
+    def test_provider_kwargs_base_url_env_substitution(self, monkeypatch):
+        monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://dashscope.example.com/v1")
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="dashscope",
+                    provider_type="openai",
+                    api_base_url="${DASHSCOPE_BASE_URL}",
+                ),
+            ]
+        )
+        provider_type, kwargs = cfg._provider_kwargs("dashscope")
+        assert provider_type == "openai"
+        assert kwargs["base_url"] == "https://dashscope.example.com/v1"
+
+    def test_provider_kwargs_missing_base_url_env_raises(self, monkeypatch):
+        monkeypatch.delenv("MISSING_BASE_URL", raising=False)
+        cfg = SootheConfig(
+            providers=[
+                ModelProviderConfig(
+                    name="dashscope",
+                    provider_type="openai",
+                    api_base_url="${MISSING_BASE_URL}",
+                ),
+            ]
+        )
+        try:
+            cfg._provider_kwargs("dashscope")
+            assert False, "Expected unresolved base_url env var to raise ValueError"
+        except ValueError as exc:
+            message = str(exc)
+            assert "dashscope" in message
+            assert "MISSING_BASE_URL" in message
+            assert "providers[].api_base_url" in message
 
     def test_no_propagate_non_openai(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)

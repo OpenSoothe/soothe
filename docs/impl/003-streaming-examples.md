@@ -53,15 +53,16 @@ A reusable `run_with_streaming()` async function that:
 4. For `custom` mode: prints formatted custom events from subagent progress
 5. For `updates` mode: handles `__interrupt__` events only
 
-Filtering: by default only main-agent events are shown. Pass `show_subagents=True` to
-also render subagent-level messages and custom events.
+Filtering: by default only main-agent events are shown.
+- Pass `show_subagents=True` to render subagent-level `custom` events.
+- Pass `show_subagent_messages=True` to render subagent-level `messages` with namespace prefixes.
 
 ### Per-Example Changes
 
 All examples convert from sync `main()` + `invoke()` to async `main()` + `run_with_streaming()`:
 
 - `scout_example.py` -- shows tool calls (ls, read_file, grep) and AI text
-- `planner_example.py` -- shows tool calls and planning text
+- `planner_example.py` -- uses `cwd=PROJECT_ROOT` for planner filesystem visibility and enables subagent messages
 - `research_example.py` -- `show_subagents=True` for custom research progress events
 - `claude_example.py` -- `show_subagents=True` for custom claude progress events
 - `browser_example.py` -- `show_subagents=True` for custom browser progress events

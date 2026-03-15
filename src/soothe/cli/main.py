@@ -454,9 +454,7 @@ def init_soothe() -> None:
         typer.echo(f"Config already exists at {target}")
         return
 
-    template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "soothe_home_config.yml"
-    if not template.exists():
-        template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "config.yml"
+    template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "config.yml"
 
     target.parent.mkdir(parents=True, exist_ok=True)
     if template.exists():

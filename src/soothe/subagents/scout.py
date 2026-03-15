@@ -70,12 +70,15 @@ SCOUT_DESCRIPTION = (
 
 def create_scout_subagent(
     model: str | BaseChatModel | None = None,
+    cwd: str | None = None,
     **kwargs: object,
 ) -> SubAgent:
     """Create a Scout subagent spec.
 
     Args:
         model: Optional model override (string or BaseChatModel instance).
+        cwd: Workspace directory for runtime consistency across subagents.
+            Scout relies on inherited parent tools/backends for filesystem access.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:

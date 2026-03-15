@@ -30,15 +30,20 @@ _SYSTEM_PROMPT = (
 
 async def main() -> None:
     from deepagents import create_deep_agent
+    from deepagents.backends.filesystem import FilesystemBackend
     from langgraph.checkpoint.memory import MemorySaver
 
     config = load_example_config()
-    planner_spec = create_planner_subagent(model=config.resolve_model("default"))
+    planner_spec = create_planner_subagent(
+        model=config.create_chat_model("default"),
+        cwd=PROJECT_ROOT,
+    )
 
     agent = create_deep_agent(
         model=config.create_chat_model("default"),
         subagents=[planner_spec],
         system_prompt=_SYSTEM_PROMPT,
+        backend=FilesystemBackend(root_dir=PROJECT_ROOT, virtual_mode=True),
         checkpointer=MemorySaver(),
     )
 
@@ -50,6 +55,7 @@ async def main() -> None:
             "available subagents, and checking config. Produce a structured plan."
         )],
         show_subagents=True,
+        show_subagent_messages=True,
     )
 
 

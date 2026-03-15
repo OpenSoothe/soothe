@@ -28,6 +28,32 @@ def _resolve_env(value: str) -> str:
     return value
 
 
+def _resolve_provider_env(value: str, *, provider_name: str, field_name: str) -> str:
+    """Resolve provider field env placeholders and fail fast if missing.
+
+    Args:
+        value: Raw configured field value.
+        provider_name: Provider name (for error messages).
+        field_name: Field name on provider config.
+
+    Returns:
+        Resolved value.
+
+    Raises:
+        ValueError: If the value is a ``${ENV_VAR}`` placeholder that could not
+            be resolved from the environment.
+    """
+    resolved = _resolve_env(value)
+    m = _ENV_VAR_RE.match(resolved)
+    if m:
+        env_name = m.group(1)
+        raise ValueError(
+            f"Provider '{provider_name}' has unresolved env var '{env_name}' in "
+            f"providers[].{field_name}. Set {env_name} or replace it with a literal value."
+        )
+    return resolved
+
+
 class ModelProviderConfig(BaseModel):
     """Configuration for a single model provider.
 
@@ -334,11 +360,19 @@ class SootheConfig(BaseSettings):
         if provider:
             provider_type = provider.provider_type
             if provider.api_base_url:
-                kwargs["base_url"] = provider.api_base_url
+                kwargs["base_url"] = _resolve_provider_env(
+                    provider.api_base_url,
+                    provider_name=provider.name,
+                    field_name="api_base_url",
+                )
                 if provider_type == "openai":
                     kwargs["use_responses_api"] = False
             if provider.api_key:
-                kwargs["api_key"] = _resolve_env(provider.api_key)
+                kwargs["api_key"] = _resolve_provider_env(
+                    provider.api_key,
+                    provider_name=provider.name,
+                    field_name="api_key",
+                )
         return provider_type, kwargs
 
     def create_chat_model(self, role: str = "default") -> BaseChatModel:
@@ -392,9 +426,23 @@ class SootheConfig(BaseSettings):
         """
         for provider in self.providers:
             if provider.provider_type == "openai" and provider.api_key:
-                resolved_key = _resolve_env(provider.api_key)
+                resolved_key = _resolve_provider_env(
+                    provider.api_key,
+                    provider_name=provider.name,
+                    field_name="api_key",
+                )
                 os.environ.setdefault("OPENAI_API_KEY", resolved_key)
                 if provider.api_base_url:
-                    os.environ.setdefault("OPENAI_BASE_URL", provider.api_base_url)
+                    resolved_base_url = _resolve_provider_env(
+                        provider.api_base_url,
+                        provider_name=provider.name,
+                        field_name="api_base_url",
+                    )
+                    os.environ.setdefault("OPENAI_BASE_URL", resolved_base_url)
             elif provider.provider_type == "ollama" and provider.api_base_url:
-                os.environ.setdefault("OLLAMA_HOST", provider.api_base_url)
+                resolved_base_url = _resolve_provider_env(
+                    provider.api_base_url,
+                    provider_name=provider.name,
+                    field_name="api_base_url",
+                )
+                os.environ.setdefault("OLLAMA_HOST", resolved_base_url)

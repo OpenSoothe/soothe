@@ -7,6 +7,7 @@ mapping, resource exploration, structured plan generation) that deepagents'
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -83,6 +84,7 @@ PLANNER_DESCRIPTION = (
 def create_planner_subagent(
     model: str | BaseChatModel | None = None,
     tools: list[BaseTool | Callable[..., Any] | dict[str, Any]] | None = None,
+    cwd: str | None = None,
     **kwargs: object,
 ) -> SubAgent:
     """Create a Planner subagent spec.
@@ -92,6 +94,7 @@ def create_planner_subagent(
         tools: Optional list of tools. If not specified, the planner will be
             restricted to read-only tools (ls, read_file, glob, grep) to ensure
             it only creates plans and does not implement them.
+        cwd: Working directory for filesystem exploration tools.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:
@@ -110,11 +113,13 @@ def create_planner_subagent(
         spec["tools"] = tools
     else:
         # Import here to avoid circular dependency
+        from deepagents.backends.filesystem import FilesystemBackend
         from deepagents.middleware.filesystem import FilesystemMiddleware
 
-        # Create a filesystem middleware to get read-only tools
-        # We use an empty backend since we only need the tool definitions
-        fs_middleware = FilesystemMiddleware()
+        resolved_cwd = cwd or os.getcwd()
+        fs_middleware = FilesystemMiddleware(
+            backend=FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True),
+        )
         read_only_tools = [
             fs_middleware._create_ls_tool(),
             fs_middleware._create_read_file_tool(),

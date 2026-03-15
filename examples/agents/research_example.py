@@ -22,9 +22,7 @@ load_dotenv()
 
 async def main() -> None:
     config = load_example_config()
-    model = config.create_chat_model("default")
-
-    spec = create_research_subagent(model=model)
+    spec = create_research_subagent(model=config.create_chat_model("default"))
     runnable = spec["runnable"]
 
     await run_with_streaming(

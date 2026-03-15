@@ -342,6 +342,7 @@ def create_weaver_subagent(
     model: str | BaseChatModel | None = None,
     *,
     config: Any | None = None,
+    cwd: str | None = None,
     **kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Weaver subagent (CompiledSubAgent).
@@ -351,6 +352,8 @@ def create_weaver_subagent(
             and generation.
         config: ``SootheConfig`` instance for vector store, embedding model,
             and weaver-specific settings.
+        cwd: Workspace directory for runtime consistency across subagents.
+            Weaver output/storage locations are based on Soothe config paths.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:

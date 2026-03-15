@@ -70,12 +70,13 @@ cp config/config.yml my-config.yml
 soothe run --config my-config.yml
 ```
 
-The YAML file supports `${ENV_VAR}` syntax for secret injection:
+The YAML file supports `${ENV_VAR}` syntax in provider fields such as `api_key` and `api_base_url`:
 
 ```yaml
 providers:
   - name: openai
     provider_type: openai
+    api_base_url: "${OPENAI_BASE_URL}"
     api_key: "${OPENAI_API_KEY}"
 ```
 

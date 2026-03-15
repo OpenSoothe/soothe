@@ -1,5 +1,7 @@
 """Tests for subagent factory functions."""
 
+import os
+
 from soothe.subagents.planner import create_planner_subagent
 from soothe.subagents.scout import create_scout_subagent
 
@@ -21,6 +23,10 @@ class TestPlannerSubagent:
         assert "planning agent" in prompt.lower()
         assert "dependencies" in prompt.lower()
         assert "verification" in prompt.lower()
+
+    def test_cwd_is_supported(self):
+        spec_with_cwd = create_planner_subagent(cwd=os.getcwd())
+        assert spec_with_cwd["name"] == "planner"
 
 
 class TestScoutSubagent:
@@ -149,6 +155,13 @@ class TestClaudeSubagent:
             max_turns=10,
             permission_mode="plan",
         )
+        assert spec["name"] == "claude"
+        assert "runnable" in spec
+
+    def test_cwd_is_supported(self):
+        from soothe.subagents.claude import create_claude_subagent
+
+        spec = create_claude_subagent(cwd=os.getcwd())
         assert spec["name"] == "claude"
         assert "runnable" in spec
 

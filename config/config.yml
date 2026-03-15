@@ -7,7 +7,7 @@
 # =============================================================================
 # Model Providers
 # =============================================================================
-# Define LLM providers. api_key supports ${ENV_VAR} syntax for secrets.
+# Define LLM providers. api_key and api_base_url support ${ENV_VAR} syntax.
 # Set at least one provider with its API key.
 
 providers:
@@ -87,7 +87,6 @@ subagents:
     enabled: false
     # model: "anthropic:claude-sonnet-4-20250514"
 
-  # Skillify (RFC-0004):
   skillify:
     enabled: false
     # config:
@@ -96,7 +95,6 @@ subagents:
     #   index_collection: soothe_skillify
     #   retrieval_top_k: 10
 
-  # Weaver (RFC-0005):
   weaver:
     enabled: false
     # config:
@@ -141,7 +139,7 @@ skills: []
 memory: []
 
 # =============================================================================
-# Protocols (RFC-0002)
+# Protocols
 # =============================================================================
 
 context_backend: keyword

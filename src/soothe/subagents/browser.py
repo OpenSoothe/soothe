@@ -198,6 +198,7 @@ def create_browser_subagent(
     headless: bool = True,
     max_steps: int = 100,
     use_vision: bool = True,
+    cwd: str | None = None,
     disable_extensions: bool = True,
     disable_cloud: bool = True,
     disable_telemetry: bool = True,
@@ -212,6 +213,8 @@ def create_browser_subagent(
         headless: Run browser in headless mode.
         max_steps: Maximum browser agent steps.
         use_vision: Enable vision/screenshot support.
+        cwd: Workspace directory for runtime consistency across subagents.
+            Browser runtime does not currently use local filesystem tooling.
         disable_extensions: Disable browser extensions (uBlock Origin, cookie handler, ClearURLs).
             Privacy-invasive extensions are disabled by default. Set to False to enable them.
         disable_cloud: Disable browser-use cloud service connections.

@@ -34,7 +34,7 @@ async def main() -> None:
     from langgraph.checkpoint.memory import MemorySaver
 
     config = load_example_config()
-    scout_spec = create_scout_subagent(model=config.resolve_model("default"))
+    scout_spec = create_scout_subagent(model=config.create_chat_model("default"))
 
     agent = create_deep_agent(
         model=config.create_chat_model("default"),

@@ -36,8 +36,16 @@ def _format_custom_event(data: Any) -> str | None:
     return ": ".join(parts[:2]) if len(parts) >= 2 else parts[0]
 
 
-def _handle_ai_message(message_obj: AIMessage) -> None:
+def _namespace_label(namespace: tuple[Any, ...]) -> str:
+    """Format a streaming namespace tuple as a concise display tag."""
+    if not namespace:
+        return "main"
+    return "/".join(str(part) for part in namespace)
+
+
+def _handle_ai_message(message_obj: AIMessage, *, prefix: str | None = None) -> None:
     """Render AI message content blocks: text tokens and tool call names."""
+    header_printed = False
     if hasattr(message_obj, "content_blocks") and message_obj.content_blocks:
         for block in message_obj.content_blocks:
             if not isinstance(block, dict):
@@ -46,18 +54,26 @@ def _handle_ai_message(message_obj: AIMessage) -> None:
             if block_type == "text":
                 text = block.get("text", "")
                 if text:
+                    if prefix and not header_printed:
+                        sys.stdout.write(f"\n  [{prefix}] ")
+                        header_printed = True
                     sys.stdout.write(text)
                     sys.stdout.flush()
             elif block_type in {"tool_call_chunk", "tool_call"}:
                 name = block.get("name")
                 if name:
-                    print(f"\n  [tool] Calling: {name}", flush=True)
+                    if prefix:
+                        print(f"\n  [{prefix}] [tool] Calling: {name}", flush=True)
+                    else:
+                        print(f"\n  [tool] Calling: {name}", flush=True)
     elif isinstance(message_obj.content, str) and message_obj.content:
+        if prefix:
+            sys.stdout.write(f"\n  [{prefix}] ")
         sys.stdout.write(message_obj.content)
         sys.stdout.flush()
 
 
-def _handle_tool_message(message_obj: ToolMessage) -> None:
+def _handle_tool_message(message_obj: ToolMessage, *, prefix: str | None = None) -> None:
     """Print a truncated preview of a tool result."""
     content = message_obj.content
     if isinstance(content, list):
@@ -67,7 +83,10 @@ def _handle_tool_message(message_obj: ToolMessage) -> None:
             content = str(content)
     elif not isinstance(content, str):
         content = str(content)
-    print(f"  [tool] Result: {_truncate(content)}", flush=True)
+    if prefix:
+        print(f"  [{prefix}] [tool] Result: {_truncate(content)}", flush=True)
+    else:
+        print(f"  [tool] Result: {_truncate(content)}", flush=True)
 
 
 async def run_with_streaming(
@@ -75,6 +94,8 @@ async def run_with_streaming(
     messages: list[HumanMessage],
     *,
     show_subagents: bool = False,
+    show_subagent_messages: bool = False,
+    thread_id: str = "example-thread",
 ) -> None:
     """Stream agent execution with real-time progress output.
 
@@ -82,15 +103,17 @@ async def run_with_streaming(
         agent: A compiled Soothe agent graph.
         messages: List of input messages (typically one HumanMessage).
         show_subagents: When True, also render subagent custom progress
-            events (from ``get_stream_writer()``). Internal subagent message
-            traffic (AI text tokens, tool results) is always suppressed to
-            avoid noisy output.
+            events (from ``get_stream_writer()``).
+        show_subagent_messages: When True, render subagent message traffic
+            (AI text tokens, tool results) with namespace prefixes.
+        thread_id: LangGraph thread identifier required by checkpointers.
     """
     print("[streaming] Starting agent...\n", flush=True)
 
     try:
         async for chunk in agent.astream(
             {"messages": messages},
+            config={"configurable": {"thread_id": thread_id}},
             stream_mode=["messages", "updates", "custom"],
             subgraphs=True,
         ):
@@ -101,26 +124,30 @@ async def run_with_streaming(
             is_main = not namespace
 
             if mode == "messages":
-                if not is_main:
+                if not is_main and not show_subagent_messages:
                     continue
                 if not isinstance(data, tuple) or len(data) != 2:
                     continue
                 message_obj, metadata = data
+                prefix = _namespace_label(namespace) if not is_main else None
 
                 if metadata and metadata.get("lc_source") == "summarization":
                     continue
 
                 if isinstance(message_obj, AIMessage):
-                    _handle_ai_message(message_obj)
+                    _handle_ai_message(message_obj, prefix=prefix)
                 elif isinstance(message_obj, ToolMessage):
-                    _handle_tool_message(message_obj)
+                    _handle_tool_message(message_obj, prefix=prefix)
 
             elif mode == "custom":
                 if not is_main and not show_subagents:
                     continue
                 line = _format_custom_event(data)
                 if line:
-                    print(f"\n  {line}", flush=True)
+                    if is_main:
+                        print(f"\n  {line}", flush=True)
+                    else:
+                        print(f"\n  [{_namespace_label(namespace)}] {line}", flush=True)
 
             elif mode == "updates":
                 if isinstance(data, dict) and "__interrupt__" in data:
