@@ -30,8 +30,53 @@ class TestSootheConfig:
         assert "research" in cfg.subagents
         assert "browser" in cfg.subagents
         assert "claude" in cfg.subagents
-        assert cfg.subagents["browser"].enabled is False
-        assert cfg.subagents["claude"].enabled is False
+        assert "skillify" in cfg.subagents
+        assert "weaver" in cfg.subagents
+        for name, sub_cfg in cfg.subagents.items():
+            assert sub_cfg.enabled is True, f"{name} should be enabled by default"
+
+    def test_assistant_name_default(self):
+        cfg = SootheConfig()
+        assert cfg.assistant_name == "Soothe"
+
+    def test_resolve_system_prompt_default(self):
+        cfg = SootheConfig()
+        prompt = cfg.resolve_system_prompt()
+        assert "Soothe" in prompt
+        assert "long-running" in prompt
+        assert "around-the-clock" in prompt
+
+    def test_resolve_system_prompt_custom_name(self):
+        cfg = SootheConfig(assistant_name="MyBot")
+        prompt = cfg.resolve_system_prompt()
+        assert "MyBot" in prompt
+        assert "Soothe" not in prompt
+
+    def test_resolve_system_prompt_override(self):
+        cfg = SootheConfig(system_prompt="Custom prompt here")
+        assert cfg.resolve_system_prompt() == "Custom prompt here"
+
+    def test_planner_routing_default(self):
+        cfg = SootheConfig()
+        assert cfg.planner_routing == "auto"
+
+    def test_planner_routing_options(self):
+        for routing in ("auto", "always_direct", "always_planner", "always_claude"):
+            cfg = SootheConfig(planner_routing=routing)
+            assert cfg.planner_routing == routing
+
+    def test_workspace_dir_default(self):
+        cfg = SootheConfig()
+        assert cfg.workspace_dir == "."
+
+    def test_progress_verbosity_default(self):
+        cfg = SootheConfig()
+        assert cfg.progress_verbosity == "normal"
+
+    def test_progress_verbosity_options(self):
+        for level in ("minimal", "normal", "detailed", "debug"):
+            cfg = SootheConfig(progress_verbosity=level)
+            assert cfg.progress_verbosity == level
 
     def test_custom_subagents(self):
         cfg = SootheConfig(

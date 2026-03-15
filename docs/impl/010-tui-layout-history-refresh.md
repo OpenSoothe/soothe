@@ -27,7 +27,7 @@ This guide covers the following modules:
 | `src/soothe/cli/tui_app.py` | SootheApp (Textual TUI) |
 | `src/soothe/cli/main.py` | CLI commands, _run_tui, _run_headless |
 | `src/soothe/cli/commands.py` | Slash commands, subagent routing |
-| `src/soothe/cli/tui.py` | Legacy Rich TUI fallback, TuiState, render helpers |
+| `src/soothe/cli/tui_shared.py` | Shared TUI state/render helpers for Textual app and commands |
 
 ## Daemon Implementation
 
@@ -85,31 +85,35 @@ Textual application with CSS grid layout.
 
 **Widget hierarchy:**
 - `Header` — App title
-- `ConversationPanel` (id=conversation) — RichLog, full-width, scrollable chat
+- `ConversationPanel` (id=conversation) — RichLog, user turns plus final main-assistant response text
 - `PlanPanel` (id=plan-panel) — RichLog, plan tree
-- `SubagentPanel` (id=subagent-panel) — RichLog, subagent status
-- `ActivityPanel` (id=right-sidebar) — RichLog, activity lines
-- `StatusBar` (id=status-bar) — Static, thread/events/state
+- `ActivityPanel` (id=activity-panel) — RichLog, protocol/tool/subagent activity lines
+- `InfoBar` (id=info-bar) — Static, thread/events/state + compact subagent status
 - `ChatInput` (id=chat-input) — Input, placeholder "soothe> Type a message or /help"
 - `Footer` — Key bindings
 
 **CSS layout:**
-- `#main-layout`: grid 2x2, columns 3fr 2fr, rows 3fr 2fr
-- `#conversation`: row-span 1, column-span 2
-- `#left-sidebar`: Plan + Subagent stacked
-- `#right-sidebar`: Activity panel
-- `#status-bar`, `#chat-input`: dock bottom
+- `#main-layout`: grid 2x1, columns 3fr 2fr
+- `#conversation`: left column
+- `#right-col`: Plan + Activity stacked
+- `#info-bar`, `#chat-input`: dock bottom
 
 ### Event Handling: Daemon Event → Widget Update
 
 | Daemon message | Handler | Widget update |
 |----------------|---------|---------------|
-| `type: status` | `_process_daemon_event` | StatusBar (state, thread_id) |
-| `type: event`, mode=messages | `_handle_messages_event` | ConversationPanel (AIMessage text), ActivityPanel (tool calls) |
+| `type: status` | `_process_daemon_event` | InfoBar (state, thread_id); end-of-turn conversation flush when state returns to idle/stopped |
+| `type: event`, mode=messages | `_handle_messages_event` | ConversationPanel (final main-assistant response text), ActivityPanel (tool calls + subagent text summaries) |
 | `type: event`, mode=custom, soothe.* | `_handle_protocol_event` | ActivityPanel, PlanPanel (if plan.*) |
-| `type: event`, mode=custom, subagent | `_handle_subagent_custom` | SubagentPanel, ActivityPanel |
+| `type: event`, mode=custom, subagent | `_handle_subagent_custom` | ActivityPanel |
 
-**Shared state:** `TuiState` from `tui.py` holds `full_response`, `activity_lines`, `current_plan`, `subagent_tracker`, `thread_id`, etc. The Textual app reuses `_handle_protocol_event`, `_handle_subagent_custom`, `_add_activity`, `render_plan_tree` from the legacy TUI.
+**Shared state:** `TuiState` from `tui_shared.py` holds `full_response`, `activity_lines`, `current_plan`, `subagent_tracker`, `thread_id`, etc. The Textual app reuses `_handle_protocol_event`, `_handle_subagent_custom`, `_add_activity`, `render_plan_tree` from the shared helper module.
+
+**Message surfacing rules:**
+- ConversationPanel is low-noise by design: it shows user turns and final main-assistant response text only.
+- ActivityPanel receives protocol events, tool activity, subagent custom events, and non-main/subagent text summaries.
+- Policy activity lines include `profile` context when present (e.g., `allow (profile=standard)`).
+- Browser progress is surfaced through structured `browser_step` events; raw browser-use stdout/stderr is suppressed.
 
 ### Connection Management
 
@@ -140,13 +144,15 @@ Textual application with CSS grid layout.
 
 - `_run_headless(cfg, prompt, thread_id, output_format)` uses `SootheRunner.astream()` directly (no daemon)
 - `--format jsonl`: Each stream chunk written as JSON line to stdout
-- `--format text` (default): Protocol events to stderr via `_render_progress_event()`; AIMessage text to stdout
+- `--format text` (default): Protocol events to stderr via `_render_progress_event()`; main-assistant text to stdout
+- `progress_verbosity` applies to both headless text output and TUI activity rendering
+- Policy progress lines include profile context when available
 
 ## Migration Notes
 
-- **Legacy TUI preserved:** `tui.py` remains as fallback when Textual is unavailable (`ImportError` on `from soothe.cli.tui_app import run_textual_tui`)
-- **Shared components:** `TuiState`, `SubagentTracker`, `DynamicThinkingText`, `_add_activity`, `_handle_protocol_event`, `_handle_subagent_custom`, `render_plan_tree` are imported by both `tui.py` and `tui_app.py`
-- **Stream handlers:** The legacy TUI consumes `SootheRunner.astream()` directly; the Textual TUI consumes the same stream via daemon IPC (events serialized/deserialized)
+- **Textual-only TUI:** `tui_app.py` is the single interactive TUI implementation.
+- **Shared components:** `TuiState`, `SubagentTracker`, `_add_activity`, `_handle_protocol_event`, `_handle_subagent_custom`, `_handle_subagent_text_activity`, and `render_plan_tree` live in `tui_shared.py`.
+- **Stream handlers:** The Textual TUI consumes `SootheRunner.astream()` via daemon IPC (events serialized/deserialized).
 
 ## Testing Strategy
 
@@ -165,7 +171,7 @@ Textual application with CSS grid layout.
 
 - Thread resume semantics
 - Durability create/resume/archive flows
-- Slash command handling in both legacy and Textual TUI
+- Slash command handling in Textual TUI
 
 ## Verification Checklist
 
@@ -173,11 +179,15 @@ Textual application with CSS grid layout.
 - [ ] `soothe attach` connects to running daemon
 - [ ] `soothe server start|stop|status` work correctly
 - [ ] `soothe init` creates ~/.soothe structure
-- [ ] Textual TUI displays conversation, plan, activity, subagent panels
+- [ ] Textual TUI displays conversation, plan, and activity panels
 - [ ] Events from daemon update correct widgets
+- [ ] Conversation panel only shows final main-assistant responses (plus user turns)
+- [ ] Activity panel shows protocol/tool/subagent activity and subagent text summaries
+- [ ] Policy progress lines include profile context in TUI/headless text rendering
+- [ ] Raw browser-use stdout/stderr is suppressed while browser progress remains visible via structured activity events
 - [ ] Slash commands (e.g. /help, /detach) work
 - [ ] Headless `--format jsonl` emits valid JSONL
-- [ ] Legacy TUI fallback works when Textual unavailable
+- [ ] Textual TUI launch path works end-to-end
 - [ ] `ruff check` passes on touched files
 - [ ] Targeted CLI/daemon tests pass
 

@@ -18,7 +18,6 @@ import threading
 from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -26,12 +25,18 @@ from textual.containers import Container, Vertical
 from textual.events import Key
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
+from soothe.cli.progress_verbosity import classify_custom_event, should_show
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
-from soothe.cli.tui import (
+from soothe.cli.tui_shared import (
     TuiState,
-    _add_activity,
+    _handle_generic_custom_activity,
     _handle_protocol_event,
+    _handle_subagent_text_activity,
     _handle_subagent_custom,
+    _handle_tool_call_activity,
+    _handle_tool_result_activity,
+    _resolve_namespace_label,
+    _update_name_map_from_ai_message,
     render_plan_tree,
 )
 from soothe.config import SootheConfig
@@ -174,6 +179,7 @@ class SootheApp(App):
         self._connected = False
         self._conversation_history: list[str] = []
         self._last_activity_count = 0
+        self._progress_verbosity = self._config.progress_verbosity
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: 3-row layout."""
@@ -252,6 +258,9 @@ class SootheApp(App):
             tid = msg.get("thread_id", self._state.thread_id)
             self._state.thread_id = tid
             self._update_status(state)
+            # Only render assistant output in conversation at turn end.
+            if state in {"idle", "stopped"} and self._state.full_response:
+                self._append_conversation("".join(self._state.full_response))
 
         elif msg_type == "event":
             namespace = tuple(msg.get("namespace", []))
@@ -259,22 +268,39 @@ class SootheApp(App):
             data = msg.get("data", {})
             is_main = not namespace
 
-            if mode == "messages" and is_main:
-                self._handle_messages_event(data)
+            if mode == "messages":
+                self._handle_messages_event(data, namespace=namespace)
             elif mode == "custom":
                 if isinstance(data, dict):
-                    etype = data.get("type", "")
-                    if etype.startswith("soothe."):
-                        _handle_protocol_event(data, self._state)
+                    category = classify_custom_event(namespace, data)
+                    if category == "protocol" and should_show(category, self._progress_verbosity):
+                        _handle_protocol_event(data, self._state, verbosity=self._progress_verbosity)
                         self._flush_new_activity()
+                        etype = data.get("type", "")
                         if "plan" in etype:
                             self._refresh_plan()
-                    elif not is_main:
-                        _handle_subagent_custom(namespace, data, self._state)
+                    elif category == "subagent_custom" and not is_main:
+                        _handle_subagent_custom(
+                            namespace,
+                            data,
+                            self._state,
+                            verbosity=self._progress_verbosity,
+                        )
                         self._flush_new_activity()
                         self._update_status("Running")
+                    elif category == "error" and should_show("error", self._progress_verbosity):
+                        _handle_protocol_event(data, self._state, verbosity="normal")
+                        self._flush_new_activity()
+                    elif should_show(category, self._progress_verbosity):
+                        _handle_generic_custom_activity(
+                            namespace,
+                            data,
+                            self._state,
+                            verbosity=self._progress_verbosity,
+                        )
+                        self._flush_new_activity()
 
-    def _handle_messages_event(self, data: Any) -> None:
+    def _handle_messages_event(self, data: Any, *, namespace: tuple[str, ...]) -> None:
         if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
             msg, metadata = data
         elif isinstance(data, dict):
@@ -285,8 +311,12 @@ class SootheApp(App):
         if metadata and isinstance(metadata, dict) and metadata.get("lc_source") == "summarization":
             return
 
+        is_main = not namespace
+        prefix = _resolve_namespace_label(namespace, self._state) if namespace else None
+
         # Handle LangChain objects (in-process)
         if isinstance(msg, AIMessage):
+            _update_name_map_from_ai_message(self._state, msg)
             msg_id = msg.id or ""
             if not isinstance(msg, AIMessageChunk):
                 if msg_id in self._state.seen_message_ids:
@@ -302,17 +332,29 @@ class SootheApp(App):
                     btype = block.get("type")
                     if btype == "text":
                         text = block.get("text", "")
-                        if text:
-                            self._state.full_response.append(text)
-                            self._append_conversation(text)
+                        if text and should_show("assistant_text", self._progress_verbosity):
+                            if is_main:
+                                self._state.full_response.append(text)
+                            else:
+                                _handle_subagent_text_activity(
+                                    namespace,
+                                    text,
+                                    self._state,
+                                    verbosity=self._progress_verbosity,
+                                )
+                                self._flush_new_activity()
                     elif btype in ("tool_call_chunk", "tool_call"):
                         name = block.get("name", "")
-                        if name:
-                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                            self._flush_new_activity()
-            elif isinstance(msg.content, str) and msg.content:
-                self._state.full_response.append(msg.content)
-                self._append_conversation(msg.content)
+                        _handle_tool_call_activity(
+                            self._state,
+                            name,
+                            prefix=prefix,
+                            verbosity=self._progress_verbosity,
+                        )
+                        self._flush_new_activity()
+            elif is_main and isinstance(msg.content, str) and msg.content:
+                if should_show("assistant_text", self._progress_verbosity):
+                    self._state.full_response.append(msg.content)
 
         # Handle deserialized dict (after JSON transport)
         elif isinstance(msg, dict):
@@ -335,9 +377,9 @@ class SootheApp(App):
                 content = msg.get("content", "")
                 if isinstance(content, list):
                     blocks = content
-                elif isinstance(content, str) and content:
-                    self._state.full_response.append(content)
-                    self._append_conversation(content)
+                elif is_main and isinstance(content, str) and content:
+                    if should_show("assistant_text", self._progress_verbosity):
+                        self._state.full_response.append(content)
 
             for block in blocks:
                 if not isinstance(block, dict):
@@ -345,30 +387,49 @@ class SootheApp(App):
                 btype = block.get("type")
                 if btype == "text":
                     text = block.get("text", "")
-                    if text:
-                        self._state.full_response.append(text)
-                        self._append_conversation(text)
+                    if text and should_show("assistant_text", self._progress_verbosity):
+                        if is_main:
+                            self._state.full_response.append(text)
+                        else:
+                            _handle_subagent_text_activity(
+                                namespace,
+                                text,
+                                self._state,
+                                verbosity=self._progress_verbosity,
+                            )
+                            self._flush_new_activity()
                 elif btype in ("tool_call_chunk", "tool_call"):
                     name = block.get("name", "")
-                    if name:
-                        _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                        self._flush_new_activity()
+                    _handle_tool_call_activity(
+                        self._state,
+                        name,
+                        prefix=prefix,
+                        verbosity=self._progress_verbosity,
+                    )
+                    self._flush_new_activity()
 
             if has_tool_chunks:
                 for tc in tool_call_chunks:
                     if isinstance(tc, dict):
                         name = tc.get("name", "")
-                        if name:
-                            _add_activity(self._state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
-                            self._flush_new_activity()
+                        _handle_tool_call_activity(
+                            self._state,
+                            name,
+                            prefix=prefix,
+                            verbosity=self._progress_verbosity,
+                        )
+                        self._flush_new_activity()
 
         # Handle ToolMessage objects
         if isinstance(msg, ToolMessage):
             tool_name = getattr(msg, "name", "tool")
             content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            brief = content.replace("\n", " ")[:80]
-            _add_activity(
-                self._state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim"))
+            _handle_tool_result_activity(
+                self._state,
+                tool_name,
+                content,
+                prefix=prefix,
+                verbosity=self._progress_verbosity,
             )
             self._flush_new_activity()
 
@@ -376,6 +437,7 @@ class SootheApp(App):
 
     def _log_conversation(self, text: str) -> None:
         self._conversation_history.append(text)
+        logger.info("Conversation: %s", text.replace("\n", " ")[:200])
         try:
             panel = self.query_one("#conversation", ConversationPanel)
             panel.write(text)

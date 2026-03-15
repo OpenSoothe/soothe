@@ -371,6 +371,7 @@ class SootheRunner:
                         "type": "soothe.policy.checked",
                         "action": "user_request",
                         "verdict": decision.verdict,
+                        "profile": self._config.policy_profile,
                     }
                 )
                 if decision.verdict == "deny":
@@ -379,6 +380,7 @@ class SootheRunner:
                             "type": "soothe.policy.denied",
                             "action": "user_request",
                             "reason": decision.reason,
+                            "profile": self._config.policy_profile,
                         }
                     )
                     return
@@ -426,7 +428,7 @@ class SootheRunner:
                 logger.debug("Context projection failed", exc_info=True)
 
         # Plan creation
-        if self._planner and self._config.planner_routing != "none":
+        if self._planner:
             try:
                 capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
                 context = PlanContext(

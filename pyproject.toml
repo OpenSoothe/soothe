@@ -36,6 +36,7 @@ dependencies = [
 
 [project.optional-dependencies]
 research = [
+    "wizsearch>=1.1.2,<2.0.0",
     "tavily-python>=0.5.0",
 ]
 browser = [
@@ -46,6 +47,9 @@ claude = [
 ]
 serper = [
     "requests>=2.31.0",
+]
+wizsearch = [
+    "wizsearch>=1.1.2,<2.0.0",
 ]
 jina = [
     "aiohttp>=3.9.0",
@@ -68,7 +72,7 @@ ollama = [
     "langchain-ollama>=0.3.0",
 ]
 all = [
-    "soothe[research,browser,claude,serper,jina,media,rocksdb,pgvector,weaviate,ollama]",
+    "soothe[research,browser,claude,serper,wizsearch,jina,media,rocksdb,pgvector,weaviate,ollama]",
 ]
 
 [dependency-groups]

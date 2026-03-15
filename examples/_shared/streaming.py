@@ -8,11 +8,24 @@ rendered in real-time.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
+
+SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
+    "planner": "Planner",
+    "scout": "Scout",
+    "research": "Research",
+    "browser": "Browser",
+    "claude": "Claude",
+    "skillify": "Skillify",
+    "weaver": "Weaver",
+}
+
+_TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
 
 
 def _truncate(text: str, limit: int = 200) -> str:
@@ -36,15 +49,66 @@ def _format_custom_event(data: Any) -> str | None:
     return ": ".join(parts[:2]) if len(parts) >= 2 else parts[0]
 
 
-def _namespace_label(namespace: tuple[Any, ...]) -> str:
-    """Format a streaming namespace tuple as a concise display tag."""
+def _resolve_namespace(
+    namespace: tuple[Any, ...],
+    name_map: dict[str, str],
+) -> str:
+    """Resolve a namespace tuple to a friendly display label.
+
+    Uses ``name_map`` to translate LangGraph tool-call IDs to capitalised
+    subagent names (e.g. ``("tools:abc123",)`` -> ``"Planner"``).
+    """
     if not namespace:
         return "main"
-    return "/".join(str(part) for part in namespace)
+    parts: list[str] = []
+    for segment in namespace:
+        seg_str = str(segment)
+        if seg_str in name_map:
+            parts.append(name_map[seg_str])
+        elif seg_str.startswith("tools:"):
+            tool_id = seg_str.split(":", 1)[1] if ":" in seg_str else seg_str
+            parts.append(name_map.get(tool_id, seg_str))
+        else:
+            parts.append(seg_str)
+    return "/".join(parts)
 
 
-def _handle_ai_message(message_obj: AIMessage, *, prefix: str | None = None) -> None:
+def _try_extract_subagent_name(message_obj: AIMessage) -> tuple[str, str] | None:
+    """Try to extract (tool_call_id, subagent_name) from a task tool call."""
+    tool_calls = getattr(message_obj, "tool_calls", None) or []
+    for tc in tool_calls:
+        if not isinstance(tc, dict):
+            continue
+        if tc.get("name") != "task":
+            continue
+        call_id = tc.get("id", "")
+        args = tc.get("args", {})
+        if isinstance(args, dict):
+            agent_name = args.get("agent", "") or args.get("name", "")
+            if agent_name:
+                return (call_id, agent_name)
+        args_str = str(args)
+        match = _TASK_NAME_RE.search(args_str)
+        if match:
+            return (call_id, match.group(1))
+    return None
+
+
+def _handle_ai_message(
+    message_obj: AIMessage,
+    *,
+    prefix: str | None = None,
+    name_map: dict[str, str] | None = None,
+) -> None:
     """Render AI message content blocks: text tokens and tool call names."""
+    if name_map is None:
+        name_map = {}
+    extracted = _try_extract_subagent_name(message_obj)
+    if extracted:
+        call_id, raw_name = extracted
+        display = SUBAGENT_DISPLAY_NAMES.get(raw_name.lower(), raw_name.title())
+        name_map[call_id] = display
+
     header_printed = False
     if hasattr(message_obj, "content_blocks") and message_obj.content_blocks:
         for block in message_obj.content_blocks:
@@ -97,18 +161,10 @@ async def run_with_streaming(
     show_subagent_messages: bool = False,
     thread_id: str = "example-thread",
 ) -> None:
-    """Stream agent execution with real-time progress output.
-
-    Args:
-        agent: A compiled Soothe agent graph.
-        messages: List of input messages (typically one HumanMessage).
-        show_subagents: When True, also render subagent custom progress
-            events (from ``get_stream_writer()``).
-        show_subagent_messages: When True, render subagent message traffic
-            (AI text tokens, tool results) with namespace prefixes.
-        thread_id: LangGraph thread identifier required by checkpointers.
-    """
+    """Stream agent execution with real-time progress output."""
     print("[streaming] Starting agent...\n", flush=True)
+
+    name_map: dict[str, str] = {}
 
     try:
         async for chunk in agent.astream(
@@ -129,13 +185,13 @@ async def run_with_streaming(
                 if not isinstance(data, tuple) or len(data) != 2:
                     continue
                 message_obj, metadata = data
-                prefix = _namespace_label(namespace) if not is_main else None
+                prefix = _resolve_namespace(namespace, name_map) if not is_main else None
 
                 if metadata and metadata.get("lc_source") == "summarization":
                     continue
 
                 if isinstance(message_obj, AIMessage):
-                    _handle_ai_message(message_obj, prefix=prefix)
+                    _handle_ai_message(message_obj, prefix=prefix, name_map=name_map)
                 elif isinstance(message_obj, ToolMessage):
                     _handle_tool_message(message_obj, prefix=prefix)
 
@@ -147,7 +203,8 @@ async def run_with_streaming(
                     if is_main:
                         print(f"\n  {line}", flush=True)
                     else:
-                        print(f"\n  [{_namespace_label(namespace)}] {line}", flush=True)
+                        label = _resolve_namespace(namespace, name_map)
+                        print(f"\n  [{label}] {line}", flush=True)
 
             elif mode == "updates":
                 if isinstance(data, dict) and "__interrupt__" in data:

@@ -67,6 +67,10 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
         from soothe.tools.serper import create_serper_tools
 
         return list(create_serper_tools())
+    if name == "wizsearch":
+        from soothe.tools.wizsearch import create_wizsearch_tools
+
+        return list(create_wizsearch_tools())
     if name == "image":
         from soothe.tools.image import create_image_tools
 
@@ -128,6 +132,12 @@ def resolve_subagents(
     Returns:
         List of subagent specs for deepagents.
     """
+    import os
+
+    _CWD_SUBAGENTS = {"planner", "scout", "claude"}
+    _STRING_MODEL_SUBAGENTS = {"claude"}
+    resolved_cwd = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
+
     subagents: list[SubAgent | CompiledSubAgent] = []
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:
@@ -136,10 +146,13 @@ def resolve_subagents(
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
-        model_override = sub_cfg.model or default_model or config.resolve_model("default")
+        if name in _STRING_MODEL_SUBAGENTS:
+            model_override = sub_cfg.model or config.resolve_model("default")
+        else:
+            model_override = sub_cfg.model or default_model or config.resolve_model("default")
         extra_kwargs = dict(sub_cfg.config)
-        if "cwd" not in extra_kwargs and config.workspace_dir:
-            extra_kwargs["cwd"] = config.workspace_dir
+        if name in _CWD_SUBAGENTS and "cwd" not in extra_kwargs:
+            extra_kwargs["cwd"] = resolved_cwd
         if name in ("skillify", "weaver"):
             extra_kwargs["config"] = config
         spec = factory(model=model_override, **extra_kwargs)
@@ -181,6 +194,8 @@ def _resolve_generated_subagents(config: SootheConfig) -> list[SubAgent]:
 def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     """Instantiate the ContextProtocol implementation from config.
 
+    Falls back to keyword backend when vector initialisation fails.
+
     Args:
         config: Soothe configuration.
 
@@ -190,13 +205,11 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     if config.context_backend == "none":
         return None
 
-    if config.context_backend == "vector":
-        from soothe.backends.context.vector import VectorContext
-        from soothe.backends.vector_store import create_vector_store
+    if config.context_backend == "vector" and config.vector_store_provider != "none":
+        try:
+            from soothe.backends.context.vector import VectorContext
+            from soothe.backends.vector_store import create_vector_store
 
-        if config.vector_store_provider == "none":
-            logger.warning("vector context requires vector_store_provider; falling back to keyword")
-        else:
             vs = create_vector_store(
                 config.vector_store_provider,
                 f"{config.vector_store_collection}_context",
@@ -204,6 +217,10 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             )
             embeddings = config.create_embedding_model()
             return VectorContext(vector_store=vs, embeddings=embeddings)
+        except Exception:  # noqa: BLE001
+            logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
+    elif config.context_backend == "vector":
+        logger.warning("vector context requires vector_store_provider; falling back to keyword")
 
     from pathlib import Path
 
@@ -219,6 +236,8 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     """Instantiate the MemoryProtocol implementation from config.
 
+    Falls back to keyword backend when vector initialisation fails.
+
     Args:
         config: Soothe configuration.
 
@@ -228,13 +247,11 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     if config.memory_backend == "none":
         return None
 
-    if config.memory_backend == "vector":
-        from soothe.backends.memory.vector import VectorMemory
-        from soothe.backends.vector_store import create_vector_store
+    if config.memory_backend == "vector" and config.vector_store_provider != "none":
+        try:
+            from soothe.backends.memory.vector import VectorMemory
+            from soothe.backends.vector_store import create_vector_store
 
-        if config.vector_store_provider == "none":
-            logger.warning("vector memory requires vector_store_provider; falling back to keyword")
-        else:
             vs = create_vector_store(
                 config.vector_store_provider,
                 f"{config.vector_store_collection}_memory",
@@ -242,6 +259,10 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
             )
             embeddings = config.create_embedding_model()
             return VectorMemory(vector_store=vs, embeddings=embeddings)
+        except Exception:  # noqa: BLE001
+            logger.warning("Vector memory init failed, falling back to keyword", exc_info=True)
+    elif config.memory_backend == "vector":
+        logger.warning("vector memory requires vector_store_provider; falling back to keyword")
 
     from pathlib import Path
 
@@ -257,36 +278,75 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 def resolve_planner(
     config: SootheConfig,
     model: BaseChatModel | None,
-) -> PlannerProtocol | None:
+) -> PlannerProtocol:
     """Instantiate the PlannerProtocol implementation from config.
+
+    Always returns a planner -- at minimum DirectPlanner is used as fallback.
 
     Args:
         config: Soothe configuration.
         model: The resolved chat model.
 
     Returns:
-        A PlannerProtocol instance, or None if disabled.
+        A PlannerProtocol instance.
     """
-    if config.planner_routing == "none":
-        return None
+    import os
 
     planner_model = model
     if planner_model is None:
         try:
             planner_model = config.create_chat_model("think")
         except Exception:  # noqa: BLE001
-            logger.warning("Failed to create think model for planner")
-            return None
+            try:
+                planner_model = config.create_chat_model("default")
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to create model for planner")
 
-    if config.planner_routing in ("always_direct", "auto"):
-        from soothe.backends.planning.direct import DirectPlanner
+    resolved_cwd = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
 
-        return DirectPlanner(model=planner_model)
-
-    logger.warning("Planner routing '%s' not yet implemented, using direct", config.planner_routing)
     from soothe.backends.planning.direct import DirectPlanner
 
-    return DirectPlanner(model=planner_model)
+    direct = DirectPlanner(model=planner_model) if planner_model else None
+
+    if config.planner_routing == "always_direct":
+        return direct or DirectPlanner(model=planner_model)
+
+    subagent_planner = None
+    try:
+        from soothe.backends.planning.subagent import SubagentPlanner
+
+        subagent_planner = SubagentPlanner(model=planner_model, cwd=resolved_cwd)
+    except Exception:  # noqa: BLE001
+        logger.debug("SubagentPlanner init failed", exc_info=True)
+
+    if config.planner_routing == "always_planner":
+        return subagent_planner or direct  # type: ignore[return-value]
+
+    claude_planner = None
+    try:
+        from soothe.backends.planning.claude import ClaudePlanner
+
+        claude_planner = ClaudePlanner(cwd=resolved_cwd)
+    except Exception:  # noqa: BLE001
+        logger.info("Claude CLI not available for planning")
+
+    if config.planner_routing == "always_claude":
+        return claude_planner or subagent_planner or direct  # type: ignore[return-value]
+
+    from soothe.backends.planning.router import AutoPlanner
+
+    fast_model = None
+    try:
+        fast_model = config.create_chat_model("fast")
+    except Exception:  # noqa: BLE001
+        pass
+
+    return AutoPlanner(
+        claude=claude_planner,
+        subagent=subagent_planner,
+        direct=direct,
+        fast_model=fast_model,
+    )
 
 
 def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:

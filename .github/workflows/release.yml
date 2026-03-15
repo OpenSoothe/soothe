@@ -1,0 +1,54 @@
+name: Release Soothe
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+
+jobs:
+  deploy-soothe:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Install dependencies
+      run: make sync-dev
+
+    - name: Run tests
+      run: make test-unit
+
+    - name: Build package
+      run: make build
+
+    - name: Verify build artifacts
+      run: |
+        ls -la dist/
+        WHL_COUNT=$(ls dist/*.whl 2>/dev/null | wc -l)
+        TGZ_COUNT=$(ls dist/*.tar.gz 2>/dev/null | wc -l)
+        if [ "$WHL_COUNT" -eq 0 ] || [ "$TGZ_COUNT" -eq 0 ]; then
+          echo "❌ Missing build artifacts"
+          exit 1
+        fi
+        echo "✅ Build artifacts verified"
+
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+        verbose: true
+        print-hash: true

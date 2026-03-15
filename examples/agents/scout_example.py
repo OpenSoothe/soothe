@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
 from soothe.subagents.scout import create_scout_subagent
-from soothe.utils.streaming import run_with_streaming
+from _shared.streaming import run_with_streaming
 
 load_dotenv()
 
@@ -34,7 +34,10 @@ async def main() -> None:
     from langgraph.checkpoint.memory import MemorySaver
 
     config = load_example_config()
-    scout_spec = create_scout_subagent(model=config.create_chat_model("default"))
+    scout_spec = create_scout_subagent(
+        model=config.create_chat_model("default"),
+        cwd=PROJECT_ROOT,
+    )
 
     agent = create_deep_agent(
         model=config.create_chat_model("default"),

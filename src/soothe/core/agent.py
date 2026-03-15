@@ -114,12 +114,16 @@ def create_soothe_agent(
     if subagents:
         all_subagents.extend(subagents)
 
+    import os
+
+    resolved_workspace = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
+
     resolved_backend = backend
-    if resolved_backend is None and config.workspace_dir:
+    if resolved_backend is None:
         from deepagents.backends.filesystem import FilesystemBackend
 
         resolved_backend = FilesystemBackend(
-            root_dir=config.workspace_dir,
+            root_dir=resolved_workspace,
             virtual_mode=True,
         )
 
@@ -139,7 +143,7 @@ def create_soothe_agent(
     agent = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
-        system_prompt=config.system_prompt,
+        system_prompt=config.resolve_system_prompt(),
         middleware=all_middleware,
         subagents=all_subagents or None,
         skills=config.skills or None,

@@ -20,7 +20,7 @@ class TestPlannerSubagent:
     def test_system_prompt_content(self):
         spec = create_planner_subagent()
         prompt = spec["system_prompt"]
-        assert "planning agent" in prompt.lower()
+        assert "planning specialist" in prompt.lower()
         assert "dependencies" in prompt.lower()
         assert "verification" in prompt.lower()
 
@@ -46,6 +46,16 @@ class TestScoutSubagent:
         assert "exploration" in prompt.lower()
         assert "reflection" in prompt.lower()
         assert "synthesis" in prompt.lower() or "synthesise" in prompt.lower()
+
+    def test_cwd_creates_filesystem_tools(self):
+        spec = create_scout_subagent(cwd=os.getcwd())
+        assert "tools" in spec
+        assert len(spec["tools"]) == 4
+
+    def test_default_creates_filesystem_tools(self):
+        spec = create_scout_subagent()
+        assert "tools" in spec
+        assert len(spec["tools"]) == 4
 
 
 class TestBrowserSubagent:
@@ -174,3 +184,11 @@ class TestResearchSubagent:
 
         with pytest.raises(ValueError, match="requires a model"):
             create_research_subagent(model=None)
+
+    def test_uses_wizsearch_defaults(self):
+        from soothe.subagents.research import _create_research_search_tool
+
+        tool = _create_research_search_tool()
+        assert tool.name == "wizsearch_search"
+        assert tool.default_engines == ["tavily"]
+        assert tool.default_max_results_per_engine == 5

@@ -23,10 +23,11 @@ routing using Rich for terminal rendering.
 
 ```
 src/soothe/cli/
-├── __init__.py          # MODIFY: export app + run_agent_tui
+├── __init__.py          # MODIFY: export app
 ├── main.py              # MODIFY: TUI as default run mode, thread subcommands
 ├── runner.py            # NEW: SootheRunner (protocol orchestration + stream)
-├── tui.py               # NEW: Rich TUI (Live display, REPL loop)
+├── tui_shared.py        # NEW: shared TUI rendering/state helpers
+├── tui_app.py           # NEW: Textual TUI client
 ├── commands.py          # NEW: Slash commands, subagent routing
 └── session.py           # NEW: SessionLogger (JSONL), InputHistory
 ```
@@ -59,16 +60,16 @@ Key design decisions:
 
 ### Phase 3: TUI
 
-**Goal**: Rich terminal UI consuming the native stream.
+**Goal**: Textual terminal UI consuming daemon-forwarded stream events.
 
-**File**: `src/soothe/cli/tui.py`
+**Files**:
+- `src/soothe/cli/tui_app.py`
+- `src/soothe/cli/tui_shared.py`
 
 Key design decisions:
-- `rich.live.Live` with `refresh_per_second=8`, `transient=True`
-- `_build_display()` returns `Group` (subagent tracker, activity lines, plan tree, spinner)
-- Message handling follows `deepagents_cli/non_interactive.py` `content_blocks` pattern
-- `prompt_toolkit` for input with history; fallback to `rich.prompt.Prompt`
-- Final answer rendered as `rich.markdown.Markdown` after Live block
+- Textual app provides always-on conversation/plan/activity panels
+- Daemon-backed event transport decouples UI from runner lifecycle
+- Shared parsing/rendering helpers live in `tui_shared.py` and are reused by commands
 
 ### Phase 4: CLI Integration
 

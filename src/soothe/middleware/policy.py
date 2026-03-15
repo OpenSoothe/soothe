@@ -45,14 +45,24 @@ class SoothePolicyMiddleware(AgentMiddleware):
         self._emit_policy_event(
             request,
             event_type="soothe.policy.checked",
-            payload={"action": action_type, "tool": action_name, "verdict": decision.verdict},
+            payload={
+                "action": action_type,
+                "tool": action_name,
+                "verdict": decision.verdict,
+                "profile": self._profile_name,
+            },
         )
 
         if decision.verdict == "deny":
             self._emit_policy_event(
                 request,
                 event_type="soothe.policy.denied",
-                payload={"action": action_type, "tool": action_name, "reason": decision.reason},
+                payload={
+                    "action": action_type,
+                    "tool": action_name,
+                    "reason": decision.reason,
+                    "profile": self._profile_name,
+                },
             )
             return ToolMessage(
                 content=f"Policy denied action '{action_name}': {decision.reason}",

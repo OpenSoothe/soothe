@@ -1,17 +1,22 @@
-"""Scout subagent -- migrated from noesium ExploreAgent, renamed.
+"""Scout subagent -- codebase and data exploration specialist.
 
-Specialises in exploring codebases, documents, and data sources to gather
-information and synthesise findings.
+Explores codebases, documents, and data sources to gather information
+and synthesise findings with citations.
 """
 
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
+from typing import Any
+
 from deepagents.middleware.subagents import SubAgent
 from langchain_core.language_models import BaseChatModel
+from langchain_core.tools import BaseTool
 
 SCOUT_SYSTEM_PROMPT = """\
-You are an expert exploration agent (Scout) capable of gathering and \
-synthesising information from diverse sources.
+You are an expert codebase and data exploration specialist capable of \
+gathering and synthesising information from diverse sources.
 
 ## Responsibilities
 
@@ -62,14 +67,15 @@ Provide a structured summary:
 """
 
 SCOUT_DESCRIPTION = (
-    "Exploration agent (Scout) for gathering and synthesising information from "
-    "codebases, documents, and data. Uses systematic search strategies with "
-    "reflection loops to ensure completeness. Read-only."
+    "Codebase and data exploration specialist for gathering and synthesising "
+    "information from codebases, documents, and data. Uses systematic search "
+    "strategies with reflection loops to ensure completeness. Read-only."
 )
 
 
 def create_scout_subagent(
     model: str | BaseChatModel | None = None,
+    tools: list[BaseTool | Callable[..., Any] | dict[str, Any]] | None = None,
     cwd: str | None = None,
     **kwargs: object,
 ) -> SubAgent:
@@ -77,8 +83,9 @@ def create_scout_subagent(
 
     Args:
         model: Optional model override (string or BaseChatModel instance).
-        cwd: Workspace directory for runtime consistency across subagents.
-            Scout relies on inherited parent tools/backends for filesystem access.
+        tools: Optional list of tools. If not specified, the scout will be
+            given read-only filesystem tools (ls, read_file, glob, grep).
+        cwd: Working directory for filesystem exploration tools.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:
@@ -91,4 +98,23 @@ def create_scout_subagent(
     }
     if model:
         spec["model"] = model
+
+    if tools is not None:
+        spec["tools"] = tools
+    else:
+        from deepagents.backends.filesystem import FilesystemBackend
+        from deepagents.middleware.filesystem import FilesystemMiddleware
+
+        resolved_cwd = cwd or os.getcwd()
+        fs_middleware = FilesystemMiddleware(
+            backend=FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True),
+        )
+        read_only_tools = [
+            fs_middleware._create_ls_tool(),
+            fs_middleware._create_read_file_tool(),
+            fs_middleware._create_glob_tool(),
+            fs_middleware._create_grep_tool(),
+        ]
+        spec["tools"] = read_only_tools
+
     return spec

@@ -39,7 +39,7 @@ When `subgraphs=True`, each chunk is a 3-tuple `(namespace, mode, data)` where
 
 ## Implementation
 
-### Shared Helper: `examples/_streaming.py`
+### Shared Helper: `examples/_shared/streaming.py`
 
 A reusable `run_with_streaming()` async function that:
 

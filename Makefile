@@ -1,6 +1,6 @@
 # Makefile for soothe project
 
-.PHONY: sync sync-dev format lint lint-fix test test-unit test-integration test-coverage build clean help
+.PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build clean help
 
 # Default target
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make sync       - Sync dependencies with uv"
 	@echo "  make sync-dev   - Sync dev dependencies"
 	@echo "  make format     - Format code with ruff"
+	@echo "  make format-check - Check code formatting (for CI)"
 	@echo "  make lint       - Lint code with ruff"
 	@echo "  make lint-fix   - Auto-fix linting issues with ruff"
 	@echo "  make test       - Run all tests with pytest"
@@ -34,6 +35,12 @@ format: sync-dev
 	@echo "Formatting code..."
 	uv run ruff format src/ tests/
 	@echo "✓ Code formatted"
+
+# Check formatting (for CI)
+format-check: sync-dev
+	@echo "Checking code formatting..."
+	uv run ruff format --check src/ tests/
+	@echo "✓ Format check passed"
 
 # Lint code
 lint: sync-dev
@@ -74,7 +81,7 @@ test-coverage: sync-dev
 	@echo "✓ Coverage report generated in htmlcov/"
 
 # Build package
-build: sync
+build:
 	@echo "Building package..."
 	uv build
 	@echo "✓ Package built"

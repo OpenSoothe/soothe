@@ -4,18 +4,3 @@
 [submodule "thirdparty/deepagents"]
 	path = thirdparty/deepagents
 	url = https://github.com/langchain-ai/deepagents.git
-[submodule "thirdparty/langchain"]
-	path = thirdparty/langchain
-	url = https://github.com/langchain-ai/langchain.git
-[submodule "thirdparty/langgraph"]
-	path = thirdparty/langgraph
-	url = https://github.com/langchain-ai/langgraph.git
-[submodule "thirdparty/claude-agent-sdk-python"]
-	path = thirdparty/claude-agent-sdk-python
-	url = https://github.com/anthropics/claude-agent-sdk-python.git
-[submodule "thirdparty/browser-use"]
-	path = thirdparty/browser-use
-	url = https://github.com/browser-use/browser-use.git
-[submodule "thirdparty/memU"]
-	path = thirdparty/memU
-	url = https://github.com/NevaMind-AI/memU.git

@@ -26,6 +26,7 @@ Install additional capabilities as needed:
 | `browser` | `pip install soothe[browser]` | Browser automation via browser-use |
 | `claude` | `pip install soothe[claude]` | Claude agent SDK integration |
 | `serper` | `pip install soothe[serper]` | Google Serper search |
+| `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search + page crawler |
 | `jina` | `pip install soothe[jina]` | Jina web reader |
 | `media` | `pip install soothe[media]` | Image generation (DALL-E) |
 | `rocksdb` | `pip install soothe[rocksdb]` | RocksDB persistence backend |
@@ -115,7 +116,7 @@ Launch the interactive terminal UI:
 soothe run
 ```
 
-This opens a Rich-powered TUI with real-time progress, plan visualization, and slash
+This opens a Textual-powered TUI with real-time progress, plan visualization, and slash
 commands. The TUI shows:
 
 - Subagent activity tracking (running/done status)
@@ -142,7 +143,45 @@ soothe run --thread abc123
 
 # Disable TUI (plain streaming output)
 soothe run --no-tui
+
+# Increase progress visibility (headless or TUI)
+soothe run --progress-verbosity detailed
+soothe run --no-tui --progress-verbosity debug "Analyze the project architecture"
+
+# Attach to running daemon with a per-session verbosity override
+soothe attach --progress-verbosity detailed
 ```
+
+Progress verbosity levels:
+
+- `minimal`: assistant text + critical errors only
+- `normal` (default): protocol progress events (`soothe.*`)
+- `detailed`: adds subagent custom events + tool call/result activity
+- `debug`: shows all available progress events (including heartbeat/thinking-style events)
+
+Set a default in config:
+
+```yaml
+progress_verbosity: normal   # minimal | normal | detailed | debug
+```
+
+### Message Surfacing Behavior
+
+Soothe uses a low-noise conversation view and a detailed activity view:
+
+- **ConversationPanel** (TUI): shows user turns and final main-assistant response text.
+- **ActivityPanel** (TUI): shows protocol events, tool calls/results, subagent custom events, and subagent text summaries.
+- **Headless text mode**: prints main-assistant response text to stdout and progress/activity lines to stderr.
+- **Headless JSONL mode**: emits raw stream chunks as JSONL for machine processing.
+
+Verbosity controls what appears in activity/progress surfaces:
+
+- `minimal`: assistant text + errors only
+- `normal`: assistant text + protocol events + errors
+- `detailed`: adds subagent custom events + tool activity
+- `debug`: all categories (including thinking/heartbeat-style events)
+
+Policy checks include profile context in surfaced lines (for example, `allow (profile=standard)`).
 
 ## TUI Interface
 
@@ -231,6 +270,10 @@ and take screenshots.
 
 Privacy-first defaults: extensions, cloud sync, and telemetry are disabled.
 
+For cleaner CLI/TUI output, raw third-party browser-use stdout/stderr noise is suppressed.
+Browser progress still appears through structured subagent activity events (subject to
+`progress_verbosity`).
+
 ### Claude
 
 Direct access to Claude via the Anthropic SDK. Useful for tasks that benefit from Claude's
@@ -281,10 +324,18 @@ memory_persist_path: ~/.soothe/memory/
 ### Planner Protocol
 
 Decomposes complex goals into structured plans with steps, dependencies, and status
-tracking. Two tiers: DirectPlanner (single LLM call) and SubagentPlanner (multi-turn).
+tracking. Three tiers:
+
+- **DirectPlanner** -- single LLM structured output call (simple tasks).
+- **SubagentPlanner** -- multi-turn planner subagent with filesystem access (medium tasks).
+- **ClaudePlanner** -- Claude CLI for deep planning (complex architecture/design tasks).
+
+The `auto` mode uses a hybrid complexity router: heuristic classification first,
+then a fast LLM call for ambiguous cases. Routes complex problems to Claude,
+medium to SubagentPlanner, and simple to DirectPlanner.
 
 ```yaml
-planner_routing: auto        # auto | always_direct | always_subagent | none
+planner_routing: auto        # auto | always_direct | always_planner | always_claude
 ```
 
 ### Policy Protocol
@@ -358,6 +409,7 @@ Enable tool groups by name in your config:
 ```yaml
 tools:
   - serper     # Google search (requires SERPER_API_KEY)
+  - wizsearch  # Multi-engine web search + crawler (optional TAVILY_API_KEY)
   - jina       # Web reader (requires JINA_API_KEY)
   - image      # Image generation via DALL-E
   - audio      # Audio processing

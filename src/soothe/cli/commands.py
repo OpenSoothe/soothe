@@ -215,7 +215,7 @@ def _show_plan(console: Console, plan: Plan | None) -> None:
     if not plan:
         console.print("[dim]No active plan.[/dim]")
         return
-    from soothe.cli.tui import render_plan_tree
+    from soothe.cli.tui_shared import render_plan_tree
 
     console.print(render_plan_tree(plan))
 

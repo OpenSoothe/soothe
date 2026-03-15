@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
 from soothe.subagents.skillify import create_skillify_subagent
-from soothe.utils.streaming import run_with_streaming
+from _shared.streaming import run_with_streaming
 
 load_dotenv()
 

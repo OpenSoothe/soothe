@@ -1,7 +1,7 @@
-"""Browser subagent -- wraps the browser-use library as a CompiledSubAgent.
+"""Browser subagent -- web browser automation specialist.
 
-Provides web browser automation via the browser-use Agent, which manages its own
-LLM calls, browser lifecycle, and action loop internally.
+Provides web browser automation for navigating pages, interacting with
+elements, filling forms, extracting content, and taking screenshots.
 
 Requires the optional `browser` extra: `pip install soothe[browser]`
 """
@@ -9,7 +9,9 @@ Requires the optional `browser` extra: `pip install soothe[browser]`
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 from typing import Annotated, Any
 
 from deepagents.middleware.subagents import CompiledSubAgent
@@ -20,10 +22,9 @@ from langgraph.graph.message import add_messages
 logger = logging.getLogger(__name__)
 
 BROWSER_DESCRIPTION = (
-    "Browser automation agent for web tasks. Can navigate pages, click elements, "
-    "fill forms, extract content, and take screenshots. Powered by the browser-use "
-    "library with its own LLM loop. Use for web scraping, form automation, and "
-    "browser-based testing. Requires the 'browser' extra."
+    "Browser automation specialist for web tasks. Can navigate pages, click "
+    "elements, fill forms, extract content, and take screenshots. Use for "
+    "web scraping, form automation, and browser-based testing."
 )
 
 
@@ -31,6 +32,22 @@ class _BrowserState(dict):
     """State schema for the browser subagent graph."""
 
     messages: Annotated[list, add_messages]
+
+
+def _suppress_external_browser_loggers() -> None:
+    """Mute noisy third-party browser-use loggers in Soothe surfaces."""
+    noisy_loggers = (
+        "browser_use",
+        "bubus",
+        "cdp_use",
+        "Agent",
+        "BrowserSession",
+        "tools",
+    )
+    for name in noisy_loggers:
+        ext_logger = logging.getLogger(name)
+        ext_logger.setLevel(logging.CRITICAL)
+        ext_logger.propagate = False
 
 
 def _build_browser_graph(
@@ -63,8 +80,6 @@ def _build_browser_graph(
     """
 
     async def _run_browser_async(state: dict[str, Any]) -> dict[str, Any]:
-        import os
-
         # Disable browser-use privacy-invasive features before importing
         if disable_extensions:
             os.environ["BROWSER_USE_DISABLE_EXTENSIONS"] = "1"
@@ -76,9 +91,10 @@ def _build_browser_graph(
         if disable_telemetry:
             os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
-        # Now import browser-use (will read env vars during initialization)
-        from browser_use import Agent as BrowserAgent, BrowserSession
-        from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+        # Ask browser-use to avoid chatty console logging where supported.
+        os.environ.setdefault("BROWSER_USE_LOGGING_LEVEL", "result")
+
+        _suppress_external_browser_loggers()
 
         try:
             from langgraph.config import get_stream_writer
@@ -90,61 +106,66 @@ def _build_browser_graph(
         def emit_progress(event: dict[str, Any]) -> None:
             if writer:
                 writer(event)
-            logger.info("Browser progress: %s", event)
-
-        messages = state.get("messages", [])
-        task = messages[-1].content if messages else ""
-
-        # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
-        model_name = browser_model or "qwen3.5-flash"
-        if ":" in model_name:
-            model_name = model_name.split(":", 1)[1]
-
-        # browser-use's ChatOpenAI expects model as first positional parameter
-        llm_kwargs: dict[str, Any] = {}
-        if browser_base_url:
-            llm_kwargs["base_url"] = browser_base_url
-        if browser_api_key:
-            llm_kwargs["api_key"] = browser_api_key
-        llm = BUChatOpenAI(model_name, **llm_kwargs)
-
-        browser = BrowserSession(headless=headless)
-
-        async def on_step_end(agent: Any) -> None:
-            step_num = agent.state.n_steps
-            last = agent.history.history[-1] if agent.history.history else None
-            action_desc = ""
-            page_title = ""
-            url = None
-            if last:
-                if hasattr(last, "model_output") and last.model_output:
-                    action = getattr(last.model_output, "action", None)
-                    if action:
-                        action_desc = str(action)[:80]
-                if hasattr(last, "state"):
-                    url = getattr(last.state, "url", None)
-                    page_title = getattr(last.state, "title", "")[:60]
-            emit_progress(
-                {
-                    "type": "browser_step",
-                    "step": step_num,
-                    "url": url,
-                    "action": action_desc,
-                    "title": page_title,
-                    "is_done": agent.history.is_done(),
-                }
-            )
-
-        agent = BrowserAgent(
-            task=task,
-            llm=llm,
-            browser=browser,
-            use_vision=use_vision,
-        )
+            logger.debug("Browser progress: %s", event)
 
         try:
-            history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
-            result = history.final_result() or "Browser task completed (no extracted content)."
+            # Suppress browser-use stdout/stderr noise and rely on structured events.
+            with open(os.devnull, "w", encoding="utf-8") as devnull:
+                with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+                    # Import browser-use under redirected stdio so startup logs are hidden.
+                    from browser_use import Agent as BrowserAgent, BrowserSession
+                    from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+
+                    messages = state.get("messages", [])
+                    task = messages[-1].content if messages else ""
+
+                    # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
+                    model_name = browser_model or "qwen3.5-flash"
+                    if ":" in model_name:
+                        model_name = model_name.split(":", 1)[1]
+
+                    llm_kwargs: dict[str, Any] = {}
+                    if browser_base_url:
+                        llm_kwargs["base_url"] = browser_base_url
+                    if browser_api_key:
+                        llm_kwargs["api_key"] = browser_api_key
+                    llm = BUChatOpenAI(model_name, **llm_kwargs)
+
+                    browser = BrowserSession(headless=headless)
+
+                    async def on_step_end(agent: Any) -> None:
+                        step_num = agent.state.n_steps
+                        last = agent.history.history[-1] if agent.history.history else None
+                        action_desc = ""
+                        page_title = ""
+                        url = None
+                        if last:
+                            if hasattr(last, "model_output") and last.model_output:
+                                action = getattr(last.model_output, "action", None)
+                                if action:
+                                    action_desc = str(action)[:80]
+                            if hasattr(last, "state"):
+                                url = getattr(last.state, "url", None)
+                                page_title = getattr(last.state, "title", "")[:60]
+                        emit_progress(
+                            {
+                                "type": "browser_step",
+                                "step": step_num,
+                                "url": url,
+                                "action": action_desc,
+                                "title": page_title,
+                                "is_done": agent.history.is_done(),
+                            }
+                        )
+
+                    agent = BrowserAgent(
+                        task=task,
+                        llm=llm,
+                        browser=browser,
+                        use_vision=use_vision,
+                    )
+                    history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
+                    result = history.final_result() or "Browser task completed (no extracted content)."
         except Exception:
             logger.exception("Browser agent failed")
             result = "Browser agent encountered an error."
@@ -198,7 +219,6 @@ def create_browser_subagent(
     headless: bool = True,
     max_steps: int = 100,
     use_vision: bool = True,
-    cwd: str | None = None,
     disable_extensions: bool = True,
     disable_cloud: bool = True,
     disable_telemetry: bool = True,
@@ -213,8 +233,6 @@ def create_browser_subagent(
         headless: Run browser in headless mode.
         max_steps: Maximum browser agent steps.
         use_vision: Enable vision/screenshot support.
-        cwd: Workspace directory for runtime consistency across subagents.
-            Browser runtime does not currently use local filesystem tooling.
         disable_extensions: Disable browser extensions (uBlock Origin, cookie handler, ClearURLs).
             Privacy-invasive extensions are disabled by default. Set to False to enable them.
         disable_cloud: Disable browser-use cloud service connections.

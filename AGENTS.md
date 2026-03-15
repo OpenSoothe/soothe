@@ -97,7 +97,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
 | `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
 | `backends/memory/` | `StoreBackedMemory`, `VectorMemory` | MemoryProtocol implementations |
-| `backends/planning/` | `DirectPlanner` | PlannerProtocol implementations |
+| `backends/planning/` | `DirectPlanner`, `SubagentPlanner`, `ClaudePlanner`, `AutoPlanner` | PlannerProtocol implementations |
 | `backends/policy/` | `ConfigDrivenPolicy` | PolicyProtocol implementations |
 | `backends/durability/` | `InMemoryDurability` | DurabilityProtocol implementations |
 | `backends/remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
@@ -106,9 +106,9 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
-| `cli/` | `main`, `tui`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |
+| `cli/` | `main`, `tui_shared`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |
 | `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
-| `utils/` | `streaming`, `progress` | Shared streaming and progress helpers |
+| `utils/` | `progress` | Shared runtime progress helper |
 
 ## What deepagents Provides (DO NOT reimplement)
 
@@ -144,7 +144,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
   serves events over Unix domain socket (`~/.soothe/soothe.sock`).
 - **Textual TUI**: `SootheApp` in `tui_app.py` connects to daemon, provides always-on
   two-column layout with ChatInput, ConversationPanel, PlanPanel, ActivityPanel.
-- **Legacy TUI**: `tui.py` provides Rich Live-based fallback when Textual unavailable.
+- **Shared TUI helpers**: `tui_shared.py` provides shared activity/plan/subagent rendering utilities for the Textual app and commands.
 - **Headless**: `_run_headless` renders `soothe.*` events as progress, supports `--format jsonl`.
 - Slash commands and subagent routing in `commands.py`.
 - Session logging (JSONL) and input history in `session.py`.
@@ -180,6 +180,20 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
 | [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
 | [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
+| [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility Hard-Cut |
+| [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
+
+## Interaction Rules
+
+- **Plan mode confirmation**: In plan mode, ALWAYS ask for the user's confirmation when
+  there are alternative solutions or design trade-offs before proceeding.
+
+## Third-party Reference Code
+
+The `thirdparty/` directory contains source code of upstream dependencies
+(deepagents, langchain, langgraph, browser-use, claude-agent-sdk, etc.)
+for **reference only**. DO NOT copy code from or import modules in `thirdparty/`.
+These are solely to help understand upstream APIs and behaviour.
 
 ### Configuration Reference
 

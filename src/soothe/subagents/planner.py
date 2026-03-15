@@ -1,8 +1,7 @@
-"""Planner subagent -- migrated from noesium PlanAgent.
+"""Planner subagent -- structured planning specialist.
 
-Provides structured planning capabilities (context evaluation, dependency
-mapping, resource exploration, structured plan generation) that deepagents'
-`write_todos` does not cover.
+Provides structured planning capabilities: context evaluation, dependency
+mapping, resource exploration, and structured plan generation.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 
 PLANNER_SYSTEM_PROMPT = """\
-You are an expert planning agent capable of creating detailed, actionable plans for any domain.
+You are an expert planning specialist capable of creating detailed, actionable plans for any domain.
 
 ## Responsibilities
 
@@ -75,9 +74,9 @@ End with a summary of total effort, risks, and prerequisites.
 """
 
 PLANNER_DESCRIPTION = (
-    "Expert planning agent for complex tasks. Analyses context, explores resources, "
-    "identifies dependencies, and produces structured plans with verification criteria. "
-    "Use for tasks that need upfront planning before implementation."
+    "Expert planning specialist for complex tasks. Analyses context, explores "
+    "resources, identifies dependencies, and produces structured plans with "
+    "verification criteria. Use for tasks that need upfront planning."
 )
 
 

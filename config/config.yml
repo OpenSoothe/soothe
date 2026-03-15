@@ -57,17 +57,20 @@ router:
 # =============================================================================
 
 embedding_dims: 1536
-# system_prompt: "You are a helpful assistant."
-# workspace_dir: "."
+# assistant_name: Soothe
+# system_prompt: "Custom system prompt override."
+workspace_dir: "."
 debug: false
 log_level: INFO
 # log_file: ~/.soothe/logs/soothe.log
 activity_max_lines: 300
+# Progress verbosity: minimal | normal | detailed | debug
+progress_verbosity: normal
 
 # =============================================================================
 # Subagents
 # =============================================================================
-# Set enabled: false to disable. Can override model per subagent.
+# All subagents are enabled by default. Set enabled: false to disable.
 
 subagents:
   research:
@@ -78,17 +81,17 @@ subagents:
   scout:
     enabled: true
   browser:
-    enabled: false
+    enabled: true
     # config:
     #   disable_extensions: true
     #   disable_cloud: true
     #   disable_telemetry: true
   claude:
-    enabled: false
+    enabled: true
     # model: "anthropic:claude-sonnet-4-20250514"
 
   skillify:
-    enabled: false
+    enabled: true
     # config:
     #   warehouse_paths: []
     #   index_interval_seconds: 300
@@ -96,7 +99,7 @@ subagents:
     #   retrieval_top_k: 10
 
   weaver:
-    enabled: false
+    enabled: true
     # config:
     #   generated_agents_dir: ~/.soothe/generated_agents
     #   reuse_threshold: 0.85
@@ -117,7 +120,7 @@ subagents:
 # Enable tool groups. Some require API keys (see config/env.example).
 
 tools: []
-  # Custom: serper, jina, image, audio, video, tabular
+  # Custom: serper, wizsearch, jina, image, audio, video, tabular
   # LangChain: tavily, duckduckgo, arxiv, wikipedia, github, python_repl
 
 # =============================================================================
@@ -150,7 +153,8 @@ memory_backend: keyword
 # memory_persist_path: ~/.soothe/memory
 # memory_persist_backend: json
 
-planner_routing: none
+# Planner routing: auto | always_direct | always_planner | always_claude
+planner_routing: auto
 policy_profile: standard
 
 durability_backend: in_memory

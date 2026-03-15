@@ -1,9 +1,7 @@
-"""Research subagent -- migrated from noesium TacitusAgent.
+"""Research subagent -- iterative web research specialist.
 
 Implements an iterative research loop:
   query generation -> web search -> reflection -> synthesis with citations.
-
-Uses a custom LangGraph StateGraph exposed as a CompiledSubAgent.
 """
 
 from __future__ import annotations
@@ -335,29 +333,36 @@ def _build_research_graph(
 # ---------------------------------------------------------------------------
 
 RESEARCH_DESCRIPTION = (
-    "Research agent for deep, iterative web research. Generates search queries, "
+    "Deep research specialist for iterative web research. Generates search queries, "
     "performs multi-engine web search, reflects on knowledge gaps, and synthesises "
     "a comprehensive answer with citations. Use for questions requiring thorough "
     "research across multiple sources."
 )
 
 
+def _create_research_search_tool() -> Any:
+    """Create the preferred search tool for the research workflow."""
+    from soothe.tools.wizsearch import WizsearchSearchTool
+
+    return WizsearchSearchTool(
+        default_engines=["tavily"],
+        default_max_results_per_engine=5,
+    )
+
+
 def create_research_subagent(
     model: str | BaseChatModel | None = None,
     max_loops: int = 2,
-    cwd: str | None = None,
     **kwargs: object,
 ) -> CompiledSubAgent:
     """Create a Research subagent (CompiledSubAgent with LangGraph workflow).
 
-    The search tool defaults to `TavilySearch` if available, otherwise
-    falls back to `DuckDuckGoSearchRun`.
+    The search tool defaults to Soothe's `wizsearch_search` wrapper.
+    If unavailable, it falls back to `DuckDuckGoSearchRun`.
 
     Args:
         model: LLM model string or instance.
         max_loops: Maximum research reflection loops.
-        cwd: Workspace directory for runtime consistency across subagents.
-            Research does not perform local filesystem operations directly.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:
@@ -384,16 +389,14 @@ def create_research_subagent(
         resolved_model = model
 
     try:
-        from langchain_tavily import TavilySearch
-
-        search_tool = TavilySearch(max_results=5)
+        search_tool = _create_research_search_tool()
     except ImportError:
         try:
             from langchain_community.tools import DuckDuckGoSearchRun
 
             search_tool = DuckDuckGoSearchRun()
         except ImportError:
-            msg = "Research subagent requires a search tool. Install langchain-tavily or duckduckgo-search."
+            msg = "Research subagent requires a search tool. Install soothe[wizsearch] or duckduckgo-search."
             raise ImportError(msg) from None
 
     runnable = _build_research_graph(resolved_model, search_tool, max_loops=max_loops)

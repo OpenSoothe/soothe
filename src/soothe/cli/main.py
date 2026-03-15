@@ -2,11 +2,12 @@
 
 import json
 import logging
+import re
 import shutil
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 
@@ -47,6 +48,52 @@ def setup_logging(config: SootheConfig | None = None) -> None:
 
 
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+_TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
+
+
+def _display_subagent_name(name: str) -> str:
+    """Return a friendly display name for a subagent id."""
+    from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES
+
+    return SUBAGENT_DISPLAY_NAMES.get(name.lower(), name.replace("_", " ").title())
+
+
+def _update_name_map_from_tool_calls(message_obj: object, name_map: dict[str, str]) -> None:
+    """Update tool-call-id -> subagent display name mapping from AIMessage."""
+    tool_calls = getattr(message_obj, "tool_calls", None) or []
+    for tc in tool_calls:
+        if not isinstance(tc, dict):
+            continue
+        if tc.get("name") != "task":
+            continue
+        call_id = str(tc.get("id", ""))
+        args = tc.get("args", {})
+        raw_name = ""
+        if isinstance(args, dict):
+            raw_name = str(args.get("agent", "") or args.get("name", ""))
+        elif args:
+            match = _TASK_NAME_RE.search(str(args))
+            if match:
+                raw_name = match.group(1)
+        if call_id and raw_name:
+            name_map[call_id] = _display_subagent_name(raw_name)
+
+
+def _resolve_namespace_label(namespace: tuple[object, ...], name_map: dict[str, str]) -> str:
+    """Resolve a namespace tuple to a friendly display label."""
+    if not namespace:
+        return "main"
+    parts: list[str] = []
+    for segment in namespace:
+        seg_str = str(segment)
+        if seg_str in name_map:
+            parts.append(name_map[seg_str])
+        elif seg_str.startswith("tools:"):
+            tool_id = seg_str.split(":", 1)[1] if ":" in seg_str else seg_str
+            parts.append(name_map.get(tool_id, seg_str))
+        else:
+            parts.append(seg_str)
+    return "/".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -168,10 +215,19 @@ def run(
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
+    progress_verbosity: Annotated[
+        Literal["minimal", "normal", "detailed", "debug"] | None,
+        typer.Option(
+            "--progress-verbosity",
+            help="Progress visibility: minimal, normal, detailed, debug.",
+        ),
+    ] = None,
 ) -> None:
     """Run the Soothe agent with a prompt or in interactive TUI mode."""
     try:
         cfg = _load_config(config)
+        if progress_verbosity is not None:
+            cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
         setup_logging(cfg)
 
         if prompt or no_tui:
@@ -194,13 +250,8 @@ def _run_tui(cfg: SootheConfig, *, thread_id: str | None = None) -> None:
 
         run_textual_tui(config=cfg, thread_id=thread_id)
     except ImportError:
-        from soothe.core.runner import SootheRunner
-        from soothe.cli.tui import run_agent_tui
-
-        runner = SootheRunner(cfg)
-        if thread_id:
-            runner.set_current_thread_id(thread_id)
-        run_agent_tui(runner)
+        typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
+        sys.exit(1)
 
 
 def _run_headless(
@@ -213,9 +264,12 @@ def _run_headless(
     """Run a single prompt with streaming output and progress events."""
     import asyncio
 
+    from soothe.cli.progress_verbosity import classify_custom_event, should_show
+    from soothe.cli.session import SessionLogger
     from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
+    session_logger = SessionLogger(thread_id=thread_id or "headless")
 
     _chunk_len = 3
     _msg_pair_len = 2
@@ -223,17 +277,23 @@ def _run_headless(
 
     async def _stream() -> int:
         nonlocal exit_code
-        from langchain_core.messages import AIMessage, AIMessageChunk
+        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         full_response: list[str] = []
         seen_message_ids: set[str] = set()
+        name_map: dict[str, str] = {}
         has_error = False
+        verbosity = cfg.progress_verbosity
+
+        session_logger.log_user_input(prompt)
 
         try:
             async for chunk in runner.astream(prompt, thread_id=thread_id):
                 if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
                     continue
                 namespace, mode, data = chunk
+
+                session_logger.log(namespace, mode, data)
 
                 if output_format == "jsonl":
                     sys.stdout.write(
@@ -243,19 +303,22 @@ def _run_headless(
                     continue
 
                 if mode == "custom" and isinstance(data, dict):
-                    etype = data.get("type", "")
-                    if etype.startswith("soothe."):
-                        _render_progress_event(data)
-                    if etype == "soothe.error":
+                    category = classify_custom_event(namespace, data)
+                    if should_show(category, verbosity):
+                        prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                        _render_progress_event(data, prefix=prefix)
+                    if category == "error":
                         has_error = True
 
-                if mode == "messages" and not namespace:
+                if mode == "messages":
                     if not isinstance(data, tuple) or len(data) != _msg_pair_len:
                         continue
                     msg, metadata = data
+                    is_main = not namespace
                     if metadata and metadata.get("lc_source") == "summarization":
                         continue
                     if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
+                        _update_name_map_from_tool_calls(msg, name_map)
                         msg_id = msg.id or ""
                         if not isinstance(msg, AIMessageChunk):
                             if msg_id in seen_message_ids:
@@ -264,15 +327,38 @@ def _run_headless(
                         elif msg_id:
                             seen_message_ids.add(msg_id)
                         for block in msg.content_blocks:
-                            if isinstance(block, dict) and block.get("type") == "text":
+                            if not isinstance(block, dict):
+                                continue
+                            btype = block.get("type")
+                            if btype == "text":
                                 text = block.get("text", "")
-                                if text:
+                                if is_main and text and should_show("assistant_text", verbosity):
                                     sys.stdout.write(text)
                                     sys.stdout.flush()
                                     full_response.append(text)
+                            elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
+                                name = block.get("name", "")
+                                if name:
+                                    prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                                    if prefix:
+                                        sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
+                                    else:
+                                        sys.stderr.write(f"[tool] Calling: {name}\n")
+                                    sys.stderr.flush()
+                    elif isinstance(msg, ToolMessage) and should_show("tool_activity", verbosity):
+                        tool_name = getattr(msg, "name", "tool")
+                        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                        brief = content.replace("\n", " ")[:120]
+                        prefix = _resolve_namespace_label(namespace, name_map) if namespace else None
+                        if prefix:
+                            sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
+                        else:
+                            sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
+                        sys.stderr.flush()
             if full_response:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
+                session_logger.log_assistant_response("".join(full_response))
             return 1 if has_error else 0
         finally:
             await runner.cleanup()
@@ -364,6 +450,7 @@ def config(
             general_table.add_row("Context Backend", cfg.context_backend.title())
             general_table.add_row("Memory Backend", cfg.memory_backend.title())
             general_table.add_row("Policy Profile", cfg.policy_profile)
+            general_table.add_row("Progress Verbosity", cfg.progress_verbosity)
             general_table.add_row("Vector Store Provider", cfg.vector_store_provider.title())
 
             typer.echo(Panel(providers_table, border_style="blue"))
@@ -378,10 +465,17 @@ def config(
         sys.exit(1)
 
 
-def _render_progress_event(data: dict) -> None:
+def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
     """Render a soothe.* event as a structured progress line to stderr."""
     etype = data.get("type", "")
-    tag = etype.replace("soothe.", "").split(".")[0] if "." in etype else "soothe"
+    if etype.startswith("soothe."):
+        tag = etype.replace("soothe.", "").split(".")[0] if "." in etype else "soothe"
+    elif "." in etype:
+        tag = etype.split(".")[0]
+    elif etype:
+        tag = etype.split("_")[0]
+    else:
+        tag = "custom"
     parts: list[str] = []
 
     if etype == "soothe.context.projected":
@@ -392,7 +486,17 @@ def _render_progress_event(data: dict) -> None:
         steps = data.get("steps", [])
         parts = [f"{len(steps)} steps created"]
     elif etype == "soothe.policy.checked":
-        parts = [data.get("verdict", "?")]
+        verdict = data.get("verdict", "?")
+        profile = data.get("profile")
+        parts = [verdict]
+        if profile:
+            parts.append(f"(profile={profile})")
+    elif etype == "soothe.policy.denied":
+        reason = data.get("reason", "denied")
+        profile = data.get("profile")
+        parts = [reason]
+        if profile:
+            parts.append(f"(profile={profile})")
     elif etype == "soothe.session.started" or etype == "soothe.session.ended":
         parts = [f"thread={data.get('thread_id', '?')}"]
     elif etype == "soothe.error":
@@ -406,7 +510,10 @@ def _render_progress_event(data: dict) -> None:
                 break
 
     detail = " ".join(parts) if parts else etype
-    sys.stderr.write(f"[{tag}] {detail}\n")
+    if prefix:
+        sys.stderr.write(f"[{prefix}] [{tag}] {detail}\n")
+    else:
+        sys.stderr.write(f"[{tag}] {detail}\n")
     sys.stderr.flush()
 
 
@@ -421,6 +528,13 @@ def attach(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    progress_verbosity: Annotated[
+        Literal["minimal", "normal", "detailed", "debug"] | None,
+        typer.Option(
+            "--progress-verbosity",
+            help="Progress visibility: minimal, normal, detailed, debug.",
+        ),
+    ] = None,
 ) -> None:
     """Attach the TUI to an already-running Soothe daemon."""
     from soothe.cli.daemon import SootheDaemon
@@ -430,6 +544,8 @@ def attach(
         sys.exit(1)
 
     cfg = _load_config(config)
+    if progress_verbosity is not None:
+        cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
     try:
         from soothe.cli.tui_app import run_textual_tui
 

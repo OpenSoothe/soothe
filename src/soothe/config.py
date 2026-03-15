@@ -15,6 +15,30 @@ from pydantic_settings import BaseSettings
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
 SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
+
+_DEFAULT_SYSTEM_PROMPT = """\
+You are {assistant_name}, a proactive AI assistant designed for continuous, \
+around-the-clock operation.
+
+You excel at long-running, complex problem-solving -- multi-step projects, \
+deep research, large-scale code changes, and tasks that require sustained \
+attention across many iterations. You break down ambitious goals into \
+manageable steps, track progress, and see work through to completion.
+
+You help users by researching information, exploring codebases, automating \
+browsers, generating specialist agents, and coordinating multiple capabilities \
+as needed. You take initiative -- anticipating what users need, suggesting \
+next steps, and following through without requiring constant direction.
+
+Guidelines:
+- Be direct and concise. Lead with answers, not preambles.
+- For multi-step tasks, outline your approach briefly, then execute.
+- Use your specialist capabilities proactively when they produce better results.
+- If you encounter an obstacle, explain what happened and suggest alternatives.
+- Never reference your internal architecture, frameworks, or technical stack.
+- Maintain context across the conversation and build on prior results.
+- For complex tasks, create a structured plan before diving into implementation.\
+"""
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
@@ -196,20 +220,21 @@ class SootheConfig(BaseSettings):
 
     # --- Agent behaviour ---
 
-    system_prompt: str | None = (
-        "You are Soothe, a helpful AI assistant powered by the Soothe multi-agent framework. You have access to various tools and subagents to help users with complex tasks. Be concise, helpful, and honest in your responses."
-    )
-    """System prompt that identifies you as Soothe agent. Prepended before base agent capabilities."""
+    assistant_name: str = "Soothe"
+    """Display name for the assistant identity in system prompts."""
+
+    system_prompt: str | None = None
+    """System prompt override. When ``None``, a default prompt is generated using ``assistant_name``."""
 
     subagents: dict[str, SubagentConfig] = Field(
         default_factory=lambda: {
             "research": SubagentConfig(),
             "planner": SubagentConfig(),
             "scout": SubagentConfig(),
-            "browser": SubagentConfig(enabled=False),
-            "claude": SubagentConfig(enabled=False),
-            "skillify": SubagentConfig(enabled=False),
-            "weaver": SubagentConfig(enabled=False),
+            "browser": SubagentConfig(),
+            "claude": SubagentConfig(),
+            "skillify": SubagentConfig(),
+            "weaver": SubagentConfig(),
         }
     )
     """Subagent name to config mapping. Set ``enabled: false`` to disable."""
@@ -226,8 +251,8 @@ class SootheConfig(BaseSettings):
     memory: list[str] = Field(default_factory=list)
     """AGENTS.md file paths passed to deepagents MemoryMiddleware."""
 
-    workspace_dir: str | None = None
-    """Root directory for filesystem operations. Defaults to ``SOOTHE_HOME``."""
+    workspace_dir: str = "."
+    """Root directory for filesystem operations. Defaults to current directory."""
 
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""
@@ -244,6 +269,15 @@ class SootheConfig(BaseSettings):
 
     activity_max_lines: int = 300
     """Maximum number of activity lines retained in the TUI Activity Panel."""
+
+    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
+    """Progress visibility level for TUI and headless execution.
+
+    - ``minimal``: assistant text and critical errors only.
+    - ``normal``: protocol progress events (default).
+    - ``detailed``: adds subagent custom events and tool activity.
+    - ``debug``: shows all available progress events.
+    """
 
     # --- Skillify and Weaver config (RFC-0004, RFC-0005) ---
 
@@ -276,8 +310,10 @@ class SootheConfig(BaseSettings):
     memory_persist_backend: Literal["json", "rocksdb"] = "json"
     """Persistence backend for memory data."""
 
-    planner_routing: Literal["auto", "always_direct", "always_subagent", "none"] = "none"
-    """PlannerProtocol routing strategy."""
+    planner_routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
+    """PlannerProtocol routing strategy: ``auto`` (hybrid complexity router),
+    ``always_direct`` (LLM structured output), ``always_planner`` (planner subagent),
+    ``always_claude`` (Claude CLI planner)."""
 
     policy_profile: str = "standard"
     """Active policy profile name."""
@@ -417,6 +453,19 @@ class SootheConfig(BaseSettings):
         kwargs.pop("use_responses_api", None)
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
         return init_embeddings(init_str, **kwargs)
+
+    def resolve_system_prompt(self) -> str:
+        """Return the effective system prompt.
+
+        Uses ``system_prompt`` if set, otherwise generates a default prompt
+        using ``assistant_name``.
+
+        Returns:
+            The system prompt string.
+        """
+        if self.system_prompt:
+            return self.system_prompt
+        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self.assistant_name)
 
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.
