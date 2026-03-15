@@ -1,127 +1,102 @@
 # =============================================================================
-# Soothe Configuration Example
+# Soothe Configuration
 # =============================================================================
-# Usage: soothe run --config config/config.yml
-#
-# This file mirrors every field in SootheConfig. All values shown are defaults
-# unless noted otherwise. Remove or comment out sections you don't need.
+# Use: soothe run --config config/config.yml
+# All values are defaults unless noted. Remove sections you don't need.
 
 # =============================================================================
 # Model Providers
 # =============================================================================
-# Define LLM API providers. The api_key field supports ${ENV_VAR} syntax
-# for referencing environment variables without hardcoding secrets.
-# At minimum, configure one provider with its API key.
+# Define LLM providers. api_key supports ${ENV_VAR} syntax for secrets.
+# Set at least one provider with its API key.
 
 providers:
   - name: openai
     provider_type: openai
     api_key: "${OPENAI_API_KEY}"
-    # api_base_url: https://api.openai.com/v1    # uncomment for custom endpoint
+    # api_base_url: https://api.openai.com/v1
     models:
       - gpt-4o
       - gpt-4o-mini
       - o3-mini
 
-  # Example: OpenAI-compatible provider (e.g. DashScope, OpenRouter, vLLM)
+  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
   # - name: dashscope
   #   provider_type: openai
   #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   #   api_key: "${DASHSCOPE_API_KEY}"
-  #   models:
-  #     - qwen-max
+  #   models: [qwen-max]
 
-  # Example: Ollama (local models, requires: pip install soothe[ollama])
+  # Ollama (local models):
   # - name: ollama
   #   provider_type: ollama
   #   api_base_url: http://localhost:11434
-  #   models:
-  #     - llama3.2
-  #     - qwen3:8b
-  #     - deepseek-r1:14b
-  #     - nomic-embed-text:latest
+  #   models: [llama3.2, qwen3:8b, deepseek-r1:14b, nomic-embed-text:latest]
 
-  # Example: Anthropic provider
+  # Anthropic:
   # - name: anthropic
   #   provider_type: anthropic
   #   api_key: "${ANTHROPIC_API_KEY}"
-  #   models:
-  #     - claude-sonnet-4-20250514
+  #   models: [claude-sonnet-4-20250514]
 
 # =============================================================================
 # Model Router
 # =============================================================================
-# Maps purpose-based roles to "provider_name:model_name" strings.
-# Unset roles fall back to "default".
+# Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
   default: "openai:gpt-4o-mini"
-  # think: "openai:o3-mini"                      # stronger model for planning
-  # fast: "openai:gpt-4o-mini"                   # cheap model for classification
-  # image: "openai:gpt-4o"                       # vision-capable model
-  # embedding: "openai:text-embedding-3-small"    # embedding model
-  # web_search: "openai:gpt-4o-mini"             # model for web search tasks
+  # think: "openai:o3-mini"
+  # fast: "openai:gpt-4o-mini"
+  # image: "openai:gpt-4o"
+  # embedding: "openai:text-embedding-3-small"
+  # web_search: "openai:gpt-4o-mini"
 
 # =============================================================================
-# Embedding
+# Agent Behavior
 # =============================================================================
 
-embedding_dims: 1536                             # must match the embedding model output (e.g., 1536 for OpenAI, 768 for Ollama nomic-embed-text)
-
-# =============================================================================
-# Agent Behaviour
-# =============================================================================
-
-# system_prompt: "You are a helpful assistant."  # prepended to the agent prompt
-# workspace_dir: "."                             # root for filesystem operations
+embedding_dims: 1536
+# system_prompt: "You are a helpful assistant."
+# workspace_dir: "."
 debug: false
-
-# =============================================================================
-# Logging
-# =============================================================================
-
-log_level: INFO                                  # DEBUG, INFO, WARNING, ERROR
-# log_file: ~/.soothe/logs/soothe.log            # log file (default: SOOTHE_HOME/logs/soothe.log)
-
-# =============================================================================
-# TUI Settings
-# =============================================================================
-
-activity_max_lines: 300                          # max activity history lines in TUI
+log_level: INFO
+# log_file: ~/.soothe/logs/soothe.log
+activity_max_lines: 300
 
 # =============================================================================
 # Subagents
 # =============================================================================
-# Set enabled: false to disable a subagent. Each can override the model.
+# Set enabled: false to disable. Can override model per subagent.
 
 subagents:
   research:
     enabled: true
-    # model: "openai:gpt-4o-mini"                # override default model
+    # model: "openai:gpt-4o-mini"
   planner:
     enabled: true
   scout:
     enabled: true
   browser:
-    enabled: false                               # requires: pip install soothe[browser]
+    enabled: false
     # config:
     #   disable_extensions: true
     #   disable_cloud: true
     #   disable_telemetry: true
   claude:
-    enabled: false                               # requires: pip install soothe[claude]
+    enabled: false
     # model: "anthropic:claude-sonnet-4-20250514"
 
-  # --- Skillify (RFC-0004) ---
+  # Skillify (RFC-0004):
   skillify:
     enabled: false
     # config:
-    #   warehouse_paths: []                        # paths to scan for SKILL.md files
-    #   index_interval_seconds: 300                # background indexing interval
-    #   index_collection: soothe_skillify          # vector store collection name
-    #   retrieval_top_k: 10                        # max results per query
+    #   warehouse_paths: []
+    #   index_interval_seconds: 300
+    #   index_collection: soothe_skillify
+    #   retrieval_top_k: 10
 
-  # --- Weaver (RFC-0005) ---
+  # Weaver (RFC-0005):
   weaver:
     enabled: false
     # config:
@@ -132,106 +107,72 @@ subagents:
     #   allowed_tool_groups: []
     #   allowed_mcp_servers: []
 
-  # Example: remote subagent via A2A / ACP / LangGraph
+  # Remote subagent:
   # remote_analyst:
   #   enabled: true
-  #   transport: a2a                              # local | acp | a2a | langgraph
+  #   transport: a2a
   #   url: "http://analyst-agent:8000"
 
 # =============================================================================
 # Tools
 # =============================================================================
-# Tool group names to enable. Each may require extra dependencies or API keys.
-#
-# --- Custom tools (ported from noesium) ---
-# serper, jina, image, audio, video, tabular
-#
-# --- Langchain ecosystem tools ---
-# tavily, duckduckgo, arxiv, wikipedia, github, python_repl
+# Enable tool groups. Some require API keys (see config/env.example).
 
 tools: []
-  # --- Custom tools ---
-  # - serper                                     # Multi-type search (requires: SERPER_API_KEY)
-  # - jina                                       # Web content extraction (requires: JINA_API_KEY)
-  # - image                                      # Vision-model image analysis
-  # - audio                                      # Audio transcription (Whisper)
-  # - video                                      # Video analysis
-  # - tabular                                    # Tabular data inspection
-  # --- Langchain ecosystem tools ---
-  # - tavily                                     # Web search (requires: TAVILY_API_KEY)
-  # - duckduckgo                                 # Web search (free, no API key)
-  # - arxiv                                      # ArXiv paper search
-  # - wikipedia                                  # Wikipedia lookup
-  # - github                                     # GitHub operations (requires: GITHUB_TOKEN)
-  # - python_repl                                # Python code execution (CAUTION: runs arbitrary code)
+  # Custom: serper, jina, image, audio, video, tabular
+  # LangChain: tavily, duckduckgo, arxiv, wikipedia, github, python_repl
 
 # =============================================================================
 # MCP Servers
 # =============================================================================
-# Claude Desktop .mcp.json compatible format.
 
 mcp_servers: []
-  # Stdio example:
   # - command: npx
   #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
   #   transport: stdio
-
-  # HTTP/SSE example:
   # - url: http://localhost:3000/mcp
   #   transport: sse
 
 # =============================================================================
-# Skills and Memory (deepagents middleware)
+# Skills & Memory
 # =============================================================================
 
-skills: []                                       # SKILL.md file paths
-memory: []                                       # AGENTS.md file paths
+skills: []
+memory: []
 
 # =============================================================================
-# Protocol Configuration (RFC-0002)
+# Protocols (RFC-0002)
 # =============================================================================
 
-# --- Context Protocol ---
-context_backend: keyword                         # keyword | vector | none
-# context_persist_dir: ~/.soothe/context          # directory for persistence (default: SOOTHE_HOME/context)
-# context_persist_backend: json                   # json | rocksdb
+context_backend: keyword
+# context_persist_dir: ~/.soothe/context
+# context_persist_backend: json
 
-# --- Memory Protocol ---
-memory_backend: keyword                          # keyword | vector | none
-# memory_persist_path: ~/.soothe/memory            # directory for persistence (default: SOOTHE_HOME/memory)
-# memory_persist_backend: json                    # json | rocksdb
+memory_backend: keyword
+# memory_persist_path: ~/.soothe/memory
+# memory_persist_backend: json
 
-# --- Planner Protocol ---
-planner_routing: none                            # auto | always_direct | always_subagent | none
+planner_routing: none
+policy_profile: standard
 
-# --- Policy Protocol ---
-policy_profile: standard                         # named policy profile
-
-# --- Durability / Checkpoint ---
-durability_backend: in_memory                   # in_memory | langgraph
-checkpointer_backend: memory                    # memory | sqlite | postgres
+durability_backend: in_memory
+checkpointer_backend: memory
 # checkpointer_sqlite_path: ~/.soothe/checkpoints.sqlite
 # checkpointer_postgres_dsn: postgresql://user:pass@localhost:5432/soothe
 # durability_metadata_path: ~/.soothe/durability/threads.json
 
-# --- Concurrency ---
 concurrency:
   max_parallel_subagents: 1
   max_parallel_tools: 3
   max_parallel_steps: 1
-  step_parallelism: dependency                   # sequential | dependency | max
+  step_parallelism: dependency
 
 # =============================================================================
-# Vector Store (for vector-backed context/memory)
+# Vector Store
 # =============================================================================
 
-vector_store_provider: none                      # pgvector | weaviate | none
+vector_store_provider: none
 vector_store_collection: soothe_default
-
-# PGVector example:
 # vector_store_config:
 #   dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
-
-# Weaviate example:
-# vector_store_config:
 #   url: "http://localhost:8080"
