@@ -22,6 +22,8 @@ from soothe.config import SootheConfig
 from soothe.core.resolver import (
     SUBAGENT_FACTORIES,
     resolve_context,
+    resolve_goal_engine,
+    resolve_goal_tools,
     resolve_memory,
     resolve_planner,
     resolve_policy,
@@ -105,8 +107,11 @@ def create_soothe_agent(
     if resolved_policy:
         logger.info("Policy: %s", type(resolved_policy).__name__)
 
+    goal_engine = resolve_goal_engine(config)
+
     config_tools = resolve_tools(config.tools)
-    all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools]
+    goal_tools = resolve_goal_tools(goal_engine)
+    all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools, *goal_tools]
     if tools:
         all_tools.extend(tools)
 
@@ -165,6 +170,7 @@ def create_soothe_agent(
     agent.soothe_memory = resolved_memory  # type: ignore[attr-defined]
     agent.soothe_planner = resolved_planner  # type: ignore[attr-defined]
     agent.soothe_policy = resolved_policy  # type: ignore[attr-defined]
+    agent.soothe_goal_engine = goal_engine  # type: ignore[attr-defined]
     agent.soothe_config = config  # type: ignore[attr-defined]
     agent.soothe_subagents = all_subagents  # type: ignore[attr-defined]
 

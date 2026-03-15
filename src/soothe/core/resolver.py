@@ -12,6 +12,7 @@ from langchain_core.tools import BaseTool
 from langgraph.types import Checkpointer
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.core.goal_engine import GoalEngine
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.durability import DurabilityProtocol
 from soothe.protocols.memory import MemoryProtocol
@@ -111,8 +112,40 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 
         return [PythonREPLTool()]
 
+    if name == "goals":
+        # GoalEngine tools are resolved separately via resolve_goal_tools()
+        return []
+
     logger.warning("Unknown tool group '%s', skipping.", name)
     return []
+
+
+def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
+    """Create a GoalEngine instance from config.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        A configured GoalEngine.
+    """
+    from soothe.core.goal_engine import GoalEngine
+
+    return GoalEngine(max_retries=config.autonomous_max_retries)
+
+
+def resolve_goal_tools(goal_engine: GoalEngine) -> list[BaseTool]:
+    """Create goal management tools bound to a GoalEngine.
+
+    Args:
+        goal_engine: The engine to bind.
+
+    Returns:
+        List of goal management BaseTool instances.
+    """
+    from soothe.tools.goals import create_goal_tools
+
+    return create_goal_tools(goal_engine)
 
 
 def resolve_subagents(

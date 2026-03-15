@@ -273,6 +273,40 @@ def _handle_protocol_event(
     elif etype == "soothe.memory.stored":
         memory_id = data.get("id", "?")
         _add_activity(state, Text.assemble(("  . ", "dim"), (f"Stored memory: {memory_id}", "cyan")))
+    elif etype == "soothe.iteration.started":
+        iteration = data.get("iteration", "?")
+        goal_desc = _truncate(str(data.get("goal_description", "")), 50)
+        _add_activity(
+            state,
+            Text.assemble(("  >> ", "bold yellow"), (f"Iteration {iteration}: {goal_desc}", "bold yellow")),
+        )
+    elif etype == "soothe.iteration.completed":
+        iteration = data.get("iteration", "?")
+        outcome = data.get("outcome", "?")
+        duration = data.get("duration_ms", 0)
+        style = "green" if outcome == "goal_complete" else "yellow"
+        _add_activity(
+            state,
+            Text.assemble(("  << ", f"bold {style}"), (f"Iteration {iteration}: {outcome} ({duration}ms)", style)),
+        )
+    elif etype == "soothe.goal.created":
+        desc = _truncate(str(data.get("description", "")), 50)
+        priority = data.get("priority", "?")
+        _add_activity(
+            state,
+            Text.assemble(("  + ", "bold cyan"), (f"Goal: {desc} (priority={priority})", "cyan")),
+        )
+    elif etype == "soothe.goal.completed":
+        goal_id = data.get("goal_id", "?")
+        _add_activity(state, Text.assemble(("  + ", "bold green"), (f"Goal {goal_id} completed", "green")))
+    elif etype == "soothe.goal.failed":
+        goal_id = data.get("goal_id", "?")
+        error = _truncate(str(data.get("error", "")), 50)
+        retry = data.get("retry_count", 0)
+        _add_activity(
+            state,
+            Text.assemble(("  ! ", "bold red"), (f"Goal {goal_id} failed (retry {retry}): {error}", "red")),
+        )
     elif etype == "soothe.error":
         error = data.get("error", "unknown")
         _add_activity(state, Text.assemble(("  ! ", "bold red"), (error, "red")))

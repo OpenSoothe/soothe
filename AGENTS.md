@@ -93,7 +93,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 
 | Package | Contents | Purpose |
 |---------|----------|---------|
-| `core/` | `agent`, `runner`, `resolver`, `events` | Framework logic (factory, orchestration, resolution) |
+| `core/` | `agent`, `runner`, `resolver`, `events`, `goal_engine` | Framework logic (factory, orchestration, resolution, goal lifecycle) |
 | `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
 | `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
 | `backends/memory/` | `StoreBackedMemory`, `VectorMemory` | MemoryProtocol implementations |
@@ -104,7 +104,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore` | Persistence backends for context/memory |
 | `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
-| `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular` | langchain BaseTool groups |
+| `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular`, `goals` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
 | `cli/` | `main`, `tui_shared`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |
 | `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
@@ -161,6 +161,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
 | [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
 | [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
+| [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
 
 ### Implementation Guides
 
@@ -182,6 +183,8 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
 | [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility Hard-Cut |
 | [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
+| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
+| [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
 | [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
 
 ## Interaction Rules

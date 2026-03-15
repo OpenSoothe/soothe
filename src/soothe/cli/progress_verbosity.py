@@ -26,6 +26,13 @@ _SUBAGENT_PREFIXES = frozenset(
     }
 )
 
+_PROTOCOL_PREFIXES = frozenset(
+    {
+        "soothe.iteration.",
+        "soothe.goal.",
+    }
+)
+
 
 def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> ProgressCategory:
     """Classify a custom event into a verbosity category."""

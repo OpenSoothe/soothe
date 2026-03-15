@@ -1,8 +1,12 @@
-"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003).
+"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007).
 
 Wraps `create_soothe_agent()` with protocol pre/post-processing and
 yields the deepagents-canonical ``(namespace, mode, data)`` stream
 extended with ``soothe.*`` custom events for protocol observability.
+
+RFC-0007 adds autonomous iteration: when ``autonomous=True``, the runner
+loops reflect -> revise -> re-execute until the goal is complete or
+max_iterations is reached.
 """
 
 from __future__ import annotations
@@ -10,12 +14,15 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from time import perf_counter
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
+from pydantic import BaseModel
 
 from soothe.config import SootheConfig
+from soothe.core.goal_engine import GoalEngine
 from soothe.protocols.context import ContextEntry, ContextProjection, ContextProtocol
 from soothe.protocols.planner import Plan, PlanContext, PlannerProtocol, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext, PolicyProtocol
@@ -35,6 +42,7 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 _MAX_HITL_ITERATIONS = 50
+_BACKOFF_BASE_SECONDS = 2.0
 
 
 def _custom(data: dict[str, Any]) -> StreamChunk:
@@ -50,6 +58,26 @@ def _generate_thread_id() -> str:
 # ---------------------------------------------------------------------------
 # Runner state
 # ---------------------------------------------------------------------------
+
+
+class IterationRecord(BaseModel):
+    """Structured record of a single autonomous iteration (RFC-0007).
+
+    Args:
+        iteration: Zero-based iteration index.
+        goal_id: Goal being worked on.
+        plan_summary: Brief description of the plan at this iteration.
+        actions_summary: Truncated agent response text.
+        reflection_assessment: Planner's reflection assessment.
+        outcome: Whether the iteration continues, completes, or fails.
+    """
+
+    iteration: int
+    goal_id: str
+    plan_summary: str
+    actions_summary: str
+    reflection_assessment: str
+    outcome: Literal["continue", "goal_complete", "failed"]
 
 
 @dataclass
@@ -95,6 +123,7 @@ class SootheRunner:
         self._memory: MemoryProtocol | None = getattr(self._agent, "soothe_memory", None)
         self._planner: PlannerProtocol | None = getattr(self._agent, "soothe_planner", None)
         self._policy: PolicyProtocol | None = getattr(self._agent, "soothe_policy", None)
+        self._goal_engine: GoalEngine | None = getattr(self._agent, "soothe_goal_engine", None)
         self._durability = resolve_durability(self._config)
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
@@ -209,6 +238,8 @@ class SootheRunner:
         user_input: str,
         *,
         thread_id: str | None = None,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Stream agent execution with protocol orchestration.
 
@@ -216,21 +247,320 @@ class SootheRunner:
         format.  Protocol events are emitted as ``custom`` events with
         ``soothe.*`` type prefix.
 
+        When ``autonomous=True`` (RFC-0007), the runner loops: reflect ->
+        revise -> re-execute until the goal is complete or ``max_iterations``
+        is reached.
+
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
+            autonomous: Enable autonomous iteration loop.
+            max_iterations: Override ``autonomous_max_iterations`` from config.
         """
+        if autonomous and self._goal_engine:
+            async for chunk in self._run_autonomous(
+                user_input,
+                thread_id=thread_id,
+                max_iterations=max_iterations or self._config.autonomous_max_iterations,
+            ):
+                yield chunk
+            return
+
+        # Default single-pass execution (unchanged)
+        async for chunk in self._run_single_pass(user_input, thread_id=thread_id):
+            yield chunk
+
+    async def _run_single_pass(
+        self,
+        user_input: str,
+        *,
+        thread_id: str | None = None,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Original single-pass execution (pre-stream -> stream -> post-stream)."""
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
-        # ---- Phase 1: pre-stream protocol orchestration -------------------
-
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
-        # ---- Phase 2: LangGraph stream with HITL loop --------------------
+        async for chunk in self._stream_phase(user_input, state):
+            yield chunk
 
+        async for chunk in self._post_stream(user_input, state):
+            yield chunk
+
+    async def _run_autonomous(
+        self,
+        user_input: str,
+        *,
+        thread_id: str | None = None,
+        max_iterations: int = 10,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Autonomous iteration loop (RFC-0007).
+
+        Creates goals, executes plans, reflects, revises, and iterates
+        until goals are complete or max_iterations is reached.
+        """
+        import asyncio
+
+        assert self._goal_engine is not None  # noqa: S101
+
+        state = RunnerState()
+        state.thread_id = thread_id or self._current_thread_id or ""
+        self._current_thread_id = state.thread_id or None
+
+        # Pre-stream: thread management, context restore, policy check
+        async for chunk in self._pre_stream(user_input, state):
+            yield chunk
+
+        # Create initial goal from user input
+        goal = await self._goal_engine.create_goal(user_input, priority=80)
+        yield _custom(
+            {
+                "type": "soothe.goal.created",
+                "goal_id": goal.id,
+                "description": goal.description,
+                "priority": goal.priority,
+            }
+        )
+
+        iteration_records: list[IterationRecord] = []
+        total_iterations = 0
+        current_input = user_input
+
+        # Outer goal loop
+        while total_iterations < max_iterations:
+            goal = await self._goal_engine.next_goal()
+            if not goal:
+                logger.info("No more goals to process")
+                break
+
+            yield _custom(
+                {
+                    "type": "soothe.iteration.started",
+                    "iteration": total_iterations,
+                    "goal_id": goal.id,
+                    "goal_description": goal.description,
+                }
+            )
+
+            iter_start = perf_counter()
+            error_occurred = False
+
+            try:
+                # Reset state for this iteration (preserve thread_id)
+                iter_state = RunnerState()
+                iter_state.thread_id = state.thread_id
+
+                # Memory recall + context projection for this iteration
+                if self._memory:
+                    try:
+                        items = await self._memory.recall(current_input, limit=5)
+                        iter_state.recalled_memories = items
+                    except Exception:
+                        logger.debug("Memory recall failed", exc_info=True)
+
+                if self._context:
+                    try:
+                        projection = await self._context.project(current_input, token_budget=4000)
+                        iter_state.context_projection = projection
+                    except Exception:
+                        logger.debug("Context projection failed", exc_info=True)
+
+                # Plan creation (first iteration) or use revised plan
+                if self._planner and not iter_state.plan:
+                    try:
+                        capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
+                        completed = [
+                            StepResult(step_id=r.goal_id, output=r.actions_summary[:200], success=r.outcome != "failed")
+                            for r in iteration_records[-3:]
+                        ]
+                        context = PlanContext(
+                            recent_messages=[current_input],
+                            available_capabilities=capabilities,
+                            completed_steps=completed,
+                        )
+                        plan = await self._planner.create_plan(current_input, context)
+                        iter_state.plan = plan
+                        self._current_plan = plan
+                        yield _custom(
+                            {
+                                "type": "soothe.plan.created",
+                                "goal": plan.goal,
+                                "steps": [
+                                    {"id": s.id, "description": s.description, "status": s.status} for s in plan.steps
+                                ],
+                            }
+                        )
+                    except Exception:
+                        logger.debug("Plan creation failed", exc_info=True)
+
+                # Stream phase
+                async for chunk in self._stream_phase(current_input, iter_state):
+                    yield chunk
+
+                # Post-stream: context ingestion, memory storage
+                response_text = "".join(iter_state.full_response)
+                if self._context and response_text:
+                    try:
+                        await self._context.ingest(
+                            ContextEntry(
+                                source="agent", content=response_text[:2000], tags=["agent_response"], importance=0.7
+                            )
+                        )
+                    except Exception:
+                        logger.debug("Context ingestion failed", exc_info=True)
+
+                if self._memory and response_text and len(response_text) > 50:
+                    try:
+                        from soothe.protocols.memory import MemoryItem
+
+                        await self._memory.remember(
+                            MemoryItem(
+                                content=response_text[:500], tags=["agent_response"], source_thread=state.thread_id
+                            )
+                        )
+                    except Exception:
+                        logger.debug("Memory storage failed", exc_info=True)
+
+                # Reflect
+                reflection = None
+                if self._planner and iter_state.plan and response_text:
+                    try:
+                        step_results = [
+                            StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
+                            for s in iter_state.plan.steps
+                            if s.status in ("completed", "failed")
+                        ]
+                        reflection = await self._planner.reflect(iter_state.plan, step_results)
+                        yield _custom(
+                            {
+                                "type": "soothe.plan.reflected",
+                                "should_revise": reflection.should_revise,
+                                "assessment": reflection.assessment[:200],
+                            }
+                        )
+                    except Exception:
+                        logger.debug("Plan reflection failed", exc_info=True)
+
+                # Store iteration journal
+                plan_summary = ""
+                if iter_state.plan:
+                    plan_summary = f"{iter_state.plan.goal}: " + "; ".join(
+                        s.description for s in iter_state.plan.steps[:5]
+                    )
+
+                should_continue = reflection.should_revise if reflection else False
+                record = IterationRecord(
+                    iteration=total_iterations,
+                    goal_id=goal.id,
+                    plan_summary=plan_summary[:500],
+                    actions_summary=response_text[:500],
+                    reflection_assessment=reflection.assessment[:200] if reflection else "",
+                    outcome="continue" if should_continue else "goal_complete",
+                )
+                iteration_records.append(record)
+                await self._store_iteration_record(record, state.thread_id)
+
+                duration_ms = int((perf_counter() - iter_start) * 1000)
+                yield _custom(
+                    {
+                        "type": "soothe.iteration.completed",
+                        "iteration": total_iterations,
+                        "goal_id": goal.id,
+                        "outcome": record.outcome,
+                        "duration_ms": duration_ms,
+                    }
+                )
+
+                if should_continue:
+                    # Revise plan and synthesize continuation
+                    if self._planner and iter_state.plan and reflection:
+                        try:
+                            revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
+                            self._current_plan = revised
+                            # Carry revised plan into next iteration
+                            state.plan = revised
+                        except Exception:
+                            logger.debug("Plan revision failed", exc_info=True)
+
+                    current_input = await self._synthesize_continuation(
+                        user_input, iteration_records, self._current_plan
+                    )
+                    total_iterations += 1
+                    continue
+
+                # Goal complete
+                await self._goal_engine.complete_goal(goal.id)
+                yield _custom({"type": "soothe.goal.completed", "goal_id": goal.id})
+                total_iterations += 1
+
+                # Check for next goal
+                next_g = await self._goal_engine.next_goal()
+                if next_g:
+                    current_input = next_g.description
+                    continue
+                break
+
+            except Exception as exc:
+                error_occurred = True
+                logger.exception("Error during autonomous iteration %d", total_iterations)
+                yield _custom({"type": "soothe.error", "error": str(exc)})
+
+                # Retry with backoff
+                updated = await self._goal_engine.fail_goal(goal.id, error=str(exc))
+                if updated.status == "pending":
+                    yield _custom(
+                        {
+                            "type": "soothe.goal.failed",
+                            "goal_id": goal.id,
+                            "error": str(exc),
+                            "retry_count": updated.retry_count,
+                        }
+                    )
+                    backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
+                    logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
+                    await asyncio.sleep(backoff)
+                    total_iterations += 1
+                    continue
+
+                yield _custom(
+                    {
+                        "type": "soothe.goal.failed",
+                        "goal_id": goal.id,
+                        "error": str(exc),
+                        "retry_count": updated.retry_count,
+                    }
+                )
+                total_iterations += 1
+
+        # Persist final state
+        try:
+            if self._context and hasattr(self._context, "persist"):
+                await self._context.persist(state.thread_id)
+            await self._durability.save_state(
+                state.thread_id,
+                {
+                    "last_query": user_input,
+                    "iterations": total_iterations,
+                    "goals": self._goal_engine.snapshot() if self._goal_engine else [],
+                },
+            )
+            yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})
+        except Exception:
+            logger.debug("Final state persistence failed", exc_info=True)
+
+        yield _custom({"type": "soothe.session.ended", "thread_id": state.thread_id})
+
+    # -- stream + autonomous helpers ----------------------------------------
+
+    async def _stream_phase(
+        self,
+        user_input: str,
+        state: RunnerState,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Run the LangGraph stream with HITL interrupt loop."""
         enriched_messages = self._build_enriched_input(
             user_input,
             state.context_projection,
@@ -289,10 +619,57 @@ class SootheRunner:
             resume_payload = self._auto_approve(pending_interrupts)
             stream_input = Command(resume=resume_payload)
 
-        # ---- Phase 3: post-stream protocol orchestration ------------------
+    async def _store_iteration_record(self, record: IterationRecord, thread_id: str) -> None:
+        """Persist an iteration record via ContextProtocol (RFC-0007)."""
+        if not self._context:
+            return
+        try:
+            await self._context.ingest(
+                ContextEntry(
+                    source="iteration_journal",
+                    content=record.model_dump_json(),
+                    tags=["iteration_record", f"iteration:{record.iteration}"],
+                    importance=0.9,
+                )
+            )
+        except Exception:
+            logger.debug("Failed to store iteration record", exc_info=True)
 
-        async for chunk in self._post_stream(user_input, state):
-            yield chunk
+    async def _synthesize_continuation(
+        self,
+        original_goal: str,
+        records: list[IterationRecord],
+        plan: Plan | None,
+    ) -> str:
+        """Generate the next iteration's input via a lightweight LLM call (RFC-0007)."""
+        try:
+            model = self._config.create_chat_model("fast")
+        except Exception:
+            try:
+                model = self._config.create_chat_model("default")
+            except Exception:
+                logger.debug("Failed to create model for continuation synthesis")
+                return original_goal
+
+        history = "\n".join(f"- Iteration {r.iteration}: {r.reflection_assessment[:100]}" for r in records[-5:])
+        plan_text = ""
+        if plan:
+            plan_text = f"\nRevised plan: {plan.goal}\nSteps: " + "; ".join(s.description for s in plan.steps[:5])
+
+        prompt = (
+            f"You are managing an autonomous agent. The original goal is:\n{original_goal}\n\n"
+            f"History of iterations:\n{history}\n{plan_text}\n\n"
+            "Generate a concise instruction for the next iteration. "
+            "Focus on what specifically to do next based on what was learned. "
+            "Do not repeat actions already completed."
+        )
+
+        try:
+            response = await model.ainvoke([HumanMessage(content=prompt)])
+            return str(response.content).strip() or original_goal
+        except Exception:
+            logger.debug("Continuation synthesis failed, reusing original goal", exc_info=True)
+            return original_goal
 
     # -- phase helpers ------------------------------------------------------
 

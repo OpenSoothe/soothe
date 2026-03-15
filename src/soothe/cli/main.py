@@ -178,6 +178,14 @@ def run(
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
     ] = False,
+    autonomous: Annotated[
+        bool,
+        typer.Option("--autonomous", "-a", help="Enable autonomous iteration mode."),
+    ] = False,
+    max_iterations: Annotated[
+        int | None,
+        typer.Option("--max-iterations", help="Max iterations for autonomous mode."),
+    ] = None,
     output_format: Annotated[
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
@@ -198,7 +206,14 @@ def run(
         setup_logging(cfg)
 
         if prompt or no_tui:
-            _run_headless(cfg, prompt or "", thread_id=thread, output_format=output_format)
+            _run_headless(
+                cfg,
+                prompt or "",
+                thread_id=thread,
+                output_format=output_format,
+                autonomous=autonomous,
+                max_iterations=max_iterations,
+            )
         else:
             _run_tui(cfg, thread_id=thread)
 
@@ -227,6 +242,8 @@ def _run_headless(
     *,
     thread_id: str | None = None,
     output_format: str = "text",
+    autonomous: bool = False,
+    max_iterations: int | None = None,
 ) -> None:
     """Run a single prompt with streaming output and progress events."""
     import asyncio
@@ -255,8 +272,14 @@ def _run_headless(
 
         session_logger.log_user_input(prompt)
 
+        stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
+        if autonomous:
+            stream_kwargs["autonomous"] = True
+            if max_iterations is not None:
+                stream_kwargs["max_iterations"] = max_iterations
+
         try:
-            async for chunk in runner.astream(prompt, thread_id=thread_id):
+            async for chunk in runner.astream(prompt, **stream_kwargs):
                 if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
                     continue
                 namespace, mode, data = chunk
@@ -467,6 +490,16 @@ def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
             parts.append(f"(profile={profile})")
     elif etype in ("soothe.session.started", "soothe.session.ended"):
         parts = [f"thread={data.get('thread_id', '?')}"]
+    elif etype == "soothe.iteration.started":
+        parts = [f"iteration {data.get('iteration', '?')}: {data.get('goal_description', '')[:60]}"]
+    elif etype == "soothe.iteration.completed":
+        parts = [f"iteration {data.get('iteration', '?')}: {data.get('outcome', '?')} ({data.get('duration_ms', 0)}ms)"]
+    elif etype == "soothe.goal.created":
+        parts = [f"{data.get('description', '')[:60]} (priority={data.get('priority', '?')})"]
+    elif etype == "soothe.goal.completed":
+        parts = [f"goal {data.get('goal_id', '?')} completed"]
+    elif etype == "soothe.goal.failed":
+        parts = [f"goal {data.get('goal_id', '?')} failed (retry {data.get('retry_count', 0)})"]
     elif etype == "soothe.error":
         parts = [data.get("error", "unknown")]
     else:

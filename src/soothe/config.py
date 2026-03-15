@@ -336,6 +336,14 @@ class SootheConfig(BaseSettings):
     durability_metadata_path: str | None = None
     """Metadata/state path for durability backends that persist locally."""
 
+    # --- Autonomous iteration (RFC-0007) ---
+
+    autonomous_max_iterations: int = 10
+    """Maximum iterations per autonomous session before forcing stop."""
+
+    autonomous_max_retries: int = 2
+    """Maximum retries per goal on failure before marking permanently failed."""
+
     # --- Vector store config ---
 
     vector_store_provider: Literal["pgvector", "weaviate", "none"] = "none"
