@@ -347,8 +347,10 @@ def _create_research_search_tool() -> Any:
     from soothe.tools.wizsearch import WizsearchSearchTool
 
     return WizsearchSearchTool(
-        default_engines=["tavily"],
-        default_max_results_per_engine=5,
+        config={
+            "default_engines": ["tavily"],
+            "max_results_per_engine": 5,
+        }
     )
 
 

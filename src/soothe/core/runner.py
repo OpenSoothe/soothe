@@ -424,7 +424,7 @@ class SootheRunner:
             async for chunk in self._run_autonomous(
                 user_input,
                 thread_id=thread_id,
-                max_iterations=max_iterations or self._config.autonomous_max_iterations,
+                max_iterations=max_iterations or self._config.autonomous.max_iterations,
             ):
                 yield chunk
             return
@@ -858,7 +858,7 @@ class SootheRunner:
                 yield _custom({"type": "soothe.thread.resumed", "thread_id": thread_info.thread_id})
             else:
                 thread_info = await self._durability.create_thread(
-                    ThreadMetadata(policy_profile=self._config.policy_profile),
+                    ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
                 yield _custom({"type": "soothe.thread.created", "thread_id": thread_info.thread_id})
             state.thread_id = thread_info.thread_id
@@ -867,7 +867,7 @@ class SootheRunner:
             logger.debug("Thread resume failed, creating a new thread", exc_info=True)
             try:
                 thread_info = await self._durability.create_thread(
-                    ThreadMetadata(policy_profile=self._config.policy_profile),
+                    ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
                 yield _custom({"type": "soothe.thread.created", "thread_id": thread_info.thread_id})
                 state.thread_id = thread_info.thread_id
@@ -916,7 +916,7 @@ class SootheRunner:
                         "type": "soothe.policy.checked",
                         "action": "user_request",
                         "verdict": decision.verdict,
-                        "profile": self._config.policy_profile,
+                        "profile": self._config.protocols.policy.profile,
                     }
                 )
                 if decision.verdict == "deny":
@@ -925,7 +925,7 @@ class SootheRunner:
                             "type": "soothe.policy.denied",
                             "action": "user_request",
                             "reason": decision.reason,
-                            "profile": self._config.policy_profile,
+                            "profile": self._config.protocols.policy.profile,
                         }
                     )
                     return

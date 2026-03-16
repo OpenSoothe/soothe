@@ -61,11 +61,7 @@ embedding_dims: 1536
 # system_prompt: "Custom system prompt override."
 workspace_dir: "."
 debug: false
-log_level: INFO
-# log_file: ~/.soothe/logs/soothe.log
 activity_max_lines: 300
-# Progress verbosity: minimal | normal | detailed | debug
-progress_verbosity: normal
 
 # =============================================================================
 # Subagents
@@ -144,6 +140,19 @@ tools:
   # - github          # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
+# Tools Settings
+# =============================================================================
+# Configure individual tool groups with specific settings.
+
+tools_settings:
+  wizsearch:
+    enabled: true
+    default_engines:
+      - tavily          # Requires TAVILY_API_KEY (set in environment)
+    max_results_per_engine: 10
+    timeout: 30
+
+# =============================================================================
 # MCP Servers
 # =============================================================================
 
@@ -162,64 +171,96 @@ skills: []
 memory: []
 
 # =============================================================================
-# Protocols
+# Persistence Configuration
 # =============================================================================
+# Unified persistence settings for all backends. PostgreSQL is recommended
+# for production deployments with persistence requirements.
 
-# PostgreSQL DSN (unified for checkpointer and all persistence backends)
-persistence_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+persistence:
+  # PostgreSQL DSN for Soothe metadata backends
+  # (checkpointer, context, memory, durability/thread state)
+  soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 
-# Context configuration
-context_backend: keyword
-# context_persist_dir: ~/.soothe/context
-context_persist_backend: postgresql
+  # PostgreSQL DSN for pgvector vector storage
+  # (used when vector_store_provider=pgvector and vector_store_config.dsn is omitted)
+  vector_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
 
-# Memory configuration
-memory_backend: keyword
-# memory_persist_path: ~/.soothe/memory
-memory_persist_backend: postgresql
-
-# Planner routing: auto | always_direct | always_planner | always_claude
-planner_routing: auto
-policy_profile: standard
-
-# Autonomous iteration (explicit-by-default safety)
-autonomous_enabled_by_default: false
-autonomous_max_iterations: 10
-autonomous_max_retries: 2
+  # Default backend for new protocols (can be overridden per-protocol below)
+  # Options: json (simple files), rocksdb (embedded KV), postgresql (production)
+  default_backend: postgresql
 
 # =============================================================================
-# Performance Optimization (RFC-0008)
+# Protocol Backends
 # =============================================================================
+# Configure the backend implementations for each core protocol.
+# All protocols support multiple backends with different tradeoffs.
 
-performance:
-  enabled: true
-  complexity_detection: true
-  skip_memory_for_simple: true
-  skip_context_for_simple: true
-  template_planning: true
-  parallel_pre_stream: true
-  log_timing: false
-  slow_query_threshold_ms: 3000
-  thresholds:
-    trivial_words: 5
-    simple_words: 15
-    medium_words: 30
+protocols:
+  # Context Protocol: Accumulates and projects knowledge within a thread
+  context:
+    backend: keyword  # keyword (tag matching) | vector (semantic) | none
+    persist_dir: ""   # Empty = SOOTHE_HOME/context/
+    persist_backend: postgresql  # Overrides persistence.default_backend
 
-# Durability configuration
-durability_backend: postgresql
-checkpointer_backend: postgres
-# durability_metadata_path: ~/.soothe/durability/threads.json
+  # Memory Protocol: Cross-thread long-term memory
+  memory:
+    backend: keyword  # keyword (tag matching) | vector (semantic) | none
+    persist_dir: ""   # Empty = SOOTHE_HOME/memory/
+    persist_backend: postgresql  # Overrides persistence.default_backend
 
-# Thread logging configuration
-# thread_log_dir: ~/.soothe/threads
-thread_log_retention_days: 30
-thread_log_max_size_mb: 100
+  # Planner Protocol: Task decomposition and execution planning
+  planner:
+    routing: auto  # auto | always_direct | always_planner | always_claude
 
-concurrency:
-  max_parallel_subagents: 1
-  max_parallel_tools: 3
-  max_parallel_steps: 1
-  step_parallelism: dependency
+  # Policy Protocol: Permission management and access control
+  policy:
+    profile: standard  # Named profile from policy_profiles.yml
+
+  # Durability Protocol: Thread lifecycle and state persistence
+  durability:
+    backend: postgresql  # json | rocksdb | postgresql
+    checkpointer: postgresql  # LangGraph checkpoint backend (consistent naming)
+    metadata_path: ""  # Empty = SOOTHE_HOME/durability/threads.json
+
+# =============================================================================
+# Autonomous Operation
+# =============================================================================
+# Configure autonomous iteration for long-running tasks. By default, requires
+# explicit user activation per thread for safety.
+
+autonomous:
+  enabled_by_default: false  # New threads start in autonomous mode
+  max_iterations: 10         # Stop after N iterations without user input
+  max_retries: 2             # Retry failed goals before giving up
+
+# =============================================================================
+# Logging & Observability
+# =============================================================================
+# Configure logging, thread history, and debugging features.
+
+logging:
+  level: INFO              # Python logging level (DEBUG, INFO, WARNING, ERROR)
+  file: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
+  progress_verbosity: normal  # minimal | normal | detailed | debug
+
+  # Thread conversation logging for audit and recovery
+  thread_logging:
+    enabled: true
+    dir: ""                # Empty = SOOTHE_HOME/threads/
+    retention_days: 30     # Auto-delete threads older than N days
+    max_size_mb: 100       # Max total size (not enforced yet)
+
+# =============================================================================
+# Execution Limits
+# =============================================================================
+# Concurrency and resource limits for safe operation.
+
+execution:
+  concurrency:
+    max_parallel_subagents: 1  # Max subagents running simultaneously
+    max_parallel_tools: 3      # Max tools in parallel per step
+    max_parallel_steps: 1      # Max parallel plan steps
+    step_parallelism: dependency  # dependency | parallel
 
 # =============================================================================
 # Vector Store
@@ -228,5 +269,6 @@ concurrency:
 vector_store_provider: none
 vector_store_collection: soothe_default
 # vector_store_config:
+#   # Optional override. If omitted for pgvector, uses persistence.vector_postgres_dsn.
 #   dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
 #   url: "http://localhost:8080"

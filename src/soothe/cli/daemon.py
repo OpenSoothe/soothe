@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import json
 import logging
 import os
@@ -28,6 +29,8 @@ _SOCKET_FILENAME = "soothe.sock"
 _PID_FILENAME = "soothe.pid"
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
+_CLEANUP_TIMEOUT_S = 3.0
+_STOP_TIMEOUT_S = 8.0
 
 
 def _soothe_dir() -> Path:
@@ -51,35 +54,28 @@ def pid_path() -> Path:
 
 def _serialize_for_json(obj: Any) -> Any:
     """Serialize objects for JSON, handling LangChain messages specially."""
-    # Handle None and primitives
     if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
 
-    # Handle lists and tuples
     if isinstance(obj, (list, tuple)):
         return [_serialize_for_json(item) for item in obj]
 
-    # Handle dicts
     if isinstance(obj, dict):
         return {str(k): _serialize_for_json(v) for k, v in obj.items()}
 
-    # Handle Pydantic models (including LangChain messages)
     if hasattr(obj, "model_dump"):
         with contextlib.suppress(Exception):
             dumped = obj.model_dump()
             return _serialize_for_json(dumped)
 
-    # Handle objects with dict() method
     if hasattr(obj, "dict"):
         with contextlib.suppress(Exception):
             return _serialize_for_json(obj.dict())
 
-    # Handle objects with __dict__
     if hasattr(obj, "__dict__"):
         with contextlib.suppress(Exception):
             return _serialize_for_json(obj.__dict__)
 
-    # Fallback to string representation
     return str(obj)
 
 
@@ -112,6 +108,60 @@ class _ClientConn:
 
 
 # ---------------------------------------------------------------------------
+# PID / singleton helpers
+# ---------------------------------------------------------------------------
+
+
+def _write_pid() -> None:
+    pf = pid_path()
+    pf.parent.mkdir(parents=True, exist_ok=True)
+    pf.write_text(str(os.getpid()))
+
+
+def _cleanup_pid() -> None:
+    pf = pid_path()
+    if pf.exists():
+        with contextlib.suppress(OSError):
+            pf.unlink()
+
+
+def _cleanup_socket() -> None:
+    sock = socket_path()
+    if sock.exists():
+        with contextlib.suppress(OSError):
+            sock.unlink()
+
+
+def _acquire_pid_lock() -> int | None:
+    """Try to acquire an exclusive lock on the PID file.
+
+    Returns:
+        File descriptor on success, None if another daemon holds the lock.
+    """
+    pf = pid_path()
+    pf.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(str(pf), os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        pid_bytes = str(os.getpid()).encode()
+        os.write(fd, pid_bytes)
+        os.ftruncate(fd, len(pid_bytes))
+        os.fsync(fd)
+    except OSError:
+        return None
+    else:
+        return fd
+
+
+def _release_pid_lock(fd: int) -> None:
+    """Release the PID file lock and clean up."""
+    with contextlib.suppress(OSError):
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    _cleanup_pid()
+
+
+# ---------------------------------------------------------------------------
 # SootheDaemon
 # ---------------------------------------------------------------------------
 
@@ -134,11 +184,13 @@ class SootheDaemon:
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
         self._running = False
+        self._query_running = False
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._cleanup_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
+        self._pid_lock_fd: int | None = None
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -146,25 +198,51 @@ class SootheDaemon:
         """Start the daemon server on the Unix socket."""
         from soothe.core.runner import SootheRunner
 
+        # Acquire singleton lock *before* heavy init
+        self._pid_lock_fd = _acquire_pid_lock()
+        if self._pid_lock_fd is None:
+            raise RuntimeError("Another Soothe daemon is already running (PID lock held)")
+
         sock = socket_path()
         sock.parent.mkdir(parents=True, exist_ok=True)
-        if sock.exists():
-            sock.unlink()
 
-        self._runner = SootheRunner(self._config)
+        # Only unlink socket if no live daemon owns it
+        if sock.exists() and not self._is_socket_live(sock):
+            sock.unlink()
+        elif sock.exists():
+            _release_pid_lock(self._pid_lock_fd)
+            self._pid_lock_fd = None
+            raise RuntimeError("Another daemon still owns the socket")
+
+        # Run heavy SootheRunner init off the event loop
+        self._runner = await asyncio.to_thread(SootheRunner, self._config)
+
         self._stop_event = asyncio.Event()
         self._server = await asyncio.start_unix_server(
             self._handle_client,
             path=str(sock),
         )
         self._running = True
-        _write_pid()
         logger.info("Soothe daemon listening on %s", sock)
 
-        # Schedule periodic cleanup task
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
+
+    @staticmethod
+    def _is_socket_live(sock: Path) -> bool:
+        """Check if a Unix socket is accepting connections."""
+        import socket as sock_mod
+
+        try:
+            s = sock_mod.socket(sock_mod.AF_UNIX, sock_mod.SOCK_STREAM)
+            s.settimeout(1.0)
+            s.connect(str(sock))
+            s.close()
+        except (ConnectionRefusedError, FileNotFoundError, OSError):
+            return False
+        else:
+            return True
 
     def request_stop(self) -> None:
         """Thread-safe method to request daemon shutdown from any thread."""
@@ -184,7 +262,6 @@ class SootheDaemon:
 
         loop = asyncio.get_running_loop()
 
-        # Signal handlers only work on the main thread; skip when embedded.
         try:
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, self.request_stop)
@@ -196,12 +273,14 @@ class SootheDaemon:
             await self._stop_event.wait()
         finally:
             input_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await input_task
             await self.stop()
 
     async def _periodic_cleanup(self) -> None:
         """Run cleanup every 24 hours."""
         while self._running:
-            await asyncio.sleep(24 * 3600)  # 24 hours
+            await asyncio.sleep(24 * 3600)
             if self._thread_logger:
                 try:
                     deleted = self._thread_logger.cleanup_old_threads()
@@ -213,12 +292,16 @@ class SootheDaemon:
     async def stop(self) -> None:
         """Shut down the daemon gracefully."""
         self._running = False
-        await self._broadcast({"type": "status", "state": "stopped"})
+        self._query_running = False
+        with contextlib.suppress(Exception):
+            await self._broadcast({"type": "status", "state": "stopped"})
 
-        # Clean up runner resources
+        # Clean up runner resources with a timeout
         if self._runner and hasattr(self._runner, "cleanup"):
             try:
-                await self._runner.cleanup()
+                await asyncio.wait_for(self._runner.cleanup(), timeout=_CLEANUP_TIMEOUT_S)
+            except TimeoutError:
+                logger.warning("Runner cleanup timed out after %.1fs", _CLEANUP_TIMEOUT_S)
             except Exception:
                 logger.debug("Failed to cleanup runner", exc_info=True)
 
@@ -231,10 +314,14 @@ class SootheDaemon:
             self._server.close()
             await self._server.wait_closed()
             self._server = None
-        _cleanup_pid()
-        sock = socket_path()
-        if sock.exists():
-            sock.unlink()
+
+        # Release singleton lock and clean up files
+        if self._pid_lock_fd is not None:
+            _release_pid_lock(self._pid_lock_fd)
+            self._pid_lock_fd = None
+        else:
+            _cleanup_pid()
+        _cleanup_socket()
         logger.info("Soothe daemon stopped")
 
     # -- client handling ----------------------------------------------------
@@ -248,14 +335,20 @@ class SootheDaemon:
         self._clients.append(client)
         logger.info("Client connected (total=%d)", len(self._clients))
 
-        await self._send(
-            client,
-            {
-                "type": "status",
-                "state": "idle" if self._running else "stopped",
-                "thread_id": self._runner.current_thread_id or "",
-            },
-        )
+        try:
+            initial_state = "running" if self._query_running else ("idle" if self._running else "stopped")
+            client.writer.write(
+                _encode(
+                    {
+                        "type": "status",
+                        "state": initial_state,
+                        "thread_id": self._runner.current_thread_id or "",
+                    }
+                )
+            )
+            await client.writer.drain()
+        except Exception:
+            logger.exception("Failed to send initial status to client")
 
         try:
             while True:
@@ -315,20 +408,38 @@ class SootheDaemon:
                 break
 
             msg_type = msg.get("type", "")
-            if msg_type == "command":
-                cmd = msg.get("cmd", "")
-                if cmd in ("/exit", "/quit"):
-                    await self._broadcast({"type": "status", "state": "stopping"})
-                    self._running = False
-                    break
-                # Execute the command and send response
-                await self._handle_command(cmd)
-            elif msg_type == "input":
-                text = msg["text"]
-                await self._run_query(
-                    text,
-                    autonomous=bool(msg.get("autonomous", False)),
-                    max_iterations=msg.get("max_iterations"),
+            try:
+                if msg_type == "command":
+                    cmd = msg.get("cmd", "")
+                    if cmd in ("/exit", "/quit"):
+                        await self._broadcast({"type": "status", "state": "stopping"})
+                        self._running = False
+                        if self._stop_event:
+                            self._stop_event.set()
+                        break
+                    await self._handle_command(cmd)
+                elif msg_type == "input":
+                    text = msg["text"]
+                    await self._run_query(
+                        text,
+                        autonomous=bool(msg.get("autonomous", False)),
+                        max_iterations=msg.get("max_iterations"),
+                    )
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                logger.exception("Daemon input loop handler error")
+                self._query_running = False
+                await self._broadcast(
+                    {
+                        "type": "event",
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": {"type": "soothe.error", "error": "Daemon failed to process input"},
+                    }
+                )
+                await self._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
                 )
 
     async def _handle_command(self, cmd: str) -> None:
@@ -343,21 +454,18 @@ class SootheDaemon:
 
         from soothe.cli.commands import handle_slash_command
 
-        # Create a console to capture output
         output = StringIO()
         console = Console(file=output, force_terminal=True, width=100)
 
-        # Execute the command (now async)
         should_exit = await handle_slash_command(
             cmd,
             self._runner,
             console,
-            current_plan=None,  # Future: track plan state in daemon
+            current_plan=None,
             thread_logger=self._thread_logger,
-            input_history=None,  # Future: track input history in daemon
+            input_history=None,
         )
 
-        # Send the response back to clients
         response_text = output.getvalue()
         if response_text.strip():
             await self._broadcast(
@@ -367,10 +475,11 @@ class SootheDaemon:
                 }
             )
 
-        # Handle exit if command returned True
         if should_exit:
             await self._broadcast({"type": "status", "state": "stopping"})
             self._running = False
+            if self._stop_event:
+                self._stop_event.set()
 
     async def _run_query(
         self,
@@ -382,14 +491,18 @@ class SootheDaemon:
         """Stream a query through SootheRunner and broadcast events."""
         thread_id = self._runner.current_thread_id or ""
 
-        # Update thread logger for current thread
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
-            self._thread_logger = ThreadLogger(thread_id=thread_id)
+            self._thread_logger = ThreadLogger(
+                thread_dir=self._config.logging.thread_logging.dir,
+                thread_id=thread_id,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
 
-        # Log user input
         if self._thread_logger:
             self._thread_logger.log_user_input(text)
 
+        self._query_running = True
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
 
         full_response: list[str] = []
@@ -405,10 +518,8 @@ class SootheDaemon:
                     continue
                 namespace, mode, data = chunk
 
-                # Log events to thread log
                 self._thread_logger.log(tuple(namespace), mode, data)
 
-                # Extract assistant text for conversation logging
                 is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                 if not namespace and mode == "messages" and is_msg_pair:
                     msg, _metadata = data
@@ -421,6 +532,9 @@ class SootheDaemon:
                     "data": data,
                 }
                 await self._broadcast(event_msg)
+        except asyncio.CancelledError:
+            logger.info("Query cancelled during shutdown")
+            raise
         except Exception as exc:
             logger.exception("Daemon query error")
             await self._broadcast(
@@ -431,8 +545,9 @@ class SootheDaemon:
                     "data": {"type": "soothe.error", "error": str(exc)},
                 }
             )
+        finally:
+            self._query_running = False
 
-        # Log assistant response
         if full_response:
             self._thread_logger.log_assistant_response("".join(full_response))
 
@@ -474,11 +589,14 @@ class SootheDaemon:
         return True
 
     @staticmethod
-    def stop_running(timeout: float = 5.0) -> bool:
+    def stop_running(timeout: float = _STOP_TIMEOUT_S) -> bool:
         """Send SIGTERM to the running daemon and wait for it to stop.
 
+        Escalates to SIGKILL if the daemon does not exit within *timeout*
+        seconds.
+
         Args:
-            timeout: Maximum seconds to wait for daemon to stop.
+            timeout: Maximum seconds to wait before SIGKILL escalation.
 
         Returns:
             True if a signal was sent and daemon stopped, False if no daemon found.
@@ -493,23 +611,36 @@ class SootheDaemon:
             os.kill(pid, signal.SIGTERM)
         except (ValueError, ProcessLookupError, PermissionError):
             _cleanup_pid()
+            _cleanup_socket()
             return False
 
-        # Wait for the daemon to actually stop
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                os.kill(pid, 0)  # Check if process is still alive
-                time.sleep(0.1)
+                os.kill(pid, 0)
+                time.sleep(0.2)
             except ProcessLookupError:
-                # Process has terminated
+                _cleanup_pid()
+                _cleanup_socket()
                 return True
             except PermissionError:
-                # Process might be in the middle of shutting down
-                time.sleep(0.1)
+                time.sleep(0.2)
 
-        # Timeout reached - process might still be running
-        logger.warning("Daemon did not stop within %.1f seconds", timeout)
+        # SIGKILL escalation
+        logger.warning("Daemon did not stop within %.1f seconds, sending SIGKILL", timeout)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(pid, signal.SIGKILL)
+
+        # Brief wait for SIGKILL to take effect
+        for _ in range(10):
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.1)
+            except ProcessLookupError:
+                break
+
+        _cleanup_pid()
+        _cleanup_socket()
         return True
 
 
@@ -595,24 +726,6 @@ class DaemonClient:
 
 
 # ---------------------------------------------------------------------------
-# PID helpers
-# ---------------------------------------------------------------------------
-
-
-def _write_pid() -> None:
-    pf = pid_path()
-    pf.parent.mkdir(parents=True, exist_ok=True)
-    pf.write_text(str(os.getpid()))
-
-
-def _cleanup_pid() -> None:
-    pf = pid_path()
-    if pf.exists():
-        with contextlib.suppress(OSError):
-            pf.unlink()
-
-
-# ---------------------------------------------------------------------------
 # Entry point for ``soothe server start``
 # ---------------------------------------------------------------------------
 
@@ -632,6 +745,8 @@ def run_daemon(config: SootheConfig | None = None) -> None:
 if __name__ == "__main__":
     import argparse
 
+    from soothe.cli.main import setup_logging
+
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument("--config", type=str, default=None, help="Config file path")
     args = parser.parse_args()
@@ -640,10 +755,11 @@ if __name__ == "__main__":
     if args.config:
         cfg = SootheConfig.from_yaml_file(args.config)
     else:
-        # Try to load from default config location
         from pathlib import Path
 
         default_config = Path(SOOTHE_HOME) / "config" / "config.yml"
         if default_config.exists():
             cfg = SootheConfig.from_yaml_file(str(default_config))
+
+    setup_logging(cfg)
     run_daemon(cfg)

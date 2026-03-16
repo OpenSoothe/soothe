@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -96,7 +96,25 @@ class WizsearchSearchTool(BaseTool):
     )
     default_max_results_per_engine: int = Field(default=10)
     default_timeout: int = Field(default=30)
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo", "wechat"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    config: dict[str, Any] = Field(default_factory=dict)
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize wizsearch search tool with optional config override.
+
+        Args:
+            **data: Tool configuration, including 'config' dict with
+                'default_engines', 'max_results_per_engine', 'timeout', etc.
+        """
+        super().__init__(**data)
+        # Override defaults from config if provided
+        if self.config:
+            if "default_engines" in self.config:
+                self.default_engines = self.config["default_engines"]
+            if "max_results_per_engine" in self.config:
+                self.default_max_results_per_engine = self.config["max_results_per_engine"]
+            if "timeout" in self.config:
+                self.default_timeout = self.config["timeout"]
 
     def _build_result_payload(self, result: object) -> dict[str, object]:
         """Build a stable JSON-serializable output payload."""
@@ -162,15 +180,21 @@ class WizsearchSearchTool(BaseTool):
 
 
 class WizsearchCrawlPageTool(BaseTool):
-    """Web page crawler tool powered by wizsearch."""
+    """Web page crawler tool powered by wizsearch.
+
+    Note: The crawler runs in headless mode by default (BrowserConfig default).
+    This is not configurable through this tool interface as wizsearch's PageCrawler
+    doesn't expose the headless parameter.
+    """
 
     name: str = "wizsearch_crawl_page"
     description: str = (
-        "Crawl and extract web page content using wizsearch. "
+        "Crawl and extract web page content using wizsearch (runs in headless mode). "
         "Inputs: `url` and optional `content_format` ('markdown', 'html', 'text') "
         "and `only_text` (default: false). Returns extracted content and metadata."
     )
     default_content_format: str = Field(default="markdown")
+    config: dict[str, Any] = Field(default_factory=dict)
 
     async def _perform_crawl(
         self,
@@ -184,12 +208,18 @@ class WizsearchCrawlPageTool(BaseTool):
         if selected_format not in {"markdown", "html", "text"}:
             selected_format = self.default_content_format
 
-        crawler = PageCrawler(url=url, content_format=selected_format, only_text=only_text)
+        # PageCrawler runs in headless mode by default (BrowserConfig default)
+        crawler = PageCrawler(
+            url=url,
+            content_format=selected_format,
+            only_text=only_text,
+        )
         content = await crawler.crawl()
         return {
             "url": url,
             "content_format": selected_format,
             "only_text": only_text,
+            "headless": True,  # Always true - wizsearch default
             "content": content or "",
             "content_length": len(content or ""),
         }
@@ -223,10 +253,21 @@ class WizsearchCrawlPageTool(BaseTool):
         )
 
 
-def create_wizsearch_tools() -> list[BaseTool]:
+def create_wizsearch_tools(config: dict[str, Any] | None = None) -> list[BaseTool]:
     """Create wizsearch tool instances.
+
+    Args:
+        config: Optional configuration dict with keys:
+            - default_engines: List of default search engines
+            - max_results_per_engine: Max results per engine
+            - timeout: Request timeout in seconds
+            - headless: Run browser crawler in headless mode
 
     Returns:
         List containing wizsearch search and crawl tools.
     """
-    return [WizsearchSearchTool(), WizsearchCrawlPageTool()]
+    config = config or {}
+    return [
+        WizsearchSearchTool(config=config),
+        WizsearchCrawlPageTool(config=config),
+    ]

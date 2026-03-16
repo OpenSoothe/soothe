@@ -6,6 +6,8 @@ from soothe.config import (
     ModelRouter,
     SootheConfig,
     SubagentConfig,
+    ToolsSettings,
+    WizsearchConfig,
     _resolve_env,
     _resolve_provider_env,
 )
@@ -30,7 +32,7 @@ class TestSootheConfig:
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
-        assert cfg.autonomous_enabled_by_default is False
+        assert cfg.autonomous.enabled_by_default is False
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
@@ -67,12 +69,12 @@ class TestSootheConfig:
 
     def test_planner_routing_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.planner_routing == "auto"
+        assert cfg.protocols.planner.routing == "auto"
 
     def test_planner_routing_options(self) -> None:
         for routing in ("auto", "always_direct", "always_planner", "always_claude"):
-            cfg = SootheConfig(planner_routing=routing)
-            assert cfg.planner_routing == routing
+            cfg = SootheConfig(protocols={"planner": {"routing": routing}})
+            assert cfg.protocols.planner.routing == routing
 
     def test_workspace_dir_default(self) -> None:
         cfg = SootheConfig()
@@ -80,12 +82,12 @@ class TestSootheConfig:
 
     def test_progress_verbosity_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.progress_verbosity == "normal"
+        assert cfg.logging.progress_verbosity == "normal"
 
     def test_progress_verbosity_options(self) -> None:
         for level in ("minimal", "normal", "detailed", "debug"):
-            cfg = SootheConfig(progress_verbosity=level)
-            assert cfg.progress_verbosity == level
+            cfg = SootheConfig(logging={"progress_verbosity": level})
+            assert cfg.logging.progress_verbosity == level
 
     def test_custom_subagents(self) -> None:
         cfg = SootheConfig(
@@ -351,21 +353,23 @@ class TestPropagateEnv:
 class TestProtocolConfig:
     def test_context_backend_options(self) -> None:
         for backend in ("keyword", "vector", "none"):
-            cfg = SootheConfig(context_backend=backend)
-            assert cfg.context_backend == backend
+            cfg = SootheConfig(protocols={"context": {"backend": backend}})
+            assert cfg.protocols.context.backend == backend
 
     def test_memory_backend_options(self) -> None:
         for backend in ("keyword", "vector", "none"):
-            cfg = SootheConfig(memory_backend=backend)
-            assert cfg.memory_backend == backend
+            cfg = SootheConfig(protocols={"memory": {"backend": backend}})
+            assert cfg.protocols.memory.backend == backend
 
     def test_persist_backend_options(self) -> None:
         cfg = SootheConfig(
-            context_persist_backend="rocksdb",
-            memory_persist_backend="rocksdb",
+            protocols={
+                "context": {"persist_backend": "rocksdb"},
+                "memory": {"persist_backend": "rocksdb"},
+            }
         )
-        assert cfg.context_persist_backend == "rocksdb"
-        assert cfg.memory_persist_backend == "rocksdb"
+        assert cfg.protocols.context.persist_backend == "rocksdb"
+        assert cfg.protocols.memory.persist_backend == "rocksdb"
 
     def test_vector_store_config(self) -> None:
         cfg = SootheConfig(
@@ -373,6 +377,93 @@ class TestProtocolConfig:
             vector_store_collection="my_collection",
             vector_store_config={"dsn": "postgresql://localhost/test"},
         )
-        assert cfg.vector_store_provider == "pgvector"
-        assert cfg.vector_store_collection == "my_collection"
-        assert cfg.vector_store_config["dsn"] == "postgresql://localhost/test"
+
+
+class TestToolsSettings:
+    """Tests for tools_settings configuration."""
+
+    def test_default_tools_settings(self) -> None:
+        """Test that tools_settings has correct defaults."""
+        cfg = SootheConfig()
+        assert hasattr(cfg, "tools_settings")
+        assert isinstance(cfg.tools_settings, ToolsSettings)
+        assert hasattr(cfg.tools_settings, "wizsearch")
+        assert isinstance(cfg.tools_settings.wizsearch, WizsearchConfig)
+
+    def test_wizsearch_default_engines(self) -> None:
+        """Test that wizsearch default_engines defaults to ['tavily']."""
+        cfg = SootheConfig()
+        assert cfg.tools_settings.wizsearch.default_engines == ["tavily"]
+        assert cfg.tools_settings.wizsearch.max_results_per_engine == 10
+        assert cfg.tools_settings.wizsearch.timeout == 30
+        assert cfg.tools_settings.wizsearch.enabled is True
+
+    def test_wizsearch_custom_config(self) -> None:
+        """Test wizsearch with custom configuration."""
+        cfg = SootheConfig(
+            tools_settings=ToolsSettings(
+                wizsearch=WizsearchConfig(
+                    enabled=True,
+                    default_engines=["tavily", "duckduckgo"],
+                    max_results_per_engine=15,
+                    timeout=45,
+                )
+            )
+        )
+        assert cfg.tools_settings.wizsearch.enabled is True
+        assert cfg.tools_settings.wizsearch.default_engines == ["tavily", "duckduckgo"]
+        assert cfg.tools_settings.wizsearch.max_results_per_engine == 15
+        assert cfg.tools_settings.wizsearch.timeout == 45
+
+    def test_wizsearch_config_from_dict(self) -> None:
+        """Test wizsearch config from dict."""
+        cfg = SootheConfig(
+            tools_settings={
+                "wizsearch": {
+                    "enabled": True,
+                    "default_engines": ["brave", "tavily"],
+                    "max_results_per_engine": 20,
+                    "timeout": 60,
+                }
+            }
+        )
+        assert cfg.tools_settings.wizsearch.enabled is True
+        assert cfg.tools_settings.wizsearch.default_engines == ["brave", "tavily"]
+        assert cfg.tools_settings.wizsearch.max_results_per_engine == 20
+        assert cfg.tools_settings.wizsearch.timeout == 60
+
+    def test_wizsearch_partial_config(self) -> None:
+        """Test wizsearch with partial configuration."""
+        cfg = SootheConfig(
+            tools_settings={
+                "wizsearch": {
+                    "default_engines": ["duckduckgo"],
+                }
+            }
+        )
+        # Custom value
+        assert cfg.tools_settings.wizsearch.default_engines == ["duckduckgo"]
+        # Defaults preserved
+        assert cfg.tools_settings.wizsearch.max_results_per_engine == 10
+        assert cfg.tools_settings.wizsearch.timeout == 30
+        assert cfg.tools_settings.wizsearch.enabled is True
+
+    def test_resolve_persistence_postgres_dsn_prefers_soothe_dsn(self) -> None:
+        cfg = SootheConfig(
+            persistence={
+                "soothe_postgres_dsn": "postgresql://localhost/soothe_new",
+            }
+        )
+        assert cfg.resolve_persistence_postgres_dsn() == "postgresql://localhost/soothe_new"
+
+    def test_resolve_vector_store_config_falls_back_to_vector_dsn(self) -> None:
+        cfg = SootheConfig(
+            vector_store_provider="pgvector",
+            vector_store_config={"pool_size": 3},
+            persistence={
+                "vector_postgres_dsn": "postgresql://localhost/vectordb_new",
+            },
+        )
+        resolved = cfg.resolve_vector_store_config()
+        assert resolved["dsn"] == "postgresql://localhost/vectordb_new"
+        assert resolved["pool_size"] == 3

@@ -130,7 +130,67 @@ class TestWizsearchTools:
         tool = WizsearchSearchTool()
         _ = tool._run(query="ai agents")
 
-        assert captured["enabled_engines"] == ["tavily", "duckduckgo", "wechat"]
+        # Default engines is now ["tavily"]
+        assert captured["enabled_engines"] == ["tavily"]
+
+    def test_custom_engines_via_config(self, monkeypatch) -> None:
+        """Test that custom engines can be set via config parameter."""
+        import soothe.tools.wizsearch as wizsearch_mod
+
+        captured: dict[str, object] = {}
+
+        class DummyConfig:
+            def __init__(self, **kwargs: object) -> None:
+                captured.update(kwargs)
+
+        class DummySearch:
+            def __init__(self, config: object) -> None:
+                self.config = config
+
+            async def search(self, query: str) -> object:
+                class DummyResult:
+                    def __init__(self, query_text: str) -> None:
+                        self.query = query_text
+                        self.answer = None
+                        self.sources = []
+                        self.response_time = 0.0
+                        self.metadata = {}
+
+                return DummyResult(query)
+
+        monkeypatch.setattr(wizsearch_mod, "WIZSEARCH_AVAILABLE", True)
+        monkeypatch.setattr(wizsearch_mod, "WizSearchConfig", DummyConfig)
+        monkeypatch.setattr(wizsearch_mod, "WizSearch", DummySearch)
+
+        # Test with custom engines
+        tool = WizsearchSearchTool(
+            config={
+                "default_engines": ["tavily", "duckduckgo"],
+                "max_results_per_engine": 5,
+                "timeout": 20,
+            }
+        )
+        _ = tool._run(query="test query")
+
+        assert captured["enabled_engines"] == ["tavily", "duckduckgo"]
+        assert captured["max_results_per_engine"] == 5
+        assert captured["timeout"] == 20
+
+    def test_create_wizsearch_tools_with_config(self) -> None:
+        """Test create_wizsearch_tools factory with config."""
+        config = {
+            "default_engines": ["tavily"],
+            "max_results_per_engine": 15,
+            "timeout": 45,
+        }
+        tools = create_wizsearch_tools(config)
+
+        assert len(tools) == 2
+        assert isinstance(tools[0], WizsearchSearchTool)
+        assert isinstance(tools[1], WizsearchCrawlPageTool)
+        assert tools[0].default_engines == ["tavily"]
+        assert tools[0].default_max_results_per_engine == 15
+        assert tools[0].default_timeout == 45
 
 
 class TestVideoTools:

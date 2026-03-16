@@ -1,10 +1,10 @@
-"""PostgreSQL persistence backend using psycopg."""
+"""PostgreSQL persistence backend using psycopg (synchronous)."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -13,11 +13,16 @@ logger = logging.getLogger(__name__)
 class PostgreSQLPersistStore:
     """PersistStore implementation using PostgreSQL with JSONB storage.
 
+    Uses psycopg's synchronous ConnectionPool so that ``save``/``load``/``delete``
+    work correctly whether called from an asyncio event-loop thread or a plain
+    thread -- avoiding the deadlock that occurs when ``asyncio.run_coroutine_threadsafe().result()``
+    is invoked from within the running loop.
+
     Features:
-    - Async connection pooling via psycopg_pool.AsyncConnectionPool
+    - Synchronous connection pooling via psycopg_pool.ConnectionPool
     - JSONB storage with namespace isolation
     - Automatic table creation with indexes
-    - Graceful connection error handling
+    - Thread-safe lazy initialization
     """
 
     def __init__(
@@ -36,14 +41,14 @@ class PostgreSQLPersistStore:
         self._dsn = dsn
         self._namespace = namespace
         self._pool_size = pool_size
-        self._pool: Any = None  # AsyncConnectionPool
-        self._loop: asyncio.AbstractEventLoop | None = None
+        self._pool: Any = None
+        self._init_lock = threading.Lock()
 
-    async def _ensure_pool(self) -> Any:
+    def _ensure_pool(self) -> Any:
         """Lazy pool initialization with automatic table creation.
 
         Returns:
-            AsyncConnectionPool instance
+            ConnectionPool instance
 
         Raises:
             ImportError: If psycopg[pool] is not installed
@@ -52,59 +57,58 @@ class PostgreSQLPersistStore:
         if self._pool is not None:
             return self._pool
 
-        try:
-            from psycopg_pool import AsyncConnectionPool
-        except ImportError as exc:
-            msg = "psycopg[pool] is required for PostgreSQL persistence: pip install 'soothe[postgres]'"
-            raise ImportError(msg) from exc
+        with self._init_lock:
+            if self._pool is not None:
+                return self._pool
 
-        # Store event loop for async-to-sync wrapper
-        self._loop = asyncio.get_event_loop()
+            try:
+                from psycopg_pool import ConnectionPool
+            except ImportError as exc:
+                msg = "psycopg[pool] is required for PostgreSQL persistence: pip install 'soothe[postgres]'"
+                raise ImportError(msg) from exc
 
-        # Create connection pool
-        self._pool = AsyncConnectionPool(
-            conninfo=self._dsn,
-            min_size=1,
-            max_size=self._pool_size,
-            open=False,  # Don't open immediately
-        )
-
-        # Open pool and create table
-        try:
-            await self._pool.open()
-            await self._create_table()
-            logger.info(
-                "PostgreSQL persist store initialized (namespace=%s, pool_size=%d)",
-                self._namespace,
-                self._pool_size,
+            pool = ConnectionPool(
+                conninfo=self._dsn,
+                min_size=1,
+                max_size=self._pool_size,
+                open=False,
             )
-        except Exception as exc:
-            await self._pool.close()
-            self._pool = None
-            msg = f"Failed to initialize PostgreSQL connection pool: {exc}"
-            raise RuntimeError(msg) from exc
 
-        return self._pool
+            try:
+                pool.open()
+                self._create_table(pool)
+                logger.info(
+                    "PostgreSQL persist store initialized (namespace=%s, pool_size=%d)",
+                    self._namespace,
+                    self._pool_size,
+                )
+            except Exception as exc:
+                pool.close()
+                msg = f"Failed to initialize PostgreSQL connection pool: {exc}"
+                raise RuntimeError(msg) from exc
 
-    async def _create_table(self) -> None:
+            self._pool = pool
+            return self._pool
+
+    def _create_table(self, pool: Any | None = None) -> None:
         """Create persistence table with indexes if not exists."""
-        pool = await self._ensure_pool()
-        async with pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute("""
-                    CREATE TABLE IF NOT EXISTS soothe_persistence (
-                        key TEXT NOT NULL,
-                        namespace TEXT NOT NULL,
-                        data JSONB NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (namespace, key)
-                    )
-                """)
-            await cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_persistence_updated
-                    ON soothe_persistence(updated_at)
-                """)
-            await conn.commit()
+        pool = pool or self._ensure_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS soothe_persistence (
+                    key TEXT NOT NULL,
+                    namespace TEXT NOT NULL,
+                    data JSONB NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (namespace, key)
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_persistence_updated
+                ON soothe_persistence(updated_at)
+            """)
+            conn.commit()
 
     def save(self, key: str, data: Any) -> None:
         """Persist data under the given key (upsert).
@@ -113,23 +117,18 @@ class PostgreSQLPersistStore:
             key: Storage key
             data: JSON-serializable data
         """
-        # Run async operation in event loop
-        asyncio.run_coroutine_threadsafe(self._async_save(key, data), self._loop or asyncio.get_event_loop()).result()
-
-    async def _async_save(self, key: str, data: Any) -> None:
-        """Async implementation of save."""
-        pool = await self._ensure_pool()
-        async with pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
+        pool = self._ensure_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
                 """
-                    INSERT INTO soothe_persistence (key, namespace, data, updated_at)
-                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (namespace, key)
-                    DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
-                    """,
+                INSERT INTO soothe_persistence (key, namespace, data, updated_at)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (namespace, key)
+                DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
+                """,
                 (key, self._namespace, json.dumps(data, default=str)),
             )
-            await conn.commit()
+            conn.commit()
 
     def load(self, key: str) -> Any | None:
         """Load data for the given key.
@@ -140,18 +139,13 @@ class PostgreSQLPersistStore:
         Returns:
             The stored data, or None if not found
         """
-        # Run async operation in event loop
-        return asyncio.run_coroutine_threadsafe(self._async_load(key), self._loop or asyncio.get_event_loop()).result()
-
-    async def _async_load(self, key: str) -> Any | None:
-        """Async implementation of load."""
-        pool = await self._ensure_pool()
-        async with pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
+        pool = self._ensure_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
                 "SELECT data FROM soothe_persistence WHERE namespace = %s AND key = %s",
                 (self._namespace, key),
             )
-            row = await cur.fetchone()
+            row = cur.fetchone()
             if row is None:
                 return None
             try:
@@ -166,24 +160,17 @@ class PostgreSQLPersistStore:
         Args:
             key: Storage key
         """
-        # Run async operation in event loop
-        asyncio.run_coroutine_threadsafe(self._async_delete(key), self._loop or asyncio.get_event_loop()).result()
-
-    async def _async_delete(self, key: str) -> None:
-        """Async implementation of delete."""
-        pool = await self._ensure_pool()
-        async with pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
+        pool = self._ensure_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
                 "DELETE FROM soothe_persistence WHERE namespace = %s AND key = %s",
                 (self._namespace, key),
             )
-            await conn.commit()
+            conn.commit()
 
     def close(self) -> None:
         """Close connection pool."""
         if self._pool is not None:
-            # Run async close in event loop
-            if self._loop and not self._loop.is_closed():
-                asyncio.run_coroutine_threadsafe(self._pool.close(), self._loop).result(timeout=5.0)
+            self._pool.close()
             self._pool = None
             logger.info("PostgreSQL persist store closed (namespace=%s)", self._namespace)

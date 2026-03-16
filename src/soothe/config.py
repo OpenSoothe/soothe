@@ -256,6 +256,191 @@ class BrowserSubagentConfig(BaseModel):
     disable_telemetry: bool = True
 
 
+class WizsearchConfig(BaseModel):
+    """Configuration for wizsearch tools.
+
+    Args:
+        enabled: Whether wizsearch tools are enabled.
+        default_engines: List of default search engines to use.
+        max_results_per_engine: Maximum results per search engine.
+        timeout: Request timeout in seconds.
+
+    Note: The crawler runs in headless mode by default (BrowserConfig default in wizsearch).
+    """
+
+    enabled: bool = True
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    max_results_per_engine: int = 10
+    timeout: int = 30
+
+
+class ToolsSettings(BaseModel):
+    """Configuration for individual tool groups.
+
+    Args:
+        wizsearch: Wizsearch tool configuration.
+    """
+
+    wizsearch: WizsearchConfig = Field(default_factory=WizsearchConfig)
+    """Wizsearch tools configuration."""
+
+
+# =============================================================================
+# Nested Configuration Classes for Reorganized Config
+# =============================================================================
+
+
+class PersistenceConfig(BaseModel):
+    """Unified persistence settings for all backends.
+
+    Args:
+        soothe_postgres_dsn: PostgreSQL DSN used by persistence/checkpointer/
+            durability metadata storage.
+        vector_postgres_dsn: PostgreSQL DSN used by pgvector-based vector store.
+        default_backend: Default backend for new protocols (can be overridden).
+    """
+
+    soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
+    vector_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/vectordb"
+    default_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+
+
+class ContextProtocolConfig(BaseModel):
+    """Context Protocol configuration.
+
+    Args:
+        backend: Context implementation (keyword, vector, or none).
+        persist_dir: Directory for context persistence.
+        persist_backend: Persistence backend for context data.
+    """
+
+    backend: Literal["keyword", "vector", "none"] = "keyword"
+    persist_dir: str | None = None
+    persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+
+
+class MemoryProtocolConfig(BaseModel):
+    """Memory Protocol configuration.
+
+    Args:
+        backend: Memory implementation (keyword, vector, or none).
+        persist_dir: Directory for memory persistence.
+        persist_backend: Persistence backend for memory data.
+    """
+
+    backend: Literal["keyword", "vector", "none"] = "keyword"
+    persist_dir: str | None = None
+    persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+
+
+class PlannerProtocolConfig(BaseModel):
+    """Planner Protocol configuration.
+
+    Args:
+        routing: Routing strategy (auto, always_direct, always_planner, always_claude).
+    """
+
+    routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
+
+
+class PolicyProtocolConfig(BaseModel):
+    """Policy Protocol configuration.
+
+    Args:
+        profile: Named profile from policy_profiles.yml.
+    """
+
+    profile: str = "standard"
+
+
+class DurabilityProtocolConfig(BaseModel):
+    """Durability Protocol configuration.
+
+    Args:
+        backend: Durability backend for thread lifecycle and metadata.
+        checkpointer: LangGraph checkpoint backend (consistent naming).
+        metadata_path: Metadata/state path for durability backends.
+    """
+
+    backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+    checkpointer: Literal["postgresql"] = "postgresql"
+    metadata_path: str | None = None
+
+
+class ProtocolsConfig(BaseModel):
+    """Protocol backends configuration.
+
+    Args:
+        context: Context Protocol configuration.
+        memory: Memory Protocol configuration.
+        planner: Planner Protocol configuration.
+        policy: Policy Protocol configuration.
+        durability: Durability Protocol configuration.
+    """
+
+    context: ContextProtocolConfig = Field(default_factory=ContextProtocolConfig)
+    memory: MemoryProtocolConfig = Field(default_factory=MemoryProtocolConfig)
+    planner: PlannerProtocolConfig = Field(default_factory=PlannerProtocolConfig)
+    policy: PolicyProtocolConfig = Field(default_factory=PolicyProtocolConfig)
+    durability: DurabilityProtocolConfig = Field(default_factory=DurabilityProtocolConfig)
+
+
+class AutonomousConfig(BaseModel):
+    """Autonomous operation configuration.
+
+    Args:
+        enabled_by_default: Whether new runs default to autonomous mode.
+        max_iterations: Maximum iterations per autonomous thread.
+        max_retries: Maximum retries per goal on failure.
+    """
+
+    enabled_by_default: bool = False
+    max_iterations: int = 10
+    max_retries: int = 2
+
+
+class ThreadLoggingConfig(BaseModel):
+    """Thread logging configuration.
+
+    Args:
+        enabled: Whether thread logging is enabled.
+        dir: Directory for thread logs.
+        retention_days: Days to retain thread logs.
+        max_size_mb: Maximum total size for thread logs.
+    """
+
+    enabled: bool = True
+    dir: str | None = None
+    retention_days: int = 30
+    max_size_mb: int = 100
+
+
+class LoggingConfig(BaseModel):
+    """Logging and observability configuration.
+
+    Args:
+        level: Python logging level.
+        file: Log file path.
+        progress_verbosity: Progress visibility level.
+        thread_logging: Thread logging configuration.
+    """
+
+    level: str = "INFO"
+    file: str | None = None
+    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
+    thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
+
+
+class ExecutionConfig(BaseModel):
+    """Execution limits configuration.
+
+    Args:
+        concurrency: Concurrency limits for parallel execution.
+    """
+
+    concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
+
+
 class SootheConfig(BaseSettings):
     """Top-level configuration for a Soothe agent.
 
@@ -344,27 +529,10 @@ class SootheConfig(BaseSettings):
     debug: bool = False
     """Enable debug mode for the underlying LangGraph agent."""
 
-    # --- Logging ---
-
-    log_level: str = "INFO"
-    """Python logging level for the ``soothe`` logger hierarchy."""
-
-    log_file: str | None = None
-    """Log file path. Defaults to ``SOOTHE_HOME/logs/soothe.log``."""
-
     # --- TUI ---
 
     activity_max_lines: int = 300
     """Maximum number of activity lines retained in the TUI Activity Panel."""
-
-    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
-    """Progress visibility level for TUI and headless execution.
-
-    - ``minimal``: assistant text and critical errors only.
-    - ``normal``: protocol progress events (default).
-    - ``detailed``: adds subagent custom events and tool activity.
-    - ``debug``: shows all available progress events.
-    """
 
     # --- Skillify and Weaver config (RFC-0004, RFC-0005) ---
 
@@ -374,75 +542,25 @@ class SootheConfig(BaseSettings):
     weaver: WeaverConfig = Field(default_factory=WeaverConfig)
     """Weaver subagent configuration."""
 
-    # --- Protocol config (RFC-0002) ---
+    # --- Nested Configuration Objects (Reorganized) ---
 
-    context_backend: Literal["keyword", "vector", "none"] = "keyword"
-    """ContextProtocol implementation: ``keyword`` (tag/keyword matching),
-    ``vector`` (semantic via VectorStore), or ``none`` (disabled)."""
+    tools_settings: ToolsSettings = Field(default_factory=ToolsSettings)
+    """Configuration for individual tool groups."""
 
-    context_persist_dir: str | None = None
-    """Directory for context persistence. Defaults to ``SOOTHE_HOME/context/``."""
+    persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)
+    """Unified persistence settings for all backends."""
 
-    context_persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
-    """Persistence backend for context data (json, rocksdb, or postgresql)."""
+    protocols: ProtocolsConfig = Field(default_factory=ProtocolsConfig)
+    """Protocol backends configuration."""
 
-    memory_backend: Literal["keyword", "vector", "none"] = "keyword"
-    """MemoryProtocol implementation: ``keyword`` (keyword matching with
-    JSON/RocksDB persistence), ``vector`` (semantic via VectorStore),
-    or ``none`` (disabled)."""
+    autonomous: AutonomousConfig = Field(default_factory=AutonomousConfig)
+    """Autonomous operation configuration."""
 
-    memory_persist_path: str | None = None
-    """Directory for memory persistence. Defaults to ``SOOTHE_HOME/memory/``."""
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    """Logging and observability configuration."""
 
-    memory_persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
-    """Persistence backend for memory data (json, rocksdb, or postgresql)."""
-
-    planner_routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
-    """PlannerProtocol routing strategy: ``auto`` (hybrid complexity router),
-    ``always_direct`` (LLM structured output), ``always_planner`` (planner subagent),
-    ``always_claude`` (Claude CLI planner)."""
-
-    policy_profile: str = "standard"
-    """Active policy profile name."""
-
-    concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
-    """Concurrency limits for parallel execution."""
-
-    durability_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
-    """Durability backend for thread lifecycle and metadata persistence.
-    Options: json (file-based), rocksdb (embedded KV), postgresql (PostgreSQL)."""
-
-    checkpointer_backend: Literal["postgres"] = "postgres"
-    """LangGraph checkpoint backend. Only PostgreSQL is supported for persistence.
-    Uses unified persistence_postgres_dsn for connection."""
-
-    persistence_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    """PostgreSQL DSN for checkpointer and all persistence backends.
-    Used by: LangGraph checkpointer, context, memory, and durability."""
-
-    durability_metadata_path: str | None = None
-    """Metadata/state path for durability backends that persist locally."""
-
-    # Thread logging configuration
-    thread_log_dir: str | None = None  # Default: SOOTHE_HOME/threads
-    """Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``."""
-
-    thread_log_retention_days: int = 100  # Auto-delete threads older than N days
-    """Days to retain thread logs before cleanup."""
-
-    thread_log_max_size_mb: int = 100  # Max total size for thread logs (not enforced yet)
-    """Maximum total size for thread logs (not enforced yet)."""
-
-    # --- Autonomous iteration (RFC-0007) ---
-
-    autonomous_enabled_by_default: bool = False
-    """Whether new runs should default to autonomous mode unless explicitly overridden."""
-
-    autonomous_max_iterations: int = 10
-    """Maximum iterations per autonomous thread before forcing stop."""
-
-    autonomous_max_retries: int = 2
-    """Maximum retries per goal on failure before marking permanently failed."""
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    """Execution limits configuration."""
 
     # --- Performance optimization (RFC-0008) ---
 
@@ -459,6 +577,32 @@ class SootheConfig(BaseSettings):
 
     vector_store_config: dict[str, Any] = Field(default_factory=dict)
     """Provider-specific vector store configuration (dsn, url, etc.)."""
+
+    def resolve_persistence_postgres_dsn(self) -> str:
+        """Resolve the effective PostgreSQL DSN for persistence components.
+
+        Returns:
+            The configured DSN for context/memory/durability/checkpointer.
+        """
+        return _resolve_env(self.persistence.soothe_postgres_dsn)
+
+    def resolve_vector_store_config(self) -> dict[str, Any]:
+        """Resolve provider-specific vector store config with DSN fallbacks.
+
+        Returns:
+            A copy of ``vector_store_config`` with env placeholders resolved. For
+            ``pgvector``, fills ``dsn`` from ``persistence.vector_postgres_dsn``
+            when missing.
+        """
+        resolved = dict(self.vector_store_config)
+        for key, value in list(resolved.items()):
+            if isinstance(value, str):
+                resolved[key] = _resolve_env(value)
+
+        if self.vector_store_provider == "pgvector" and not resolved.get("dsn"):
+            resolved["dsn"] = _resolve_env(self.persistence.vector_postgres_dsn)
+
+        return resolved
 
     # --- Model resolution ---
 

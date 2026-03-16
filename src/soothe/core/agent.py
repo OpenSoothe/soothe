@@ -154,7 +154,7 @@ def create_soothe_agent(
         default_middleware.append(
             SoothePolicyMiddleware(
                 policy=resolved_policy,
-                profile_name=config.policy_profile,
+                profile_name=config.protocols.policy.profile,
             )
         )
     if resolved_context:

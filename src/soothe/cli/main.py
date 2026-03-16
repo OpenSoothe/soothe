@@ -15,6 +15,7 @@ import typer
 from soothe.config import SOOTHE_HOME, SootheConfig
 
 logger = logging.getLogger(__name__)
+_DAEMON_FALLBACK_EXIT_CODE = 42
 
 app = typer.Typer(
     name="soothe",
@@ -29,14 +30,14 @@ def setup_logging(config: SootheConfig | None = None) -> None:
     Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 10 MB max, 3 backups).
 
     Args:
-        config: Optional config to read ``log_level`` and ``log_file`` from.
+        config: Optional config to read ``logging_config.level`` and ``logging_config.file`` from.
     """
     cfg = config or SootheConfig()
     log_dir = Path(SOOTHE_HOME) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = cfg.log_file or str(log_dir / "soothe.log")
-    level_name = cfg.log_level.upper() if cfg.log_level else "INFO"
+    log_file = cfg.logging.file or str(log_dir / "soothe.log")
+    level_name = cfg.logging.level.upper() if cfg.logging.level else "INFO"
     if cfg.debug:
         level_name = "DEBUG"
     level = getattr(logging, level_name, logging.INFO)
@@ -305,18 +306,18 @@ def run(
     try:
         cfg = _load_config(config)
         if progress_verbosity is not None:
-            cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
+            logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+            cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
         migrate_sessions_to_threads()
         migrate_rocksdb_to_data_subfolder()
 
-        # Check PostgreSQL availability if checkpointer is postgres
-        if cfg.checkpointer_backend == "postgres":
-            if not _check_postgres_available():
-                logger.warning(
-                    "PostgreSQL checkpointer configured but server not responding at localhost:5432. "
-                    "Start pgvector: docker-compose up -d"
-                )
+        # Check PostgreSQL availability if checkpointer is postgresql
+        if cfg.protocols.durability.checkpointer == "postgresql" and not _check_postgres_available():
+            logger.warning(
+                "PostgreSQL checkpointer configured but server not responding at localhost:5432. "
+                "Start pgvector: docker-compose up -d"
+            )
 
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
         logger.info("Startup completed in %.1fms", startup_elapsed_ms)
@@ -350,9 +351,10 @@ def _check_postgres_available() -> bool:
         sock.settimeout(1)
         result = sock.connect_ex(("localhost", 5432))
         sock.close()
-        return result == 0
     except Exception:
         return False
+    else:
+        return result == 0
 
 
 def _run_tui(
@@ -387,9 +389,8 @@ def _run_headless(
     """
     from soothe.cli.daemon import SootheDaemon
 
-    # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
     if SootheDaemon.is_running():
-        _run_headless_via_daemon(
+        daemon_exit_code = _run_headless_via_daemon(
             cfg,
             prompt,
             thread_id=thread_id,
@@ -397,15 +398,20 @@ def _run_headless(
             autonomous=autonomous,
             max_iterations=max_iterations,
         )
-    else:
-        _run_headless_standalone(
-            cfg,
-            prompt,
-            thread_id=thread_id,
-            output_format=output_format,
-            autonomous=autonomous,
-            max_iterations=max_iterations,
-        )
+        if daemon_exit_code != _DAEMON_FALLBACK_EXIT_CODE:
+            sys.exit(daemon_exit_code)
+        # Daemon unresponsive -- stop it to release locks, then run standalone
+        typer.echo("Daemon is unresponsive, stopping it and running standalone...", err=True)
+        SootheDaemon.stop_running(timeout=5.0)
+
+    _run_headless_standalone(
+        cfg,
+        prompt,
+        thread_id=thread_id,
+        output_format=output_format,
+        autonomous=autonomous,
+        max_iterations=max_iterations,
+    )
 
 
 def _run_headless_via_daemon(
@@ -416,7 +422,7 @@ def _run_headless_via_daemon(
     output_format: str = "text",
     autonomous: bool = False,
     max_iterations: int | None = None,
-) -> None:
+) -> int:
     """Run a single prompt by connecting to a running daemon."""
     import asyncio
 
@@ -425,18 +431,22 @@ def _run_headless_via_daemon(
     from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
 
     async def _stream() -> int:
-
+        _ = thread_id
+        daemon_start_timeout_s = 20.0
+        daemon_inactivity_timeout_s = 180.0
         client = DaemonClient()
-        exit_code = 0
 
         try:
-            await client.connect()
+            await asyncio.wait_for(client.connect(), timeout=5.0)
 
             # Send the input
-            await client.send_input(
-                prompt,
-                autonomous=autonomous,
-                max_iterations=max_iterations,
+            await asyncio.wait_for(
+                client.send_input(
+                    prompt,
+                    autonomous=autonomous,
+                    max_iterations=max_iterations,
+                ),
+                timeout=5.0,
             )
 
             # Stream events
@@ -444,11 +454,18 @@ def _run_headless_via_daemon(
             seen_message_ids: set[str] = set()
             name_map: dict[str, str] = {}
             has_error = False
-            verbosity = cfg.progress_verbosity
+            verbosity = cfg.logging.progress_verbosity
             query_started = False  # Track if we've seen the query start running
 
             while True:
-                event = await client.read_event()
+                timeout_s = daemon_inactivity_timeout_s if query_started else daemon_start_timeout_s
+                try:
+                    event = await asyncio.wait_for(client.read_event(), timeout=timeout_s)
+                except TimeoutError:
+                    if query_started:
+                        typer.echo("Error: daemon stream timed out while waiting for events.", err=True)
+                        return 1
+                    return _DAEMON_FALLBACK_EXIT_CODE
                 if not event:
                     break
 
@@ -459,14 +476,18 @@ def _run_headless_via_daemon(
                     state = event.get("state", "")
                     if state == "running":
                         query_started = True
-                    elif state == "idle" and query_started:
-                        # Query completed (only break after query has started)
+                    elif (state == "idle" and query_started) or state == "stopped":
                         break
                     continue
 
-                # Handle events
                 if event_type != "event":
                     continue
+
+                # Detect errors before query started as a hard failure
+                ev_data = event.get("data")
+                if not query_started and isinstance(ev_data, dict) and ev_data.get("type") == "soothe.error":
+                    typer.echo(f"Daemon error: {ev_data.get('error', 'unknown')}", err=True)
+                    return 1
 
                 namespace = tuple(event.get("namespace", []))
                 mode = event.get("mode", "")
@@ -488,7 +509,8 @@ def _run_headless_via_daemon(
                         has_error = True
 
                 if mode == "messages":
-                    if not isinstance(data, (list, tuple)) or len(data) != 2:
+                    message_data_tuple_length = 2
+                    if not isinstance(data, (list, tuple)) or len(data) != message_data_tuple_length:
                         continue
                     msg_data, metadata = data
                     is_main = not namespace
@@ -547,10 +569,7 @@ def _run_headless_via_daemon(
                     elif msg_type in ("tool", "ToolMessage") and should_show("tool_activity", verbosity):
                         tool_name = msg_data.get("name", "tool")
                         content = msg_data.get("content", "")
-                        if isinstance(content, str):
-                            brief = content.replace("\n", " ")[:120]
-                        else:
-                            brief = str(content)[:120]
+                        brief = content.replace("\n", " ")[:120] if isinstance(content, str) else str(content)[:120]
                         prefix = resolve_namespace_label(namespace, name_map) if namespace else None
                         if prefix:
                             sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
@@ -561,17 +580,19 @@ def _run_headless_via_daemon(
             if full_response:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
-            return 1 if has_error else 0
 
+        except (ConnectionError, OSError, TimeoutError):
+            return _DAEMON_FALLBACK_EXIT_CODE
         except Exception as e:
             logger.exception("Failed to run via daemon")
             typer.echo(f"Error: {e}", err=True)
             return 1
+        else:
+            return 1 if has_error else 0
         finally:
             await client.close()
 
-    exit_code = asyncio.run(_stream())
-    sys.exit(exit_code)
+    return asyncio.run(_stream())
 
 
 def _run_headless_standalone(
@@ -592,7 +613,12 @@ def _run_headless_standalone(
     from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
-    thread_logger = ThreadLogger(thread_id=thread_id or "headless")
+    thread_logger = ThreadLogger(
+        thread_dir=cfg.logging.thread_logging.dir,
+        thread_id=thread_id or "headless",
+        retention_days=cfg.logging.thread_logging.retention_days,
+        max_size_mb=cfg.logging.thread_logging.max_size_mb,
+    )
 
     _chunk_len = 3
     _msg_pair_len = 2
@@ -606,7 +632,7 @@ def _run_headless_standalone(
         seen_message_ids: set[str] = set()
         name_map: dict[str, str] = {}
         has_error = False
-        verbosity = cfg.progress_verbosity
+        verbosity = cfg.logging.progress_verbosity
 
         thread_logger.log_user_input(prompt)
 
@@ -764,10 +790,10 @@ def config(
             general_table.add_column("Setting", style="cyan")
             general_table.add_column("Value", style="yellow")
             general_table.add_row("Debug Mode", "[green]Yes[/green]" if cfg.debug else "[red]No[/red]")
-            general_table.add_row("Context Backend", cfg.context_backend.title())
-            general_table.add_row("Memory Backend", cfg.memory_backend.title())
-            general_table.add_row("Policy Profile", cfg.policy_profile)
-            general_table.add_row("Progress Verbosity", cfg.progress_verbosity)
+            general_table.add_row("Context Backend", cfg.protocols.context.backend.title())
+            general_table.add_row("Memory Backend", cfg.protocols.memory.backend.title())
+            general_table.add_row("Policy Profile", cfg.protocols.policy.profile)
+            general_table.add_row("Progress Verbosity", cfg.logging.progress_verbosity)
             general_table.add_row("Vector Store Provider", cfg.vector_store_provider.title())
 
             typer.echo(Panel(providers_table, border_style="blue"))
@@ -872,7 +898,8 @@ def attach(
 
     cfg = _load_config(config)
     if progress_verbosity is not None:
-        cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
+        logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+        cfg = cfg.model_copy(update={"logging": logging_config})
     try:
         from soothe.cli.tui_app import run_textual_tui
 
@@ -937,7 +964,9 @@ def server_start(
     ] = False,
 ) -> None:
     """Start the Soothe daemon."""
-    from soothe.cli.daemon import SootheDaemon, run_daemon
+    import time
+
+    from soothe.cli.daemon import SootheDaemon, pid_path, run_daemon
 
     if SootheDaemon.is_running():
         typer.echo("Soothe daemon is already running.")
@@ -954,8 +983,6 @@ def server_start(
         cmd = [sys.executable, "-m", "soothe.cli.daemon"]
         if config:
             cmd.extend(["--config", config])
-        # Command is constructed from trusted sources (sys.executable, internal module)
-        # Redirect stderr to the log file for debugging
         log_file = Path(SOOTHE_HOME) / "logs" / "daemon.stderr"
         log_file.parent.mkdir(parents=True, exist_ok=True)
         with log_file.open("a") as stderr_file:
@@ -965,7 +992,16 @@ def server_start(
                 stderr=stderr_file,
                 start_new_session=True,
             )
-        typer.echo("Soothe daemon started in background.")
+        # Wait briefly for daemon to acquire PID lock and write PID file
+        for _ in range(30):
+            if pid_path().exists():
+                break
+            time.sleep(0.2)
+        if SootheDaemon.is_running():
+            pid = pid_path().read_text().strip()
+            typer.echo(f"Soothe daemon started in background (PID: {pid}).")
+        else:
+            typer.echo("Soothe daemon started in background.")
 
 
 @server_app.command("stop")
@@ -1023,7 +1059,7 @@ def thread_list(
         _thread_list_standalone(cfg, status_filter=status)
 
 
-def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = None) -> None:
+def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = None) -> None:
     """List threads by connecting to a running daemon."""
     import asyncio
 
@@ -1329,9 +1365,9 @@ def show_config(
             typer.echo("  (none)")
 
         typer.echo("\n[Protocols]")
-        typer.echo(f"  context_backend: {cfg.context_backend}")
-        typer.echo(f"  memory_backend: {cfg.memory_backend}")
-        typer.echo(f"  planner_routing: {cfg.planner_routing}")
+        typer.echo(f"  context_backend: {cfg.protocols.context.backend}")
+        typer.echo(f"  memory_backend: {cfg.protocols.memory.backend}")
+        typer.echo(f"  planner_routing: {cfg.protocols.planner.routing}")
         typer.echo(f"  vector_store_provider: {cfg.vector_store_provider}")
 
         typer.echo("\n" + "=" * 50)

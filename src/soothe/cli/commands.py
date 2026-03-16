@@ -292,8 +292,8 @@ def _show_context(console: Console, runner: SootheRunner) -> None:
 
 
 def _show_policy(console: Console, runner: SootheRunner) -> None:
-    console.print(f"[dim]Policy profile: {runner.config.policy_profile}[/dim]")
-    console.print(f"[dim]Planner routing: {runner.config.planner_routing}[/dim]")
+    console.print(f"[dim]Policy profile: {runner.config.protocols.policy.profile}[/dim]")
+    console.print(f"[dim]Planner routing: {runner.config.protocols.planner.routing}[/dim]")
 
 
 def _show_input_history(console: Console, history: InputHistory | None) -> None:

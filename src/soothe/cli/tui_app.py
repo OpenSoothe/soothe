@@ -197,7 +197,7 @@ class SootheApp(App):
         self._connected = False
         self._conversation_history: list[str] = []
         self._last_activity_count = 0
-        self._progress_verbosity = self._config.progress_verbosity
+        self._progress_verbosity = self._config.logging.progress_verbosity
         self._thread_logger: ThreadLogger | None = None
 
     def compose(self) -> ComposeResult:
@@ -507,7 +507,12 @@ class SootheApp(App):
             log_file = directory / f"{thread_id}.jsonl"
             if log_file.exists():
                 try:
-                    self._thread_logger = ThreadLogger(thread_dir=str(directory), thread_id=thread_id)
+                    self._thread_logger = ThreadLogger(
+                        thread_dir=str(directory),
+                        thread_id=thread_id,
+                        retention_days=self._config.logging.thread_logging.retention_days,
+                        max_size_mb=self._config.logging.thread_logging.max_size_mb,
+                    )
                     logger.info("Found thread history in %s for thread %s", directory, thread_id)
                     break
                 except Exception:
@@ -515,7 +520,12 @@ class SootheApp(App):
                     continue
         else:
             # No data found, use default directory
-            self._thread_logger = ThreadLogger(thread_id=thread_id)
+            self._thread_logger = ThreadLogger(
+                thread_dir=self._config.logging.thread_logging.dir,
+                thread_id=thread_id,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
             logger.info("No existing history found for thread %s, using default directory", thread_id)
 
         try:
@@ -649,7 +659,7 @@ class SootheApp(App):
             self._log_conversation("[bold green]Assistant:[/bold green] ")
             await self._client.send_input(
                 text,
-                autonomous=self._config.autonomous_enabled_by_default,
+                autonomous=self._config.autonomous.enabled_by_default,
             )
 
     # -- actions ------------------------------------------------------------

@@ -429,7 +429,7 @@ def create_weaver_subagent(
         skillify_retriever=skillify_retriever,
         model=resolved_model,
         policy=ConfigDrivenPolicy(),
-        policy_profile=cfg.policy_profile,
+        policy_profile=cfg.protocols.policy.profile,
     )
 
     spec: CompiledSubAgent = {
@@ -443,13 +443,14 @@ def create_weaver_subagent(
 
 def _resolve_dependencies(cfg: Any, collection: str) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings for the reuse index."""
+    vector_store_config = cfg.resolve_vector_store_config()
     if cfg.vector_store_provider != "none":
         from soothe.backends.vector_store import create_vector_store
 
         vs = create_vector_store(
             cfg.vector_store_provider,
             collection,
-            cfg.vector_store_config,
+            vector_store_config,
         )
     else:
         from soothe.backends.vector_store.in_memory import InMemoryVectorStore
@@ -469,10 +470,11 @@ def _get_skillify_retriever(cfg: Any) -> Any | None:
             from soothe.subagents.skillify.retriever import SkillRetriever
 
             collection = getattr(skillify_cfg, "index_collection", "soothe_skillify")
+            vector_store_config = cfg.resolve_vector_store_config()
             if cfg.vector_store_provider != "none":
                 from soothe.backends.vector_store import create_vector_store
 
-                vs = create_vector_store(cfg.vector_store_provider, collection, cfg.vector_store_config)
+                vs = create_vector_store(cfg.vector_store_provider, collection, vector_store_config)
             else:
                 vs = InMemoryVectorStore(collection)
             embeddings = cfg.create_embedding_model()

@@ -44,12 +44,13 @@ SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 }
 
 
-def resolve_tools(tool_names: list[str], *, lazy: bool = False) -> list[BaseTool]:
+def resolve_tools(tool_names: list[str], *, lazy: bool = False, config: SootheConfig | None = None) -> list[BaseTool]:
     """Resolve tool group names to instantiated langchain BaseTool lists.
 
     Args:
         tool_names: Enabled tool group names from config.
         lazy: If True, defer tool loading until first use (improves startup time).
+        config: Optional Soothe config for tool configuration.
 
     Returns:
         Flat list of `BaseTool` instances (or lazy proxies).
@@ -69,7 +70,7 @@ def resolve_tools(tool_names: list[str], *, lazy: bool = False) -> list[BaseTool
                 # For simplicity, we load the first tool in the group
                 proxy = LazyToolProxy(
                     tool_name=name,
-                    loader=lambda n=name: _resolve_single_tool_group_uncached(n),
+                    loader=lambda n=name, c=config: _resolve_single_tool_group_uncached(n, c),
                     index=0,
                 )
                 tools.append(proxy)
@@ -77,7 +78,7 @@ def resolve_tools(tool_names: list[str], *, lazy: bool = False) -> list[BaseTool
                 logger.debug("Created lazy proxy for tool '%s' in %.1fms", name, elapsed_ms)
             else:
                 # Eager loading with caching
-                resolved = _resolve_single_tool_group(name)
+                resolved = _resolve_single_tool_group(name, config)
                 tools.extend(resolved)
         except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
@@ -122,8 +123,13 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
     return tools
 
 
-def _resolve_single_tool_group_uncached(name: str) -> list[BaseTool]:
-    """Resolve a single tool group name to a list of BaseTool instances."""
+def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None = None) -> list[BaseTool]:
+    """Resolve a single tool group name to a list of BaseTool instances.
+
+    Args:
+        name: Tool group name.
+        config: Optional Soothe config for tool configuration.
+    """
     if name == "jina":
         from soothe.tools.jina import create_jina_tools
 
@@ -135,7 +141,15 @@ def _resolve_single_tool_group_uncached(name: str) -> list[BaseTool]:
     if name == "wizsearch":
         from soothe.tools.wizsearch import create_wizsearch_tools
 
-        return list(create_wizsearch_tools())
+        # Pass wizsearch config if available
+        wizsearch_config = {}
+        if config and hasattr(config, "tools_settings") and hasattr(config.tools_settings, "wizsearch"):
+            wizsearch_config = {
+                "default_engines": config.tools_settings.wizsearch.default_engines,
+                "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
+                "timeout": config.tools_settings.wizsearch.timeout,
+            }
+        return list(create_wizsearch_tools(wizsearch_config))
     if name == "datetime":
         from soothe.tools.datetime import create_datetime_tools
 
@@ -220,7 +234,7 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
     """
     from soothe.core.goal_engine import GoalEngine
 
-    return GoalEngine(max_retries=config.autonomous_max_retries)
+    return GoalEngine(max_retries=config.autonomous.max_retries)
 
 
 def resolve_goal_tools(goal_engine: GoalEngine) -> list[BaseTool]:
@@ -366,10 +380,10 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     Returns:
         A ContextProtocol instance, or None if disabled.
     """
-    if config.context_backend == "none":
+    if config.protocols.context.backend == "none":
         return None
 
-    if config.context_backend == "vector" and config.vector_store_provider != "none":
+    if config.protocols.context.backend == "vector" and config.vector_store_provider != "none":
         try:
             from soothe.backends.context.vector import VectorContext
             from soothe.backends.vector_store import create_vector_store
@@ -377,13 +391,13 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             vs = create_vector_store(
                 config.vector_store_provider,
                 f"{config.vector_store_collection}_context",
-                config.vector_store_config,
+                config.resolve_vector_store_config(),
             )
             embeddings = config.create_embedding_model()
             return VectorContext(vector_store=vs, embeddings=embeddings)
         except Exception:
             logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
-    elif config.context_backend == "vector":
+    elif config.protocols.context.backend == "vector":
         logger.warning("vector context requires vector_store_provider; falling back to keyword")
 
     from pathlib import Path
@@ -391,14 +405,16 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     from soothe.backends.context.keyword import KeywordContext
     from soothe.backends.persistence import create_persist_store
 
-    persist_dir = config.context_persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
+    persist_dir = config.protocols.context.persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
 
     # Create persist store based on config
     try:
         persist_store = create_persist_store(
             persist_dir=persist_dir,
-            backend=config.context_persist_backend,
-            dsn=config.persistence_postgres_dsn if config.context_persist_backend == "postgresql" else None,
+            backend=config.protocols.context.persist_backend,
+            dsn=config.resolve_persistence_postgres_dsn()
+            if config.protocols.context.persist_backend == "postgresql"
+            else None,
             namespace="context",
         )
     except Exception as e:
@@ -422,10 +438,10 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     Returns:
         A MemoryProtocol instance, or None if disabled.
     """
-    if config.memory_backend == "none":
+    if config.protocols.memory.backend == "none":
         return None
 
-    if config.memory_backend == "vector" and config.vector_store_provider != "none":
+    if config.protocols.memory.backend == "vector" and config.vector_store_provider != "none":
         try:
             from soothe.backends.memory.vector import VectorMemory
             from soothe.backends.vector_store import create_vector_store
@@ -433,13 +449,13 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
             vs = create_vector_store(
                 config.vector_store_provider,
                 f"{config.vector_store_collection}_memory",
-                config.vector_store_config,
+                config.resolve_vector_store_config(),
             )
             embeddings = config.create_embedding_model()
             return VectorMemory(vector_store=vs, embeddings=embeddings)
         except Exception:
             logger.warning("Vector memory init failed, falling back to keyword", exc_info=True)
-    elif config.memory_backend == "vector":
+    elif config.protocols.memory.backend == "vector":
         logger.warning("vector memory requires vector_store_provider; falling back to keyword")
 
     from pathlib import Path
@@ -447,14 +463,16 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     from soothe.backends.memory.keyword import KeywordMemory
     from soothe.backends.persistence import create_persist_store
 
-    persist_path = config.memory_persist_path or str(Path(SOOTHE_HOME) / "memory" / "data")
+    persist_path = config.protocols.memory.persist_dir or str(Path(SOOTHE_HOME) / "memory" / "data")
 
     # Create persist store based on config
     try:
         persist_store = create_persist_store(
             persist_dir=persist_path,
-            backend=config.memory_persist_backend,
-            dsn=config.persistence_postgres_dsn if config.memory_persist_backend == "postgresql" else None,
+            backend=config.protocols.memory.persist_backend,
+            dsn=config.resolve_persistence_postgres_dsn()
+            if config.protocols.memory.persist_backend == "postgresql"
+            else None,
             namespace="memory",
         )
     except Exception as e:
@@ -498,7 +516,7 @@ def resolve_planner(
 
     direct = DirectPlanner(model=planner_model) if planner_model else None
 
-    if config.planner_routing == "always_direct":
+    if config.protocols.planner.routing == "always_direct":
         return direct or DirectPlanner(model=planner_model)
 
     subagent_planner = None
@@ -509,7 +527,7 @@ def resolve_planner(
     except Exception:
         logger.debug("SubagentPlanner init failed", exc_info=True)
 
-    if config.planner_routing == "always_planner":
+    if config.protocols.planner.routing == "always_planner":
         return subagent_planner or direct  # type: ignore[return-value]
 
     claude_planner = None
@@ -520,7 +538,7 @@ def resolve_planner(
     except Exception:
         logger.info("Claude CLI not available for planning")
 
-    if config.planner_routing == "always_claude":
+    if config.protocols.planner.routing == "always_claude":
         return claude_planner or subagent_planner or direct  # type: ignore[return-value]
 
     from soothe.backends.planning.router import AutoPlanner
@@ -560,14 +578,14 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     from pathlib import Path
 
     # Try PostgreSQL backend
-    if config.durability_backend == "postgresql":
+    if config.protocols.durability.backend == "postgresql":
         try:
             from soothe.backends.durability.postgresql import PostgreSQLDurability
             from soothe.backends.persistence import create_persist_store
 
             persist_store = create_persist_store(
                 backend="postgresql",
-                dsn=config.persistence_postgres_dsn,
+                dsn=config.resolve_persistence_postgres_dsn(),
                 namespace="durability",
             )
             logger.info("Using PostgreSQL durability backend")
@@ -582,11 +600,11 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             # Fall through to json backend
 
     # Try RocksDB backend
-    if config.durability_backend == "rocksdb":
+    if config.protocols.durability.backend == "rocksdb":
         try:
             from soothe.backends.durability.rocksdb import RocksDBDurability
 
-            persist_dir = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "data")
+            persist_dir = config.protocols.durability.metadata_path or str(Path(SOOTHE_HOME) / "durability" / "data")
             logger.info("Using RocksDB durability backend at %s", persist_dir)
             return RocksDBDurability(persist_dir=persist_dir)
         except (ImportError, RuntimeError) as e:
@@ -599,17 +617,19 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             # Fall through to json backend
 
     # JSON backend (default fallback)
-    if config.durability_backend in ("json", "postgresql", "rocksdb"):
+    if config.protocols.durability.backend in ("json", "postgresql", "rocksdb"):
         from soothe.backends.durability.json import JsonDurability
 
-        metadata_path = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "threads.json")
+        metadata_path = config.protocols.durability.metadata_path or str(
+            Path(SOOTHE_HOME) / "durability" / "threads.json"
+        )
         logger.info("Using json durability backend at %s", metadata_path)
         return JsonDurability(metadata_path=metadata_path)
 
     # Unknown backend - default to json
     logger.warning(
         "Unknown durability backend '%s'; using json durability",
-        config.durability_backend,
+        config.protocols.durability.backend,
     )
     from soothe.backends.durability.json import JsonDurability
 
@@ -620,14 +640,14 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
-    Uses unified persistence_postgres_dsn for connection.
+    Uses persistence.soothe_postgres_dsn for connection.
     Falls back to MemorySaver when PostgreSQL is unavailable.
     """
     from langgraph.checkpoint.memory import MemorySaver
 
-    backend = config.checkpointer_backend
-    if backend == "postgres":
-        dsn = config.persistence_postgres_dsn
+    backend = config.protocols.durability.checkpointer
+    if backend == "postgresql":
+        dsn = config.resolve_persistence_postgres_dsn()
         return _resolve_postgres_checkpointer(dsn) or MemorySaver()
 
     logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
@@ -642,33 +662,24 @@ def _resolve_postgres_checkpointer(dsn: str) -> Checkpointer | None:
 
     # Try AsyncPostgresSaver first (better for async agent execution)
     try:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-        checkpointer = AsyncPostgresSaver.from_conn_string(dsn)
-    except ImportError:
-        logger.debug("AsyncPostgresSaver not available, trying sync version")
-    except Exception as exc:
-        logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
-    else:
-        logger.info("Using AsyncPostgresSaver with DSN: %s", _mask_dsn(dsn))
-        return checkpointer
-
-    # Fallback to sync PostgresSaver
-    try:
         from langgraph.checkpoint.postgres import PostgresSaver
-
-        checkpointer = PostgresSaver.from_conn_string(dsn)
     except ImportError:
         logger.warning(
             "PostgreSQL checkpointer requires 'langgraph[postgres]'. Install with: pip install 'langgraph[postgres]'"
         )
+        return None
+
+    # Try AsyncPostgresSaver.from_conn_string
+    # NOTE: from_conn_string returns an async context manager, not a checkpointer directly
+    # We need to use the sync PostgresSaver for now, as agent compilation happens synchronously
+    try:
+        checkpointer = PostgresSaver.from_conn_string(dsn)
+        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
     except Exception as exc:
         logger.warning("Failed to initialize PostgresSaver: %s", exc)
+        return None
     else:
-        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
         return checkpointer
-
-    return None
 
 
 def _mask_dsn(dsn: str) -> str:

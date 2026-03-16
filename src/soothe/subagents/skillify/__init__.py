@@ -206,7 +206,7 @@ def create_skillify_subagent(
         top_k=top_k,
         ready_event=indexer.ready_event,
         policy=ConfigDrivenPolicy(),
-        policy_profile=cfg.policy_profile,
+        policy_profile=cfg.protocols.policy.profile,
     )
 
     _start_background_indexer(indexer)
@@ -231,12 +231,13 @@ def _resolve_dependencies(
     from soothe.backends.vector_store import create_vector_store
 
     collection = getattr(skillify_cfg, "index_collection", "soothe_skillify") if skillify_cfg else "soothe_skillify"
+    vector_store_config = cfg.resolve_vector_store_config()
 
     if cfg.vector_store_provider != "none":
         vs = create_vector_store(
             cfg.vector_store_provider,
             collection,
-            cfg.vector_store_config,
+            vector_store_config,
         )
     else:
         from soothe.backends.vector_store.in_memory import InMemoryVectorStore
