@@ -48,8 +48,8 @@ def pgvector_store(pgvector_config):
 def weaviate_config():
     """Configuration for Weaviate tests."""
     return {
-        "url": "http://localhost:8080",
-        "grpc_port": 50051,
+        "url": "http://localhost:8081",
+        "grpc_port": 50052,
     }
 
 

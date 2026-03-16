@@ -110,23 +110,24 @@ Numeric prefix routes to subagents: `1`=Main, `2`=Planner, `3`=Scout, `4`=Resear
 ```
 src/soothe/
 ├── __init__.py               # Public API exports
-├── agent.py                  # create_soothe_agent() factory
 ├── config.py                 # SootheConfig (pydantic-settings)
-├── protocols/                # 8 runtime-agnostic protocol definitions
-├── context/                  # KeywordContext, VectorContext
-├── memory_store/             # StoreBackedMemory, VectorMemory
-├── planning/                 # DirectPlanner
-├── policy/                   # ConfigDrivenPolicy
-├── durability/               # InMemoryDurability
-├── remote/                   # LangGraphRemoteAgent
+├── protocols/                # Runtime-agnostic protocol definitions
+├── backends/                 # Protocol implementations
+│   ├── context/              # KeywordContext, VectorContext
+│   ├── memory/               # StoreBackedMemory, VectorMemory
+│   ├── planning/             # DirectPlanner
+│   ├── policy/               # ConfigDrivenPolicy
+│   ├── durability/           # InMemoryDurability
+│   ├── remote/               # LangGraphRemoteAgent
+│   ├── persistence/          # JSON, RocksDB stores
+│   └── vector_store/         # PGVector, Weaviate
 ├── middleware/               # ContextMiddleware, PolicyMiddleware
-├── core/                     # runner, resolver, goal_engine (autonomous iteration)
+├── core/                     # agent, runner, resolver, goal_engine (autonomous iteration)
 ├── subagents/                # planner, scout, research, browser, claude, skillify, weaver
-├── tools/                    # jina, serper, image, audio, video, tabular, bash, file_edit, document, python_executor, goals
+├── tools/                    # jina, serper, image, audio, video, tabular, bash, file_edit, document, python_executor, goals, wizsearch
 ├── mcp/                      # MCP server loading
 ├── cli/                      # Typer CLI, SootheRunner, Rich TUI
-├── vector_store/             # PGVector, Weaviate
-├── persistence/              # JSON, RocksDB stores
+├── built_in_skills/          # Built-in skill implementations
 └── utils/                    # Streaming helpers
 ```
 

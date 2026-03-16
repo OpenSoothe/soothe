@@ -54,6 +54,7 @@ class WeaviateVectorStore:
     async def _ensure_client(self) -> Any:
         if self._client is None:
             import weaviate
+            import weaviate.classes as wvc
 
             if self._api_key:
                 auth = weaviate.auth.AuthApiKey(api_key=self._api_key)
@@ -62,10 +63,19 @@ class WeaviateVectorStore:
                     auth_credentials=auth,
                 )
             else:
+                # Parse host and port from URL
+                url_parts = self._url.replace("http://", "").split(":")
+                host = url_parts[0]
+                port = int(url_parts[1]) if len(url_parts) > 1 else 8080
+
                 self._client = weaviate.use_async_with_local(
-                    host=self._url.replace("http://", "").split(":")[0],
-                    port=int(self._url.split(":")[-1]) if ":" in self._url.split("//")[-1] else 8080,
+                    host=host,
+                    port=port,
                     grpc_port=self._grpc_port,
+                    skip_init_checks=True,
+                    additional_config=wvc.init.AdditionalConfig(
+                        timeout=wvc.init.Timeout(init=30, query=30, insert=120),
+                    ),
                 )
             await self._client.connect()
         return self._client
@@ -73,7 +83,7 @@ class WeaviateVectorStore:
     def _get_collection(self, client: Any) -> Any:
         return client.collections.get(self._collection_name)
 
-    async def create_collection(self, _vector_size: int, distance: str = "cosine") -> None:
+    async def create_collection(self, vector_size: int, distance: str = "cosine") -> None:  # noqa: ARG002
         """Create the Weaviate collection with ``none`` vectorizer."""
         import weaviate.classes.config as wc
 
@@ -121,7 +131,7 @@ class WeaviateVectorStore:
 
     async def search(
         self,
-        _query: str,
+        query: str,  # noqa: ARG002
         vector: list[float],
         limit: int = 5,
         filters: dict[str, Any] | None = None,

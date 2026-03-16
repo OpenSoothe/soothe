@@ -112,15 +112,12 @@ class PGVectorStore:
 
     async def search(
         self,
-        _query: str = "",
-        vector: list[float] | None = None,
+        query: str,  # noqa: ARG002
+        vector: list[float],
         limit: int = 5,
         filters: dict[str, Any] | None = None,
     ) -> list[VectorRecord]:
         """Search for nearest neighbours using cosine distance."""
-        if vector is None:
-            return []
-
         pool = await self._ensure_pool()
 
         where_clause = ""

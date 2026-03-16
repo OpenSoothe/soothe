@@ -171,7 +171,7 @@ class TestPGVectorStoreUnit:
             store._pool = mock_pool
 
             query_vector = [0.1, 0.2, 0.3] * 256
-            results = await store.search(vector=query_vector, limit=5)
+            results = await store.search(query="test query", vector=query_vector, limit=5)
 
             assert len(results) == 2
             assert results[0].id == "id1"

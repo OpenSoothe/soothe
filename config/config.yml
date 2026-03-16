@@ -133,24 +133,29 @@ browser:
 # Tools
 # =============================================================================
 # Enable tool groups. Some require API keys (see config/env.example).
+# Default tools are powerful and require no external API keys (except wizsearch).
 
 tools:
-  - datetime       # Current date/time (no API key)
-  - arxiv          # Academic paper search (no API key)
-  - wikipedia      # Encyclopedia lookup (no API key)
-  - wizsearch      # Multi-engine web search (engines: tavily, duckduckgo, wechat)
-  # Optional (require API keys or dependencies):
-  # - serper        # Google search via Serper (SERPER_API_KEY)
-  # - jina          # Web page reader via Jina (JINA_API_KEY)
-  # - image         # Image analysis (OpenAI)
-  # - audio         # Audio transcription (OpenAI)
-  # - video         # Video info extraction
-  # - tabular       # Tabular data tools
-  # LangChain community:
-  # - arxiv         # ArxivQueryRun (no API key)
-  # - wikipedia     # WikipediaQueryRun (no API key)
-  # - github        # GitHub API (GITHUB_TOKEN)
-  # - python_repl   # Python REPL (security risk)
+  # Core tools (no external dependencies)
+  - datetime          # Current date/time for time-awareness
+  - file_edit         # Create, read, delete, search files with backup
+  - python_executor   # Execute Python code with matplotlib support
+  - bash              # Persistent bash shell execution
+  - tabular           # Inspect and validate tabular data (CSV, Excel, etc.)
+  - document          # Extract text from documents (PDF, DOCX, etc.)
+
+  # Web accesses (wizsearch taivily engine requires API key)
+  - wizsearch         # Multi-engine web search and page crawling
+  - wikipedia         # Encyclopedia lookup (no API key)
+  - arxiv             # Academic paper search (no API key)
+
+  # Optional tools (require API keys or external services):
+  # - serper          # Google search via Serper (SERPER_API_KEY)
+  # - jina            # Web page reader via Jina (JINA_API_KEY)
+  # - image           # Image analysis (OpenAI GPT-4o)
+  # - audio           # Audio transcription (OpenAI Whisper)
+  # - video           # Video analysis (Google Gemini)
+  # - github          # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
 # MCP Servers
