@@ -104,7 +104,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore` | Persistence backends for context/memory |
 | `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
-| `tools/` | `jina`, `serper`, `image`, `audio`, `video`, `tabular`, `goals` | langchain BaseTool groups |
+| `tools/` | `jina`, `serper`, `wizsearch`, `image`, `audio`, `video`, `tabular`, `bash`, `file_edit`, `document`, `python_executor`, `goals`, `datetime` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
 | `cli/` | `main`, `tui_shared`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |
 | `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
@@ -185,7 +185,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
 | [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
 | [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
-| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
+| [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
 
 ## Interaction Rules
 

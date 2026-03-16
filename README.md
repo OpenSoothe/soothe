@@ -103,7 +103,7 @@ Soothe is configured through two mechanisms:
 | `/config` | Active configuration |
 | `/exit` | Exit |
 
-Numeric prefix routes to subagents: `1`=Main, `2`=Planner, `3`=Scout, `4`=Research, `5`=Browser, `6`=Claude.
+Numeric prefix routes to subagents: `1`=Main, `2`=Planner, `3`=Scout, `4`=Research, `5`=Browser, `6`=Claude, `7`=Skillify, `8`=Weaver.
 
 ## Project Structure
 
@@ -120,8 +120,9 @@ src/soothe/
 ├── durability/               # InMemoryDurability
 ├── remote/                   # LangGraphRemoteAgent
 ├── middleware/               # ContextMiddleware, PolicyMiddleware
-├── subagents/                # planner, scout, research, browser, claude
-├── tools/                    # jina, serper, image, audio, video, tabular
+├── core/                     # runner, resolver, goal_engine (autonomous iteration)
+├── subagents/                # planner, scout, research, browser, claude, skillify, weaver
+├── tools/                    # jina, serper, image, audio, video, tabular, bash, file_edit, document, python_executor, goals
 ├── mcp/                      # MCP server loading
 ├── cli/                      # Typer CLI, SootheRunner, Rich TUI
 ├── vector_store/             # PGVector, Weaviate
@@ -138,6 +139,10 @@ src/soothe/
 | [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design |
 | [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture Design |
 | [RFC-0003](docs/specs/RFC-0003.md) | CLI TUI Architecture Design |
+| [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
+| [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
+| [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
+| [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
 
 ### Implementation Guides
 
@@ -151,6 +156,17 @@ src/soothe/
 | [IG-006](docs/impl/006-vectorstore-router-persistence.md) | VectorStore, Router, Persistence |
 | [IG-007](docs/impl/007-cli-tui-implementation.md) | CLI TUI Implementation |
 | [IG-008](docs/impl/008-config-docs-revision.md) | Config and Docs Revision |
+| [IG-009](docs/impl/009-ollama-provider.md) | Ollama Provider |
+| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | TUI Layout, History, and Refresh |
+| [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
+| [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
+| [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
+| [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
+| [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility Hard-Cut |
+| [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
+| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
+| [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
+| [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
 
 ### User Guide
 

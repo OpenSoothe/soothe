@@ -155,7 +155,7 @@ soothe attach --progress-verbosity detailed
 Progress verbosity levels:
 
 - `minimal`: assistant text + critical errors only
-- `normal` (default): protocol progress events (`soothe.*`)
+- `normal` (default): protocol progress events (`soothe.*`) + iteration/goal events
 - `detailed`: adds subagent custom events + tool call/result activity
 - `debug`: shows all available progress events (including heartbeat/thinking-style events)
 
@@ -182,6 +182,82 @@ Verbosity controls what appears in activity/progress surfaces:
 - `debug`: all categories (including thinking/heartbeat-style events)
 
 Policy checks include profile context in surfaced lines (for example, `allow (profile=standard)`).
+
+### Autonomous Iteration Mode
+
+Soothe supports autonomous multi-iteration execution for complex tasks that require iterative refinement. When enabled, the agent executes a plan, reflects on results, revises the plan, and continues without requiring human input at each step.
+
+#### When to Use Autonomous Mode
+
+Use autonomous mode for tasks that require:
+- Iterative refinement based on results (parameter sweeps, optimization)
+- Multi-phase research where findings inform next steps
+- Long-running workflows where the agent should self-direct
+- Decomposition into sub-goals that emerge during execution
+
+#### Command-Line Usage
+
+Enable autonomous mode with the `--autonomous` flag:
+
+```bash
+# Autonomous iteration with default settings
+soothe run --autonomous "Optimize the simulation parameters across the search space"
+
+# With custom iteration limit
+soothe run --autonomous --max-iterations 20 "Research the latest advances in quantum error correction"
+
+# Combine with other flags
+soothe run --config my-config.yml --autonomous --progress-verbosity detailed "Analyze and improve model performance"
+```
+
+#### How It Works
+
+1. **Goal Creation**: The initial user input creates a primary goal
+2. **Plan Generation**: The planner creates a structured plan
+3. **Iteration Loop**:
+   - Execute the plan (pre-stream → stream → post-stream)
+   - Store an iteration record in context
+   - Reflect on results (via PlannerProtocol)
+   - If revision needed, revise plan and synthesize continuation
+   - If goal complete, move to next goal or exit
+4. **Self-Driven Goals**: The agent can create new sub-goals during execution using the `manage_goals` tool
+
+#### Goal Lifecycle
+
+Goals have the following lifecycle:
+- **Pending**: Created but not yet started
+- **Active**: Currently being worked on
+- **Completed**: Successfully achieved
+- **Failed**: Could not be achieved after retries
+
+The agent can create hierarchical goals (parent/child relationships) and assign priorities. Higher priority goals are executed first.
+
+#### Configuration
+
+Configure autonomous mode in your YAML config:
+
+```yaml
+autonomous_max_iterations: 10    # Max iterations per goal
+autonomous_max_retries: 2        # Max retries before permanent failure
+```
+
+#### Iteration Events
+
+In TUI or detailed verbosity, you'll see:
+- `soothe.iteration.started` - Iteration began for a goal
+- `soothe.iteration.completed` - Iteration finished with outcome
+- `soothe.goal.created` - New goal created
+- `soothe.goal.completed` - Goal achieved
+- `soothe.goal.failed` - Goal failed (with error and retry count)
+
+#### Reflection and Revision Cycle
+
+After each iteration, the planner reflects on:
+- What was accomplished
+- What remains to be done
+- Whether the current plan is still valid
+
+If revision is needed, the planner updates the plan and a continuation prompt is generated for the next iteration. This enables the agent to adapt its approach based on what it learns.
 
 ## TUI Interface
 
@@ -216,6 +292,8 @@ Prefix your message with a number to route to a specific subagent:
 | `4` | Research |
 | `5` | Browser |
 | `6` | Claude |
+| `7` | Skillify |
+| `8` | Weaver |
 
 Examples:
 
@@ -223,6 +301,8 @@ Examples:
 4 Search for papers on transformer architectures
 5 Open https://example.com and take a screenshot
 2 Create a plan for building a REST API
+7 Retrieve skills for data processing
+8 Generate an agent for PDF extraction
 ```
 
 Multiple subagents: `4,5 Find and visit the top 3 AI news sites`
@@ -280,6 +360,34 @@ Direct access to Claude via the Anthropic SDK. Useful for tasks that benefit fro
 strengths (long context, careful reasoning).
 
 **Requires**: `pip install soothe[claude]` + `ANTHROPIC_API_KEY`
+
+### Skillify
+
+Skill warehouse and retrieval system. Manages a library of reusable skills (SKILL.md files)
+and retrieves relevant skills based on the current task. Helps the agent discover and apply
+previously learned patterns and workflows.
+
+**Features**:
+- Skill indexing and semantic search
+- Skill retrieval based on task context
+- Integration with the built_in_skills directory
+- Automatic skill discovery from configured paths
+
+**Routing**: Prefix `7` routes to Skillify subagent.
+
+### Weaver
+
+Agent generation and composition system. Dynamically creates specialized agents (subagents)
+for specific tasks by composing tools, prompts, and workflows. Enables rapid creation of
+task-specific agents without manual coding.
+
+**Features**:
+- Generate specialized agents on demand
+- Compose tools and prompts into workflows
+- Reuse patterns across agent instances
+- Integration with Skillify for pattern discovery
+
+**Routing**: Prefix `8` routes to Weaver subagent.
 
 ### Enabling/Disabling
 
@@ -404,7 +512,7 @@ up on suspend/archive.
 
 ## Tools
 
-Enable tool groups by name in your config:
+Soothe provides tool groups beyond what deepagents offers. Enable them by name in your config:
 
 ```yaml
 tools:
@@ -420,6 +528,65 @@ tools:
 Note: deepagents already provides file operations (`ls`, `read_file`, `write_file`,
 `edit_file`, `glob`, `grep`), shell execution (`execute`), and task tracking
 (`write_todos`). These are always available and do not need to be listed in `tools`.
+
+### Tool Details
+
+#### Bash Toolkit
+
+Persistent shell execution with session management. Maintains shell state across commands, supports environment variables, and provides working directory control.
+
+**Features**:
+- Persistent shell sessions (state maintained between commands)
+- Environment variable management
+- Working directory tracking
+- Timeout handling
+- Structured output parsing
+
+#### File Edit Toolkit
+
+File operations with backup and safety features.
+
+**Features**:
+- Create, read, edit files with backup copies
+- Pattern-based file editing
+- Rollback capabilities
+- Safety checks before destructive operations
+
+#### Python Executor Toolkit
+
+IPython-based code execution with visualization support.
+
+**Features**:
+- Execute Python code in an IPython environment
+- Matplotlib integration for plots and visualizations
+- Variable persistence across executions
+- Output capture and display
+- Error handling and debugging support
+
+Useful for data analysis, scientific computing, and rapid prototyping.
+
+#### Document Toolkit
+
+Document processing and extraction.
+
+**Features**:
+- Extract text and metadata from various document formats
+- Support for PDF, DOCX, TXT, and more
+- Structured data extraction
+- Document conversion capabilities
+
+#### Goals Tool
+
+Goal lifecycle management for autonomous operation.
+
+**Features**:
+- Create new goals during execution
+- List and query goal status
+- Complete or fail goals programmatically
+- Hierarchical goal support (parent/child relationships)
+- Priority management
+
+This tool enables the agent to decompose complex tasks into sub-goals dynamically.
 
 ## Using Ollama (Local Models)
 
