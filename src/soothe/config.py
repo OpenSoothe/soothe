@@ -5,14 +5,16 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from langchain_core.embeddings import Embeddings
-from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
+
+if TYPE_CHECKING:
+    from langchain_core.embeddings import Embeddings
+    from langchain_core.language_models import BaseChatModel
 
 SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
 
@@ -71,10 +73,11 @@ def _resolve_provider_env(value: str, *, provider_name: str, field_name: str) ->
     m = _ENV_VAR_RE.match(resolved)
     if m:
         env_name = m.group(1)
-        raise ValueError(
+        msg = (
             f"Provider '{provider_name}' has unresolved env var '{env_name}' in "
             f"providers[].{field_name}. Set {env_name} or replace it with a literal value."
         )
+        raise ValueError(msg)
     return resolved
 
 
@@ -248,7 +251,7 @@ class SootheConfig(BaseSettings):
         """
         import yaml
 
-        with open(path) as f:
+        with Path(path).open() as f:
             config_data = yaml.safe_load(f) or {}
         return cls(**config_data)
 

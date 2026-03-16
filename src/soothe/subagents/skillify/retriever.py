@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.embeddings import Embeddings
-
-from soothe.protocols.vector_store import VectorStoreProtocol
 from soothe.subagents.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from langchain_core.embeddings import Embeddings
+
+    from soothe.protocols.vector_store import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,12 @@ _INDEXING_WAIT_TIMEOUT = 10.0
 class LazyEmbeddings:
     """Wrapper that creates fresh embedding instances per event loop."""
 
-    def __init__(self, factory: Callable[[], Embeddings]):
+    def __init__(self, factory: Callable[[], Embeddings]) -> None:
+        """Initialize the lazy embeddings wrapper.
+
+        Args:
+            factory: Callable that creates fresh embedding instances.
+        """
         self._factory = factory
         self._instances: dict[int, Embeddings] = {}
 
@@ -32,15 +40,47 @@ class LazyEmbeddings:
         return self._instances[loop_id]
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Asynchronously embed a list of documents.
+
+        Args:
+            texts: List of document texts to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+        """
         return await self._get_instance().aembed_documents(texts)
 
     async def aembed_query(self, text: str) -> list[float]:
+        """Asynchronously embed a single query.
+
+        Args:
+            text: Query text to embed.
+
+        Returns:
+            Embedding vector for the query.
+        """
         return await self._get_instance().aembed_query(text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Synchronously embed a list of documents.
+
+        Args:
+            texts: List of document texts to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+        """
         return self._get_instance().embed_documents(texts)
 
     def embed_query(self, text: str) -> list[float]:
+        """Synchronously embed a single query.
+
+        Args:
+            text: Query text to embed.
+
+        Returns:
+            Embedding vector for the query.
+        """
         return self._get_instance().embed_query(text)
 
 
@@ -68,6 +108,16 @@ class SkillRetriever:
         policy: Any | None = None,
         policy_profile: str = "standard",
     ) -> None:
+        """Initialize the skill retriever.
+
+        Args:
+            vector_store: Vector store containing skill embeddings.
+            embeddings: Embedding model for query vectorization.
+            top_k: Maximum number of results to return.
+            ready_event: ``asyncio.Event`` set by ``SkillIndexer`` after first pass.
+            policy: Optional policy for retrieval guard checks.
+            policy_profile: Name of the policy profile to use.
+        """
         self._vector_store = vector_store
         if callable(embeddings):
             self._embeddings = LazyEmbeddings(embeddings)
@@ -115,7 +165,7 @@ class SkillRetriever:
         try:
             vector = await self._embeddings.aembed_query(query)
         except Exception:
-            logger.error("Query embedding failed for: %s", query[:100], exc_info=True)
+            logger.exception("Query embedding failed for: %s", query[:100])
             return SkillBundle(query=query)
 
         try:
@@ -125,7 +175,7 @@ class SkillRetriever:
                 limit=k,
             )
         except Exception:
-            logger.error("Vector store search failed", exc_info=True)
+            logger.exception("Vector store search failed")
             return SkillBundle(query=query)
 
         results: list[SkillSearchResult] = []

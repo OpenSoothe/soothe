@@ -101,7 +101,8 @@ class PGVectorStore:
         ids = ids or [str(uuid.uuid4()) for _ in vectors]
 
         async with pool.connection() as conn:
-            for vid, vec, payload in zip(ids, vectors, payloads):
+            for vid, vec, payload in zip(ids, vectors, payloads, strict=False):
+                # Collection name is controlled internally, not from user input
                 await conn.execute(
                     f"INSERT INTO {self._collection} (id, embedding, payload) "
                     "VALUES (%s, %s, %s) ON CONFLICT (id) DO UPDATE "
@@ -111,12 +112,15 @@ class PGVectorStore:
 
     async def search(
         self,
-        query: str,
-        vector: list[float],
+        _query: str = "",
+        vector: list[float] | None = None,
         limit: int = 5,
         filters: dict[str, Any] | None = None,
     ) -> list[VectorRecord]:
         """Search for nearest neighbours using cosine distance."""
+        if vector is None:
+            return []
+
         pool = await self._ensure_pool()
 
         where_clause = ""
@@ -131,10 +135,15 @@ class PGVectorStore:
 
         async with pool.connection() as conn:
             # Build the query with proper parameter ordering
-            sql = f"SELECT id, payload, 1 - (embedding <=> %s) as score FROM {self._collection} {where_clause} ORDER BY embedding <=> %s LIMIT %s"
+            # Collection name is controlled internally, not from user input
+            sql = (
+                f"SELECT id, payload, 1 - (embedding <=> %s) as score "
+                f"FROM {self._collection} {where_clause} "
+                f"ORDER BY embedding <=> %s LIMIT %s"
+            )
 
             # Parameters: vector for score, filter params, vector for ordering, limit
-            sql_params = [str(vector)] + params + [str(vector), limit]
+            sql_params = [str(vector), *params, str(vector), limit]
 
             rows = await conn.execute(sql, sql_params)
             results = await rows.fetchall()
@@ -144,6 +153,7 @@ class PGVectorStore:
         """Delete a record by ID."""
         pool = await self._ensure_pool()
         async with pool.connection() as conn:
+            # Collection name is controlled internally, not from user input
             await conn.execute(
                 f"DELETE FROM {self._collection} WHERE id = %s",
                 (record_id,),
@@ -171,6 +181,7 @@ class PGVectorStore:
             return
         params.append(record_id)
         async with pool.connection() as conn:
+            # Collection name is controlled internally, not from user input
             await conn.execute(
                 f"UPDATE {self._collection} SET {', '.join(sets)} WHERE id = %s",
                 tuple(params),
@@ -180,6 +191,7 @@ class PGVectorStore:
         """Retrieve a single record by ID."""
         pool = await self._ensure_pool()
         async with pool.connection() as conn:
+            # Collection name is controlled internally, not from user input
             row = await conn.execute(
                 f"SELECT id, payload FROM {self._collection} WHERE id = %s",
                 (record_id,),
@@ -210,6 +222,7 @@ class PGVectorStore:
 
         limit_clause = f" LIMIT {limit}" if limit else ""
         async with pool.connection() as conn:
+            # Collection name is controlled internally, not from user input
             rows = await conn.execute(
                 f"SELECT id, payload FROM {self._collection} {where_clause}{limit_clause}",
                 tuple(params) if params else None,

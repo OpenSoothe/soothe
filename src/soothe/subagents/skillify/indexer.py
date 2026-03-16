@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.embeddings import Embeddings
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-from soothe.protocols.vector_store import VectorStoreProtocol
-from soothe.subagents.skillify.models import SkillRecord
-from soothe.subagents.skillify.warehouse import SkillWarehouse
+    from langchain_core.embeddings import Embeddings
+
+    from soothe.protocols.vector_store import VectorStoreProtocol
+    from soothe.subagents.skillify.models import SkillRecord
+    from soothe.subagents.skillify.warehouse import SkillWarehouse
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,12 @@ logger = logging.getLogger(__name__)
 class LazyEmbeddings:
     """Wrapper that creates fresh embedding instances per event loop."""
 
-    def __init__(self, factory: Callable[[], Embeddings]):
+    def __init__(self, factory: Callable[[], Embeddings]) -> None:
+        """Initialize the lazy embeddings wrapper.
+
+        Args:
+            factory: Callable that creates fresh embedding instances.
+        """
         self._factory = factory
         self._instances: dict[int, Embeddings] = {}
 
@@ -30,15 +38,47 @@ class LazyEmbeddings:
         return self._instances[loop_id]
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Asynchronously embed a list of documents.
+
+        Args:
+            texts: List of document texts to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+        """
         return await self._get_instance().aembed_documents(texts)
 
     async def aembed_query(self, text: str) -> list[float]:
+        """Asynchronously embed a single query.
+
+        Args:
+            text: Query text to embed.
+
+        Returns:
+            Embedding vector for the query.
+        """
         return await self._get_instance().aembed_query(text)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Synchronously embed a list of documents.
+
+        Args:
+            texts: List of document texts to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+        """
         return self._get_instance().embed_documents(texts)
 
     def embed_query(self, text: str) -> list[float]:
+        """Synchronously embed a single query.
+
+        Args:
+            text: Query text to embed.
+
+        Returns:
+            Embedding vector for the query.
+        """
         return self._get_instance().embed_query(text)
 
 
@@ -67,6 +107,17 @@ class SkillIndexer:
         embedding_dims: int = 1536,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
+        """Initialize the skill indexer.
+
+        Args:
+            warehouse: Warehouse scanner instance.
+            vector_store: Vector store for skill embeddings.
+            embeddings: Embedding model for generating vectors.
+            interval_seconds: Seconds between indexing passes.
+            collection: Vector store collection name.
+            embedding_dims: Embedding vector dimensionality.
+            event_callback: Optional callback for index lifecycle events.
+        """
         self._warehouse = warehouse
         self._vector_store = vector_store
         if callable(embeddings):
@@ -78,6 +129,7 @@ class SkillIndexer:
         self._embedding_dims = embedding_dims
         self._hash_cache: dict[str, str] = {}
         self._task: asyncio.Task[None] | None = None
+        self._start_task: asyncio.Task[None] | None = None
         self._initialized = False
         self._total_indexed = 0
         self._ready_event: asyncio.Event | None = None
@@ -117,10 +169,8 @@ class SkillIndexer:
         if self._task is None:
             return
         self._task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await self._task
-        except asyncio.CancelledError:
-            pass
         self._task = None
 
         # Close the vector store connection pool
@@ -178,7 +228,7 @@ class SkillIndexer:
         try:
             vectors = await self._embeddings.aembed_documents(texts)
         except Exception:
-            logger.error("Embedding generation failed for %d skills", len(records), exc_info=True)
+            logger.exception("Embedding generation failed for %d skills", len(records))
             return
 
         payloads: list[dict[str, Any]] = []
@@ -199,7 +249,7 @@ class SkillIndexer:
         try:
             await self._vector_store.insert(vectors=vectors, payloads=payloads, ids=ids)
         except Exception:
-            logger.error("Vector store upsert failed for %d skills", len(records), exc_info=True)
+            logger.exception("Vector store upsert failed for %d skills", len(records))
 
     @staticmethod
     def _embedding_text(record: SkillRecord) -> str:
@@ -266,7 +316,7 @@ class SkillIndexer:
                 raise
             except Exception:
                 self._emit({"type": "soothe.skillify.index.error"})
-                logger.error("Skillify index pass failed", exc_info=True)
+                logger.exception("Skillify index pass failed")
                 if first_pass:
                     if self._ready_event:
                         self._ready_event.set()

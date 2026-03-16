@@ -6,7 +6,6 @@ Replaces the broken python_repl tool in LangChain.
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import io
 import logging
@@ -16,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import BaseTool
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class PythonExecutorTool(BaseTool):
     max_timeout: int = Field(default=300)
 
     # Track files created during execution
-    _created_files: list[str] = []
+    _created_files: list[str] = PrivateAttr(default_factory=list)
 
     def _clean_code(self, code: str) -> str:
         """Remove markdown code blocks if present."""
@@ -89,7 +88,7 @@ class PythonExecutorTool(BaseTool):
         except ImportError:
             logger.debug("matplotlib not available")
             return None
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.warning("Failed to save plot: %s", e)
             return None
 
@@ -120,13 +119,13 @@ class PythonExecutorTool(BaseTool):
             }
 
         # Validate timeout
-        actual_timeout = min(timeout or self.timeout, self.max_timeout)
+        min(timeout or self.timeout, self.max_timeout)
 
         # Reset file tracking
         self._created_files = []
 
         # Capture initial files in directory
-        initial_files = set(f.name for f in wd.iterdir() if f.is_file())
+        initial_files = {f.name for f in wd.iterdir() if f.is_file()}
 
         # Setup IPython shell
         try:
@@ -140,7 +139,7 @@ class PythonExecutorTool(BaseTool):
             stderr_capture = io.StringIO()
 
             # Change to working directory
-            old_cwd = os.getcwd()
+            old_cwd = str(Path.cwd())
             os.chdir(wd)
 
             # Execute with output capture
@@ -155,26 +154,25 @@ class PythonExecutorTool(BaseTool):
                     # Capture result
                     if exec_result.success:
                         result_obj = exec_result.result
-                    else:
-                        # Capture execution errors (runtime errors)
-                        if exec_result.error_in_exec:
-                            error_msg = str(exec_result.error_in_exec)
-                        # Capture pre-execution errors (syntax errors)
-                        elif exec_result.error_before_exec:
-                            error_msg = str(exec_result.error_before_exec)
+                    # Capture execution errors (runtime errors)
+                    elif exec_result.error_in_exec:
+                        error_msg = str(exec_result.error_in_exec)
+                    # Capture pre-execution errors (syntax errors)
+                    elif exec_result.error_before_exec:
+                        error_msg = str(exec_result.error_before_exec)
 
                     # Save matplotlib plots if created
                     plot_file = self._save_plot(wd)
                     if plot_file:
                         stdout_capture.write(f"\nPlot saved to: {plot_file}\n")
 
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 error_msg = str(e)
             finally:
                 os.chdir(old_cwd)
 
             # Track new files created
-            final_files = set(f.name for f in wd.iterdir() if f.is_file())
+            final_files = {f.name for f in wd.iterdir() if f.is_file()}
             new_files = list(final_files - initial_files - set(self._created_files))
             all_created = self._created_files + new_files
 
@@ -187,15 +185,6 @@ class PythonExecutorTool(BaseTool):
             if result_obj is not None:
                 result_str = str(result_obj)
 
-            return {
-                "success": error_msg is None and exec_result.success,
-                "stdout": stdout,
-                "stderr": stderr,
-                "result": result_str,
-                "files": all_created,
-                "error": error_msg,
-            }
-
         except ImportError:
             return {
                 "success": False,
@@ -205,8 +194,8 @@ class PythonExecutorTool(BaseTool):
                 "result": None,
                 "files": [],
             }
-        except Exception as e:  # noqa: BLE001
-            logger.error("Python execution failed: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Python execution failed")
             return {
                 "success": False,
                 "error": f"Execution error: {e}",
@@ -215,10 +204,19 @@ class PythonExecutorTool(BaseTool):
                 "result": None,
                 "files": [],
             }
+        else:
+            return {
+                "success": error_msg is None and exec_result.success,
+                "stdout": stdout,
+                "stderr": stderr,
+                "result": result_str,
+                "files": all_created,
+                "error": error_msg,
+            }
 
-    async def _arun(self, code: str, workdir: str | None = None, timeout: int | None = None) -> dict[str, Any]:
+    async def _arun(self, code: str, workdir: str | None = None, timeout_seconds: int | None = None) -> dict[str, Any]:
         """Async wrapper for sync execution."""
-        return self._run(code, workdir, timeout)
+        return self._run(code, workdir, timeout_seconds)
 
 
 def create_python_executor_tools() -> list[BaseTool]:

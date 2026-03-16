@@ -8,6 +8,7 @@ connected clients; only the latest client may send input.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _SOCKET_FILENAME = "soothe.sock"
 _PID_FILENAME = "soothe.pid"
+_STREAM_CHUNK_LENGTH = 3
 
 
 def _soothe_dir() -> Path:
@@ -60,25 +62,19 @@ def _serialize_for_json(obj: Any) -> Any:
 
     # Handle Pydantic models (including LangChain messages)
     if hasattr(obj, "model_dump"):
-        try:
+        with contextlib.suppress(Exception):
             dumped = obj.model_dump()
             return _serialize_for_json(dumped)
-        except Exception:
-            pass
 
     # Handle objects with dict() method
     if hasattr(obj, "dict"):
-        try:
+        with contextlib.suppress(Exception):
             return _serialize_for_json(obj.dict())
-        except Exception:
-            pass
 
     # Handle objects with __dict__
     if hasattr(obj, "__dict__"):
-        try:
+        with contextlib.suppress(Exception):
             return _serialize_for_json(obj.__dict__)
-        except Exception:
-            pass
 
     # Fallback to string representation
     return str(obj)
@@ -125,12 +121,18 @@ class SootheDaemon:
     """
 
     def __init__(self, config: SootheConfig | None = None) -> None:
+        """Initialize the Soothe daemon.
+
+        Args:
+            config: Soothe configuration.
+        """
         self._config = config or SootheConfig()
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
         self._running = False
         self._thread_stop = threading.Event()
+        self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     # -- lifecycle ----------------------------------------------------------
@@ -145,6 +147,7 @@ class SootheDaemon:
             sock.unlink()
 
         self._runner = SootheRunner(self._config)
+        self._stop_event = asyncio.Event()
         self._server = await asyncio.start_unix_server(
             self._handle_client,
             path=str(sock),
@@ -158,6 +161,9 @@ class SootheDaemon:
     def request_stop(self) -> None:
         """Thread-safe method to request daemon shutdown from any thread."""
         self._thread_stop.set()
+        if self._stop_event is not None:
+            loop = self._stop_event._loop  # type: ignore[attr-defined]
+            loop.call_soon_threadsafe(self._stop_event.set)
 
     async def serve_forever(self) -> None:
         """Block until the daemon is stopped.
@@ -179,8 +185,7 @@ class SootheDaemon:
 
         input_task = asyncio.create_task(self._input_loop())
         try:
-            while not self._thread_stop.is_set():  # noqa: ASYNC110 -- threading.Event, not asyncio.Event
-                await asyncio.sleep(0.5)
+            await self._stop_event.wait()
         finally:
             input_task.cancel()
             await self.stop()
@@ -198,11 +203,9 @@ class SootheDaemon:
                 logger.debug("Failed to cleanup runner", exc_info=True)
 
         for client in self._clients:
-            try:
+            with contextlib.suppress(Exception):
                 client.writer.close()
                 await client.writer.wait_closed()
-            except Exception:
-                pass
         self._clients.clear()
         if self._server:
             self._server.close()
@@ -247,11 +250,9 @@ class SootheDaemon:
             pass
         finally:
             self._clients = [c for c in self._clients if c is not client]
-            try:
+            with contextlib.suppress(Exception):
                 writer.close()
                 await writer.wait_closed()
-            except Exception:
-                pass
             logger.info("Client disconnected (total=%d)", len(self._clients))
 
     async def _handle_client_message(
@@ -300,7 +301,7 @@ class SootheDaemon:
 
         try:
             async for chunk in self._runner.astream(text, thread_id=self._runner.current_thread_id):
-                if not isinstance(chunk, tuple) or len(chunk) != 3:
+                if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
                     continue
                 namespace, mode, data = chunk
                 event_msg = {
@@ -311,7 +312,7 @@ class SootheDaemon:
                 }
                 await self._broadcast(event_msg)
         except Exception as exc:
-            logger.error("Daemon query error", exc_info=True)
+            logger.exception("Daemon query error")
             await self._broadcast(
                 {
                     "type": "event",
@@ -338,11 +339,9 @@ class SootheDaemon:
             self._clients = [c for c in self._clients if c is not d]
 
     async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
-        try:
+        with contextlib.suppress(Exception):
             client.writer.write(_encode(msg))
             await client.writer.drain()
-        except Exception:
-            pass
 
     # -- static helpers -----------------------------------------------------
 
@@ -373,10 +372,11 @@ class SootheDaemon:
         try:
             pid = int(pf.read_text().strip())
             os.kill(pid, signal.SIGTERM)
-            return True
         except (ValueError, ProcessLookupError, PermissionError):
             _cleanup_pid()
             return False
+        else:
+            return True
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +392,11 @@ class DaemonClient:
     """
 
     def __init__(self, sock: Path | None = None) -> None:
+        """Initialize the daemon client.
+
+        Args:
+            sock: Path to the Unix socket.
+        """
         self._sock = sock or socket_path()
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
@@ -404,10 +409,8 @@ class DaemonClient:
         """Close the connection."""
         if self._writer:
             self._writer.close()
-            try:
+            with contextlib.suppress(Exception):
                 await self._writer.wait_closed()
-            except Exception:
-                pass
             self._writer = None
             self._reader = None
 
@@ -460,10 +463,8 @@ def _write_pid() -> None:
 def _cleanup_pid() -> None:
     pf = pid_path()
     if pf.exists():
-        try:
+        with contextlib.suppress(OSError):
             pf.unlink()
-        except OSError:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -479,10 +480,8 @@ def run_daemon(config: SootheConfig | None = None) -> None:
         await daemon.start()
         await daemon.serve_forever()
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_main())
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

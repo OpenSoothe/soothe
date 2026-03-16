@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -51,10 +52,8 @@ class RocksDBPersistStore:
 
     def delete(self, key: str) -> None:
         """Delete a key from RocksDB."""
-        try:
+        with contextlib.suppress(KeyError):
             del self._db[key]
-        except KeyError:
-            pass
 
     def close(self) -> None:
         """Close the RocksDB database."""

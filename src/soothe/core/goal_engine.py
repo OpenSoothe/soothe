@@ -56,6 +56,11 @@ class GoalEngine:
     """
 
     def __init__(self, max_retries: int = 2) -> None:
+        """Initialize the goal engine.
+
+        Args:
+            max_retries: Default max retries for new goals.
+        """
         self._goals: dict[str, Goal] = {}
         self._max_retries = max_retries
 
@@ -120,7 +125,8 @@ class GoalEngine:
         """
         goal = self._goals.get(goal_id)
         if not goal:
-            raise KeyError(f"Goal {goal_id} not found")
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
         logger.info("Completed goal %s: %s", goal_id, goal.description)
@@ -151,7 +157,8 @@ class GoalEngine:
         """
         goal = self._goals.get(goal_id)
         if not goal:
-            raise KeyError(f"Goal {goal_id} not found")
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
 
         if allow_retry and goal.retry_count < goal.max_retries:
             goal.retry_count += 1

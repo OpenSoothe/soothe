@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from soothe.protocols.planner import (
-    Plan,
-    PlanContext,
-    Reflection,
-    StepResult,
-)
+if TYPE_CHECKING:
+    from soothe.protocols.planner import (
+        Plan,
+        PlanContext,
+        Reflection,
+        StepResult,
+    )
 
 logger = logging.getLogger(__name__)
+
+# Word count thresholds for complexity classification
+_COMPLEX_WORD_COUNT_THRESHOLD = 80
+_SIMPLE_WORD_COUNT_THRESHOLD = 15
 
 _COMPLEX_KEYWORDS = frozenset(
     {
@@ -97,6 +102,14 @@ class AutoPlanner:
         direct: Any | None = None,
         fast_model: Any | None = None,
     ) -> None:
+        """Initialize the auto planner with available planner backends.
+
+        Args:
+            claude: ClaudePlanner instance (or None if unavailable).
+            subagent: SubagentPlanner instance (or None if unavailable).
+            direct: DirectPlanner instance (or None -- should always be present).
+            fast_model: Fast LLM for ambiguity classification (optional).
+        """
         self._claude = claude
         self._subagent = subagent
         self._direct = direct
@@ -121,10 +134,9 @@ class AutoPlanner:
         """Determine which planner to use based on goal complexity."""
         goal_lower = goal.lower()
 
-        if any(kw in goal_lower for kw in _EXPLICIT_CLAUDE_KEYWORDS):
-            if self._claude:
-                logger.info("AutoPlanner: explicit Claude request")
-                return self._claude
+        if any(kw in goal_lower for kw in _EXPLICIT_CLAUDE_KEYWORDS) and self._claude:
+            logger.info("AutoPlanner: explicit Claude request")
+            return self._claude
 
         level = self._heuristic_classify(goal)
         if level == "complex":
@@ -156,13 +168,13 @@ class AutoPlanner:
             return "complex"
 
         word_count = len(goal.split())
-        if word_count > 80:
+        if word_count > _COMPLEX_WORD_COUNT_THRESHOLD:
             return "complex"
 
         if any(kw in goal_lower for kw in _MEDIUM_KEYWORDS):
             return "medium"
 
-        if word_count < 15:
+        if word_count < _SIMPLE_WORD_COUNT_THRESHOLD:
             return "simple"
 
         return None
@@ -177,10 +189,11 @@ class AutoPlanner:
                 return "complex"
             if "medium" in text:
                 return "medium"
-            return "simple"
         except Exception:
             logger.debug("AutoPlanner LLM classification failed", exc_info=True)
             return "medium"
+        else:
+            return "simple"
 
     def _best_available(self) -> Any:
         """Return the most capable available planner."""

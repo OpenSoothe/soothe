@@ -13,6 +13,8 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 _MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+_MAX_SAMPLE_DISPLAY_LENGTH = 50
+_HIGH_MISSING_THRESHOLD_PCT = 50
 
 
 def _load_dataframe(file_path: str) -> Any:
@@ -77,11 +79,11 @@ class TabularColumnsTool(BaseTool):
         lines.append("-" * 60)
         for col in df.columns:
             dtype = str(df[col].dtype)
-            nulls = int(df[col].isnull().sum())
+            nulls = int(df[col].isna().sum())
             null_pct = round(nulls / len(df) * 100, 1) if len(df) > 0 else 0
             sample = str(df[col].dropna().iloc[0]) if not df[col].dropna().empty else "N/A"
-            if len(sample) > 50:
-                sample = sample[:50] + "..."
+            if len(sample) > _MAX_SAMPLE_DISPLAY_LENGTH:
+                sample = sample[:_MAX_SAMPLE_DISPLAY_LENGTH] + "..."
             lines.append(f"  {col}: {dtype} | nulls: {nulls} ({null_pct}%) | sample: {sample}")
         return "\n".join(lines)
 
@@ -106,14 +108,14 @@ class TabularSummaryTool(BaseTool):
             "",
             "Dtypes:",
         ]
-        for dtype, count in df.dtypes.value_counts().items():
-            lines.append(f"  {dtype}: {count}")
+        lines.extend(f"  {dtype}: {count}" for dtype, count in df.dtypes.value_counts().items())
 
-        missing = df.isnull().sum()
+        missing = df.isna().sum()
         if missing.any():
             lines.append("\nMissing data:")
-            for col in missing[missing > 0].index:
-                lines.append(f"  {col}: {missing[col]} ({missing[col] / len(df) * 100:.1f}%)")
+            lines.extend(
+                f"  {col}: {missing[col]} ({missing[col] / len(df) * 100:.1f}%)" for col in missing[missing > 0].index
+            )
 
         numerics = df.select_dtypes(include="number")
         if not numerics.empty:
@@ -140,8 +142,8 @@ class TabularQualityTool(BaseTool):
         issues: list[str] = []
 
         for col in df.columns:
-            null_pct = df[col].isnull().sum() / len(df) * 100 if len(df) > 0 else 0
-            if null_pct > 50:
+            null_pct = df[col].isna().sum() / len(df) * 100 if len(df) > 0 else 0
+            if null_pct > _HIGH_MISSING_THRESHOLD_PCT:
                 issues.append(f"HIGH MISSING: {col} has {null_pct:.1f}% missing values")
 
         dupes = df.duplicated().sum()
@@ -149,8 +151,10 @@ class TabularQualityTool(BaseTool):
             issues.append(f"DUPLICATES: {dupes} duplicate rows ({dupes / len(df) * 100:.1f}%)")
 
         for col in df.columns:
-            if df[col].nunique() <= 1:
-                issues.append(f"SINGLE VALUE: {col} has only {df[col].nunique()} unique value(s)")
+            # Check for constant columns efficiently
+            if (df[col] == df[col].iloc[0]).all() if len(df) > 0 else True:
+                unique_count = df[col].nunique()
+                issues.append(f"SINGLE VALUE: {col} has only {unique_count} unique value(s)")
 
         if not issues:
             return "No data quality issues found."

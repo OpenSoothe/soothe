@@ -28,6 +28,11 @@ class DirectPlanner:
     """
 
     def __init__(self, model: Any) -> None:
+        """Initialize the direct planner.
+
+        Args:
+            model: A langchain BaseChatModel instance supporting structured output.
+        """
         self._model = model
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
@@ -36,13 +41,14 @@ class DirectPlanner:
         prompt = self._build_plan_prompt(goal, context)
         try:
             plan: Plan = await structured_model.ainvoke(prompt)
-            return plan
         except Exception:
             logger.warning("Structured plan creation failed, using fallback")
             return Plan(
                 goal=goal,
                 steps=[PlanStep(id="step_1", description=goal)],
             )
+        else:
+            return plan
 
     async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
         """Revise a plan based on reflection feedback."""
@@ -57,10 +63,11 @@ class DirectPlanner:
         try:
             revised: Plan = await structured_model.ainvoke(prompt)
             revised.status = "revised"
-            return revised
         except Exception:
             logger.warning("Plan revision failed, keeping original")
             return plan
+        else:
+            return revised
 
     async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
         """Trivial reflection for simple plans."""

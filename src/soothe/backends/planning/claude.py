@@ -19,6 +19,8 @@ from soothe.protocols.planner import (
 
 logger = logging.getLogger(__name__)
 
+_MIN_STEP_DESCRIPTION_LENGTH = 5
+
 _PLANNING_SYSTEM_PROMPT = """\
 You are a senior technical architect and planning specialist.
 
@@ -50,27 +52,25 @@ def _check_claude_available() -> None:
             is not set.
     """
     if not shutil.which("claude"):
-        raise RuntimeError(
-            "Claude CLI ('claude') not found on PATH. Install it: npm install -g @anthropic-ai/claude-code"
-        )
+        msg = "Claude CLI ('claude') not found on PATH. Install it: npm install -g @anthropic-ai/claude-code"
+        raise RuntimeError(msg)
     has_key = any(k.startswith("ANTHROPIC_") for k in os.environ)
     if not has_key:
-        raise RuntimeError(
-            "No ANTHROPIC_ environment variables found. Set ANTHROPIC_API_KEY to use the Claude planner."
-        )
+        msg = "No ANTHROPIC_ environment variables found. Set ANTHROPIC_API_KEY to use the Claude planner."
+        raise RuntimeError(msg)
 
 
 def _parse_plan_from_text(goal: str, text: str) -> Plan:
     """Extract a Plan from Claude's markdown output."""
     steps: list[PlanStep] = []
     matches = _PLAN_STEP_RE.findall(text)
-    for i, (num, title) in enumerate(matches, 1):
+    for i, (_num, title) in enumerate(matches, 1):
         steps.append(PlanStep(id=f"step_{i}", description=title.strip()))
     if not steps:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         for i, line in enumerate(lines[:10], 1):
             cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", line)
-            if cleaned and len(cleaned) > 5:
+            if cleaned and len(cleaned) > _MIN_STEP_DESCRIPTION_LENGTH:
                 steps.append(PlanStep(id=f"step_{i}", description=cleaned))
     if not steps:
         steps = [PlanStep(id="step_1", description=goal)]
@@ -91,6 +91,14 @@ class ClaudePlanner:
     """
 
     def __init__(self, cwd: str | None = None) -> None:
+        """Initialize the Claude planner.
+
+        Args:
+            cwd: Working directory for the Claude CLI.
+
+        Raises:
+            RuntimeError: If Claude CLI or ANTHROPIC_ env vars are missing.
+        """
         _check_claude_available()
 
         from soothe.subagents.claude import create_claude_subagent
@@ -126,10 +134,11 @@ class ClaudePlanner:
             text = await self._invoke(prompt)
             revised = _parse_plan_from_text(plan.goal, text)
             revised.status = "revised"
-            return revised
         except Exception:
             logger.warning("ClaudePlanner revise_plan failed", exc_info=True)
             return plan
+        else:
+            return revised
 
     async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
         """Simple reflection based on step outcomes."""

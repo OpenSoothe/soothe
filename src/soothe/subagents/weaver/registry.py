@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-
-from deepagents.middleware.subagents import SubAgent
+from typing import TYPE_CHECKING
 
 from soothe.subagents.weaver.models import AgentManifest
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import SubAgent
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,12 @@ class GeneratedAgentRegistry:
     """
 
     def __init__(self, base_dir: Path) -> None:
+        """Initialize the generated agent registry.
+
+        Args:
+            base_dir: Root directory for generated agents
+                (e.g. ``~/.soothe/generated_agents``).
+        """
         self._base_dir = Path(base_dir).expanduser().resolve()
 
     @property

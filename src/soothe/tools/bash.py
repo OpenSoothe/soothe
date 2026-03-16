@@ -6,9 +6,9 @@ Ported from noesium's bash_toolkit.py for coding agent support.
 from __future__ import annotations
 
 import logging
-import os
 import re
-from typing import Any, ClassVar
+from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -57,6 +57,11 @@ class BashTool(BaseTool):
     )
 
     def __init__(self, **data: Any) -> None:
+        """Initialize the bash tool.
+
+        Args:
+            **data: Pydantic model fields (workspace_root, timeout, etc.).
+        """
         super().__init__(**data)
         self._initialize_shell()
 
@@ -81,7 +86,7 @@ class BashTool(BaseTool):
 
             # Set workspace directory if specified
             if self.workspace_root:
-                workspace = os.path.abspath(self.workspace_root)
+                workspace = str(Path(self.workspace_root).resolve())
                 child.sendline(f"cd '{workspace}'")
                 child.expect(custom_prompt)
 
@@ -92,17 +97,14 @@ class BashTool(BaseTool):
         except ImportError:
             logger.warning("pexpect not installed; bash tool will not work")
             self.custom_prompt = ""
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("Failed to initialize bash shell", exc_info=True)
             self.custom_prompt = ""
 
     def _is_banned(self, command: str) -> bool:
         """Check if command is in banned list."""
         cmd_lower = command.strip().lower()
-        for banned in self.banned_commands:
-            if banned.lower() in cmd_lower:
-                return True
-        return False
+        return any(banned.lower() in cmd_lower for banned in self.banned_commands)
 
     def _run(self, command: str) -> str:
         """Execute bash command in persistent shell.
@@ -141,8 +143,8 @@ class BashTool(BaseTool):
 
             return output.strip()
 
-        except Exception as e:  # noqa: BLE001
-            logger.error("Bash command failed: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Bash command failed")
             # Try to reinitialize shell on error
             self._initialize_shell()
             return f"Error executing command: {e}"
@@ -174,7 +176,7 @@ class GetCurrentDirTool(BaseTool):
             output = child.before or ""
             output = ANSI_ESCAPE.sub("", output)
             return output.strip()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return f"Error: {e}"
 
     async def _arun(self) -> str:
@@ -206,7 +208,7 @@ class ListDirTool(BaseTool):
             output = child.before or ""
             output = ANSI_ESCAPE.sub("", output)
             return output.strip()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return f"Error: {e}"
 
     async def _arun(self, path: str = ".") -> str:

@@ -18,6 +18,8 @@ from soothe.protocols.planner import (
 
 logger = logging.getLogger(__name__)
 
+_MIN_STEP_DESCRIPTION_LENGTH = 5
+
 _PLAN_EXTRACTION_RE = re.compile(
     r"\*\*Step\s+(\d+)[:\s]*(.+?)\*\*",
     re.IGNORECASE,
@@ -28,7 +30,7 @@ def _parse_plan_from_text(goal: str, text: str) -> Plan:
     """Best-effort extraction of Plan from planner subagent markdown output."""
     steps: list[PlanStep] = []
     matches = _PLAN_EXTRACTION_RE.findall(text)
-    for i, (num, title) in enumerate(matches, 1):
+    for i, (_num, title) in enumerate(matches, 1):
         steps.append(
             PlanStep(
                 id=f"step_{i}",
@@ -39,7 +41,7 @@ def _parse_plan_from_text(goal: str, text: str) -> Plan:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         for i, line in enumerate(lines[:10], 1):
             cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", line)
-            if cleaned and len(cleaned) > 5:
+            if cleaned and len(cleaned) > _MIN_STEP_DESCRIPTION_LENGTH:
                 steps.append(PlanStep(id=f"step_{i}", description=cleaned))
     if not steps:
         steps = [PlanStep(id="step_1", description=goal)]
@@ -58,6 +60,12 @@ class SubagentPlanner:
     """
 
     def __init__(self, model: Any, cwd: str | None = None) -> None:
+        """Initialize the subagent planner.
+
+        Args:
+            model: LLM model (instance or string).
+            cwd: Working directory for the planner's filesystem tools.
+        """
         from deepagents import create_deep_agent
         from langgraph.checkpoint.memory import MemorySaver
 
@@ -99,10 +107,11 @@ class SubagentPlanner:
             text = await self._invoke(prompt)
             revised = _parse_plan_from_text(plan.goal, text)
             revised.status = "revised"
-            return revised
         except Exception:
             logger.warning("SubagentPlanner revise_plan failed", exc_info=True)
             return plan
+        else:
+            return revised
 
     async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
         """Simple reflection based on step outcomes."""

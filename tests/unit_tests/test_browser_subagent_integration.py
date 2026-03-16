@@ -3,15 +3,13 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from soothe.config import BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
 
 
-def test_browser_subagent_uses_configured_runtime_dir():
+def test_browser_subagent_uses_configured_runtime_dir() -> None:
     """Test that browser subagent uses configured runtime directories."""
     with tempfile.TemporaryDirectory() as tmpdir:
         custom_runtime = Path(tmpdir) / "custom_browser"
@@ -37,7 +35,7 @@ def test_browser_subagent_uses_configured_runtime_dir():
         assert "runnable" in subagent
 
 
-def test_browser_subagent_environment_variables():
+def test_browser_subagent_environment_variables() -> None:
     """Test that browser subagent sets correct environment variables."""
     with tempfile.TemporaryDirectory() as tmpdir:
         custom_runtime = Path(tmpdir) / "browser_test"
@@ -58,7 +56,7 @@ def test_browser_subagent_environment_variables():
             assert subagent is not None
 
 
-def test_browser_subagent_default_directories():
+def test_browser_subagent_default_directories() -> None:
     """Test that browser subagent works with default directories."""
     with tempfile.TemporaryDirectory() as tmpdir:
         with patch("soothe.utils.runtime.get_browser_runtime_dir") as mock_runtime:
@@ -79,7 +77,7 @@ def test_browser_subagent_default_directories():
                         assert subagent["name"] == "browser"
 
 
-def test_browser_subagent_config_from_soothe_config():
+def test_browser_subagent_config_from_soothe_config() -> None:
     """Test that browser subagent can be created from SootheConfig."""
     config = SootheConfig(
         browser=BrowserSubagentConfig(
@@ -102,7 +100,7 @@ def test_browser_subagent_config_from_soothe_config():
     assert subagent["name"] == "browser"
 
 
-def test_browser_subagent_cleanup_flag():
+def test_browser_subagent_cleanup_flag() -> None:
     """Test that cleanup_on_exit flag is properly passed."""
     with tempfile.TemporaryDirectory() as tmpdir:
         # Test with cleanup enabled

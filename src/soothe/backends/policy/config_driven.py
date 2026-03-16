@@ -118,6 +118,12 @@ class ConfigDrivenPolicy:
         profiles: dict[str, PolicyProfile] | None = None,
         child_restrictions: dict[str, frozenset[Permission]] | None = None,
     ) -> None:
+        """Initialize the config-driven policy.
+
+        Args:
+            profiles: Mapping of profile name to PolicyProfile.
+            child_restrictions: Per-child permission overrides.
+        """
         self._profiles = profiles or dict(DEFAULT_PROFILES)
         self._child_restrictions = child_restrictions or {}
 

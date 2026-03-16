@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ class LangGraphRemoteAgent:
         self._url = url
         self._graph_name = graph_name
 
-    async def invoke(self, task: str, context: dict[str, Any] | None = None) -> str:
+    async def invoke(self, task: str, _context: dict[str, Any] | None = None) -> str:
         """Invoke the remote LangGraph agent."""
         try:
             from langgraph.pregel.remote import RemoteGraph
@@ -40,9 +42,9 @@ class LangGraphRemoteAgent:
             logger.warning("langgraph remote not available")
             return "Error: langgraph remote not available"
 
-    async def stream(self, task: str, context: dict[str, Any] | None = None) -> AsyncIterator[str]:
+    async def stream(self, task: str, _context: dict[str, Any] | None = None) -> AsyncIterator[str]:
         """Stream is not fully supported; falls back to invoke."""
-        result = await self.invoke(task, context)
+        result = await self.invoke(task, _context)
         yield result
 
     async def health_check(self) -> bool:
@@ -52,7 +54,7 @@ class LangGraphRemoteAgent:
 
             graph = RemoteGraph(self._graph_name, url=self._url)
             await graph.aget_graph()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         else:
             return True

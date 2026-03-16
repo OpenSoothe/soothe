@@ -12,19 +12,21 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from deepagents.middleware.subagents import CompiledSubAgent
-from langchain_core.embeddings import Embeddings
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.subagents.skillify.indexer import SkillIndexer
-from soothe.subagents.skillify.models import SkillBundle
 from soothe.subagents.skillify.retriever import SkillRetriever
 from soothe.subagents.skillify.warehouse import SkillWarehouse
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
+    from langchain_core.language_models import BaseChatModel
+
+    from soothe.subagents.skillify.models import SkillBundle
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +149,10 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
 
 
 def create_skillify_subagent(
-    model: str | BaseChatModel | None = None,
+    _model: str | BaseChatModel | None = None,
     *,
     config: Any | None = None,
-    **kwargs: Any,
+    **_kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Skillify subagent (CompiledSubAgent with background indexer).
 
@@ -250,6 +252,6 @@ def _start_background_indexer(indexer: SkillIndexer) -> None:
     """Start the indexer background loop, creating an event loop if needed."""
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(indexer.start())
+        indexer._start_task = loop.create_task(indexer.start())
     except RuntimeError:
         pass

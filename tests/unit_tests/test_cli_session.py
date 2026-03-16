@@ -13,11 +13,11 @@ class DummyRunner:
 
     config = SimpleNamespace(policy_profile="standard", planner_routing="auto")
 
-    def set_current_thread_id(self, thread_id):
+    def set_current_thread_id(self, thread_id) -> None:
         self.thread_id = thread_id
 
 
-def test_session_logger_round_trips_conversation_and_events(tmp_path):
+def test_session_logger_round_trips_conversation_and_events(tmp_path) -> None:
     """Session logs should retain both conversation turns and action events."""
     logger = SessionLogger(session_dir=str(tmp_path), thread_id="thread-1")
 
@@ -32,7 +32,7 @@ def test_session_logger_round_trips_conversation_and_events(tmp_path):
     assert logger.recent_actions()[0]["data"]["type"] == "soothe.session.started"
 
 
-def test_history_command_renders_recent_prompts(tmp_path):
+def test_history_command_renders_recent_prompts(tmp_path) -> None:
     """The history command should show stored prompts."""
     history = InputHistory(history_file=str(tmp_path / "history.json"))
     history.add("first prompt")
@@ -52,7 +52,7 @@ def test_history_command_renders_recent_prompts(tmp_path):
     assert "second prompt" in output
 
 
-def test_review_command_renders_conversation_and_actions(tmp_path):
+def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
     """The review command should surface both recent conversation and actions."""
     logger = SessionLogger(session_dir=str(tmp_path), thread_id="thread-2")
     logger.log_user_input("summarize the repo")

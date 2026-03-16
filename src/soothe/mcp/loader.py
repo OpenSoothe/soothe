@@ -14,7 +14,8 @@ if TYPE_CHECKING:
     from langchain_core.tools import BaseTool
     from langchain_mcp_adapters.client import Connection
 
-from soothe.config import MCPServerConfig
+    from soothe.config import MCPServerConfig
+
 
 logger = logging.getLogger(__name__)
 

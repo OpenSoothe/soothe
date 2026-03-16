@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import logging
 
 
 def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:

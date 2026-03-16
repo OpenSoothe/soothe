@@ -12,21 +12,21 @@ from soothe.protocols.context import ContextEntry, ContextProjection
 class TestKeywordContext:
     """Unit tests for KeywordContext."""
 
-    def test_initialization_without_persistence(self):
+    def test_initialization_without_persistence(self) -> None:
         """Test that KeywordContext initializes without persistence."""
         context = KeywordContext(persist_dir=None)
 
         assert context.entries == []
         assert context._store is None
 
-    def test_initialization_with_json_persistence(self, tmp_path: Path):
+    def test_initialization_with_json_persistence(self, tmp_path: Path) -> None:
         """Test that KeywordContext initializes with JSON persistence."""
         context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
 
         assert context.entries == []
         assert context._store is not None
 
-    def test_entries_property_returns_copy(self):
+    def test_entries_property_returns_copy(self) -> None:
         """Test that entries property returns a copy of the list."""
         context = KeywordContext()
         entry = ContextEntry(source="test", content="content")
@@ -42,7 +42,7 @@ class TestKeywordContext:
         assert len(context.entries) == 1
 
     @pytest.mark.asyncio
-    async def test_ingest_adds_entry(self):
+    async def test_ingest_adds_entry(self) -> None:
         """Test that ingest adds an entry to the ledger."""
         context = KeywordContext()
         entry = ContextEntry(source="test", content="test content")
@@ -53,7 +53,7 @@ class TestKeywordContext:
         assert context.entries[0] == entry
 
     @pytest.mark.asyncio
-    async def test_project_empty_ledger(self):
+    async def test_project_empty_ledger(self) -> None:
         """Test projection on empty ledger returns empty projection."""
         context = KeywordContext()
 
@@ -65,7 +65,7 @@ class TestKeywordContext:
         assert projection.summary is None
 
     @pytest.mark.asyncio
-    async def test_project_with_entries(self):
+    async def test_project_with_entries(self) -> None:
         """Test projection with entries returns relevant entries."""
         context = KeywordContext()
 
@@ -88,12 +88,12 @@ class TestKeywordContext:
         assert any("python" in e.content for e in projection.entries)
 
     @pytest.mark.asyncio
-    async def test_project_respects_token_budget(self):
+    async def test_project_respects_token_budget(self) -> None:
         """Test that projection respects token budget."""
         context = KeywordContext()
 
         # Add entries with different sizes
-        for i in range(10):
+        for _i in range(10):
             content = " ".join(["word"] * 100)  # ~25 tokens each
             entry = ContextEntry(source="test", content=content)
             await context.ingest(entry)
@@ -106,7 +106,7 @@ class TestKeywordContext:
         assert projection.token_count <= 50
 
     @pytest.mark.asyncio
-    async def test_project_for_subagent(self):
+    async def test_project_for_subagent(self) -> None:
         """Test project_for_subagent delegates to project."""
         context = KeywordContext()
         entry = ContextEntry(source="test", content="test content")
@@ -119,7 +119,7 @@ class TestKeywordContext:
         assert projection.total_entries == 1
 
     @pytest.mark.asyncio
-    async def test_summarize_empty_ledger(self):
+    async def test_summarize_empty_ledger(self) -> None:
         """Test summarize on empty ledger."""
         context = KeywordContext()
 
@@ -128,7 +128,7 @@ class TestKeywordContext:
         assert "No context entries" in summary
 
     @pytest.mark.asyncio
-    async def test_summarize_with_entries(self):
+    async def test_summarize_with_entries(self) -> None:
         """Test summarize with entries."""
         context = KeywordContext()
 
@@ -142,7 +142,7 @@ class TestKeywordContext:
         assert "source_" in summary
 
     @pytest.mark.asyncio
-    async def test_summarize_with_scope_filter(self):
+    async def test_summarize_with_scope_filter(self) -> None:
         """Test summarize filters by scope."""
         context = KeywordContext()
 
@@ -158,7 +158,7 @@ class TestKeywordContext:
         assert "tag_a" in summary or "test_a" in summary
 
     @pytest.mark.asyncio
-    async def test_persist_without_store(self):
+    async def test_persist_without_store(self) -> None:
         """Test persist does nothing without store."""
         context = KeywordContext(persist_dir=None)
 
@@ -166,7 +166,7 @@ class TestKeywordContext:
         await context.persist("thread_123")
 
     @pytest.mark.asyncio
-    async def test_persist_and_restore(self, tmp_path: Path):
+    async def test_persist_and_restore(self, tmp_path: Path) -> None:
         """Test persist and restore with JSON backend."""
         context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
 
@@ -184,7 +184,7 @@ class TestKeywordContext:
         assert context2.entries[0].content == "persisted content"
 
     @pytest.mark.asyncio
-    async def test_restore_nonexistent_thread(self, tmp_path: Path):
+    async def test_restore_nonexistent_thread(self, tmp_path: Path) -> None:
         """Test restore returns False for nonexistent thread."""
         context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
 
@@ -193,7 +193,7 @@ class TestKeywordContext:
         assert restored is False
 
     @pytest.mark.asyncio
-    async def test_restore_handles_corrupted_data(self, tmp_path: Path):
+    async def test_restore_handles_corrupted_data(self, tmp_path: Path) -> None:
         """Test restore handles corrupted data gracefully."""
         context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
 
@@ -206,7 +206,7 @@ class TestKeywordContext:
 
         assert restored is False
 
-    def test_score_entries_keyword_overlap(self):
+    def test_score_entries_keyword_overlap(self) -> None:
         """Test that scoring gives higher scores to keyword matches."""
         context = KeywordContext()
 
@@ -221,12 +221,12 @@ class TestKeywordContext:
         assert scored[0][0] > scored[1][0]
         assert "python" in scored[0][1].content
 
-    def test_score_entries_recency_boost(self):
+    def test_score_entries_recency_boost(self) -> None:
         """Test that scoring includes recency boost."""
         context = KeywordContext()
 
         # Add multiple entries with same keywords
-        for i in range(3):
+        for _i in range(3):
             entry = ContextEntry(source="test", content="programming language")
             context._entries.append(entry)
 
@@ -235,7 +235,7 @@ class TestKeywordContext:
         # More recent entries should have higher scores
         assert scored[-1][0] < scored[0][0]
 
-    def test_score_entries_importance_weight(self):
+    def test_score_entries_importance_weight(self) -> None:
         """Test that scoring includes importance weight."""
         context = KeywordContext()
 
@@ -249,7 +249,7 @@ class TestKeywordContext:
         # Higher importance should have higher score
         assert scored[0][1].importance > scored[1][1].importance
 
-    def test_select_within_budget(self):
+    def test_select_within_budget(self) -> None:
         """Test selection within token budget."""
         context = KeywordContext()
 
@@ -261,7 +261,7 @@ class TestKeywordContext:
 
         scored = [(1.0, entries[0]), (0.9, entries[1]), (0.8, entries[2])]
 
-        selected, token_count = context._select_within_budget(scored, token_budget=10)
+        _selected, token_count = context._select_within_budget(scored, token_budget=10)
 
         # Should select entries that fit in budget
         assert token_count <= 10
@@ -287,7 +287,7 @@ class TestVectorContext:
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 768)
         return embeddings
 
-    def test_initialization(self, mock_vector_store, mock_embeddings):
+    def test_initialization(self, mock_vector_store, mock_embeddings) -> None:
         """Test VectorContext initialization."""
         from soothe.backends.context.vector import VectorContext
 
@@ -298,7 +298,7 @@ class TestVectorContext:
         assert context._embeddings == mock_embeddings
 
     @pytest.mark.asyncio
-    async def test_ingest_embeds_and_stores(self, mock_vector_store, mock_embeddings):
+    async def test_ingest_embeds_and_stores(self, mock_vector_store, mock_embeddings) -> None:
         """Test that ingest embeds content and stores in vector store."""
         from soothe.backends.context.vector import VectorContext
 
@@ -318,7 +318,7 @@ class TestVectorContext:
         assert context.entries[0] == entry
 
     @pytest.mark.asyncio
-    async def test_project_empty_ledger(self, mock_vector_store, mock_embeddings):
+    async def test_project_empty_ledger(self, mock_vector_store, mock_embeddings) -> None:
         """Test projection on empty ledger."""
         from soothe.backends.context.vector import VectorContext
 
@@ -331,7 +331,7 @@ class TestVectorContext:
         assert projection.token_count == 0
 
     @pytest.mark.asyncio
-    async def test_project_with_results(self, mock_vector_store, mock_embeddings):
+    async def test_project_with_results(self, mock_vector_store, mock_embeddings) -> None:
         """Test projection with vector search results."""
         from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
@@ -367,7 +367,7 @@ class TestVectorContext:
         mock_embeddings.aembed_query.assert_called_once_with("programming")
 
     @pytest.mark.asyncio
-    async def test_project_respects_token_budget(self, mock_vector_store, mock_embeddings):
+    async def test_project_respects_token_budget(self, mock_vector_store, mock_embeddings) -> None:
         """Test that projection respects token budget."""
         from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
@@ -390,7 +390,7 @@ class TestVectorContext:
         assert projection.token_count <= 50
 
     @pytest.mark.asyncio
-    async def test_project_handles_invalid_payload(self, mock_vector_store, mock_embeddings):
+    async def test_project_handles_invalid_payload(self, mock_vector_store, mock_embeddings) -> None:
         """Test that projection handles invalid payloads gracefully."""
         from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
@@ -411,7 +411,7 @@ class TestVectorContext:
         assert isinstance(projection, ContextProjection)
 
     @pytest.mark.asyncio
-    async def test_project_for_subagent(self, mock_vector_store, mock_embeddings):
+    async def test_project_for_subagent(self, mock_vector_store, mock_embeddings) -> None:
         """Test project_for_subagent delegates to project."""
         from soothe.backends.context.vector import VectorContext
 
@@ -422,7 +422,7 @@ class TestVectorContext:
         assert isinstance(projection, ContextProjection)
 
     @pytest.mark.asyncio
-    async def test_summarize_empty_ledger(self, mock_vector_store, mock_embeddings):
+    async def test_summarize_empty_ledger(self, mock_vector_store, mock_embeddings) -> None:
         """Test summarize on empty ledger."""
         from soothe.backends.context.vector import VectorContext
 
@@ -433,7 +433,7 @@ class TestVectorContext:
         assert "No context entries" in summary
 
     @pytest.mark.asyncio
-    async def test_summarize_with_entries(self, mock_vector_store, mock_embeddings):
+    async def test_summarize_with_entries(self, mock_vector_store, mock_embeddings) -> None:
         """Test summarize with cached entries."""
         from soothe.backends.context.vector import VectorContext
 
@@ -448,7 +448,7 @@ class TestVectorContext:
         assert "5 entries" in summary
 
     @pytest.mark.asyncio
-    async def test_summarize_with_scope(self, mock_vector_store, mock_embeddings):
+    async def test_summarize_with_scope(self, mock_vector_store, mock_embeddings) -> None:
         """Test summarize with scope filter."""
         from soothe.backends.context.vector import VectorContext
 
@@ -465,7 +465,7 @@ class TestVectorContext:
         assert "tag_a" in summary or "test_a" in summary
 
     @pytest.mark.asyncio
-    async def test_persist_is_noop(self, mock_vector_store, mock_embeddings):
+    async def test_persist_is_noop(self, mock_vector_store, mock_embeddings) -> None:
         """Test that persist is a no-op for vector context."""
         from soothe.backends.context.vector import VectorContext
 
@@ -475,7 +475,7 @@ class TestVectorContext:
         await context.persist("thread_123")
 
     @pytest.mark.asyncio
-    async def test_restore_from_vector_store(self, mock_vector_store, mock_embeddings):
+    async def test_restore_from_vector_store(self, mock_vector_store, mock_embeddings) -> None:
         """Test restore loads entries from vector store."""
         from soothe.backends.context.vector import VectorContext
         from soothe.protocols.vector_store import VectorRecord
@@ -498,7 +498,7 @@ class TestVectorContext:
         assert len(context.entries) == 2
 
     @pytest.mark.asyncio
-    async def test_restore_handles_errors(self, mock_vector_store, mock_embeddings):
+    async def test_restore_handles_errors(self, mock_vector_store, mock_embeddings) -> None:
         """Test restore handles errors gracefully."""
         from soothe.backends.context.vector import VectorContext
 

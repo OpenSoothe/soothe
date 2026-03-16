@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +17,7 @@ from soothe.tools.document import (
 class TestDocumentQATool:
     """Test DocumentQATool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = DocumentQATool()
 
@@ -25,7 +25,7 @@ class TestDocumentQATool:
         assert "document" in tool.description.lower()
         assert "question" in tool.description.lower()
 
-    def test_parse_text_file(self):
+    def test_parse_text_file(self) -> None:
         """Test parsing text file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test text file
@@ -38,7 +38,7 @@ class TestDocumentQATool:
 
             assert "Hello, World!" in result
 
-    def test_parse_json_file(self):
+    def test_parse_json_file(self) -> None:
         """Test parsing JSON file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test JSON file
@@ -55,7 +55,7 @@ class TestDocumentQATool:
             assert "message" in result
             assert "Hello, World!" in result
 
-    def test_parse_markdown_file(self):
+    def test_parse_markdown_file(self) -> None:
         """Test parsing markdown file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test markdown file
@@ -69,7 +69,7 @@ class TestDocumentQATool:
             assert "# Header" in result
             assert "Content here" in result
 
-    def test_parse_unsupported_format(self):
+    def test_parse_unsupported_format(self) -> None:
         """Test parsing unsupported format."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file with unsupported extension
@@ -81,7 +81,7 @@ class TestDocumentQATool:
             with pytest.raises(ValueError, match="Unsupported"):
                 tool._parse_document(str(file_path))
 
-    def test_parse_pdf_without_pymupdf(self):
+    def test_parse_pdf_without_pymupdf(self) -> None:
         """Test parsing PDF without PyMuPDF."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create dummy PDF file
@@ -90,22 +90,21 @@ class TestDocumentQATool:
 
             tool = DocumentQATool()
 
-            with patch.dict("sys.modules", {"fitz": None}):
-                with pytest.raises(ImportError, match="PyMuPDF"):
-                    tool._parse_document(str(file_path))
+            with patch.dict("sys.modules", {"fitz": None}), pytest.raises(ImportError, match="PyMuPDF"):
+                tool._parse_document(str(file_path))
 
 
 class TestExtractTextTool:
     """Test ExtractTextTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = ExtractTextTool()
 
         assert tool.name == "extract_text"
         assert "extract" in tool.description.lower()
 
-    def test_extract_text_from_file(self):
+    def test_extract_text_from_file(self) -> None:
         """Test extracting text from file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -118,7 +117,7 @@ class TestExtractTextTool:
 
             assert "Hello, World!" in result
 
-    def test_extract_text_with_size_limit(self):
+    def test_extract_text_with_size_limit(self) -> None:
         """Test extracting text with size limit."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -135,14 +134,14 @@ class TestExtractTextTool:
 class TestGetDocumentInfoTool:
     """Test GetDocumentInfoTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = GetDocumentInfoTool()
 
         assert tool.name == "get_document_info"
         assert "info" in tool.description.lower() or "metadata" in tool.description.lower()
 
-    def test_get_document_info(self):
+    def test_get_document_info(self) -> None:
         """Test getting document info."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -159,7 +158,7 @@ class TestGetDocumentInfoTool:
             assert "size_bytes" in result
             assert "size_kb" in result
 
-    def test_get_nonexistent_document_info(self):
+    def test_get_nonexistent_document_info(self) -> None:
         """Test getting info for non-existent document."""
         tool = GetDocumentInfoTool()
 
@@ -168,7 +167,7 @@ class TestGetDocumentInfoTool:
         assert "error" in result
         assert "not found" in result["error"].lower()
 
-    def test_get_pdf_info(self):
+    def test_get_pdf_info(self) -> None:
         """Test getting PDF document info."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create dummy PDF file
@@ -188,7 +187,7 @@ class TestGetDocumentInfoTool:
 class TestCreateDocumentTools:
     """Test factory function."""
 
-    def test_create_document_tools(self):
+    def test_create_document_tools(self) -> None:
         """Test factory function creates all tools."""
         tools = create_document_tools()
 
@@ -203,7 +202,7 @@ class TestCreateDocumentTools:
 class TestDocumentToolIntegration:
     """Integration tests for Document tools."""
 
-    def test_document_qa_workflow(self):
+    def test_document_qa_workflow(self) -> None:
         """Test complete document Q&A workflow."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test document
@@ -218,7 +217,7 @@ class TestDocumentToolIntegration:
 
                 assert "Guido van Rossum" in result
 
-    def test_document_summarization(self):
+    def test_document_summarization(self) -> None:
         """Test document summarization."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test document

@@ -19,6 +19,11 @@ class InMemoryVectorStore:
     """
 
     def __init__(self, collection: str = "default") -> None:
+        """Initialize the in-memory vector store.
+
+        Args:
+            collection: Collection name (for logging/identification only).
+        """
         self._collection = collection
         self._records: dict[str, tuple[list[float], dict[str, Any]]] = {}
 
@@ -34,15 +39,15 @@ class InMemoryVectorStore:
         """Insert or overwrite vectors."""
         payloads = payloads or [{} for _ in vectors]
         ids = ids or [str(i) for i in range(len(vectors))]
-        for vid, vec, pay in zip(ids, vectors, payloads):
+        for vid, vec, pay in zip(ids, vectors, payloads, strict=False):
             self._records[vid] = (vec, pay)
 
     async def search(
         self,
-        query: str,
+        _query: str,
         vector: list[float],
         limit: int = 5,
-        filters: dict[str, Any] | None = None,
+        _filters: dict[str, Any] | None = None,
     ) -> list[VectorRecord]:
         """Brute-force cosine similarity search."""
         scored: list[tuple[str, float, dict[str, Any]]] = []
@@ -80,7 +85,7 @@ class InMemoryVectorStore:
 
     async def list_records(
         self,
-        filters: dict[str, Any] | None = None,
+        _filters: dict[str, Any] | None = None,
         limit: int | None = None,
     ) -> list[VectorRecord]:
         """List all records."""
@@ -103,7 +108,7 @@ class InMemoryVectorStore:
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:
         """Compute cosine similarity between two vectors."""
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
         norm_a = math.sqrt(sum(x * x for x in a))
         norm_b = math.sqrt(sum(x * x for x in b))
         if norm_a == 0 or norm_b == 0:

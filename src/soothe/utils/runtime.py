@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from soothe.config import SOOTHE_HOME
+
+# Minimum length for UUID-like suffix in directory names
+_UUID_SUFFIX_MIN_LENGTH = 8
 
 
 def get_subagent_runtime_dir(subagent_name: str) -> Path:
@@ -61,8 +65,6 @@ def cleanup_browser_temp_files(session_id: str | None = None) -> None:
         session_id: Optional specific session ID to clean up.
             If None, cleans up old temporary files.
     """
-    import shutil
-
     downloads_dir = get_browser_downloads_dir()
     runtime_dir = get_browser_runtime_dir()
 
@@ -78,7 +80,11 @@ def cleanup_browser_temp_files(session_id: str | None = None) -> None:
         for parent in [downloads_dir, runtime_dir / "tmp"]:
             if parent.exists():
                 for subdir in parent.iterdir():
-                    if subdir.is_dir():
-                        # Check if it's a temp directory (has UUID-like suffix)
-                        if "-" in subdir.name and len(subdir.name.split("-")[-1]) >= 8:
-                            shutil.rmtree(subdir, ignore_errors=True)
+                    # Check if it's a temp directory (is a directory with UUID-like suffix)
+                    is_temp_dir = (
+                        subdir.is_dir()
+                        and "-" in subdir.name
+                        and len(subdir.name.split("-")[-1]) >= _UUID_SUFFIX_MIN_LENGTH
+                    )
+                    if is_temp_dir:
+                        shutil.rmtree(subdir, ignore_errors=True)

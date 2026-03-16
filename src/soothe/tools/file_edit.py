@@ -8,9 +8,8 @@ from __future__ import annotations
 import logging
 import re
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -56,14 +55,12 @@ class CreateFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    raise ValueError(f"Path {file_path} is outside work directory") from err
+                    msg = f"Path {file_path} is outside work directory"
+                    raise ValueError(msg) from err
             return path
 
         # Relative path - resolve against work_dir or cwd
-        if self.work_dir:
-            base = Path(self.work_dir).resolve()
-        else:
-            base = Path.cwd()
+        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -81,7 +78,7 @@ class CreateFileTool(BaseTool):
         # Remove leading/trailing underscores and dots
         return safe.strip("_.")
 
-    def _create_backup(self, file_path: Path) -> Optional[Path]:
+    def _create_backup(self, file_path: Path) -> Path | None:
         """Create timestamped backup of existing file.
 
         Args:
@@ -94,15 +91,12 @@ class CreateFileTool(BaseTool):
             return None
 
         # Determine backup directory
-        if self.backup_dir:
-            backup_base = Path(self.backup_dir)
-        else:
-            backup_base = file_path.parent / ".backups"
+        backup_base = Path(self.backup_dir) if self.backup_dir else file_path.parent / ".backups"
 
         backup_base.mkdir(parents=True, exist_ok=True)
 
         # Create timestamped backup
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file_path.stem}_{timestamp}{file_path.suffix}"
         backup_path = backup_base / backup_name
 
@@ -111,7 +105,7 @@ class CreateFileTool(BaseTool):
 
         return backup_path
 
-    def _run(self, file_path: str, content: str, overwrite: bool = False) -> str:
+    def _run(self, file_path: str, content: str, *, overwrite: bool = False) -> str:
         """Create or update file.
 
         Args:
@@ -148,15 +142,15 @@ class CreateFileTool(BaseTool):
             if backup_path:
                 result += f" (backup: {backup_path.name})"
 
-            return result
-
         except ValueError as e:
             return f"Error: {e}"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to create file: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to create file")
             return f"Error creating file: {e}"
+        else:
+            return result
 
-    async def _arun(self, file_path: str, content: str, overwrite: bool = False) -> str:
+    async def _arun(self, file_path: str, content: str, *, overwrite: bool = False) -> str:
         return self._run(file_path, content, overwrite)
 
 
@@ -184,13 +178,11 @@ class ReadFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    raise ValueError(f"Path {file_path} is outside work directory") from err
+                    msg = f"Path {file_path} is outside work directory"
+                    raise ValueError(msg) from err
             return path
 
-        if self.work_dir:
-            base = Path(self.work_dir).resolve()
-        else:
-            base = Path.cwd()
+        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -237,8 +229,8 @@ class ReadFileTool(BaseTool):
 
         except ValueError as e:
             return f"Error: {e}"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to read file: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to read file")
             return f"Error reading file: {e}"
 
     async def _arun(
@@ -275,36 +267,31 @@ class DeleteFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    raise ValueError(f"Path {file_path} is outside work directory") from err
+                    msg = f"Path {file_path} is outside work directory"
+                    raise ValueError(msg) from err
             return path
 
-        if self.work_dir:
-            base = Path(self.work_dir).resolve()
-        else:
-            base = Path.cwd()
+        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
-    def _create_backup(self, file_path: Path) -> Optional[Path]:
+    def _create_backup(self, file_path: Path) -> Path | None:
         """Create backup before deletion."""
         if not self.backup_enabled or not file_path.exists():
             return None
 
-        if self.backup_dir:
-            backup_base = Path(self.backup_dir)
-        else:
-            backup_base = file_path.parent / ".backups"
+        backup_base = Path(self.backup_dir) if self.backup_dir else file_path.parent / ".backups"
 
         backup_base.mkdir(parents=True, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file_path.stem}_{timestamp}{file_path.suffix}"
         backup_path = backup_base / backup_name
 
         shutil.copy2(file_path, backup_path)
         return backup_path
 
-    def _run(self, file_path: str, backup: bool = True) -> str:
+    def _run(self, file_path: str, *, backup: bool = True) -> str:
         """Delete file.
 
         Args:
@@ -333,15 +320,15 @@ class DeleteFileTool(BaseTool):
             if backup_path:
                 result += f" (backup: {backup_path.name})"
 
-            return result
-
         except ValueError as e:
             return f"Error: {e}"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to delete file: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to delete file")
             return f"Error deleting file: {e}"
+        else:
+            return result
 
-    async def _arun(self, file_path: str, backup: bool = True) -> str:
+    async def _arun(self, file_path: str, *, backup: bool = True) -> str:
         return self._run(file_path, backup)
 
 
@@ -363,6 +350,7 @@ class ListFilesTool(BaseTool):
         self,
         path: str = ".",
         pattern: str = "*",
+        *,
         recursive: bool = False,
     ) -> str:
         """List files in directory.
@@ -376,10 +364,7 @@ class ListFilesTool(BaseTool):
             File listing or error.
         """
         try:
-            if self.work_dir:
-                base = Path(self.work_dir).resolve()
-            else:
-                base = Path.cwd()
+            base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
             target = (base / path).resolve() if path != "." else base
 
@@ -390,10 +375,7 @@ class ListFilesTool(BaseTool):
                 return f"Error: Not a directory: {target}"
 
             # Collect files
-            if recursive:
-                files = list(target.rglob(pattern))
-            else:
-                files = list(target.glob(pattern))
+            files = list(target.rglob(pattern)) if recursive else list(target.glob(pattern))
 
             # Format output
             lines = []
@@ -408,14 +390,15 @@ class ListFilesTool(BaseTool):
 
             return "\n".join(lines)
 
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to list files: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to list files")
             return f"Error listing files: {e}"
 
     async def _arun(
         self,
         path: str = ".",
         pattern: str = "*",
+        *,
         recursive: bool = False,
     ) -> str:
         return self._run(path, pattern, recursive)
@@ -452,10 +435,7 @@ class SearchInFilesTool(BaseTool):
             Search results or error.
         """
         try:
-            if self.work_dir:
-                base = Path(self.work_dir).resolve()
-            else:
-                base = Path.cwd()
+            base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
             target = (base / path).resolve() if path != "." else base
 
@@ -477,7 +457,8 @@ class SearchInFilesTool(BaseTool):
                         if regex.search(line):
                             rel_path = f.relative_to(target)
                             results.append(f"{rel_path}:{i}: {line.strip()}")
-                except Exception:  # noqa: BLE001
+                except Exception:
+                    logger.debug("Failed to read file %s", f, exc_info=True)
                     continue
 
             if not results:
@@ -487,8 +468,8 @@ class SearchInFilesTool(BaseTool):
 
         except re.error as e:
             return f"Error: Invalid regex pattern: {e}"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to search files: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to search files")
             return f"Error searching files: {e}"
 
     async def _arun(
@@ -522,13 +503,11 @@ class GetFileInfoTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    raise ValueError(f"Path {file_path} is outside work directory") from err
+                    msg = f"Path {file_path} is outside work directory"
+                    raise ValueError(msg) from err
             return path
 
-        if self.work_dir:
-            base = Path(self.work_dir).resolve()
-        else:
-            base = Path.cwd()
+        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -549,10 +528,8 @@ class GetFileInfoTool(BaseTool):
 
             stat = resolved.stat()
 
-            import time
-
-            mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-            atime = datetime.fromtimestamp(stat.st_atime).strftime("%Y-%m-%d %H:%M:%S")
+            mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+            atime = datetime.fromtimestamp(stat.st_atime, tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
 
             info = [
                 f"Path: {resolved}",
@@ -567,8 +544,8 @@ class GetFileInfoTool(BaseTool):
 
         except ValueError as e:
             return f"Error: {e}"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to get file info: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to get file info")
             return f"Error getting file info: {e}"
 
     async def _arun(self, file_path: str) -> str:

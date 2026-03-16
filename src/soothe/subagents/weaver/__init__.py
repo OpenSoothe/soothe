@@ -10,10 +10,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from deepagents.middleware.subagents import CompiledSubAgent
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -21,15 +19,22 @@ from langgraph.graph.message import add_messages
 from soothe.subagents.weaver.analyzer import RequirementAnalyzer
 from soothe.subagents.weaver.composer import AgentComposer
 from soothe.subagents.weaver.generator import AgentGenerator
-from soothe.subagents.weaver.models import (
-    AgentManifest,
-    CapabilitySignature,
-    ReuseCandidate,
-)
 from soothe.subagents.weaver.registry import GeneratedAgentRegistry
 from soothe.subagents.weaver.reuse import ReuseIndex
 
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
+    from langchain_core.language_models import BaseChatModel
+
+    from soothe.subagents.weaver.models import (
+        AgentManifest,
+        CapabilitySignature,
+        ReuseCandidate,
+    )
+
 logger = logging.getLogger(__name__)
+
+_MIN_CHUNK_TUPLE_LENGTH = 2
 
 WEAVER_DESCRIPTION = (
     "Generative agent framework that creates task-specific subagents on the fly. "
@@ -112,15 +117,19 @@ def _build_weaver_graph(
         capability: CapabilitySignature,
     ) -> None:
         if not manifest.name.strip():
-            raise ValueError("Generated manifest has empty name")
+            msg = "Generated manifest has empty name"
+            raise ValueError(msg)
         if not manifest.system_prompt_file.strip():
-            raise ValueError("Generated manifest has empty system_prompt_file")
+            msg = "Generated manifest has empty system_prompt_file"
+            raise ValueError(msg)
         prompt_path = output_dir / manifest.system_prompt_file
         if not prompt_path.is_file():
-            raise ValueError("Generated package missing system prompt file")
+            msg = "Generated package missing system prompt file"
+            raise ValueError(msg)
         prompt_text = prompt_path.read_text(encoding="utf-8").strip()
         if not prompt_text:
-            raise ValueError("Generated system prompt is empty")
+            msg = "Generated system prompt is empty"
+            raise ValueError(msg)
 
         # Validate tool usage against policy before registration.
         for tool in manifest.tools:
@@ -276,7 +285,7 @@ def _build_weaver_graph(
                 {"messages": [HumanMessage(content=task)]},
                 stream_mode=["messages"],
             ):
-                if isinstance(chunk, tuple) and len(chunk) >= 2:
+                if isinstance(chunk, tuple) and len(chunk) >= _MIN_CHUNK_TUPLE_LENGTH:
                     _, data = chunk[0] if len(chunk) == 1 else (chunk[0], chunk[1])
                     if isinstance(data, tuple) and len(data) >= 1:
                         msg = data[0]
@@ -284,15 +293,16 @@ def _build_weaver_graph(
                             result_text += msg.content
 
             if not result_text:
-                result_chunks = []
                 result = await agent.ainvoke({"messages": [HumanMessage(content=task)]})
-                for msg in result.get("messages", []):
-                    if hasattr(msg, "content") and hasattr(msg, "type") and msg.type == "ai":
-                        result_chunks.append(str(msg.content))
+                result_chunks = [
+                    str(msg.content)
+                    for msg in result.get("messages", [])
+                    if hasattr(msg, "content") and hasattr(msg, "type") and msg.type == "ai"
+                ]
                 result_text = "\n".join(result_chunks) or "Agent completed but produced no output."
 
         except Exception:
-            logger.error("Generated agent execution failed", exc_info=True)
+            logger.exception("Generated agent execution failed")
             result_text = f"Generated agent '{manifest.name}' encountered an error during execution."
 
         _emit_progress(
@@ -342,7 +352,7 @@ def create_weaver_subagent(
     model: str | BaseChatModel | None = None,
     *,
     config: Any | None = None,
-    **kwargs: Any,
+    **_kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Weaver subagent (CompiledSubAgent).
 

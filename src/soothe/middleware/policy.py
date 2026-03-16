@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
-from langgraph.types import Command
 
 from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext, PolicyProtocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from langgraph.types import Command
 
 
 class SoothePolicyMiddleware(AgentMiddleware):
     """Enforce PolicyProtocol on tool calls and subagent delegations."""
 
     def __init__(self, policy: PolicyProtocol, profile_name: str = "standard") -> None:
+        """Initialize the policy middleware.
+
+        Args:
+            policy: Policy implementation for checking actions.
+            profile_name: Name of the policy profile to use.
+        """
         self._policy = policy
         self._profile_name = profile_name
 
@@ -24,6 +33,16 @@ class SoothePolicyMiddleware(AgentMiddleware):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Any],
     ) -> ToolMessage | Command[Any]:
+        """Check policy before allowing a tool call to proceed.
+
+        Args:
+            request: The tool call request containing tool name and arguments.
+            handler: The next handler in the middleware chain.
+
+        Returns:
+            A ToolMessage with denial reason if policy denies the action,
+            otherwise the result from the handler.
+        """
         tool_call = request.tool_call or {}
         tool_name = str(tool_call.get("name", ""))
         tool_args = tool_call.get("args", {})

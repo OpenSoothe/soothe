@@ -10,13 +10,15 @@ import datetime
 import json
 import logging
 from operator import add
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from deepagents.middleware.subagents import CompiledSubAgent
-from langchain_core.language_models import BaseChatModel
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
+    from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +355,7 @@ def _create_research_search_tool() -> Any:
 def create_research_subagent(
     model: str | BaseChatModel | None = None,
     max_loops: int = 2,
-    **kwargs: object,
+    **_kwargs: object,
 ) -> CompiledSubAgent:
     """Create a Research subagent (CompiledSubAgent with LangGraph workflow).
 

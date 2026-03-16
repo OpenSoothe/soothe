@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Annotated, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any
 
-from deepagents.middleware.subagents import CompiledSubAgent
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +170,7 @@ def create_claude_subagent(
     allowed_tools: list[str] | None = None,
     disallowed_tools: list[str] | None = None,
     cwd: str | None = None,
-    **kwargs: Any,
+    **_kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Claude Agent subagent (CompiledSubAgent with claude-agent-sdk).
 
@@ -184,10 +187,8 @@ def create_claude_subagent(
     Returns:
         `CompiledSubAgent` dict compatible with deepagents.
     """
-    import os
-
     # Default to current working directory if not specified
-    resolved_cwd = cwd or os.getcwd()
+    resolved_cwd = cwd or str(Path.cwd())
 
     runnable = _build_claude_graph(
         claude_model=model,

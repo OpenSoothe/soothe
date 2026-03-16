@@ -73,7 +73,7 @@ class WeaviateVectorStore:
     def _get_collection(self, client: Any) -> Any:
         return client.collections.get(self._collection_name)
 
-    async def create_collection(self, vector_size: int, distance: str = "cosine") -> None:
+    async def create_collection(self, _vector_size: int, distance: str = "cosine") -> None:
         """Create the Weaviate collection with ``none`` vectorizer."""
         import weaviate.classes.config as wc
 
@@ -109,7 +109,7 @@ class WeaviateVectorStore:
         ids = ids or [str(uuid.uuid4()) for _ in vectors]
 
         # Use batch insertion with async context manager
-        for vid, vec, payload in zip(ids, vectors, payloads):
+        for vid, vec, payload in zip(ids, vectors, payloads, strict=False):
             await collection.data.insert(
                 properties={
                     "record_id": vid,
@@ -121,7 +121,7 @@ class WeaviateVectorStore:
 
     async def search(
         self,
-        query: str,
+        _query: str,
         vector: list[float],
         limit: int = 5,
         filters: dict[str, Any] | None = None,

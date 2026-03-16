@@ -26,6 +26,11 @@ class JinaReaderTool(BaseTool):
     api_key: str = Field(default="")
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the Jina Reader tool.
+
+        Args:
+            **kwargs: Pydantic model fields. Falls back to JINA_API_KEY env var.
+        """
         if not kwargs.get("api_key"):
             kwargs["api_key"] = os.environ.get("JINA_API_KEY", "")
         super().__init__(**kwargs)

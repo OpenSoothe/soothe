@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -33,7 +33,7 @@ class VideoAnalysisTool(BaseTool):
         "Returns analysis or error message."
     )
 
-    google_api_key: Optional[str] = Field(default=None)
+    google_api_key: str | None = Field(default=None)
     model_name: str = Field(default="gemini-1.5-pro")
     max_file_size: int = Field(default=2 * 1024 * 1024 * 1024)  # 2GB
 
@@ -68,6 +68,18 @@ class VideoAnalysisTool(BaseTool):
 
         return path, None
 
+    def _raise_video_failed(self, error: str) -> None:
+        """Raise RuntimeError for video processing failure.
+
+        Args:
+            error: Error message from video processing.
+
+        Raises:
+            RuntimeError: Always raised with the error message.
+        """
+        msg = f"Video processing failed: {error}"
+        raise RuntimeError(msg)
+
     def _upload_video(self, client: Any, video_path: Path) -> Any:
         """Upload video file to Gemini File API.
 
@@ -95,13 +107,14 @@ class VideoAnalysisTool(BaseTool):
                 video_file = client.files.get(name=video_file.name)
 
             if video_file.state.name == "FAILED":
-                raise RuntimeError(f"Video processing failed: {video_file.error}")
+                self._raise_video_failed(video_file.error)
 
             logger.info("Video uploaded and processed: %s", video_file.name)
-            return video_file
-
         except Exception as e:
-            raise RuntimeError(f"Failed to upload video: {e}") from e
+            msg = f"Failed to upload video: {e}"
+            raise RuntimeError(msg) from e
+        else:
+            return video_file
 
     def _run(self, video_path: str, question: str = "Describe this video in detail") -> str:
         """Analyze video content.
@@ -148,16 +161,16 @@ class VideoAnalysisTool(BaseTool):
             try:
                 client.files.delete(name=video_file.name)
                 logger.debug("Deleted uploaded video: %s", video_file.name)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.debug("Failed to delete uploaded video")
-
-            return response.text
 
         except ImportError:
             return "Error: google-genai not installed. Install with: pip install google-genai"
-        except Exception as e:  # noqa: BLE001
-            logger.error("Video analysis failed: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Video analysis failed")
             return f"Error analyzing video: {e}"
+        else:
+            return response.text
 
     async def _arun(self, video_path: str, question: str = "Describe this video in detail") -> str:
         return self._run(video_path, question)

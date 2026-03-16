@@ -9,7 +9,7 @@ import pytest
 class TestPGVectorStoreUnit:
     """Unit tests for PGVectorStore focusing on interface compliance."""
 
-    def test_class_can_be_imported(self):
+    def test_class_can_be_imported(self) -> None:
         """Test that PGVectorStore class can be imported."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -18,7 +18,7 @@ class TestPGVectorStoreUnit:
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
 
-    def test_initialization_signature(self):
+    def test_initialization_signature(self) -> None:
         """Test that __init__ has expected signature."""
         try:
             import inspect
@@ -41,7 +41,7 @@ class TestPGVectorStoreUnit:
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
 
-    def test_required_methods_exist(self):
+    def test_required_methods_exist(self) -> None:
         """Test that all required methods exist on the class."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -66,7 +66,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_can_instantiate_without_connection(self):
+    async def test_can_instantiate_without_connection(self) -> None:
         """Test that class can be instantiated without immediate connection."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -88,7 +88,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_create_collection_creates_table(self):
+    async def test_create_collection_creates_table(self) -> None:
         """Test create_collection creates the table and index."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -116,7 +116,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_insert_vectors(self):
+    async def test_insert_vectors(self) -> None:
         """Test inserting vectors with payloads."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -146,7 +146,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_search_vectors(self):
+    async def test_search_vectors(self) -> None:
         """Test searching for vectors."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -171,7 +171,7 @@ class TestPGVectorStoreUnit:
             store._pool = mock_pool
 
             query_vector = [0.1, 0.2, 0.3] * 256
-            results = await store.search(query="test query", vector=query_vector, limit=5)
+            results = await store.search(vector=query_vector, limit=5)
 
             assert len(results) == 2
             assert results[0].id == "id1"
@@ -181,7 +181,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_delete_record(self):
+    async def test_delete_record(self) -> None:
         """Test deleting a record."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -206,7 +206,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_update_record(self):
+    async def test_update_record(self) -> None:
         """Test updating a record."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -235,7 +235,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_get_record(self):
+    async def test_get_record(self) -> None:
         """Test retrieving a record by ID."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -264,7 +264,7 @@ class TestPGVectorStoreUnit:
             pytest.skip("pgvector dependencies not installed")
 
     @pytest.mark.asyncio
-    async def test_get_nonexistent_record(self):
+    async def test_get_nonexistent_record(self) -> None:
         """Test retrieving a nonexistent record returns None."""
         try:
             from soothe.backends.vector_store.pgvector import PGVectorStore
@@ -294,7 +294,7 @@ class TestPGVectorStoreUnit:
 class TestWeaviateVectorStoreUnit:
     """Unit tests for WeaviateVectorStore focusing on interface compliance."""
 
-    def test_class_can_be_imported(self):
+    def test_class_can_be_imported(self) -> None:
         """Test that WeaviateVectorStore class can be imported."""
         try:
             from soothe.backends.vector_store.weaviate import WeaviateVectorStore
@@ -303,7 +303,7 @@ class TestWeaviateVectorStoreUnit:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
-    def test_initialization_signature(self):
+    def test_initialization_signature(self) -> None:
         """Test that __init__ has expected signature."""
         try:
             import inspect
@@ -326,7 +326,7 @@ class TestWeaviateVectorStoreUnit:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
-    def test_required_methods_exist(self):
+    def test_required_methods_exist(self) -> None:
         """Test that all required methods exist on the class."""
         try:
             from soothe.backends.vector_store.weaviate import WeaviateVectorStore
@@ -350,7 +350,7 @@ class TestWeaviateVectorStoreUnit:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
-    def test_can_instantiate_without_connection(self):
+    def test_can_instantiate_without_connection(self) -> None:
         """Test that class can be instantiated without immediate connection."""
         try:
             from soothe.backends.vector_store.weaviate import WeaviateVectorStore
@@ -371,7 +371,7 @@ class TestWeaviateVectorStoreUnit:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
-    def test_weaviate_uuid_generation(self):
+    def test_weaviate_uuid_generation(self) -> None:
         """Test deterministic UUID generation."""
         try:
             from soothe.backends.vector_store.weaviate import weaviate_uuid_from_str
@@ -396,7 +396,7 @@ class TestWeaviateVectorStoreUnit:
 class TestVectorStoreFactory:
     """Tests for create_vector_store factory function."""
 
-    def test_creates_pgvector_store(self):
+    def test_creates_pgvector_store(self) -> None:
         """Test that factory creates PGVectorStore."""
         try:
             from soothe.backends.vector_store import create_vector_store
@@ -413,7 +413,7 @@ class TestVectorStoreFactory:
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
 
-    def test_creates_weaviate_store(self):
+    def test_creates_weaviate_store(self) -> None:
         """Test that factory creates WeaviateVectorStore."""
         try:
             from soothe.backends.vector_store import create_vector_store
@@ -430,7 +430,7 @@ class TestVectorStoreFactory:
         except ImportError:
             pytest.skip("weaviate dependencies not installed")
 
-    def test_raises_error_for_unknown_provider(self):
+    def test_raises_error_for_unknown_provider(self) -> None:
         """Test that factory raises error for unknown provider."""
         from soothe.backends.vector_store import create_vector_store
 
@@ -440,7 +440,7 @@ class TestVectorStoreFactory:
                 collection="test_collection",
             )
 
-    def test_creates_with_defaults(self):
+    def test_creates_with_defaults(self) -> None:
         """Test that factory creates store with default config."""
         try:
             from soothe.backends.vector_store import create_vector_store

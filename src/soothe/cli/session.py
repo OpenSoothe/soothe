@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from soothe.config import SOOTHE_HOME
 logger = logging.getLogger(__name__)
 
 _LOG_CONTENT_LIMIT = 2000
+_MESSAGE_TUPLE_LENGTH = 2
 
 
 def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
@@ -43,7 +43,13 @@ class SessionLogger:
         session_dir: str | None = None,
         thread_id: str | None = None,
     ) -> None:
-        self._session_dir = Path(session_dir or os.path.join(SOOTHE_HOME, "sessions")).expanduser()
+        """Initialize the session logger.
+
+        Args:
+            session_dir: Directory for session logs. Defaults to ``SOOTHE_HOME/sessions/``.
+            thread_id: Thread ID for the log file name.
+        """
+        self._session_dir = Path(session_dir or Path(SOOTHE_HOME) / "sessions").expanduser()
         self._thread_id = thread_id or "default"
         self._initialized = False
 
@@ -86,7 +92,7 @@ class SessionLogger:
                 "data": data,
             }
             self._write_record(record)
-        elif mode == "messages" and isinstance(data, (tuple, list)) and len(data) == 2:
+        elif mode == "messages" and isinstance(data, (tuple, list)) and len(data) == _MESSAGE_TUPLE_LENGTH:
             self._log_message_event(namespace, data)
 
     def log_user_input(self, text: str) -> None:
@@ -175,7 +181,7 @@ class SessionLogger:
             return []
 
         try:
-            with open(self.log_path, encoding="utf-8") as fh:
+            with self.log_path.open(encoding="utf-8") as fh:
                 lines = fh.readlines()[-limit:]
         except OSError:
             logger.debug("SessionLogger read failed", exc_info=True)
@@ -208,7 +214,7 @@ class SessionLogger:
         """Append a single JSONL record to the session log."""
         try:
             self._ensure_dir()
-            with open(self.log_path, "a", encoding="utf-8") as fh:
+            with self.log_path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, default=str) + "\n")
         except OSError:
             logger.debug("SessionLogger write failed", exc_info=True)
@@ -240,7 +246,13 @@ class InputHistory:
         history_file: str | None = None,
         max_size: int = 1000,
     ) -> None:
-        self.history_file = Path(history_file or os.path.join(SOOTHE_HOME, "history.json")).expanduser()
+        """Initialize the input history.
+
+        Args:
+            history_file: Path to the history JSON file.
+            max_size: Maximum number of history entries to retain.
+        """
+        self.history_file = Path(history_file or Path(SOOTHE_HOME) / "history.json").expanduser()
         self.max_size = max_size
         self.history: list[str] = []
         self._load()
@@ -248,7 +260,7 @@ class InputHistory:
     def _load(self) -> None:
         if self.history_file.exists():
             try:
-                with open(self.history_file) as f:
+                with self.history_file.open() as f:
                     self.history = json.load(f)
             except Exception:
                 self.history = []
@@ -256,7 +268,7 @@ class InputHistory:
     def _save(self) -> None:
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, "w") as f:
+            with self.history_file.open("w") as f:
                 json.dump(self.history[-self.max_size :], f, indent=2)
         except Exception:
             logger.debug("InputHistory save failed", exc_info=True)

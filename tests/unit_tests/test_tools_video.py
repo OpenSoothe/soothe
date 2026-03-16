@@ -12,7 +12,7 @@ from soothe.tools.video import VideoAnalysisTool, VideoInfoTool, create_video_to
 class TestVideoAnalysisTool:
     """Test VideoAnalysisTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = VideoAnalysisTool()
 
@@ -20,7 +20,7 @@ class TestVideoAnalysisTool:
         assert "analyze" in tool.description.lower()
         assert "video" in tool.description.lower()
 
-    def test_create_video_tools(self):
+    def test_create_video_tools(self) -> None:
         """Test factory function creates all tools."""
         tools = create_video_tools()
 
@@ -28,7 +28,7 @@ class TestVideoAnalysisTool:
         assert isinstance(tools[0], VideoAnalysisTool)
         assert isinstance(tools[1], VideoInfoTool)
 
-    def test_default_configuration(self):
+    def test_default_configuration(self) -> None:
         """Test default configuration."""
         tool = VideoAnalysisTool()
 
@@ -36,7 +36,7 @@ class TestVideoAnalysisTool:
         assert tool.max_file_size == 2 * 1024 * 1024 * 1024  # 2GB
         assert tool.google_api_key is None
 
-    def test_custom_configuration(self):
+    def test_custom_configuration(self) -> None:
         """Test custom configuration."""
         tool = VideoAnalysisTool(
             google_api_key="test_key",
@@ -48,7 +48,7 @@ class TestVideoAnalysisTool:
         assert tool.model_name == "gemini-1.5-flash"
         assert tool.max_file_size == 1024 * 1024 * 1024
 
-    def test_get_api_key_from_instance(self):
+    def test_get_api_key_from_instance(self) -> None:
         """Test getting API key from instance."""
         tool = VideoAnalysisTool(google_api_key="test_key")
 
@@ -56,7 +56,7 @@ class TestVideoAnalysisTool:
 
         assert result == "test_key"
 
-    def test_get_api_key_from_environment(self):
+    def test_get_api_key_from_environment(self) -> None:
         """Test getting API key from environment."""
         tool = VideoAnalysisTool()
 
@@ -69,26 +69,26 @@ class TestVideoAnalysisTool:
 class TestVideoAnalysisToolValidation:
     """Test video file validation."""
 
-    def test_validate_nonexistent_file(self):
+    def test_validate_nonexistent_file(self) -> None:
         """Test validation of non-existent file."""
         tool = VideoAnalysisTool()
 
-        path, error = tool._validate_file("/nonexistent/video.mp4")
+        _path, error = tool._validate_file("/nonexistent/video.mp4")
 
         assert error is not None
         assert "not found" in error.lower()
 
-    def test_validate_directory(self):
+    def test_validate_directory(self) -> None:
         """Test validation of directory path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = VideoAnalysisTool()
 
-            path, error = tool._validate_file(temp_dir)
+            _path, error = tool._validate_file(temp_dir)
 
             assert error is not None
             assert "not a file" in error.lower()
 
-    def test_validate_oversized_file(self):
+    def test_validate_oversized_file(self) -> None:
         """Test validation of oversized file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a file that's too large (simulated)
@@ -97,12 +97,12 @@ class TestVideoAnalysisToolValidation:
 
             tool = VideoAnalysisTool(max_file_size=10)  # Very small limit
 
-            path, error = tool._validate_file(str(file_path))
+            _path, error = tool._validate_file(str(file_path))
 
             assert error is not None
             assert "too large" in error.lower()
 
-    def test_validate_valid_file(self):
+    def test_validate_valid_file(self) -> None:
         """Test validation of valid file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "video.mp4"
@@ -119,7 +119,7 @@ class TestVideoAnalysisToolValidation:
 class TestVideoAnalysisToolExecution:
     """Test video analysis execution."""
 
-    def test_run_without_api_key(self):
+    def test_run_without_api_key(self) -> None:
         """Test execution without API key."""
         tool = VideoAnalysisTool()
 
@@ -129,7 +129,7 @@ class TestVideoAnalysisToolExecution:
             assert "Error" in result
             assert "API key required" in result
 
-    def test_run_with_nonexistent_file(self):
+    def test_run_with_nonexistent_file(self) -> None:
         """Test execution with non-existent file."""
         tool = VideoAnalysisTool(google_api_key="test_key")
 
@@ -137,7 +137,7 @@ class TestVideoAnalysisToolExecution:
 
         assert "Error" in result
 
-    def test_run_without_google_genai(self):
+    def test_run_without_google_genai(self) -> None:
         """Test execution without google-genai library."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "video.mp4"
@@ -155,14 +155,14 @@ class TestVideoAnalysisToolExecution:
 class TestVideoInfoTool:
     """Test VideoInfoTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = VideoInfoTool()
 
         assert tool.name == "get_video_info"
         assert "info" in tool.description.lower() or "metadata" in tool.description.lower()
 
-    def test_get_info_nonexistent_file(self):
+    def test_get_info_nonexistent_file(self) -> None:
         """Test getting info for non-existent file."""
         tool = VideoInfoTool()
 
@@ -171,7 +171,7 @@ class TestVideoInfoTool:
         assert "error" in result
         assert "not found" in result["error"].lower()
 
-    def test_get_info_valid_file(self):
+    def test_get_info_valid_file(self) -> None:
         """Test getting info for valid file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "video.mp4"
@@ -187,7 +187,7 @@ class TestVideoInfoTool:
             assert "size_bytes" in result
             assert "size_mb" in result
 
-    def test_get_info_directory(self):
+    def test_get_info_directory(self) -> None:
         """Test getting info for directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = VideoInfoTool()
@@ -205,13 +205,13 @@ class TestVideoToolIntegration:
         not pytest.importorskip("google.genai", reason="google-genai not installed"),
         reason="Google API key required for integration test",
     )
-    def test_real_video_analysis(self):
+    def test_real_video_analysis(self) -> None:
         """Test real video analysis (requires Google API key)."""
         # This test would require an actual video file and API key
         # Skip if not available
         pytest.skip("Integration test requires video file and Google API key")
 
-    def test_video_analysis_workflow(self):
+    def test_video_analysis_workflow(self) -> None:
         """Test complete video analysis workflow."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "video.mp4"
@@ -244,7 +244,7 @@ class TestVideoToolIntegration:
 
                 assert "test scene" in result
 
-    def test_video_info_workflow(self):
+    def test_video_info_workflow(self) -> None:
         """Test complete video info workflow."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test video file

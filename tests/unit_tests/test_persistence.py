@@ -11,17 +11,17 @@ from soothe.backends.persistence.json_store import JsonPersistStore
 class TestJsonPersistStore:
     """Unit tests for JsonPersistStore."""
 
-    def test_initialization_creates_directory(self, tmp_path: Path):
+    def test_initialization_creates_directory(self, tmp_path: Path) -> None:
         """Test that initialization creates the persist directory."""
         persist_dir = tmp_path / "test_persist"
         assert not persist_dir.exists()
 
-        store = JsonPersistStore(str(persist_dir))
+        JsonPersistStore(str(persist_dir))
 
         assert persist_dir.exists()
         assert persist_dir.is_dir()
 
-    def test_save_and_load_simple_data(self, tmp_path: Path):
+    def test_save_and_load_simple_data(self, tmp_path: Path) -> None:
         """Test saving and loading simple data types."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -32,7 +32,7 @@ class TestJsonPersistStore:
 
         assert loaded == data
 
-    def test_save_and_load_complex_data(self, tmp_path: Path):
+    def test_save_and_load_complex_data(self, tmp_path: Path) -> None:
         """Test saving and loading complex nested data."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -45,7 +45,7 @@ class TestJsonPersistStore:
 
         assert loaded == data
 
-    def test_load_nonexistent_key_returns_none(self, tmp_path: Path):
+    def test_load_nonexistent_key_returns_none(self, tmp_path: Path) -> None:
         """Test that loading a nonexistent key returns None."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -53,7 +53,7 @@ class TestJsonPersistStore:
 
         assert result is None
 
-    def test_delete_existing_key(self, tmp_path: Path):
+    def test_delete_existing_key(self, tmp_path: Path) -> None:
         """Test deleting an existing key."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -64,14 +64,14 @@ class TestJsonPersistStore:
 
         assert store.load("to_delete") is None
 
-    def test_delete_nonexistent_key_no_error(self, tmp_path: Path):
+    def test_delete_nonexistent_key_no_error(self, tmp_path: Path) -> None:
         """Test that deleting a nonexistent key doesn't raise an error."""
         store = JsonPersistStore(str(tmp_path))
 
         # Should not raise an error
         store.delete("nonexistent")
 
-    def test_key_sanitization(self, tmp_path: Path):
+    def test_key_sanitization(self, tmp_path: Path) -> None:
         """Test that keys with special characters are sanitized."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -85,7 +85,7 @@ class TestJsonPersistStore:
         expected_file = tmp_path / "test_key_name.json"
         assert expected_file.exists()
 
-    def test_overwrite_existing_key(self, tmp_path: Path):
+    def test_overwrite_existing_key(self, tmp_path: Path) -> None:
         """Test that saving with an existing key overwrites the data."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -95,14 +95,14 @@ class TestJsonPersistStore:
         loaded = store.load("key")
         assert loaded == {"version": 2}
 
-    def test_close_is_noop(self, tmp_path: Path):
+    def test_close_is_noop(self, tmp_path: Path) -> None:
         """Test that close() is a no-op for JSON backend."""
         store = JsonPersistStore(str(tmp_path))
 
         # Should not raise an error
         store.close()
 
-    def test_handles_invalid_json_gracefully(self, tmp_path: Path):
+    def test_handles_invalid_json_gracefully(self, tmp_path: Path) -> None:
         """Test that loading corrupted JSON returns None."""
         store = JsonPersistStore(str(tmp_path))
 
@@ -116,7 +116,7 @@ class TestJsonPersistStore:
 
         assert loaded is None
 
-    def test_nested_directory_creation(self, tmp_path: Path):
+    def test_nested_directory_creation(self, tmp_path: Path) -> None:
         """Test that nested directories are created for storage."""
         nested_dir = tmp_path / "nested" / "deep" / "path"
         store = JsonPersistStore(str(nested_dir))
@@ -131,7 +131,7 @@ class TestRocksDBPersistStore:
     """Unit tests for RocksDBPersistStore."""
 
     @pytest.fixture
-    def rocksdb_available(self):
+    def rocksdb_available(self) -> bool | None:
         """Check if rocksdict is available."""
         try:
             import rocksdict
@@ -140,7 +140,7 @@ class TestRocksDBPersistStore:
         except ImportError:
             return False
 
-    def test_import_error_without_rocksdict(self, tmp_path: Path, monkeypatch):
+    def test_import_error_without_rocksdict(self, tmp_path: Path, monkeypatch) -> None:
         """Test that ImportError is raised if rocksdict is not installed."""
         # Mock the import to raise ImportError
         import builtins
@@ -149,7 +149,8 @@ class TestRocksDBPersistStore:
 
         def mock_import(name, *args, **kwargs):
             if name == "rocksdict" or name.startswith("rocksdict."):
-                raise ImportError("No module named 'rocksdict'")
+                msg = "No module named 'rocksdict'"
+                raise ImportError(msg)
             return real_import(name, *args, **kwargs)
 
         monkeypatch.setattr(builtins, "__import__", mock_import)
@@ -163,7 +164,7 @@ class TestRocksDBPersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_save_and_load_data(self, tmp_path: Path):
+    def test_save_and_load_data(self, tmp_path: Path) -> None:
         """Test saving and loading data with RocksDB."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -181,7 +182,7 @@ class TestRocksDBPersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_load_nonexistent_key_returns_none(self, tmp_path: Path):
+    def test_load_nonexistent_key_returns_none(self, tmp_path: Path) -> None:
         """Test that loading a nonexistent key returns None."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -197,7 +198,7 @@ class TestRocksDBPersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_delete_key(self, tmp_path: Path):
+    def test_delete_key(self, tmp_path: Path) -> None:
         """Test deleting a key from RocksDB."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -216,7 +217,7 @@ class TestRocksDBPersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_delete_nonexistent_key_no_error(self, tmp_path: Path):
+    def test_delete_nonexistent_key_no_error(self, tmp_path: Path) -> None:
         """Test that deleting a nonexistent key doesn't raise an error."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -231,7 +232,7 @@ class TestRocksDBPersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_overwrite_existing_key(self, tmp_path: Path):
+    def test_overwrite_existing_key(self, tmp_path: Path) -> None:
         """Test that saving with an existing key overwrites the data."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -249,19 +250,19 @@ class TestRocksDBPersistStore:
 class TestCreatePersistStore:
     """Tests for create_persist_store factory function."""
 
-    def test_returns_none_if_no_persist_dir(self):
+    def test_returns_none_if_no_persist_dir(self) -> None:
         """Test that None is returned if persist_dir is None."""
         result = create_persist_store(None, "json")
 
         assert result is None
 
-    def test_creates_json_store_by_default(self, tmp_path: Path):
+    def test_creates_json_store_by_default(self, tmp_path: Path) -> None:
         """Test that JSON store is created by default."""
         store = create_persist_store(str(tmp_path))
 
         assert isinstance(store, JsonPersistStore)
 
-    def test_creates_json_store_explicitly(self, tmp_path: Path):
+    def test_creates_json_store_explicitly(self, tmp_path: Path) -> None:
         """Test that JSON store is created when backend='json'."""
         store = create_persist_store(str(tmp_path), "json")
 
@@ -271,7 +272,7 @@ class TestCreatePersistStore:
         not pytest.importorskip("rocksdict", reason="rocksdict not installed"),
         reason="rocksdict not installed",
     )
-    def test_creates_rocksdb_store(self, tmp_path: Path):
+    def test_creates_rocksdb_store(self, tmp_path: Path) -> None:
         """Test that RocksDB store is created when backend='rocksdb'."""
         from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
 
@@ -281,7 +282,7 @@ class TestCreatePersistStore:
 
         store.close()
 
-    def test_protocol_compliance(self, tmp_path: Path):
+    def test_protocol_compliance(self, tmp_path: Path) -> None:
         """Test that created stores implement PersistStore protocol."""
         store = create_persist_store(str(tmp_path), "json")
 

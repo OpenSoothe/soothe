@@ -19,7 +19,7 @@ class TestBashToolIntegration:
             timeout=30,
         )
 
-    def test_real_command_execution(self, bash_tool):
+    def test_real_command_execution(self, bash_tool) -> None:
         """Test real command execution (requires pexpect)."""
         pytest.importorskip("pexpect")
 
@@ -30,7 +30,7 @@ class TestBashToolIntegration:
         result = bash_tool._run("echo 'Hello World'")
         assert "Hello World" in result
 
-    def test_real_shell_persistence(self, bash_tool):
+    def test_real_shell_persistence(self, bash_tool) -> None:
         """Test that shell state persists between commands."""
         pytest.importorskip("pexpect")
 
@@ -44,7 +44,7 @@ class TestBashToolIntegration:
         result = bash_tool._run("echo $TEST_VAR")
         assert "hello" in result
 
-    def test_real_directory_operations(self, bash_tool):
+    def test_real_directory_operations(self, bash_tool) -> None:
         """Test real directory operations."""
         pytest.importorskip("pexpect")
 
@@ -60,7 +60,7 @@ class TestBashToolIntegration:
 class TestPythonExecutorIntegration:
     """Integration tests for PythonExecutorTool with real IPython."""
 
-    def test_real_error_traceback(self):
+    def test_real_error_traceback(self) -> None:
         """Test real error traceback with IPython."""
         pytest.importorskip("IPython")
 
@@ -75,7 +75,7 @@ class TestPythonExecutorIntegration:
         # Error details available
         assert result.get("stderr") or result.get("error")
 
-    def test_real_matplotlib_generation(self):
+    def test_real_matplotlib_generation(self) -> None:
         """Test real matplotlib plot generation."""
         pytest.importorskip("IPython")
         pytest.importorskip("matplotlib")
@@ -100,7 +100,7 @@ plt.savefig('test_plot.png')
 
             assert result["success"] is True
             # Verify plot was created
-            plot_path = Path(temp_dir) / "test_plot.png"
+            Path(temp_dir) / "test_plot.png"
             # May or may not exist depending on matplotlib setup
             # Just verify execution succeeded
 
@@ -112,10 +112,8 @@ class TestAudioToolIntegration:
         not pytest.importorskip("openai", reason="openai not installed"),
         reason="OpenAI API key required for integration test",
     )
-    def test_real_audio_transcription(self):
+    def test_real_audio_transcription(self) -> None:
         """Test real audio transcription (requires OpenAI API key)."""
-        from soothe.tools.audio import AudioTranscriptionTool
-
         # This test would require a real audio file and API key
         pytest.skip("Integration test requires audio file and OpenAI API key")
 
@@ -127,9 +125,7 @@ class TestVideoToolIntegration:
         not pytest.importorskip("google.genai", reason="google-genai not installed"),
         reason="Google API key required for integration test",
     )
-    def test_real_video_analysis(self):
+    def test_real_video_analysis(self) -> None:
         """Test real video analysis (requires Google API key)."""
-        from soothe.tools.video import VideoAnalysisTool
-
         # This test would require a real video file and API key
         pytest.skip("Integration test requires video file and Google API key")

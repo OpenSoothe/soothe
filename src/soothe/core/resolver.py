@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from collections.abc import Callable
-
-from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
-from langchain_core.language_models import BaseChatModel
-from langchain_core.tools import BaseTool
-from langgraph.types import Checkpointer
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.core.goal_engine import GoalEngine
-from soothe.protocols.context import ContextProtocol
-from soothe.protocols.durability import DurabilityProtocol
-from soothe.protocols.memory import MemoryProtocol
-from soothe.protocols.planner import PlannerProtocol
-from soothe.protocols.policy import PolicyProtocol
 from soothe.subagents.browser import create_browser_subagent
 from soothe.subagents.claude import create_claude_subagent
 from soothe.subagents.planner import create_planner_subagent
@@ -24,6 +15,21 @@ from soothe.subagents.research import create_research_subagent
 from soothe.subagents.scout import create_scout_subagent
 from soothe.subagents.skillify import create_skillify_subagent
 from soothe.subagents.weaver import create_weaver_subagent
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.tools import BaseTool
+    from langgraph.types import Checkpointer
+
+    from soothe.core.goal_engine import GoalEngine
+    from soothe.protocols.context import ContextProtocol
+    from soothe.protocols.durability import DurabilityProtocol
+    from soothe.protocols.memory import MemoryProtocol
+    from soothe.protocols.planner import PlannerProtocol
+    from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +58,7 @@ def resolve_tools(tool_names: list[str]) -> list[BaseTool]:
         try:
             resolved = _resolve_single_tool_group(name)
             tools.extend(resolved)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
     return tools
 
@@ -177,11 +183,9 @@ def resolve_subagents(
     Returns:
         List of subagent specs for deepagents.
     """
-    import os
-
-    _CWD_SUBAGENTS = {"planner", "scout", "claude"}
-    _STRING_MODEL_SUBAGENTS = {"claude"}
-    resolved_cwd = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
+    cwd_subagents = {"planner", "scout", "claude"}
+    string_model_subagents = {"claude"}
+    resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     subagents: list[SubAgent | CompiledSubAgent] = []
     for name, sub_cfg in config.subagents.items():
@@ -191,12 +195,12 @@ def resolve_subagents(
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
-        if name in _STRING_MODEL_SUBAGENTS:
+        if name in string_model_subagents:
             model_override = sub_cfg.model or config.resolve_model("default")
         else:
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
         extra_kwargs = dict(sub_cfg.config)
-        if name in _CWD_SUBAGENTS and "cwd" not in extra_kwargs:
+        if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
         if name in ("skillify", "weaver"):
             extra_kwargs["config"] = config
@@ -237,7 +241,7 @@ def _resolve_generated_subagents(config: SootheConfig) -> list[SubAgent]:
         from soothe.subagents.weaver.registry import GeneratedAgentRegistry
 
         registry = GeneratedAgentRegistry(base_dir=base)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("Failed to initialise generated agent registry", exc_info=True)
         return []
 
@@ -275,7 +279,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             )
             embeddings = config.create_embedding_model()
             return VectorContext(vector_store=vs, embeddings=embeddings)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
     elif config.context_backend == "vector":
         logger.warning("vector context requires vector_store_provider; falling back to keyword")
@@ -317,7 +321,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
             )
             embeddings = config.create_embedding_model()
             return VectorMemory(vector_store=vs, embeddings=embeddings)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("Vector memory init failed, falling back to keyword", exc_info=True)
     elif config.memory_backend == "vector":
         logger.warning("vector memory requires vector_store_provider; falling back to keyword")
@@ -348,19 +352,17 @@ def resolve_planner(
     Returns:
         A PlannerProtocol instance.
     """
-    import os
-
     planner_model = model
     if planner_model is None:
         try:
             planner_model = config.create_chat_model("think")
-        except Exception:  # noqa: BLE001
+        except Exception:
             try:
                 planner_model = config.create_chat_model("default")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.warning("Failed to create model for planner")
 
-    resolved_cwd = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
+    resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     from soothe.backends.planning.direct import DirectPlanner
 
@@ -374,7 +376,7 @@ def resolve_planner(
         from soothe.backends.planning.subagent import SubagentPlanner
 
         subagent_planner = SubagentPlanner(model=planner_model, cwd=resolved_cwd)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("SubagentPlanner init failed", exc_info=True)
 
     if config.planner_routing == "always_planner":
@@ -385,7 +387,7 @@ def resolve_planner(
         from soothe.backends.planning.claude import ClaudePlanner
 
         claude_planner = ClaudePlanner(cwd=resolved_cwd)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.info("Claude CLI not available for planning")
 
     if config.planner_routing == "always_claude":
@@ -394,10 +396,8 @@ def resolve_planner(
     from soothe.backends.planning.router import AutoPlanner
 
     fast_model = None
-    try:
+    with contextlib.suppress(Exception):
         fast_model = config.create_chat_model("fast")
-    except Exception:  # noqa: BLE001
-        pass
 
     return AutoPlanner(
         claude=claude_planner,
@@ -407,11 +407,11 @@ def resolve_planner(
     )
 
 
-def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
+def resolve_policy(_config: SootheConfig) -> PolicyProtocol | None:
     """Instantiate the PolicyProtocol implementation from config.
 
     Args:
-        config: Soothe configuration.
+        _config: Soothe configuration (unused - ConfigDrivenPolicy reads from env).
 
     Returns:
         A PolicyProtocol instance.
@@ -477,6 +477,7 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
                 return saver_cls.from_conn_string(sqlite_path)
             return saver_cls(sqlite_path)
         except Exception:
+            logger.debug("Failed to load %s.%s", module_name, class_name, exc_info=True)
             continue
 
     logger.warning(
@@ -505,6 +506,7 @@ def _resolve_postgres_checkpointer(config: SootheConfig) -> Checkpointer | None:
                 return saver_cls.from_conn_string(dsn)
             return saver_cls(dsn)
         except Exception:
+            logger.debug("Failed to load %s.%s", module_name, class_name, exc_info=True)
             continue
 
     logger.warning(

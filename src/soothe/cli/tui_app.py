@@ -13,16 +13,16 @@ streaming and user input.  When the daemon is not already running,
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
-from textual.events import Key
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
@@ -40,6 +40,9 @@ from soothe.cli.tui_shared import (
     render_plan_tree,
 )
 from soothe.config import SootheConfig
+
+if TYPE_CHECKING:
+    from textual.events import Key
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,11 @@ class ChatInput(Input):
     """Chat input with UP/DOWN arrow key history navigation."""
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the chat input with history navigation.
+
+        Args:
+            **kwargs: Additional keyword arguments passed to Input.
+        """
         super().__init__(**kwargs)
         self._history: list[str] = []
         self._history_index: int = -1
@@ -160,7 +168,7 @@ class SootheApp(App):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("ctrl+d", "detach", "Detach"),
         Binding("ctrl+q", "quit_app", "Quit"),
     ]
@@ -171,6 +179,13 @@ class SootheApp(App):
         thread_id: str | None = None,
         **kwargs: Any,
     ) -> None:
+        """Initialize the Soothe TUI application.
+
+        Args:
+            config: Soothe configuration.
+            thread_id: Optional thread ID to resume.
+            **kwargs: Additional keyword arguments passed to App.
+        """
         super().__init__(**kwargs)
         self._config = config or SootheConfig()
         self._thread_id = thread_id
@@ -212,11 +227,9 @@ class SootheApp(App):
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
-        try:
+        with contextlib.suppress(Exception):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
-        except Exception:
-            pass
 
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
@@ -260,7 +273,7 @@ class SootheApp(App):
             self._update_status(state)
             # Only render assistant output in conversation at turn end.
             if state in {"idle", "stopped"} and self._state.full_response:
-                self._append_conversation("".join(self._state.full_response))
+                self._append_conversation()
 
         elif msg_type == "event":
             namespace = tuple(msg.get("namespace", []))
@@ -270,35 +283,34 @@ class SootheApp(App):
 
             if mode == "messages":
                 self._handle_messages_event(data, namespace=namespace)
-            elif mode == "custom":
-                if isinstance(data, dict):
-                    category = classify_custom_event(namespace, data)
-                    if category == "protocol" and should_show(category, self._progress_verbosity):
-                        _handle_protocol_event(data, self._state, verbosity=self._progress_verbosity)
-                        self._flush_new_activity()
-                        etype = data.get("type", "")
-                        if "plan" in etype:
-                            self._refresh_plan()
-                    elif category == "subagent_custom" and not is_main:
-                        _handle_subagent_custom(
-                            namespace,
-                            data,
-                            self._state,
-                            verbosity=self._progress_verbosity,
-                        )
-                        self._flush_new_activity()
-                        self._update_status("Running")
-                    elif category == "error" and should_show("error", self._progress_verbosity):
-                        _handle_protocol_event(data, self._state, verbosity="normal")
-                        self._flush_new_activity()
-                    elif should_show(category, self._progress_verbosity):
-                        _handle_generic_custom_activity(
-                            namespace,
-                            data,
-                            self._state,
-                            verbosity=self._progress_verbosity,
-                        )
-                        self._flush_new_activity()
+            elif mode == "custom" and isinstance(data, dict):
+                category = classify_custom_event(namespace, data)
+                if category == "protocol" and should_show(category, self._progress_verbosity):
+                    _handle_protocol_event(data, self._state, verbosity=self._progress_verbosity)
+                    self._flush_new_activity()
+                    etype = data.get("type", "")
+                    if "plan" in etype:
+                        self._refresh_plan()
+                elif category == "subagent_custom" and not is_main:
+                    _handle_subagent_custom(
+                        namespace,
+                        data,
+                        self._state,
+                        verbosity=self._progress_verbosity,
+                    )
+                    self._flush_new_activity()
+                    self._update_status("Running")
+                elif category == "error" and should_show("error", self._progress_verbosity):
+                    _handle_protocol_event(data, self._state, verbosity="normal")
+                    self._flush_new_activity()
+                elif should_show(category, self._progress_verbosity):
+                    _handle_generic_custom_activity(
+                        namespace,
+                        data,
+                        self._state,
+                        verbosity=self._progress_verbosity,
+                    )
+                    self._flush_new_activity()
 
     def _handle_messages_event(self, data: Any, *, namespace: tuple[str, ...]) -> None:
         if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
@@ -352,9 +364,13 @@ class SootheApp(App):
                             verbosity=self._progress_verbosity,
                         )
                         self._flush_new_activity()
-            elif is_main and isinstance(msg.content, str) and msg.content:
-                if should_show("assistant_text", self._progress_verbosity):
-                    self._state.full_response.append(msg.content)
+            elif (
+                is_main
+                and isinstance(msg.content, str)
+                and msg.content
+                and should_show("assistant_text", self._progress_verbosity)
+            ):
+                self._state.full_response.append(msg.content)
 
         # Handle deserialized dict (after JSON transport)
         elif isinstance(msg, dict):
@@ -377,9 +393,13 @@ class SootheApp(App):
                 content = msg.get("content", "")
                 if isinstance(content, list):
                     blocks = content
-                elif is_main and isinstance(content, str) and content:
-                    if should_show("assistant_text", self._progress_verbosity):
-                        self._state.full_response.append(content)
+                elif (
+                    is_main
+                    and isinstance(content, str)
+                    and content
+                    and should_show("assistant_text", self._progress_verbosity)
+                ):
+                    self._state.full_response.append(content)
 
             for block in blocks:
                 if not isinstance(block, dict):
@@ -438,15 +458,13 @@ class SootheApp(App):
     def _log_conversation(self, text: str) -> None:
         self._conversation_history.append(text)
         logger.info("Conversation: %s", text.replace("\n", " ")[:200])
-        try:
+        with contextlib.suppress(Exception):
             panel = self.query_one("#conversation", ConversationPanel)
             panel.write(text)
-        except Exception:
-            pass
 
-    def _append_conversation(self, text: str) -> None:
+    def _append_conversation(self) -> None:
         """Rewrite the conversation panel with history + accumulated streaming text."""
-        try:
+        with contextlib.suppress(Exception):
             panel = self.query_one("#conversation", ConversationPanel)
             response_text = "".join(self._state.full_response)
             if not response_text:
@@ -455,22 +473,18 @@ class SootheApp(App):
             for entry in self._conversation_history:
                 panel.write(entry)
             panel.write(response_text, scroll_end=True)
-        except Exception:
-            pass
 
     def _flush_new_activity(self) -> None:
         """Append only new activity lines (append-only, no clear)."""
-        try:
+        with contextlib.suppress(Exception):
             panel = self.query_one("#activity-panel", ActivityPanel)
             new_lines = self._state.activity_lines[self._last_activity_count :]
             for line in new_lines:
                 panel.write(line)
             self._last_activity_count = len(self._state.activity_lines)
-        except Exception:
-            pass
 
     def _refresh_plan(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             panel = self.query_one("#plan-panel", PlanPanel)
             panel.clear()
             if self._state.current_plan:
@@ -478,11 +492,9 @@ class SootheApp(App):
                 panel.write(tree)
             else:
                 panel.write("[dim]No active plan.[/dim]")
-        except Exception:
-            pass
 
     def _update_status(self, state: str) -> None:
-        try:
+        with contextlib.suppress(Exception):
             bar = self.query_one("#info-bar", InfoBar)
             tid = self._state.thread_id or "-"
             events = len(self._state.activity_lines)
@@ -492,8 +504,6 @@ class SootheApp(App):
                 last = subagent_lines[-1]
                 sub_summary = f"  |  {last.plain}" if hasattr(last, "plain") else ""
             bar.update(f"Thread: {tid}  Events: {events}  {state.title()}{sub_summary}")
-        except Exception:
-            pass
 
     # -- input handling -----------------------------------------------------
 
@@ -505,11 +515,9 @@ class SootheApp(App):
             return
         event.input.clear()
 
-        try:
+        with contextlib.suppress(Exception):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.add_to_history(text)
-        except Exception:
-            pass
 
         if self._state.full_response:
             self._conversation_history.append("".join(self._state.full_response))
@@ -565,7 +573,7 @@ _daemon_instance: SootheDaemon | None = None
 
 def _start_daemon_in_background(config: SootheConfig) -> None:
     """Start the daemon on a background thread if not already running."""
-    global _daemon_thread, _daemon_instance  # noqa: PLW0603
+    global _daemon_thread, _daemon_instance
 
     if SootheDaemon.is_running():
         return
@@ -585,10 +593,8 @@ def _start_daemon_in_background(config: SootheConfig) -> None:
         except Exception:
             logger.exception("Daemon thread error")
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 loop.run_until_complete(_daemon_instance.stop())
-            except Exception:
-                pass
             loop.close()
 
     _daemon_thread = threading.Thread(target=_run, daemon=True, name="soothe-daemon")
@@ -604,7 +610,7 @@ def _start_daemon_in_background(config: SootheConfig) -> None:
 
 def _stop_background_daemon() -> None:
     """Stop the in-process daemon if we started one."""
-    global _daemon_thread, _daemon_instance  # noqa: PLW0603
+    global _daemon_thread, _daemon_instance
     if _daemon_instance is not None:
         _daemon_instance.request_stop()
         _daemon_instance = None

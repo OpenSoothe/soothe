@@ -55,6 +55,7 @@ class SubagentTracker:
     """Tracks per-subagent progress for display."""
 
     def __init__(self) -> None:
+        """Initialize the subagent tracker."""
         self._states: dict[str, _SubagentState] = {}
 
     def update_from_custom(self, label: str, data: dict[str, Any]) -> None:

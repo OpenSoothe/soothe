@@ -11,7 +11,7 @@ from soothe.protocols.durability import ThreadFilter, ThreadMetadata
 class TestInMemoryDurability:
     """Unit tests for InMemoryDurability."""
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test initialization creates empty storage."""
         durability = InMemoryDurability()
 
@@ -19,7 +19,7 @@ class TestInMemoryDurability:
         assert durability._state == {}
 
     @pytest.mark.asyncio
-    async def test_create_thread(self):
+    async def test_create_thread(self) -> None:
         """Test creating a new thread."""
         durability = InMemoryDurability()
 
@@ -34,7 +34,7 @@ class TestInMemoryDurability:
         assert thread.updated_at is not None
 
     @pytest.mark.asyncio
-    async def test_create_thread_generates_unique_ids(self):
+    async def test_create_thread_generates_unique_ids(self) -> None:
         """Test that each thread gets a unique ID."""
         durability = InMemoryDurability()
 
@@ -45,7 +45,7 @@ class TestInMemoryDurability:
         assert thread1.thread_id != thread2.thread_id
 
     @pytest.mark.asyncio
-    async def test_resume_existing_thread(self):
+    async def test_resume_existing_thread(self) -> None:
         """Test resuming an existing thread."""
         durability = InMemoryDurability()
 
@@ -62,7 +62,7 @@ class TestInMemoryDurability:
         assert resumed.thread_id == thread.thread_id
 
     @pytest.mark.asyncio
-    async def test_resume_nonexistent_thread_raises_error(self):
+    async def test_resume_nonexistent_thread_raises_error(self) -> None:
         """Test that resuming nonexistent thread raises KeyError."""
         durability = InMemoryDurability()
 
@@ -70,7 +70,7 @@ class TestInMemoryDurability:
             await durability.resume_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_suspend_thread(self):
+    async def test_suspend_thread(self) -> None:
         """Test suspending a thread."""
         durability = InMemoryDurability()
 
@@ -85,7 +85,7 @@ class TestInMemoryDurability:
         assert suspended_thread.status == "suspended"
 
     @pytest.mark.asyncio
-    async def test_suspend_nonexistent_thread_no_error(self):
+    async def test_suspend_nonexistent_thread_no_error(self) -> None:
         """Test that suspending nonexistent thread doesn't raise error."""
         durability = InMemoryDurability()
 
@@ -93,7 +93,7 @@ class TestInMemoryDurability:
         await durability.suspend_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_archive_thread(self):
+    async def test_archive_thread(self) -> None:
         """Test archiving a thread."""
         durability = InMemoryDurability()
 
@@ -108,7 +108,7 @@ class TestInMemoryDurability:
         assert archived_thread.status == "archived"
 
     @pytest.mark.asyncio
-    async def test_archive_nonexistent_thread_no_error(self):
+    async def test_archive_nonexistent_thread_no_error(self) -> None:
         """Test that archiving nonexistent thread doesn't raise error."""
         durability = InMemoryDurability()
 
@@ -116,7 +116,7 @@ class TestInMemoryDurability:
         await durability.archive_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_list_threads_no_filter(self):
+    async def test_list_threads_no_filter(self) -> None:
         """Test listing all threads without filter."""
         durability = InMemoryDurability()
 
@@ -134,7 +134,7 @@ class TestInMemoryDurability:
         assert thread2.thread_id in thread_ids
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_status(self):
+    async def test_list_threads_filter_by_status(self) -> None:
         """Test listing threads filtered by status."""
         durability = InMemoryDurability()
 
@@ -149,20 +149,20 @@ class TestInMemoryDurability:
 
         # Filter by active status
         filter_active = ThreadFilter(status="active")
-        active_threads = await durability.list_threads(filter=filter_active)
+        active_threads = await durability.list_threads(thread_filter=filter_active)
 
         assert len(active_threads) == 1
         assert active_threads[0].thread_id == thread1.thread_id
 
         # Filter by suspended status
         filter_suspended = ThreadFilter(status="suspended")
-        suspended_threads = await durability.list_threads(filter=filter_suspended)
+        suspended_threads = await durability.list_threads(thread_filter=filter_suspended)
 
         assert len(suspended_threads) == 1
         assert suspended_threads[0].thread_id == thread2.thread_id
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_tags(self):
+    async def test_list_threads_filter_by_tags(self) -> None:
         """Test listing threads filtered by tags."""
         durability = InMemoryDurability()
 
@@ -170,37 +170,37 @@ class TestInMemoryDurability:
         metadata2 = ThreadMetadata(plan_summary="Thread 2", tags=["java", "test"])
 
         thread1 = await durability.create_thread(metadata1)
-        thread2 = await durability.create_thread(metadata2)
+        await durability.create_thread(metadata2)
 
         # Filter by tag
         filter_tags = ThreadFilter(tags=["python"])
-        python_threads = await durability.list_threads(filter=filter_tags)
+        python_threads = await durability.list_threads(thread_filter=filter_tags)
 
         assert len(python_threads) == 1
         assert python_threads[0].thread_id == thread1.thread_id
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_date_range(self):
+    async def test_list_threads_filter_by_date_range(self) -> None:
         """Test listing threads filtered by creation date."""
         durability = InMemoryDurability()
 
         metadata = ThreadMetadata(plan_summary="Test")
-        thread = await durability.create_thread(metadata)
+        await durability.create_thread(metadata)
 
         # Filter after creation (using timezone-aware datetime)
         filter_after = ThreadFilter(created_after=datetime.now(UTC) - timedelta(hours=1))
-        recent_threads = await durability.list_threads(filter=filter_after)
+        recent_threads = await durability.list_threads(thread_filter=filter_after)
 
         assert len(recent_threads) == 1
 
         # Filter before creation
         filter_before = ThreadFilter(created_before=datetime.now(UTC) - timedelta(hours=1))
-        old_threads = await durability.list_threads(filter=filter_before)
+        old_threads = await durability.list_threads(thread_filter=filter_before)
 
         assert len(old_threads) == 0
 
     @pytest.mark.asyncio
-    async def test_list_threads_combined_filters(self):
+    async def test_list_threads_combined_filters(self) -> None:
         """Test listing threads with combined filters."""
         durability = InMemoryDurability()
 
@@ -215,13 +215,13 @@ class TestInMemoryDurability:
 
         # Combined filter
         combined_filter = ThreadFilter(status="active", tags=["python"])
-        filtered_threads = await durability.list_threads(filter=combined_filter)
+        filtered_threads = await durability.list_threads(thread_filter=combined_filter)
 
         assert len(filtered_threads) == 1
         assert filtered_threads[0].thread_id == thread1.thread_id
 
     @pytest.mark.asyncio
-    async def test_save_and_load_state(self):
+    async def test_save_and_load_state(self) -> None:
         """Test saving and loading thread state."""
         durability = InMemoryDurability()
 
@@ -236,7 +236,7 @@ class TestInMemoryDurability:
         assert loaded_state == state
 
     @pytest.mark.asyncio
-    async def test_load_state_nonexistent_thread(self):
+    async def test_load_state_nonexistent_thread(self) -> None:
         """Test loading state for nonexistent thread returns None."""
         durability = InMemoryDurability()
 
@@ -245,7 +245,7 @@ class TestInMemoryDurability:
         assert state is None
 
     @pytest.mark.asyncio
-    async def test_save_state_overwrites(self):
+    async def test_save_state_overwrites(self) -> None:
         """Test that saving state overwrites previous state."""
         durability = InMemoryDurability()
 
@@ -263,7 +263,7 @@ class TestInMemoryDurability:
         assert loaded_state == state2
 
     @pytest.mark.asyncio
-    async def test_thread_updated_at_changes(self):
+    async def test_thread_updated_at_changes(self) -> None:
         """Test that updated_at timestamp changes on modifications."""
         durability = InMemoryDurability()
 

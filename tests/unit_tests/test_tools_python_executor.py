@@ -12,7 +12,7 @@ from soothe.tools.python_executor import PythonExecutorTool, create_python_execu
 class TestPythonExecutorToolInitialization:
     """Test PythonExecutorTool initialization and configuration."""
 
-    def test_default_initialization(self):
+    def test_default_initialization(self) -> None:
         """Test initialization with default configuration."""
         tool = PythonExecutorTool()
 
@@ -21,7 +21,7 @@ class TestPythonExecutorToolInitialization:
         assert tool.max_timeout == 300
         assert tool.workdir == ""
 
-    def test_custom_configuration(self):
+    def test_custom_configuration(self) -> None:
         """Test initialization with custom configuration."""
         tool = PythonExecutorTool(
             workdir="/tmp/test",
@@ -33,7 +33,7 @@ class TestPythonExecutorToolInitialization:
         assert tool.timeout == 60
         assert tool.max_timeout == 600
 
-    def test_create_python_executor_tools(self):
+    def test_create_python_executor_tools(self) -> None:
         """Test factory function creates tool."""
         tools = create_python_executor_tools()
 
@@ -44,7 +44,7 @@ class TestPythonExecutorToolInitialization:
 class TestPythonExecutorToolCodeCleaning:
     """Test code cleaning functionality."""
 
-    def test_clean_code_removes_markdown_blocks(self):
+    def test_clean_code_removes_markdown_blocks(self) -> None:
         """Test removal of markdown code blocks."""
         tool = PythonExecutorTool()
 
@@ -56,7 +56,7 @@ print("hello")
         assert "```" not in result
         assert 'print("hello")' in result
 
-    def test_clean_code_handles_plain_code(self):
+    def test_clean_code_handles_plain_code(self) -> None:
         """Test cleaning plain code without blocks."""
         tool = PythonExecutorTool()
 
@@ -69,7 +69,7 @@ print("hello")
 class TestPythonExecutorToolExecution:
     """Test Python code execution."""
 
-    def test_simple_code_execution(self):
+    def test_simple_code_execution(self) -> None:
         """Test execution of simple Python code."""
         pytest.importorskip("IPython")
 
@@ -80,7 +80,7 @@ class TestPythonExecutorToolExecution:
         assert result["success"] is True
         assert "Hello, World!" in result["stdout"]
 
-    def test_code_with_result(self):
+    def test_code_with_result(self) -> None:
         """Test execution with return value."""
         pytest.importorskip("IPython")
 
@@ -91,7 +91,7 @@ class TestPythonExecutorToolExecution:
         assert result["success"] is True
         assert result["result"] == "3"
 
-    def test_code_with_error(self):
+    def test_code_with_error(self) -> None:
         """Test execution with error."""
         pytest.importorskip("IPython")
 
@@ -103,7 +103,7 @@ class TestPythonExecutorToolExecution:
         # Error captured in some form
         assert result.get("stderr") or result.get("error")
 
-    def test_syntax_error_handling(self):
+    def test_syntax_error_handling(self) -> None:
         """Test handling of syntax errors."""
         pytest.importorskip("IPython")
 
@@ -115,7 +115,7 @@ class TestPythonExecutorToolExecution:
         # Error captured in some form
         assert result.get("stderr") or result.get("error")
 
-    def test_import_error_handling(self):
+    def test_import_error_handling(self) -> None:
         """Test handling of import errors."""
         pytest.importorskip("IPython")
 
@@ -127,7 +127,7 @@ class TestPythonExecutorToolExecution:
         # Error captured in some form
         assert result.get("stderr") or result.get("error")
 
-    def test_code_without_ipython(self):
+    def test_code_without_ipython(self) -> None:
         """Test execution when IPython is not available."""
         with patch.dict("sys.modules", {"IPython": None, "IPython.core.interactiveshell": None}):
             tool = PythonExecutorTool()
@@ -141,7 +141,7 @@ class TestPythonExecutorToolExecution:
 class TestPythonExecutorToolWorkdir:
     """Test working directory handling."""
 
-    def test_setup_workdir_creates_directory(self):
+    def test_setup_workdir_creates_directory(self) -> None:
         """Test that workdir is created."""
         tool = PythonExecutorTool()
 
@@ -153,7 +153,7 @@ class TestPythonExecutorToolWorkdir:
             assert result.exists()
             assert result.is_dir()
 
-    def test_setup_workdir_with_configured_path(self):
+    def test_setup_workdir_with_configured_path(self) -> None:
         """Test workdir from configuration."""
         tool = PythonExecutorTool(workdir="/tmp")
 
@@ -166,7 +166,7 @@ class TestPythonExecutorToolWorkdir:
 class TestPythonExecutorToolMatplotlib:
     """Test matplotlib integration."""
 
-    def test_matplotlib_plot_generation(self):
+    def test_matplotlib_plot_generation(self) -> None:
         """Test matplotlib plot generation."""
         pytest.importorskip("IPython")
         pytest.importorskip("matplotlib")
@@ -190,7 +190,7 @@ plt.title('Test Plot')
             # Check if plot file was created
             assert len(result["files"]) > 0
 
-    def test_matplotlib_not_available(self):
+    def test_matplotlib_not_available(self) -> None:
         """Test execution when matplotlib is not available."""
         pytest.importorskip("IPython")
 
@@ -211,7 +211,7 @@ plt.figure()
 class TestPythonExecutorToolIntegration:
     """Integration tests for PythonExecutorTool."""
 
-    def test_complex_code_execution(self):
+    def test_complex_code_execution(self) -> None:
         """Test execution of complex Python code."""
         pytest.importorskip("IPython")
 
@@ -236,7 +236,7 @@ data["value"]
         assert "timestamp" in result["stdout"]
         assert result["result"] == "42"
 
-    def test_file_operations(self):
+    def test_file_operations(self) -> None:
         """Test file operations in workdir."""
         pytest.importorskip("IPython")
 

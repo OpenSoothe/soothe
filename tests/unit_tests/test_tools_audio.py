@@ -7,13 +7,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.tools.audio import AudioTranscriptionTool, AudioQATool, create_audio_tools
+from soothe.tools.audio import AudioQATool, AudioTranscriptionTool, create_audio_tools
 
 
 class TestAudioTranscriptionTool:
     """Test AudioTranscriptionTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = AudioTranscriptionTool()
 
@@ -21,7 +21,7 @@ class TestAudioTranscriptionTool:
         assert "transcribe" in tool.description.lower()
         assert "audio" in tool.description.lower()
 
-    def test_create_audio_tools(self):
+    def test_create_audio_tools(self) -> None:
         """Test factory function creates all tools."""
         tools = create_audio_tools()
 
@@ -29,7 +29,7 @@ class TestAudioTranscriptionTool:
         assert isinstance(tools[0], AudioTranscriptionTool)
         assert isinstance(tools[1], AudioQATool)
 
-    def test_get_cache_path_disabled(self):
+    def test_get_cache_path_disabled(self) -> None:
         """Test cache path when caching disabled."""
         tool = AudioTranscriptionTool(cache_dir="")
 
@@ -37,7 +37,7 @@ class TestAudioTranscriptionTool:
 
         assert result is None
 
-    def test_get_cache_path_enabled(self):
+    def test_get_cache_path_enabled(self) -> None:
         """Test cache path when caching enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = AudioTranscriptionTool(cache_dir=temp_dir)
@@ -48,13 +48,13 @@ class TestAudioTranscriptionTool:
             assert result.parent == Path(temp_dir)
             assert result.suffix == ".json"
 
-    def test_cache_key_is_md5(self):
+    def test_cache_key_is_md5(self) -> None:
         """Test that cache key is MD5 hash."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = AudioTranscriptionTool(cache_dir=temp_dir)
 
             cache_path = tool._get_cache_path("/path/to/audio.mp3")
-            expected_md5 = hashlib.md5("/path/to/audio.mp3".encode()).hexdigest()
+            expected_md5 = hashlib.md5(b"/path/to/audio.mp3").hexdigest()
 
             assert cache_path.name == f"{expected_md5}.json"
 
@@ -62,7 +62,7 @@ class TestAudioTranscriptionTool:
 class TestAudioTranscriptionToolDownload:
     """Test URL downloading functionality."""
 
-    def test_download_if_url_with_local_path(self):
+    def test_download_if_url_with_local_path(self) -> None:
         """Test that local paths are returned as-is."""
         tool = AudioTranscriptionTool()
 
@@ -70,7 +70,7 @@ class TestAudioTranscriptionToolDownload:
 
         assert result == "/path/to/audio.mp3"
 
-    def test_download_if_url_with_url(self):
+    def test_download_if_url_with_url(self) -> None:
         """Test URL downloading."""
         tool = AudioTranscriptionTool()
 
@@ -89,7 +89,7 @@ class TestAudioTranscriptionToolDownload:
             # Cleanup
             Path(result).unlink()
 
-    def test_download_if_url_without_requests(self):
+    def test_download_if_url_without_requests(self) -> None:
         """Test URL downloading without requests library."""
         tool = AudioTranscriptionTool()
 
@@ -101,7 +101,7 @@ class TestAudioTranscriptionToolDownload:
 class TestAudioTranscriptionToolTranscription:
     """Test transcription functionality."""
 
-    def test_transcribe_openai(self):
+    def test_transcribe_openai(self) -> None:
         """Test OpenAI Whisper transcription."""
         tool = AudioTranscriptionTool()
 
@@ -131,7 +131,7 @@ class TestAudioTranscriptionToolTranscription:
             finally:
                 Path(tmp.name).unlink()
 
-    def test_transcribe_with_cache(self):
+    def test_transcribe_with_cache(self) -> None:
         """Test transcription with caching."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = AudioTranscriptionTool(cache_dir=temp_dir)
@@ -151,7 +151,7 @@ class TestAudioTranscriptionToolTranscription:
 class TestAudioQATool:
     """Test AudioQATool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = AudioQATool()
 
@@ -159,7 +159,7 @@ class TestAudioQATool:
         assert "question" in tool.description.lower()
         assert "audio" in tool.description.lower()
 
-    def test_audio_qa_with_transcription(self):
+    def test_audio_qa_with_transcription(self) -> None:
         """Test audio Q&A with successful transcription."""
         tool = AudioQATool()
 
@@ -176,7 +176,7 @@ class TestAudioQATool:
 
                 assert "Python programming" in result
 
-    def test_audio_qa_with_transcription_error(self):
+    def test_audio_qa_with_transcription_error(self) -> None:
         """Test audio Q&A with transcription error."""
         tool = AudioQATool()
 
@@ -187,7 +187,7 @@ class TestAudioQATool:
 
             assert "Failed to transcribe" in result
 
-    def test_audio_qa_with_empty_transcription(self):
+    def test_audio_qa_with_empty_transcription(self) -> None:
         """Test audio Q&A with empty transcription."""
         tool = AudioQATool()
 
@@ -206,13 +206,13 @@ class TestAudioToolIntegration:
         not pytest.importorskip("openai", reason="openai not installed"),
         reason="OpenAI API key required for integration test",
     )
-    def test_real_audio_transcription(self):
+    def test_real_audio_transcription(self) -> None:
         """Test real audio transcription (requires OpenAI API key)."""
         # This test would require an actual audio file and API key
         # Skip if not available
         pytest.skip("Integration test requires audio file and OpenAI API key")
 
-    def test_audio_qa_workflow(self):
+    def test_audio_qa_workflow(self) -> None:
         """Test complete audio Q&A workflow."""
         tool = AudioQATool()
 

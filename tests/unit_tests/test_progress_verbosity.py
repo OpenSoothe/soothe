@@ -8,21 +8,21 @@ from soothe.cli.progress_verbosity import (
 
 
 class TestProgressVerbosity:
-    def test_should_show_minimal(self):
+    def test_should_show_minimal(self) -> None:
         assert should_show("assistant_text", "minimal")
         assert should_show("error", "minimal")
         assert not should_show("protocol", "minimal")
         assert not should_show("tool_activity", "minimal")
         assert not should_show("subagent_custom", "minimal")
 
-    def test_should_show_normal(self):
+    def test_should_show_normal(self) -> None:
         assert should_show("assistant_text", "normal")
         assert should_show("protocol", "normal")
         assert should_show("error", "normal")
         assert not should_show("tool_activity", "normal")
         assert not should_show("subagent_custom", "normal")
 
-    def test_should_show_detailed(self):
+    def test_should_show_detailed(self) -> None:
         assert should_show("assistant_text", "detailed")
         assert should_show("protocol", "detailed")
         assert should_show("error", "detailed")
@@ -30,7 +30,7 @@ class TestProgressVerbosity:
         assert should_show("subagent_custom", "detailed")
         assert not should_show("thinking", "detailed")
 
-    def test_should_show_debug(self):
+    def test_should_show_debug(self) -> None:
         for category in (
             "assistant_text",
             "protocol",
@@ -42,18 +42,18 @@ class TestProgressVerbosity:
         ):
             assert should_show(category, "debug")
 
-    def test_classify_custom_event_protocol(self):
+    def test_classify_custom_event_protocol(self) -> None:
         assert classify_custom_event((), {"type": "soothe.plan.created"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.context.projected"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.policy.checked"}) == "protocol"
 
-    def test_classify_custom_event_error(self):
+    def test_classify_custom_event_error(self) -> None:
         assert classify_custom_event((), {"type": "soothe.error"}) == "error"
 
-    def test_classify_custom_event_subagent_from_namespace(self):
+    def test_classify_custom_event_subagent_from_namespace(self) -> None:
         assert classify_custom_event(("tools:abc",), {"type": "some_event"}) == "subagent_custom"
 
-    def test_classify_custom_event_subagent_from_soothe_prefix(self):
+    def test_classify_custom_event_subagent_from_soothe_prefix(self) -> None:
         assert classify_custom_event((), {"type": "soothe.browser.step"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.research.web_search"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.claude.text"}) == "subagent_custom"
@@ -62,10 +62,10 @@ class TestProgressVerbosity:
         assert classify_custom_event((), {"type": "soothe.skillify.search"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.weaver.generate"}) == "subagent_custom"
 
-    def test_classify_custom_event_thinking(self):
+    def test_classify_custom_event_thinking(self) -> None:
         assert classify_custom_event((), {"type": "soothe.thinking.heartbeat"}) == "thinking"
 
-    def test_subagent_prefixes_complete(self):
+    def test_subagent_prefixes_complete(self) -> None:
         expected = {
             "soothe.research.",
             "soothe.browser.",

@@ -3,7 +3,7 @@
 import pytest
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser) -> None:
     """Add custom command-line options for integration tests."""
     parser.addoption(
         "--run-integration",
@@ -13,12 +13,12 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
+def pytest_configure(config) -> None:
     """Configure pytest markers."""
     config.addinivalue_line("markers", "integration: mark test as integration test")
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config, items) -> None:
     """Skip integration tests unless --run-integration is passed."""
     if config.getoption("--run-integration"):
         # --run-integration given in cli: do not skip integration tests

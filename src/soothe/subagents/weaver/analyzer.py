@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
-
-from langchain_core.language_models import BaseChatModel
+from typing import TYPE_CHECKING
 
 from soothe.subagents.weaver.models import CapabilitySignature
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,11 @@ class RequirementAnalyzer:
     """
 
     def __init__(self, model: BaseChatModel) -> None:
+        """Initialize the requirement analyzer.
+
+        Args:
+            model: Chat model for analysis.
+        """
         self._model = model
 
     async def analyze(self, request: str) -> CapabilitySignature:
@@ -65,7 +72,7 @@ class RequirementAnalyzer:
                 expected_output="task result",
             )
         except Exception:
-            logger.error("Requirement analysis failed", exc_info=True)
+            logger.exception("Requirement analysis failed")
             return CapabilitySignature(
                 description=request,
                 required_capabilities=[],

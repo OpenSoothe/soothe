@@ -26,6 +26,11 @@ class SkillWarehouse:
     """
 
     def __init__(self, paths: list[str]) -> None:
+        """Initialize the skill warehouse.
+
+        Args:
+            paths: List of directory paths to scan for skill packages.
+        """
         self._paths = [Path(p).expanduser().resolve() for p in paths]
 
     def scan(self) -> list[SkillRecord]:
@@ -50,7 +55,7 @@ class SkillWarehouse:
     def _parse_skill(self, skill_md: Path) -> SkillRecord:
         """Parse a single SKILL.md into a SkillRecord."""
         content = skill_md.read_text(encoding="utf-8")
-        frontmatter, body = self.parse_skill_md(content)
+        frontmatter, _body = self.parse_skill_md(content)
 
         name = frontmatter.get("name", skill_md.parent.name)
         description = frontmatter.get("description", "")

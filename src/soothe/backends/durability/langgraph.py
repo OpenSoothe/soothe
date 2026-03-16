@@ -19,6 +19,11 @@ class LangGraphDurability:
     """
 
     def __init__(self, metadata_path: str) -> None:
+        """Initialize the durability backend with a JSON metadata file.
+
+        Args:
+            metadata_path: Path to the JSON file for storing thread metadata.
+        """
         self._path = Path(metadata_path).expanduser().resolve()
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._threads: dict[str, ThreadInfo] = {}
@@ -68,21 +73,21 @@ class LangGraphDurability:
 
     async def list_threads(
         self,
-        filter: ThreadFilter | None = None,  # noqa: A002
+        thread_filter: ThreadFilter | None = None,
     ) -> list[ThreadInfo]:
         """List threads matching a filter."""
         results = list(self._threads.values())
-        if filter is None:
+        if thread_filter is None:
             return results
-        if filter.status:
-            results = [t for t in results if t.status == filter.status]
-        if filter.tags:
-            tag_set = set(filter.tags)
+        if thread_filter.status:
+            results = [t for t in results if t.status == thread_filter.status]
+        if thread_filter.tags:
+            tag_set = set(thread_filter.tags)
             results = [t for t in results if tag_set.issubset(set(t.metadata.tags))]
-        if filter.created_after:
-            results = [t for t in results if t.created_at >= filter.created_after]
-        if filter.created_before:
-            results = [t for t in results if t.created_at <= filter.created_before]
+        if thread_filter.created_after:
+            results = [t for t in results if t.created_at >= thread_filter.created_after]
+        if thread_filter.created_before:
+            results = [t for t in results if t.created_at <= thread_filter.created_before]
         return results
 
     async def save_state(self, thread_id: str, state: Any) -> None:

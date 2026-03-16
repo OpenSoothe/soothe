@@ -17,7 +17,7 @@ class TestManageGoalsTool:
         return tools[0]
 
     @pytest.mark.asyncio
-    async def test_create_action(self):
+    async def test_create_action(self) -> None:
         tool = self._make_tool()
         result = await tool._arun(action="create", description="New goal", priority=70)
         assert "created" in result
@@ -25,13 +25,13 @@ class TestManageGoalsTool:
         assert result["created"]["priority"] == 70
 
     @pytest.mark.asyncio
-    async def test_create_without_description(self):
+    async def test_create_without_description(self) -> None:
         tool = self._make_tool()
         result = await tool._arun(action="create")
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_list_action(self):
+    async def test_list_action(self) -> None:
         tool = self._make_tool()
         await tool._arun(action="create", description="Goal A")
         await tool._arun(action="create", description="Goal B")
@@ -39,7 +39,7 @@ class TestManageGoalsTool:
         assert len(result["goals"]) == 2
 
     @pytest.mark.asyncio
-    async def test_list_with_status_filter(self):
+    async def test_list_with_status_filter(self) -> None:
         tool = self._make_tool()
         create_result = await tool._arun(action="create", description="Goal A")
         goal_id = create_result["created"]["id"]
@@ -51,7 +51,7 @@ class TestManageGoalsTool:
         assert len(completed["goals"]) == 1
 
     @pytest.mark.asyncio
-    async def test_complete_action(self):
+    async def test_complete_action(self) -> None:
         tool = self._make_tool()
         create_result = await tool._arun(action="create", description="To complete")
         goal_id = create_result["created"]["id"]
@@ -59,13 +59,13 @@ class TestManageGoalsTool:
         assert result["completed"]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_complete_not_found(self):
+    async def test_complete_not_found(self) -> None:
         tool = self._make_tool()
         result = await tool._arun(action="complete", goal_id="nonexistent")
         assert "error" in result
 
     @pytest.mark.asyncio
-    async def test_fail_action(self):
+    async def test_fail_action(self) -> None:
         tool = self._make_tool()
         create_result = await tool._arun(action="create", description="To fail")
         goal_id = create_result["created"]["id"]
@@ -75,12 +75,12 @@ class TestManageGoalsTool:
         assert result["failed"]["retry_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_unknown_action(self):
+    async def test_unknown_action(self) -> None:
         tool = self._make_tool()
         result = await tool._arun(action="unknown_action")
         assert "error" in result
 
-    def test_tool_name_and_description(self):
+    def test_tool_name_and_description(self) -> None:
         tool = self._make_tool()
         assert tool.name == "manage_goals"
         assert "create" in tool.description

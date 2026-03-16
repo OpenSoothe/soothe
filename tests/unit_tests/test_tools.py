@@ -20,18 +20,18 @@ from soothe.tools.wizsearch import (
 
 
 class TestDatetimeTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_datetime_tools()
         assert len(tools) == 1
         assert isinstance(tools[0], CurrentDateTimeTool)
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         tool = CurrentDateTimeTool()
         assert tool.name == "current_datetime"
         assert "date" in tool.description.lower()
         assert "time" in tool.description.lower()
 
-    def test_returns_expected_keys(self):
+    def test_returns_expected_keys(self) -> None:
         tool = CurrentDateTimeTool()
         result = tool._run()
         assert "date" in result
@@ -40,7 +40,7 @@ class TestDatetimeTools:
         assert "timezone" in result
         assert "iso" in result
 
-    def test_date_format(self):
+    def test_date_format(self) -> None:
         tool = CurrentDateTimeTool()
         result = tool._run()
         parts = result["date"].split("-")
@@ -49,24 +49,24 @@ class TestDatetimeTools:
 
 
 class TestJinaTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_jina_tools()
         assert len(tools) == 1
         assert isinstance(tools[0], JinaReaderTool)
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         tool = JinaReaderTool()
         assert tool.name == "jina_get_web_content"
         assert "web" in tool.description.lower()
 
 
 class TestSerperTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_serper_tools()
         assert len(tools) == 1
         assert isinstance(tools[0], SerperSearchTool)
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         tool = SerperSearchTool()
         assert tool.name == "serper_search"
         assert "search" in tool.description.lower()
@@ -75,14 +75,14 @@ class TestSerperTools:
 
 
 class TestWizsearchTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_wizsearch_tools()
         assert len(tools) == 2
         types = {type(tool) for tool in tools}
         assert WizsearchSearchTool in types
         assert WizsearchCrawlPageTool in types
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         search_tool = WizsearchSearchTool()
         assert search_tool.name == "wizsearch_search"
         assert "multiple engines" in search_tool.description.lower()
@@ -91,7 +91,7 @@ class TestWizsearchTools:
         assert crawl_tool.name == "wizsearch_crawl_page"
         assert "crawl" in crawl_tool.description.lower()
 
-    def test_missing_dependency_error(self, monkeypatch):
+    def test_missing_dependency_error(self, monkeypatch) -> None:
         import soothe.tools.wizsearch as wizsearch_mod
 
         monkeypatch.setattr(wizsearch_mod, "WIZSEARCH_AVAILABLE", False)
@@ -99,7 +99,7 @@ class TestWizsearchTools:
         with pytest.raises(ImportError, match="wizsearch package is not installed"):
             tool._run(query="latest ai research")
 
-    def test_default_engines(self, monkeypatch):
+    def test_default_engines(self, monkeypatch) -> None:
         import soothe.tools.wizsearch as wizsearch_mod
 
         captured: dict[str, object] = {}
@@ -134,19 +134,19 @@ class TestWizsearchTools:
 
 
 class TestVideoTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_video_tools()
         assert len(tools) == 2  # VideoInfoTool and VideoAnalysisTool
         assert isinstance(tools[1], VideoInfoTool)
 
-    def test_nonexistent_file(self):
+    def test_nonexistent_file(self) -> None:
         tool = VideoInfoTool()
         result = tool._run("/nonexistent/path.mp4")
         assert "error" in result
 
 
 class TestTabularTools:
-    def test_create_returns_list(self):
+    def test_create_returns_list(self) -> None:
         tools = create_tabular_tools()
         assert len(tools) == 3
         names = {t.name for t in tools}
@@ -154,7 +154,7 @@ class TestTabularTools:
         assert "get_data_summary" in names
         assert "validate_data_quality" in names
 
-    def test_tool_types(self):
+    def test_tool_types(self) -> None:
         tools = create_tabular_tools()
         types = {type(t) for t in tools}
         assert TabularColumnsTool in types

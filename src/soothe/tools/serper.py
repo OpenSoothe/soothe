@@ -33,6 +33,11 @@ class SerperSearchTool(BaseTool):
     api_key: str = Field(default="")
 
     def __init__(self, **kwargs: Any) -> None:
+        """Initialize the Serper search tool.
+
+        Args:
+            **kwargs: Pydantic model fields. Falls back to SERPER_API_KEY env var.
+        """
         if not kwargs.get("api_key"):
             kwargs["api_key"] = os.environ.get("SERPER_API_KEY", "")
         super().__init__(**kwargs)

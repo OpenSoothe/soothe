@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from langchain_core.embeddings import Embeddings
-
-from soothe.protocols.vector_store import VectorStoreProtocol
 from soothe.subagents.weaver.models import AgentManifest, CapabilitySignature, ReuseCandidate
+
+if TYPE_CHECKING:
+    from langchain_core.embeddings import Embeddings
+
+    from soothe.protocols.vector_store import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,15 @@ class ReuseIndex:
         collection: str = "soothe_weaver_reuse",
         embedding_dims: int = 1536,
     ) -> None:
+        """Initialize the reuse index.
+
+        Args:
+            vector_store: Vector store for agent description embeddings.
+            embeddings: Embedding model for vectorization.
+            threshold: Minimum confidence score to consider a reuse hit.
+            collection: Vector store collection name.
+            embedding_dims: Embedding vector dimensionality.
+        """
         self._vector_store = vector_store
         self._embeddings = embeddings
         self._threshold = threshold
@@ -65,7 +76,7 @@ class ReuseIndex:
         try:
             vector = await self._embeddings.aembed_query(capability.description)
         except Exception:
-            logger.error("Failed to embed capability description", exc_info=True)
+            logger.exception("Failed to embed capability description")
             return None
 
         try:
@@ -75,7 +86,7 @@ class ReuseIndex:
                 limit=5,
             )
         except Exception:
-            logger.error("Reuse index search failed", exc_info=True)
+            logger.exception("Reuse index search failed")
             return None
 
         if not results:
@@ -115,7 +126,7 @@ class ReuseIndex:
         try:
             vector = await self._embeddings.aembed_query(text)
         except Exception:
-            logger.error("Failed to embed agent description for reuse index", exc_info=True)
+            logger.exception("Failed to embed agent description for reuse index")
             return
 
         payload: dict[str, Any] = {
@@ -131,7 +142,7 @@ class ReuseIndex:
                 ids=[manifest.name],
             )
         except Exception:
-            logger.error("Failed to index agent in reuse store", exc_info=True)
+            logger.exception("Failed to index agent in reuse store")
 
     async def close(self) -> None:
         """Close the underlying vector store if supported."""

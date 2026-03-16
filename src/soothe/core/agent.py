@@ -3,19 +3,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from deepagents import create_deep_agent
-from deepagents.backends.protocol import BackendFactory, BackendProtocol
-from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
-from langchain.agents.middleware import InterruptOnConfig
-from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.language_models import BaseChatModel
-from langchain_core.tools import BaseTool
-from langgraph.graph.state import CompiledStateGraph
-from langgraph.store.base import BaseStore
-from langgraph.types import Checkpointer
 
 from soothe.built_in_skills import get_built_in_skills_paths
 from soothe.config import SootheConfig
@@ -32,10 +24,23 @@ from soothe.core.resolver import (
 )
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
-from soothe.protocols.context import ContextProtocol
-from soothe.protocols.memory import MemoryProtocol
-from soothe.protocols.planner import PlannerProtocol
-from soothe.protocols.policy import PolicyProtocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from deepagents.backends.protocol import BackendFactory, BackendProtocol
+    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
+    from langchain.agents.middleware import InterruptOnConfig
+    from langchain.agents.middleware.types import AgentMiddleware
+    from langchain_core.tools import BaseTool
+    from langgraph.graph.state import CompiledStateGraph
+    from langgraph.store.base import BaseStore
+    from langgraph.types import Checkpointer
+
+    from soothe.protocols.context import ContextProtocol
+    from soothe.protocols.memory import MemoryProtocol
+    from soothe.protocols.planner import PlannerProtocol
+    from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -87,10 +92,7 @@ def create_soothe_agent(
     config.propagate_env()
 
     resolved_model: str | BaseChatModel
-    if model is not None:
-        resolved_model = model
-    else:
-        resolved_model = config.create_chat_model("default")
+    resolved_model = model if model is not None else config.create_chat_model("default")
 
     default_model_instance = resolved_model if isinstance(resolved_model, BaseChatModel) else None
     resolved_context = context or resolve_context(config)
@@ -120,9 +122,7 @@ def create_soothe_agent(
     if subagents:
         all_subagents.extend(subagents)
 
-    import os
-
-    resolved_workspace = os.path.abspath(config.workspace_dir) if config.workspace_dir else os.getcwd()
+    resolved_workspace = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     resolved_backend = backend
     if resolved_backend is None:
@@ -144,7 +144,7 @@ def create_soothe_agent(
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))
 
-    all_middleware: tuple[AgentMiddleware, ...] = tuple([*default_middleware, *middleware])
+    all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
     # Merge built-in skills with user-provided skills
     all_skills = get_built_in_skills_paths()

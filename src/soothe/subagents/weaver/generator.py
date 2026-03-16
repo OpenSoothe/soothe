@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from langchain_core.language_models import BaseChatModel
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import anyio
+    from langchain_core.language_models import BaseChatModel
 
 from soothe.subagents.weaver.models import AgentBlueprint, AgentManifest
 
@@ -50,12 +54,17 @@ class AgentGenerator:
     """
 
     def __init__(self, model: BaseChatModel) -> None:
+        """Initialize the agent generator.
+
+        Args:
+            model: Chat model for system prompt generation.
+        """
         self._model = model
 
     async def generate(
         self,
         blueprint: AgentBlueprint,
-        output_dir: Path,
+        output_dir: anyio.Path,
     ) -> AgentManifest:
         """Generate an agent package from a blueprint.
 
@@ -69,16 +78,16 @@ class AgentGenerator:
         Returns:
             The generated ``AgentManifest``.
         """
-        output_dir.mkdir(parents=True, exist_ok=True)
+        await output_dir.mkdir(parents=True, exist_ok=True)
 
         skills_dir = output_dir / "skills"
-        skills_dir.mkdir(exist_ok=True)
+        await skills_dir.mkdir(exist_ok=True)
         copied_skills = self._copy_skills(blueprint, skills_dir)
 
         system_prompt = await self._generate_system_prompt(blueprint)
 
         prompt_path = output_dir / "system_prompt.md"
-        prompt_path.write_text(system_prompt, encoding="utf-8")
+        await prompt_path.write_text(system_prompt, encoding="utf-8")
 
         manifest = AgentManifest(
             name=blueprint.agent_name,
@@ -125,7 +134,7 @@ class AgentGenerator:
             resp = await self._model.ainvoke([{"role": "user", "content": prompt}])
             return str(resp.content).strip()
         except Exception:
-            logger.error("System prompt generation failed", exc_info=True)
+            logger.exception("System prompt generation failed")
             return self._fallback_prompt(blueprint)
 
     @staticmethod

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
-from langchain_core.messages import ToolMessage
-from langgraph.types import Command
 
-from soothe.protocols.context import ContextProtocol
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from langchain_core.messages import ToolMessage
+    from langgraph.types import Command
+
+    from soothe.protocols.context import ContextProtocol
 
 _DEFAULT_SUBAGENT_TOKEN_BUDGET = 1200
 
@@ -18,6 +21,12 @@ class SubagentContextMiddleware(AgentMiddleware):
     """Inject `project_for_subagent` briefings into `task` delegations."""
 
     def __init__(self, context: ContextProtocol, token_budget: int = _DEFAULT_SUBAGENT_TOKEN_BUDGET) -> None:
+        """Initialize the subagent context middleware.
+
+        Args:
+            context: Context provider for subagent briefings.
+            token_budget: Maximum tokens for subagent context briefings.
+        """
         self._context = context
         self._token_budget = token_budget
 
@@ -26,6 +35,16 @@ class SubagentContextMiddleware(AgentMiddleware):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Any],
     ) -> ToolMessage | Command[Any]:
+        """Inject context briefing into task delegation tool calls.
+
+        Args:
+            request: The tool call request containing tool name and arguments.
+            handler: The next handler in the middleware chain.
+
+        Returns:
+            The result from the handler, with context briefing injected
+            if the tool call is a task delegation.
+        """
         tool_call = request.tool_call or {}
         if tool_call.get("name") != "task":
             return await handler(request)

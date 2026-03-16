@@ -85,7 +85,7 @@ class TestPGVectorStoreIntegration:
     """Integration tests for PGVectorStore with real PostgreSQL database."""
 
     @pytest.mark.asyncio
-    async def test_create_collection(self, pgvector_store):
+    async def test_create_collection(self, pgvector_store) -> None:
         """Test collection creation."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -93,7 +93,7 @@ class TestPGVectorStoreIntegration:
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
     @pytest.mark.asyncio
-    async def test_insert_and_get(self, pgvector_store):
+    async def test_insert_and_get(self, pgvector_store) -> None:
         """Test inserting and retrieving vectors."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -111,7 +111,7 @@ class TestPGVectorStoreIntegration:
         assert result.payload["hash"] == "abc123"
 
     @pytest.mark.asyncio
-    async def test_search(self, pgvector_store):
+    async def test_search(self, pgvector_store) -> None:
         """Test vector search functionality."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -145,7 +145,7 @@ class TestPGVectorStoreIntegration:
         assert len(result_ids & set(test_ids)) > 0
 
     @pytest.mark.asyncio
-    async def test_search_with_filters(self, pgvector_store):
+    async def test_search_with_filters(self, pgvector_store) -> None:
         """Test search with metadata filters."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -173,7 +173,7 @@ class TestPGVectorStoreIntegration:
         assert all(result.payload.get("user_id") == "user1" for result in results)
 
     @pytest.mark.asyncio
-    async def test_update(self, pgvector_store):
+    async def test_update(self, pgvector_store) -> None:
         """Test updating vector and payload."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -201,7 +201,7 @@ class TestPGVectorStoreIntegration:
         assert result.payload["data"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_delete(self, pgvector_store):
+    async def test_delete(self, pgvector_store) -> None:
         """Test deleting vectors."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -223,7 +223,7 @@ class TestPGVectorStoreIntegration:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_list_records(self, pgvector_store):
+    async def test_list_records(self, pgvector_store) -> None:
         """Test listing all vectors."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -246,7 +246,7 @@ class TestPGVectorStoreIntegration:
         assert len(result_ids & set(test_ids)) == 2
 
     @pytest.mark.asyncio
-    async def test_reset(self, pgvector_store):
+    async def test_reset(self, pgvector_store) -> None:
         """Test collection reset (truncate)."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -269,7 +269,7 @@ class TestPGVectorStoreIntegration:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_delete_collection(self, pgvector_store):
+    async def test_delete_collection(self, pgvector_store) -> None:
         """Test deleting the entire collection."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -287,7 +287,7 @@ class TestPGVectorStoreIntegration:
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
     @pytest.mark.asyncio
-    async def test_batch_operations(self, pgvector_store):
+    async def test_batch_operations(self, pgvector_store) -> None:
         """Test batch insert operations."""
         await pgvector_store.create_collection(vector_size=768, distance="cosine")
 
@@ -319,7 +319,7 @@ class TestWeaviateVectorStoreIntegration:
     """Integration tests for WeaviateVectorStore with real Weaviate instance."""
 
     @pytest.mark.asyncio
-    async def test_create_collection(self, weaviate_store):
+    async def test_create_collection(self, weaviate_store) -> None:
         """Test collection creation."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -327,7 +327,7 @@ class TestWeaviateVectorStoreIntegration:
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
     @pytest.mark.asyncio
-    async def test_insert_and_get(self, weaviate_store):
+    async def test_insert_and_get(self, weaviate_store) -> None:
         """Test inserting and retrieving vectors."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -344,7 +344,7 @@ class TestWeaviateVectorStoreIntegration:
         assert result.payload["data"] == "test object"
 
     @pytest.mark.asyncio
-    async def test_search(self, weaviate_store):
+    async def test_search(self, weaviate_store) -> None:
         """Test vector search functionality."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -382,7 +382,7 @@ class TestWeaviateVectorStoreIntegration:
             assert results[0].score is not None
 
     @pytest.mark.asyncio
-    async def test_delete(self, weaviate_store):
+    async def test_delete(self, weaviate_store) -> None:
         """Test deleting vectors."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -404,7 +404,7 @@ class TestWeaviateVectorStoreIntegration:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_update(self, weaviate_store):
+    async def test_update(self, weaviate_store) -> None:
         """Test updating vector and payload."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -423,7 +423,7 @@ class TestWeaviateVectorStoreIntegration:
         assert result.payload["data"] == "updated"
 
     @pytest.mark.asyncio
-    async def test_list_records(self, weaviate_store):
+    async def test_list_records(self, weaviate_store) -> None:
         """Test listing all vectors."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -442,7 +442,7 @@ class TestWeaviateVectorStoreIntegration:
         assert len(results) >= 2
 
     @pytest.mark.asyncio
-    async def test_reset(self, weaviate_store):
+    async def test_reset(self, weaviate_store) -> None:
         """Test collection reset."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
@@ -465,7 +465,7 @@ class TestWeaviateVectorStoreIntegration:
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 
     @pytest.mark.asyncio
-    async def test_delete_collection(self, weaviate_store):
+    async def test_delete_collection(self, weaviate_store) -> None:
         """Test deleting the entire collection."""
         await weaviate_store.create_collection(vector_size=768, distance="cosine")
 

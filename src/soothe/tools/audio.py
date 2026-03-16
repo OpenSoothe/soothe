@@ -41,7 +41,7 @@ class AudioTranscriptionTool(BaseTool):
 
         cache = Path(self.cache_dir)
         cache.mkdir(parents=True, exist_ok=True)
-        md5 = hashlib.md5(audio_path.encode()).hexdigest()  # noqa: S324
+        md5 = hashlib.md5(audio_path.encode()).hexdigest()
         return cache / f"{md5}.json"
 
     def _download_if_url(self, audio_path: str) -> str:
@@ -56,15 +56,16 @@ class AudioTranscriptionTool(BaseTool):
             resp.raise_for_status()
 
             suffix = Path(audio_path).suffix or ".mp3"
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-            tmp.write(resp.content)
-            tmp.close()
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(resp.content)
+                tmp_path = tmp.name
 
             logger.info("Downloaded audio from URL: %s", audio_path)
-            return tmp.name
-
         except ImportError:
-            raise RuntimeError("requests not installed for URL downloading") from None
+            msg = "requests not installed for URL downloading"
+            raise RuntimeError(msg) from None
+        else:
+            return tmp_path
 
     def _transcribe_openai(self, audio_path: str) -> dict[str, Any]:
         """Transcribe using OpenAI Whisper."""
@@ -105,7 +106,7 @@ class AudioTranscriptionTool(BaseTool):
         local_path = audio_path
         try:
             local_path = self._download_if_url(audio_path)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return {"error": f"Failed to download audio: {e}"}
 
         # Transcribe
@@ -116,11 +117,11 @@ class AudioTranscriptionTool(BaseTool):
             if cache_path and "error" not in result:
                 cache_path.write_text(json.dumps(result, ensure_ascii=False))
 
-            return result
-
-        except Exception as e:  # noqa: BLE001
-            logger.error("Transcription failed: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Transcription failed")
             return {"error": f"Transcription failed: {e}"}
+        else:
+            return result
 
     async def _arun(self, audio_path: str) -> dict[str, Any]:
         return self._run(audio_path)
@@ -178,11 +179,11 @@ Question: {question}
 Answer:"""
 
             response = llm.invoke(prompt)
-            return response.content
-
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to answer question: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to answer question")
             return f"Failed to generate answer: {e}"
+        else:
+            return response.content
 
     async def _arun(self, audio_path: str, question: str) -> str:
         return self._run(audio_path, question)

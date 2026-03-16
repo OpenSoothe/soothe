@@ -12,12 +12,15 @@ import asyncio
 import contextlib
 import logging
 import os
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from deepagents.middleware.subagents import CompiledSubAgent
+import anyio
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
 
 logger = logging.getLogger(__name__)
 
@@ -126,73 +129,77 @@ def _build_browser_graph(
 
         try:
             # Suppress browser-use stdout/stderr noise and rely on structured events.
-            with open(os.devnull, "w", encoding="utf-8") as devnull:
-                with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-                    # Import browser-use under redirected stdio so startup logs are hidden.
-                    from browser_use import Agent as BrowserAgent, BrowserSession
-                    from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+            devnull_file = await anyio.Path(os.devnull).open("w", encoding="utf-8")
+            with (
+                devnull_file,
+                contextlib.redirect_stdout(devnull_file),
+                contextlib.redirect_stderr(devnull_file),
+            ):
+                # Import browser-use under redirected stdio so startup logs are hidden.
+                from browser_use import Agent as BrowserAgent, BrowserSession
+                from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
 
-                    messages = state.get("messages", [])
-                    task = messages[-1].content if messages else ""
+                messages = state.get("messages", [])
+                task = messages[-1].content if messages else ""
 
-                    # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
-                    model_name = browser_model or "qwen3.5-flash"
-                    if ":" in model_name:
-                        model_name = model_name.split(":", 1)[1]
+                # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
+                model_name = browser_model or "qwen3.5-flash"
+                if ":" in model_name:
+                    model_name = model_name.split(":", 1)[1]
 
-                    llm_kwargs: dict[str, Any] = {}
-                    if browser_base_url:
-                        llm_kwargs["base_url"] = browser_base_url
-                    if browser_api_key:
-                        llm_kwargs["api_key"] = browser_api_key
-                    llm = BUChatOpenAI(model_name, **llm_kwargs)
+                llm_kwargs: dict[str, Any] = {}
+                if browser_base_url:
+                    llm_kwargs["base_url"] = browser_base_url
+                if browser_api_key:
+                    llm_kwargs["api_key"] = browser_api_key
+                llm = BUChatOpenAI(model_name, **llm_kwargs)
 
-                    browser = BrowserSession(
-                        headless=headless,
-                        downloads_path=browser_downloads_dir,
-                        user_data_dir=browser_user_data_dir,
+                browser = BrowserSession(
+                    headless=headless,
+                    downloads_path=browser_downloads_dir,
+                    user_data_dir=browser_user_data_dir,
+                )
+
+                async def on_step_end(agent: Any) -> None:
+                    step_num = agent.state.n_steps
+                    last = agent.history.history[-1] if agent.history.history else None
+                    action_desc = ""
+                    page_title = ""
+                    url = None
+                    if last:
+                        if hasattr(last, "model_output") and last.model_output:
+                            action = getattr(last.model_output, "action", None)
+                            if action:
+                                action_desc = str(action)[:80]
+                        if hasattr(last, "state"):
+                            url = getattr(last.state, "url", None)
+                            page_title = getattr(last.state, "title", "")[:60]
+                    _emit(
+                        {
+                            "type": "soothe.browser.step",
+                            "step": step_num,
+                            "url": url,
+                            "action": action_desc,
+                            "title": page_title,
+                            "is_done": agent.history.is_done(),
+                        },
+                        logger,
                     )
 
-                    async def on_step_end(agent: Any) -> None:
-                        step_num = agent.state.n_steps
-                        last = agent.history.history[-1] if agent.history.history else None
-                        action_desc = ""
-                        page_title = ""
-                        url = None
-                        if last:
-                            if hasattr(last, "model_output") and last.model_output:
-                                action = getattr(last.model_output, "action", None)
-                                if action:
-                                    action_desc = str(action)[:80]
-                            if hasattr(last, "state"):
-                                url = getattr(last.state, "url", None)
-                                page_title = getattr(last.state, "title", "")[:60]
-                        _emit(
-                            {
-                                "type": "soothe.browser.step",
-                                "step": step_num,
-                                "url": url,
-                                "action": action_desc,
-                                "title": page_title,
-                                "is_done": agent.history.is_done(),
-                            },
-                            logger,
-                        )
+                agent = BrowserAgent(
+                    task=task,
+                    llm=llm,
+                    browser=browser,
+                    use_vision=use_vision,
+                )
+                history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
+                result = history.final_result() or "Browser task completed (no extracted content)."
 
-                    agent = BrowserAgent(
-                        task=task,
-                        llm=llm,
-                        browser=browser,
-                        use_vision=use_vision,
-                    )
-                    history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
-                    result = history.final_result() or "Browser task completed (no extracted content)."
+                # Clean up temporary files if requested
+                if cleanup_on_exit:
+                    from soothe.utils.runtime import cleanup_browser_temp_files
 
-                    # Clean up temporary files if requested
-                    if cleanup_on_exit:
-                        from soothe.utils.runtime import cleanup_browser_temp_files
-
-                        cleanup_browser_temp_files()
+                    cleanup_browser_temp_files()
         except Exception:
             logger.exception("Browser agent failed")
             result = "Browser agent encountered an error."
@@ -243,6 +250,7 @@ def _extract_model_name(model: Any) -> str | None:
 
 def create_browser_subagent(
     model: Any = None,
+    *,
     headless: bool = True,
     max_steps: int = 100,
     use_vision: bool = True,

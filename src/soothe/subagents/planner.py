@@ -6,13 +6,15 @@ mapping, resource exploration, and structured plan generation.
 
 from __future__ import annotations
 
-import os
-from collections.abc import Callable
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from deepagents.middleware.subagents import SubAgent
-from langchain_core.language_models import BaseChatModel
-from langchain_core.tools import BaseTool
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from deepagents.middleware.subagents import SubAgent
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.tools import BaseTool
 
 PLANNER_SYSTEM_PROMPT = """\
 You are an expert planning specialist capable of creating detailed, actionable plans for any domain.
@@ -84,7 +86,7 @@ def create_planner_subagent(
     model: str | BaseChatModel | None = None,
     tools: list[BaseTool | Callable[..., Any] | dict[str, Any]] | None = None,
     cwd: str | None = None,
-    **kwargs: object,
+    **_kwargs: object,
 ) -> SubAgent:
     """Create a Planner subagent spec.
 
@@ -115,7 +117,7 @@ def create_planner_subagent(
         from deepagents.backends.filesystem import FilesystemBackend
         from deepagents.middleware.filesystem import FilesystemMiddleware
 
-        resolved_cwd = cwd or os.getcwd()
+        resolved_cwd = cwd or str(Path.cwd())
         fs_middleware = FilesystemMiddleware(
             backend=FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True),
         )

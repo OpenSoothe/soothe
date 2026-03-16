@@ -10,7 +10,7 @@ import hashlib
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -45,7 +45,7 @@ class DocumentQATool(BaseTool):
 
         cache = Path(self.cache_dir)
         cache.mkdir(parents=True, exist_ok=True)
-        md5 = hashlib.md5(document_path.encode()).hexdigest()  # noqa: S324
+        md5 = hashlib.md5(document_path.encode()).hexdigest()
         return cache / f"{md5}.txt"
 
     def _download_if_url(self, document_path: str) -> str:
@@ -60,15 +60,16 @@ class DocumentQATool(BaseTool):
             resp.raise_for_status()
 
             suffix = Path(document_path).suffix or ".pdf"
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-            tmp.write(resp.content)
-            tmp.close()
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(resp.content)
+                tmp_path = tmp.name
 
             logger.info("Downloaded document from URL: %s", document_path)
-            return tmp.name
-
         except ImportError:
-            raise RuntimeError("requests not installed for URL downloading") from None
+            msg = "requests not installed for URL downloading"
+            raise RuntimeError(msg) from None
+        else:
+            return tmp_path
 
     def _parse_pdf_pymupdf(self, file_path: str) -> str:
         """Parse PDF using PyMuPDF.
@@ -97,7 +98,8 @@ class DocumentQATool(BaseTool):
             return "\n\n".join(pages)
 
         except ImportError:
-            raise ImportError("PyMuPDF not installed. Install with: pip install PyMuPDF") from None
+            msg = "PyMuPDF not installed. Install with: pip install PyMuPDF"
+            raise ImportError(msg) from None
 
     def _parse_document(self, document_path: str) -> str:
         """Parse document and extract text.
@@ -118,9 +120,8 @@ class DocumentQATool(BaseTool):
         if suffix == ".pdf":
             if self.parser == "pymupdf":
                 return self._parse_pdf_pymupdf(document_path)
-            else:
-                # Future: Chunkr API support
-                return self._parse_pdf_pymupdf(document_path)
+            # Future: Chunkr API support
+            return self._parse_pdf_pymupdf(document_path)
 
         # Text files
         if suffix in {".txt", ".md", ".rst", ".log"}:
@@ -133,7 +134,8 @@ class DocumentQATool(BaseTool):
             return json.dumps(json.loads(path.read_text()), indent=2)
 
         # Unsupported format
-        raise ValueError(f"Unsupported document format: {suffix}. Supported: PDF, TXT, MD, RST, JSON")
+        msg = f"Unsupported document format: {suffix}. Supported: PDF, TXT, MD, RST, JSON"
+        raise ValueError(msg)
 
     def _summarize_text(self, text: str) -> str:
         """Summarize text using LLM.
@@ -160,11 +162,11 @@ class DocumentQATool(BaseTool):
 Provide a concise summary highlighting the key points:"""
 
             response = llm.invoke(prompt)
-            return response.content
-
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to summarize: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to summarize")
             return f"Failed to generate summary: {e}"
+        else:
+            return response.content
 
     def _answer_question(self, text: str, question: str) -> str:
         """Answer question about text using LLM.
@@ -195,13 +197,13 @@ Question: {question}
 Answer:"""
 
             response = llm.invoke(prompt)
+        except Exception as e:
+            logger.exception("Failed to answer question")
+            return f"Failed to generate answer: {e}"
+        else:
             return response.content
 
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to answer question: %s", e, exc_info=True)
-            return f"Failed to generate answer: {e}"
-
-    def _run(self, document_path: str, question: Optional[str] = None) -> str:
+    def _run(self, document_path: str, question: str | None = None) -> str:
         """Analyze document and answer questions.
 
         Args:
@@ -221,7 +223,7 @@ Answer:"""
             local_path = document_path
             try:
                 local_path = self._download_if_url(document_path)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 return f"Error: Failed to download document: {e}"
 
             # Parse document
@@ -234,8 +236,8 @@ Answer:"""
 
             except ImportError as e:
                 return f"Error: {e}"
-            except Exception as e:  # noqa: BLE001
-                logger.error("Failed to parse document: %s", e, exc_info=True)
+            except Exception as e:
+                logger.exception("Failed to parse document")
                 return f"Error parsing document: {e}"
 
         # Truncate text
@@ -245,10 +247,9 @@ Answer:"""
         # Generate summary or answer question
         if question:
             return self._answer_question(text, question)
-        else:
-            return self._summarize_text(text)
+        return self._summarize_text(text)
 
-    async def _arun(self, document_path: str, question: Optional[str] = None) -> str:
+    async def _arun(self, document_path: str, question: str | None = None) -> str:
         return self._run(document_path, question)
 
 
@@ -282,11 +283,11 @@ class ExtractTextTool(BaseTool):
             if len(text) > self.text_limit:
                 text = text[: self.text_limit] + "\n\n... (document truncated)"
 
-            return text
-
-        except Exception as e:  # noqa: BLE001
-            logger.error("Failed to extract text: %s", e, exc_info=True)
+        except Exception as e:
+            logger.exception("Failed to extract text")
             return f"Error extracting text: {e}"
+        else:
+            return text
 
     async def _arun(self, document_path: str) -> str:
         return self._run(document_path)
@@ -345,7 +346,7 @@ class GetDocumentInfoTool(BaseTool):
 
             except ImportError:
                 info["pdf_info_error"] = "PyMuPDF not installed"
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 info["pdf_info_error"] = str(e)
 
         return info

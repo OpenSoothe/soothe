@@ -22,7 +22,6 @@ from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
 
 from soothe.config import SootheConfig
-from soothe.core.goal_engine import GoalEngine
 from soothe.protocols.context import ContextEntry, ContextProjection, ContextProtocol
 from soothe.protocols.planner import Plan, PlanContext, PlannerProtocol, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext, PolicyProtocol
@@ -32,6 +31,7 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
+    from soothe.core.goal_engine import GoalEngine
     from soothe.protocols.memory import MemoryItem, MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,7 @@ _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 _MAX_HITL_ITERATIONS = 50
 _BACKOFF_BASE_SECONDS = 2.0
+_MIN_MEMORY_STORAGE_LENGTH = 50
 
 
 def _custom(data: dict[str, Any]) -> StreamChunk:
@@ -108,7 +109,8 @@ class SootheRunner:
         config: Soothe configuration. If ``None``, uses defaults.
     """
 
-    def __init__(self, config: SootheConfig | None = None) -> None:  # noqa: D107
+    def __init__(self, config: SootheConfig | None = None) -> None:
+        """Initialize the runner with optional config."""
         from soothe.core.agent import create_soothe_agent
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
 
@@ -304,7 +306,8 @@ class SootheRunner:
         """
         import asyncio
 
-        assert self._goal_engine is not None  # noqa: S101
+        if self._goal_engine is None:
+            raise RuntimeError("Goal engine not initialized")
 
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
@@ -346,7 +349,6 @@ class SootheRunner:
             )
 
             iter_start = perf_counter()
-            error_occurred = False
 
             try:
                 # Reset state for this iteration (preserve thread_id)
@@ -412,7 +414,7 @@ class SootheRunner:
                     except Exception:
                         logger.debug("Context ingestion failed", exc_info=True)
 
-                if self._memory and response_text and len(response_text) > 50:
+                if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
                     try:
                         from soothe.protocols.memory import MemoryItem
 
@@ -504,7 +506,6 @@ class SootheRunner:
                 break
 
             except Exception as exc:
-                error_occurred = True
                 logger.exception("Error during autonomous iteration %d", total_iterations)
                 yield _custom({"type": "soothe.error", "error": str(exc)})
 
@@ -619,7 +620,7 @@ class SootheRunner:
             resume_payload = self._auto_approve(pending_interrupts)
             stream_input = Command(resume=resume_payload)
 
-    async def _store_iteration_record(self, record: IterationRecord, thread_id: str) -> None:
+    async def _store_iteration_record(self, record: IterationRecord, _thread_id: str) -> None:
         """Persist an iteration record via ContextProtocol (RFC-0007)."""
         if not self._context:
             return
@@ -871,7 +872,7 @@ class SootheRunner:
                 logger.debug("Context persistence failed", exc_info=True)
 
         # Memory storage for significant responses
-        if self._memory and response_text and len(response_text) > 50:
+        if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
             try:
                 from soothe.protocols.memory import MemoryItem
 

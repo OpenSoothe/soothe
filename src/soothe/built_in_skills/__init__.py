@@ -35,9 +35,22 @@ def get_built_in_skills_paths() -> list[str]:
                     if skill_file.exists():
                         skill_dirs.append(str(skill_dir))
 
-        return skill_dirs
-
     except (TypeError, AttributeError, FileNotFoundError):
+        # Fallback for development/editable installs
+        import soothe.built_in_skills
+
+        base_path = Path(soothe.built_in_skills.__file__).parent
+        skill_dirs = []
+
+        for skill_dir in base_path.iterdir():
+            if skill_dir.is_dir():
+                skill_file = skill_dir / "SKILL.md"
+                if skill_file.exists():
+                    skill_dirs.append(str(skill_dir))
+
+        return skill_dirs
+    else:
+        return skill_dirs
         # Fallback for development/editable installs
         import soothe.built_in_skills
 

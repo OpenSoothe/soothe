@@ -11,10 +11,8 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from langchain_core.language_models import BaseChatModel
-
-from soothe.subagents.skillify.models import SkillBundle
 from soothe.subagents.weaver.models import (
     AgentBlueprint,
     CapabilitySignature,
@@ -22,7 +20,16 @@ from soothe.subagents.weaver.models import (
     SkillConflictReport,
 )
 
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
+
+    from soothe.subagents.skillify.models import SkillBundle
+
 logger = logging.getLogger(__name__)
+
+# Constants for skill content formatting
+_MAX_AGENT_NAME_WORDS = 4
+_MAX_SKILL_CONTENT_LENGTH = 1500
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -114,6 +121,12 @@ class AgentComposer:
         model: BaseChatModel,
         allowed_tool_groups: list[str] | None = None,
     ) -> None:
+        """Initialize the agent composer.
+
+        Args:
+            model: Chat model for LLM-assisted harmonization.
+            allowed_tool_groups: Tool groups the generated agent may use.
+        """
         self._model = model
         self._allowed_tools = allowed_tool_groups or []
 
@@ -239,10 +252,11 @@ class AgentComposer:
             if not kept:
                 return skill_contents, [], ["Merge returned empty; keeping all skills."]
 
-            return kept, dropped, log
         except (json.JSONDecodeError, Exception):
             logger.warning("Merge LLM call failed, keeping all skills", exc_info=True)
             return skill_contents, [], ["Merge skipped due to error."]
+        else:
+            return kept, dropped, log
 
     # -- Step 3: Gap analysis -----------------------------------------------
 
@@ -272,17 +286,17 @@ class AgentComposer:
     def _resolve_tools(self, capability: CapabilitySignature) -> list[str]:
         """Match capabilities to allowed tool groups."""
         cap_lower = {c.lower() for c in capability.required_capabilities}
-        matched: list[str] = []
-        for tool_group in self._allowed_tools:
-            if tool_group.lower() in cap_lower or any(tool_group.lower() in c for c in cap_lower):
-                matched.append(tool_group)
-        return matched
+        return [
+            tool_group
+            for tool_group in self._allowed_tools
+            if tool_group.lower() in cap_lower or any(tool_group.lower() in c for c in cap_lower)
+        ]
 
     @staticmethod
     def _generate_name(description: str) -> str:
         """Generate a hyphenated agent name from a description."""
         words = re.sub(r"[^a-z0-9\s]", "", description.lower()).split()
-        name_words = words[:4] if len(words) > 4 else words
+        name_words = words[:_MAX_AGENT_NAME_WORDS] if len(words) > _MAX_AGENT_NAME_WORDS else words
         return "-".join(name_words) if name_words else "generated-agent"
 
     @staticmethod
@@ -290,7 +304,7 @@ class AgentComposer:
         """Format skill contents for inclusion in LLM prompts."""
         parts: list[str] = []
         for sid, content in skill_contents.items():
-            truncated = content[:1500] if len(content) > 1500 else content
+            truncated = content[:_MAX_SKILL_CONTENT_LENGTH] if len(content) > _MAX_SKILL_CONTENT_LENGTH else content
             parts.append(f"--- Skill ID: {sid} ---\n{truncated}\n")
         return "\n".join(parts)
 

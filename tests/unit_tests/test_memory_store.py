@@ -12,14 +12,14 @@ from soothe.protocols.memory import MemoryItem
 class TestStoreBackedMemory:
     """Unit tests for StoreBackedMemory."""
 
-    def test_initialization_without_persistence(self):
+    def test_initialization_without_persistence(self) -> None:
         """Test initialization without persistence."""
         memory = StoreBackedMemory(persist_path=None)
 
         assert memory._items == {}
         assert memory._store is None
 
-    def test_initialization_with_json_persistence(self, tmp_path: Path):
+    def test_initialization_with_json_persistence(self, tmp_path: Path) -> None:
         """Test initialization with JSON persistence."""
         memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
 
@@ -27,7 +27,7 @@ class TestStoreBackedMemory:
         assert memory._store is not None
 
     @pytest.mark.asyncio
-    async def test_remember_stores_item(self):
+    async def test_remember_stores_item(self) -> None:
         """Test that remember stores a memory item."""
         memory = StoreBackedMemory()
         item = MemoryItem(content="test memory", tags=["test"])
@@ -39,7 +39,7 @@ class TestStoreBackedMemory:
         assert memory._items[item.id] == item
 
     @pytest.mark.asyncio
-    async def test_remember_with_persistence(self, tmp_path: Path):
+    async def test_remember_with_persistence(self, tmp_path: Path) -> None:
         """Test that remember persists item to storage."""
         memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
         item = MemoryItem(content="persisted memory", tags=["test"])
@@ -53,7 +53,7 @@ class TestStoreBackedMemory:
         assert memory2._items[item.id].content == "persisted memory"
 
     @pytest.mark.asyncio
-    async def test_recall_by_keyword_match(self):
+    async def test_recall_by_keyword_match(self) -> None:
         """Test recall finds items by keyword matching."""
         memory = StoreBackedMemory()
 
@@ -72,7 +72,7 @@ class TestStoreBackedMemory:
         assert any("python" in item.content for item in results)
 
     @pytest.mark.asyncio
-    async def test_recall_respects_limit(self):
+    async def test_recall_respects_limit(self) -> None:
         """Test that recall respects the limit parameter."""
         memory = StoreBackedMemory()
 
@@ -85,7 +85,7 @@ class TestStoreBackedMemory:
         assert len(results) <= 3
 
     @pytest.mark.asyncio
-    async def test_recall_includes_importance(self):
+    async def test_recall_includes_importance(self) -> None:
         """Test that recall considers importance in scoring."""
         memory = StoreBackedMemory()
 
@@ -101,7 +101,7 @@ class TestStoreBackedMemory:
         assert results[0].importance >= results[1].importance
 
     @pytest.mark.asyncio
-    async def test_recall_by_tags(self):
+    async def test_recall_by_tags(self) -> None:
         """Test recall_by_tags filters by tags."""
         memory = StoreBackedMemory()
 
@@ -121,7 +121,7 @@ class TestStoreBackedMemory:
         assert "programming" in results[0].tags
 
     @pytest.mark.asyncio
-    async def test_recall_by_tags_respects_limit(self):
+    async def test_recall_by_tags_respects_limit(self) -> None:
         """Test recall_by_tags respects limit."""
         memory = StoreBackedMemory()
 
@@ -134,7 +134,7 @@ class TestStoreBackedMemory:
         assert len(results) <= 5
 
     @pytest.mark.asyncio
-    async def test_forget_removes_item(self):
+    async def test_forget_removes_item(self) -> None:
         """Test that forget removes an item."""
         memory = StoreBackedMemory()
         item = MemoryItem(content="to be forgotten")
@@ -148,7 +148,7 @@ class TestStoreBackedMemory:
         assert item.id not in memory._items
 
     @pytest.mark.asyncio
-    async def test_forget_nonexistent_returns_false(self):
+    async def test_forget_nonexistent_returns_false(self) -> None:
         """Test that forget returns False for nonexistent item."""
         memory = StoreBackedMemory()
 
@@ -157,7 +157,7 @@ class TestStoreBackedMemory:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_forget_with_persistence(self, tmp_path: Path):
+    async def test_forget_with_persistence(self, tmp_path: Path) -> None:
         """Test that forget removes item from persistence."""
         memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
         item = MemoryItem(content="to be forgotten")
@@ -174,7 +174,7 @@ class TestStoreBackedMemory:
         assert item.id not in memory2._items
 
     @pytest.mark.asyncio
-    async def test_update_existing_item(self):
+    async def test_update_existing_item(self) -> None:
         """Test updating an existing item's content."""
         memory = StoreBackedMemory()
         item = MemoryItem(content="original content")
@@ -185,7 +185,7 @@ class TestStoreBackedMemory:
         assert memory._items[item.id].content == "updated content"
 
     @pytest.mark.asyncio
-    async def test_update_nonexistent_raises_keyerror(self):
+    async def test_update_nonexistent_raises_keyerror(self) -> None:
         """Test that update raises KeyError for nonexistent item."""
         memory = StoreBackedMemory()
 
@@ -193,7 +193,7 @@ class TestStoreBackedMemory:
             await memory.update("nonexistent_id", "new content")
 
     @pytest.mark.asyncio
-    async def test_update_with_persistence(self, tmp_path: Path):
+    async def test_update_with_persistence(self, tmp_path: Path) -> None:
         """Test that update persists changes."""
         memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
         item = MemoryItem(content="original")
@@ -207,7 +207,7 @@ class TestStoreBackedMemory:
         assert memory2._items[item.id].content == "updated"
 
     @pytest.mark.asyncio
-    async def test_recall_by_tags_orders_by_importance(self):
+    async def test_recall_by_tags_orders_by_importance(self) -> None:
         """Test that recall_by_tags orders results by importance."""
         memory = StoreBackedMemory()
 
@@ -249,7 +249,7 @@ class TestVectorMemory:
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 768)
         return embeddings
 
-    def test_initialization(self, mock_vector_store, mock_embeddings):
+    def test_initialization(self, mock_vector_store, mock_embeddings) -> None:
         """Test VectorMemory initialization."""
         from soothe.backends.memory.vector import VectorMemory
 
@@ -259,7 +259,7 @@ class TestVectorMemory:
         assert memory._embeddings == mock_embeddings
 
     @pytest.mark.asyncio
-    async def test_remember_embeds_and_stores(self, mock_vector_store, mock_embeddings):
+    async def test_remember_embeds_and_stores(self, mock_vector_store, mock_embeddings) -> None:
         """Test that remember embeds content and stores in vector store."""
         from soothe.backends.memory.vector import VectorMemory
 
@@ -277,7 +277,7 @@ class TestVectorMemory:
         mock_vector_store.insert.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_recall_by_semantic_search(self, mock_vector_store, mock_embeddings):
+    async def test_recall_by_semantic_search(self, mock_vector_store, mock_embeddings) -> None:
         """Test recall uses semantic search."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord
@@ -306,7 +306,7 @@ class TestVectorMemory:
         mock_vector_store.search.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_recall_handles_invalid_payloads(self, mock_vector_store, mock_embeddings):
+    async def test_recall_handles_invalid_payloads(self, mock_vector_store, mock_embeddings) -> None:
         """Test recall handles invalid payloads gracefully."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord
@@ -327,7 +327,7 @@ class TestVectorMemory:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_recall_by_tags(self, mock_vector_store, mock_embeddings):
+    async def test_recall_by_tags(self, mock_vector_store, mock_embeddings) -> None:
         """Test recall_by_tags filters by tags."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord
@@ -353,7 +353,7 @@ class TestVectorMemory:
         assert all("python" in item.tags for item in results)
 
     @pytest.mark.asyncio
-    async def test_recall_by_tags_respects_limit(self, mock_vector_store, mock_embeddings):
+    async def test_recall_by_tags_respects_limit(self, mock_vector_store, mock_embeddings) -> None:
         """Test recall_by_tags respects limit."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord
@@ -371,7 +371,7 @@ class TestVectorMemory:
         assert len(results) <= 5
 
     @pytest.mark.asyncio
-    async def test_forget_deletes_from_store(self, mock_vector_store, mock_embeddings):
+    async def test_forget_deletes_from_store(self, mock_vector_store, mock_embeddings) -> None:
         """Test that forget deletes item from vector store."""
         from soothe.backends.memory.vector import VectorMemory
 
@@ -383,7 +383,7 @@ class TestVectorMemory:
         mock_vector_store.delete.assert_called_once_with("test_id")
 
     @pytest.mark.asyncio
-    async def test_forget_handles_errors(self, mock_vector_store, mock_embeddings):
+    async def test_forget_handles_errors(self, mock_vector_store, mock_embeddings) -> None:
         """Test that forget returns False on error."""
         from soothe.backends.memory.vector import VectorMemory
 
@@ -396,7 +396,7 @@ class TestVectorMemory:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_update_existing_item(self, mock_vector_store, mock_embeddings):
+    async def test_update_existing_item(self, mock_vector_store, mock_embeddings) -> None:
         """Test updating an existing item."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord
@@ -424,7 +424,7 @@ class TestVectorMemory:
         mock_vector_store.update.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_update_nonexistent_raises_keyerror(self, mock_vector_store, mock_embeddings):
+    async def test_update_nonexistent_raises_keyerror(self, mock_vector_store, mock_embeddings) -> None:
         """Test that update raises KeyError for nonexistent item."""
         from soothe.backends.memory.vector import VectorMemory
 
@@ -436,7 +436,7 @@ class TestVectorMemory:
             await memory.update("nonexistent_id", "new content")
 
     @pytest.mark.asyncio
-    async def test_update_handles_corrupt_data(self, mock_vector_store, mock_embeddings):
+    async def test_update_handles_corrupt_data(self, mock_vector_store, mock_embeddings) -> None:
         """Test that update raises KeyError for corrupt data."""
         from soothe.backends.memory.vector import VectorMemory
         from soothe.protocols.vector_store import VectorRecord

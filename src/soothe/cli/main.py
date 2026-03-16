@@ -1,13 +1,15 @@
 """Main CLI entry point using Typer."""
 
+import contextlib
 import json
 import logging
 import shutil
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
+import anyio
 import typer
 
 from soothe.config import SOOTHE_HOME, SootheConfig
@@ -174,6 +176,7 @@ def run(
         str | None,
         typer.Option("--thread", "-t", help="Thread ID to resume."),
     ] = None,
+    *,
     no_tui: Annotated[
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
@@ -397,18 +400,6 @@ def config(
 
             for provider in cfg.providers:
                 model_count = len(provider.models)
-                default_models = [
-                    m for m in provider.models if m in [cfg.router.default, getattr(cfg.router, role, None)]
-                ]
-                is_default = (
-                    "✓"
-                    if any(
-                        p.name in cfg.router.default or p.name in (getattr(cfg.router, role, None) or "").split(":")[0]
-                        for p in [provider]
-                        if p.name == (cfg.router.default or "").split(":")[0]
-                    )
-                    else ""
-                )
                 providers_table.add_row(
                     provider.name,
                     f"{model_count} models",
@@ -601,6 +592,7 @@ def server_start(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    *,
     foreground: Annotated[
         bool,
         typer.Option("--foreground", help="Run in foreground (don't daemonize)."),
@@ -624,6 +616,7 @@ def server_start(
         cmd = [sys.executable, "-m", "soothe.cli.daemon"]
         if config:
             cmd.extend(["--config", config])
+        # Command is constructed from trusted sources (sys.executable, internal module)
         subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -786,6 +779,7 @@ def thread_delete(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    *,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation."),
@@ -806,13 +800,11 @@ def thread_delete(
     runner = SootheRunner(cfg)
 
     async def _delete() -> None:
-        try:
+        with contextlib.suppress(Exception):
             await runner._durability.archive_thread(thread_id)
-        except Exception:
-            pass
-        session_file = Path(SOOTHE_HOME).expanduser() / "sessions" / f"{thread_id}.jsonl"
-        if session_file.exists():
-            session_file.unlink()
+        session_file = anyio.Path(SOOTHE_HOME).expanduser() / "sessions" / f"{thread_id}.jsonl"
+        if await session_file.exists():
+            await session_file.unlink()
         typer.echo(f"Deleted thread {thread_id}.")
 
     asyncio.run(_delete())
@@ -840,14 +832,14 @@ def thread_export(
         typer.echo(f"No records found for thread {thread_id}.")
         return
 
-    out_path = output or f"{thread_id}.{export_format}"
+    out_path = Path(output or f"{thread_id}.{export_format}")
 
     if export_format == "jsonl":
-        with open(out_path, "w", encoding="utf-8") as f:
+        with out_path.open("w", encoding="utf-8") as f:
             f.writelines(json.dumps(r, default=str) + "\n" for r in records)
     elif export_format == "md":
         conversations = [r for r in records if r.get("kind") == "conversation"]
-        with open(out_path, "w", encoding="utf-8") as f:
+        with out_path.open("w", encoding="utf-8") as f:
             f.write(f"# Thread {thread_id}\n\n")
             for c in conversations:
                 role = c.get("role", "unknown").title()
@@ -866,7 +858,7 @@ def thread_export(
 
 
 @app.command()
-def list_subagents() -> None:
+def list_subagents_status() -> None:
     """List all available subagents and their status."""
     try:
         cfg = SootheConfig()
@@ -889,6 +881,7 @@ def list_subagents() -> None:
 
 @app.command("config")
 def show_config(
+    *,
     show_sensitive: Annotated[
         bool,
         typer.Option("--show-sensitive", "-s", help="Show sensitive values like API keys."),

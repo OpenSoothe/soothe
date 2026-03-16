@@ -113,14 +113,14 @@ class WizsearchSearchTool(BaseTool):
         query: str,
         engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
-        timeout: int | None = None,  # noqa: ASYNC109
+        timeout_seconds: int | None = None,
     ) -> dict[str, object]:
         _require_wizsearch()
         _maybe_apply_tavily_key()
 
         config_kwargs: dict[str, object] = {
             "max_results_per_engine": max_results_per_engine or self.default_max_results_per_engine,
-            "timeout": timeout or self.default_timeout,
+            "timeout": timeout_seconds or self.default_timeout,
             "fail_silently": True,
         }
         normalized = _normalize_engines(engines) or self.default_engines
@@ -135,14 +135,14 @@ class WizsearchSearchTool(BaseTool):
         query: str,
         engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
-        timeout: int | None = None,
+        timeout_seconds: int | None = None,
     ) -> dict[str, object]:
         return _run_coro(
             self._perform_search(
                 query=query,
                 engines=engines,
                 max_results_per_engine=max_results_per_engine,
-                timeout=timeout,
+                timeout_seconds=timeout_seconds,
             )
         )
 
@@ -151,13 +151,13 @@ class WizsearchSearchTool(BaseTool):
         query: str,
         engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
-        timeout: int | None = None,  # noqa: ASYNC109
+        timeout_seconds: int | None = None,
     ) -> dict[str, object]:
         return await self._perform_search(
             query=query,
             engines=engines,
             max_results_per_engine=max_results_per_engine,
-            timeout=timeout,
+            timeout_seconds=timeout_seconds,
         )
 
 
@@ -176,7 +176,8 @@ class WizsearchCrawlPageTool(BaseTool):
         self,
         url: str,
         content_format: str | None = None,
-        only_text: bool = False,  # noqa: FBT001,FBT002
+        *,
+        only_text: bool = False,
     ) -> dict[str, object]:
         _require_wizsearch()
         selected_format = (content_format or self.default_content_format).strip().lower()
@@ -197,7 +198,8 @@ class WizsearchCrawlPageTool(BaseTool):
         self,
         url: str,
         content_format: str | None = None,
-        only_text: bool = False,  # noqa: FBT001,FBT002
+        *,
+        only_text: bool = False,
     ) -> dict[str, object]:
         return _run_coro(
             self._perform_crawl(
@@ -211,7 +213,8 @@ class WizsearchCrawlPageTool(BaseTool):
         self,
         url: str,
         content_format: str | None = None,
-        only_text: bool = False,  # noqa: FBT001,FBT002
+        *,
+        only_text: bool = False,
     ) -> dict[str, object]:
         return await self._perform_crawl(
             url=url,

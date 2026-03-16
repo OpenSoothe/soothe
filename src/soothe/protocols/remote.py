@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 @runtime_checkable

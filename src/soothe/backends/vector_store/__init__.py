@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from soothe.protocols.vector_store import VectorStoreProtocol
+if TYPE_CHECKING:
+    from soothe.protocols.vector_store import VectorStoreProtocol
 
 
 def create_vector_store(

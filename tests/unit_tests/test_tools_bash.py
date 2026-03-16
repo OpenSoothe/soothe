@@ -1,9 +1,6 @@
 """Tests for Bash tools functionality."""
 
-import tempfile
-from unittest.mock import Mock, patch
-
-import pytest
+from unittest.mock import patch
 
 from soothe.tools.bash import BashTool, GetCurrentDirTool, ListDirTool, create_bash_tools
 
@@ -11,7 +8,7 @@ from soothe.tools.bash import BashTool, GetCurrentDirTool, ListDirTool, create_b
 class TestBashToolInitialization:
     """Test BashTool initialization and configuration."""
 
-    def test_default_initialization(self):
+    def test_default_initialization(self) -> None:
         """Test initialization with default configuration."""
         tool = BashTool()
 
@@ -21,7 +18,7 @@ class TestBashToolInitialization:
         assert tool.workspace_root == ""
         assert "rm -rf /" in tool.banned_commands
 
-    def test_custom_configuration(self):
+    def test_custom_configuration(self) -> None:
         """Test initialization with custom configuration."""
         tool = BashTool(
             workspace_root="/tmp/test",
@@ -33,7 +30,7 @@ class TestBashToolInitialization:
         assert tool.timeout == 120
         assert tool.max_output_length == 5000
 
-    def test_security_configuration(self):
+    def test_security_configuration(self) -> None:
         """Test default security configuration."""
         tool = BashTool()
 
@@ -49,7 +46,7 @@ class TestBashToolInitialization:
         for banned in expected_banned:
             assert banned in tool.banned_commands
 
-    def test_create_bash_tools(self):
+    def test_create_bash_tools(self) -> None:
         """Test factory function creates all tools."""
         tools = create_bash_tools()
 
@@ -62,7 +59,7 @@ class TestBashToolInitialization:
 class TestBashToolCommandValidation:
     """Test command validation and security features."""
 
-    def test_is_banned_detects_banned_commands(self):
+    def test_is_banned_detects_banned_commands(self) -> None:
         """Test detection of banned commands."""
         tool = BashTool()
 
@@ -79,7 +76,7 @@ class TestBashToolCommandValidation:
             result = tool._is_banned(command)
             assert result is True, f"Command '{command}' should be banned"
 
-    def test_is_banned_allows_safe_commands(self):
+    def test_is_banned_allows_safe_commands(self) -> None:
         """Test that safe commands are allowed."""
         tool = BashTool()
 
@@ -99,7 +96,7 @@ class TestBashToolCommandValidation:
 class TestBashToolExecution:
     """Test bash command execution."""
 
-    def test_run_with_banned_command(self):
+    def test_run_with_banned_command(self) -> None:
         """Test execution with banned command."""
         tool = BashTool()
 
@@ -108,7 +105,7 @@ class TestBashToolExecution:
         assert "Error" in result
         assert "not allowed" in result
 
-    def test_run_without_pexpect(self):
+    def test_run_without_pexpect(self) -> None:
         """Test execution when pexpect is not available."""
         # Clear any existing shell instances from previous tests
         import soothe.tools.bash
@@ -127,7 +124,7 @@ class TestBashToolExecution:
 class TestGetCurrentDirTool:
     """Test get current directory tool."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = GetCurrentDirTool()
 
@@ -138,7 +135,7 @@ class TestGetCurrentDirTool:
 class TestListDirTool:
     """Test list directory tool."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = ListDirTool()
 

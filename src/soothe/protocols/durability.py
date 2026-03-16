@@ -103,12 +103,12 @@ class DurabilityProtocol(Protocol):
 
     async def list_threads(
         self,
-        filter: ThreadFilter | None = None,  # noqa: A002
+        thread_filter: ThreadFilter | None = None,
     ) -> list[ThreadInfo]:
         """List threads matching a filter.
 
         Args:
-            filter: Optional filter criteria.
+            thread_filter: Optional filter criteria.
 
         Returns:
             Matching threads.

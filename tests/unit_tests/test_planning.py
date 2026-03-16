@@ -11,7 +11,7 @@ from soothe.protocols.planner import Plan, PlanContext, PlanStep, StepResult
 class TestDirectPlanner:
     """Unit tests for DirectPlanner."""
 
-    def test_initialization(self):
+    def test_initialization(self) -> None:
         """Test initialization with a model."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -19,7 +19,7 @@ class TestDirectPlanner:
         assert planner._model == mock_model
 
     @pytest.mark.asyncio
-    async def test_create_plan_success(self):
+    async def test_create_plan_success(self) -> None:
         """Test successful plan creation."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
@@ -44,7 +44,7 @@ class TestDirectPlanner:
         assert plan.steps[0].id == "step_1"
 
     @pytest.mark.asyncio
-    async def test_create_plan_fallback_on_error(self):
+    async def test_create_plan_fallback_on_error(self) -> None:
         """Test plan creation fallback when structured output fails."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
@@ -62,7 +62,7 @@ class TestDirectPlanner:
         assert plan.steps[0].description == "test goal"
 
     @pytest.mark.asyncio
-    async def test_create_plan_includes_context(self):
+    async def test_create_plan_includes_context(self) -> None:
         """Test that plan creation includes context information."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
@@ -89,7 +89,7 @@ class TestDirectPlanner:
         assert "prev_step" in call_args
 
     @pytest.mark.asyncio
-    async def test_revise_plan_success(self):
+    async def test_revise_plan_success(self) -> None:
         """Test successful plan revision."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
@@ -117,7 +117,7 @@ class TestDirectPlanner:
         assert len(result.steps) == 2
 
     @pytest.mark.asyncio
-    async def test_revise_plan_fallback_on_error(self):
+    async def test_revise_plan_fallback_on_error(self) -> None:
         """Test plan revision fallback when structured output fails."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
@@ -136,7 +136,7 @@ class TestDirectPlanner:
         assert result == original_plan
 
     @pytest.mark.asyncio
-    async def test_reflect_all_steps_succeeded(self):
+    async def test_reflect_all_steps_succeeded(self) -> None:
         """Test reflection when all steps succeeded."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -161,7 +161,7 @@ class TestDirectPlanner:
         assert reflection.feedback == ""
 
     @pytest.mark.asyncio
-    async def test_reflect_some_steps_failed(self):
+    async def test_reflect_some_steps_failed(self) -> None:
         """Test reflection when some steps failed."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -187,7 +187,7 @@ class TestDirectPlanner:
         assert "step_2" in reflection.feedback
 
     @pytest.mark.asyncio
-    async def test_reflect_all_steps_failed(self):
+    async def test_reflect_all_steps_failed(self) -> None:
         """Test reflection when all steps failed."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -211,7 +211,7 @@ class TestDirectPlanner:
         assert "2 failed" in reflection.assessment
         assert reflection.should_revise is True
 
-    def test_build_plan_prompt_basic(self):
+    def test_build_plan_prompt_basic(self) -> None:
         """Test building plan prompt with basic goal."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -222,7 +222,7 @@ class TestDirectPlanner:
         assert "test goal" in prompt
         assert "Plan" in prompt
 
-    def test_build_plan_prompt_with_capabilities(self):
+    def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)
@@ -234,7 +234,7 @@ class TestDirectPlanner:
         assert "tool2" in prompt
         assert "agent1" in prompt
 
-    def test_build_plan_prompt_with_completed_steps(self):
+    def test_build_plan_prompt_with_completed_steps(self) -> None:
         """Test building plan prompt with completed steps."""
         mock_model = MagicMock()
         planner = DirectPlanner(mock_model)

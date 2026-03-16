@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from soothe.tools.file_edit import (
     CreateFileTool,
     DeleteFileTool,
@@ -19,7 +17,7 @@ from soothe.tools.file_edit import (
 class TestCreateFileTool:
     """Test CreateFileTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = CreateFileTool()
 
@@ -27,7 +25,7 @@ class TestCreateFileTool:
         assert "create" in tool.description.lower()
         assert "file" in tool.description.lower()
 
-    def test_create_new_file(self):
+    def test_create_new_file(self) -> None:
         """Test creating a new file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir)
@@ -42,7 +40,7 @@ class TestCreateFileTool:
             assert file_path.exists()
             assert file_path.read_text() == "Hello, World!"
 
-    def test_create_file_in_subdirectory(self):
+    def test_create_file_in_subdirectory(self) -> None:
         """Test creating file in subdirectory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir)
@@ -56,7 +54,7 @@ class TestCreateFileTool:
             assert file_path.exists()
             assert file_path.read_text() == "Hello, World!"
 
-    def test_create_existing_file_without_overwrite(self):
+    def test_create_existing_file_without_overwrite(self) -> None:
         """Test creating file that already exists without overwrite."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir)
@@ -70,7 +68,7 @@ class TestCreateFileTool:
             assert "Error" in result
             assert "already exists" in result.lower()
 
-    def test_create_existing_file_with_overwrite(self):
+    def test_create_existing_file_with_overwrite(self) -> None:
         """Test creating file that already exists with overwrite."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir, backup_enabled=False)
@@ -87,7 +85,7 @@ class TestCreateFileTool:
             file_path = Path(temp_dir) / "test.txt"
             assert file_path.read_text() == "New content"
 
-    def test_create_file_with_backup(self):
+    def test_create_file_with_backup(self) -> None:
         """Test creating file with backup enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir, backup_enabled=True)
@@ -100,7 +98,7 @@ class TestCreateFileTool:
 
             assert "backup:" in result.lower()
 
-    def test_path_outside_workdir(self):
+    def test_path_outside_workdir(self) -> None:
         """Test that paths outside work directory are rejected."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = CreateFileTool(work_dir=temp_dir)
@@ -114,14 +112,14 @@ class TestCreateFileTool:
 class TestReadFileTool:
     """Test ReadFileTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = ReadFileTool()
 
         assert tool.name == "read_file"
         assert "read" in tool.description.lower()
 
-    def test_read_existing_file(self):
+    def test_read_existing_file(self) -> None:
         """Test reading an existing file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -134,7 +132,7 @@ class TestReadFileTool:
 
             assert result == "Hello, World!"
 
-    def test_read_nonexistent_file(self):
+    def test_read_nonexistent_file(self) -> None:
         """Test reading a non-existent file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = ReadFileTool(work_dir=temp_dir)
@@ -144,7 +142,7 @@ class TestReadFileTool:
             assert "Error" in result
             assert "not found" in result.lower()
 
-    def test_read_file_with_line_range(self):
+    def test_read_file_with_line_range(self) -> None:
         """Test reading file with line range."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file with multiple lines
@@ -164,14 +162,14 @@ class TestReadFileTool:
 class TestDeleteFileTool:
     """Test DeleteFileTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = DeleteFileTool()
 
         assert tool.name == "delete_file"
         assert "delete" in tool.description.lower()
 
-    def test_delete_existing_file(self):
+    def test_delete_existing_file(self) -> None:
         """Test deleting an existing file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -185,7 +183,7 @@ class TestDeleteFileTool:
             assert "Deleted:" in result
             assert not file_path.exists()
 
-    def test_delete_nonexistent_file(self):
+    def test_delete_nonexistent_file(self) -> None:
         """Test deleting a non-existent file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = DeleteFileTool(work_dir=temp_dir)
@@ -195,7 +193,7 @@ class TestDeleteFileTool:
             assert "Error" in result
             assert "not found" in result.lower()
 
-    def test_delete_with_backup(self):
+    def test_delete_with_backup(self) -> None:
         """Test deleting file with backup."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -212,14 +210,14 @@ class TestDeleteFileTool:
 class TestListFilesTool:
     """Test ListFilesTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = ListFilesTool()
 
         assert tool.name == "list_files"
         assert "list" in tool.description.lower()
 
-    def test_list_files_in_directory(self):
+    def test_list_files_in_directory(self) -> None:
         """Test listing files in directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files
@@ -233,7 +231,7 @@ class TestListFilesTool:
             assert "file1.txt" in result
             assert "file2.py" in result
 
-    def test_list_files_with_pattern(self):
+    def test_list_files_with_pattern(self) -> None:
         """Test listing files with pattern."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files
@@ -251,14 +249,14 @@ class TestListFilesTool:
 class TestSearchInFilesTool:
     """Test SearchInFilesTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = SearchInFilesTool()
 
         assert tool.name == "search_in_files"
         assert "search" in tool.description.lower()
 
-    def test_search_in_files(self):
+    def test_search_in_files(self) -> None:
         """Test searching in files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files
@@ -272,7 +270,7 @@ class TestSearchInFilesTool:
             assert "file1.txt" in result
             assert "file2.txt" not in result
 
-    def test_search_with_file_pattern(self):
+    def test_search_with_file_pattern(self) -> None:
         """Test searching with file pattern."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test files
@@ -286,7 +284,7 @@ class TestSearchInFilesTool:
             assert "file1.txt" in result
             assert "file2.py" not in result
 
-    def test_search_no_matches(self):
+    def test_search_no_matches(self) -> None:
         """Test searching with no matches."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -302,14 +300,14 @@ class TestSearchInFilesTool:
 class TestGetFileInfoTool:
     """Test GetFileInfoTool functionality."""
 
-    def test_tool_metadata(self):
+    def test_tool_metadata(self) -> None:
         """Test tool metadata."""
         tool = GetFileInfoTool()
 
         assert tool.name == "get_file_info"
         assert "info" in tool.description.lower() or "metadata" in tool.description.lower()
 
-    def test_get_file_info(self):
+    def test_get_file_info(self) -> None:
         """Test getting file info."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test file
@@ -324,7 +322,7 @@ class TestGetFileInfoTool:
             assert "Size:" in result
             assert "Modified:" in result
 
-    def test_get_nonexistent_file_info(self):
+    def test_get_nonexistent_file_info(self) -> None:
         """Test getting info for non-existent file."""
         with tempfile.TemporaryDirectory() as temp_dir:
             tool = GetFileInfoTool(work_dir=temp_dir)
@@ -338,7 +336,7 @@ class TestGetFileInfoTool:
 class TestCreateFileEditTools:
     """Test factory function."""
 
-    def test_create_file_edit_tools(self):
+    def test_create_file_edit_tools(self) -> None:
         """Test factory function creates all tools."""
         tools = create_file_edit_tools()
 

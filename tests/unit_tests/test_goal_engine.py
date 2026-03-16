@@ -8,7 +8,7 @@ from soothe.core.goal_engine import Goal, GoalEngine
 class TestGoalModel:
     """Unit tests for the Goal model."""
 
-    def test_goal_defaults(self):
+    def test_goal_defaults(self) -> None:
         goal = Goal(description="Test goal")
         assert goal.status == "pending"
         assert goal.priority == 50
@@ -17,7 +17,7 @@ class TestGoalModel:
         assert goal.max_retries == 2
         assert len(goal.id) == 8
 
-    def test_goal_custom_fields(self):
+    def test_goal_custom_fields(self) -> None:
         goal = Goal(description="Custom", priority=90, parent_id="abc", max_retries=5)
         assert goal.priority == 90
         assert goal.parent_id == "abc"
@@ -28,7 +28,7 @@ class TestGoalEngine:
     """Unit tests for GoalEngine."""
 
     @pytest.mark.asyncio
-    async def test_create_goal(self):
+    async def test_create_goal(self) -> None:
         engine = GoalEngine()
         goal = await engine.create_goal("Test goal", priority=70)
         assert goal.description == "Test goal"
@@ -36,12 +36,12 @@ class TestGoalEngine:
         assert goal.status == "pending"
 
     @pytest.mark.asyncio
-    async def test_next_goal_empty(self):
+    async def test_next_goal_empty(self) -> None:
         engine = GoalEngine()
         assert await engine.next_goal() is None
 
     @pytest.mark.asyncio
-    async def test_next_goal_priority_order(self):
+    async def test_next_goal_priority_order(self) -> None:
         engine = GoalEngine()
         await engine.create_goal("Low priority", priority=10)
         await engine.create_goal("High priority", priority=90)
@@ -53,7 +53,7 @@ class TestGoalEngine:
         assert goal.status == "active"
 
     @pytest.mark.asyncio
-    async def test_next_goal_skips_completed(self):
+    async def test_next_goal_skips_completed(self) -> None:
         engine = GoalEngine()
         g1 = await engine.create_goal("First", priority=90)
         await engine.create_goal("Second", priority=50)
@@ -64,20 +64,20 @@ class TestGoalEngine:
         assert goal.description == "Second"
 
     @pytest.mark.asyncio
-    async def test_complete_goal(self):
+    async def test_complete_goal(self) -> None:
         engine = GoalEngine()
         g = await engine.create_goal("To complete")
         completed = await engine.complete_goal(g.id)
         assert completed.status == "completed"
 
     @pytest.mark.asyncio
-    async def test_complete_goal_not_found(self):
+    async def test_complete_goal_not_found(self) -> None:
         engine = GoalEngine()
         with pytest.raises(KeyError):
             await engine.complete_goal("nonexistent")
 
     @pytest.mark.asyncio
-    async def test_fail_goal_with_retry(self):
+    async def test_fail_goal_with_retry(self) -> None:
         engine = GoalEngine(max_retries=2)
         g = await engine.create_goal("Retryable")
 
@@ -94,14 +94,14 @@ class TestGoalEngine:
         assert failed.retry_count == 2
 
     @pytest.mark.asyncio
-    async def test_fail_goal_no_retry(self):
+    async def test_fail_goal_no_retry(self) -> None:
         engine = GoalEngine()
         g = await engine.create_goal("No retry")
         failed = await engine.fail_goal(g.id, error="fail", allow_retry=False)
         assert failed.status == "failed"
 
     @pytest.mark.asyncio
-    async def test_list_goals_all(self):
+    async def test_list_goals_all(self) -> None:
         engine = GoalEngine()
         await engine.create_goal("A")
         await engine.create_goal("B")
@@ -109,7 +109,7 @@ class TestGoalEngine:
         assert len(goals) == 2
 
     @pytest.mark.asyncio
-    async def test_list_goals_by_status(self):
+    async def test_list_goals_by_status(self) -> None:
         engine = GoalEngine()
         g1 = await engine.create_goal("A")
         await engine.create_goal("B")
@@ -121,7 +121,7 @@ class TestGoalEngine:
         assert len(completed) == 1
 
     @pytest.mark.asyncio
-    async def test_get_goal(self):
+    async def test_get_goal(self) -> None:
         engine = GoalEngine()
         g = await engine.create_goal("Find me")
         found = await engine.get_goal(g.id)
@@ -130,7 +130,7 @@ class TestGoalEngine:
         assert await engine.get_goal("nonexistent") is None
 
     @pytest.mark.asyncio
-    async def test_snapshot_and_restore(self):
+    async def test_snapshot_and_restore(self) -> None:
         engine = GoalEngine()
         await engine.create_goal("Goal A", priority=80)
         g2 = await engine.create_goal("Goal B", priority=20)
@@ -149,7 +149,7 @@ class TestGoalEngine:
         assert completed[0].description == "Goal B"
 
     @pytest.mark.asyncio
-    async def test_parent_child_goals(self):
+    async def test_parent_child_goals(self) -> None:
         engine = GoalEngine()
         parent = await engine.create_goal("Parent goal", priority=80)
         child = await engine.create_goal("Child goal", priority=60, parent_id=parent.id)
