@@ -38,6 +38,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 - Python >=3.11, type hints on all public functions.
 - Google-style docstrings with Args, Returns, Raises sections.
 - Use `ruff` for linting and formatting.
+- **MUST run `make lint` before committing** - all linting errors must be fixed.
 - Unit tests for all new features; `pytest` with `asyncio_mode = "auto"`.
 - No bare `except:`; use typed exception handling.
 - Single backticks for inline code in docstrings (not Sphinx double backticks).

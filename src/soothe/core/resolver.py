@@ -44,26 +44,85 @@ SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 }
 
 
-def resolve_tools(tool_names: list[str]) -> list[BaseTool]:
+def resolve_tools(tool_names: list[str], *, lazy: bool = False) -> list[BaseTool]:
     """Resolve tool group names to instantiated langchain BaseTool lists.
 
     Args:
         tool_names: Enabled tool group names from config.
+        lazy: If True, defer tool loading until first use (improves startup time).
 
     Returns:
-        Flat list of `BaseTool` instances.
+        Flat list of `BaseTool` instances (or lazy proxies).
     """
+    import time
+
+    from soothe.core.lazy_tools import LazyToolProxy
+
     tools: list[BaseTool] = []
+    total_start = time.perf_counter()
+
     for name in tool_names:
+        tool_start = time.perf_counter()
         try:
-            resolved = _resolve_single_tool_group(name)
-            tools.extend(resolved)
+            if lazy:
+                # Create lazy proxy that will load on first use
+                # For simplicity, we load the first tool in the group
+                proxy = LazyToolProxy(
+                    tool_name=name,
+                    loader=lambda n=name: _resolve_single_tool_group_uncached(n),
+                    index=0,
+                )
+                tools.append(proxy)
+                elapsed_ms = (time.perf_counter() - tool_start) * 1000
+                logger.debug("Created lazy proxy for tool '%s' in %.1fms", name, elapsed_ms)
+            else:
+                # Eager loading with caching
+                resolved = _resolve_single_tool_group(name)
+                tools.extend(resolved)
         except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
+
+    total_elapsed_ms = (time.perf_counter() - total_start) * 1000
+    logger.info(
+        "Loaded %d tool groups (%d tools) in %.1fms (lazy=%s)",
+        len(tool_names),
+        len(tools),
+        total_elapsed_ms,
+        lazy,
+    )
+
     return tools
 
 
 def _resolve_single_tool_group(name: str) -> list[BaseTool]:
+    """Resolve a single tool group name to a list of BaseTool instances with caching and profiling.
+
+    This method checks the cache first, and if not found, delegates to the uncached version.
+    """
+    import time
+
+    from soothe.core.lazy_tools import cache_tools, get_cached_tools
+
+    # Check cache first
+    cached = get_cached_tools(name)
+    if cached is not None:
+        logger.debug("Tool group '%s' loaded from cache (%d tools)", name, len(cached))
+        return cached
+
+    # Load and cache
+    start = time.perf_counter()
+    tools = _resolve_single_tool_group_uncached(name)
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    # Cache for future use
+    if tools:
+        cache_tools(name, tools)
+
+    logger.debug("Tool group '%s' loaded in %.1fms (%d tools)", name, elapsed_ms, len(tools))
+    return tools
+
+
+def _resolve_single_tool_group_uncached(name: str) -> list[BaseTool]:
     """Resolve a single tool group name to a list of BaseTool instances."""
     if name == "jina":
         from soothe.tools.jina import create_jina_tools
@@ -181,32 +240,48 @@ def resolve_goal_tools(goal_engine: GoalEngine) -> list[BaseTool]:
 def resolve_subagents(
     config: SootheConfig,
     default_model: BaseChatModel | None = None,
+    *,
+    lazy: bool = False,
 ) -> list[SubAgent | CompiledSubAgent]:
-    """Build subagent specs from config.
+    """Build subagent specs from config with optional lazy loading.
 
     Args:
         config: Soothe configuration.
         default_model: Pre-configured model instance to use as default.
+        lazy: If True, defer subagent initialization until first use.
 
     Returns:
         List of subagent specs for deepagents.
     """
+    import time
+
+    from soothe.core.lazy_tools import LazySubagentSpec
+
+    # Subagents that should always be loaded eagerly (commonly used)
+    eager_subagents = {"planner"}
+
     cwd_subagents = {"planner", "scout", "claude"}
     string_model_subagents = {"claude"}
     resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     subagents: list[SubAgent | CompiledSubAgent] = []
+    total_start = time.perf_counter()
+
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:
             continue
+
+        sub_start = time.perf_counter()
         factory = SUBAGENT_FACTORIES.get(name)
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
+
         if name in string_model_subagents:
             model_override = sub_cfg.model or config.resolve_model("default")
         else:
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
+
         extra_kwargs = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
@@ -215,13 +290,42 @@ def resolve_subagents(
         # Pass browser-specific config
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
-        spec = factory(model=model_override, **extra_kwargs)
+
+        # Decide whether to load eagerly or lazily
+        if lazy and name not in eager_subagents:
+            # Create lazy spec that will initialize on first use
+            spec = LazySubagentSpec(
+                name=name,
+                factory=factory,
+                kwargs={"model": model_override, **extra_kwargs},
+            )
+            elapsed_ms = (time.perf_counter() - sub_start) * 1000
+            logger.debug("Created lazy spec for subagent '%s' in %.1fms", name, elapsed_ms)
+        else:
+            # Eager loading (current behavior)
+            try:
+                spec = factory(model=model_override, **extra_kwargs)
+                elapsed_ms = (time.perf_counter() - sub_start) * 1000
+                logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
+            except Exception:
+                logger.exception("Failed to load subagent '%s'", name)
+                continue
+
         subagents.append(spec)
 
+    # Load generated subagents (these are already compiled, so usually fast)
     generated = _resolve_generated_subagents(config)
     if generated:
         logger.info("Loaded %d generated agent(s) from registry", len(generated))
         subagents.extend(generated)
+
+    total_elapsed_ms = (time.perf_counter() - total_start) * 1000
+    logger.info(
+        "Loaded %d subagents in %.1fms (lazy=%s)",
+        len(subagents),
+        total_elapsed_ms,
+        lazy,
+    )
 
     return subagents
 
@@ -286,7 +390,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
     from soothe.backends.context.keyword import KeywordContext
 
-    persist_dir = config.context_persist_dir or str(Path(SOOTHE_HOME) / "context")
+    persist_dir = config.context_persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
     return KeywordContext(
         persist_dir=persist_dir,
         persist_backend=config.context_persist_backend,
@@ -328,7 +432,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 
     from soothe.backends.memory.store import StoreBackedMemory
 
-    persist_path = config.memory_persist_path or str(Path(SOOTHE_HOME) / "memory")
+    persist_path = config.memory_persist_path or str(Path(SOOTHE_HOME) / "memory" / "data")
     return StoreBackedMemory(
         persist_path=persist_path,
         persist_backend=config.memory_persist_backend,
@@ -420,35 +524,54 @@ def resolve_policy(_config: SootheConfig) -> PolicyProtocol | None:
 
 
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
-    """Instantiate the DurabilityProtocol implementation from config."""
-    if config.durability_backend == "langgraph":
-        from pathlib import Path
+    """Instantiate the DurabilityProtocol implementation from config.
 
+    Falls back to ``langgraph`` durability when rocksdb dependencies are unavailable.
+    """
+    from pathlib import Path
+
+    if config.durability_backend == "rocksdb":
+        try:
+            from soothe.backends.durability.rocksdb import RocksDBDurability
+
+            persist_dir = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "data")
+            logger.info("Using RocksDB durability backend at %s", persist_dir)
+            return RocksDBDurability(persist_dir=persist_dir)
+        except (ImportError, RuntimeError) as e:
+            logger.warning(
+                "RocksDB durability requested but dependencies unavailable: %s. "
+                "Falling back to langgraph durability (JSON-based). "
+                "Install with: pip install soothe[rocksdb]",
+                e,
+            )
+            # Fall through to langgraph backend
+
+    if config.durability_backend == "langgraph" or config.durability_backend == "rocksdb":
         from soothe.backends.durability.langgraph import LangGraphDurability
 
         metadata_path = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "threads.json")
+        logger.info("Using langgraph durability backend at %s", metadata_path)
         return LangGraphDurability(metadata_path=metadata_path)
 
-    from soothe.backends.durability.in_memory import InMemoryDurability
+    # Unknown backend - default to langgraph
+    logger.warning(
+        "Unknown durability backend '%s'; using langgraph (JSON-based) durability",
+        config.durability_backend,
+    )
+    from soothe.backends.durability.langgraph import LangGraphDurability
 
-    return InMemoryDurability()
+    metadata_path = str(Path(SOOTHE_HOME) / "durability" / "threads.json")
+    return LangGraphDurability(metadata_path=metadata_path)
 
 
 def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
-    Falls back to ``MemorySaver`` when an optional backend dependency is
-    unavailable or misconfigured.
+    Falls back to ``MemorySaver`` when PostgreSQL is unavailable.
     """
     from langgraph.checkpoint.memory import MemorySaver
 
     backend = config.checkpointer_backend
-    if backend == "memory":
-        return MemorySaver()
-
-    if backend == "sqlite":
-        return _resolve_sqlite_checkpointer(config) or MemorySaver()
-
     if backend == "postgres":
         return _resolve_postgres_checkpointer(config) or MemorySaver()
 
@@ -456,59 +579,44 @@ def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
     return MemorySaver()
 
 
-def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
-    """Try to initialize a SQLite-based checkpointer."""
-    from pathlib import Path
-
-    sqlite_path = config.checkpointer_sqlite_path or str(Path(SOOTHE_HOME) / "checkpoints.sqlite")
-    Path(sqlite_path).expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
-
-    candidates = [
-        ("langgraph.checkpoint.sqlite.aio", "AsyncSqliteSaver"),
-        ("langgraph.checkpoint.sqlite", "SqliteSaver"),
-    ]
-    for module_name, class_name in candidates:
-        try:
-            module = __import__(module_name, fromlist=[class_name])
-            saver_cls = getattr(module, class_name)
-            if hasattr(saver_cls, "from_conn_string"):
-                return saver_cls.from_conn_string(sqlite_path)
-            return saver_cls(sqlite_path)
-        except Exception:
-            logger.debug("Failed to load %s.%s", module_name, class_name, exc_info=True)
-            continue
-
-    logger.warning(
-        "SQLite checkpointer requested but sqlite checkpoint package is unavailable; "
-        "install langgraph sqlite checkpoint support. Falling back to memory."
-    )
-    return None
-
-
 def _resolve_postgres_checkpointer(config: SootheConfig) -> Checkpointer | None:
-    """Try to initialize a Postgres-based checkpointer."""
+    """Initialize PostgreSQL checkpointer."""
     dsn = config.checkpointer_postgres_dsn
     if not dsn:
-        logger.warning("Postgres checkpointer requested but checkpointer_postgres_dsn is not set; using memory.")
+        logger.warning("PostgreSQL checkpointer requires DSN configuration")
         return None
 
-    candidates = [
-        ("langgraph.checkpoint.postgres.aio", "AsyncPostgresSaver"),
-        ("langgraph.checkpoint.postgres", "PostgresSaver"),
-    ]
-    for module_name, class_name in candidates:
-        try:
-            module = __import__(module_name, fromlist=[class_name])
-            saver_cls = getattr(module, class_name)
-            if hasattr(saver_cls, "from_conn_string"):
-                return saver_cls.from_conn_string(dsn)
-            return saver_cls(dsn)
-        except Exception:
-            logger.debug("Failed to load %s.%s", module_name, class_name, exc_info=True)
-            continue
+    # Try AsyncPostgresSaver first (better for async agent execution)
+    try:
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    logger.warning(
-        "Postgres checkpointer requested but postgres checkpoint package is unavailable; "
-        "install langgraph postgres checkpoint support. Falling back to memory."
-    )
+        checkpointer = AsyncPostgresSaver.from_conn_string(dsn)
+        logger.info("Using AsyncPostgresSaver with DSN: %s", _mask_dsn(dsn))
+        return checkpointer
+    except ImportError:
+        logger.debug("AsyncPostgresSaver not available, trying sync version")
+    except Exception as exc:
+        logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
+
+    # Fallback to sync PostgresSaver
+    try:
+        from langgraph.checkpoint.postgres import PostgresSaver
+
+        checkpointer = PostgresSaver.from_conn_string(dsn)
+        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
+        return checkpointer
+    except ImportError:
+        logger.warning(
+            "PostgreSQL checkpointer requires 'langgraph[postgres]'. Install with: pip install 'langgraph[postgres]'"
+        )
+    except Exception as exc:
+        logger.warning("Failed to initialize PostgresSaver: %s", exc)
+
     return None
+
+
+def _mask_dsn(dsn: str) -> str:
+    """Mask password in DSN for logging."""
+    import re
+
+    return re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", dsn)

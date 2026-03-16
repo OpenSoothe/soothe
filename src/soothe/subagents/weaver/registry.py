@@ -126,6 +126,65 @@ class GeneratedAgentRegistry:
             "system_prompt": system_prompt,
         }
 
+    def cleanup_old_agents(self, max_age_days: int = 30, max_agents: int = 100) -> int:
+        """Remove old/unused generated agents.
+
+        Args:
+            max_age_days: Delete agents not accessed for N days.
+            max_agents: Keep at most N agents (delete oldest first).
+
+        Returns:
+            Number of agents deleted.
+        """
+        import shutil
+        from datetime import UTC, datetime, timedelta
+
+        deleted = 0
+
+        if not self._base_dir.is_dir():
+            return deleted
+
+        # Get all agents with their access times
+        agents: list[tuple[Path, datetime]] = []
+        try:
+            for manifest_file in self._base_dir.glob("*/manifest.yml"):
+                try:
+                    stat = manifest_file.stat()
+                    atime = datetime.fromtimestamp(stat.st_atime, tz=UTC)
+                    agents.append((manifest_file.parent, atime))
+                except Exception:
+                    logger.debug("Failed to stat %s", manifest_file, exc_info=True)
+                    continue
+
+            # Sort by access time (oldest first)
+            agents.sort(key=lambda x: x[1])
+
+            # Delete by age
+            cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
+            for agent_dir, atime in agents:
+                if atime < cutoff:
+                    try:
+                        shutil.rmtree(agent_dir)
+                        deleted += 1
+                        logger.info("Deleted old generated agent: %s", agent_dir.name)
+                    except Exception:
+                        logger.warning("Failed to delete agent %s", agent_dir, exc_info=True)
+
+            # Delete by count (if still over limit)
+            remaining = [(d, t) for d, t in agents if t >= cutoff]
+            if len(remaining) > max_agents:
+                for agent_dir, _ in remaining[:-max_agents]:
+                    try:
+                        shutil.rmtree(agent_dir)
+                        deleted += 1
+                        logger.info("Deleted excess generated agent: %s", agent_dir.name)
+                    except Exception:
+                        logger.warning("Failed to delete agent %s", agent_dir, exc_info=True)
+        except Exception:
+            logger.warning("Agent cleanup failed", exc_info=True)
+
+        return deleted
+
     @staticmethod
     def _load_manifest(path: Path) -> AgentManifest | None:
         """Load a YAML manifest file."""

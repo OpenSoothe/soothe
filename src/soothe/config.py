@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
 
 _DEFAULT_SYSTEM_PROMPT = """\
-You are {assistant_name}, a proactive AI assistant designed for continuous, \
-around-the-clock operation.
+You are {assistant_name}, a proactive AI assistant invented by Dr. Xiaming Chen, \
+designed for continuous, around-the-clock operation.
 
 You excel at long-running, complex problem-solving -- multi-step projects, \
 deep research, large-scale code changes, and tasks that require sustained \
@@ -186,6 +186,50 @@ class WeaverConfig(BaseModel):
     max_generation_attempts: int = 2
     allowed_tool_groups: list[str] = Field(default_factory=list)
     allowed_mcp_servers: list[str] = Field(default_factory=list)
+    cleanup_old_agents_days: int = 100  # Delete agents not accessed for N days
+    max_generated_agents: int = 100  # Max number of generated agents to keep
+
+
+class ComplexityThresholds(BaseModel):
+    """Query complexity classification thresholds.
+
+    Args:
+        trivial_words: Maximum words for a query to be classified as trivial.
+        simple_words: Maximum words for a query to be classified as simple.
+        medium_words: Maximum words for a query to be classified as medium.
+    """
+
+    trivial_words: int = 5
+    simple_words: int = 15
+    medium_words: int = 30
+
+
+class PerformanceConfig(BaseModel):
+    """Performance optimization configuration (RFC-0008).
+
+    Args:
+        enabled: Master switch for all performance optimizations.
+        complexity_detection: Enable query complexity classification.
+        skip_memory_for_simple: Skip memory recall for trivial/simple queries.
+        skip_context_for_simple: Skip context projection for trivial/simple queries.
+        template_planning: Use template plans for simple queries.
+        parallel_pre_stream: Run memory/context operations in parallel.
+        cache_size: LRU cache size for embeddings (future).
+        log_timing: Log detailed timing information.
+        slow_query_threshold_ms: Threshold for slow query warnings.
+        thresholds: Query classification thresholds.
+    """
+
+    enabled: bool = True
+    complexity_detection: bool = True
+    skip_memory_for_simple: bool = True
+    skip_context_for_simple: bool = True
+    template_planning: bool = True
+    parallel_pre_stream: bool = True
+    cache_size: int = 100
+    log_timing: bool = False
+    slow_query_threshold_ms: int = 3000
+    thresholds: ComplexityThresholds = Field(default_factory=ComplexityThresholds)
 
 
 class BrowserSubagentConfig(BaseModel):
@@ -219,6 +263,10 @@ class SootheConfig(BaseSettings):
     """
 
     model_config = {"env_prefix": "SOOTHE_"}
+
+    # Model instance cache for performance
+    _model_cache: dict[str, BaseChatModel] = {}
+    _embedding_cache: dict[str, Embeddings] = {}
 
     @classmethod
     def from_yaml_file(cls, path: str) -> SootheConfig:
@@ -335,7 +383,7 @@ class SootheConfig(BaseSettings):
     context_persist_dir: str | None = None
     """Directory for context persistence. Defaults to ``SOOTHE_HOME/context/``."""
 
-    context_persist_backend: Literal["json", "rocksdb"] = "json"
+    context_persist_backend: Literal["json", "rocksdb"] = "rocksdb"
     """Persistence backend for context data."""
 
     memory_backend: Literal["keyword", "vector", "none"] = "keyword"
@@ -346,7 +394,7 @@ class SootheConfig(BaseSettings):
     memory_persist_path: str | None = None
     """Directory for memory persistence. Defaults to ``SOOTHE_HOME/memory/``."""
 
-    memory_persist_backend: Literal["json", "rocksdb"] = "json"
+    memory_persist_backend: Literal["json", "rocksdb"] = "rocksdb"
     """Persistence backend for memory data."""
 
     planner_routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
@@ -360,20 +408,27 @@ class SootheConfig(BaseSettings):
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     """Concurrency limits for parallel execution."""
 
-    durability_backend: Literal["in_memory", "langgraph"] = "in_memory"
+    durability_backend: Literal["langgraph", "rocksdb"] = "rocksdb"
     """Durability backend for thread lifecycle and metadata persistence."""
 
-    checkpointer_backend: Literal["memory", "sqlite", "postgres"] = "memory"
-    """LangGraph checkpoint backend."""
+    checkpointer_backend: Literal["postgres"] = "postgres"
+    """LangGraph checkpoint backend. Only PostgreSQL is supported for persistence."""
 
-    checkpointer_sqlite_path: str | None = None
-    """SQLite checkpoint file path when ``checkpointer_backend=sqlite``."""
-
-    checkpointer_postgres_dsn: str | None = None
-    """Postgres DSN when ``checkpointer_backend=postgres``."""
+    checkpointer_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
+    """Postgres DSN for checkpoints. Default: local pgvector instance."""
 
     durability_metadata_path: str | None = None
     """Metadata/state path for durability backends that persist locally."""
+
+    # Thread logging configuration
+    thread_log_dir: str | None = None  # Default: SOOTHE_HOME/threads
+    """Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``."""
+
+    thread_log_retention_days: int = 100  # Auto-delete threads older than N days
+    """Days to retain thread logs before cleanup."""
+
+    thread_log_max_size_mb: int = 100  # Max total size for thread logs (not enforced yet)
+    """Maximum total size for thread logs (not enforced yet)."""
 
     # --- Autonomous iteration (RFC-0007) ---
 
@@ -381,10 +436,15 @@ class SootheConfig(BaseSettings):
     """Whether new runs should default to autonomous mode unless explicitly overridden."""
 
     autonomous_max_iterations: int = 10
-    """Maximum iterations per autonomous session before forcing stop."""
+    """Maximum iterations per autonomous thread before forcing stop."""
 
     autonomous_max_retries: int = 2
     """Maximum retries per goal on failure before marking permanently failed."""
+
+    # --- Performance optimization (RFC-0008) ---
+
+    performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
+    """Performance optimization configuration."""
 
     # --- Vector store config ---
 
@@ -462,10 +522,11 @@ class SootheConfig(BaseSettings):
         return provider_type, kwargs
 
     def create_chat_model(self, role: str = "default") -> BaseChatModel:
-        """Create a ``BaseChatModel`` for a given role.
+        """Create a ``BaseChatModel`` for a given role with caching.
 
         Resolves the role to a ``provider:model`` pair, looks up the
         provider's credentials, and calls ``init_chat_model()``.
+        Caches the result to avoid recreating models.
 
         Args:
             role: Purpose role (default, think, fast, image, web_search).
@@ -473,7 +534,11 @@ class SootheConfig(BaseSettings):
         Returns:
             A configured ``BaseChatModel`` instance.
         """
+        import logging
+
         from langchain.chat_models import init_chat_model
+
+        logger = logging.getLogger(__name__)
 
         model_str = self.resolve_model(role)
         provider_name, _, model_name = model_str.partition(":")
@@ -481,17 +546,33 @@ class SootheConfig(BaseSettings):
             model_name = provider_name
             provider_name = ""
 
+        # Check cache first
+        cache_key = model_str
+        if cache_key in self._model_cache:
+            logger.debug("Using cached model for '%s'", model_str)
+            return self._model_cache[cache_key]
+
         provider_type, kwargs = self._provider_kwargs(provider_name)
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-        return init_chat_model(init_str, **kwargs)
+
+        # Create and cache the model
+        model = init_chat_model(init_str, **kwargs)
+        self._model_cache[cache_key] = model
+        logger.debug("Created and cached model for '%s'", model_str)
+
+        return model
 
     def create_embedding_model(self) -> Embeddings:
-        """Create an ``Embeddings`` instance using the ``embedding`` role.
+        """Create an ``Embeddings`` instance using the ``embedding`` role with caching.
 
         Returns:
             A configured langchain ``Embeddings`` instance.
         """
+        import logging
+
         from langchain.embeddings import init_embeddings
+
+        logger = logging.getLogger(__name__)
 
         model_str = self.resolve_model("embedding")
         provider_name, _, model_name = model_str.partition(":")
@@ -499,10 +580,22 @@ class SootheConfig(BaseSettings):
             model_name = provider_name
             provider_name = ""
 
+        # Check cache first
+        cache_key = model_str
+        if cache_key in self._embedding_cache:
+            logger.debug("Using cached embedding model for '%s'", model_str)
+            return self._embedding_cache[cache_key]
+
         provider_type, kwargs = self._provider_kwargs(provider_name)
         kwargs.pop("use_responses_api", None)
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
-        return init_embeddings(init_str, **kwargs)
+
+        # Create and cache the embedding model
+        embeddings = init_embeddings(init_str, **kwargs)
+        self._embedding_cache[cache_key] = embeddings
+        logger.debug("Created and cached embedding model for '%s'", model_str)
+
+        return embeddings
 
     def resolve_system_prompt(self) -> str:
         """Return the effective system prompt.

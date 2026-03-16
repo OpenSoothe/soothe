@@ -53,6 +53,12 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_prefix_from_input(user_input: str) -> tuple[list[str], str]:
     """Parse leading numeric selector from input.
 
+    .. deprecated::
+        Numeric prefix routing is deprecated and not used in Soothe.
+        The LLM naturally routes to appropriate subagents via the `task` tool.
+        This function is retained for backward compatibility with external code
+        but should not be used in new implementations.
+
     Numeric prefixes select subagents:
     ``1`` = Main, ``2`` = Planner, ``3`` = Scout, ``4`` = Research,
     ``5`` = Browser, ``6`` = Claude.
@@ -116,6 +122,11 @@ SLASH_COMMANDS: dict[str, str] = {
 }
 
 
+_AUTO_MAX_SPLIT = 2
+_AUTO_MIN_PARTS = 1
+_AUTO_TWO_PARTS = 2
+
+
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
     """Parse `/auto` command payload.
 
@@ -129,11 +140,11 @@ def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
     if not stripped.startswith("/auto"):
         return None
 
-    parts = stripped.split(maxsplit=2)
-    if len(parts) == 1:
+    parts = stripped.split(maxsplit=_AUTO_MAX_SPLIT)
+    if len(parts) == _AUTO_MIN_PARTS:
         return None
 
-    if len(parts) == 2:
+    if len(parts) == _AUTO_TWO_PARTS:
         single = parts[1].strip()
         if not single or single.isdigit():
             return None
@@ -152,7 +163,7 @@ def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
     return (None, prompt) if prompt else None
 
 
-def handle_slash_command(
+async def handle_slash_command(
     cmd: str,
     runner: SootheRunner,
     console: Console,
@@ -212,7 +223,7 @@ def handle_slash_command(
         return False
 
     if command == "/thread":
-        _handle_thread_command(arg, arg2, console, runner)
+        await _handle_thread_command(arg, arg2, console, runner)
         return False
 
     if command == "/config":
@@ -320,7 +331,7 @@ def _show_review(console: Console, thread_logger: ThreadLogger | None, scope: st
                 table.add_row(role, text)
             console.print(table)
         else:
-            console.print("[dim]No conversation records in this session yet.[/dim]")
+            console.print("[dim]No conversation records in this thread yet.[/dim]")
 
     if normalized in {"all", "actions"}:
         actions = thread_logger.recent_actions()
@@ -349,19 +360,18 @@ def _show_review(console: Console, thread_logger: ThreadLogger | None, scope: st
                 table.add_row(source, event_type, str(summary)[:100])
             console.print(table)
         elif normalized == "actions":
-            console.print("[dim]No action records in this session yet.[/dim]")
+            console.print("[dim]No action records in this thread yet.[/dim]")
 
 
-def _handle_thread_command(
+async def _handle_thread_command(
     sub_cmd: str,
     arg: str,
     console: Console,
     runner: SootheRunner,
 ) -> None:
     if sub_cmd == "list":
-        loop = asyncio.get_event_loop()
         try:
-            threads = loop.run_until_complete(runner.list_threads())
+            threads = await runner.list_threads()
             if not threads:
                 console.print("[dim]No threads.[/dim]")
                 return

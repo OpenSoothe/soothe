@@ -26,8 +26,8 @@ from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
-from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.cli.commands import parse_autonomous_command
+from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.cli.progress_verbosity import classify_custom_event, should_show
 from soothe.cli.thread_logger import ThreadLogger
 from soothe.cli.tui_shared import (
@@ -511,6 +511,7 @@ class SootheApp(App):
                     logger.info("Found thread history in %s for thread %s", directory, thread_id)
                     break
                 except Exception:
+                    logger.debug("Failed to load thread history from %s", directory, exc_info=True)
                     continue
         else:
             # No data found, use default directory

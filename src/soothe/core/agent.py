@@ -86,6 +86,10 @@ def create_soothe_agent(
     Returns:
         Compiled LangGraph agent.
     """
+    import time
+
+    create_start = time.perf_counter()
+
     if config is None:
         config = SootheConfig()
 
@@ -95,10 +99,15 @@ def create_soothe_agent(
     resolved_model = model if model is not None else config.create_chat_model("default")
 
     default_model_instance = resolved_model if isinstance(resolved_model, BaseChatModel) else None
+
+    # Resolve protocols with timing
+    resolve_start = time.perf_counter()
     resolved_context = context or resolve_context(config)
     resolved_memory = memory_store or resolve_memory(config)
     resolved_planner = planner or resolve_planner(config, default_model_instance)
     resolved_policy = policy or resolve_policy(config)
+    resolve_ms = (time.perf_counter() - resolve_start) * 1000
+    logger.debug("Protocols resolved in %.1fms", resolve_ms)
 
     if resolved_context:
         logger.info("Context: %s", type(resolved_context).__name__)
@@ -111,16 +120,23 @@ def create_soothe_agent(
 
     goal_engine = resolve_goal_engine(config)
 
-    config_tools = resolve_tools(config.tools)
+    # Use lazy loading by default for better startup performance
+    tools_start = time.perf_counter()
+    config_tools = resolve_tools(config.tools, lazy=False)
     goal_tools = resolve_goal_tools(goal_engine)
     all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools, *goal_tools]
     if tools:
         all_tools.extend(tools)
+    tools_ms = (time.perf_counter() - tools_start) * 1000
+    logger.info("Tools resolved in %.1fms", tools_ms)
 
-    config_subagents = resolve_subagents(config, default_model=default_model_instance)
+    subagents_start = time.perf_counter()
+    config_subagents = resolve_subagents(config, default_model=default_model_instance, lazy=False)
     all_subagents: list[SubAgent | CompiledSubAgent] = [*config_subagents]
     if subagents:
         all_subagents.extend(subagents)
+    subagents_ms = (time.perf_counter() - subagents_start) * 1000
+    logger.info("Subagents resolved in %.1fms", subagents_ms)
 
     resolved_workspace = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
@@ -151,6 +167,7 @@ def create_soothe_agent(
     if config.skills:
         all_skills.extend(config.skills)
 
+    deep_agent_start = time.perf_counter()
     agent = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
@@ -165,6 +182,8 @@ def create_soothe_agent(
         interrupt_on=interrupt_on,
         debug=config.debug,
     )
+    deep_agent_ms = (time.perf_counter() - deep_agent_start) * 1000
+    logger.info("Deep agent created in %.1fms", deep_agent_ms)
 
     agent.soothe_context = resolved_context  # type: ignore[attr-defined]
     agent.soothe_memory = resolved_memory  # type: ignore[attr-defined]
@@ -173,5 +192,8 @@ def create_soothe_agent(
     agent.soothe_goal_engine = goal_engine  # type: ignore[attr-defined]
     agent.soothe_config = config  # type: ignore[attr-defined]
     agent.soothe_subagents = all_subagents  # type: ignore[attr-defined]
+
+    total_ms = (time.perf_counter() - create_start) * 1000
+    logger.info("Soothe agent created in %.1fms", total_ms)
 
     return agent

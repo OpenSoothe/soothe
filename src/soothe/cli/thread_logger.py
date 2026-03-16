@@ -42,15 +42,21 @@ class ThreadLogger:
         self,
         thread_dir: str | None = None,
         thread_id: str | None = None,
+        retention_days: int = 100,
+        max_size_mb: int = 100,
     ) -> None:
         """Initialize the thread logger.
 
         Args:
             thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``.
             thread_id: Thread ID for the log file name.
+            retention_days: Days to retain thread logs before cleanup.
+            max_size_mb: Maximum total size for thread logs (not enforced yet).
         """
         self._thread_dir = Path(thread_dir or Path(SOOTHE_HOME) / "threads").expanduser()
         self._thread_id = thread_id or "default"
+        self._retention_days = retention_days
+        self._max_size_mb = max_size_mb
         self._initialized = False
 
     @property
@@ -226,6 +232,35 @@ class ThreadLogger:
                 self._initialized = True
             except OSError:
                 pass
+
+    def cleanup_old_threads(self) -> int:
+        """Delete thread files older than retention_days.
+
+        Returns:
+            Number of threads deleted.
+        """
+        from datetime import timedelta
+
+        cutoff = datetime.now(UTC) - timedelta(days=self._retention_days)
+        deleted = 0
+
+        try:
+            self._ensure_dir()
+            for thread_file in self._thread_dir.glob("*.jsonl"):
+                try:
+                    # Check file modification time
+                    mtime = datetime.fromtimestamp(thread_file.stat().st_mtime, tz=UTC)
+                    if mtime < cutoff:
+                        thread_file.unlink()
+                        deleted += 1
+                        logger.debug("Deleted old thread log: %s", thread_file.name)
+                except Exception:
+                    logger.debug("Failed to process thread file %s", thread_file, exc_info=True)
+                    continue
+        except Exception:
+            logger.warning("Thread cleanup failed", exc_info=True)
+
+        return deleted
 
 
 # ---------------------------------------------------------------------------

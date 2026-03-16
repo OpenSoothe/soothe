@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from soothe.config import SootheConfig
 from soothe.protocols.context import ContextEntry, ContextProjection, ContextProtocol
-from soothe.protocols.planner import Plan, PlanContext, PlannerProtocol, StepResult
+from soothe.protocols.planner import Plan, PlanContext, PlannerProtocol, PlanStep, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext, PolicyProtocol
 
 if TYPE_CHECKING:
@@ -111,24 +111,56 @@ class SootheRunner:
 
     def __init__(self, config: SootheConfig | None = None) -> None:
         """Initialize the runner with optional config."""
+        import time
+
         from soothe.core.agent import create_soothe_agent
+        from soothe.core.query_classifier import QueryClassifier
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
 
+        init_start = time.perf_counter()
+
         self._config = config or SootheConfig()
+
+        # Initialize query classifier for performance optimization
+        if self._config.performance.enabled and self._config.performance.complexity_detection:
+            self._classifier = QueryClassifier(
+                trivial_word_threshold=self._config.performance.thresholds.trivial_words,
+                simple_word_threshold=self._config.performance.thresholds.simple_words,
+                medium_word_threshold=self._config.performance.thresholds.medium_words,
+            )
+            logger.debug("Query classifier initialized")
+        else:
+            self._classifier = None
+
+        checkpointer_start = time.perf_counter()
         self._checkpointer = resolve_checkpointer(self._config)
+        checkpointer_ms = (time.perf_counter() - checkpointer_start) * 1000
+        logger.debug("Checkpointer resolved in %.1fms", checkpointer_ms)
+
+        agent_start = time.perf_counter()
         self._agent: CompiledStateGraph = create_soothe_agent(
             self._config,
             checkpointer=self._checkpointer,
         )
+        agent_ms = (time.perf_counter() - agent_start) * 1000
+        logger.info("Agent created in %.1fms", agent_ms)
 
         self._context: ContextProtocol | None = getattr(self._agent, "soothe_context", None)
         self._memory: MemoryProtocol | None = getattr(self._agent, "soothe_memory", None)
         self._planner: PlannerProtocol | None = getattr(self._agent, "soothe_planner", None)
         self._policy: PolicyProtocol | None = getattr(self._agent, "soothe_policy", None)
         self._goal_engine: GoalEngine | None = getattr(self._agent, "soothe_goal_engine", None)
+
+        durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
+        durability_ms = (time.perf_counter() - durability_start) * 1000
+        logger.debug("Durability resolved in %.1fms", durability_ms)
+
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
+
+        total_ms = (time.perf_counter() - init_start) * 1000
+        logger.info("SootheRunner initialized in %.1fms", total_ms)
 
     # -- public helpers -----------------------------------------------------
 
@@ -232,6 +264,135 @@ class SootheRunner:
             await close_method()
         except Exception:
             logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
+
+    # -- query classification helpers (RFC-0008) ----------------------------
+
+    def _classify_query(self, query: str) -> str:
+        """Classify query complexity for adaptive processing.
+
+        Args:
+            query: User input text.
+
+        Returns:
+            Complexity level: "trivial", "simple", "medium", or "complex".
+        """
+        if not self._classifier:
+            # Classifier not enabled, default to medium (safe)
+            return "medium"
+
+        from soothe.core.query_classifier import ComplexityLevel
+
+        level: ComplexityLevel = self._classifier.classify(query)
+        return level
+
+    def _get_template_plan(self, goal: str, complexity: str) -> Plan | None:
+        """Get template plan for trivial/simple queries.
+
+        Args:
+            goal: The user's goal.
+            complexity: Query complexity level.
+
+        Returns:
+            Template plan, or None if no template matches.
+        """
+        import re
+
+        # Trivial: always single-step plan
+        if complexity == "trivial":
+            return Plan(
+                goal=goal,
+                steps=[PlanStep(id="step_1", description=goal, execution_hint="auto")],
+            )
+
+        # Simple: try to match common patterns
+        goal_lower = goal.lower()
+
+        # Search pattern
+        if re.match(r"^(search|find|look up)\s+", goal_lower):
+            return Plan(
+                goal=goal,
+                steps=[
+                    PlanStep(id="step_1", description="Search for information", execution_hint="tool"),
+                    PlanStep(id="step_2", description="Summarize findings", execution_hint="auto"),
+                ],
+            )
+
+        # Analysis pattern
+        if re.match(r"^(analyze|analyse|review|examine|investigate)\s+", goal_lower):
+            return Plan(
+                goal=goal,
+                steps=[
+                    PlanStep(id="step_1", description="Analyze the content", execution_hint="auto"),
+                    PlanStep(id="step_2", description="Provide insights", execution_hint="auto"),
+                ],
+            )
+
+        # Implementation pattern
+        if re.match(r"^(implement|create|build|write|develop)\s+", goal_lower):
+            return Plan(
+                goal=goal,
+                steps=[
+                    PlanStep(id="step_1", description="Understand requirements", execution_hint="auto"),
+                    PlanStep(id="step_2", description="Implement the solution", execution_hint="tool"),
+                    PlanStep(id="step_3", description="Test and validate", execution_hint="tool"),
+                ],
+            )
+
+        # Default simple plan
+        return Plan(
+            goal=goal,
+            steps=[PlanStep(id="step_1", description=goal, execution_hint="auto")],
+        )
+
+    async def _pre_stream_parallel_memory_context(
+        self,
+        user_input: str,
+        complexity: str,
+    ) -> tuple[list[Any], Any | None]:
+        """Run memory and context operations in parallel for medium/complex queries (RFC-0008 Phase 2).
+
+        Args:
+            user_input: User query text.
+            complexity: Query complexity level.
+
+        Returns:
+            Tuple of (memory_items, context_projection).
+        """
+        import asyncio
+
+        if complexity not in ("medium", "complex"):
+            return ([], None)
+
+        tasks = []
+
+        # Memory recall task
+        if self._memory:
+            tasks.append(self._memory.recall(user_input, limit=5))
+        else:
+            tasks.append(asyncio.sleep(0, result=[]))
+
+        # Context projection task
+        if self._context:
+            tasks.append(self._context.project(user_input, token_budget=4000))
+        else:
+            tasks.append(asyncio.sleep(0, result=None))
+
+        # Execute in parallel
+        try:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            memory_items = [] if isinstance(results[0], Exception) else results[0]
+            context_projection = None if isinstance(results[1], Exception) else results[1]
+
+            if isinstance(results[0], Exception):
+                logger.debug("Memory recall failed in parallel execution", exc_info=results[0])
+            if isinstance(results[1], Exception):
+                logger.debug("Context projection failed in parallel execution", exc_info=results[1])
+        except Exception:
+            logger.debug("Parallel execution failed", exc_info=True)
+            return ([], None)
+        else:
+            return memory_items, context_projection
 
     # -- main stream --------------------------------------------------------
 
@@ -682,6 +843,12 @@ class SootheRunner:
         """Run protocol pre-processing before the LangGraph stream."""
         from soothe.protocols.durability import ThreadMetadata
 
+        # Query complexity classification (RFC-0008)
+        complexity = "medium"  # Default to existing behavior
+        if self._config.performance.enabled and self._config.performance.complexity_detection:
+            complexity = self._classify_query(user_input)
+            logger.info("Query classified as: %s (%s)", complexity, user_input[:50])
+
         # Thread management
         requested_thread_id = state.thread_id
         try:
@@ -765,47 +932,98 @@ class SootheRunner:
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
 
-        # Memory recall
-        if self._memory:
-            try:
-                items = await self._memory.recall(user_input, limit=5)
-                state.recalled_memories = items
-                if self._context and items:
-                    for item in items:
-                        await self._context.ingest(
-                            ContextEntry(
-                                source="memory",
-                                content=item.content[:2000],
-                                tags=["recalled_memory", *item.tags],
-                                importance=item.importance,
+        # Memory recall and context projection - CONDITIONAL + PARALLEL (RFC-0008)
+        should_run_memory_context = (
+            not self._config.performance.enabled
+            or not self._config.performance.skip_memory_for_simple
+            or complexity in ("medium", "complex")
+        )
+
+        if should_run_memory_context:
+            # Use parallel execution if enabled
+            if self._config.performance.enabled and self._config.performance.parallel_pre_stream:
+                memory_items, context_projection = await self._pre_stream_parallel_memory_context(
+                    user_input, complexity
+                )
+
+                state.recalled_memories = memory_items
+                state.context_projection = context_projection
+
+                # Ingest memory into context
+                if self._context and memory_items:
+                    for item in memory_items:
+                        try:
+                            await self._context.ingest(
+                                ContextEntry(
+                                    source="memory",
+                                    content=item.content[:2000],
+                                    tags=["recalled_memory", *item.tags],
+                                    importance=item.importance,
+                                )
                             )
+                        except Exception:
+                            logger.debug("Memory ingestion failed", exc_info=True)
+
+                # Emit events
+                if memory_items:
+                    yield _custom(
+                        {
+                            "type": "soothe.memory.recalled",
+                            "count": len(memory_items),
+                            "query": user_input[:100],
+                        }
+                    )
+                if context_projection:
+                    yield _custom(
+                        {
+                            "type": "soothe.context.projected",
+                            "entries": context_projection.total_entries,
+                            "tokens": context_projection.token_count,
+                        }
+                    )
+            else:
+                # Sequential execution (Phase 1 or disabled)
+                # Memory recall
+                if self._memory:
+                    try:
+                        items = await self._memory.recall(user_input, limit=5)
+                        state.recalled_memories = items
+                        if self._context and items:
+                            for item in items:
+                                await self._context.ingest(
+                                    ContextEntry(
+                                        source="memory",
+                                        content=item.content[:2000],
+                                        tags=["recalled_memory", *item.tags],
+                                        importance=item.importance,
+                                    )
+                                )
+                        yield _custom(
+                            {
+                                "type": "soothe.memory.recalled",
+                                "count": len(items),
+                                "query": user_input[:100],
+                            }
                         )
-                yield _custom(
-                    {
-                        "type": "soothe.memory.recalled",
-                        "count": len(items),
-                        "query": user_input[:100],
-                    }
-                )
-            except Exception:
-                logger.debug("Memory recall failed", exc_info=True)
+                    except Exception:
+                        logger.debug("Memory recall failed", exc_info=True)
 
-        # Context projection (after memory recall/ingestion)
-        if self._context:
-            try:
-                projection = await self._context.project(user_input, token_budget=4000)
-                state.context_projection = projection
-                yield _custom(
-                    {
-                        "type": "soothe.context.projected",
-                        "entries": projection.total_entries,
-                        "tokens": projection.token_count,
-                    }
-                )
-            except Exception:
-                logger.debug("Context projection failed", exc_info=True)
+                # Context projection
+                if self._context:
+                    try:
+                        projection = await self._context.project(user_input, token_budget=4000)
+                        state.context_projection = projection
+                        yield _custom(
+                            {
+                                "type": "soothe.context.projected",
+                                "entries": projection.total_entries,
+                                "tokens": projection.token_count,
+                            }
+                        )
+                    except Exception:
+                        logger.debug("Context projection failed", exc_info=True)
 
-        # Plan creation
+        # Plan creation - ADAPTIVE (RFC-0008)
         if self._planner:
             try:
                 capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
@@ -814,7 +1032,19 @@ class SootheRunner:
                     available_capabilities=capabilities,
                     completed_steps=[],
                 )
-                plan = await self._planner.create_plan(user_input, context)
+
+                # Use template for trivial/simple queries
+                if (
+                    self._config.performance.enabled
+                    and self._config.performance.template_planning
+                    and complexity in ("trivial", "simple")
+                ):
+                    plan = self._get_template_plan(user_input, complexity)
+                    logger.info("Using template plan for %s query", complexity)
+                else:
+                    # Fall back to LLM planning
+                    plan = await self._planner.create_plan(user_input, context)
+
                 state.plan = plan
                 self._current_plan = plan
                 yield _custom(

@@ -112,6 +112,8 @@ subagents:
     #   max_generation_attempts: 2
     #   allowed_tool_groups: []
     #   allowed_mcp_servers: []
+    #   cleanup_old_agents_days: 30
+    #   max_generated_agents: 100
 
 # =============================================================================
 # Tools
@@ -165,11 +167,11 @@ memory: []
 
 context_backend: keyword
 # context_persist_dir: ~/.soothe/context
-# context_persist_backend: json
+context_persist_backend: rocksdb
 
 memory_backend: keyword
 # memory_persist_path: ~/.soothe/memory
-# memory_persist_backend: json
+memory_persist_backend: rocksdb
 
 # Planner routing: auto | always_direct | always_planner | always_claude
 planner_routing: auto
@@ -180,11 +182,33 @@ autonomous_enabled_by_default: false
 autonomous_max_iterations: 10
 autonomous_max_retries: 2
 
-durability_backend: in_memory
-checkpointer_backend: memory
-# checkpointer_sqlite_path: ~/.soothe/checkpoints.sqlite
-# checkpointer_postgres_dsn: postgresql://user:pass@localhost:5432/soothe
+# =============================================================================
+# Performance Optimization (RFC-0008)
+# =============================================================================
+
+performance:
+  enabled: true
+  complexity_detection: true
+  skip_memory_for_simple: true
+  skip_context_for_simple: true
+  template_planning: true
+  parallel_pre_stream: true
+  log_timing: false
+  slow_query_threshold_ms: 3000
+  thresholds:
+    trivial_words: 5
+    simple_words: 15
+    medium_words: 30
+
+durability_backend: rocksdb
+checkpointer_backend: postgres
+checkpointer_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 # durability_metadata_path: ~/.soothe/durability/threads.json
+
+# Thread logging configuration
+# thread_log_dir: ~/.soothe/threads
+thread_log_retention_days: 30
+thread_log_max_size_mb: 100
 
 concurrency:
   max_parallel_subagents: 1

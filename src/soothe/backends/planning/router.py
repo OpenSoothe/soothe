@@ -131,14 +131,21 @@ class AutoPlanner:
         return await planner.reflect(plan, step_results)
 
     async def _route(self, goal: str) -> Any:
-        """Determine which planner to use based on goal complexity."""
+        """Determine which planner to use - heuristics only (RFC-0008).
+
+        Note: LLM classification removed for performance (saves 500-1000ms).
+        Heuristics are sufficient for routing decisions.
+        """
         goal_lower = goal.lower()
 
+        # Explicit Claude request
         if any(kw in goal_lower for kw in _EXPLICIT_CLAUDE_KEYWORDS) and self._claude:
             logger.info("AutoPlanner: explicit Claude request")
             return self._claude
 
+        # Heuristic classification (no LLM call)
         level = self._heuristic_classify(goal)
+
         if level == "complex":
             return self._claude or self._subagent or self._direct
         if level == "medium":
@@ -146,15 +153,8 @@ class AutoPlanner:
         if level == "simple":
             return self._direct or self._subagent
 
-        if self._fast_model:
-            level = await self._llm_classify(goal)
-            if level == "complex":
-                return self._claude or self._subagent or self._direct
-            if level == "medium":
-                return self._subagent or self._direct
-            return self._direct or self._subagent
-
-        return self._subagent or self._direct
+        # Default to DirectPlanner for ambiguous cases (no LLM classification)
+        return self._direct or self._subagent
 
     def _heuristic_classify(self, goal: str) -> str | None:
         """Classify goal complexity using heuristics.

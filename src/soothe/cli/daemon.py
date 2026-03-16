@@ -18,15 +18,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.cli.thread_logger import ThreadLogger
 from soothe.cli.tui_shared import extract_text_from_ai_message
+from soothe.config import SOOTHE_HOME, SootheConfig
 
 logger = logging.getLogger(__name__)
 
 _SOCKET_FILENAME = "soothe.sock"
 _PID_FILENAME = "soothe.pid"
 _STREAM_CHUNK_LENGTH = 3
+_MSG_PAIR_LENGTH = 2
 
 
 def _soothe_dir() -> Path:
@@ -136,6 +137,7 @@ class SootheDaemon:
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._cleanup_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
 
     # -- lifecycle ----------------------------------------------------------
@@ -158,6 +160,9 @@ class SootheDaemon:
         self._running = True
         _write_pid()
         logger.info("Soothe daemon listening on %s", sock)
+
+        # Schedule periodic cleanup task
+        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
 
@@ -182,7 +187,7 @@ class SootheDaemon:
         # Signal handlers only work on the main thread; skip when embedded.
         try:
             for sig in (signal.SIGTERM, signal.SIGINT):
-                loop.add_signal_handler(sig, self._thread_stop.set)
+                loop.add_signal_handler(sig, self.request_stop)
         except RuntimeError:
             logger.debug("Cannot set signal handlers (not main thread)")
 
@@ -192,6 +197,18 @@ class SootheDaemon:
         finally:
             input_task.cancel()
             await self.stop()
+
+    async def _periodic_cleanup(self) -> None:
+        """Run cleanup every 24 hours."""
+        while self._running:
+            await asyncio.sleep(24 * 3600)  # 24 hours
+            if self._thread_logger:
+                try:
+                    deleted = self._thread_logger.cleanup_old_threads()
+                    if deleted > 0:
+                        logger.info("Cleaned up %d old thread logs", deleted)
+                except Exception:
+                    logger.warning("Periodic cleanup failed", exc_info=True)
 
     async def stop(self) -> None:
         """Shut down the daemon gracefully."""
@@ -323,7 +340,6 @@ class SootheDaemon:
         from io import StringIO
 
         from rich.console import Console
-        from rich.text import Text
 
         from soothe.cli.commands import handle_slash_command
 
@@ -331,14 +347,14 @@ class SootheDaemon:
         output = StringIO()
         console = Console(file=output, force_terminal=True, width=100)
 
-        # Execute the command
-        should_exit = handle_slash_command(
+        # Execute the command (now async)
+        should_exit = await handle_slash_command(
             cmd,
             self._runner,
             console,
-            current_plan=None,  # TODO: track plan state in daemon
+            current_plan=None,  # Future: track plan state in daemon
             thread_logger=self._thread_logger,
-            input_history=None,  # TODO: track input history in daemon
+            input_history=None,  # Future: track input history in daemon
         )
 
         # Send the response back to clients
@@ -366,7 +382,7 @@ class SootheDaemon:
         """Stream a query through SootheRunner and broadcast events."""
         thread_id = self._runner.current_thread_id or ""
 
-        # Update session logger for current thread
+        # Update thread logger for current thread
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
             self._thread_logger = ThreadLogger(thread_id=thread_id)
 
@@ -389,14 +405,14 @@ class SootheDaemon:
                     continue
                 namespace, mode, data = chunk
 
-                # Log events to session
+                # Log events to thread log
                 self._thread_logger.log(tuple(namespace), mode, data)
 
                 # Extract assistant text for conversation logging
-                if not namespace and mode == "messages":
-                    if isinstance(data, (tuple, list)) and len(data) == 2:
-                        msg, _metadata = data
-                        full_response.extend(extract_text_from_ai_message(msg))
+                is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
+                if not namespace and mode == "messages" and is_msg_pair:
+                    msg, _metadata = data
+                    full_response.extend(extract_text_from_ai_message(msg))
 
                 event_msg = {
                     "type": "event",
@@ -458,12 +474,17 @@ class SootheDaemon:
         return True
 
     @staticmethod
-    def stop_running() -> bool:
-        """Send SIGTERM to the running daemon.
+    def stop_running(timeout: float = 5.0) -> bool:
+        """Send SIGTERM to the running daemon and wait for it to stop.
+
+        Args:
+            timeout: Maximum seconds to wait for daemon to stop.
 
         Returns:
-            True if a signal was sent, False if no daemon found.
+            True if a signal was sent and daemon stopped, False if no daemon found.
         """
+        import time
+
         pf = pid_path()
         if not pf.exists():
             return False
@@ -473,8 +494,23 @@ class SootheDaemon:
         except (ValueError, ProcessLookupError, PermissionError):
             _cleanup_pid()
             return False
-        else:
-            return True
+
+        # Wait for the daemon to actually stop
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                os.kill(pid, 0)  # Check if process is still alive
+                time.sleep(0.1)
+            except ProcessLookupError:
+                # Process has terminated
+                return True
+            except PermissionError:
+                # Process might be in the middle of shutting down
+                time.sleep(0.1)
+
+        # Timeout reached - process might still be running
+        logger.warning("Daemon did not stop within %.1f seconds", timeout)
+        return True
 
 
 # ---------------------------------------------------------------------------

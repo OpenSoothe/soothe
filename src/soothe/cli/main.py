@@ -14,6 +14,8 @@ import typer
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 
+logger = logging.getLogger(__name__)
+
 app = typer.Typer(
     name="soothe",
     help="Multi-agent harness built on deepagents and langchain/langgraph.",
@@ -79,10 +81,59 @@ def migrate_sessions_to_threads() -> None:
             typer.echo(f"Migrated {sessions_dir} -> {threads_dir}")
         except Exception as e:
             # Log the error but don't fail - the user can manually move if needed
-            logging.getLogger(__name__).warning(f"Failed to migrate sessions/ to threads/: {e}")
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to migrate sessions/ to threads/: %s", e)
+
+
+def migrate_rocksdb_to_data_subfolder() -> None:
+    """Migrate RocksDB data files to data/ subfolders.
+
+    This is a one-time migration to reorganize RocksDB storage structure.
+    Moves existing RocksDB files from component root directories to data/ subfolders:
+    - durability/ -> durability/data/
+    - context/ -> context/data/
+    - memory/ -> memory/data/
+    """
+    home = Path(SOOTHE_HOME).expanduser()
+
+    for component in ["durability", "context", "memory"]:
+        component_dir = home / component
+        data_dir = component_dir / "data"
+
+        # Skip if data/ already exists (already migrated or fresh install)
+        if data_dir.exists():
+            continue
+
+        # Skip if component directory doesn't exist
+        if not component_dir.exists():
+            continue
+
+        # Check for RocksDB files (*.db files, LOG, LOCK, OPTIONS*, etc.)
+        rocksdb_files = []
+        for pattern in ["*.db", "LOG", "LOCK", "OPTIONS*", "CURRENT", "IDENTITY", "MANIFEST-*"]:
+            rocksdb_files.extend(component_dir.glob(pattern))
+
+        # Skip if no RocksDB files found
+        if not rocksdb_files:
+            continue
+
+        # Perform migration
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            for file_path in rocksdb_files:
+                dest = data_dir / file_path.name
+                file_path.rename(dest)
+            logger = logging.getLogger(__name__)
+            logger.info("Migrated %d RocksDB files from %s/ to %s/data/", len(rocksdb_files), component, component)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to migrate %s to data/ subfolder: %s", component, e)
 
 
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+
+# Config cache for performance
+_config_cache: dict[str, SootheConfig] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -138,10 +189,12 @@ def list_subagents(
 
 
 def _load_config(config_path: str | None) -> SootheConfig:
-    """Load SootheConfig from a file path or defaults.
+    """Load SootheConfig from a file path or defaults with caching.
 
     When no ``config_path`` is provided, automatically checks
     ``~/.soothe/config/config.yml`` and loads it if present.
+
+    Uses an in-memory cache to avoid re-parsing config files.
 
     Args:
         config_path: Path to a YAML/JSON config file, or ``None`` for defaults.
@@ -149,11 +202,28 @@ def _load_config(config_path: str | None) -> SootheConfig:
     Returns:
         A ``SootheConfig`` instance.
     """
+    import time
+
+    # Determine the actual path to use
     if not config_path and _DEFAULT_CONFIG_PATH.is_file():
         config_path = str(_DEFAULT_CONFIG_PATH)
 
+    # Use "default" as cache key when no path is provided
+    cache_key = config_path or "default"
+
+    # Check cache first
+    if cache_key in _config_cache:
+        logger.debug("Config loaded from cache: %s", cache_key)
+        return _config_cache[cache_key]
+
+    load_start = time.perf_counter()
+
     if not config_path:
-        return SootheConfig()
+        config = SootheConfig()
+        _config_cache[cache_key] = config
+        elapsed_ms = (time.perf_counter() - load_start) * 1000
+        logger.debug("Created default config in %.1fms", elapsed_ms)
+        return config
 
     path = Path(config_path)
     with path.open() as f:
@@ -174,7 +244,13 @@ def _load_config(config_path: str | None) -> SootheConfig:
             typer.echo("Error: Unsupported config format. Use .yaml, .yml, or .json", err=True)
             sys.exit(1)
 
-    return SootheConfig(**config_data)
+    config = SootheConfig(**config_data)
+    _config_cache[cache_key] = config
+
+    elapsed_ms = (time.perf_counter() - load_start) * 1000
+    logger.info("Loaded config from '%s' in %.1fms", config_path, elapsed_ms)
+
+    return config
 
 
 # ---------------------------------------------------------------------------
@@ -222,12 +298,28 @@ def run(
     ] = None,
 ) -> None:
     """Run the Soothe agent with a prompt or in interactive TUI mode."""
+    import time
+
+    startup_start = time.perf_counter()
+
     try:
         cfg = _load_config(config)
         if progress_verbosity is not None:
             cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
         setup_logging(cfg)
         migrate_sessions_to_threads()
+        migrate_rocksdb_to_data_subfolder()
+
+        # Check PostgreSQL availability if checkpointer is postgres
+        if cfg.checkpointer_backend == "postgres":
+            if not _check_postgres_available():
+                logger.warning(
+                    "PostgreSQL checkpointer configured but server not responding at localhost:5432. "
+                    "Start pgvector: docker-compose up -d"
+                )
+
+        startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
+        logger.info("Startup completed in %.1fms", startup_elapsed_ms)
 
         if prompt or no_tui:
             _run_headless(
@@ -247,6 +339,20 @@ def run(
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
         sys.exit(1)
+
+
+def _check_postgres_available() -> bool:
+    """Check if PostgreSQL is running on localhost:5432."""
+    import socket
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex(("localhost", 5432))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
 
 
 def _run_tui(
@@ -274,7 +380,213 @@ def _run_headless(
     autonomous: bool = False,
     max_iterations: int | None = None,
 ) -> None:
-    """Run a single prompt with streaming output and progress events."""
+    """Run a single prompt with streaming output and progress events.
+
+    Connects to running daemon if available to avoid RocksDB lock conflicts.
+    Falls back to standalone mode if no daemon is running.
+    """
+    import asyncio
+
+    from soothe.cli.daemon import SootheDaemon
+
+    # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
+    if SootheDaemon.is_running():
+        _run_headless_via_daemon(
+            cfg,
+            prompt,
+            thread_id=thread_id,
+            output_format=output_format,
+            autonomous=autonomous,
+            max_iterations=max_iterations,
+        )
+    else:
+        _run_headless_standalone(
+            cfg,
+            prompt,
+            thread_id=thread_id,
+            output_format=output_format,
+            autonomous=autonomous,
+            max_iterations=max_iterations,
+        )
+
+
+def _run_headless_via_daemon(
+    cfg: SootheConfig,
+    prompt: str,
+    *,
+    thread_id: str | None = None,
+    output_format: str = "text",
+    autonomous: bool = False,
+    max_iterations: int | None = None,
+) -> None:
+    """Run a single prompt by connecting to a running daemon."""
+    import asyncio
+
+    from soothe.cli.daemon import DaemonClient
+    from soothe.cli.progress_verbosity import classify_custom_event, should_show
+    from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
+
+    async def _stream() -> int:
+        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+
+        client = DaemonClient()
+        exit_code = 0
+
+        try:
+            await client.connect()
+
+            # Send the input
+            await client.send_input(
+                prompt,
+                autonomous=autonomous,
+                max_iterations=max_iterations,
+            )
+
+            # Stream events
+            full_response: list[str] = []
+            seen_message_ids: set[str] = set()
+            name_map: dict[str, str] = {}
+            has_error = False
+            verbosity = cfg.progress_verbosity
+            query_started = False  # Track if we've seen the query start running
+
+            while True:
+                event = await client.read_event()
+                if not event:
+                    break
+
+                event_type = event.get("type", "")
+
+                # Handle status changes
+                if event_type == "status":
+                    state = event.get("state", "")
+                    if state == "running":
+                        query_started = True
+                    elif state == "idle" and query_started:
+                        # Query completed (only break after query has started)
+                        break
+                    continue
+
+                # Handle events
+                if event_type != "event":
+                    continue
+
+                namespace = tuple(event.get("namespace", []))
+                mode = event.get("mode", "")
+                data = event.get("data")
+
+                if output_format == "jsonl":
+                    sys.stdout.write(
+                        json.dumps({"namespace": list(namespace), "mode": mode, "data": data}, default=str) + "\n"
+                    )
+                    sys.stdout.flush()
+                    continue
+
+                if mode == "custom" and isinstance(data, dict):
+                    category = classify_custom_event(namespace, data)
+                    if should_show(category, verbosity):
+                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                        _render_progress_event(data, prefix=prefix)
+                    if category == "error":
+                        has_error = True
+
+                if mode == "messages":
+                    if not isinstance(data, (list, tuple)) or len(data) != 2:
+                        continue
+                    msg_data, metadata = data
+                    is_main = not namespace
+                    if metadata and metadata.get("lc_source") == "summarization":
+                        continue
+
+                    # Reconstruct message object from serialized data
+                    msg_type = msg_data.get("type") if isinstance(msg_data, dict) else None
+
+                    # Handle AI messages (both AIMessage and AIMessageChunk)
+                    if msg_type in ("ai", "AIMessage", "AIMessageChunk"):
+                        msg_id = msg_data.get("id", "")
+
+                        # Handle both content_blocks format and simple content format
+                        content_blocks = msg_data.get("content_blocks", [])
+                        content = msg_data.get("content", "")
+
+                        if content_blocks and isinstance(content_blocks, list):
+                            # Format 1: content_blocks array
+                            update_name_map_from_tool_calls({"content_blocks": content_blocks}, name_map)
+
+                            if msg_id:
+                                if msg_id in seen_message_ids:
+                                    continue
+                                seen_message_ids.add(msg_id)
+
+                            for block in content_blocks:
+                                if not isinstance(block, dict):
+                                    continue
+                                btype = block.get("type")
+                                if btype == "text":
+                                    text = block.get("text", "")
+                                    if is_main and text and should_show("assistant_text", verbosity):
+                                        sys.stdout.write(text)
+                                        sys.stdout.flush()
+                                        full_response.append(text)
+                                elif btype in ("tool_call", "tool_call_chunk") and should_show(
+                                    "tool_activity", verbosity
+                                ):
+                                    name = block.get("name", "")
+                                    if name:
+                                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                                        if prefix:
+                                            sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
+                                        else:
+                                            sys.stderr.write(f"[tool] Calling: {name}\n")
+                                        sys.stderr.flush()
+
+                        elif content and isinstance(content, str):
+                            # Format 2: simple content string (from daemon serialization)
+                            if is_main and should_show("assistant_text", verbosity):
+                                sys.stdout.write(content)
+                                sys.stdout.flush()
+                                full_response.append(content)
+
+                    elif msg_type in ("tool", "ToolMessage") and should_show("tool_activity", verbosity):
+                        tool_name = msg_data.get("name", "tool")
+                        content = msg_data.get("content", "")
+                        if isinstance(content, str):
+                            brief = content.replace("\n", " ")[:120]
+                        else:
+                            brief = str(content)[:120]
+                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                        if prefix:
+                            sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
+                        else:
+                            sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
+                        sys.stderr.flush()
+
+            if full_response:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+            return 1 if has_error else 0
+
+        except Exception as e:
+            logger.exception("Failed to run via daemon")
+            typer.echo(f"Error: {e}", err=True)
+            return 1
+        finally:
+            await client.close()
+
+    exit_code = asyncio.run(_stream())
+    sys.exit(exit_code)
+
+
+def _run_headless_standalone(
+    cfg: SootheConfig,
+    prompt: str,
+    *,
+    thread_id: str | None = None,
+    output_format: str = "text",
+    autonomous: bool = False,
+    max_iterations: int | None = None,
+) -> None:
+    """Run a single prompt in standalone mode (no daemon)."""
     import asyncio
 
     from soothe.cli.progress_verbosity import classify_custom_event, should_show
@@ -646,12 +958,16 @@ def server_start(
         if config:
             cmd.extend(["--config", config])
         # Command is constructed from trusted sources (sys.executable, internal module)
-        subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        # Redirect stderr to the log file for debugging
+        log_file = Path(SOOTHE_HOME) / "logs" / "daemon.stderr"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with log_file.open("a") as stderr_file:
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=stderr_file,
+                start_new_session=True,
+            )
         typer.echo("Soothe daemon started in background.")
 
 
@@ -701,15 +1017,69 @@ def thread_list(
     """List all agent threads."""
     import asyncio
 
+    from soothe.cli.daemon import SootheDaemon
     from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
+
+    # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
+    if SootheDaemon.is_running():
+        _thread_list_via_daemon(cfg, status_filter=status)
+    else:
+        _thread_list_standalone(cfg, status_filter=status)
+
+
+def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = None) -> None:
+    """List threads by connecting to a running daemon."""
+    import asyncio
+
+    from soothe.cli.daemon import DaemonClient
+
+    async def _list() -> None:
+        client = DaemonClient()
+        try:
+            await client.connect()
+            await client.send_command("/thread list")
+            # Read command response
+            while True:
+                event = await client.read_event()
+                if not event:
+                    break
+                event_type = event.get("type", "")
+                if event_type == "command_response":
+                    content = event.get("content", "")
+                    if content.strip():
+                        # Filter by status if needed
+                        if status_filter:
+                            lines = content.split("\n")
+                            for line in lines:
+                                if status_filter in line or "ID" in line or "──" in line:
+                                    typer.echo(line)
+                        else:
+                            typer.echo(content.strip())
+                    break
+                elif event_type == "status":
+                    state = event.get("state", "")
+                    if state in ("idle", "stopped"):
+                        break
+        finally:
+            await client.close()
+
+    asyncio.run(_list())
+
+
+def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = None) -> None:
+    """List threads in standalone mode (no daemon)."""
+    import asyncio
+
+    from soothe.core.runner import SootheRunner
+
     runner = SootheRunner(cfg)
 
     async def _list() -> None:
         threads = await runner.list_threads()
-        if status:
-            threads = [t for t in threads if t.get("status") == status]
+        if status_filter:
+            threads = [t for t in threads if t.get("status") == status_filter]
         if not threads:
             typer.echo("No threads.")
             return
