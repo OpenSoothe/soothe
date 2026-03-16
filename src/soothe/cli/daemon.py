@@ -264,7 +264,18 @@ class SootheDaemon:
         if msg_type == "input":
             text = msg.get("text", "").strip()
             if text:
-                await self._current_input_queue.put({"type": "input", "text": text})
+                max_iterations = msg.get("max_iterations")
+                parsed_max: int | None = (
+                    max_iterations if isinstance(max_iterations, int) and max_iterations > 0 else None
+                )
+                await self._current_input_queue.put(
+                    {
+                        "type": "input",
+                        "text": text,
+                        "autonomous": bool(msg.get("autonomous", False)),
+                        "max_iterations": parsed_max,
+                    }
+                )
         elif msg_type == "command":
             cmd = msg.get("cmd", "")
             await self._current_input_queue.put({"type": "command", "cmd": cmd})
@@ -293,14 +304,29 @@ class SootheDaemon:
                 await self._broadcast({"type": "event", "data": {"type": "soothe.command", "cmd": cmd}})
             elif msg_type == "input":
                 text = msg["text"]
-                await self._run_query(text)
+                await self._run_query(
+                    text,
+                    autonomous=bool(msg.get("autonomous", False)),
+                    max_iterations=msg.get("max_iterations"),
+                )
 
-    async def _run_query(self, text: str) -> None:
+    async def _run_query(
+        self,
+        text: str,
+        *,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+    ) -> None:
         """Stream a query through SootheRunner and broadcast events."""
         await self._broadcast({"type": "status", "state": "running", "thread_id": self._runner.current_thread_id or ""})
 
         try:
-            async for chunk in self._runner.astream(text, thread_id=self._runner.current_thread_id):
+            stream_kwargs: dict[str, Any] = {"thread_id": self._runner.current_thread_id}
+            if autonomous:
+                stream_kwargs["autonomous"] = True
+                if max_iterations is not None:
+                    stream_kwargs["max_iterations"] = max_iterations
+            async for chunk in self._runner.astream(text, **stream_kwargs):
                 if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
                     continue
                 namespace, mode, data = chunk
@@ -414,9 +440,20 @@ class DaemonClient:
             self._writer = None
             self._reader = None
 
-    async def send_input(self, text: str) -> None:
+    async def send_input(
+        self,
+        text: str,
+        *,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+    ) -> None:
         """Send user input to the daemon."""
-        await self._send({"type": "input", "text": text})
+        payload: dict[str, Any] = {"type": "input", "text": text}
+        if autonomous:
+            payload["autonomous"] = True
+            if max_iterations is not None:
+                payload["max_iterations"] = max_iterations
+        await self._send(payload)
 
     async def send_command(self, cmd: str) -> None:
         """Send a slash command to the daemon."""

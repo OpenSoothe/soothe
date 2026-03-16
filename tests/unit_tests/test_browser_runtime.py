@@ -98,26 +98,32 @@ def test_browser_subagent_config_defaults() -> None:
     assert config.disable_telemetry is True
 
 
-def test_soothe_config_browser_field() -> None:
-    """Test that SootheConfig includes browser configuration."""
+def test_soothe_config_browser_subagent_config() -> None:
+    """Test that SootheConfig includes browser configuration in subagents."""
     config = SootheConfig()
-    assert hasattr(config, "browser")
-    assert isinstance(config.browser, BrowserSubagentConfig)
+    assert "browser" in config.subagents
+    assert config.subagents["browser"].enabled is True
 
 
 def test_browser_config_integration() -> None:
     """Test browser configuration integration with config file."""
     config_dict = {
-        "browser": {
-            "runtime_dir": "/custom/browser",
-            "cleanup_on_exit": False,
-            "disable_extensions": False,
+        "subagents": {
+            "browser": {
+                "enabled": True,
+                "config": {
+                    "runtime_dir": "/custom/browser",
+                    "cleanup_on_exit": False,
+                    "disable_extensions": False,
+                },
+            }
         }
     }
     config = SootheConfig(**config_dict)
-    assert config.browser.runtime_dir == "/custom/browser"
-    assert config.browser.cleanup_on_exit is False
-    assert config.browser.disable_extensions is False
+    browser_config = BrowserSubagentConfig(**config.subagents["browser"].config)
+    assert browser_config.runtime_dir == "/custom/browser"
+    assert browser_config.cleanup_on_exit is False
+    assert browser_config.disable_extensions is False
 
 
 def test_runtime_directory_structure() -> None:

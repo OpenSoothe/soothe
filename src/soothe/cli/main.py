@@ -218,7 +218,7 @@ def run(
                 max_iterations=max_iterations,
             )
         else:
-            _run_tui(cfg, thread_id=thread)
+            _run_tui(cfg, thread_id=thread, config_path=config)
 
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.")
@@ -228,12 +228,17 @@ def run(
         sys.exit(1)
 
 
-def _run_tui(cfg: SootheConfig, *, thread_id: str | None = None) -> None:
+def _run_tui(
+    cfg: SootheConfig,
+    *,
+    thread_id: str | None = None,
+    config_path: str | None = None,
+) -> None:
     """Launch the Textual TUI (with daemon auto-start)."""
     try:
         from soothe.cli.tui_app import run_textual_tui
 
-        run_textual_tui(config=cfg, thread_id=thread_id)
+        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config_path)
     except ImportError:
         typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
         sys.exit(1)
@@ -541,7 +546,7 @@ def attach(
     try:
         from soothe.cli.tui_app import run_textual_tui
 
-        run_textual_tui(config=cfg)
+        run_textual_tui(config=cfg, config_path=config)
     except ImportError:
         typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
         sys.exit(1)
@@ -703,7 +708,7 @@ def thread_resume(
 ) -> None:
     """Resume a thread in the next soothe run."""
     cfg = _load_config(config)
-    _run_tui(cfg, thread_id=thread_id)
+    _run_tui(cfg, thread_id=thread_id, config_path=config)
 
 
 @thread_app.command("archive")

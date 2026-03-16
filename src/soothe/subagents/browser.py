@@ -19,6 +19,8 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.config import BrowserSubagentConfig
+
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
 
@@ -61,13 +63,7 @@ def _build_browser_graph(
     browser_model: str | None = None,
     browser_base_url: str | None = None,
     browser_api_key: str | None = None,
-    disable_extensions: bool = True,
-    disable_cloud: bool = True,
-    disable_telemetry: bool = True,
-    runtime_dir: str | None = None,
-    downloads_dir: str | None = None,
-    user_data_dir: str | None = None,
-    cleanup_on_exit: bool = True,
+    config: BrowserSubagentConfig | None = None,
 ) -> Any:
     """Build and compile the browser LangGraph.
 
@@ -78,28 +74,24 @@ def _build_browser_graph(
         browser_model: Model name for browser-use LLM (e.g. `qwen3.5-flash`).
         browser_base_url: Base URL for the browser-use LLM.
         browser_api_key: API key for the browser-use LLM.
-        disable_extensions: Disable browser extensions (uBlock Origin, cookie handler, ClearURLs).
-        disable_cloud: Disable browser-use cloud service connections.
-        disable_telemetry: Disable anonymous usage telemetry.
-        runtime_dir: Base directory for browser runtime files.
-        downloads_dir: Directory for browser downloads.
-        user_data_dir: Persistent browser profile directory.
-        cleanup_on_exit: Clean up temporary files when session ends.
+        config: Browser subagent configuration object.
 
     Returns:
         Compiled LangGraph runnable.
     """
+    # Use provided config or create default
+    browser_config = config or BrowserSubagentConfig()
 
     async def _run_browser_async(state: dict[str, Any]) -> dict[str, Any]:
         # Disable browser-use privacy-invasive features before importing
-        if disable_extensions:
+        if browser_config.disable_extensions:
             os.environ["BROWSER_USE_DISABLE_EXTENSIONS"] = "1"
 
-        if disable_cloud:
+        if browser_config.disable_cloud:
             os.environ["BROWSER_USE_CLOUD_SYNC"] = "false"
             os.environ.pop("BROWSER_USE_API_KEY", None)
 
-        if disable_telemetry:
+        if browser_config.disable_telemetry:
             os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
         # Ask browser-use to avoid chatty console logging where supported.
@@ -113,10 +105,10 @@ def _build_browser_graph(
             get_browser_user_data_dir,
         )
 
-        browser_runtime_dir = runtime_dir or str(get_browser_runtime_dir())
-        browser_downloads_dir = downloads_dir or str(get_browser_downloads_dir())
-        browser_user_data_dir = user_data_dir or str(get_browser_user_data_dir())
-        browser_extensions_dir = str(get_browser_extensions_dir())
+        browser_runtime_dir = browser_config.runtime_dir or str(get_browser_runtime_dir())
+        browser_downloads_dir = browser_config.downloads_dir or str(get_browser_downloads_dir())
+        browser_user_data_dir = browser_config.user_data_dir or str(get_browser_user_data_dir())
+        browser_extensions_dir = browser_config.extensions_dir or str(get_browser_extensions_dir())
 
         # Set environment variables for browser-use
         os.environ["BROWSER_USE_CONFIG_DIR"] = browser_runtime_dir
@@ -196,7 +188,7 @@ def _build_browser_graph(
                 result = history.final_result() or "Browser task completed (no extracted content)."
 
                 # Clean up temporary files if requested
-                if cleanup_on_exit:
+                if browser_config.cleanup_on_exit:
                     from soothe.utils.runtime import cleanup_browser_temp_files
 
                     cleanup_browser_temp_files()
@@ -254,13 +246,7 @@ def create_browser_subagent(
     headless: bool = True,
     max_steps: int = 100,
     use_vision: bool = True,
-    disable_extensions: bool = True,
-    disable_cloud: bool = True,
-    disable_telemetry: bool = True,
-    runtime_dir: str | None = None,
-    downloads_dir: str | None = None,
-    user_data_dir: str | None = None,
-    cleanup_on_exit: bool = True,
+    config: BrowserSubagentConfig | None = None,
     **kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Browser subagent (CompiledSubAgent with browser-use workflow).
@@ -272,16 +258,8 @@ def create_browser_subagent(
         headless: Run browser in headless mode.
         max_steps: Maximum browser agent steps.
         use_vision: Enable vision/screenshot support.
-        disable_extensions: Disable browser extensions (uBlock Origin, cookie handler, ClearURLs).
-            Privacy-invasive extensions are disabled by default. Set to False to enable them.
-        disable_cloud: Disable browser-use cloud service connections.
-            Cloud features are disabled by default. Set to False to enable cloud sync.
-        disable_telemetry: Disable anonymous usage telemetry.
-            Telemetry is disabled by default. Set to False to enable anonymous usage data collection.
-        runtime_dir: Base directory for browser runtime files. Defaults to SOOTHE_HOME/agents/browser/.
-        downloads_dir: Directory for browser downloads. Defaults to runtime_dir/downloads/.
-        user_data_dir: Persistent browser profile directory. Defaults to runtime_dir/profiles/default/.
-        cleanup_on_exit: Clean up temporary files (downloads, temp profiles) when session ends.
+        config: Browser subagent configuration object with runtime directories,
+            cleanup settings, and feature flags.
         **kwargs: Additional config -- `base_url` and `api_key` are forwarded
             to the browser-use LLM.
 
@@ -303,13 +281,7 @@ def create_browser_subagent(
         browser_model=model_name,
         browser_base_url=browser_base_url,
         browser_api_key=browser_api_key,
-        disable_extensions=disable_extensions,
-        disable_cloud=disable_cloud,
-        disable_telemetry=disable_telemetry,
-        runtime_dir=runtime_dir,
-        downloads_dir=downloads_dir,
-        user_data_dir=user_data_dir,
-        cleanup_on_exit=cleanup_on_exit,
+        config=config,
     )
 
     return {

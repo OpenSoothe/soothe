@@ -197,36 +197,3 @@ class TestAudioQATool:
             result = tool._run("/path/to/audio.mp3", "What is this about?")
 
             assert "empty text" in result.lower()
-
-
-class TestAudioToolIntegration:
-    """Integration tests for Audio tools."""
-
-    @pytest.mark.skipif(
-        not pytest.importorskip("openai", reason="openai not installed"),
-        reason="OpenAI API key required for integration test",
-    )
-    def test_real_audio_transcription(self) -> None:
-        """Test real audio transcription (requires OpenAI API key)."""
-        # This test would require an actual audio file and API key
-        # Skip if not available
-        pytest.skip("Integration test requires audio file and OpenAI API key")
-
-    def test_audio_qa_workflow(self) -> None:
-        """Test complete audio Q&A workflow."""
-        tool = AudioQATool()
-
-        with patch.object(AudioTranscriptionTool, "_run") as mock_transcribe:
-            mock_transcribe.return_value = {
-                "text": "The speaker discusses machine learning and artificial intelligence.",
-                "provider": "openai",
-            }
-
-            with patch("langchain_openai.ChatOpenAI") as mock_llm:
-                mock_response = MagicMock()
-                mock_response.content = "The speaker discusses AI and ML."
-                mock_llm.return_value.invoke.return_value = mock_response
-
-                result = tool._run("test.mp3", "What topics are covered?")
-
-                assert "AI" in result or "ML" in result

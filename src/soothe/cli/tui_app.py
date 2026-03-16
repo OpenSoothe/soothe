@@ -6,8 +6,8 @@ Three-row layout:
   Row 3 -- Chat input with UP/DOWN history navigation
 
 Connects to the Soothe daemon over a Unix domain socket for event
-streaming and user input.  When the daemon is not already running,
-``run_textual_tui`` starts it in-process on a background thread.
+streaming and user input. When the daemon is not already running,
+``run_textual_tui`` starts it as an external process.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import threading
+import subprocess
+import sys
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
@@ -26,6 +27,7 @@ from textual.containers import Container, Vertical
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
+from soothe.cli.commands import parse_autonomous_command
 from soothe.cli.progress_verbosity import classify_custom_event, should_show
 from soothe.cli.tui_shared import (
     TuiState,
@@ -539,10 +541,19 @@ class SootheApp(App):
             if text.strip() == "/detach":
                 await self.action_detach()
                 return
+            parsed_auto = parse_autonomous_command(text.strip())
+            if parsed_auto is not None:
+                max_iterations, prompt = parsed_auto
+                self._log_conversation("[bold green]Assistant:[/bold green] ")
+                await self._client.send_input(prompt, autonomous=True, max_iterations=max_iterations)
+                return
             await self._client.send_command(text.strip())
         else:
             self._log_conversation("[bold green]Assistant:[/bold green] ")
-            await self._client.send_input(text)
+            await self._client.send_input(
+                text,
+                autonomous=self._config.autonomous_enabled_by_default,
+            )
 
     # -- actions ------------------------------------------------------------
 
@@ -564,41 +575,24 @@ class SootheApp(App):
 
 
 # ---------------------------------------------------------------------------
-# In-process daemon thread
+# Daemon process bootstrap
 # ---------------------------------------------------------------------------
 
-_daemon_thread: threading.Thread | None = None
-_daemon_instance: SootheDaemon | None = None
 
-
-def _start_daemon_in_background(config: SootheConfig) -> None:
-    """Start the daemon on a background thread if not already running."""
-    global _daemon_thread, _daemon_instance
-
+def _start_daemon_in_background(_config: SootheConfig, *, config_path: str | None = None) -> None:
+    """Start daemon as an external process when not already running."""
     if SootheDaemon.is_running():
         return
-    if _daemon_thread is not None and _daemon_thread.is_alive():
-        return
 
-    _daemon_instance = SootheDaemon(config)
-
-    def _run() -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(_daemon_instance.start())
-            loop.run_until_complete(_daemon_instance.serve_forever())
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            pass
-        except Exception:
-            logger.exception("Daemon thread error")
-        finally:
-            with contextlib.suppress(Exception):
-                loop.run_until_complete(_daemon_instance.stop())
-            loop.close()
-
-    _daemon_thread = threading.Thread(target=_run, daemon=True, name="soothe-daemon")
-    _daemon_thread.start()
+    cmd = [sys.executable, "-m", "soothe.cli.daemon"]
+    if config_path:
+        cmd.extend(["--config", config_path])
+    subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
     import time
 
@@ -609,14 +603,8 @@ def _start_daemon_in_background(config: SootheConfig) -> None:
 
 
 def _stop_background_daemon() -> None:
-    """Stop the in-process daemon if we started one."""
-    global _daemon_thread, _daemon_instance
-    if _daemon_instance is not None:
-        _daemon_instance.request_stop()
-        _daemon_instance = None
-    if _daemon_thread is not None:
-        _daemon_thread.join(timeout=5)
-        _daemon_thread = None
+    """No-op: daemon lifecycle is externally managed."""
+    return
 
 
 # ---------------------------------------------------------------------------
@@ -628,15 +616,17 @@ def run_textual_tui(
     config: SootheConfig | None = None,
     *,
     thread_id: str | None = None,
+    config_path: str | None = None,
 ) -> None:
     """Launch the Textual-based TUI.
 
     Args:
         config: Soothe configuration.
         thread_id: Optional thread ID to resume.
+        config_path: Optional config file path passed to daemon process.
     """
     cfg = config or SootheConfig()
-    _start_daemon_in_background(cfg)
+    _start_daemon_in_background(cfg, config_path=config_path)
     try:
         app = SootheApp(config=cfg, thread_id=thread_id)
         app.run()

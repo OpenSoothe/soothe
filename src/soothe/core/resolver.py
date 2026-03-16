@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
 from soothe.subagents.claude import create_claude_subagent
 from soothe.subagents.planner import create_planner_subagent
@@ -206,17 +206,7 @@ def resolve_subagents(
             extra_kwargs["config"] = config
         # Pass browser-specific config
         if name == "browser":
-            extra_kwargs.update(
-                {
-                    "runtime_dir": config.browser.runtime_dir,
-                    "downloads_dir": config.browser.downloads_dir,
-                    "user_data_dir": config.browser.user_data_dir,
-                    "cleanup_on_exit": config.browser.cleanup_on_exit,
-                    "disable_extensions": config.browser.disable_extensions,
-                    "disable_cloud": config.browser.disable_cloud,
-                    "disable_telemetry": config.browser.disable_telemetry,
-                }
-            )
+            extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
         spec = factory(model=model_override, **extra_kwargs)
         subagents.append(spec)
 

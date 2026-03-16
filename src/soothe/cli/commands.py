@@ -99,6 +99,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/exit": "Stop daemon and exit",
     "/quit": "Stop daemon and exit",
     "/detach": "Detach TUI; daemon keeps running (reconnect with 'soothe attach')",
+    "/auto <prompt>": "Run prompt in autonomous mode",
+    "/auto <max_iterations> <prompt>": "Run prompt in autonomous mode with iteration limit",
     "/plan": "Show current task plan",
     "/memory": "Show memory stats",
     "/context": "Show context stats",
@@ -113,6 +115,42 @@ SLASH_COMMANDS: dict[str, str] = {
     "/session": "Show current session log path",
     "/help": "Show available commands",
 }
+
+
+def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
+    """Parse `/auto` command payload.
+
+    Args:
+        cmd: Raw slash command, e.g. ``/auto 20 Crawl all skills``.
+
+    Returns:
+        ``(max_iterations, prompt)`` for valid input, otherwise ``None``.
+    """
+    stripped = cmd.strip()
+    if not stripped.startswith("/auto"):
+        return None
+
+    parts = stripped.split(maxsplit=2)
+    if len(parts) == 1:
+        return None
+
+    if len(parts) == 2:
+        single = parts[1].strip()
+        if not single or single.isdigit():
+            return None
+        return (None, single)
+
+    maybe_num = parts[1].strip()
+    if maybe_num.isdigit():
+        prompt = parts[2].strip()
+        if not prompt:
+            return None
+        max_iterations = int(maybe_num)
+        return (max_iterations if max_iterations > 0 else None, prompt)
+
+    # `/auto <prompt...>` with first token non-numeric.
+    prompt = f"{parts[1]} {parts[2]}".strip()
+    return (None, prompt) if prompt else None
 
 
 def handle_slash_command(

@@ -186,6 +186,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
 | [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
 | [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
+| [IG-020](docs/impl/020-detached-daemon-autonomous-capability.md) | Detached Daemon Autonomous Capability |
 
 ## Interaction Rules
 

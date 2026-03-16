@@ -30,6 +30,7 @@ class TestSootheConfig:
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
+        assert cfg.autonomous_enabled_by_default is False
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()

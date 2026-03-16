@@ -134,25 +134,6 @@ class SubagentConfig(BaseModel):
     """Runtime directory for subagent. Defaults to SOOTHE_HOME/agents/<name>/."""
 
 
-class BrowserConfig(BaseModel):
-    """Configuration for browser subagent runtime directories."""
-
-    runtime_dir: str = ""
-    """Base directory for browser runtime files. Defaults to SOOTHE_HOME/agents/browser/."""
-
-    downloads_dir: str = ""
-    """Directory for browser downloads. Defaults to runtime_dir/downloads/."""
-
-    user_data_dir: str = ""
-    """Persistent browser profile directory. Defaults to runtime_dir/profiles/."""
-
-    extensions_dir: str = ""
-    """Browser extensions directory. Defaults to runtime_dir/extensions/."""
-
-    cleanup_on_exit: bool = True
-    """Clean up temporary files (downloads, temp profiles) when session ends."""
-
-
 class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server.
 
@@ -345,9 +326,6 @@ class SootheConfig(BaseSettings):
     weaver: WeaverConfig = Field(default_factory=WeaverConfig)
     """Weaver subagent configuration."""
 
-    browser: BrowserSubagentConfig = Field(default_factory=BrowserSubagentConfig)
-    """Browser subagent configuration."""
-
     # --- Protocol config (RFC-0002) ---
 
     context_backend: Literal["keyword", "vector", "none"] = "keyword"
@@ -398,6 +376,9 @@ class SootheConfig(BaseSettings):
     """Metadata/state path for durability backends that persist locally."""
 
     # --- Autonomous iteration (RFC-0007) ---
+
+    autonomous_enabled_by_default: bool = False
+    """Whether new runs should default to autonomous mode unless explicitly overridden."""
 
     autonomous_max_iterations: int = 10
     """Maximum iterations per autonomous session before forcing stop."""

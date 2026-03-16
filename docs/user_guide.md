@@ -1,32 +1,488 @@
 # Soothe User Guide
 
+---
+
+# Part 1: End-User Guide
+
+## Introduction
+
+Soothe is an intelligent AI assistant that can work autonomously on complex tasks. This guide will help you get started and make the most of Soothe's capabilities.
+
 ## Installation
 
-### From Source (recommended for development)
+### Basic Installation
 
-```bash
-git clone <repository-url>
-cd soothe
-make sync          # installs all dependencies via uv
-```
-
-### With pip
+Install Soothe with pip:
 
 ```bash
 pip install soothe
 ```
 
+### Set Your API Key
+
+Soothe needs an API key to access AI models. Set your OpenAI API key:
+
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+```
+
+You can also create a `.env` file in your working directory:
+
+```bash
+OPENAI_API_KEY=sk-your-key-here
+```
+
+### Optional: Install from Source
+
+For the latest development version:
+
+```bash
+git clone <repository-url>
+cd soothe
+make sync
+```
+
+## Basic Usage
+
+### Interactive TUI Mode
+
+Launch the interactive terminal interface:
+
+```bash
+soothe run
+```
+
+This opens a rich terminal UI where you can:
+- See real-time progress as Soothe works
+- View plans and task decomposition
+- Track subagent activity
+- Use slash commands for quick actions
+
+Just type your request and press Enter. Soothe will process it and show you what it's doing.
+
+### Headless Mode
+
+Run a single prompt and exit:
+
+```bash
+soothe run "Research the latest developments in quantum computing"
+```
+
+This is useful for:
+- Quick one-off queries
+- Scripts and automation
+- CI/CD pipelines
+- Background jobs
+
+### Resume a Previous Session
+
+Continue from where you left off:
+
+```bash
+soothe run --thread abc123
+```
+
+Replace `abc123` with your thread ID (shown in previous sessions).
+
+## TUI Interface
+
+### Slash Commands
+
+Type these commands in the interactive prompt:
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show all commands and available subagents |
+| `/auto <prompt>` | Run one prompt in autonomous mode |
+| `/auto <max_iterations> <prompt>` | Run in autonomous mode with custom iteration limit |
+| `/plan` | Show the current task plan |
+| `/memory` | Show memory statistics |
+| `/context` | Show context statistics |
+| `/policy` | Show active policy profile |
+| `/thread list` | List all conversation threads |
+| `/thread resume <id>` | Resume a specific thread |
+| `/thread archive <id>` | Archive a thread |
+| `/config` | Show active configuration |
+| `/session` | Show session log path |
+| `/clear` | Clear the screen |
+| `/exit` or `/quit` | Exit the TUI |
+
+### Routing to Specialized Subagents
+
+Prefix your message with a number to route to a specific subagent:
+
+| Prefix | Subagent | Best For |
+|--------|----------|----------|
+| `1` | Main | General tasks (default) |
+| `2` | Planner | Creating plans for complex goals |
+| `3` | Scout | Quick file searches and code navigation |
+| `4` | Research | Deep web research |
+| `5` | Browser | Web browsing and automation |
+| `6` | Claude | Tasks requiring Claude's strengths |
+| `7` | Skillify | Retrieving relevant skills |
+| `8` | Weaver | Generating specialized agents |
+
+**Examples:**
+
+```
+4 Search for papers on transformer architectures
+5 Open https://example.com and take a screenshot
+2 Create a plan for building a REST API
+```
+
+Route to multiple subagents:
+
+```
+4,5 Find and visit the top 3 AI news sites
+```
+
+### Multi-Line Input
+
+Continue your input on multiple lines by ending with `\`:
+
+```
+soothe> Write a function that \
+...  takes a list of numbers \
+...  and returns the median
+```
+
+### Keyboard Shortcuts
+
+- `Ctrl+C` once: Cancel current task
+- `Ctrl+C` twice: Exit the TUI
+
+## Autonomous Iteration Mode
+
+Soothe can work autonomously on complex tasks that require iterative refinement.
+
+### When to Use Autonomous Mode
+
+Use autonomous mode for tasks that:
+- Require iterative refinement based on results
+- Involve multi-phase research where findings inform next steps
+- Need long-running workflows without manual intervention
+- Decompose into sub-goals that emerge during execution
+
+### How to Use It
+
+Enable autonomous mode with the `--autonomous` flag:
+
+```bash
+# Autonomous iteration with default settings
+soothe run --autonomous "Optimize the simulation parameters"
+
+# With custom iteration limit
+soothe run --autonomous --max-iterations 20 "Research quantum error correction advances"
+
+# In TUI
+/auto Optimize the simulation parameters
+/auto 15 Research and improve model performance
+```
+
+### What Happens
+
+1. Soothe creates a plan for your goal
+2. Executes the plan step-by-step
+3. Reflects on results after each iteration
+4. Adjusts the plan if needed
+5. Continues until the goal is achieved or iteration limit is reached
+
+You'll see progress events:
+- `soothe.iteration.started` - Iteration began
+- `soothe.iteration.completed` - Iteration finished
+- `soothe.goal.created` - New goal created
+- `soothe.goal.completed` - Goal achieved
+- `soothe.goal.failed` - Goal failed
+
+### Configuration
+
+Set defaults in your config:
+
+```yaml
+autonomous_enabled_by_default: false
+autonomous_max_iterations: 10
+autonomous_max_retries: 2
+```
+
+## Thread Management
+
+### What Are Threads?
+
+Threads are conversation sessions. Each thread maintains:
+- Your conversation history
+- Context and accumulated knowledge
+- Memory of important findings
+- Task plans and progress
+
+### Listing Threads
+
+```bash
+soothe thread list
+```
+
+Or in the TUI:
+
+```
+/thread list
+```
+
+### Resuming Threads
+
+Continue a previous conversation:
+
+```bash
+soothe run --thread abc123
+```
+
+Or in TUI:
+
+```
+/thread resume abc123
+```
+
+### Archiving Threads
+
+Clean up old threads:
+
+```bash
+soothe thread archive abc123
+```
+
+Or in TUI:
+
+```
+/thread archive abc123
+```
+
+## Specialized Subagents
+
+### Research Agent (Prefix: 4)
+
+Deep web research using Tavily search. Automatically:
+- Breaks queries into sub-searches
+- Gathers sources
+- Synthesizes findings
+
+**Requires**: `pip install soothe[research]` + `TAVILY_API_KEY`
+
+### Browser Agent (Prefix: 5)
+
+Automated web browsing. Can:
+- Navigate pages
+- Fill forms
+- Click elements
+- Take screenshots
+
+**Requires**: `pip install soothe[browser]`
+
+**Privacy**: Extensions, cloud sync, and telemetry are disabled by default.
+
+### Planner Agent (Prefix: 2)
+
+Creates structured task plans. Best for:
+- Complex multi-step goals
+- Breaking down problems
+- Planning with dependencies
+
+### Scout Agent (Prefix: 3)
+
+Lightweight exploration for:
+- Quick file searches
+- Code navigation
+- Codebase understanding
+
+### Claude Agent (Prefix: 6)
+
+Direct access to Claude. Useful for:
+- Long context reasoning
+- Careful analysis
+
+**Requires**: `pip install soothe[claude]` + `ANTHROPIC_API_KEY`
+
+### Skillify Agent (Prefix: 7)
+
+Skill warehouse and retrieval. Helps discover and apply:
+- Previously learned patterns
+- Reusable workflows
+- Best practices
+
+### Weaver Agent (Prefix: 8)
+
+Agent generation system. Creates specialized agents for specific tasks.
+
+## Examples
+
+### Research Task
+
+```
+You: "Research the latest developments in quantum error correction and summarize the top 5 papers"
+
+Soothe: [Searches databases, reads papers, synthesizes findings]
+        "I've analyzed recent publications. Here are the top 5 papers on quantum error correction..."
+```
+
+### Multi-Step Workflow
+
+```
+You: "Find the top 3 AI news sites, visit each one, and create a summary of today's announcements"
+
+Soothe: [Plans → Searches → Visits → Extracts → Summarizes]
+        "I've visited TechCrunch AI, VentureBeat AI, and AI News. Here's today's summary..."
+```
+
+### Autonomous Operation
+
+```
+You: "Optimize the simulation parameters across the search space"
+
+Soothe: [Creates plan → Runs iterations → Analyzes results → Refines approach]
+        "After 15 iterations, I found the optimal configuration. Performance improved by 23%."
+```
+
+### File Analysis
+
+```
+You: "Analyze the codebase structure and identify the main components"
+
+Soothe: [Explores directories → Reads key files → Builds mental model]
+        "The codebase has three main components: protocols, backends, and tools..."
+```
+
+## Configuration
+
+### Quick Configuration
+
+For basic usage, you only need to set your API key:
+
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+```
+
+### Using a Config File
+
+For more control, create a YAML config file:
+
+```bash
+cp config/config.yml my-config.yml
+# Edit my-config.yml
+soothe run --config my-config.yml
+```
+
+### Essential Settings
+
+In `my-config.yml`, you can customize:
+
+```yaml
+# Model selection
+router:
+  default: "openai:gpt-4o-mini"
+
+# Enable/disable subagents
+subagents:
+  research:
+    enabled: true
+  browser:
+    enabled: true
+  claude:
+    enabled: false
+
+# Progress verbosity
+progress_verbosity: normal  # minimal | normal | detailed | debug
+```
+
+See the [Developer Guide](#part-2-developer-guide) for full configuration details.
+
+## Troubleshooting
+
+### API Key Issues
+
+**Error**: `Could not resolve model openai:gpt-4o-mini`
+
+**Solution**: Set your API key:
+
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+```
+
+### Browser Agent Not Working
+
+**Solution**: Install the browser extra:
+
+```bash
+pip install soothe[browser]
+```
+
+### Research Agent Not Working
+
+**Solution**: Install the research extra and set your Tavily key:
+
+```bash
+pip install soothe[research]
+export TAVILY_API_KEY=tvly-your-key-here
+```
+
+### Debug Mode
+
+Enable verbose logging to see what's happening:
+
+```bash
+export SOOTHE_DEBUG=true
+soothe run
+```
+
+### Getting Help
+
+- Use `/help` in the TUI to see available commands
+- Check the [Developer Guide](#part-2-developer-guide) for advanced configuration
+- Review the [documentation](docs/) for design specifications
+
+---
+
+# Part 2: Developer Guide
+
+## Architecture Overview
+
+Soothe is built on three layers:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Soothe (orchestration framework)                            │
+│  Protocols: Context, Memory, Planner, Policy, Durability,    │
+│             RemoteAgent, Concurrency, VectorStore             │
+│  CLI TUI: SootheRunner, Rich Live, slash commands            │
+│  create_soothe_agent() wires everything together             │
+├──────────────────────────────────────────────────────────────┤
+│  deepagents (agent framework)                                 │
+│  BackendProtocol, AgentMiddleware, SubAgent, Summarization   │
+│  create_deep_agent()                                         │
+├──────────────────────────────────────────────────────────────┤
+│  langchain / langgraph (runtime layer)                       │
+│  BaseChatModel, BaseTool, StateGraph, Checkpointer           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Soothe extends deepagents with seven core protocols:
+- **Context Protocol**: Cognitive context engineering
+- **Memory Protocol**: Cross-thread memory
+- **Planner Protocol**: Plan-driven execution
+- **Policy Protocol**: Least-privilege security
+- **Durability Protocol**: Thread lifecycle management
+- **RemoteAgent Protocol**: Remote agent interop (ACP/A2A)
+- **Concurrency Protocol**: Controlled concurrency
+
+## Installation
+
 ### Optional Extras
 
 Install additional capabilities as needed:
 
-| Extra | Command | What it adds |
-|-------|---------|-------------|
+| Extra | Command | Adds |
+|-------|---------|------|
 | `research` | `pip install soothe[research]` | Tavily web search |
 | `browser` | `pip install soothe[browser]` | Browser automation via browser-use |
 | `claude` | `pip install soothe[claude]` | Claude agent SDK integration |
 | `serper` | `pip install soothe[serper]` | Google Serper search |
-| `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search + page crawler |
+| `wizsearch` | `pip install soothe[wizsearch]` | Multi-engine search + crawler |
 | `jina` | `pip install soothe[jina]` | Jina web reader |
 | `media` | `pip install soothe[media]` | Image generation (DALL-E) |
 | `rocksdb` | `pip install soothe[rocksdb]` | RocksDB persistence backend |
@@ -35,25 +491,22 @@ Install additional capabilities as needed:
 | `ollama` | `pip install soothe[ollama]` | Ollama local LLM provider |
 | `all` | `pip install soothe[all]` | Everything above |
 
-## Configuration
+### Development Setup
 
-Soothe uses two configuration mechanisms: environment variables and a YAML config file.
+```bash
+git clone <repository-url>
+cd soothe
+make sync-dev    # sync with dev dependencies
+make test        # run tests
+make lint        # lint code
+make format      # format code
+```
+
+## Configuration
 
 ### Environment Variables
 
-Copy the example and fill in your API keys:
-
-```bash
-cp config/env.example .env
-```
-
-At minimum, set `OPENAI_API_KEY` (or another LLM provider key):
-
-```bash
-export OPENAI_API_KEY=sk-...
-```
-
-All `SootheConfig` fields can be overridden with `SOOTHE_` prefixed env vars:
+All `SootheConfig` fields can be set with `SOOTHE_` prefixed env vars:
 
 ```bash
 export SOOTHE_DEBUG=true
@@ -61,31 +514,81 @@ export SOOTHE_PLANNER_ROUTING=auto
 export SOOTHE_CONTEXT_BACKEND=keyword
 ```
 
-### YAML Config File
-
-For full control, use a YAML config file:
+Standard provider keys:
 
 ```bash
-cp config/config.yml my-config.yml
-# Edit my-config.yml
-soothe run --config my-config.yml
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export TAVILY_API_KEY=tvly-...
 ```
 
-The YAML file supports `${ENV_VAR}` syntax in provider fields such as `api_key` and `api_base_url`:
+### YAML Config File
+
+Full configuration via YAML:
 
 ```yaml
+# Providers
 providers:
   - name: openai
     provider_type: openai
-    api_base_url: "${OPENAI_BASE_URL}"
+    api_base_url: "${OPENAI_BASE_URL}"  # supports env vars
     api_key: "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o-mini
+      - gpt-4o
+
+# Model router
+router:
+  default: "openai:gpt-4o-mini"
+  think: "openai:o3-mini"
+  fast: "openai:gpt-4o-mini"
+  embedding: "openai:text-embedding-3-small"
+
+# Protocols
+context_backend: keyword
+memory_backend: keyword
+planner_routing: auto
+policy_profile: standard
+
+# Autonomous mode
+autonomous_enabled_by_default: false
+autonomous_max_iterations: 10
+autonomous_max_retries: 2
+
+# Progress verbosity
+progress_verbosity: normal
+
+# Subagents
+subagents:
+  research:
+    enabled: true
+  browser:
+    enabled: true
+  claude:
+    enabled: false
+
+# Tools
+tools:
+  - serper
+  - wizsearch
+  - jina
+  - image
+  - audio
+  - video
+  - tabular
+
+# MCP servers
+mcp_servers:
+  - command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    transport: stdio
 ```
 
-See [config/config.yml](../config/config.yml) for the complete reference with all fields.
+See [config/config.yml](../config/config.yml) for the complete reference.
 
 ### Model Router
 
-The model router maps purpose-based roles to specific models:
+The router maps purpose-based roles to specific models:
 
 | Role | Purpose | Default |
 |------|---------|---------|
@@ -96,404 +599,101 @@ The model router maps purpose-based roles to specific models:
 | `embedding` | Vector operations | Falls back to default |
 | `web_search` | Web search tasks | Falls back to default |
 
-Configure in YAML:
-
-```yaml
-router:
-  default: "openai:gpt-4o-mini"
-  think: "openai:o3-mini"
-  fast: "openai:gpt-4o-mini"
-  embedding: "openai:text-embedding-3-small"
-```
-
-## Running the Agent
-
-### Interactive TUI Mode
-
-Launch the interactive terminal UI:
-
-```bash
-soothe run
-```
-
-This opens a Textual-powered TUI with real-time progress, plan visualization, and slash
-commands. The TUI shows:
-
-- Subagent activity tracking (running/done status)
-- Tool call progress
-- Protocol events (context projection, memory recall, plan creation)
-- Spinner with phase-aware thinking messages
-
-### Headless Mode
-
-Run a single prompt and exit:
-
-```bash
-soothe run "What are the latest developments in quantum computing?"
-```
-
-### With Options
-
-```bash
-# Use a specific config file
-soothe run --config my-config.yml
-
-# Resume a specific thread
-soothe run --thread abc123
-
-# Disable TUI (plain streaming output)
-soothe run --no-tui
-
-# Increase progress visibility (headless or TUI)
-soothe run --progress-verbosity detailed
-soothe run --no-tui --progress-verbosity debug "Analyze the project architecture"
-
-# Attach to running daemon with a per-session verbosity override
-soothe attach --progress-verbosity detailed
-```
-
-Progress verbosity levels:
-
-- `minimal`: assistant text + critical errors only
-- `normal` (default): protocol progress events (`soothe.*`) + iteration/goal events
-- `detailed`: adds subagent custom events + tool call/result activity
-- `debug`: shows all available progress events (including heartbeat/thinking-style events)
-
-Set a default in config:
-
-```yaml
-progress_verbosity: normal   # minimal | normal | detailed | debug
-```
-
 ### Message Surfacing Behavior
 
-Soothe uses a low-noise conversation view and a detailed activity view:
-
-- **ConversationPanel** (TUI): shows user turns and final main-assistant response text.
-- **ActivityPanel** (TUI): shows protocol events, tool calls/results, subagent custom events, and subagent text summaries.
-- **Headless text mode**: prints main-assistant response text to stdout and progress/activity lines to stderr.
-- **Headless JSONL mode**: emits raw stream chunks as JSONL for machine processing.
-
-Verbosity controls what appears in activity/progress surfaces:
-
-- `minimal`: assistant text + errors only
-- `normal`: assistant text + protocol events + errors
-- `detailed`: adds subagent custom events + tool activity
-- `debug`: all categories (including thinking/heartbeat-style events)
-
-Policy checks include profile context in surfaced lines (for example, `allow (profile=standard)`).
-
-### Autonomous Iteration Mode
-
-Soothe supports autonomous multi-iteration execution for complex tasks that require iterative refinement. When enabled, the agent executes a plan, reflects on results, revises the plan, and continues without requiring human input at each step.
-
-#### When to Use Autonomous Mode
-
-Use autonomous mode for tasks that require:
-- Iterative refinement based on results (parameter sweeps, optimization)
-- Multi-phase research where findings inform next steps
-- Long-running workflows where the agent should self-direct
-- Decomposition into sub-goals that emerge during execution
-
-#### Command-Line Usage
-
-Enable autonomous mode with the `--autonomous` flag:
-
-```bash
-# Autonomous iteration with default settings
-soothe run --autonomous "Optimize the simulation parameters across the search space"
-
-# With custom iteration limit
-soothe run --autonomous --max-iterations 20 "Research the latest advances in quantum error correction"
-
-# Combine with other flags
-soothe run --config my-config.yml --autonomous --progress-verbosity detailed "Analyze and improve model performance"
-```
-
-#### How It Works
-
-1. **Goal Creation**: The initial user input creates a primary goal
-2. **Plan Generation**: The planner creates a structured plan
-3. **Iteration Loop**:
-   - Execute the plan (pre-stream → stream → post-stream)
-   - Store an iteration record in context
-   - Reflect on results (via PlannerProtocol)
-   - If revision needed, revise plan and synthesize continuation
-   - If goal complete, move to next goal or exit
-4. **Self-Driven Goals**: The agent can create new sub-goals during execution using the `manage_goals` tool
-
-#### Goal Lifecycle
-
-Goals have the following lifecycle:
-- **Pending**: Created but not yet started
-- **Active**: Currently being worked on
-- **Completed**: Successfully achieved
-- **Failed**: Could not be achieved after retries
-
-The agent can create hierarchical goals (parent/child relationships) and assign priorities. Higher priority goals are executed first.
-
-#### Configuration
-
-Configure autonomous mode in your YAML config:
-
-```yaml
-autonomous_max_iterations: 10    # Max iterations per goal
-autonomous_max_retries: 2        # Max retries before permanent failure
-```
-
-#### Iteration Events
-
-In TUI or detailed verbosity, you'll see:
-- `soothe.iteration.started` - Iteration began for a goal
-- `soothe.iteration.completed` - Iteration finished with outcome
-- `soothe.goal.created` - New goal created
-- `soothe.goal.completed` - Goal achieved
-- `soothe.goal.failed` - Goal failed (with error and retry count)
-
-#### Reflection and Revision Cycle
-
-After each iteration, the planner reflects on:
-- What was accomplished
-- What remains to be done
-- Whether the current plan is still valid
-
-If revision is needed, the planner updates the plan and a continuation prompt is generated for the next iteration. This enables the agent to adapt its approach based on what it learns.
-
-## TUI Interface
-
-### Slash Commands
-
-Type these in the TUI prompt:
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show all commands and subagent selector |
-| `/plan` | Show current task plan tree |
-| `/memory` | Show memory statistics |
-| `/context` | Show context statistics |
-| `/policy` | Show active policy profile |
-| `/thread list` | List all threads |
-| `/thread resume <id>` | Resume a specific thread |
-| `/thread archive <id>` | Archive a thread |
-| `/config` | Show active configuration |
-| `/session` | Show session log path |
-| `/clear` | Clear screen |
-| `/exit` or `/quit` | Exit the TUI |
-
-### Subagent Routing
-
-Prefix your message with a number to route to a specific subagent:
-
-| Prefix | Subagent |
-|--------|----------|
-| `1` | Main (default) |
-| `2` | Planner |
-| `3` | Scout |
-| `4` | Research |
-| `5` | Browser |
-| `6` | Claude |
-| `7` | Skillify |
-| `8` | Weaver |
-
-Examples:
-
-```
-4 Search for papers on transformer architectures
-5 Open https://example.com and take a screenshot
-2 Create a plan for building a REST API
-7 Retrieve skills for data processing
-8 Generate an agent for PDF extraction
-```
-
-Multiple subagents: `4,5 Find and visit the top 3 AI news sites`
-
-### Multi-line Input
-
-End a line with `\` to continue on the next line:
-
-```
-soothe> Write a function that \
-...  takes a list of numbers \
-...  and returns the median
-```
-
-### Keyboard Shortcuts
-
-- `Ctrl+C` once: cancel current task
-- `Ctrl+C` twice: exit the TUI
-
-## Subagents
-
-### Research
-
-Deep web research using Tavily search. Automatically breaks queries into sub-searches,
-gathers sources, and synthesizes findings.
-
-**Requires**: `pip install soothe[research]` + `TAVILY_API_KEY`
-
-### Planner
-
-Creates structured task plans for complex goals. Decomposes problems into steps with
-dependencies. Works with the PlannerProtocol for plan-driven execution.
-
-### Scout
-
-Lightweight exploration agent for quick file searches, code navigation, and codebase
-understanding. Uses deepagents' filesystem tools.
-
-### Browser
-
-Automated web browsing via browser-use. Can navigate pages, fill forms, click elements,
-and take screenshots.
-
-**Requires**: `pip install soothe[browser]`
-
-Privacy-first defaults: extensions, cloud sync, and telemetry are disabled.
-
-For cleaner CLI/TUI output, raw third-party browser-use stdout/stderr noise is suppressed.
-Browser progress still appears through structured subagent activity events (subject to
-`progress_verbosity`).
-
-### Claude
-
-Direct access to Claude via the Anthropic SDK. Useful for tasks that benefit from Claude's
-strengths (long context, careful reasoning).
-
-**Requires**: `pip install soothe[claude]` + `ANTHROPIC_API_KEY`
-
-### Skillify
-
-Skill warehouse and retrieval system. Manages a library of reusable skills (SKILL.md files)
-and retrieves relevant skills based on the current task. Helps the agent discover and apply
-previously learned patterns and workflows.
-
-**Features**:
-- Skill indexing and semantic search
-- Skill retrieval based on task context
-- Integration with the built_in_skills directory
-- Automatic skill discovery from configured paths
-
-**Routing**: Prefix `7` routes to Skillify subagent.
-
-### Weaver
-
-Agent generation and composition system. Dynamically creates specialized agents (subagents)
-for specific tasks by composing tools, prompts, and workflows. Enables rapid creation of
-task-specific agents without manual coding.
-
-**Features**:
-- Generate specialized agents on demand
-- Compose tools and prompts into workflows
-- Reuse patterns across agent instances
-- Integration with Skillify for pattern discovery
-
-**Routing**: Prefix `8` routes to Weaver subagent.
-
-### Enabling/Disabling
-
-In your config YAML:
-
-```yaml
-subagents:
-  research:
-    enabled: true
-  browser:
-    enabled: true     # enable browser
-  claude:
-    enabled: false    # keep disabled
-```
+Soothe separates conversation view from activity view:
+
+- **ConversationPanel (TUI)**: User turns and final responses
+- **ActivityPanel (TUI)**: Protocol events, tool calls, subagent activity
+- **Headless text mode**: Main response to stdout, progress to stderr
+- **Headless JSONL mode**: Raw stream chunks for machine processing
+
+**Verbosity levels**:
+
+- `minimal`: Assistant text + errors only
+- `normal`: Assistant text + protocol events + errors
+- `detailed`: Adds subagent events + tool activity
+- `debug`: All events (including heartbeat/thinking)
 
 ## Protocols
 
-Soothe's core protocols provide capabilities beyond what deepagents offers.
-All protocols are optional and configured via `SootheConfig`.
-
 ### Context Protocol
 
-Accumulates knowledge from tool results, subagent outputs, and agent reflections in an
-unbounded context ledger. Projects relevant subsets into bounded token windows for LLM
-calls and subagent briefings.
+Accumulates knowledge and projects relevant subsets into bounded token windows.
+
+**Backends**:
+- `keyword`: Tag-based matching
+- `vector`: Semantic search
+- `none`: Disabled
+
+**Configuration**:
 
 ```yaml
-context_backend: keyword     # keyword (tag matching) | vector (semantic) | none
+context_backend: keyword
 context_persist_dir: ~/.soothe/context
 ```
 
 ### Memory Protocol
 
-Cross-thread long-term memory. Stores important findings that survive beyond a single
-conversation. Retrieved by keyword or semantic relevance at the start of new threads.
+Cross-thread long-term memory for important findings.
+
+**Backends**:
+- `keyword`: Keyword retrieval
+- `vector`: Semantic retrieval
+- `none`: Disabled
+
+**Configuration**:
 
 ```yaml
-memory_backend: keyword      # keyword | vector (semantic) | none
+memory_backend: keyword
 memory_persist_path: ~/.soothe/memory/
 ```
 
 ### Planner Protocol
 
-Decomposes complex goals into structured plans with steps, dependencies, and status
-tracking. Three tiers:
+Decomposes goals into structured plans with three tiers:
 
-- **DirectPlanner** -- single LLM structured output call (simple tasks).
-- **SubagentPlanner** -- multi-turn planner subagent with filesystem access (medium tasks).
-- **ClaudePlanner** -- Claude CLI for deep planning (complex architecture/design tasks).
+1. **DirectPlanner**: Single LLM call (simple tasks)
+2. **SubagentPlanner**: Multi-turn planner subagent (medium tasks)
+3. **ClaudePlanner**: Claude CLI for deep planning (complex tasks)
 
-The `auto` mode uses a hybrid complexity router: heuristic classification first,
-then a fast LLM call for ambiguous cases. Routes complex problems to Claude,
-medium to SubagentPlanner, and simple to DirectPlanner.
+**Auto routing**: Uses heuristic classification + LLM verification.
+
+**Configuration**:
 
 ```yaml
-planner_routing: auto        # auto | always_direct | always_planner | always_claude
+planner_routing: auto  # auto | always_direct | always_planner | always_claude
 ```
 
 ### Policy Protocol
 
-Enforces least-privilege delegation. Every tool call and subagent spawn passes through
-a policy check. Permissions are structured by category, action, and scope.
+Enforces least-privilege delegation for tools and subagents.
+
+**Profiles**:
+- `standard`: Balanced permissions
+- `readonly`: Read-only operations
+- `privileged`: Elevated permissions
+
+**Configuration**:
 
 ```yaml
-policy_profile: standard     # named profile (standard, readonly, privileged)
+policy_profile: standard
 ```
 
 ### Durability Protocol
 
-Persists and restores agent state. Thread lifecycle management: create, resume, suspend,
-archive. Ensures continuity across crashes and restarts.
+Persists and restores agent state across sessions.
 
-## Thread Management
-
-### CLI Commands
-
-```bash
-# List all threads
-soothe thread list
-
-# Archive a thread
-soothe thread archive abc123
-```
-
-### TUI Commands
-
-```
-/thread list
-/thread resume abc123
-/thread archive abc123
-```
-
-### Resuming Threads
-
-```bash
-# Resume from CLI
-soothe run --thread abc123
-
-# Resume from TUI
-/thread resume abc123
-```
+**Features**:
+- Thread lifecycle: create, resume, suspend, archive
+- Crash recovery
+- State persistence
 
 ## MCP Integration
 
-Connect to MCP servers for additional tool capabilities. Configure in YAML using the
-Claude Desktop `.mcp.json` format:
+Connect to MCP servers for additional tools.
+
+**Configuration**:
 
 ```yaml
 mcp_servers:
@@ -507,100 +707,82 @@ mcp_servers:
     transport: sse
 ```
 
-MCP sessions are managed alongside thread lifecycle: created on thread start, cleaned
-up on suspend/archive.
+Sessions are managed alongside thread lifecycle.
 
 ## Tools
 
-Soothe provides tool groups beyond what deepagents offers. Enable them by name in your config:
+Enable additional tools in your config:
 
 ```yaml
 tools:
-  - serper     # Google search (requires SERPER_API_KEY)
-  - wizsearch  # Multi-engine web search + crawler (optional TAVILY_API_KEY)
-  - jina       # Web reader (requires JINA_API_KEY)
-  - image      # Image generation via DALL-E
-  - audio      # Audio processing
-  - video      # Video processing
-  - tabular    # Tabular data analysis
+  - serper      # Google search (requires SERPER_API_KEY)
+  - wizsearch   # Multi-engine search + crawler
+  - jina        # Web reader (requires JINA_API_KEY)
+  - image       # Image generation via DALL-E
+  - audio       # Audio processing
+  - video       # Video processing
+  - tabular     # Tabular data analysis
 ```
 
-Note: deepagents already provides file operations (`ls`, `read_file`, `write_file`,
-`edit_file`, `glob`, `grep`), shell execution (`execute`), and task tracking
-(`write_todos`). These are always available and do not need to be listed in `tools`.
+**Note**: deepagents provides file operations (`ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`), shell execution (`execute`), and task tracking (`write_todos`) by default.
 
 ### Tool Details
 
 #### Bash Toolkit
 
-Persistent shell execution with session management. Maintains shell state across commands, supports environment variables, and provides working directory control.
+Persistent shell execution with session management.
 
-**Features**:
-- Persistent shell sessions (state maintained between commands)
+- Maintains shell state across commands
 - Environment variable management
 - Working directory tracking
 - Timeout handling
-- Structured output parsing
 
 #### File Edit Toolkit
 
-File operations with backup and safety features.
+File operations with safety features.
 
-**Features**:
-- Create, read, edit files with backup copies
-- Pattern-based file editing
+- Create, read, edit with backups
+- Pattern-based editing
 - Rollback capabilities
-- Safety checks before destructive operations
 
 #### Python Executor Toolkit
 
-IPython-based code execution with visualization support.
+IPython-based code execution.
 
-**Features**:
-- Execute Python code in an IPython environment
-- Matplotlib integration for plots and visualizations
-- Variable persistence across executions
-- Output capture and display
-- Error handling and debugging support
-
-Useful for data analysis, scientific computing, and rapid prototyping.
+- Execute Python code
+- Matplotlib visualization
+- Variable persistence
+- Output capture
 
 #### Document Toolkit
 
-Document processing and extraction.
+Document processing.
 
-**Features**:
-- Extract text and metadata from various document formats
-- Support for PDF, DOCX, TXT, and more
+- Extract text and metadata
+- Support for PDF, DOCX, TXT
 - Structured data extraction
-- Document conversion capabilities
 
 #### Goals Tool
 
-Goal lifecycle management for autonomous operation.
+Goal lifecycle management.
 
-**Features**:
-- Create new goals during execution
-- List and query goal status
-- Complete or fail goals programmatically
-- Hierarchical goal support (parent/child relationships)
+- Create/list/complete goals
+- Hierarchical goals (parent/child)
 - Priority management
-
-This tool enables the agent to decompose complex tasks into sub-goals dynamically.
 
 ## Using Ollama (Local Models)
 
-Soothe supports [Ollama](https://ollama.ai) for running local LLMs without API keys.
+Run local models without API keys.
 
-### Setup
+**Setup**:
 
 ```bash
-pip install soothe[ollama]    # install langchain-ollama
-ollama serve                  # start the Ollama server
-ollama pull llama3.2          # pull a model
+pip install soothe[ollama]
+ollama serve
+ollama pull llama3.2
 ```
 
-### Configuration
+**Configuration**:
 
 ```yaml
 providers:
@@ -609,33 +791,34 @@ providers:
     api_base_url: http://localhost:11434
     models:
       - llama3.2
-      - qwen3:8b
 
 router:
   default: "ollama:llama3.2"
-  fast: "ollama:llama3.2"
 ```
 
-Ollama uses `provider_type: ollama` (native `ChatOllama` via `langchain-ollama`), **not**
-`provider_type: openai`. No API key is required for local models.
+**Note**: Use `provider_type: ollama`, not `openai`. No API key required.
 
-## Troubleshooting
+## Advanced Troubleshooting
 
-### Missing API Key
+### Vector Store Connection Errors
 
-```
-Error: Could not resolve model openai:gpt-4o-mini
-```
-
-Set your API key:
+Start infrastructure:
 
 ```bash
-export OPENAI_API_KEY=sk-...
+docker compose up -d  # starts PGVector + Weaviate
 ```
 
-### Model Resolution
+Configure connection:
 
-The `provider:model` format requires the provider to be defined in `providers`:
+```yaml
+vector_store_provider: pgvector
+vector_store_config:
+  dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
+```
+
+### Model Resolution Issues
+
+Ensure provider name matches:
 
 ```yaml
 providers:
@@ -644,33 +827,7 @@ providers:
     api_key: "${OPENAI_API_KEY}"
 
 router:
-  default: "openai:gpt-4o-mini"   # "openai" must match providers[].name
-```
-
-### Browser Subagent Not Working
-
-Install the browser extra:
-
-```bash
-pip install soothe[browser]
-# or
-uv sync --extra browser
-```
-
-### Vector Store Connection Errors
-
-Start infrastructure services:
-
-```bash
-docker compose up -d   # starts PGVector + Weaviate
-```
-
-Configure the connection:
-
-```yaml
-vector_store_provider: pgvector
-vector_store_config:
-  dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
+  default: "openai:gpt-4o-mini"  # "openai" must match providers[].name
 ```
 
 ### Debug Mode
@@ -679,7 +836,6 @@ Enable verbose logging:
 
 ```bash
 export SOOTHE_DEBUG=true
-soothe run
 ```
 
 Or in YAML:
@@ -687,3 +843,88 @@ Or in YAML:
 ```yaml
 debug: true
 ```
+
+## Development
+
+### Commands
+
+```bash
+make help          # show all commands
+make sync-dev      # sync dev dependencies
+make format        # format with ruff
+make lint          # lint with ruff
+make test          # run all tests
+make test-unit     # run unit tests
+make test-integration  # run integration tests (requires docker compose)
+make build         # build package
+```
+
+### Infrastructure
+
+For integration tests:
+
+```bash
+docker compose up -d
+make test-integration
+```
+
+## Documentation
+
+### Design Specifications
+
+| RFC | Title |
+|-----|-------|
+| [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design |
+| [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture |
+| [RFC-0003](docs/specs/RFC-0003.md) | CLI TUI Architecture |
+| [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture |
+| [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture |
+| [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture |
+| [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
+
+### Implementation Guides
+
+| Guide | Title |
+|-------|-------|
+| [IG-001](docs/impl/001-soothe-setup-migration.md) | Soothe Setup and Migration |
+| [IG-002](docs/impl/002-soothe-polish.md) | Soothe Polish |
+| [IG-003](docs/impl/003-streaming-examples.md) | Streaming Examples |
+| [IG-004](docs/impl/004-ecosystem-capability-analysis.md) | Ecosystem Capability Analysis |
+| [IG-005](docs/impl/005-core-protocols-implementation.md) | Core Protocols Implementation |
+| [IG-006](docs/impl/006-vectorstore-router-persistence.md) | VectorStore, Router, Persistence |
+| [IG-007](docs/impl/007-cli-tui-implementation.md) | CLI TUI Implementation |
+| [IG-008](docs/impl/008-config-docs-revision.md) | Config and Docs Revision |
+| [IG-009](docs/impl/009-ollama-provider.md) | Ollama Provider |
+| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | TUI Layout, History, Refresh |
+| [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
+| [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
+| [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
+| [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
+| [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility |
+| [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
+| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
+| [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
+| [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
+| [IG-020](docs/impl/020-detached-daemon-autonomous-capability.md) | Detached Daemon Autonomous Capability |
+
+## Privacy
+
+The Browser subagent uses [browser-use](https://github.com/browser-use/browser-use) with privacy-first defaults:
+- Browser extensions: disabled
+- Cloud services: disabled
+- Anonymous telemetry: disabled
+
+Re-enable in config if needed:
+
+```yaml
+subagents:
+  browser:
+    config:
+      disable_extensions: false
+      disable_cloud: false
+      disable_telemetry: false
+```
+
+## License
+
+MIT

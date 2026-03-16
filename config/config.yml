@@ -82,10 +82,15 @@ subagents:
     enabled: true
   browser:
     enabled: true
-    # config:
-    #   disable_extensions: true
-    #   disable_cloud: true
-    #   disable_telemetry: true
+    config:
+      runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
+      downloads_dir: ""  # Empty = runtime_dir/downloads/
+      user_data_dir: ""  # Empty = runtime_dir/profiles/default/
+      extensions_dir: ""  # Empty = runtime_dir/extensions/
+      cleanup_on_exit: true  # Clean temp files on session end
+      disable_extensions: true  # Disable uBlock Origin, cookie handler, ClearURLs
+      disable_cloud: true  # Disable browser-use cloud service
+      disable_telemetry: true  # Disable anonymous usage telemetry
   claude:
     enabled: true
     # model: "anthropic:claude-sonnet-4-20250514"
@@ -107,27 +112,6 @@ subagents:
     #   max_generation_attempts: 2
     #   allowed_tool_groups: []
     #   allowed_mcp_servers: []
-
-# =============================================================================
-# Browser Configuration
-# =============================================================================
-# Configure browser subagent runtime directories and behavior
-
-browser:
-  runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
-  downloads_dir: ""  # Empty = runtime_dir/downloads/
-  user_data_dir: ""  # Empty = runtime_dir/profiles/default/
-  extensions_dir: ""  # Empty = runtime_dir/extensions/
-  cleanup_on_exit: true  # Clean temp files on session end
-  disable_extensions: true  # Disable uBlock Origin, cookie handler, ClearURLs
-  disable_cloud: true  # Disable browser-use cloud service
-  disable_telemetry: true  # Disable anonymous usage telemetry
-
-  # Remote subagent:
-  # remote_analyst:
-  #   enabled: true
-  #   transport: a2a
-  #   url: "http://analyst-agent:8000"
 
 # =============================================================================
 # Tools
@@ -190,6 +174,11 @@ memory_backend: keyword
 # Planner routing: auto | always_direct | always_planner | always_claude
 planner_routing: auto
 policy_profile: standard
+
+# Autonomous iteration (explicit-by-default safety)
+autonomous_enabled_by_default: false
+autonomous_max_iterations: 10
+autonomous_max_retries: 2
 
 durability_backend: in_memory
 checkpointer_backend: memory
