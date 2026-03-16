@@ -136,8 +136,8 @@ class TestWizsearchTools:
 class TestVideoTools:
     def test_create_returns_list(self):
         tools = create_video_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], VideoInfoTool)
+        assert len(tools) == 2  # VideoInfoTool and VideoAnalysisTool
+        assert isinstance(tools[1], VideoInfoTool)
 
     def test_nonexistent_file(self):
         tool = VideoInfoTool()

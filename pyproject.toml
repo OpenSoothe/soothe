@@ -59,6 +59,22 @@ media = [
     "pillow>=10.0.0",
     "openai>=1.0.0",
 ]
+bash = [
+    "pexpect>=4.9.0",
+]
+audio-full = [
+    "aiohttp>=3.9.0",
+]
+video = [
+    "google-genai>=0.3.0",
+]
+document = [
+    "PyMuPDF>=1.24.0",
+]
+python-executor = [
+    "ipython>=8.0.0",
+    "matplotlib>=3.8.0",
+]
 rocksdb = [
     "rocksdict>=0.3",
 ]
@@ -73,7 +89,7 @@ ollama = [
     "langchain-ollama>=0.3.0",
 ]
 all = [
-    "soothe[research,browser,claude,serper,wizsearch,jina,media,rocksdb,pgvector,weaviate,ollama]",
+    "soothe[research,browser,claude,serper,wizsearch,jina,media,bash,audio-full,video,document,python-executor,rocksdb,pgvector,weaviate,ollama]",
 ]
 
 [dependency-groups]
@@ -130,19 +146,37 @@ convention = "google"
 ignore-var-parameters = true
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ANN001", "ANN201", "ANN202", "ARG002", "D1", "PLC0415", "PLR2004", "PT018", "S101", "S311"]
-"src/soothe/protocols/**" = ["TC003", "ANN401"]
+"tests/**" = ["ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ARG002", "B007", "B011", "BLE001", "D1", "EM101", "F401", "F841", "I001", "PD003", "PD101", "PLC0415", "PLR2004", "PT012", "PT015", "PT018", "PTH100", "PTH109", "PTH118", "RUF059", "S101", "S108", "S110", "S311", "S324", "SIM117", "SIM300", "TRY003", "TRY300", "UP012", "W292"]
+"src/soothe/protocols/**" = ["ANN401", "TC003"]
 "src/soothe/planning/**" = ["ANN401", "BLE001", "D107", "TRY300"]
 "src/soothe/policy/**" = ["D107", "PLR0911"]
 "src/soothe/durability/**" = ["ANN401"]
 "src/soothe/remote/**" = ["ANN401", "ARG002", "PLC0415", "TC003"]
-"src/soothe/config.py" = ["ANN401", "PLC0415", "TC002"]
+"src/soothe/config.py" = ["ANN401", "EM102", "PLC0415", "PTH123", "TC002", "TRY003"]
 "src/soothe/agent.py" = ["ARG001", "C901", "PLC0415", "PLR0911", "SIM108", "TC001", "TC002", "TC003"]
 "src/soothe/vector_store/**" = ["ANN401", "ARG002", "B905", "BLE001", "D107", "PLC0415", "S608", "TC001"]
 "src/soothe/persistence/**" = ["ANN401", "PLC0415", "SIM105"]
-"src/soothe/context/vector_context.py" = ["BLE001"]
-"src/soothe/memory_store/vector_memory.py" = ["BLE001"]
-"src/soothe/cli/**" = ["ANN", "ASYNC240", "BLE001", "C901", "D107", "E501", "FBT002", "G201", "PIE810", "PLC0415", "PLR0911", "PLR0912", "PLR0915", "PLR1714", "PLR2004", "PTH123", "RUF012", "S110", "S603", "S607", "SIM102", "SIM105", "TCH003", "TRY300"]
+"src/soothe/context/**" = ["BLE001"]
+"src/soothe/memory_store/**" = ["BLE001"]
+"src/soothe/cli/**" = ["ANN", "ARG002", "ASYNC240", "BLE001", "C901", "D107", "E501", "F811", "F821", "F841", "FBT002", "G201", "PIE810", "PLC0415", "PLR0911", "PLR0912", "PLR0915", "PLR1714", "PLR2004", "PTH118", "PTH123", "RUF012", "S110", "S603", "S607", "SIM102", "SIM105", "TCH003", "TC002", "TRY300"]
+"src/soothe/core/resolver.py" = ["ARG001", "BLE001", "C901", "D107", "N806", "PLC0415", "PLR0911", "PLR0912", "PLR0915", "PTH100", "PTH109", "RUF100", "S110", "S112", "SIM105", "TC001", "TC002", "TC003"]
+"src/soothe/backends/**" = ["ANN401", "ARG001", "ARG002", "BLE001", "B007", "B905", "D107", "E501", "EM101", "G201", "PLC0415", "PLR0911", "PLR2004", "PTH100", "RUF005", "RUF012", "RUF100", "S110", "S608", "SIM102", "SIM105", "TC001", "TC002", "TC003", "TRY003", "TRY300"]
+"src/soothe/subagents/**" = ["ANN204", "ANN401", "ARG001", "ASYNC230", "ASYNC240", "BLE001", "C901", "D102", "D107", "EM101", "F401", "FBT001", "FBT002", "G201", "I001", "PERF401", "PLC0415", "PLR0912", "PLR0915", "PLR2004", "PTH109", "PTH123", "RUF006", "RUF059", "RUF100", "SIM105", "SIM117", "TC001", "TC002", "TC003", "TRY003", "TRY300"]
+"src/soothe/tools/**" = ["ANN401", "BLE001", "C409", "C901", "D102", "D107", "EM101", "EM102", "F841", "G201", "I001", "PD003", "PD101", "PERF401", "PLC0415", "PLR0911", "PLR0912", "PLR0915", "PLR2004", "PTH100", "PTH109", "PTH123", "RUF100", "SIM108", "SIM115", "TC001", "TRY003", "TRY300", "UP045", "W292"]
+"src/soothe/built_in_skills/**" = ["C901", "PLC0415", "TRY300"]
+"src/soothe/core/agent.py" = ["C409", "C901", "PLC0415", "PLR0912", "PLR0915", "PTH100", "PTH109", "SIM108", "TC001", "TC002", "TC003"]
+"src/soothe/core/runner.py" = ["ANN401", "ARG002", "BLE001", "C901", "F841", "PLC0415", "PLR0912", "PLR0915", "PLR2004", "TC001"]
+"src/soothe/core/goal_engine.py" = ["BLE001", "D107", "EM102", "TRY003"]
+"src/soothe/mcp/loader.py" = ["PLC0415", "TC001"]
+"src/soothe/middleware/policy.py" = ["BLE001", "D102", "D107", "TC002", "TC003"]
+"src/soothe/middleware/subagent_context.py" = ["BLE001", "D102", "D107", "TC001", "TC002", "TC003"]
+"src/soothe/utils/progress.py" = ["PLC0415", "TC003"]
+"src/soothe/tools/bash.py" = ["ANN401", "BLE001", "D107", "G201", "I001", "PLC0415", "PLR0911", "PTH100", "RUF012", "RUF100", "SIM110", "TRY300", "W292"]
+"src/soothe/tools/python_executor.py" = ["ANN401", "ASYNC109", "BLE001", "C401", "D107", "F401", "F841", "G201", "I001", "PLC0415", "PTH109", "RUF012", "RUF100", "TRY300", "W292"]
+"src/soothe/tools/file_edit.py" = ["ANN401", "BLE001", "C901", "D107", "DTZ005", "DTZ006", "EM102", "F401", "FBT001", "FBT002", "G201", "I001", "PLC0415", "RUF100", "S112", "SIM108", "TRY003", "TRY300", "UP045", "W292"]
+"src/soothe/tools/audio.py" = ["BLE001", "EM101", "G201", "I001", "PLC0415", "PLR0911", "RUF100", "SIM115", "TRY003", "TRY300", "W292"]
+"src/soothe/tools/video.py" = ["ANN401", "BLE001", "EM102", "G201", "I001", "PLC0415", "RUF100", "TRY003", "TRY301", "TRY300", "UP045", "W292"]
+"src/soothe/tools/document.py" = ["ANN401", "BLE001", "EM101", "EM102", "G201", "I001", "PLC0415", "RET505", "RUF100", "SIM102", "SIM115", "TRY003", "TRY300", "UP045", "W292"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

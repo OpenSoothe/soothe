@@ -12,8 +12,8 @@ from rich.table import Table
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from soothe.core.runner import SootheRunner
     from soothe.cli.session import InputHistory, SessionLogger
+    from soothe.core.runner import SootheRunner
     from soothe.protocols.planner import Plan
 
 # ---------------------------------------------------------------------------
@@ -115,7 +115,7 @@ SLASH_COMMANDS: dict[str, str] = {
 }
 
 
-def handle_slash_command(  # noqa: PLR0911
+def handle_slash_command(
     cmd: str,
     runner: SootheRunner,
     console: Console,

@@ -127,6 +127,27 @@ class SubagentConfig(BaseModel):
     transport: Literal["local", "acp", "a2a", "langgraph"] = "local"
     url: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    runtime_dir: str = ""
+    """Runtime directory for subagent. Defaults to SOOTHE_HOME/agents/<name>/."""
+
+
+class BrowserConfig(BaseModel):
+    """Configuration for browser subagent runtime directories."""
+
+    runtime_dir: str = ""
+    """Base directory for browser runtime files. Defaults to SOOTHE_HOME/agents/browser/."""
+
+    downloads_dir: str = ""
+    """Directory for browser downloads. Defaults to runtime_dir/downloads/."""
+
+    user_data_dir: str = ""
+    """Persistent browser profile directory. Defaults to runtime_dir/profiles/."""
+
+    extensions_dir: str = ""
+    """Browser extensions directory. Defaults to runtime_dir/extensions/."""
+
+    cleanup_on_exit: bool = True
+    """Clean up temporary files (downloads, temp profiles) when session ends."""
 
 
 class MCPServerConfig(BaseModel):
@@ -181,6 +202,30 @@ class WeaverConfig(BaseModel):
     max_generation_attempts: int = 2
     allowed_tool_groups: list[str] = Field(default_factory=list)
     allowed_mcp_servers: list[str] = Field(default_factory=list)
+
+
+class BrowserSubagentConfig(BaseModel):
+    """Configuration for the browser subagent runtime.
+
+    Args:
+        runtime_dir: Base directory for browser runtime files.
+        downloads_dir: Directory for browser downloads.
+        user_data_dir: Persistent browser profile directory.
+        extensions_dir: Browser extensions directory.
+        cleanup_on_exit: Clean up temporary files when session ends.
+        disable_extensions: Disable browser extensions.
+        disable_cloud: Disable browser-use cloud service.
+        disable_telemetry: Disable usage telemetry.
+    """
+
+    runtime_dir: str = ""
+    downloads_dir: str = ""
+    user_data_dir: str = ""
+    extensions_dir: str = ""
+    cleanup_on_exit: bool = True
+    disable_extensions: bool = True
+    disable_cloud: bool = True
+    disable_telemetry: bool = True
 
 
 class SootheConfig(BaseSettings):
@@ -286,6 +331,9 @@ class SootheConfig(BaseSettings):
 
     weaver: WeaverConfig = Field(default_factory=WeaverConfig)
     """Weaver subagent configuration."""
+
+    browser: BrowserSubagentConfig = Field(default_factory=BrowserSubagentConfig)
+    """Browser subagent configuration."""
 
     # --- Protocol config (RFC-0002) ---
 

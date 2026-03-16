@@ -61,6 +61,10 @@ def _build_browser_graph(
     disable_extensions: bool = True,
     disable_cloud: bool = True,
     disable_telemetry: bool = True,
+    runtime_dir: str | None = None,
+    downloads_dir: str | None = None,
+    user_data_dir: str | None = None,
+    cleanup_on_exit: bool = True,
 ) -> Any:
     """Build and compile the browser LangGraph.
 
@@ -74,6 +78,10 @@ def _build_browser_graph(
         disable_extensions: Disable browser extensions (uBlock Origin, cookie handler, ClearURLs).
         disable_cloud: Disable browser-use cloud service connections.
         disable_telemetry: Disable anonymous usage telemetry.
+        runtime_dir: Base directory for browser runtime files.
+        downloads_dir: Directory for browser downloads.
+        user_data_dir: Persistent browser profile directory.
+        cleanup_on_exit: Clean up temporary files when session ends.
 
     Returns:
         Compiled LangGraph runnable.
@@ -93,6 +101,24 @@ def _build_browser_graph(
 
         # Ask browser-use to avoid chatty console logging where supported.
         os.environ.setdefault("BROWSER_USE_LOGGING_LEVEL", "result")
+
+        # Configure browser runtime directories
+        from soothe.utils.runtime import (
+            get_browser_downloads_dir,
+            get_browser_extensions_dir,
+            get_browser_runtime_dir,
+            get_browser_user_data_dir,
+        )
+
+        browser_runtime_dir = runtime_dir or str(get_browser_runtime_dir())
+        browser_downloads_dir = downloads_dir or str(get_browser_downloads_dir())
+        browser_user_data_dir = user_data_dir or str(get_browser_user_data_dir())
+        browser_extensions_dir = str(get_browser_extensions_dir())
+
+        # Set environment variables for browser-use
+        os.environ["BROWSER_USE_CONFIG_DIR"] = browser_runtime_dir
+        os.environ["BROWSER_USE_PROFILES_DIR"] = browser_user_data_dir
+        os.environ["BROWSER_USE_EXTENSIONS_DIR"] = browser_extensions_dir
 
         _suppress_external_browser_loggers()
 
@@ -121,7 +147,11 @@ def _build_browser_graph(
                         llm_kwargs["api_key"] = browser_api_key
                     llm = BUChatOpenAI(model_name, **llm_kwargs)
 
-                    browser = BrowserSession(headless=headless)
+                    browser = BrowserSession(
+                        headless=headless,
+                        downloads_path=browser_downloads_dir,
+                        user_data_dir=browser_user_data_dir,
+                    )
 
                     async def on_step_end(agent: Any) -> None:
                         step_num = agent.state.n_steps
@@ -157,6 +187,12 @@ def _build_browser_graph(
                     )
                     history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
                     result = history.final_result() or "Browser task completed (no extracted content)."
+
+                    # Clean up temporary files if requested
+                    if cleanup_on_exit:
+                        from soothe.utils.runtime import cleanup_browser_temp_files
+
+                        cleanup_browser_temp_files()
         except Exception:
             logger.exception("Browser agent failed")
             result = "Browser agent encountered an error."
@@ -213,6 +249,10 @@ def create_browser_subagent(
     disable_extensions: bool = True,
     disable_cloud: bool = True,
     disable_telemetry: bool = True,
+    runtime_dir: str | None = None,
+    downloads_dir: str | None = None,
+    user_data_dir: str | None = None,
+    cleanup_on_exit: bool = True,
     **kwargs: Any,
 ) -> CompiledSubAgent:
     """Create a Browser subagent (CompiledSubAgent with browser-use workflow).
@@ -230,6 +270,10 @@ def create_browser_subagent(
             Cloud features are disabled by default. Set to False to enable cloud sync.
         disable_telemetry: Disable anonymous usage telemetry.
             Telemetry is disabled by default. Set to False to enable anonymous usage data collection.
+        runtime_dir: Base directory for browser runtime files. Defaults to SOOTHE_HOME/agents/browser/.
+        downloads_dir: Directory for browser downloads. Defaults to runtime_dir/downloads/.
+        user_data_dir: Persistent browser profile directory. Defaults to runtime_dir/profiles/default/.
+        cleanup_on_exit: Clean up temporary files (downloads, temp profiles) when session ends.
         **kwargs: Additional config -- `base_url` and `api_key` are forwarded
             to the browser-use LLM.
 
@@ -254,6 +298,10 @@ def create_browser_subagent(
         disable_extensions=disable_extensions,
         disable_cloud=disable_cloud,
         disable_telemetry=disable_telemetry,
+        runtime_dir=runtime_dir,
+        downloads_dir=downloads_dir,
+        user_data_dir=user_data_dir,
+        cleanup_on_exit=cleanup_on_exit,
     )
 
     return {

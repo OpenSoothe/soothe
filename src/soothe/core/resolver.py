@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
 
 from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from langchain_core.language_models import BaseChatModel
@@ -93,6 +92,27 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 
         return list(create_tabular_tools())
 
+    # New tools from enhancement
+    if name == "bash":
+        from soothe.tools.bash import create_bash_tools
+
+        return list(create_bash_tools())
+
+    if name == "file_edit":
+        from soothe.tools.file_edit import create_file_edit_tools
+
+        return list(create_file_edit_tools())
+
+    if name == "document":
+        from soothe.tools.document import create_document_tools
+
+        return list(create_document_tools())
+
+    if name == "python_executor":
+        from soothe.tools.python_executor import create_python_executor_tools
+
+        return list(create_python_executor_tools())
+
     if name == "arxiv":
         from langchain_community.tools import ArxivQueryRun
 
@@ -107,10 +127,6 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 
         wrapper = GitHubAPIWrapper()
         return wrapper.get_tools()
-    if name == "python_repl":
-        from langchain_community.tools import PythonREPLTool
-
-        return [PythonREPLTool()]
 
     if name == "goals":
         # GoalEngine tools are resolved separately via resolve_goal_tools()
@@ -184,6 +200,19 @@ def resolve_subagents(
             extra_kwargs["cwd"] = resolved_cwd
         if name in ("skillify", "weaver"):
             extra_kwargs["config"] = config
+        # Pass browser-specific config
+        if name == "browser":
+            extra_kwargs.update(
+                {
+                    "runtime_dir": config.browser.runtime_dir,
+                    "downloads_dir": config.browser.downloads_dir,
+                    "user_data_dir": config.browser.user_data_dir,
+                    "cleanup_on_exit": config.browser.cleanup_on_exit,
+                    "disable_extensions": config.browser.disable_extensions,
+                    "disable_cloud": config.browser.disable_cloud,
+                    "disable_telemetry": config.browser.disable_telemetry,
+                }
+            )
         spec = factory(model=model_override, **extra_kwargs)
         subagents.append(spec)
 

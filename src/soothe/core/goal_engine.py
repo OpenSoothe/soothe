@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -41,8 +41,8 @@ class Goal(BaseModel):
     parent_id: str | None = None
     retry_count: int = 0
     max_retries: int = 2
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class GoalEngine:
@@ -103,7 +103,7 @@ class GoalEngine:
         goal = executable[0]
         if goal.status == "pending":
             goal.status = "active"
-            goal.updated_at = datetime.now(timezone.utc)
+            goal.updated_at = datetime.now(UTC)
         return goal
 
     async def complete_goal(self, goal_id: str) -> Goal:
@@ -122,7 +122,7 @@ class GoalEngine:
         if not goal:
             raise KeyError(f"Goal {goal_id} not found")
         goal.status = "completed"
-        goal.updated_at = datetime.now(timezone.utc)
+        goal.updated_at = datetime.now(UTC)
         logger.info("Completed goal %s: %s", goal_id, goal.description)
         return goal
 
@@ -156,7 +156,7 @@ class GoalEngine:
         if allow_retry and goal.retry_count < goal.max_retries:
             goal.retry_count += 1
             goal.status = "pending"
-            goal.updated_at = datetime.now(timezone.utc)
+            goal.updated_at = datetime.now(UTC)
             logger.info(
                 "Goal %s retry %d/%d: %s%s",
                 goal_id,
@@ -168,7 +168,7 @@ class GoalEngine:
             return goal
 
         goal.status = "failed"
-        goal.updated_at = datetime.now(timezone.utc)
+        goal.updated_at = datetime.now(UTC)
         logger.warning("Failed goal %s: %s%s", goal_id, goal.description, f" - {error}" if error else "")
         return goal
 

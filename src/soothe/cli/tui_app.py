@@ -25,14 +25,14 @@ from textual.containers import Container, Vertical
 from textual.events import Key
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
-from soothe.cli.progress_verbosity import classify_custom_event, should_show
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
+from soothe.cli.progress_verbosity import classify_custom_event, should_show
 from soothe.cli.tui_shared import (
     TuiState,
     _handle_generic_custom_activity,
     _handle_protocol_event,
-    _handle_subagent_text_activity,
     _handle_subagent_custom,
+    _handle_subagent_text_activity,
     _handle_tool_call_activity,
     _handle_tool_result_activity,
     _resolve_namespace_label,

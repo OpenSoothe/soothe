@@ -38,7 +38,7 @@ class SessionLogger:
         thread_id: Thread ID for the log file name.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         session_dir: str | None = None,
         thread_id: str | None = None,
@@ -235,7 +235,7 @@ class InputHistory:
         max_size: Maximum number of history entries to retain.
     """
 
-    def __init__(  # noqa: D107
+    def __init__(
         self,
         history_file: str | None = None,
         max_size: int = 1000,

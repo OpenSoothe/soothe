@@ -7,7 +7,6 @@ create, list, and complete goals during execution.
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from langchain_core.tools import BaseTool

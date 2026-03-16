@@ -108,6 +108,21 @@ subagents:
     #   allowed_tool_groups: []
     #   allowed_mcp_servers: []
 
+# =============================================================================
+# Browser Configuration
+# =============================================================================
+# Configure browser subagent runtime directories and behavior
+
+browser:
+  runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
+  downloads_dir: ""  # Empty = runtime_dir/downloads/
+  user_data_dir: ""  # Empty = runtime_dir/profiles/default/
+  extensions_dir: ""  # Empty = runtime_dir/extensions/
+  cleanup_on_exit: true  # Clean temp files on session end
+  disable_extensions: true  # Disable uBlock Origin, cookie handler, ClearURLs
+  disable_cloud: true  # Disable browser-use cloud service
+  disable_telemetry: true  # Disable anonymous usage telemetry
+
   # Remote subagent:
   # remote_analyst:
   #   enabled: true

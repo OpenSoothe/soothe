@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from soothe.protocols.planner import (
     Plan,
     PlanContext,
-    PlanStep,
     Reflection,
     StepResult,
 )

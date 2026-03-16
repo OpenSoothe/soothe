@@ -134,7 +134,7 @@ class TestRocksDBPersistStore:
     def rocksdb_available(self):
         """Check if rocksdict is available."""
         try:
-            import rocksdict  # noqa: F401
+            import rocksdict
 
             return True
         except ImportError:

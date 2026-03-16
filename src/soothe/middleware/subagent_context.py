@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
@@ -55,7 +56,7 @@ class SubagentContextMiddleware(AgentMiddleware):
 
         prompt = str(tool_args.get("prompt") or "")
         if "<subagent_context>" not in prompt:
-            tool_args["prompt"] = briefing + (prompt if prompt else goal)
+            tool_args["prompt"] = briefing + (prompt or goal)
             tool_call["args"] = tool_args
             request.tool_call = tool_call
 

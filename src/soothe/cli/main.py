@@ -81,7 +81,7 @@ def list_subagents(
 
         from rich.table import Table
 
-        from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES, BUILTIN_SUBAGENT_NAMES
+        from soothe.cli.commands import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
 
         table = Table(title="Available Subagents")
         table.add_column("Name", style="cyan")
@@ -419,7 +419,7 @@ def config(
                 providers_table.add_row("None configured", "", "")
 
             # Subagents summary
-            from soothe.cli.commands import SUBAGENT_DISPLAY_NAMES, BUILTIN_SUBAGENT_NAMES
+            from soothe.cli.commands import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
 
             subagents_table = Table(title="Subagents")
             subagents_table.add_column("Name", style="cyan")
@@ -747,8 +747,8 @@ def thread_inspect(
     """Inspect thread details."""
     import asyncio
 
-    from soothe.core.runner import SootheRunner
     from soothe.cli.session import SessionLogger
+    from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
     runner = SootheRunner(cfg)

@@ -455,8 +455,8 @@ def _get_skillify_retriever(cfg: Any) -> Any | None:
     try:
         skillify_cfg = cfg.skillify if hasattr(cfg, "skillify") else None
         if skillify_cfg and getattr(skillify_cfg, "enabled", False):
-            from soothe.subagents.skillify.retriever import SkillRetriever
             from soothe.backends.vector_store.in_memory import InMemoryVectorStore
+            from soothe.subagents.skillify.retriever import SkillRetriever
 
             collection = getattr(skillify_cfg, "index_collection", "soothe_skillify")
             if cfg.vector_store_provider != "none":

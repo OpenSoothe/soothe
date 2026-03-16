@@ -73,4 +73,4 @@ class TestProgressVerbosity:
             "soothe.skillify.",
             "soothe.weaver.",
         }
-        assert _SUBAGENT_PREFIXES == expected
+        assert expected == _SUBAGENT_PREFIXES

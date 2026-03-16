@@ -325,7 +325,7 @@ def _handle_subagent_custom(
         return
     label = _resolve_namespace_label(namespace, state)
     state.subagent_tracker.update_from_custom(label, data)
-    tag = label if label else "subagent"
+    tag = label or "subagent"
     etype = data.get("type", "")
 
     if etype == "soothe.browser.step":
