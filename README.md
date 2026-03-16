@@ -1,5 +1,10 @@
 # Soothe
 
+[![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
+[![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
+[![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
+
 Your intelligent, always-available AI assistant that works autonomously on complex tasks.
 
 ## What is Soothe?
