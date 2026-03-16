@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe.backends.context.keyword import KeywordContext
+from soothe.backends.persistence import create_persist_store
 from soothe.protocols.context import ContextEntry, ContextProjection
 
 
@@ -14,14 +15,15 @@ class TestKeywordContext:
 
     def test_initialization_without_persistence(self) -> None:
         """Test that KeywordContext initializes without persistence."""
-        context = KeywordContext(persist_dir=None)
+        context = KeywordContext(persist_store=None)
 
         assert context.entries == []
         assert context._store is None
 
     def test_initialization_with_json_persistence(self, tmp_path: Path) -> None:
         """Test that KeywordContext initializes with JSON persistence."""
-        context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        context = KeywordContext(persist_store=persist_store)
 
         assert context.entries == []
         assert context._store is not None
@@ -160,7 +162,7 @@ class TestKeywordContext:
     @pytest.mark.asyncio
     async def test_persist_without_store(self) -> None:
         """Test persist does nothing without store."""
-        context = KeywordContext(persist_dir=None)
+        context = KeywordContext(persist_store=None)
 
         # Should not raise an error
         await context.persist("thread_123")
@@ -168,7 +170,8 @@ class TestKeywordContext:
     @pytest.mark.asyncio
     async def test_persist_and_restore(self, tmp_path: Path) -> None:
         """Test persist and restore with JSON backend."""
-        context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        context = KeywordContext(persist_store=persist_store)
 
         entry = ContextEntry(source="test", content="persisted content")
         await context.ingest(entry)
@@ -176,7 +179,8 @@ class TestKeywordContext:
         await context.persist("thread_123")
 
         # Create new context and restore
-        context2 = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
+        persist_store2 = create_persist_store(str(tmp_path), backend="json")
+        context2 = KeywordContext(persist_store=persist_store2)
         restored = await context2.restore("thread_123")
 
         assert restored is True
@@ -186,7 +190,8 @@ class TestKeywordContext:
     @pytest.mark.asyncio
     async def test_restore_nonexistent_thread(self, tmp_path: Path) -> None:
         """Test restore returns False for nonexistent thread."""
-        context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        context = KeywordContext(persist_store=persist_store)
 
         restored = await context.restore("nonexistent")
 
@@ -195,7 +200,8 @@ class TestKeywordContext:
     @pytest.mark.asyncio
     async def test_restore_handles_corrupted_data(self, tmp_path: Path) -> None:
         """Test restore handles corrupted data gracefully."""
-        context = KeywordContext(persist_dir=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        context = KeywordContext(persist_store=persist_store)
 
         # Write invalid data
 

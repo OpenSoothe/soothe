@@ -2,62 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
-
-
-@runtime_checkable
-class PersistStore(Protocol):
-    """Simple key-value persistence interface.
-
-    Both JSON-file and RocksDB backends implement this protocol.
-    """
-
-    def save(self, key: str, data: Any) -> None:
-        """Persist data under the given key.
-
-        Args:
-            key: Storage key.
-            data: JSON-serialisable data.
-        """
-        ...
-
-    def load(self, key: str) -> Any | None:
-        """Load data for the given key.
-
-        Args:
-            key: Storage key.
-
-        Returns:
-            The stored data, or None if not found.
-        """
-        ...
-
-    def delete(self, key: str) -> None:
-        """Delete data for the given key.
-
-        Args:
-            key: Storage key.
-        """
-        ...
-
-    def close(self) -> None:
-        """Release any resources held by the store."""
-        ...
+from soothe.protocols.persistence import PersistStore
 
 
 def create_persist_store(
-    persist_dir: str | None,
+    persist_dir: str | None = None,
     backend: str = "json",
+    dsn: str | None = None,
+    namespace: str = "default",
 ) -> PersistStore | None:
     """Factory for persistence backends.
 
     Args:
-        persist_dir: Root directory for persistence. None disables persistence.
-        backend: Backend type (``json`` or ``rocksdb``).
+        persist_dir: Root directory for file-based backends (json/rocksdb). None disables file persistence.
+        backend: Backend type (``json``, ``rocksdb``, or ``postgresql``).
+        dsn: PostgreSQL DSN (required for backend="postgresql").
+        namespace: Namespace for key isolation (PostgreSQL only).
 
     Returns:
         A PersistStore instance, or None if persistence is disabled.
     """
+    if backend == "postgresql":
+        if not dsn:
+            raise ValueError("DSN required for PostgreSQL backend")
+        from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
+
+        return PostgreSQLPersistStore(dsn=dsn, namespace=namespace)
+
     if not persist_dir:
         return None
 

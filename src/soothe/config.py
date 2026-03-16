@@ -383,8 +383,8 @@ class SootheConfig(BaseSettings):
     context_persist_dir: str | None = None
     """Directory for context persistence. Defaults to ``SOOTHE_HOME/context/``."""
 
-    context_persist_backend: Literal["json", "rocksdb"] = "rocksdb"
-    """Persistence backend for context data."""
+    context_persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+    """Persistence backend for context data (json, rocksdb, or postgresql)."""
 
     memory_backend: Literal["keyword", "vector", "none"] = "keyword"
     """MemoryProtocol implementation: ``keyword`` (keyword matching with
@@ -394,8 +394,8 @@ class SootheConfig(BaseSettings):
     memory_persist_path: str | None = None
     """Directory for memory persistence. Defaults to ``SOOTHE_HOME/memory/``."""
 
-    memory_persist_backend: Literal["json", "rocksdb"] = "rocksdb"
-    """Persistence backend for memory data."""
+    memory_persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+    """Persistence backend for memory data (json, rocksdb, or postgresql)."""
 
     planner_routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
     """PlannerProtocol routing strategy: ``auto`` (hybrid complexity router),
@@ -408,14 +408,17 @@ class SootheConfig(BaseSettings):
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     """Concurrency limits for parallel execution."""
 
-    durability_backend: Literal["langgraph", "rocksdb"] = "rocksdb"
-    """Durability backend for thread lifecycle and metadata persistence."""
+    durability_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+    """Durability backend for thread lifecycle and metadata persistence.
+    Options: json (file-based), rocksdb (embedded KV), postgresql (PostgreSQL)."""
 
     checkpointer_backend: Literal["postgres"] = "postgres"
-    """LangGraph checkpoint backend. Only PostgreSQL is supported for persistence."""
+    """LangGraph checkpoint backend. Only PostgreSQL is supported for persistence.
+    Uses unified persistence_postgres_dsn for connection."""
 
-    checkpointer_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    """Postgres DSN for checkpoints. Default: local pgvector instance."""
+    persistence_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
+    """PostgreSQL DSN for checkpointer and all persistence backends.
+    Used by: LangGraph checkpointer, context, memory, and durability."""
 
     durability_metadata_path: str | None = None
     """Metadata/state path for durability backends that persist locally."""

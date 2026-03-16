@@ -165,13 +165,18 @@ memory: []
 # Protocols
 # =============================================================================
 
+# PostgreSQL DSN (unified for checkpointer and all persistence backends)
+persistence_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+
+# Context configuration
 context_backend: keyword
 # context_persist_dir: ~/.soothe/context
-context_persist_backend: rocksdb
+context_persist_backend: postgresql
 
+# Memory configuration
 memory_backend: keyword
 # memory_persist_path: ~/.soothe/memory
-memory_persist_backend: rocksdb
+memory_persist_backend: postgresql
 
 # Planner routing: auto | always_direct | always_planner | always_claude
 planner_routing: auto
@@ -200,9 +205,9 @@ performance:
     simple_words: 15
     medium_words: 30
 
-durability_backend: rocksdb
+# Durability configuration
+durability_backend: postgresql
 checkpointer_backend: postgres
-checkpointer_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 # durability_metadata_path: ~/.soothe/durability/threads.json
 
 # Thread logging configuration

@@ -385,8 +385,6 @@ def _run_headless(
     Connects to running daemon if available to avoid RocksDB lock conflicts.
     Falls back to standalone mode if no daemon is running.
     """
-    import asyncio
-
     from soothe.cli.daemon import SootheDaemon
 
     # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
@@ -427,7 +425,6 @@ def _run_headless_via_daemon(
     from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
 
     async def _stream() -> int:
-        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         client = DaemonClient()
         exit_code = 0
@@ -1015,10 +1012,7 @@ def thread_list(
     ] = None,
 ) -> None:
     """List all agent threads."""
-    import asyncio
-
     from soothe.cli.daemon import SootheDaemon
-    from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
 
@@ -1058,7 +1052,7 @@ def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = No
                         else:
                             typer.echo(content.strip())
                     break
-                elif event_type == "status":
+                if event_type == "status":
                     state = event.get("state", "")
                     if state in ("idle", "stopped"):
                         break

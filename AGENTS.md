@@ -97,12 +97,12 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `core/` | `agent`, `runner`, `resolver`, `events`, `goal_engine` | Framework logic (factory, orchestration, resolution, goal lifecycle) |
 | `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
 | `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
-| `backends/memory/` | `StoreBackedMemory`, `VectorMemory` | MemoryProtocol implementations |
+| `backends/memory/` | `KeywordMemory`, `VectorMemory` | MemoryProtocol implementations |
 | `backends/planning/` | `DirectPlanner`, `SubagentPlanner`, `ClaudePlanner`, `AutoPlanner` | PlannerProtocol implementations |
 | `backends/policy/` | `ConfigDrivenPolicy` | PolicyProtocol implementations |
-| `backends/durability/` | `InMemoryDurability` | DurabilityProtocol implementations |
+| `backends/durability/` | `JsonDurability`, `RocksDBDurability`, `PostgreSQLDurability` | DurabilityProtocol implementations |
 | `backends/remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
-| `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore` | Persistence backends for context/memory |
+| `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore`, `PostgreSQLPersistStore` | PersistStore implementations for context/memory/durability |
 | `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
 | `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `wizsearch`, `image`, `audio`, `video`, `tabular`, `bash`, `file_edit`, `document`, `python_executor`, `goals`, `datetime` | langchain BaseTool groups |

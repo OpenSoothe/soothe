@@ -1,6 +1,7 @@
 """Durability protocol backends."""
 
-from soothe.backends.durability.in_memory import InMemoryDurability
-from soothe.backends.durability.langgraph import LangGraphDurability
+from soothe.backends.durability.json import JsonDurability
+from soothe.backends.durability.postgresql import PostgreSQLDurability
+from soothe.backends.durability.rocksdb import RocksDBDurability
 
-__all__ = ["InMemoryDurability", "LangGraphDurability"]
+__all__ = ["JsonDurability", "PostgreSQLDurability", "RocksDBDurability"]

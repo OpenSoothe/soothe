@@ -1,27 +1,30 @@
-"""Tests for durability implementation (InMemoryDurability)."""
+"""Tests for durability implementations (JsonDurability)."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
-from soothe.backends.durability.in_memory import InMemoryDurability
+from soothe.backends.durability.json import JsonDurability
 from soothe.protocols.durability import ThreadFilter, ThreadMetadata
 
 
-class TestInMemoryDurability:
-    """Unit tests for InMemoryDurability."""
+class TestJsonDurability:
+    """Unit tests for JsonDurability."""
 
-    def test_initialization(self) -> None:
+    def test_initialization(self, tmp_path: Path) -> None:
         """Test initialization creates empty storage."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         assert durability._threads == {}
         assert durability._state == {}
 
     @pytest.mark.asyncio
-    async def test_create_thread(self) -> None:
+    async def test_create_thread(self, tmp_path: Path) -> None:
         """Test creating a new thread."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(tags=["test"], plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -34,9 +37,10 @@ class TestInMemoryDurability:
         assert thread.updated_at is not None
 
     @pytest.mark.asyncio
-    async def test_create_thread_generates_unique_ids(self) -> None:
+    async def test_create_thread_generates_unique_ids(self, tmp_path: Path) -> None:
         """Test that each thread gets a unique ID."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test")
         thread1 = await durability.create_thread(metadata)
@@ -45,9 +49,10 @@ class TestInMemoryDurability:
         assert thread1.thread_id != thread2.thread_id
 
     @pytest.mark.asyncio
-    async def test_resume_existing_thread(self) -> None:
+    async def test_resume_existing_thread(self, tmp_path: Path) -> None:
         """Test resuming an existing thread."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -62,17 +67,19 @@ class TestInMemoryDurability:
         assert resumed.thread_id == thread.thread_id
 
     @pytest.mark.asyncio
-    async def test_resume_nonexistent_thread_raises_error(self) -> None:
+    async def test_resume_nonexistent_thread_raises_error(self, tmp_path: Path) -> None:
         """Test that resuming nonexistent thread raises KeyError."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         with pytest.raises(KeyError, match="not found"):
             await durability.resume_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_suspend_thread(self) -> None:
+    async def test_suspend_thread(self, tmp_path: Path) -> None:
         """Test suspending a thread."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -85,17 +92,19 @@ class TestInMemoryDurability:
         assert suspended_thread.status == "suspended"
 
     @pytest.mark.asyncio
-    async def test_suspend_nonexistent_thread_no_error(self) -> None:
+    async def test_suspend_nonexistent_thread_no_error(self, tmp_path: Path) -> None:
         """Test that suspending nonexistent thread doesn't raise error."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         # Should not raise an error
         await durability.suspend_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_archive_thread(self) -> None:
+    async def test_archive_thread(self, tmp_path: Path) -> None:
         """Test archiving a thread."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -108,17 +117,19 @@ class TestInMemoryDurability:
         assert archived_thread.status == "archived"
 
     @pytest.mark.asyncio
-    async def test_archive_nonexistent_thread_no_error(self) -> None:
+    async def test_archive_nonexistent_thread_no_error(self, tmp_path: Path) -> None:
         """Test that archiving nonexistent thread doesn't raise error."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         # Should not raise an error
         await durability.archive_thread("nonexistent_id")
 
     @pytest.mark.asyncio
-    async def test_list_threads_no_filter(self) -> None:
+    async def test_list_threads_no_filter(self, tmp_path: Path) -> None:
         """Test listing all threads without filter."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata1 = ThreadMetadata(plan_summary="Thread 1")
         metadata2 = ThreadMetadata(plan_summary="Thread 2")
@@ -134,9 +145,10 @@ class TestInMemoryDurability:
         assert thread2.thread_id in thread_ids
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_status(self) -> None:
+    async def test_list_threads_filter_by_status(self, tmp_path: Path) -> None:
         """Test listing threads filtered by status."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata1 = ThreadMetadata(plan_summary="Thread 1")
         metadata2 = ThreadMetadata(plan_summary="Thread 2")
@@ -162,9 +174,10 @@ class TestInMemoryDurability:
         assert suspended_threads[0].thread_id == thread2.thread_id
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_tags(self) -> None:
+    async def test_list_threads_filter_by_tags(self, tmp_path: Path) -> None:
         """Test listing threads filtered by tags."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata1 = ThreadMetadata(plan_summary="Thread 1", tags=["python", "test"])
         metadata2 = ThreadMetadata(plan_summary="Thread 2", tags=["java", "test"])
@@ -180,9 +193,10 @@ class TestInMemoryDurability:
         assert python_threads[0].thread_id == thread1.thread_id
 
     @pytest.mark.asyncio
-    async def test_list_threads_filter_by_date_range(self) -> None:
+    async def test_list_threads_filter_by_date_range(self, tmp_path: Path) -> None:
         """Test listing threads filtered by creation date."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test")
         await durability.create_thread(metadata)
@@ -200,9 +214,10 @@ class TestInMemoryDurability:
         assert len(old_threads) == 0
 
     @pytest.mark.asyncio
-    async def test_list_threads_combined_filters(self) -> None:
+    async def test_list_threads_combined_filters(self, tmp_path: Path) -> None:
         """Test listing threads with combined filters."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata1 = ThreadMetadata(plan_summary="Thread 1", tags=["python"])
         metadata2 = ThreadMetadata(plan_summary="Thread 2", tags=["java"])
@@ -221,9 +236,10 @@ class TestInMemoryDurability:
         assert filtered_threads[0].thread_id == thread1.thread_id
 
     @pytest.mark.asyncio
-    async def test_save_and_load_state(self) -> None:
+    async def test_save_and_load_state(self, tmp_path: Path) -> None:
         """Test saving and loading thread state."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -236,18 +252,20 @@ class TestInMemoryDurability:
         assert loaded_state == state
 
     @pytest.mark.asyncio
-    async def test_load_state_nonexistent_thread(self) -> None:
+    async def test_load_state_nonexistent_thread(self, tmp_path: Path) -> None:
         """Test loading state for nonexistent thread returns None."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         state = await durability.load_state("nonexistent_id")
 
         assert state is None
 
     @pytest.mark.asyncio
-    async def test_save_state_overwrites(self) -> None:
+    async def test_save_state_overwrites(self, tmp_path: Path) -> None:
         """Test that saving state overwrites previous state."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -263,9 +281,10 @@ class TestInMemoryDurability:
         assert loaded_state == state2
 
     @pytest.mark.asyncio
-    async def test_thread_updated_at_changes(self) -> None:
+    async def test_thread_updated_at_changes(self, tmp_path: Path) -> None:
         """Test that updated_at timestamp changes on modifications."""
-        durability = InMemoryDurability()
+        metadata_path = str(tmp_path / "threads.json")
+        durability = JsonDurability(metadata_path=metadata_path)
 
         metadata = ThreadMetadata(plan_summary="Test Thread")
         thread = await durability.create_thread(metadata)
@@ -276,3 +295,21 @@ class TestInMemoryDurability:
         resumed = await durability.resume_thread(thread.thread_id)
 
         assert resumed.updated_at > original_updated_at
+
+    @pytest.mark.asyncio
+    async def test_persistence_across_restarts(self, tmp_path: Path) -> None:
+        """Test that data persists across durability restarts."""
+        metadata_path = str(tmp_path / "threads.json")
+
+        # Create thread with first instance
+        durability1 = JsonDurability(metadata_path=metadata_path)
+        metadata = ThreadMetadata(plan_summary="Persistent Thread", tags=["test"])
+        thread1 = await durability1.create_thread(metadata)
+
+        # Create new instance with same path
+        durability2 = JsonDurability(metadata_path=metadata_path)
+        threads = await durability2.list_threads()
+
+        assert len(threads) == 1
+        assert threads[0].thread_id == thread1.thread_id
+        assert threads[0].metadata.plan_summary == "Persistent Thread"

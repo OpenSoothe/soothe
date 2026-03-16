@@ -29,9 +29,9 @@ class QueryClassifier:
     ]
 
     _SIMPLE_PATTERNS: ClassVar[list[str]] = [
-        r"^(read|show|list|display|cat|open|view)\s+\w+",  # Direct file operations
-        r"^(search|find|look up)\s+",  # Basic searches
-        r"^(run|execute|start)\s+",  # Direct execution
+        r".*\b(read|show|list|display|cat|open|view)\s+\w+",  # Direct file operations
+        r".*\b(search|find|look up)\s+",  # Basic searches
+        r".*\b(run|execute|start)\s+",  # Direct execution
     ]
 
     _COMPLEX_KEYWORDS = frozenset(
@@ -105,6 +105,12 @@ class QueryClassifier:
                 logger.debug("Query classified as trivial due to pattern match: %s", query[:50])
                 return "trivial"
 
+        # Check for simple patterns (before word count check)
+        for pattern in self._SIMPLE_PATTERNS:
+            if re.match(pattern, query_lower):
+                logger.debug("Query classified as simple due to pattern match: %s", query[:50])
+                return "simple"
+
         # Word count heuristics
         if word_count > self._medium_threshold:
             logger.debug("Query classified as complex due to word count (%d): %s", word_count, query[:50])
@@ -115,16 +121,9 @@ class QueryClassifier:
             return "medium"
 
         if word_count > self._trivial_threshold:
-            # Check for simple patterns
-            for pattern in self._SIMPLE_PATTERNS:
-                if re.match(pattern, query_lower):
-                    logger.debug("Query classified as simple due to pattern match: %s", query[:50])
-                    return "simple"
-            return "medium"
+            logger.debug("Query classified as simple due to word count (%d): %s", word_count, query[:50])
+            return "simple"
 
-        # Default to trivial for very short queries
-        if word_count <= self._trivial_threshold:
-            logger.debug("Query classified as trivial due to short length (%d words): %s", word_count, query[:50])
-            return "trivial"
-
-        return "simple"
+        # Default to trivial for very short queries (strictly less than threshold)
+        logger.debug("Query classified as trivial due to short length (%d words): %s", word_count, query[:50])
+        return "trivial"

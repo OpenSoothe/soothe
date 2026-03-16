@@ -9,6 +9,7 @@ from soothe.protocols.durability import (
     ThreadMetadata,
 )
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
+from soothe.protocols.persistence import PersistStore
 from soothe.protocols.planner import (
     Plan,
     PlanContext,
@@ -40,6 +41,7 @@ __all__ = [
     "MemoryProtocol",
     "Permission",
     "PermissionSet",
+    "PersistStore",
     "Plan",
     "PlanContext",
     "PlanStep",

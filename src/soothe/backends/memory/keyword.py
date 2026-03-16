@@ -1,4 +1,4 @@
-"""StoreBackedMemory -- lightweight memory implementation using key-value storage."""
+"""KeywordMemory -- lightweight memory implementation using keyword matching with persistence."""
 
 from __future__ import annotations
 
@@ -6,32 +6,31 @@ import logging
 import re
 from datetime import UTC, datetime
 
-from soothe.backends.persistence import PersistStore, create_persist_store
+from soothe.backends.persistence import PersistStore
 from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
 
 
-class StoreBackedMemory:
-    """MemoryProtocol implementation using simple key-value persistence.
+class KeywordMemory:
+    """MemoryProtocol implementation using keyword matching with persistence.
 
-    Stores items in a dict keyed by ID. Recall uses keyword matching.
-    Persistence via JSON or RocksDB.
+    Lightweight memory with keyword-based recall. Supports JSON, RocksDB,
+    or PostgreSQL persistence backends.
+
+    Naming: Consistent with KeywordContext - both use keyword matching
+    for retrieval and support the same persistence backends.
     """
 
-    def __init__(
-        self,
-        persist_path: str | None = None,
-        persist_backend: str = "json",
-    ) -> None:
-        """Initialize StoreBackedMemory.
+    def __init__(self, persist_store: PersistStore | None = None) -> None:
+        """Initialize KeywordMemory.
 
         Args:
-            persist_path: Path/directory for persistence. None for in-memory only.
-            persist_backend: Backend type (``json`` or ``rocksdb``).
+            persist_store: Optional PersistStore instance for persistence.
+                          None for in-memory only (no persistence).
         """
         self._items: dict[str, MemoryItem] = {}
-        self._store: PersistStore | None = create_persist_store(persist_path, persist_backend)
+        self._store = persist_store
         if self._store:
             self._load_all()
 
@@ -90,8 +89,7 @@ class StoreBackedMemory:
     def _load_all(self) -> None:
         """Load all memory items from persistence.
 
-        For the JSON backend, items are stored individually. For RocksDB,
-        each item is a separate key. We use a manifest key to track all IDs.
+        Items are stored individually with a manifest key tracking all IDs.
         """
         if not self._store:
             return

@@ -1,7 +1,9 @@
 """Tests for CLI thread logging and review commands."""
 
+import asyncio
 from types import SimpleNamespace
 
+import pytest
 from rich.console import Console
 
 from soothe.cli.commands import handle_slash_command
@@ -32,14 +34,15 @@ def test_thread_logger_round_trips_conversation_and_events(tmp_path) -> None:
     assert logger.recent_actions()[0]["data"]["type"] == "soothe.thread.started"
 
 
-def test_history_command_renders_recent_prompts(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_history_command_renders_recent_prompts(tmp_path) -> None:
     """The history command should show stored prompts."""
     history = InputHistory(history_file=str(tmp_path / "history.json"))
     history.add("first prompt")
     history.add("second prompt")
     console = Console(record=True, width=120)
 
-    should_exit = handle_slash_command(
+    should_exit = await handle_slash_command(
         "/history",
         DummyRunner(),
         console,
@@ -52,7 +55,8 @@ def test_history_command_renders_recent_prompts(tmp_path) -> None:
     assert "second prompt" in output
 
 
-def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
+@pytest.mark.asyncio
+async def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
     """The review command should surface both recent conversation and actions."""
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="thread-2")
     logger.log_user_input("summarize the repo")
@@ -60,7 +64,7 @@ def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
     logger.log_assistant_response("Here is a short summary.")
     console = Console(record=True, width=120)
 
-    should_exit = handle_slash_command(
+    should_exit = await handle_slash_command(
         "/review",
         DummyRunner(),
         console,

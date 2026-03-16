@@ -1,9 +1,9 @@
 # Unified Persistence Storage Implementation
 
-> Implementation guide for unified RocksDB-based persistence across all Soothe components.
+> Implementation guide for unified PostgreSQL-based persistence across all Soothe components.
 >
-> **Module**: `soothe.backends.durability`, `soothe.config`, `soothe.cli`, `soothe.subagents.weaver`
-> **Related**: RFC-0002 (Core Protocols), RFC-0003 (CLI/TUI Architecture), RFC-0008 (Performance Optimization)
+> **Module**: `soothe.backends.persistence`, `soothe.backends.durability`, `soothe.config`, `soothe.core.resolver`
+> **Related**: RFC-0002 (Core Protocols), RFC-0003 (CLI/TUI Architecture), RFC-0006 (Context/Memory Architecture), RFC-0008 (Performance Optimization)
 > **Created**: 2026-03-16
 > **Updated**: 2026-03-16
 
@@ -13,18 +13,20 @@
 
 ### Problem Statement
 
-Soothe currently has multiple persistence backends with inconsistent storage mechanisms:
+Soothe previously had multiple persistence backends with inconsistent storage mechanisms:
 
-1. **RESOLVED**: Checkpointer now uses PostgreSQL (persistent, no async/sync conflicts)
-2. **CRITICAL**: `durability_backend` should default to `rocksdb` (not `in_memory`)
-3. **MODERATE**: Context/Memory default to `json` instead of performant `rocksdb`
-4. **MODERATE**: No cleanup policies for ThreadLogger, Weaver, or Browser
+1. **RESOLVED**: Checkpointer uses PostgreSQL (persistent, no async/sync conflicts)
+2. **RESOLVED**: Unified PostgreSQL DSN for checkpointer and persistence backends
+3. **RESOLVED**: Context/Memory/Durability now support PostgreSQL backend
+4. **RESOLVED**: Renamed `StoreBackedMemory` → `KeywordMemory` for consistency
+5. **RESOLVED**: Removed outdated `InMemoryDurability` and `LangGraphDurability` classes
+6. **RESOLVED**: Renamed durability backend `langgraph` → `json` for clarity
 
 ### Solution
 
-Unify all persistence:
+Unify all persistence with PostgreSQL as the default:
 - **Checkpoints**: PostgreSQL (persistent, leverages pgvector infrastructure)
-- **Durability/Context/Memory**: RocksDB (fast local KV store)
+- **Durability/Context/Memory**: PostgreSQL (default), JSON or RocksDB (fallback)
 - **Thread Logs**: JSONL files (human-readable conversation history)
 
 ### Target Architecture
@@ -33,72 +35,29 @@ Unify all persistence:
 ~/.soothe/                          # SOOTHE_HOME
 ├── config/config.yml
 ├── context/
-│   └── data/                       # RocksDB (keyword context)
+│   └── data/                       # JSON/RocksDB fallback
 ├── memory/
-│   └── data/                       # RocksDB (keyword memory)
+│   └── data/                       # JSON/RocksDB fallback
 ├── durability/
-│   └── data/                       # RocksDB (thread metadata)
+│   └── threads.json                # JSON fallback
 ├── threads/                        # ThreadLogger JSONL files
 │   └── {thread_id}.jsonl
-├── [PostgreSQL Database]           # Checkpoints (persistent)
-│   ├── checkpoints                 # Checkpoint state
+├── [PostgreSQL Database]           # Primary storage (persistent)
+│   ├── checkpoints                 # LangGraph checkpoint state
 │   ├── checkpoint_blobs            # Large binary data
 │   ├── checkpoint_writes           # Pending writes
-│   └── checkpoint_config           # Thread configs
+│   ├── checkpoint_config           # Thread configs
+│   └── soothe_persistence          # Unified persistence table (context/memory/durability)
 ├── generated_agents/
 ├── logs/soothe.log
 └── history.json
 ```
 
-**Note**:
-- Checkpoints use PostgreSQL (no local files)
-- No SQLite support (async context manager incompatibility)
-- Each RocksDB component uses separate database instances (no lock conflicts)
-
----
-
-## 2. Checkpointer Backend: PostgreSQL
-
-### Why PostgreSQL (No SQLite Support)
-
-**SQLite was removed because:**
-- `AsyncSqliteSaver.from_conn_string()` returns async context manager
-- Incompatible with synchronous `SootheRunner.__init__()`
-- Would require major architecture changes to support
-
-**PostgreSQL advantages:**
-- `PostgresSaver.from_conn_string()` returns checkpointer directly (no context manager)
-- Works with current synchronous initialization
-- Already running via Docker Compose (pgvector)
-- Better for distributed deployments
-- Built-in connection pooling
-- Production-ready persistence
-
-### Configuration
-
-```yaml
-# config/config.yml
-checkpointer_backend: postgres  # Only option
-checkpointer_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
-```
-
-### Prerequisites
-
-```bash
-# Start pgvector
-docker-compose up -d
-
-# Install PostgreSQL support
-pip install 'langgraph[postgres]'
-```
-
-### Tables Created Automatically
-
-LangGraph creates these tables on first use:
-- `checkpoints` - Checkpoint state
-- `checkpoint_blobs` - Large binary data
-- `checkpoint_writes` - Pending writes
-- `checkpoint_config` - Thread configurations
+**Key Improvements**:
+- **Single DSN**: One PostgreSQL connection for all persistence needs
+- **Namespace isolation**: Each subsystem (context, memory, durability) uses separate namespace
+- **Graceful fallback**: If PostgreSQL fails, falls back to JSON file storage
+- **Production-ready**: PostgreSQL provides ACID guarantees and rich tooling
 
 ---
 

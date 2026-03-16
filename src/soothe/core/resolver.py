@@ -389,12 +389,26 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     from pathlib import Path
 
     from soothe.backends.context.keyword import KeywordContext
+    from soothe.backends.persistence import create_persist_store
 
     persist_dir = config.context_persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
-    return KeywordContext(
-        persist_dir=persist_dir,
-        persist_backend=config.context_persist_backend,
-    )
+
+    # Create persist store based on config
+    try:
+        persist_store = create_persist_store(
+            persist_dir=persist_dir,
+            backend=config.context_persist_backend,
+            dsn=config.persistence_postgres_dsn if config.context_persist_backend == "postgresql" else None,
+            namespace="context",
+        )
+    except Exception as e:
+        logger.warning("Failed to create context persist store, falling back to json: %s", e)
+        persist_store = create_persist_store(
+            persist_dir=persist_dir,
+            backend="json",
+        )
+
+    return KeywordContext(persist_store=persist_store)
 
 
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
@@ -430,13 +444,27 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 
     from pathlib import Path
 
-    from soothe.backends.memory.store import StoreBackedMemory
+    from soothe.backends.memory.keyword import KeywordMemory
+    from soothe.backends.persistence import create_persist_store
 
     persist_path = config.memory_persist_path or str(Path(SOOTHE_HOME) / "memory" / "data")
-    return StoreBackedMemory(
-        persist_path=persist_path,
-        persist_backend=config.memory_persist_backend,
-    )
+
+    # Create persist store based on config
+    try:
+        persist_store = create_persist_store(
+            persist_dir=persist_path,
+            backend=config.memory_persist_backend,
+            dsn=config.persistence_postgres_dsn if config.memory_persist_backend == "postgresql" else None,
+            namespace="memory",
+        )
+    except Exception as e:
+        logger.warning("Failed to create memory persist store, falling back to json: %s", e)
+        persist_store = create_persist_store(
+            persist_dir=persist_path,
+            backend="json",
+        )
+
+    return KeywordMemory(persist_store=persist_store)
 
 
 def resolve_planner(
@@ -526,10 +554,34 @@ def resolve_policy(_config: SootheConfig) -> PolicyProtocol | None:
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     """Instantiate the DurabilityProtocol implementation from config.
 
-    Falls back to ``langgraph`` durability when rocksdb dependencies are unavailable.
+    Supports: json, rocksdb, postgresql backends.
+    Falls back to json durability when other backends fail.
     """
     from pathlib import Path
 
+    # Try PostgreSQL backend
+    if config.durability_backend == "postgresql":
+        try:
+            from soothe.backends.durability.postgresql import PostgreSQLDurability
+            from soothe.backends.persistence import create_persist_store
+
+            persist_store = create_persist_store(
+                backend="postgresql",
+                dsn=config.persistence_postgres_dsn,
+                namespace="durability",
+            )
+            logger.info("Using PostgreSQL durability backend")
+            return PostgreSQLDurability(persist_store=persist_store)
+        except Exception as e:
+            logger.warning(
+                "PostgreSQL durability requested but failed: %s. "
+                "Falling back to json durability. "
+                "Install with: pip install 'soothe[postgres]'",
+                e,
+            )
+            # Fall through to json backend
+
+    # Try RocksDB backend
     if config.durability_backend == "rocksdb":
         try:
             from soothe.backends.durability.rocksdb import RocksDBDurability
@@ -540,48 +592,50 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
         except (ImportError, RuntimeError) as e:
             logger.warning(
                 "RocksDB durability requested but dependencies unavailable: %s. "
-                "Falling back to langgraph durability (JSON-based). "
+                "Falling back to json durability. "
                 "Install with: pip install soothe[rocksdb]",
                 e,
             )
-            # Fall through to langgraph backend
+            # Fall through to json backend
 
-    if config.durability_backend == "langgraph" or config.durability_backend == "rocksdb":
-        from soothe.backends.durability.langgraph import LangGraphDurability
+    # JSON backend (default fallback)
+    if config.durability_backend in ("json", "postgresql", "rocksdb"):
+        from soothe.backends.durability.json import JsonDurability
 
         metadata_path = config.durability_metadata_path or str(Path(SOOTHE_HOME) / "durability" / "threads.json")
-        logger.info("Using langgraph durability backend at %s", metadata_path)
-        return LangGraphDurability(metadata_path=metadata_path)
+        logger.info("Using json durability backend at %s", metadata_path)
+        return JsonDurability(metadata_path=metadata_path)
 
-    # Unknown backend - default to langgraph
+    # Unknown backend - default to json
     logger.warning(
-        "Unknown durability backend '%s'; using langgraph (JSON-based) durability",
+        "Unknown durability backend '%s'; using json durability",
         config.durability_backend,
     )
-    from soothe.backends.durability.langgraph import LangGraphDurability
+    from soothe.backends.durability.json import JsonDurability
 
     metadata_path = str(Path(SOOTHE_HOME) / "durability" / "threads.json")
-    return LangGraphDurability(metadata_path=metadata_path)
+    return JsonDurability(metadata_path=metadata_path)
 
 
 def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
-    Falls back to ``MemorySaver`` when PostgreSQL is unavailable.
+    Uses unified persistence_postgres_dsn for connection.
+    Falls back to MemorySaver when PostgreSQL is unavailable.
     """
     from langgraph.checkpoint.memory import MemorySaver
 
     backend = config.checkpointer_backend
     if backend == "postgres":
-        return _resolve_postgres_checkpointer(config) or MemorySaver()
+        dsn = config.persistence_postgres_dsn
+        return _resolve_postgres_checkpointer(dsn) or MemorySaver()
 
     logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
     return MemorySaver()
 
 
-def _resolve_postgres_checkpointer(config: SootheConfig) -> Checkpointer | None:
-    """Initialize PostgreSQL checkpointer."""
-    dsn = config.checkpointer_postgres_dsn
+def _resolve_postgres_checkpointer(dsn: str) -> Checkpointer | None:
+    """Initialize PostgreSQL checkpointer with provided DSN."""
     if not dsn:
         logger.warning("PostgreSQL checkpointer requires DSN configuration")
         return None
@@ -591,26 +645,28 @@ def _resolve_postgres_checkpointer(config: SootheConfig) -> Checkpointer | None:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
         checkpointer = AsyncPostgresSaver.from_conn_string(dsn)
-        logger.info("Using AsyncPostgresSaver with DSN: %s", _mask_dsn(dsn))
-        return checkpointer
     except ImportError:
         logger.debug("AsyncPostgresSaver not available, trying sync version")
     except Exception as exc:
         logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
+    else:
+        logger.info("Using AsyncPostgresSaver with DSN: %s", _mask_dsn(dsn))
+        return checkpointer
 
     # Fallback to sync PostgresSaver
     try:
         from langgraph.checkpoint.postgres import PostgresSaver
 
         checkpointer = PostgresSaver.from_conn_string(dsn)
-        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
-        return checkpointer
     except ImportError:
         logger.warning(
             "PostgreSQL checkpointer requires 'langgraph[postgres]'. Install with: pip install 'langgraph[postgres]'"
         )
     except Exception as exc:
         logger.warning("Failed to initialize PostgresSaver: %s", exc)
+    else:
+        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
+        return checkpointer
 
     return None
 

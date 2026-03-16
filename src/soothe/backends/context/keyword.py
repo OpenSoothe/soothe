@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
-from soothe.backends.persistence import PersistStore, create_persist_store
+from soothe.backends.persistence import PersistStore
 from soothe.protocols.context import ContextEntry, ContextProjection
 
 logger = logging.getLogger(__name__)
@@ -27,21 +27,18 @@ class KeywordContext:
 
     Stores entries in a list. Projection ranks entries by keyword overlap
     with the query plus a recency boost. No embedding dependencies.
+    Supports JSON, RocksDB, or PostgreSQL persistence backends.
     """
 
-    def __init__(
-        self,
-        persist_dir: str | None = None,
-        persist_backend: str = "json",
-    ) -> None:
+    def __init__(self, persist_store: PersistStore | None = None) -> None:
         """Initialize KeywordContext.
 
         Args:
-            persist_dir: Directory for persistence. None disables persistence.
-            persist_backend: Backend type (``json`` or ``rocksdb``).
+            persist_store: Optional PersistStore instance for persistence.
+                          None for in-memory only (no persistence).
         """
         self._entries: list[ContextEntry] = []
-        self._store: PersistStore | None = create_persist_store(persist_dir, persist_backend)
+        self._store = persist_store
 
     @property
     def entries(self) -> list[ContextEntry]:

@@ -1,27 +1,29 @@
-"""Tests for memory store implementations (StoreBackedMemory and VectorMemory)."""
+"""Tests for memory implementations (KeywordMemory and VectorMemory)."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.backends.memory.store import StoreBackedMemory
+from soothe.backends.memory.keyword import KeywordMemory
+from soothe.backends.persistence import create_persist_store
 from soothe.protocols.memory import MemoryItem
 
 
-class TestStoreBackedMemory:
-    """Unit tests for StoreBackedMemory."""
+class TestKeywordMemory:
+    """Unit tests for KeywordMemory."""
 
     def test_initialization_without_persistence(self) -> None:
         """Test initialization without persistence."""
-        memory = StoreBackedMemory(persist_path=None)
+        memory = KeywordMemory(persist_store=None)
 
         assert memory._items == {}
         assert memory._store is None
 
     def test_initialization_with_json_persistence(self, tmp_path: Path) -> None:
         """Test initialization with JSON persistence."""
-        memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        memory = KeywordMemory(persist_store=persist_store)
 
         assert memory._items == {}
         assert memory._store is not None
@@ -29,7 +31,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_remember_stores_item(self) -> None:
         """Test that remember stores a memory item."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
         item = MemoryItem(content="test memory", tags=["test"])
 
         item_id = await memory.remember(item)
@@ -41,13 +43,15 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_remember_with_persistence(self, tmp_path: Path) -> None:
         """Test that remember persists item to storage."""
-        memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        memory = KeywordMemory(persist_store=persist_store)
         item = MemoryItem(content="persisted memory", tags=["test"])
 
         await memory.remember(item)
 
         # Create new memory instance to test persistence
-        memory2 = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store2 = create_persist_store(str(tmp_path), backend="json")
+        memory2 = KeywordMemory(persist_store=persist_store2)
 
         assert item.id in memory2._items
         assert memory2._items[item.id].content == "persisted memory"
@@ -55,7 +59,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_recall_by_keyword_match(self) -> None:
         """Test recall finds items by keyword matching."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         item1 = MemoryItem(content="python programming language", importance=0.7)
         item2 = MemoryItem(content="java programming language", importance=0.7)
@@ -74,7 +78,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_recall_respects_limit(self) -> None:
         """Test that recall respects the limit parameter."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         for i in range(10):
             item = MemoryItem(content=f"memory item {i}", tags=["test"])
@@ -87,7 +91,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_recall_includes_importance(self) -> None:
         """Test that recall considers importance in scoring."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         item1 = MemoryItem(content="important python", importance=0.9)
         item2 = MemoryItem(content="python basics", importance=0.1)
@@ -103,7 +107,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_recall_by_tags(self) -> None:
         """Test recall_by_tags filters by tags."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         item1 = MemoryItem(content="item 1", tags=["python", "programming"])
         item2 = MemoryItem(content="item 2", tags=["java", "programming"])
@@ -123,7 +127,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_recall_by_tags_respects_limit(self) -> None:
         """Test recall_by_tags respects limit."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         for i in range(10):
             item = MemoryItem(content=f"item {i}", tags=["test", "shared"])
@@ -136,7 +140,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_forget_removes_item(self) -> None:
         """Test that forget removes an item."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
         item = MemoryItem(content="to be forgotten")
 
         await memory.remember(item)
@@ -150,7 +154,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_forget_nonexistent_returns_false(self) -> None:
         """Test that forget returns False for nonexistent item."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         result = await memory.forget("nonexistent_id")
 
@@ -159,7 +163,8 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_forget_with_persistence(self, tmp_path: Path) -> None:
         """Test that forget removes item from persistence."""
-        memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        memory = KeywordMemory(persist_store=persist_store)
         item = MemoryItem(content="to be forgotten")
 
         await memory.remember(item)
@@ -169,14 +174,15 @@ class TestStoreBackedMemory:
         assert result is True
 
         # Create new memory instance to verify deletion
-        memory2 = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store2 = create_persist_store(str(tmp_path), backend="json")
+        memory2 = KeywordMemory(persist_store=persist_store2)
 
         assert item.id not in memory2._items
 
     @pytest.mark.asyncio
     async def test_update_existing_item(self) -> None:
         """Test updating an existing item's content."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
         item = MemoryItem(content="original content")
 
         await memory.remember(item)
@@ -187,7 +193,7 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_update_nonexistent_raises_keyerror(self) -> None:
         """Test that update raises KeyError for nonexistent item."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         with pytest.raises(KeyError, match="not found"):
             await memory.update("nonexistent_id", "new content")
@@ -195,21 +201,23 @@ class TestStoreBackedMemory:
     @pytest.mark.asyncio
     async def test_update_with_persistence(self, tmp_path: Path) -> None:
         """Test that update persists changes."""
-        memory = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store = create_persist_store(str(tmp_path), backend="json")
+        memory = KeywordMemory(persist_store=persist_store)
         item = MemoryItem(content="original")
 
         await memory.remember(item)
         await memory.update(item.id, "updated")
 
         # Create new memory instance to verify update persisted
-        memory2 = StoreBackedMemory(persist_path=str(tmp_path), persist_backend="json")
+        persist_store2 = create_persist_store(str(tmp_path), backend="json")
+        memory2 = KeywordMemory(persist_store=persist_store2)
 
         assert memory2._items[item.id].content == "updated"
 
     @pytest.mark.asyncio
     async def test_recall_by_tags_orders_by_importance(self) -> None:
         """Test that recall_by_tags orders results by importance."""
-        memory = StoreBackedMemory()
+        memory = KeywordMemory()
 
         item1 = MemoryItem(content="item 1", tags=["test"], importance=0.3)
         item2 = MemoryItem(content="item 2", tags=["test"], importance=0.9)

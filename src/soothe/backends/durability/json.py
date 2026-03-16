@@ -1,4 +1,4 @@
-"""LangGraphDurability -- file-backed thread metadata durability."""
+"""JsonDurability -- file-backed thread metadata durability."""
 
 from __future__ import annotations
 
@@ -11,11 +11,14 @@ from uuid import uuid4
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
-class LangGraphDurability:
-    """DurabilityProtocol implementation with JSON-backed thread metadata.
+class JsonDurability:
+    """DurabilityProtocol implementation using JSON file storage.
 
-    This backend complements LangGraph checkpoint persistence by storing thread
-    lifecycle metadata and lightweight per-thread state in a local JSON file.
+    Stores thread metadata in a single threads.json file.
+    Simple, file-based persistence for development/testing.
+
+    NOT related to LangGraph checkpointer - this is for thread
+    lifecycle metadata only.
     """
 
     def __init__(self, metadata_path: str) -> None:

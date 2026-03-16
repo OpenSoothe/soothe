@@ -262,11 +262,12 @@ async def test_classification_performance():
 
 def test_rocksdb_data_subfolder_structure():
     """Test that RocksDB files are stored in data/ subfolders."""
-    import tempfile
-    import shutil
-    from pathlib import Path
-    from soothe.config import SOOTHE_HOME
     import os
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from soothe.config import SOOTHE_HOME
 
     # Use temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
