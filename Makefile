@@ -1,6 +1,6 @@
 # Makefile for soothe project
 
-.PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build clean help
+.PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help
 
 # Default target
 help:
@@ -16,6 +16,8 @@ help:
 	@echo "  make test-integration - Run integration tests (requires --run-integration)"
 	@echo "  make test-coverage - Run tests with coverage report"
 	@echo "  make build      - Build the package"
+	@echo "  make publish    - Publish package to PyPI"
+	@echo "  make publish-test - Publish package to TestPyPI"
 	@echo "  make clean      - Clean build artifacts"
 
 # Sync dependencies
@@ -85,6 +87,18 @@ build:
 	@echo "Building package..."
 	uv build
 	@echo "✓ Package built"
+
+# Publish package to PyPI
+publish:
+	@echo "Publishing package to PyPI..."
+	uv publish
+	@echo "✓ Package published to PyPI"
+
+# Publish package to TestPyPI
+publish-test:
+	@echo "Publishing package to TestPyPI..."
+	uv publish --index-url https://test.pypi.org/simple/
+	@echo "✓ Package published to TestPyPI"
 
 # Clean build artifacts
 clean:
