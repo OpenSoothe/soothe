@@ -62,6 +62,26 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
+def migrate_sessions_to_threads() -> None:
+    """Migrate old sessions/ directory to threads/ if needed.
+
+    This is a one-time migration to support the terminology change from
+    "session" to "thread" for conversation continuity.
+    """
+    home = Path(SOOTHE_HOME).expanduser()
+    sessions_dir = home / "sessions"
+    threads_dir = home / "threads"
+
+    # Only migrate if sessions/ exists and threads/ doesn't
+    if sessions_dir.exists() and not threads_dir.exists():
+        try:
+            sessions_dir.rename(threads_dir)
+            typer.echo(f"Migrated {sessions_dir} -> {threads_dir}")
+        except Exception as e:
+            # Log the error but don't fail - the user can manually move if needed
+            logging.getLogger(__name__).warning(f"Failed to migrate sessions/ to threads/: {e}")
+
+
 _DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 
 
@@ -207,6 +227,7 @@ def run(
         if progress_verbosity is not None:
             cfg = cfg.model_copy(update={"progress_verbosity": progress_verbosity})
         setup_logging(cfg)
+        migrate_sessions_to_threads()
 
         if prompt or no_tui:
             _run_headless(
@@ -257,12 +278,12 @@ def _run_headless(
     import asyncio
 
     from soothe.cli.progress_verbosity import classify_custom_event, should_show
-    from soothe.cli.session import SessionLogger
+    from soothe.cli.thread_logger import ThreadLogger
     from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
     from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
-    session_logger = SessionLogger(thread_id=thread_id or "headless")
+    thread_logger = ThreadLogger(thread_id=thread_id or "headless")
 
     _chunk_len = 3
     _msg_pair_len = 2
@@ -278,7 +299,7 @@ def _run_headless(
         has_error = False
         verbosity = cfg.progress_verbosity
 
-        session_logger.log_user_input(prompt)
+        thread_logger.log_user_input(prompt)
 
         stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
         if autonomous:
@@ -292,7 +313,7 @@ def _run_headless(
                     continue
                 namespace, mode, data = chunk
 
-                session_logger.log(namespace, mode, data)
+                thread_logger.log(namespace, mode, data)
 
                 if output_format == "jsonl":
                     sys.stdout.write(
@@ -357,7 +378,7 @@ def _run_headless(
             if full_response:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
-                session_logger.log_assistant_response("".join(full_response))
+                thread_logger.log_assistant_response("".join(full_response))
             return 1 if has_error else 0
         finally:
             await runner.cleanup()
@@ -484,7 +505,7 @@ def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
         parts = [reason]
         if profile:
             parts.append(f"(profile={profile})")
-    elif etype in ("soothe.session.started", "soothe.session.ended"):
+    elif etype in ("soothe.thread.started", "soothe.thread.ended"):
         parts = [f"thread={data.get('thread_id', '?')}"]
     elif etype == "soothe.iteration.started":
         parts = [f"iteration {data.get('iteration', '?')}: {data.get('goal_description', '')[:60]}"]
@@ -577,7 +598,10 @@ def init_soothe() -> None:
         target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
         typer.echo(f"Created minimal {target}")
 
-    for subdir in ("sessions", "generated_agents", "logs"):
+    # Migrate old sessions/ to threads/ if needed
+    migrate_sessions_to_threads()
+
+    for subdir in ("threads", "generated_agents", "logs"):
         (home / subdir).mkdir(parents=True, exist_ok=True)
 
     typer.echo(f"Soothe home initialized at {home}")
@@ -745,7 +769,7 @@ def thread_inspect(
     """Inspect thread details."""
     import asyncio
 
-    from soothe.cli.session import SessionLogger
+    from soothe.cli.thread_logger import ThreadLogger
     from soothe.core.runner import SootheRunner
 
     cfg = _load_config(config)
@@ -762,7 +786,7 @@ def thread_inspect(
         typer.echo(f"Status:       {t.get('status')}")
         typer.echo(f"Created:      {t.get('created_at')}")
 
-        logger = SessionLogger(thread_id=thread_id)
+        logger = ThreadLogger(thread_id=thread_id)
         records = logger.read_recent_records(limit=200)
         conversations = [r for r in records if r.get("kind") == "conversation"]
         events = [r for r in records if r.get("kind") == "event"]
@@ -807,9 +831,9 @@ def thread_delete(
     async def _delete() -> None:
         with contextlib.suppress(Exception):
             await runner._durability.archive_thread(thread_id)
-        session_file = anyio.Path(SOOTHE_HOME).expanduser() / "sessions" / f"{thread_id}.jsonl"
-        if await session_file.exists():
-            await session_file.unlink()
+        thread_file = anyio.Path(SOOTHE_HOME).expanduser() / "threads" / f"{thread_id}.jsonl"
+        if await thread_file.exists():
+            await thread_file.unlink()
         typer.echo(f"Deleted thread {thread_id}.")
 
     asyncio.run(_delete())
@@ -828,9 +852,9 @@ def thread_export(
     ] = "jsonl",
 ) -> None:
     """Export thread conversation to a file."""
-    from soothe.cli.session import SessionLogger
+    from soothe.cli.thread_logger import ThreadLogger
 
-    logger = SessionLogger(thread_id=thread_id)
+    logger = ThreadLogger(thread_id=thread_id)
     records = logger.read_recent_records(limit=10000)
 
     if not records:

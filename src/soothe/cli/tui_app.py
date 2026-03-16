@@ -29,6 +29,7 @@ from textual.widgets import Footer, Header, Input, RichLog, Static
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.cli.commands import parse_autonomous_command
 from soothe.cli.progress_verbosity import classify_custom_event, should_show
+from soothe.cli.thread_logger import ThreadLogger
 from soothe.cli.tui_shared import (
     TuiState,
     _handle_generic_custom_activity,
@@ -197,6 +198,7 @@ class SootheApp(App):
         self._conversation_history: list[str] = []
         self._last_activity_count = 0
         self._progress_verbosity = self._config.progress_verbosity
+        self._thread_logger: ThreadLogger | None = None
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: 3-row layout."""
@@ -271,11 +273,31 @@ class SootheApp(App):
         if msg_type == "status":
             state = msg.get("state", "unknown")
             tid = msg.get("thread_id", self._state.thread_id)
+            previous_thread_id = self._state.thread_id
             self._state.thread_id = tid
+
+            # Load thread history when thread_id is first received or changes
+            if tid and tid != previous_thread_id:
+                self._load_thread_history(tid)
+                # Refresh the conversation panel with loaded history
+                with contextlib.suppress(Exception):
+                    panel = self.query_one("#conversation", ConversationPanel)
+                    panel.clear()
+                    for entry in self._conversation_history:
+                        panel.write(entry)
+                    # Also refresh activity panel
+                    self._flush_new_activity()
+
             self._update_status(state)
             # Only render assistant output in conversation at turn end.
             if state in {"idle", "stopped"} and self._state.full_response:
                 self._append_conversation()
+
+        elif msg_type == "command_response":
+            # Display command output in conversation panel
+            content = msg.get("content", "")
+            if content:
+                self._log_conversation(content)
 
         elif msg_type == "event":
             namespace = tuple(msg.get("namespace", []))
@@ -456,6 +478,80 @@ class SootheApp(App):
             self._flush_new_activity()
 
     # -- UI helpers ---------------------------------------------------------
+
+    def _load_thread_history(self, thread_id: str) -> None:
+        """Load conversation and activity history for a thread.
+
+        Searches both 'sessions' and 'threads' directories for backward compatibility.
+
+        Args:
+            thread_id: Thread ID to load history for.
+        """
+        if not thread_id:
+            return
+
+        # Clear previous history to prevent unbounded memory growth
+        self._conversation_history.clear()
+
+        # Try both directories for backward compatibility
+        from pathlib import Path
+
+        from soothe.config import SOOTHE_HOME
+
+        sessions_dir = Path(SOOTHE_HOME) / "sessions"
+        threads_dir = Path(SOOTHE_HOME) / "threads"
+
+        # Try sessions first (preferred for backward compatibility), then threads
+        # Use file existence check instead of reading the entire file
+        for directory in [sessions_dir, threads_dir]:
+            log_file = directory / f"{thread_id}.jsonl"
+            if log_file.exists():
+                try:
+                    self._thread_logger = ThreadLogger(thread_dir=str(directory), thread_id=thread_id)
+                    logger.info("Found thread history in %s for thread %s", directory, thread_id)
+                    break
+                except Exception:
+                    continue
+        else:
+            # No data found, use default directory
+            self._thread_logger = ThreadLogger(thread_id=thread_id)
+            logger.info("No existing history found for thread %s, using default directory", thread_id)
+
+        try:
+            # Load recent conversation history
+            conversations = self._thread_logger.recent_conversation(limit=50)
+            for record in conversations:
+                role = record.get("role", "unknown")
+                text = record.get("text", "")
+                if role == "user":
+                    self._conversation_history.append(f"\n[bold cyan]User:[/bold cyan] {text}")
+                elif role == "assistant":
+                    self._conversation_history.append(f"\n[bold green]Assistant:[/bold green] {text}")
+
+            # Load recent activity
+            events = self._thread_logger.recent_actions(limit=100)
+            for record in events:
+                namespace = record.get("namespace", [])
+                data = record.get("data", {})
+                if isinstance(data, dict):
+                    # Re-render the event using existing handlers
+                    category = classify_custom_event(tuple(namespace), data)
+                    if should_show(category, self._progress_verbosity):
+                        _handle_generic_custom_activity(
+                            tuple(namespace),
+                            data,
+                            self._state,
+                            verbosity=self._progress_verbosity,
+                        )
+
+            logger.info(
+                "Loaded thread history: %d conversations, %d events for thread %s",
+                len(conversations),
+                len(events),
+                thread_id,
+            )
+        except Exception:
+            logger.debug("Failed to load thread history", exc_info=True)
 
     def _log_conversation(self, text: str) -> None:
         self._conversation_history.append(text)

@@ -552,7 +552,7 @@ class SootheRunner:
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
 
-        yield _custom({"type": "soothe.session.ended", "thread_id": state.thread_id})
+        yield _custom({"type": "soothe.thread.ended", "thread_id": state.thread_id})
 
     # -- stream + autonomous helpers ----------------------------------------
 
@@ -726,7 +726,7 @@ class SootheRunner:
         protocols = self.protocol_summary()
         yield _custom(
             {
-                "type": "soothe.session.started",
+                "type": "soothe.thread.started",
                 "thread_id": state.thread_id,
                 "protocols": protocols,
             }
@@ -934,7 +934,7 @@ class SootheRunner:
         except Exception:
             logger.debug("State persistence failed", exc_info=True)
 
-        yield _custom({"type": "soothe.session.ended", "thread_id": state.thread_id})
+        yield _custom({"type": "soothe.thread.ended", "thread_id": state.thread_id})
 
     # -- internal helpers ---------------------------------------------------
 

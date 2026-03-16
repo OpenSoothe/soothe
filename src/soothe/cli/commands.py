@@ -12,7 +12,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from rich.console import Console
 
-    from soothe.cli.session import InputHistory, SessionLogger
+    from soothe.cli.thread_logger import InputHistory, ThreadLogger
     from soothe.core.runner import SootheRunner
     from soothe.protocols.planner import Plan
 
@@ -112,7 +112,6 @@ SLASH_COMMANDS: dict[str, str] = {
     "/thread archive <id>": "Archive a thread",
     "/clear": "Clear the screen",
     "/config": "Show active configuration summary",
-    "/session": "Show current session log path",
     "/help": "Show available commands",
 }
 
@@ -159,7 +158,7 @@ def handle_slash_command(
     console: Console,
     *,
     current_plan: Plan | None = None,
-    session_logger: SessionLogger | None = None,
+    thread_logger: ThreadLogger | None = None,
     input_history: InputHistory | None = None,
 ) -> bool:
     """Handle a slash command.
@@ -169,7 +168,7 @@ def handle_slash_command(
         runner: The SootheRunner instance.
         console: Rich console for output.
         current_plan: Current plan (if any).
-        session_logger: Active session logger.
+        thread_logger: Active thread logger.
         input_history: Stored prompt history for `/history`.
 
     Returns:
@@ -209,7 +208,7 @@ def handle_slash_command(
         return False
 
     if command == "/review":
-        _show_review(console, session_logger, arg)
+        _show_review(console, thread_logger, arg)
         return False
 
     if command == "/thread":
@@ -218,13 +217,6 @@ def handle_slash_command(
 
     if command == "/config":
         _show_config(console, runner)
-        return False
-
-    if command == "/session":
-        if session_logger:
-            console.print(f"[dim]Session dir: {session_logger.session_dir}[/dim]")
-        else:
-            console.print("[dim]No session logger active.[/dim]")
         return False
 
     if command == "/clear":
@@ -306,9 +298,9 @@ def _show_input_history(console: Console, history: InputHistory | None) -> None:
     console.print(table)
 
 
-def _show_review(console: Console, session_logger: SessionLogger | None, scope: str) -> None:
-    if not session_logger:
-        console.print("[dim]No session logger active.[/dim]")
+def _show_review(console: Console, thread_logger: ThreadLogger | None, scope: str) -> None:
+    if not thread_logger:
+        console.print("[dim]No thread logger active.[/dim]")
         return
 
     normalized = (scope or "all").lower()
@@ -317,7 +309,7 @@ def _show_review(console: Console, session_logger: SessionLogger | None, scope: 
         return
 
     if normalized in {"all", "conversation"}:
-        conversation = session_logger.recent_conversation()
+        conversation = thread_logger.recent_conversation()
         if conversation:
             table = Table(title="Recent Conversation", show_lines=False)
             table.add_column("Role", style="bold cyan")
@@ -331,7 +323,7 @@ def _show_review(console: Console, session_logger: SessionLogger | None, scope: 
             console.print("[dim]No conversation records in this session yet.[/dim]")
 
     if normalized in {"all", "actions"}:
-        actions = session_logger.recent_actions()
+        actions = thread_logger.recent_actions()
         if actions:
             table = Table(title="Recent Actions", show_lines=False)
             table.add_column("Source", style="magenta")

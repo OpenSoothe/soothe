@@ -26,7 +26,7 @@ prompts so the agent works correctly out of the box and presents a professional 
 | File | Change |
 |------|--------|
 | `config.py` | `workspace_dir` default `"."` instead of `None` |
-| `cli/main.py` | Resolve workspace_dir to absolute path; add `SessionLogger` to headless mode |
+| `cli/main.py` | Resolve workspace_dir to absolute path; add `ThreadLogger` to headless mode |
 | `core/resolver.py` | Claude model passed as string; vector context/memory with try/except fallback to keyword |
 
 ### 1. Subagent cwd

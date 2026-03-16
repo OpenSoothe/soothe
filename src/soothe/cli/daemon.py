@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.cli.thread_logger import ThreadLogger
+from soothe.cli.tui_shared import extract_text_from_ai_message
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +136,7 @@ class SootheDaemon:
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._thread_logger: ThreadLogger | None = None
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -301,7 +304,8 @@ class SootheDaemon:
                     await self._broadcast({"type": "status", "state": "stopping"})
                     self._running = False
                     break
-                await self._broadcast({"type": "event", "data": {"type": "soothe.command", "cmd": cmd}})
+                # Execute the command and send response
+                await self._handle_command(cmd)
             elif msg_type == "input":
                 text = msg["text"]
                 await self._run_query(
@@ -309,6 +313,48 @@ class SootheDaemon:
                     autonomous=bool(msg.get("autonomous", False)),
                     max_iterations=msg.get("max_iterations"),
                 )
+
+    async def _handle_command(self, cmd: str) -> None:
+        """Execute a slash command and broadcast the response.
+
+        Args:
+            cmd: The slash command to execute.
+        """
+        from io import StringIO
+
+        from rich.console import Console
+        from rich.text import Text
+
+        from soothe.cli.commands import handle_slash_command
+
+        # Create a console to capture output
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=100)
+
+        # Execute the command
+        should_exit = handle_slash_command(
+            cmd,
+            self._runner,
+            console,
+            current_plan=None,  # TODO: track plan state in daemon
+            thread_logger=self._thread_logger,
+            input_history=None,  # TODO: track input history in daemon
+        )
+
+        # Send the response back to clients
+        response_text = output.getvalue()
+        if response_text.strip():
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "content": response_text,
+                }
+            )
+
+        # Handle exit if command returned True
+        if should_exit:
+            await self._broadcast({"type": "status", "state": "stopping"})
+            self._running = False
 
     async def _run_query(
         self,
@@ -318,10 +364,22 @@ class SootheDaemon:
         max_iterations: int | None = None,
     ) -> None:
         """Stream a query through SootheRunner and broadcast events."""
-        await self._broadcast({"type": "status", "state": "running", "thread_id": self._runner.current_thread_id or ""})
+        thread_id = self._runner.current_thread_id or ""
+
+        # Update session logger for current thread
+        if not self._thread_logger or self._thread_logger._thread_id != thread_id:
+            self._thread_logger = ThreadLogger(thread_id=thread_id)
+
+        # Log user input
+        if self._thread_logger:
+            self._thread_logger.log_user_input(text)
+
+        await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+
+        full_response: list[str] = []
 
         try:
-            stream_kwargs: dict[str, Any] = {"thread_id": self._runner.current_thread_id}
+            stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
             if autonomous:
                 stream_kwargs["autonomous"] = True
                 if max_iterations is not None:
@@ -330,6 +388,16 @@ class SootheDaemon:
                 if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
                     continue
                 namespace, mode, data = chunk
+
+                # Log events to session
+                self._thread_logger.log(tuple(namespace), mode, data)
+
+                # Extract assistant text for conversation logging
+                if not namespace and mode == "messages":
+                    if isinstance(data, (tuple, list)) and len(data) == 2:
+                        msg, _metadata = data
+                        full_response.extend(extract_text_from_ai_message(msg))
+
                 event_msg = {
                     "type": "event",
                     "namespace": list(namespace),
@@ -347,6 +415,10 @@ class SootheDaemon:
                     "data": {"type": "soothe.error", "error": str(exc)},
                 }
             )
+
+        # Log assistant response
+        if full_response:
+            self._thread_logger.log_assistant_response("".join(full_response))
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
 

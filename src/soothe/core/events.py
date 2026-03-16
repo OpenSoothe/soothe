@@ -11,8 +11,8 @@ STREAM_CHUNK_LEN = 3
 MSG_PAIR_LEN = 2
 
 # Protocol event type prefixes
-SESSION_STARTED = "soothe.session.started"
-SESSION_ENDED = "soothe.session.ended"
+THREAD_STARTED = "soothe.thread.started"
+THREAD_ENDED = "soothe.thread.ended"
 CONTEXT_PROJECTED = "soothe.context.projected"
 CONTEXT_INGESTED = "soothe.context.ingested"
 MEMORY_RECALLED = "soothe.memory.recalled"

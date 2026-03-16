@@ -120,14 +120,22 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
         return list(create_python_executor_tools())
 
     if name == "arxiv":
-        from langchain_community.tools import ArxivQueryRun
+        try:
+            from langchain_community.tools import ArxivQueryRun
 
-        return [ArxivQueryRun()]
+            return [ArxivQueryRun()]
+        except Exception:
+            logger.debug("Failed to load arxiv tool, skipping", exc_info=True)
+            return []
     if name == "wikipedia":
-        from langchain_community.tools import WikipediaQueryRun
-        from langchain_community.utilities import WikipediaAPIWrapper
+        try:
+            from langchain_community.tools import WikipediaQueryRun
+            from langchain_community.utilities import WikipediaAPIWrapper
 
-        return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
+            return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
+        except Exception:
+            logger.debug("Failed to load wikipedia tool, skipping", exc_info=True)
+            return []
     if name == "github":
         from langchain_community.utilities import GitHubAPIWrapper
 

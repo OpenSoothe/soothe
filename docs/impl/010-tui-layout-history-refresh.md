@@ -136,9 +136,9 @@ Textual application with CSS grid layout.
 
 | Command | Implementation |
 |--------|----------------|
-| `soothe thread inspect <id>` | List threads, find match, show details + SessionLogger stats |
-| `soothe thread delete <id>` | Archive + delete session file; `--yes` skips confirm |
-| `soothe thread export <id>` | SessionLogger.read_recent_records; output jsonl or md |
+| `soothe thread inspect <id>` | List threads, find match, show details + ThreadLogger stats |
+| `soothe thread delete <id>` | Archive + delete thread file; `--yes` skips confirm |
+| `soothe thread export <id>` | ThreadLogger.read_recent_records; output jsonl or md |
 
 ### Headless Mode
 

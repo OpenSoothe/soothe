@@ -1,4 +1,4 @@
-"""Session logging and input history for the Soothe TUI."""
+"""Thread logging and input history for the Soothe TUI."""
 
 from __future__ import annotations
 
@@ -23,45 +23,45 @@ def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Session logger
+# Thread logger
 # ---------------------------------------------------------------------------
 
 
-class SessionLogger:
+class ThreadLogger:
     """Append-only JSONL writer for stream and conversation records.
 
     Captures structured event records for offline replay and audit, plus
     user/assistant conversation turns for lightweight in-terminal review.
 
     Args:
-        session_dir: Directory for session logs. Defaults to ``SOOTHE_HOME/sessions/``.
+        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``.
         thread_id: Thread ID for the log file name.
     """
 
     def __init__(
         self,
-        session_dir: str | None = None,
+        thread_dir: str | None = None,
         thread_id: str | None = None,
     ) -> None:
-        """Initialize the session logger.
+        """Initialize the thread logger.
 
         Args:
-            session_dir: Directory for session logs. Defaults to ``SOOTHE_HOME/sessions/``.
+            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``.
             thread_id: Thread ID for the log file name.
         """
-        self._session_dir = Path(session_dir or Path(SOOTHE_HOME) / "sessions").expanduser()
+        self._thread_dir = Path(thread_dir or Path(SOOTHE_HOME) / "threads").expanduser()
         self._thread_id = thread_id or "default"
         self._initialized = False
 
     @property
-    def session_dir(self) -> Path:
-        """Root directory for session JSONL files."""
-        return self._session_dir
+    def thread_dir(self) -> Path:
+        """Root directory for thread JSONL files."""
+        return self._thread_dir
 
     @property
     def log_path(self) -> Path:
         """Path to the current thread's JSONL file."""
-        return self._session_dir / f"{self._thread_id}.jsonl"
+        return self._thread_dir / f"{self._thread_id}.jsonl"
 
     def set_thread_id(self, thread_id: str) -> None:
         """Update the thread ID (and thus the log file)."""
@@ -96,7 +96,7 @@ class SessionLogger:
             self._log_message_event(namespace, data)
 
     def log_user_input(self, text: str) -> None:
-        """Log a user turn for later session review.
+        """Log a user turn for later thread review.
 
         Args:
             text: User-entered prompt text.
@@ -114,7 +114,7 @@ class SessionLogger:
         )
 
     def log_assistant_response(self, text: str) -> None:
-        """Log an assistant turn for later session review.
+        """Log an assistant turn for later thread review.
 
         Args:
             text: Final assistant response text.
@@ -169,7 +169,7 @@ class SessionLogger:
             logger.debug("Failed to log message event", exc_info=True)
 
     def read_recent_records(self, limit: int = 100) -> list[dict[str, Any]]:
-        """Read the most recent session records from disk.
+        """Read the most recent thread records from disk.
 
         Args:
             limit: Maximum number of records to return.
@@ -184,7 +184,7 @@ class SessionLogger:
             with self.log_path.open(encoding="utf-8") as fh:
                 lines = fh.readlines()[-limit:]
         except OSError:
-            logger.debug("SessionLogger read failed", exc_info=True)
+            logger.debug("ThreadLogger read failed", exc_info=True)
             return []
 
         records: list[dict[str, Any]] = []
@@ -192,37 +192,37 @@ class SessionLogger:
             try:
                 parsed = json.loads(line)
             except json.JSONDecodeError:
-                logger.debug("Skipping invalid session log line", exc_info=True)
+                logger.debug("Skipping invalid thread log line", exc_info=True)
                 continue
             if isinstance(parsed, dict):
                 records.append(parsed)
         return records
 
     def recent_conversation(self, limit: int = 6) -> list[dict[str, Any]]:
-        """Return recent conversation turns from the current session log."""
+        """Return recent conversation turns from the current thread log."""
         records = self.read_recent_records(limit=max(limit * 4, limit))
         items = [record for record in records if record.get("kind") == "conversation"]
         return items[-limit:]
 
     def recent_actions(self, limit: int = 12) -> list[dict[str, Any]]:
-        """Return recent action/event records from the current session log."""
+        """Return recent action/event records from the current thread log."""
         records = self.read_recent_records(limit=max(limit * 4, limit))
         items = [record for record in records if record.get("kind") == "event"]
         return items[-limit:]
 
     def _write_record(self, record: dict[str, Any]) -> None:
-        """Append a single JSONL record to the session log."""
+        """Append a single JSONL record to the thread log."""
         try:
             self._ensure_dir()
             with self.log_path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, default=str) + "\n")
         except OSError:
-            logger.debug("SessionLogger write failed", exc_info=True)
+            logger.debug("ThreadLogger write failed", exc_info=True)
 
     def _ensure_dir(self) -> None:
         if not self._initialized:
             try:
-                self._session_dir.mkdir(parents=True, exist_ok=True)
+                self._thread_dir.mkdir(parents=True, exist_ok=True)
                 self._initialized = True
             except OSError:
                 pass

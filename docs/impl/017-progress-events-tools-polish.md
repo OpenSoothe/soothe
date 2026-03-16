@@ -86,7 +86,7 @@ for basic operation:
 | `src/soothe/cli/progress_verbosity.py` | Add `_SUBAGENT_PREFIXES`, update classifier |
 | `src/soothe/cli/tui_shared.py` | Update `_handle_subagent_custom()` for new names |
 | `src/soothe/cli/main.py` | Consolidate helpers, suppress loggers, fix idioms |
-| `src/soothe/cli/session.py` | Add `classification` field to event records |
+| `src/soothe/cli/thread_logger.py` | Add `classification` field to event records |
 | `src/soothe/core/resolver.py` | Remove tavily/duckduckgo, add datetime group |
 | `src/soothe/tools/wizsearch.py` | Update default engines |
 | `src/soothe/config.py` | Default tools list |

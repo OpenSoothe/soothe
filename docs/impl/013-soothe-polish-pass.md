@@ -45,7 +45,7 @@ This guide covers a comprehensive polish pass across several Soothe subsystems:
 - `src/soothe/agent.py`
 - `src/soothe/cli/main.py`
 - `src/soothe/cli/commands.py`
-- `src/soothe/cli/session.py`
+- `src/soothe/cli/thread_logger.py`
 - `config/config.yml`
 - `config/env.example`
 - `pyproject.toml`

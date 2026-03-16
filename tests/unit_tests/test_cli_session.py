@@ -1,11 +1,11 @@
-"""Tests for CLI session logging and review commands."""
+"""Tests for CLI thread logging and review commands."""
 
 from types import SimpleNamespace
 
 from rich.console import Console
 
 from soothe.cli.commands import handle_slash_command
-from soothe.cli.session import InputHistory, SessionLogger
+from soothe.cli.thread_logger import InputHistory, ThreadLogger
 
 
 class DummyRunner:
@@ -17,19 +17,19 @@ class DummyRunner:
         self.thread_id = thread_id
 
 
-def test_session_logger_round_trips_conversation_and_events(tmp_path) -> None:
-    """Session logs should retain both conversation turns and action events."""
-    logger = SessionLogger(session_dir=str(tmp_path), thread_id="thread-1")
+def test_thread_logger_round_trips_conversation_and_events(tmp_path) -> None:
+    """Thread logs should retain both conversation turns and action events."""
+    logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="thread-1")
 
     logger.log_user_input("hello soothe")
-    logger.log((), "custom", {"type": "soothe.session.started", "thread_id": "thread-1"})
+    logger.log((), "custom", {"type": "soothe.thread.started", "thread_id": "thread-1"})
     logger.log_assistant_response("hi there")
 
     records = logger.read_recent_records()
 
     assert [record["kind"] for record in records] == ["conversation", "event", "conversation"]
     assert [record["role"] for record in logger.recent_conversation()] == ["user", "assistant"]
-    assert logger.recent_actions()[0]["data"]["type"] == "soothe.session.started"
+    assert logger.recent_actions()[0]["data"]["type"] == "soothe.thread.started"
 
 
 def test_history_command_renders_recent_prompts(tmp_path) -> None:
@@ -54,7 +54,7 @@ def test_history_command_renders_recent_prompts(tmp_path) -> None:
 
 def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
     """The review command should surface both recent conversation and actions."""
-    logger = SessionLogger(session_dir=str(tmp_path), thread_id="thread-2")
+    logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="thread-2")
     logger.log_user_input("summarize the repo")
     logger.log((), "custom", {"type": "soothe.thread.created", "thread_id": "thread-2"})
     logger.log_assistant_response("Here is a short summary.")
@@ -64,7 +64,7 @@ def test_review_command_renders_conversation_and_actions(tmp_path) -> None:
         "/review",
         DummyRunner(),
         console,
-        session_logger=logger,
+        thread_logger=logger,
     )
 
     output = console.export_text()

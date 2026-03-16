@@ -29,7 +29,7 @@ src/soothe/cli/
 ├── tui_shared.py        # NEW: shared TUI rendering/state helpers
 ├── tui_app.py           # NEW: Textual TUI client
 ├── commands.py          # NEW: Slash commands, subagent routing
-└── session.py           # NEW: SessionLogger (JSONL), InputHistory
+└── thread_logger.py     # NEW: ThreadLogger (JSONL), InputHistory
 ```
 
 ## Implementation Plan
@@ -56,7 +56,7 @@ Key design decisions:
 
 **Files**:
 - `src/soothe/cli/commands.py` -- slash commands, subagent display names, numeric prefix parser
-- `src/soothe/cli/session.py` -- JSONL session logger, persistent input history
+- `src/soothe/cli/thread_logger.py` -- JSONL thread logger, persistent input history
 
 ### Phase 3: TUI
 
@@ -149,7 +149,7 @@ while True:
 
 - `tests/unit_tests/test_cli_runner.py` -- SootheRunner protocol orchestration with mock agent
 - `tests/unit_tests/test_cli_commands.py` -- Slash command parsing, subagent prefix routing
-- `tests/unit_tests/test_cli_session.py` -- SessionLogger JSONL output, InputHistory persistence
+- `tests/unit_tests/test_cli_session.py` -- ThreadLogger JSONL output, InputHistory persistence
 
 ### Integration Tests
 
