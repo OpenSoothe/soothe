@@ -256,6 +256,10 @@ class SootheApp(App):
                     return
                 await asyncio.sleep(0.25)
 
+        # Request thread resumption if thread_id was provided
+        if self._thread_id:
+            await self._client.send_resume_thread(self._thread_id)
+
         while self._connected:
             event = await self._client.read_event()
             if event is None:

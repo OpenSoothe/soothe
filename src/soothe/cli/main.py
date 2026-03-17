@@ -888,6 +888,10 @@ def attach(
             help="Progress visibility: minimal, normal, detailed, debug.",
         ),
     ] = None,
+    thread_id: Annotated[
+        str | None,
+        typer.Option("--thread-id", "-t", help="Thread ID to resume."),
+    ] = None,
 ) -> None:
     """Attach the TUI to an already-running Soothe daemon."""
     from soothe.cli.daemon import SootheDaemon
@@ -903,7 +907,7 @@ def attach(
     try:
         from soothe.cli.tui_app import run_textual_tui
 
-        run_textual_tui(config=cfg, config_path=config)
+        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config)
     except ImportError:
         typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
         sys.exit(1)
@@ -1087,7 +1091,7 @@ def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = N
                                     typer.echo(line)
                         else:
                             typer.echo(content.strip())
-                    break
+                    break  # Always break after command_response, even if empty
                 if event_type == "status":
                     state = event.get("state", "")
                     if state in ("idle", "stopped"):

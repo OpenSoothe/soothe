@@ -392,6 +392,13 @@ class SootheDaemon:
         elif msg_type == "command":
             cmd = msg.get("cmd", "")
             await self._current_input_queue.put({"type": "command", "cmd": cmd})
+        elif msg_type == "resume_thread":
+            thread_id = msg.get("thread_id", "")
+            if thread_id:
+                self._runner.set_current_thread_id(thread_id)
+                await self._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+                )
         elif msg_type == "detach":
             await self._send(client, {"type": "status", "state": "detached"})
         else:
@@ -701,6 +708,14 @@ class DaemonClient:
     async def send_detach(self) -> None:
         """Notify the daemon that this client is detaching."""
         await self._send({"type": "detach"})
+
+    async def send_resume_thread(self, thread_id: str) -> None:
+        """Request the daemon to resume a specific thread.
+
+        Args:
+            thread_id: The thread ID to resume.
+        """
+        await self._send({"type": "resume_thread", "thread_id": thread_id})
 
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
