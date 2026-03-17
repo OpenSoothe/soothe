@@ -14,6 +14,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from soothe.protocols.planner import GoalReport
+
 logger = logging.getLogger(__name__)
 
 GoalStatus = Literal["pending", "active", "completed", "failed"]
@@ -44,7 +46,7 @@ class Goal(BaseModel):
     depends_on: list[str] = Field(default_factory=list)
     retry_count: int = 0
     max_retries: int = 2
-    report: str | None = None
+    report: GoalReport | None = None  # RFC-0009: structured report (was str | None)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -140,6 +142,12 @@ class GoalEngine:
             if goal.status == "pending":
                 goal.status = "active"
                 goal.updated_at = datetime.now(UTC)
+
+        # Log ready goals (RFC-0009 / IG-026)
+        if result:
+            logger.info("Ready goals: %d (%s)", len(result), [g.id for g in result])
+        else:
+            logger.debug("No ready goals (waiting for dependencies)")
 
         return result
 
@@ -247,7 +255,14 @@ class GoalEngine:
 
     def snapshot(self) -> list[dict[str, Any]]:
         """Serialize all goals to a list of dicts for persistence."""
-        return [g.model_dump(mode="json") for g in self._goals.values()]
+        result = []
+        for g in self._goals.values():
+            goal_dict = g.model_dump(mode="json")
+            # Serialize GoalReport to JSON string if present
+            if g.report is not None:
+                goal_dict["report"] = g.report.model_dump_json()
+            result.append(goal_dict)
+        return result
 
     def restore_from_snapshot(self, data: list[dict[str, Any]]) -> None:
         """Restore goals from a serialized snapshot.
@@ -258,6 +273,9 @@ class GoalEngine:
         self._goals.clear()
         for item in data:
             try:
+                # Deserialize GoalReport from JSON string if present
+                if "report" in item and isinstance(item["report"], str):
+                    item["report"] = GoalReport.model_validate_json(item["report"])
                 goal = Goal(**item)
                 self._goals[goal.id] = goal
             except Exception:

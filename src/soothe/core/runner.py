@@ -819,7 +819,7 @@ class SootheRunner:
                         status="completed" if n_failed == 0 else "failed",
                         duration_ms=duration_ms,
                     )
-                    goal.report = goal_report.model_dump_json()
+                    goal.report = goal_report  # RFC-0009: store structured object
 
                     if self._context:
                         try:
@@ -902,6 +902,8 @@ class SootheRunner:
 
         # Emit DAG snapshot for logs (RFC-0009 / IG-022)
         if len(plan.steps) > 1 and any(s.depends_on for s in plan.steps):
+            dep_count = sum(1 for s in plan.steps if s.depends_on)
+            logger.info("Plan DAG: %d steps, %d with dependencies", len(plan.steps), dep_count)
             yield _custom(
                 {
                     "type": "soothe.plan.dag_snapshot",
@@ -917,6 +919,13 @@ class SootheRunner:
                 logger.warning("No ready steps but scheduler not complete -- breaking")
                 break
 
+            # Log batch execution info
+            step_ids = [s.id for s in ready]
+            if len(ready) == 1:
+                logger.info("Batch %d: 1 step ready (%s)", batch_index, step_ids[0])
+            else:
+                logger.info("Batch %d: %d steps ready %s", batch_index, len(ready), step_ids)
+
             yield _custom(
                 {
                     "type": "soothe.plan.batch_started",
@@ -928,6 +937,10 @@ class SootheRunner:
 
             for s in ready:
                 scheduler.mark_in_progress(s.id)
+
+            # Log parallel execution
+            if len(ready) > 1:
+                logger.info("Executing %d steps in parallel", len(ready))
 
             if len(ready) == 1:
                 step = ready[0]

@@ -146,9 +146,7 @@ class WizsearchSearchTool(BaseTool):
         # Check Tavily API key
         if "tavily" in engines:
             tavily_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("WIZSEARCH_TAVILY_API_KEY")
-            if tavily_key:
-                logger.info("Tavily API key found (length: %d)", len(tavily_key))
-            else:
+            if not tavily_key:
                 logger.warning("Tavily API key NOT FOUND - Tavily search will fail")
 
         # Log proxy configuration

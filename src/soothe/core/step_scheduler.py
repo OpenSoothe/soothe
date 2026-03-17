@@ -119,7 +119,7 @@ class StepScheduler:
         if step:
             step.status = "completed"
             step.result = result
-            logger.info("Step %s completed", step_id)
+            logger.info("Step %s completed (%d chars)", step_id, len(result))
 
     def mark_failed(self, step_id: str, error: str) -> None:
         """Mark a step as failed.
@@ -132,7 +132,7 @@ class StepScheduler:
         if step:
             step.status = "failed"
             step.result = error
-            logger.warning("Step %s failed: %s", step_id, error)
+            logger.warning("Step %s failed: %s", step_id, error[:100])
 
     def mark_in_progress(self, step_id: str) -> None:
         """Mark a step as in-progress.
@@ -143,6 +143,7 @@ class StepScheduler:
         step = self._step_map.get(step_id)
         if step:
             step.status = "in_progress"
+            logger.info("Step %s started: %s", step_id, step.description[:60])
 
     def is_complete(self) -> bool:
         """Check if all steps are terminal (completed or failed)."""

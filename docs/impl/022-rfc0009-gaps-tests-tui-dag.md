@@ -1,15 +1,17 @@
-# IG-022: RFC-0009 Gaps, Tests, TUI DAG, and Log Enhancements
+# IG-022: RFC-0009 Polish -- Tests, TUI DAG Visualization, and Spec Fixes
 
-**Implements**: RFC-0009 (gap closure), cross-RFC consistency
-**Status**: In Progress
+**Implements**: RFC-0009 (gap closure and polish), cross-RFC consistency
+**Status**: Completed
 **Created**: 2026-03-18
+**Completed**: 2026-03-18
 
 ## Overview
 
-Closes implementation gaps between RFC-0009 spec and code, fixes cross-RFC
+Closes minor implementation gaps between RFC-0009 spec and code, fixes cross-RFC
 consistency issues, adds comprehensive unit tests for all new DAG modules,
-enhances the TUI plan panel with DAG visualization, and enriches log records
-with dependency structure.
+and enhances the TUI plan panel with DAG dependency visualization.
+
+**Note**: Core RFC-0009 functionality (DAG execution, concurrency control, GoalReport assembly) is fully implemented. This guide addresses polish items only.
 
 ## Phase 1: RFC Consistency Fixes
 

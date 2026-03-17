@@ -66,6 +66,24 @@ def test_plan_step_started_by_id() -> None:
     assert "s1" in state.activity_lines[0].plain
 
 
+def test_plan_step_started_with_batch_index() -> None:
+    """Test step_started includes batch_index (RFC-0009)."""
+    state = TuiState()
+    _handle_protocol_event(
+        {
+            "type": "soothe.plan.step_started",
+            "step_id": "s1",
+            "description": "do something",
+            "depends_on": [],
+            "batch_index": 0,
+        },
+        state,
+        verbosity="normal",
+    )
+    assert len(state.activity_lines) == 1
+    assert "s1" in state.activity_lines[0].plain
+
+
 def test_plan_step_completed_by_id_with_duration() -> None:
     state = TuiState()
     _handle_protocol_event(
@@ -93,6 +111,25 @@ def test_plan_step_failed_renders() -> None:
     assert len(state.activity_lines) == 1
     assert "FAILED" in state.activity_lines[0].plain
     assert "timeout" in state.activity_lines[0].plain
+
+
+def test_plan_step_failed_with_blocked_steps() -> None:
+    """Test step_failed includes blocked_steps (RFC-0009)."""
+    state = TuiState()
+    _handle_protocol_event(
+        {
+            "type": "soothe.plan.step_failed",
+            "step_id": "s1",
+            "error": "dependency failed",
+            "blocked_steps": ["s2", "s3"],
+        },
+        state,
+        verbosity="normal",
+    )
+    # Verify event is handled and shows failure (blocked_steps is emitted but not displayed in TUI)
+    assert len(state.activity_lines) == 1
+    assert "FAILED" in state.activity_lines[0].plain
+    assert "dependency failed" in state.activity_lines[0].plain
 
 
 def test_goal_batch_started_renders() -> None:

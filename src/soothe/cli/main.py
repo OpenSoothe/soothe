@@ -931,6 +931,27 @@ def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
         parts = [f"goal {data.get('goal_id', '?')} completed"]
     elif etype == "soothe.goal.failed":
         parts = [f"goal {data.get('goal_id', '?')} failed (retry {data.get('retry_count', 0)})"]
+    elif etype == "soothe.goal.report":
+        goal_id = data.get("goal_id", "?")
+        step_count = data.get("step_count", 0)
+        completed = data.get("completed", 0)
+        failed = data.get("failed", 0)
+        summary = data.get("summary", "")
+
+        status = "completed" if failed == 0 else "failed"
+        parts = [f"[goal] {goal_id}: {completed}/{step_count} steps {status}"]
+
+        if failed > 0:
+            parts.append(f"({failed} failed)")
+
+        sys.stderr.write(" ".join(parts) + "\n")
+
+        if summary:
+            sys.stderr.write(f"  Summary: {summary}\n")
+
+        sys.stderr.flush()
+
+        return  # Prevent default printing
     elif etype == "soothe.error":
         parts = [data.get("error", "unknown")]
     else:
