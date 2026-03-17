@@ -24,7 +24,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
-from textual.widgets import Footer, Header, Input, RichLog, Static
+from textual.widgets import Header, Input, RichLog, Static
 
 from soothe.cli.commands import parse_autonomous_command
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
@@ -228,7 +228,6 @@ class SootheApp(App):
                 )
         yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
         yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
-        yield Footer()
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""

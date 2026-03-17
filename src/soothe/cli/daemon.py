@@ -221,6 +221,7 @@ class SootheDaemon:
         self._server = await asyncio.start_unix_server(
             self._handle_client,
             path=str(sock),
+            limit=10 * 1024 * 1024,  # 10MB limit for large events
         )
         self._running = True
         logger.info("Soothe daemon listening on %s", sock)
@@ -677,7 +678,8 @@ class DaemonClient:
 
     async def connect(self) -> None:
         """Open a connection to the daemon."""
-        self._reader, self._writer = await asyncio.open_unix_connection(str(self._sock))
+        # Set limit to 10MB to handle large events (e.g., search results)
+        self._reader, self._writer = await asyncio.open_unix_connection(str(self._sock), limit=10 * 1024 * 1024)
 
     async def close(self) -> None:
         """Close the connection."""

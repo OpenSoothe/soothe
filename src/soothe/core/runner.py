@@ -1183,6 +1183,9 @@ class SootheRunner:
             try:
                 if state.plan.steps:
                     first_step_success = bool(response_text.strip())
+                    # Update the step status in the runner's plan object
+                    state.plan.steps[0].status = "completed" if first_step_success else "failed"
+                    state.plan.steps[0].result = response_text[:200] if first_step_success else None
                     yield _custom(
                         {
                             "type": "soothe.plan.step_completed",
