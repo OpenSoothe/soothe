@@ -120,6 +120,7 @@ class SootheRunner:
         init_start = time.perf_counter()
 
         self._config = config or SootheConfig()
+        self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
         # Initialize query classifier for performance optimization
         if self._config.performance.enabled and self._config.performance.complexity_detection:
@@ -133,7 +134,15 @@ class SootheRunner:
             self._classifier = None
 
         checkpointer_start = time.perf_counter()
-        self._checkpointer = resolve_checkpointer(self._config)
+        checkpointer_result = resolve_checkpointer(self._config)
+        # Handle both tuple (PostgreSQL with pool) and single checkpointer (MemorySaver)
+        if isinstance(checkpointer_result, tuple):
+            self._checkpointer, self._checkpointer_pool = checkpointer_result
+            self._checkpointer_initialized = False
+        else:
+            self._checkpointer = checkpointer_result
+            self._checkpointer_pool = None
+            self._checkpointer_initialized = True
         checkpointer_ms = (time.perf_counter() - checkpointer_start) * 1000
         logger.debug("Checkpointer resolved in %.1fms", checkpointer_ms)
 
@@ -227,6 +236,14 @@ class SootheRunner:
 
         Stops background indexer tasks and closes connection pools.
         """
+        # Close checkpointer connection pool if it exists
+        if self._checkpointer_pool is not None:
+            try:
+                await self._checkpointer_pool.close()
+                logger.info("Closed PostgreSQL checkpointer connection pool")
+            except Exception:
+                logger.debug("Failed to close checkpointer pool", exc_info=True)
+
         # Close context / memory backend stores when they expose async close().
         await self._close_attached_store(self._context)
         await self._close_attached_store(self._memory)
@@ -730,6 +747,22 @@ class SootheRunner:
         )
         stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
         config = {"configurable": {"thread_id": state.thread_id}}
+
+        # Initialize checkpointer pool if using AsyncPostgresSaver
+        if not self._checkpointer_initialized and self._checkpointer_pool is not None:
+            try:
+                await self._checkpointer_pool.open()
+                await self._checkpointer.setup()
+                self._checkpointer_initialized = True
+                logger.info("AsyncPostgresSaver pool opened and tables initialized")
+            except Exception as exc:
+                logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
+                # Fall back to memory saver
+                from langgraph.checkpoint.memory import MemorySaver
+
+                self._checkpointer = MemorySaver()
+                self._checkpointer_pool = None
+                self._checkpointer_initialized = True
 
         hitl_iterations = 0
         while True:

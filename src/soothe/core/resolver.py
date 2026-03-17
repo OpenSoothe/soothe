@@ -95,7 +95,7 @@ def resolve_tools(tool_names: list[str], *, lazy: bool = False, config: SootheCo
     return tools
 
 
-def _resolve_single_tool_group(name: str) -> list[BaseTool]:
+def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) -> list[BaseTool]:
     """Resolve a single tool group name to a list of BaseTool instances with caching and profiling.
 
     This method checks the cache first, and if not found, delegates to the uncached version.
@@ -112,7 +112,7 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 
     # Load and cache
     start = time.perf_counter()
-    tools = _resolve_single_tool_group_uncached(name)
+    tools = _resolve_single_tool_group_uncached(name, config)
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     # Cache for future use
@@ -383,7 +383,19 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
     if config.protocols.context.backend == "none":
         return None
 
-    if config.protocols.context.backend == "vector" and config.vector_store_provider != "none":
+    # Parse combined backend: {behavior}-{storage}
+    parts = config.protocols.context.backend.split("-")
+    if len(parts) != 2:
+        logger.warning(
+            "Invalid context backend '%s', expected format: {behavior}-{storage}",
+            config.protocols.context.backend,
+        )
+        return None
+
+    behavior, storage = parts
+
+    # Handle vector behavior
+    if behavior == "vector" and config.vector_store_provider != "none":
         try:
             from soothe.backends.context.vector import VectorContext
             from soothe.backends.vector_store import create_vector_store
@@ -394,12 +406,14 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
                 config.resolve_vector_store_config(),
             )
             embeddings = config.create_embedding_model()
+            logger.info("Using vector context backend")
             return VectorContext(vector_store=vs, embeddings=embeddings)
         except Exception:
             logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
-    elif config.protocols.context.backend == "vector":
+    elif behavior == "vector":
         logger.warning("vector context requires vector_store_provider; falling back to keyword")
 
+    # Keyword behavior with storage backend
     from pathlib import Path
 
     from soothe.backends.context.keyword import KeywordContext
@@ -407,14 +421,12 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
     persist_dir = config.protocols.context.persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
 
-    # Create persist store based on config
+    # Create persist store based on storage backend
     try:
         persist_store = create_persist_store(
             persist_dir=persist_dir,
-            backend=config.protocols.context.persist_backend,
-            dsn=config.resolve_persistence_postgres_dsn()
-            if config.protocols.context.persist_backend == "postgresql"
-            else None,
+            backend=storage,
+            dsn=config.resolve_persistence_postgres_dsn() if storage == "postgresql" else None,
             namespace="context",
         )
     except Exception as e:
@@ -424,6 +436,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             backend="json",
         )
 
+    logger.info("Using keyword context backend with %s storage", storage)
     return KeywordContext(persist_store=persist_store)
 
 
@@ -441,7 +454,19 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     if config.protocols.memory.backend == "none":
         return None
 
-    if config.protocols.memory.backend == "vector" and config.vector_store_provider != "none":
+    # Parse combined backend: {behavior}-{storage}
+    parts = config.protocols.memory.backend.split("-")
+    if len(parts) != 2:
+        logger.warning(
+            "Invalid memory backend '%s', expected format: {behavior}-{storage}",
+            config.protocols.memory.backend,
+        )
+        return None
+
+    behavior, storage = parts
+
+    # Handle vector behavior
+    if behavior == "vector" and config.vector_store_provider != "none":
         try:
             from soothe.backends.memory.vector import VectorMemory
             from soothe.backends.vector_store import create_vector_store
@@ -452,36 +477,37 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
                 config.resolve_vector_store_config(),
             )
             embeddings = config.create_embedding_model()
+            logger.info("Using vector memory backend")
             return VectorMemory(vector_store=vs, embeddings=embeddings)
         except Exception:
             logger.warning("Vector memory init failed, falling back to keyword", exc_info=True)
-    elif config.protocols.memory.backend == "vector":
+    elif behavior == "vector":
         logger.warning("vector memory requires vector_store_provider; falling back to keyword")
 
+    # Keyword behavior with storage backend
     from pathlib import Path
 
     from soothe.backends.memory.keyword import KeywordMemory
     from soothe.backends.persistence import create_persist_store
 
-    persist_path = config.protocols.memory.persist_dir or str(Path(SOOTHE_HOME) / "memory" / "data")
+    persist_dir = config.protocols.memory.persist_dir or str(Path(SOOTHE_HOME) / "memory" / "data")
 
-    # Create persist store based on config
+    # Create persist store based on storage backend
     try:
         persist_store = create_persist_store(
-            persist_dir=persist_path,
-            backend=config.protocols.memory.persist_backend,
-            dsn=config.resolve_persistence_postgres_dsn()
-            if config.protocols.memory.persist_backend == "postgresql"
-            else None,
+            persist_dir=persist_dir,
+            backend=storage,
+            dsn=config.resolve_persistence_postgres_dsn() if storage == "postgresql" else None,
             namespace="memory",
         )
     except Exception as e:
         logger.warning("Failed to create memory persist store, falling back to json: %s", e)
         persist_store = create_persist_store(
-            persist_dir=persist_path,
+            persist_dir=persist_dir,
             backend="json",
         )
 
+    logger.info("Using keyword memory backend with %s storage", storage)
     return KeywordMemory(persist_store=persist_store)
 
 
@@ -603,11 +629,16 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     if config.protocols.durability.backend == "rocksdb":
         try:
             from soothe.backends.durability.rocksdb import RocksDBDurability
+            from soothe.backends.persistence import create_persist_store
 
-            persist_dir = config.protocols.durability.metadata_path or str(Path(SOOTHE_HOME) / "durability" / "data")
+            persist_dir = config.protocols.durability.persist_dir or str(Path(SOOTHE_HOME) / "durability" / "data")
+            persist_store = create_persist_store(persist_dir, backend="rocksdb")
+            if persist_store is None:
+                raise ValueError(f"Failed to create RocksDB store at {persist_dir}")
+
             logger.info("Using RocksDB durability backend at %s", persist_dir)
-            return RocksDBDurability(persist_dir=persist_dir)
-        except (ImportError, RuntimeError) as e:
+            return RocksDBDurability(persist_store)
+        except (ImportError, RuntimeError, ValueError) as e:
             logger.warning(
                 "RocksDB durability requested but dependencies unavailable: %s. "
                 "Falling back to json durability. "
@@ -620,11 +651,9 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     if config.protocols.durability.backend in ("json", "postgresql", "rocksdb"):
         from soothe.backends.durability.json import JsonDurability
 
-        metadata_path = config.protocols.durability.metadata_path or str(
-            Path(SOOTHE_HOME) / "durability" / "threads.json"
-        )
-        logger.info("Using json durability backend at %s", metadata_path)
-        return JsonDurability(metadata_path=metadata_path)
+        persist_dir = config.protocols.durability.persist_dir or str(Path(SOOTHE_HOME) / "durability")
+        logger.info("Using json durability backend at %s", persist_dir)
+        return JsonDurability(persist_dir=persist_dir)
 
     # Unknown backend - default to json
     logger.warning(
@@ -633,53 +662,74 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     )
     from soothe.backends.durability.json import JsonDurability
 
-    metadata_path = str(Path(SOOTHE_HOME) / "durability" / "threads.json")
-    return JsonDurability(metadata_path=metadata_path)
+    persist_dir = str(Path(SOOTHE_HOME) / "durability")
+    return JsonDurability(persist_dir=persist_dir)
 
 
-def resolve_checkpointer(config: SootheConfig) -> Checkpointer:
+def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
     Uses persistence.soothe_postgres_dsn for connection.
     Falls back to MemorySaver when PostgreSQL is unavailable.
+
+    Returns:
+        A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for MemorySaver.
+        The connection_resource must be closed during cleanup (e.g., via runner.cleanup()).
     """
     from langgraph.checkpoint.memory import MemorySaver
 
     backend = config.protocols.durability.checkpointer
     if backend == "postgresql":
         dsn = config.resolve_persistence_postgres_dsn()
-        return _resolve_postgres_checkpointer(dsn) or MemorySaver()
+        result = _resolve_postgres_checkpointer(dsn)
+        if result:
+            return result  # (checkpointer, pool)
 
     logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
     return MemorySaver()
 
 
-def _resolve_postgres_checkpointer(dsn: str) -> Checkpointer | None:
-    """Initialize PostgreSQL checkpointer with provided DSN."""
+def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
+    """Initialize PostgreSQL checkpointer with provided DSN.
+
+    Returns:
+        A tuple of (AsyncPostgresSaver, AsyncConnectionPool) if successful, None otherwise.
+        The pool must be closed during cleanup.
+    """
     if not dsn:
         logger.warning("PostgreSQL checkpointer requires DSN configuration")
         return None
 
-    # Try AsyncPostgresSaver first (better for async agent execution)
     try:
-        from langgraph.checkpoint.postgres import PostgresSaver
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        from psycopg_pool import AsyncConnectionPool
+        from psycopg.rows import dict_row
     except ImportError:
         logger.warning(
-            "PostgreSQL checkpointer requires 'langgraph[postgres]'. Install with: pip install 'langgraph[postgres]'"
+            "PostgreSQL checkpointer requires 'langgraph[postgres]' and 'psycopg-pool'. "
+            "Install with: pip install 'langgraph[postgres]' 'psycopg-pool'"
         )
         return None
 
-    # Try AsyncPostgresSaver.from_conn_string
-    # NOTE: from_conn_string returns an async context manager, not a checkpointer directly
-    # We need to use the sync PostgresSaver for now, as agent compilation happens synchronously
+    # Create an async connection pool (better for long-running daemon)
     try:
-        checkpointer = PostgresSaver.from_conn_string(dsn)
-        logger.info("Using PostgresSaver with DSN: %s", _mask_dsn(dsn))
+        pool = AsyncConnectionPool(
+            dsn,
+            max_size=10,
+            kwargs={
+                "autocommit": True,
+                "prepare_threshold": 0,
+                "row_factory": dict_row,
+            },
+            open=False,  # Don't open connections yet
+        )
+        checkpointer = AsyncPostgresSaver(pool)
+
+        logger.info("Using AsyncPostgresSaver with connection pool, DSN: %s", _mask_dsn(dsn))
+        return (checkpointer, pool)
     except Exception as exc:
-        logger.warning("Failed to initialize PostgresSaver: %s", exc)
+        logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
         return None
-    else:
-        return checkpointer
 
 
 def _mask_dsn(dsn: str) -> str:

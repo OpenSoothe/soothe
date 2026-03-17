@@ -3,119 +3,116 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+import logging
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
 
-from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
+from soothe.backends.durability.base import BasePersistStoreDurability
+from soothe.backends.persistence import create_persist_store
+
+logger = logging.getLogger(__name__)
 
 
-class JsonDurability:
+class JsonDurability(BasePersistStoreDurability):
     """DurabilityProtocol implementation using JSON file storage.
 
-    Stores thread metadata in a single threads.json file.
-    Simple, file-based persistence for development/testing.
+    Uses JsonPersistStore for persistence with automatic migration from
+    legacy single-file format (threads.json) to new multi-file format.
 
-    NOT related to LangGraph checkpointer - this is for thread
-    lifecycle metadata only.
+    Legacy format (threads.json):
+        {"threads": {...}, "state": {...}}
+
+    New format (multiple files):
+        - thread:{id}.json - individual thread metadata
+        - state:{id}.json - individual thread state
+        - thread_index.json - list of all thread IDs
     """
 
-    def __init__(self, metadata_path: str) -> None:
-        """Initialize the durability backend with a JSON metadata file.
+    def __init__(self, persist_dir: str) -> None:
+        """Initialize the durability backend with a JSON persistence directory.
 
         Args:
-            metadata_path: Path to the JSON file for storing thread metadata.
+            persist_dir: Directory for JSON persistence files.
+                        If a .json file path is provided, uses its parent directory
+                        and migrates legacy format if needed.
         """
-        self._path = Path(metadata_path).expanduser().resolve()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._threads: dict[str, ThreadInfo] = {}
-        self._state: dict[str, Any] = {}
-        self._load()
+        path = Path(persist_dir).expanduser().resolve()
 
-    async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
-        """Create a new thread and persist metadata."""
-        now = datetime.now(tz=UTC)
-        info = ThreadInfo(
-            thread_id=str(uuid4()),
-            status="active",
-            created_at=now,
-            updated_at=now,
-            metadata=metadata,
-        )
-        self._threads[info.thread_id] = info
-        self._save()
-        return info
+        # Handle legacy usage where a .json file path was passed
+        if path.suffix == ".json":
+            self._migrate_legacy_format(path)
+            persist_dir = str(path.parent)
+        else:
+            # Ensure directory exists
+            path.mkdir(parents=True, exist_ok=True)
+            persist_dir = str(path)
 
-    async def resume_thread(self, thread_id: str) -> ThreadInfo:
-        """Resume a suspended thread."""
-        info = self._threads.get(thread_id)
-        if info is None:
-            msg = f"Thread '{thread_id}' not found"
-            raise KeyError(msg)
-        info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
-        self._threads[thread_id] = info
-        self._save()
-        return info
+        # Create PersistStore
+        persist_store = create_persist_store(persist_dir, backend="json")
+        if persist_store is None:
+            raise ValueError(f"Failed to create JSON persist store at {persist_dir}")
 
-    async def suspend_thread(self, thread_id: str) -> None:
-        """Suspend an active thread."""
-        info = self._threads.get(thread_id)
-        if info is None:
+        super().__init__(persist_store)
+
+    def _migrate_legacy_format(self, legacy_path: Path) -> None:
+        """Migrate from legacy single-file format to new multi-file format.
+
+        This migration is idempotent and safe to run multiple times.
+        Creates backup of legacy file as threads.json.legacy.
+
+        Args:
+            legacy_path: Path to the legacy threads.json file.
+        """
+        # Check if legacy file exists
+        if not legacy_path.exists():
             return
-        self._threads[thread_id] = info.model_copy(update={"status": "suspended", "updated_at": datetime.now(tz=UTC)})
-        self._save()
 
-    async def archive_thread(self, thread_id: str) -> None:
-        """Archive a thread."""
-        info = self._threads.get(thread_id)
-        if info is None:
+        # Check if already migrated (thread_index.json exists)
+        index_path = legacy_path.parent / "thread_index.json"
+        if index_path.exists():
+            logger.debug("Already migrated from legacy format, skipping")
             return
-        self._threads[thread_id] = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
-        self._save()
 
-    async def list_threads(
-        self,
-        thread_filter: ThreadFilter | None = None,
-    ) -> list[ThreadInfo]:
-        """List threads matching a filter."""
-        results = list(self._threads.values())
-        if thread_filter is None:
-            return results
-        if thread_filter.status:
-            results = [t for t in results if t.status == thread_filter.status]
-        if thread_filter.tags:
-            tag_set = set(thread_filter.tags)
-            results = [t for t in results if tag_set.issubset(set(t.metadata.tags))]
-        if thread_filter.created_after:
-            results = [t for t in results if t.created_at >= thread_filter.created_after]
-        if thread_filter.created_before:
-            results = [t for t in results if t.created_at <= thread_filter.created_before]
-        return results
+        # Load legacy data
+        try:
+            raw = legacy_path.read_text(encoding="utf-8").strip()
+            if not raw:
+                return
 
-    async def save_state(self, thread_id: str, state: Any) -> None:
-        """Persist arbitrary state for a thread."""
-        self._state[thread_id] = state
-        self._save()
+            data = json.loads(raw)
+            threads = data.get("threads", {})
+            states = data.get("state", {})
 
-    async def load_state(self, thread_id: str) -> Any | None:
-        """Load persisted state for a thread."""
-        return self._state.get(thread_id)
+            # Create PersistStore for migration
+            store = create_persist_store(str(legacy_path.parent), backend="json")
+            if store is None:
+                logger.warning("Failed to create store for migration, skipping")
+                return
 
-    def _save(self) -> None:
-        payload = {
-            "threads": {tid: info.model_dump(mode="json") for tid, info in self._threads.items()},
-            "state": self._state,
-        }
-        self._path.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+            # Migrate threads
+            thread_ids = []
+            for tid, thread_data in threads.items():
+                store.save(f"thread:{tid}", thread_data)
+                thread_ids.append(tid)
 
-    def _load(self) -> None:
-        if not self._path.exists():
-            return
-        raw = self._path.read_text(encoding="utf-8").strip()
-        if not raw:
-            return
-        data = json.loads(raw)
-        threads = data.get("threads", {})
-        self._threads = {tid: ThreadInfo.model_validate(item) for tid, item in threads.items()}
-        self._state = data.get("state", {})
+            # Migrate states
+            for tid, state_data in states.items():
+                store.save(f"state:{tid}", state_data)
+
+            # Create thread index
+            store.save("thread_index", thread_ids)
+
+            # Backup legacy file
+            backup_path = legacy_path.with_suffix(".json.legacy")
+            legacy_path.rename(backup_path)
+            logger.info(
+                "Migrated %d threads from legacy format to %s",
+                len(thread_ids),
+                legacy_path.parent,
+            )
+
+        except (json.JSONDecodeError, OSError, ValueError):
+            logger.warning(
+                "Failed to migrate legacy format from %s, starting fresh",
+                legacy_path,
+                exc_info=True,
+            )

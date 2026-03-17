@@ -462,7 +462,7 @@ class SootheDaemon:
         from soothe.cli.commands import handle_slash_command
 
         output = StringIO()
-        console = Console(file=output, force_terminal=True, width=100)
+        console = Console(file=output, force_terminal=False, width=100)
 
         should_exit = await handle_slash_command(
             cmd,

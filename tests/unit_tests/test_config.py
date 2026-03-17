@@ -352,24 +352,27 @@ class TestPropagateEnv:
 
 class TestProtocolConfig:
     def test_context_backend_options(self) -> None:
-        for backend in ("keyword", "vector", "none"):
+        """Test context backend with combined format."""
+        for backend in ("keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"):
             cfg = SootheConfig(protocols={"context": {"backend": backend}})
             assert cfg.protocols.context.backend == backend
 
     def test_memory_backend_options(self) -> None:
-        for backend in ("keyword", "vector", "none"):
+        """Test memory backend with combined format."""
+        for backend in ("keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"):
             cfg = SootheConfig(protocols={"memory": {"backend": backend}})
             assert cfg.protocols.memory.backend == backend
 
-    def test_persist_backend_options(self) -> None:
+    def test_combined_backend_options(self) -> None:
+        """Test combined backend format for context and memory."""
         cfg = SootheConfig(
             protocols={
-                "context": {"persist_backend": "rocksdb"},
-                "memory": {"persist_backend": "rocksdb"},
+                "context": {"backend": "keyword-rocksdb"},
+                "memory": {"backend": "keyword-rocksdb"},
             }
         )
-        assert cfg.protocols.context.persist_backend == "rocksdb"
-        assert cfg.protocols.memory.persist_backend == "rocksdb"
+        assert cfg.protocols.context.backend == "keyword-rocksdb"
+        assert cfg.protocols.memory.backend == "keyword-rocksdb"
 
     def test_vector_store_config(self) -> None:
         cfg = SootheConfig(

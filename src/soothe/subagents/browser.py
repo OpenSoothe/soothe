@@ -14,7 +14,6 @@ import logging
 import os
 from typing import TYPE_CHECKING, Annotated, Any
 
-import anyio
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -121,100 +120,89 @@ def _build_browser_graph(
 
         try:
             # Suppress browser-use stdout/stderr noise and rely on structured events.
-            devnull_file = await anyio.Path(os.devnull).open("w", encoding="utf-8")
-            with (
-                devnull_file,
-                contextlib.redirect_stdout(devnull_file),
-                contextlib.redirect_stderr(devnull_file),
-            ):
-                # Import browser-use under redirected stdio so startup logs are hidden.
-                from browser_use import Agent as BrowserAgent, BrowserSession
-                from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+            # Use synchronous file object since contextlib.redirect_stdout/stderr
+            # require synchronous context managers
+            with open(os.devnull, "w", encoding="utf-8") as devnull_file:
+                with (
+                    contextlib.redirect_stdout(devnull_file),
+                    contextlib.redirect_stderr(devnull_file),
+                ):
+                    # Import browser-use under redirected stdio so startup logs are hidden.
+                    from browser_use import Agent as BrowserAgent, BrowserSession
+                    from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
 
-                messages = state.get("messages", [])
-                task = messages[-1].content if messages else ""
+                    messages = state.get("messages", [])
+                    task = messages[-1].content if messages else ""
 
-                # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
-                model_name = browser_model or "qwen3.5-flash"
-                if ":" in model_name:
-                    model_name = model_name.split(":", 1)[1]
+                    # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
+                    model_name = browser_model or "qwen3.5-flash"
+                    if ":" in model_name:
+                        model_name = model_name.split(":", 1)[1]
 
-                llm_kwargs: dict[str, Any] = {}
-                if browser_base_url:
-                    llm_kwargs["base_url"] = browser_base_url
-                if browser_api_key:
-                    llm_kwargs["api_key"] = browser_api_key
-                llm = BUChatOpenAI(model_name, **llm_kwargs)
+                    llm_kwargs: dict[str, Any] = {}
+                    if browser_base_url:
+                        llm_kwargs["base_url"] = browser_base_url
+                    if browser_api_key:
+                        llm_kwargs["api_key"] = browser_api_key
+                    llm = BUChatOpenAI(model_name, **llm_kwargs)
 
-                browser = BrowserSession(
-                    headless=headless,
-                    downloads_path=browser_downloads_dir,
-                    user_data_dir=browser_user_data_dir,
-                )
-
-                async def on_step_end(agent: Any) -> None:
-                    step_num = agent.state.n_steps
-                    last = agent.history.history[-1] if agent.history.history else None
-                    action_desc = ""
-                    page_title = ""
-                    url = None
-                    if last:
-                        if hasattr(last, "model_output") and last.model_output:
-                            action = getattr(last.model_output, "action", None)
-                            if action:
-                                action_desc = str(action)[:80]
-                        if hasattr(last, "state"):
-                            url = getattr(last.state, "url", None)
-                            page_title = getattr(last.state, "title", "")[:60]
-                    _emit(
-                        {
-                            "type": "soothe.browser.step",
-                            "step": step_num,
-                            "url": url,
-                            "action": action_desc,
-                            "title": page_title,
-                            "is_done": agent.history.is_done(),
-                        },
-                        logger,
+                    browser = BrowserSession(
+                        headless=headless,
+                        downloads_path=browser_downloads_dir,
+                        user_data_dir=browser_user_data_dir,
                     )
 
-                agent = BrowserAgent(
-                    task=task,
-                    llm=llm,
-                    browser=browser,
-                    use_vision=use_vision,
-                )
-                history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
-                result = history.final_result() or "Browser task completed (no extracted content)."
+                    async def on_step_end(agent: Any) -> None:
+                        step_num = agent.state.n_steps
+                        last = agent.history.history[-1] if agent.history.history else None
+                        action_desc = ""
+                        page_title = ""
+                        url = None
+                        if last:
+                            if hasattr(last, "model_output") and last.model_output:
+                                action = getattr(last.model_output, "action", None)
+                                if action:
+                                    action_desc = str(action)[:80]
+                            if hasattr(last, "state"):
+                                url = getattr(last.state, "url", None)
+                                page_title = getattr(last.state, "title", "")[:60]
+                        _emit(
+                            {
+                                "type": "soothe.browser.step",
+                                "step": step_num,
+                                "url": url,
+                                "action": action_desc,
+                                "title": page_title,
+                                "is_done": agent.history.is_done(),
+                            },
+                            logger,
+                        )
 
-                # Clean up temporary files if requested
-                if browser_config.cleanup_on_exit:
-                    from soothe.utils.runtime import cleanup_browser_temp_files
+                    agent = BrowserAgent(
+                        task=task,
+                        llm=llm,
+                        browser=browser,
+                        use_vision=use_vision,
+                    )
+                    history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
+                    result = history.final_result() or "Browser task completed (no extracted content)."
 
-                    cleanup_browser_temp_files()
-        except Exception:
+                    # Clean up temporary files if requested
+                    if browser_config.cleanup_on_exit:
+                        from soothe.utils.runtime import cleanup_browser_temp_files
+
+                        cleanup_browser_temp_files()
+        except Exception as e:
             logger.exception("Browser agent failed")
-            result = "Browser agent encountered an error."
+            error_type = type(e).__name__
+            error_msg = str(e)
+            result = f"Browser agent encountered an error: {error_type}: {error_msg}"
 
         return {"messages": [AIMessage(content=result)]}
 
-    def run_browser(state: dict[str, Any]) -> dict[str, Any]:
-        """Synchronous wrapper for the async browser function."""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if loop.is_running():
-            # If we're already in an async context, create a new loop
-            new_loop = asyncio.new_event_loop()
-            try:
-                return new_loop.run_until_complete(_run_browser_async(state))
-            finally:
-                new_loop.close()
-        else:
-            return loop.run_until_complete(_run_browser_async(state))
+    async def run_browser(state: dict[str, Any]) -> dict[str, Any]:
+        """Async browser function for LangGraph."""
+        return await _run_browser_async(state)
 
     graph = StateGraph(_BrowserState)
     graph.add_node("run_browser", run_browser)

@@ -545,8 +545,10 @@ router:
   embedding: "openai:text-embedding-3-small"
 
 # Protocols
-context_backend: keyword
-memory_backend: keyword
+context:
+  backend: keyword-postgresql
+memory:
+  backend: keyword-postgresql
 planner_routing: auto
 policy_profile: standard
 
@@ -621,32 +623,40 @@ Soothe separates conversation view from activity view:
 
 Accumulates knowledge and projects relevant subsets into bounded token windows.
 
-**Backends**:
-- `keyword`: Tag-based matching
-- `vector`: Semantic search
+**Backends** (combined format: `{behavior}-{storage}`):
+- `keyword-json`: Tag-based matching with JSON storage
+- `keyword-rocksdb`: Tag-based matching with RocksDB storage
+- `keyword-postgresql`: Tag-based matching with PostgreSQL storage
+- `vector-postgresql`: Semantic search with PostgreSQL storage
 - `none`: Disabled
 
 **Configuration**:
 
 ```yaml
-context_backend: keyword
-context_persist_dir: ~/.soothe/context
+protocols:
+  context:
+    backend: keyword-postgresql
+    persist_dir: ~/.soothe/context
 ```
 
 ### Memory Protocol
 
 Cross-thread long-term memory for important findings.
 
-**Backends**:
-- `keyword`: Keyword retrieval
-- `vector`: Semantic retrieval
+**Backends** (combined format: `{behavior}-{storage}`):
+- `keyword-json`: Keyword retrieval with JSON storage
+- `keyword-rocksdb`: Keyword retrieval with RocksDB storage
+- `keyword-postgresql`: Keyword retrieval with PostgreSQL storage
+- `vector-postgresql`: Semantic retrieval with PostgreSQL storage
 - `none`: Disabled
 
 **Configuration**:
 
 ```yaml
-memory_backend: keyword
-memory_persist_path: ~/.soothe/memory/
+protocols:
+  memory:
+    backend: keyword-postgresql
+    persist_dir: ~/.soothe/memory/
 ```
 
 ### Planner Protocol

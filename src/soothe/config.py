@@ -309,28 +309,36 @@ class ContextProtocolConfig(BaseModel):
     """Context Protocol configuration.
 
     Args:
-        backend: Context implementation (keyword, vector, or none).
+        backend: Combined behavior and storage backend.
+                 Format: {behavior}-{storage} or 'none'
+                 Behaviors: keyword, vector
+                 Storage: json, rocksdb, postgresql
+                 Examples: keyword-postgresql, vector-postgresql, keyword-json
         persist_dir: Directory for context persistence.
-        persist_backend: Persistence backend for context data.
     """
 
-    backend: Literal["keyword", "vector", "none"] = "keyword"
+    backend: Literal["keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"] = (
+        "keyword-postgresql"
+    )
     persist_dir: str | None = None
-    persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
 
 
 class MemoryProtocolConfig(BaseModel):
     """Memory Protocol configuration.
 
     Args:
-        backend: Memory implementation (keyword, vector, or none).
+        backend: Combined behavior and storage backend.
+                 Format: {behavior}-{storage} or 'none'
+                 Behaviors: keyword, vector
+                 Storage: json, rocksdb, postgresql
+                 Examples: keyword-postgresql, vector-postgresql, keyword-json
         persist_dir: Directory for memory persistence.
-        persist_backend: Persistence backend for memory data.
     """
 
-    backend: Literal["keyword", "vector", "none"] = "keyword"
+    backend: Literal["keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"] = (
+        "keyword-postgresql"
+    )
     persist_dir: str | None = None
-    persist_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
 
 
 class PlannerProtocolConfig(BaseModel):
@@ -359,12 +367,12 @@ class DurabilityProtocolConfig(BaseModel):
     Args:
         backend: Durability backend for thread lifecycle and metadata.
         checkpointer: LangGraph checkpoint backend (consistent naming).
-        metadata_path: Metadata/state path for durability backends.
+        persist_dir: Directory for durability persistence.
     """
 
     backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
     checkpointer: Literal["postgresql"] = "postgresql"
-    metadata_path: str | None = None
+    persist_dir: str | None = None
 
 
 class ProtocolsConfig(BaseModel):

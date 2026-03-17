@@ -196,18 +196,6 @@ persistence:
 # All protocols support multiple backends with different tradeoffs.
 
 protocols:
-  # Context Protocol: Accumulates and projects knowledge within a thread
-  context:
-    backend: keyword  # keyword (tag matching) | vector (semantic) | none
-    persist_dir: ""   # Empty = SOOTHE_HOME/context/
-    persist_backend: postgresql  # Overrides persistence.default_backend
-
-  # Memory Protocol: Cross-thread long-term memory
-  memory:
-    backend: keyword  # keyword (tag matching) | vector (semantic) | none
-    persist_dir: ""   # Empty = SOOTHE_HOME/memory/
-    persist_backend: postgresql  # Overrides persistence.default_backend
-
   # Planner Protocol: Task decomposition and execution planning
   planner:
     routing: auto  # auto | always_direct | always_planner | always_claude
@@ -216,11 +204,21 @@ protocols:
   policy:
     profile: standard  # Named profile from policy_profiles.yml
 
+  # Context Protocol: Accumulates and projects knowledge within a thread
+  context:
+    backend: keyword-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
+    persist_dir: ""   # Empty = SOOTHE_HOME/context/
+
+  # Memory Protocol: Cross-thread long-term memory
+  memory:
+    backend: keyword-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
+    persist_dir: ""   # Empty = SOOTHE_HOME/memory/
+
   # Durability Protocol: Thread lifecycle and state persistence
   durability:
     backend: postgresql  # json | rocksdb | postgresql
-    checkpointer: postgresql  # LangGraph checkpoint backend (consistent naming)
-    metadata_path: ""  # Empty = SOOTHE_HOME/durability/threads.json
+    persist_dir: ""  # Empty = SOOTHE_HOME/durability/
+    checkpointer: postgresql  # LangGraph checkpoint backend
 
 # =============================================================================
 # Autonomous Operation

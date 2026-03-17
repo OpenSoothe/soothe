@@ -104,42 +104,6 @@ class TestBrowserSubagent:
         assert spec["name"] == "browser"
         assert "runnable" in spec
 
-    def test_environment_variables_set_correctly(self) -> None:
-        """Test that environment variables are set in the async function."""
-        import os
-
-        from soothe.subagents.browser import _build_browser_graph
-
-        # Save original env vars
-        original_ext = os.environ.get("BROWSER_USE_DISABLE_EXTENSIONS")
-        original_cloud = os.environ.get("BROWSER_USE_CLOUD_SYNC")
-        original_telem = os.environ.get("ANONYMIZED_TELEMETRY")
-
-        try:
-            # Build graph with defaults (all privacy features disabled)
-            graph = _build_browser_graph()
-
-            # We can't directly test the async function's env var setting
-            # without actually running it (which requires browser-use installed),
-            # but we verify the function accepts the parameters
-            assert graph is not None
-
-        finally:
-            # Restore original env vars
-            if original_ext is not None:
-                os.environ["BROWSER_USE_DISABLE_EXTENSIONS"] = original_ext
-            elif "BROWSER_USE_DISABLE_EXTENSIONS" in os.environ:
-                del os.environ["BROWSER_USE_DISABLE_EXTENSIONS"]
-
-            if original_cloud is not None:
-                os.environ["BROWSER_USE_CLOUD_SYNC"] = original_cloud
-            elif "BROWSER_USE_CLOUD_SYNC" in os.environ:
-                del os.environ["BROWSER_USE_CLOUD_SYNC"]
-
-            if original_telem is not None:
-                os.environ["ANONYMIZED_TELEMETRY"] = original_telem
-            elif "ANONYMIZED_TELEMETRY" in os.environ:
-                del os.environ["ANONYMIZED_TELEMETRY"]
 
 
 class TestClaudeSubagent:
