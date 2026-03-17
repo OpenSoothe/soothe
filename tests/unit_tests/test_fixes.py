@@ -16,7 +16,6 @@ from soothe.cli.commands import (
 )
 from soothe.cli.daemon import DaemonClient, SootheDaemon
 
-
 # ---------------------------------------------------------------------------
 # Fix 1: TUI Slash Commands Not Working (async issue)
 # ---------------------------------------------------------------------------
@@ -34,23 +33,20 @@ def test_show_context_is_async() -> None:
 
 def test_handle_thread_command_is_async() -> None:
     """Verify _handle_thread_command is an async function."""
-    assert inspect.iscoroutinefunction(
-        _handle_thread_command
-    ), "_handle_thread_command should be async"
+    assert inspect.iscoroutinefunction(_handle_thread_command), "_handle_thread_command should be async"
 
 
 def test_handle_slash_command_is_async() -> None:
     """Verify handle_slash_command is an async function."""
-    assert inspect.iscoroutinefunction(
-        handle_slash_command
-    ), "handle_slash_command should be async"
+    assert inspect.iscoroutinefunction(handle_slash_command), "handle_slash_command should be async"
 
 
 @pytest.mark.asyncio
 async def test_show_memory_calls_await() -> None:
     """Test that _show_memory properly awaits the runner."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeRunner:
         async def memory_stats(self) -> dict:
@@ -71,8 +67,9 @@ async def test_show_memory_calls_await() -> None:
 @pytest.mark.asyncio
 async def test_show_context_calls_await() -> None:
     """Test that _show_context properly awaits the runner."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeRunner:
         async def context_stats(self) -> dict:
@@ -93,8 +90,9 @@ async def test_show_context_calls_await() -> None:
 @pytest.mark.asyncio
 async def test_handle_thread_archive_uses_await() -> None:
     """Test that /thread archive properly awaits the durability operation."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeDurability:
         def __init__(self) -> None:
@@ -115,7 +113,11 @@ async def test_handle_thread_archive_uses_await() -> None:
     await _handle_thread_command("archive", "thread-123", console, runner)
 
     assert "thread-123" in runner._durability.archived_threads
-    assert "Archived thread thread-123" in output.getvalue()
+    # Check output contains the expected message (strip ANSI codes for comparison)
+    import re
+
+    output_text = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
+    assert "Archived thread thread-123" in output_text
 
 
 # ---------------------------------------------------------------------------
@@ -126,8 +128,9 @@ async def test_handle_thread_archive_uses_await() -> None:
 @pytest.mark.asyncio
 async def test_thread_list_breaks_on_empty_response() -> None:
     """Test that thread list doesn't hang on empty command response."""
-    from soothe.cli.main import _thread_list_via_daemon
     import asyncio
+
+    from soothe.cli.main import _thread_list_via_daemon
 
     # Track if we complete in reasonable time
     completed = False
@@ -143,8 +146,6 @@ async def test_thread_list_breaks_on_empty_response() -> None:
     # This means it always breaks after command_response, even if empty
     # We verify this by checking the source code
     import ast
-
-    from soothe.cli.main import _thread_list_via_daemon
 
     source = inspect.getsource(_thread_list_via_daemon)
     tree = ast.parse(source)
@@ -171,9 +172,11 @@ async def test_thread_list_breaks_on_empty_response() -> None:
 
 def test_attach_command_accepts_thread_id() -> None:
     """Test that attach command has thread_id parameter."""
-    from soothe.cli.main import attach
-    import typer
     from typing import get_type_hints
+
+    import typer
+
+    from soothe.cli.main import attach
 
     sig = inspect.signature(attach)
     params = sig.parameters
@@ -182,9 +185,9 @@ def test_attach_command_accepts_thread_id() -> None:
 
     # Check it's optional
     param = params["thread_id"]
-    assert param.default is not inspect.Parameter.empty or str(param).startswith(
-        "thread_id: Annotated["
-    ), "thread_id should be optional"
+    assert param.default is not inspect.Parameter.empty or str(param).startswith("thread_id: Annotated["), (
+        "thread_id should be optional"
+    )
 
 
 @pytest.mark.asyncio
@@ -213,9 +216,7 @@ async def test_daemon_handles_resume_thread_message() -> None:
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
     client = SimpleNamespace()
-    await daemon._handle_client_message(
-        client, {"type": "resume_thread", "thread_id": "thread-456"}
-    )
+    await daemon._handle_client_message(client, {"type": "resume_thread", "thread_id": "thread-456"})
 
     # Verify runner's thread_id was set
     assert "thread-456" in daemon._runner.set_thread_id_calls  # type: ignore[attr-defined]
@@ -245,11 +246,14 @@ async def test_daemon_client_send_resume_thread() -> None:
 async def test_tui_sends_thread_id_on_connection() -> None:
     """Test that TUI sends resume_thread message when thread_id is provided."""
     # We verify this by checking the TUI code calls send_resume_thread
-    from soothe.cli.tui_app import SootheApp
     import ast
+    import textwrap
+
+    from soothe.cli.tui_app import SootheApp
 
     source = inspect.getsource(SootheApp._connect_and_listen)
-    tree = ast.parse(source)
+    # Dedent the source since inspect.getsource returns indented method
+    tree = ast.parse(textwrap.dedent(source))
 
     # Check for send_resume_thread call
     found_call = False
@@ -265,8 +269,9 @@ async def test_tui_sends_thread_id_on_connection() -> None:
 @pytest.mark.asyncio
 async def test_slash_command_memory_in_daemon() -> None:
     """Test that /memory command works in daemon context (no nested event loops)."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeRunner:
         async def memory_stats(self) -> dict:
@@ -289,8 +294,9 @@ async def test_slash_command_memory_in_daemon() -> None:
 @pytest.mark.asyncio
 async def test_slash_command_context_in_daemon() -> None:
     """Test that /context command works in daemon context (no nested event loops)."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeRunner:
         async def context_stats(self) -> dict:
@@ -313,8 +319,9 @@ async def test_slash_command_context_in_daemon() -> None:
 @pytest.mark.asyncio
 async def test_slash_command_thread_archive_in_daemon() -> None:
     """Test that /thread archive command works in daemon context (no nested event loops)."""
-    from rich.console import Console
     from io import StringIO
+
+    from rich.console import Console
 
     class FakeDurability:
         def __init__(self) -> None:
