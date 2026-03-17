@@ -1,4 +1,4 @@
-"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007).
+"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0009).
 
 Wraps `create_soothe_agent()` with protocol pre/post-processing and
 yields the deepagents-canonical ``(namespace, mode, data)`` stream
@@ -7,6 +7,10 @@ extended with ``soothe.*`` custom events for protocol observability.
 RFC-0007 adds autonomous iteration: when ``autonomous=True``, the runner
 loops reflect -> revise -> re-execute until the goal is complete or
 max_iterations is reached.
+
+RFC-0009 adds DAG-based step execution: plans with multiple steps are
+iterated via ``StepScheduler``, independent steps can run in parallel,
+and ``ConcurrencyController`` enforces hierarchical limits.
 """
 
 from __future__ import annotations
@@ -114,6 +118,7 @@ class SootheRunner:
         import time
 
         from soothe.core.agent import create_soothe_agent
+        from soothe.core.concurrency import ConcurrencyController
         from soothe.core.query_classifier import QueryClassifier
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
 
@@ -172,6 +177,7 @@ class SootheRunner:
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
+        self._concurrency = ConcurrencyController(self._config.execution.concurrency)
 
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
@@ -467,7 +473,13 @@ class SootheRunner:
         *,
         thread_id: str | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Original single-pass execution (pre-stream -> stream -> post-stream)."""
+        """Single-pass execution with DAG step loop (RFC-0009).
+
+        Pre-stream creates the plan.  If the plan has multiple steps,
+        the step loop drives execution via ``StepScheduler``.  Single-step
+        plans fall through to a direct ``_stream_phase`` call for
+        backward-compatible behavior.
+        """
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
@@ -475,8 +487,13 @@ class SootheRunner:
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
-        async for chunk in self._stream_phase(user_input, state):
-            yield chunk
+        if state.plan and len(state.plan.steps) > 1:
+            async for chunk in self._run_step_loop(user_input, state, state.plan):
+                yield chunk
+        else:
+            async with self._concurrency.acquire_llm_call():
+                async for chunk in self._stream_phase(user_input, state):
+                    yield chunk
 
         async for chunk in self._post_stream(user_input, state):
             yield chunk
@@ -488,10 +505,11 @@ class SootheRunner:
         thread_id: str | None = None,
         max_iterations: int = 10,
     ) -> AsyncGenerator[StreamChunk, None]:
-        """Autonomous iteration loop (RFC-0007).
+        """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009).
 
-        Creates goals, executes plans, reflects, revises, and iterates
-        until goals are complete or max_iterations is reached.
+        Creates goals, executes plans via the step loop, reflects, revises,
+        and iterates until goals are complete or max_iterations is reached.
+        Independent goals can run in parallel with isolated threads.
         """
         import asyncio
 
@@ -502,11 +520,9 @@ class SootheRunner:
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
-        # Pre-stream: thread management, context restore, policy check
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
-        # Create initial goal from user input
         goal = await self._goal_engine.create_goal(user_input, priority=80)
         yield _custom(
             {
@@ -519,213 +535,78 @@ class SootheRunner:
 
         iteration_records: list[IterationRecord] = []
         total_iterations = 0
-        current_input = user_input
 
-        # Outer goal loop
-        while total_iterations < max_iterations:
-            goal = await self._goal_engine.next_goal()
-            if not goal:
+        while total_iterations < max_iterations and not self._goal_engine.is_complete():
+            max_par_goals = self._concurrency.max_parallel_goals
+            ready_goals = await self._goal_engine.ready_goals(limit=max_par_goals)
+            if not ready_goals:
                 logger.info("No more goals to process")
                 break
 
-            yield _custom(
-                {
-                    "type": "soothe.iteration.started",
-                    "iteration": total_iterations,
-                    "goal_id": goal.id,
-                    "goal_description": goal.description,
-                }
-            )
+            if len(ready_goals) > 1:
+                yield _custom(
+                    {
+                        "type": "soothe.goal.batch_started",
+                        "goal_ids": [g.id for g in ready_goals],
+                        "parallel_count": len(ready_goals),
+                    }
+                )
 
-            iter_start = perf_counter()
-
-            try:
-                # Reset state for this iteration (preserve thread_id)
-                iter_state = RunnerState()
-                iter_state.thread_id = state.thread_id
-
-                # Memory recall + context projection for this iteration
-                if self._memory:
-                    try:
-                        items = await self._memory.recall(current_input, limit=5)
-                        iter_state.recalled_memories = items
-                    except Exception:
-                        logger.debug("Memory recall failed", exc_info=True)
-
-                if self._context:
-                    try:
-                        projection = await self._context.project(current_input, token_budget=4000)
-                        iter_state.context_projection = projection
-                    except Exception:
-                        logger.debug("Context projection failed", exc_info=True)
-
-                # Plan creation (first iteration) or use revised plan
-                if self._planner and not iter_state.plan:
-                    try:
-                        capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
-                        completed = [
-                            StepResult(step_id=r.goal_id, output=r.actions_summary[:200], success=r.outcome != "failed")
-                            for r in iteration_records[-3:]
-                        ]
-                        context = PlanContext(
-                            recent_messages=[current_input],
-                            available_capabilities=capabilities,
-                            completed_steps=completed,
-                        )
-                        plan = await self._planner.create_plan(current_input, context)
-                        iter_state.plan = plan
-                        self._current_plan = plan
-                        yield _custom(
-                            {
-                                "type": "soothe.plan.created",
-                                "goal": plan.goal,
-                                "steps": [
-                                    {"id": s.id, "description": s.description, "status": s.status} for s in plan.steps
-                                ],
-                            }
-                        )
-                    except Exception:
-                        logger.debug("Plan creation failed", exc_info=True)
-
-                # Stream phase
-                async for chunk in self._stream_phase(current_input, iter_state):
+            # Execute goals (serial if 1, parallel if multiple)
+            if len(ready_goals) == 1:
+                g = ready_goals[0]
+                async for chunk in self._execute_autonomous_goal(
+                    g,
+                    parent_state=state,
+                    thread_id=state.thread_id,
+                    user_input=user_input,
+                    iteration_records=iteration_records,
+                    total_iterations=total_iterations,
+                    parallel_goals=1,
+                ):
                     yield chunk
+                total_iterations += 1
+            else:
+                collected: dict[str, list[StreamChunk]] = {}
 
-                # Post-stream: context ingestion, memory storage
-                response_text = "".join(iter_state.full_response)
-                if self._context and response_text:
-                    try:
-                        await self._context.ingest(
-                            ContextEntry(
-                                source="agent", content=response_text[:2000], tags=["agent_response"], importance=0.7
-                            )
-                        )
-                    except Exception:
-                        logger.debug("Context ingestion failed", exc_info=True)
+                n_parallel = len(ready_goals)
 
-                if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
-                    try:
-                        from soothe.protocols.memory import MemoryItem
+                async def _run_goal(
+                    g: Any,
+                    _collected: dict[str, list[StreamChunk]] = collected,
+                    _iters: int = total_iterations,
+                    _n_par: int = n_parallel,
+                ) -> None:
+                    chunks: list[StreamChunk] = []
+                    goal_tid = f"{state.thread_id}__goal_{g.id}"
+                    async with self._concurrency.acquire_goal():
+                        async for chunk in self._execute_autonomous_goal(
+                            g,
+                            parent_state=state,
+                            thread_id=goal_tid,
+                            user_input=user_input,
+                            iteration_records=iteration_records,
+                            total_iterations=_iters,
+                            parallel_goals=_n_par,
+                        ):
+                            chunks.append(chunk)  # noqa: PERF401
+                    _collected[g.id] = chunks
 
-                        await self._memory.remember(
-                            MemoryItem(
-                                content=response_text[:500], tags=["agent_response"], source_thread=state.thread_id
-                            )
-                        )
-                    except Exception:
-                        logger.debug("Memory storage failed", exc_info=True)
-
-                # Reflect
-                reflection = None
-                if self._planner and iter_state.plan and response_text:
-                    try:
-                        step_results = [
-                            StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
-                            for s in iter_state.plan.steps
-                            if s.status in ("completed", "failed")
-                        ]
-                        reflection = await self._planner.reflect(iter_state.plan, step_results)
+                results = await asyncio.gather(
+                    *[_run_goal(g) for g in ready_goals],
+                    return_exceptions=True,
+                )
+                for g, result in zip(ready_goals, results, strict=True):
+                    if isinstance(result, Exception):
+                        logger.exception("Goal %s failed: %s", g.id, result)
+                        await self._goal_engine.fail_goal(g.id, error=str(result))
                         yield _custom(
-                            {
-                                "type": "soothe.plan.reflected",
-                                "should_revise": reflection.should_revise,
-                                "assessment": reflection.assessment[:200],
-                            }
+                            {"type": "soothe.goal.failed", "goal_id": g.id, "error": str(result), "retry_count": 0}
                         )
-                    except Exception:
-                        logger.debug("Plan reflection failed", exc_info=True)
-
-                # Store iteration journal
-                plan_summary = ""
-                if iter_state.plan:
-                    plan_summary = f"{iter_state.plan.goal}: " + "; ".join(
-                        s.description for s in iter_state.plan.steps[:5]
-                    )
-
-                should_continue = reflection.should_revise if reflection else False
-                record = IterationRecord(
-                    iteration=total_iterations,
-                    goal_id=goal.id,
-                    plan_summary=plan_summary[:500],
-                    actions_summary=response_text[:500],
-                    reflection_assessment=reflection.assessment[:200] if reflection else "",
-                    outcome="continue" if should_continue else "goal_complete",
-                )
-                iteration_records.append(record)
-                await self._store_iteration_record(record, state.thread_id)
-
-                duration_ms = int((perf_counter() - iter_start) * 1000)
-                yield _custom(
-                    {
-                        "type": "soothe.iteration.completed",
-                        "iteration": total_iterations,
-                        "goal_id": goal.id,
-                        "outcome": record.outcome,
-                        "duration_ms": duration_ms,
-                    }
-                )
-
-                if should_continue:
-                    # Revise plan and synthesize continuation
-                    if self._planner and iter_state.plan and reflection:
-                        try:
-                            revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
-                            self._current_plan = revised
-                            # Carry revised plan into next iteration
-                            state.plan = revised
-                        except Exception:
-                            logger.debug("Plan revision failed", exc_info=True)
-
-                    current_input = await self._synthesize_continuation(
-                        user_input, iteration_records, self._current_plan
-                    )
-                    total_iterations += 1
-                    continue
-
-                # Goal complete
-                await self._goal_engine.complete_goal(goal.id)
-                yield _custom({"type": "soothe.goal.completed", "goal_id": goal.id})
-                total_iterations += 1
-
-                # Check for next goal
-                next_g = await self._goal_engine.next_goal()
-                if next_g:
-                    current_input = next_g.description
-                    continue
-                break
-
-            except Exception as exc:
-                logger.exception("Error during autonomous iteration %d", total_iterations)
-                from soothe.utils.error_format import emit_error_event
-
-                yield _custom(emit_error_event(exc, context="autonomous iteration"))
-
-                # Retry with backoff
-                updated = await self._goal_engine.fail_goal(goal.id, error=str(exc))
-                if updated.status == "pending":
-                    yield _custom(
-                        {
-                            "type": "soothe.goal.failed",
-                            "goal_id": goal.id,
-                            "error": str(exc),
-                            "retry_count": updated.retry_count,
-                        }
-                    )
-                    backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
-                    logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
-                    await asyncio.sleep(backoff)
-                    total_iterations += 1
-                    continue
-
-                yield _custom(
-                    {
-                        "type": "soothe.goal.failed",
-                        "goal_id": goal.id,
-                        "error": str(exc),
-                        "retry_count": updated.retry_count,
-                    }
-                )
-                total_iterations += 1
+                    else:
+                        for chunk in collected.get(g.id, []):
+                            yield chunk
+                total_iterations += len(ready_goals)
 
         # Persist final state
         try:
@@ -744,6 +625,473 @@ class SootheRunner:
             logger.debug("Final state persistence failed", exc_info=True)
 
         yield _custom({"type": "soothe.thread.ended", "thread_id": state.thread_id})
+
+    async def _execute_autonomous_goal(
+        self,
+        goal: Any,
+        *,
+        parent_state: RunnerState,
+        thread_id: str,
+        user_input: str,  # noqa: ARG002
+        iteration_records: list[IterationRecord],
+        total_iterations: int,
+        parallel_goals: int = 1,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Execute a single goal in the autonomous loop (RFC-0009).
+
+        Runs plan creation, step loop, reflection, and optional revision
+        for one goal.  Each goal may use an isolated thread for parallel
+        execution.
+        """
+        import asyncio
+
+        yield _custom(
+            {
+                "type": "soothe.iteration.started",
+                "iteration": total_iterations,
+                "goal_id": goal.id,
+                "goal_description": goal.description,
+                "parallel_goals": parallel_goals,
+            }
+        )
+
+        iter_start = perf_counter()
+        current_input = goal.description
+
+        try:
+            iter_state = RunnerState()
+            iter_state.thread_id = thread_id
+
+            if self._memory:
+                try:
+                    items = await self._memory.recall(current_input, limit=5)
+                    iter_state.recalled_memories = items
+                except Exception:
+                    logger.debug("Memory recall failed", exc_info=True)
+
+            if self._context:
+                try:
+                    projection = await self._context.project(current_input, token_budget=4000)
+                    iter_state.context_projection = projection
+                except Exception:
+                    logger.debug("Context projection failed", exc_info=True)
+
+            # Plan creation
+            if self._planner:
+                try:
+                    capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
+                    completed = [
+                        StepResult(step_id=r.goal_id, output=r.actions_summary[:200], success=r.outcome != "failed")
+                        for r in iteration_records[-3:]
+                    ]
+                    context = PlanContext(
+                        recent_messages=[current_input],
+                        available_capabilities=capabilities,
+                        completed_steps=completed,
+                    )
+                    plan = await self._planner.create_plan(current_input, context)
+                    iter_state.plan = plan
+                    self._current_plan = plan
+                    yield _custom(
+                        {
+                            "type": "soothe.plan.created",
+                            "goal": plan.goal,
+                            "steps": [
+                                {
+                                    "id": s.id,
+                                    "description": s.description,
+                                    "status": s.status,
+                                    "depends_on": s.depends_on,
+                                }
+                                for s in plan.steps
+                            ],
+                        }
+                    )
+                except Exception:
+                    logger.debug("Plan creation failed", exc_info=True)
+
+            # Step loop or single stream (RFC-0009)
+            if iter_state.plan and len(iter_state.plan.steps) > 1:
+                async for chunk in self._run_step_loop(current_input, iter_state, iter_state.plan):
+                    yield chunk
+            else:
+                async with self._concurrency.acquire_llm_call():
+                    async for chunk in self._stream_phase(current_input, iter_state):
+                        yield chunk
+
+            # Post-iteration: context ingestion, memory
+            response_text = "".join(iter_state.full_response)
+            if self._context and response_text:
+                try:
+                    await self._context.ingest(
+                        ContextEntry(
+                            source="agent",
+                            content=response_text[:2000],
+                            tags=["agent_response"],
+                            importance=0.7,
+                        )
+                    )
+                except Exception:
+                    logger.debug("Context ingestion failed", exc_info=True)
+
+            if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
+                try:
+                    from soothe.protocols.memory import MemoryItem
+
+                    await self._memory.remember(
+                        MemoryItem(content=response_text[:500], tags=["agent_response"], source_thread=thread_id)
+                    )
+                except Exception:
+                    logger.debug("Memory storage failed", exc_info=True)
+
+            # Reflect
+            reflection = None
+            if self._planner and iter_state.plan and response_text:
+                try:
+                    step_results = [
+                        StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
+                        for s in iter_state.plan.steps
+                        if s.status in ("completed", "failed")
+                    ]
+                    if step_results:
+                        reflection = await self._planner.reflect(iter_state.plan, step_results)
+                        yield _custom(
+                            {
+                                "type": "soothe.plan.reflected",
+                                "should_revise": reflection.should_revise,
+                                "assessment": reflection.assessment[:200],
+                            }
+                        )
+                except Exception:
+                    logger.debug("Plan reflection failed", exc_info=True)
+
+            # Journal
+            plan_summary = ""
+            if iter_state.plan:
+                plan_summary = f"{iter_state.plan.goal}: " + "; ".join(s.description for s in iter_state.plan.steps[:5])
+
+            should_continue = reflection.should_revise if reflection else False
+            record = IterationRecord(
+                iteration=total_iterations,
+                goal_id=goal.id,
+                plan_summary=plan_summary[:500],
+                actions_summary=response_text[:500],
+                reflection_assessment=reflection.assessment[:200] if reflection else "",
+                outcome="continue" if should_continue else "goal_complete",
+            )
+            iteration_records.append(record)
+            await self._store_iteration_record(record, thread_id)
+
+            duration_ms = int((perf_counter() - iter_start) * 1000)
+            yield _custom(
+                {
+                    "type": "soothe.iteration.completed",
+                    "iteration": total_iterations,
+                    "goal_id": goal.id,
+                    "outcome": record.outcome,
+                    "duration_ms": duration_ms,
+                }
+            )
+
+            if not should_continue:
+                # Assemble GoalReport from step results (RFC-0009)
+                goal_report = None
+                if iter_state.plan:
+                    from soothe.protocols.planner import GoalReport, StepReport as StepReportModel
+
+                    sr_list = [
+                        StepReportModel(
+                            step_id=s.id,
+                            description=s.description,
+                            status=s.status if s.status in ("completed", "failed") else "skipped",
+                            result=s.result or "",
+                        )
+                        for s in iter_state.plan.steps
+                        if s.status in ("completed", "failed", "pending")
+                    ]
+                    n_completed = sum(1 for r in sr_list if r.status == "completed")
+                    n_failed = sum(1 for r in sr_list if r.status == "failed")
+                    goal_report = GoalReport(
+                        goal_id=goal.id,
+                        description=goal.description,
+                        step_reports=sr_list,
+                        summary=response_text[:500],
+                        status="completed" if n_failed == 0 else "failed",
+                        duration_ms=duration_ms,
+                    )
+                    goal.report = goal_report.model_dump_json()
+
+                    if self._context:
+                        try:
+                            await self._context.ingest(
+                                ContextEntry(
+                                    source="goal_report",
+                                    content=f"[Goal {goal.id}] {goal_report.summary[:1000]}",
+                                    tags=["goal_report", f"goal:{goal.id}"],
+                                    importance=0.9,
+                                )
+                            )
+                        except Exception:
+                            logger.debug("Goal report ingestion failed", exc_info=True)
+
+                    yield _custom(
+                        {
+                            "type": "soothe.goal.report",
+                            "goal_id": goal.id,
+                            "step_count": len(sr_list),
+                            "completed": n_completed,
+                            "failed": n_failed,
+                            "summary": goal_report.summary[:200],
+                        }
+                    )
+
+                await self._goal_engine.complete_goal(goal.id)
+                yield _custom(
+                    {
+                        "type": "soothe.goal.completed",
+                        "goal_id": goal.id,
+                    }
+                )
+            elif self._planner and iter_state.plan and reflection:
+                try:
+                    revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
+                    self._current_plan = revised
+                    parent_state.plan = revised
+                except Exception:
+                    logger.debug("Plan revision failed", exc_info=True)
+
+        except Exception as exc:
+            logger.exception("Error during autonomous goal %s", goal.id)
+            from soothe.utils.error_format import emit_error_event
+
+            yield _custom(emit_error_event(exc, context="autonomous iteration"))
+
+            updated = await self._goal_engine.fail_goal(goal.id, error=str(exc))
+            yield _custom(
+                {
+                    "type": "soothe.goal.failed",
+                    "goal_id": goal.id,
+                    "error": str(exc),
+                    "retry_count": updated.retry_count,
+                }
+            )
+            if updated.status == "pending":
+                backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
+                logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
+                await asyncio.sleep(backoff)
+
+    # -- step loop (RFC-0009) ------------------------------------------------
+
+    async def _run_step_loop(
+        self,
+        goal_description: str,
+        state: RunnerState,
+        plan: Plan,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Execute plan steps respecting DAG dependencies (RFC-0009).
+
+        Iterates through batches of ready steps.  Sequential steps reuse
+        the main thread; parallel steps get isolated thread IDs.
+        """
+        import asyncio
+
+        from soothe.core.step_scheduler import StepScheduler
+
+        scheduler = StepScheduler(plan)
+        parallelism = self._concurrency.step_parallelism
+
+        # Emit DAG snapshot for logs (RFC-0009 / IG-022)
+        if len(plan.steps) > 1 and any(s.depends_on for s in plan.steps):
+            yield _custom(
+                {
+                    "type": "soothe.plan.dag_snapshot",
+                    "steps": [{"id": s.id, "depends_on": s.depends_on} for s in plan.steps],
+                }
+            )
+        max_steps = self._concurrency.max_parallel_steps
+        batch_index = 0
+
+        while not scheduler.is_complete():
+            ready = scheduler.ready_steps(limit=max_steps, parallelism=parallelism)
+            if not ready:
+                logger.warning("No ready steps but scheduler not complete -- breaking")
+                break
+
+            yield _custom(
+                {
+                    "type": "soothe.plan.batch_started",
+                    "batch_index": batch_index,
+                    "step_ids": [s.id for s in ready],
+                    "parallel_count": len(ready),
+                }
+            )
+
+            for s in ready:
+                scheduler.mark_in_progress(s.id)
+
+            if len(ready) == 1:
+                step = ready[0]
+                dep_results = scheduler.get_dependency_results(step)
+                async for chunk in self._execute_step(
+                    step,
+                    goal_description=goal_description,
+                    dependency_results=dep_results,
+                    thread_id=state.thread_id,
+                    state=state,
+                    batch_index=batch_index,
+                ):
+                    yield chunk
+                if step.status == "completed":
+                    scheduler.mark_completed(step.id, step.result or "")
+                elif step.status != "failed":
+                    scheduler.mark_failed(step.id, step.result or "No result")
+            else:
+                collected_chunks: dict[str, list[StreamChunk]] = {}
+
+                async def _run_one(
+                    s: PlanStep,
+                    _collected: dict[str, list[StreamChunk]] = collected_chunks,
+                    _batch: int = batch_index,
+                ) -> None:
+                    chunks: list[StreamChunk] = []
+                    dep_results = scheduler.get_dependency_results(s)
+                    step_tid = f"{state.thread_id}__step_{s.id}"
+                    async with self._concurrency.acquire_step():
+                        async for chunk in self._execute_step(
+                            s,
+                            goal_description=goal_description,
+                            dependency_results=dep_results,
+                            thread_id=step_tid,
+                            state=state,
+                            batch_index=_batch,
+                        ):
+                            chunks.append(chunk)  # noqa: PERF401
+                    _collected[s.id] = chunks
+
+                results = await asyncio.gather(
+                    *[_run_one(s) for s in ready],
+                    return_exceptions=True,
+                )
+                for s, result in zip(ready, results, strict=True):
+                    if isinstance(result, Exception):
+                        scheduler.mark_failed(s.id, str(result))
+                        yield _custom(
+                            {
+                                "type": "soothe.plan.step_failed",
+                                "step_id": s.id,
+                                "error": str(result),
+                            }
+                        )
+                    else:
+                        for chunk in collected_chunks.get(s.id, []):
+                            yield chunk
+                        if s.status == "completed":
+                            scheduler.mark_completed(s.id, s.result or "")
+                        elif s.status != "failed":
+                            scheduler.mark_failed(s.id, s.result or "No result")
+
+            batch_index += 1
+
+        state.full_response = [s.result or "" for s in plan.steps if s.status == "completed"]
+
+    async def _execute_step(
+        self,
+        step: PlanStep,
+        *,
+        goal_description: str,
+        dependency_results: list[tuple[str, str]],
+        thread_id: str,
+        state: RunnerState,  # noqa: ARG002
+        batch_index: int = 0,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Execute a single plan step as a LangGraph invocation (RFC-0009).
+
+        Builds step-specific input enriched with dependency results, runs
+        the LangGraph agent, records the result, and ingests into context.
+        """
+        step_start = perf_counter()
+
+        parts = [f"Goal: {goal_description}", f"Current step: {step.description}"]
+        if dependency_results:
+            dep_text = "\n".join(f"- [{desc}]: {result[:300]}" for desc, result in dependency_results)
+            parts.append(f"Results from prior steps:\n{dep_text}")
+        step_input = "\n\n".join(parts)
+
+        yield _custom(
+            {
+                "type": "soothe.plan.step_started",
+                "step_id": step.id,
+                "description": step.description,
+                "depends_on": step.depends_on,
+                "batch_index": batch_index,
+            }
+        )
+
+        step_state = RunnerState()
+        step_state.thread_id = thread_id
+
+        if self._memory:
+            try:
+                items = await self._memory.recall(step.description, limit=3)
+                step_state.recalled_memories = items
+            except Exception:
+                logger.debug("Memory recall failed for step %s", step.id, exc_info=True)
+
+        if self._context:
+            try:
+                projection = await self._context.project(step.description, token_budget=3000)
+                step_state.context_projection = projection
+            except Exception:
+                logger.debug("Context projection failed for step %s", step.id, exc_info=True)
+
+        async with self._concurrency.acquire_llm_call():
+            async for chunk in self._stream_phase(step_input, step_state):
+                yield chunk
+
+        response_text = "".join(step_state.full_response)
+        duration_ms = int((perf_counter() - step_start) * 1000)
+
+        if response_text.strip():
+            step.status = "completed"
+            step.result = response_text[:2000]
+            yield _custom(
+                {
+                    "type": "soothe.plan.step_completed",
+                    "step_id": step.id,
+                    "success": True,
+                    "result_preview": response_text[:200],
+                    "duration_ms": duration_ms,
+                }
+            )
+        else:
+            step.status = "failed"
+            step.result = "No response from agent"
+            blocked = [
+                s.id
+                for s in (self._current_plan.steps if self._current_plan else [])
+                if step.id in s.depends_on and s.status == "pending"
+            ]
+            yield _custom(
+                {
+                    "type": "soothe.plan.step_failed",
+                    "step_id": step.id,
+                    "error": "No response from agent",
+                    "blocked_steps": blocked,
+                }
+            )
+
+        if self._context and step.result:
+            try:
+                await self._context.ingest(
+                    ContextEntry(
+                        source="step_result",
+                        content=f"[Step {step.id}: {step.description}]\n{step.result[:1500]}",
+                        tags=["step_result", f"step:{step.id}"],
+                        importance=0.85,
+                    )
+                )
+            except Exception:
+                logger.debug("Step result ingestion failed", exc_info=True)
 
     # -- stream + autonomous helpers ----------------------------------------
 
@@ -1106,7 +1454,15 @@ class SootheRunner:
                     {
                         "type": "soothe.plan.created",
                         "goal": plan.goal,
-                        "steps": [{"id": s.id, "description": s.description, "status": s.status} for s in plan.steps],
+                        "steps": [
+                            {
+                                "id": s.id,
+                                "description": s.description,
+                                "status": s.status,
+                                "depends_on": s.depends_on,
+                            }
+                            for s in plan.steps
+                        ],
                     }
                 )
                 if plan.steps:
@@ -1178,34 +1534,38 @@ class SootheRunner:
             except Exception:
                 logger.debug("Memory storage failed", exc_info=True)
 
-        # Plan reflection
-        if self._planner and state.plan and response_text:
+        # Plan reflection (RFC-0009: reflect on ALL steps, not just steps[0])
+        if self._planner and state.plan:
             try:
-                if state.plan.steps:
+                # For single-step plans that went through _stream_phase directly,
+                # update step[0] status from the response.
+                if state.plan.steps and state.plan.steps[0].status == "pending" and response_text:
                     first_step_success = bool(response_text.strip())
-                    # Update the step status in the runner's plan object
                     state.plan.steps[0].status = "completed" if first_step_success else "failed"
                     state.plan.steps[0].result = response_text[:200] if first_step_success else None
                     yield _custom(
                         {
                             "type": "soothe.plan.step_completed",
-                            "index": 0,
+                            "step_id": state.plan.steps[0].id,
                             "success": first_step_success,
+                            "duration_ms": 0,
                         }
                     )
+
                 step_results = [
                     StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
                     for s in state.plan.steps
                     if s.status in ("completed", "failed")
                 ]
-                reflection = await self._planner.reflect(state.plan, step_results)
-                yield _custom(
-                    {
-                        "type": "soothe.plan.reflected",
-                        "should_revise": reflection.should_revise,
-                        "assessment": reflection.assessment[:200],
-                    }
-                )
+                if step_results:
+                    reflection = await self._planner.reflect(state.plan, step_results)
+                    yield _custom(
+                        {
+                            "type": "soothe.plan.reflected",
+                            "should_revise": reflection.should_revise,
+                            "assessment": reflection.assessment[:200],
+                        }
+                    )
             except Exception:
                 logger.debug("Plan reflection failed", exc_info=True)
 

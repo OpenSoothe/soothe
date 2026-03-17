@@ -154,3 +154,117 @@ class TestGoalEngine:
         parent = await engine.create_goal("Parent goal", priority=80)
         child = await engine.create_goal("Child goal", priority=60, parent_id=parent.id)
         assert child.parent_id == parent.id
+
+
+class TestReadyGoals:
+    """Tests for ready_goals (DAG-aware scheduling)."""
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_empty(self) -> None:
+        engine = GoalEngine()
+        ready = await engine.ready_goals()
+        assert ready == []
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_no_deps(self) -> None:
+        engine = GoalEngine()
+        g = await engine.create_goal("No deps")
+        ready = await engine.ready_goals()
+        assert len(ready) == 1
+        assert ready[0].id == g.id
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_waits_for_dep(self) -> None:
+        engine = GoalEngine()
+        g_a = await engine.create_goal("A")
+        g_b = await engine.create_goal("B")
+        g_b.depends_on = [g_a.id]
+
+        ready = await engine.ready_goals()
+        assert len(ready) == 1
+        assert ready[0].id == g_a.id
+
+        await engine.complete_goal(g_a.id)
+        ready = await engine.ready_goals()
+        assert len(ready) == 1
+        assert ready[0].id == g_b.id
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_limit(self) -> None:
+        engine = GoalEngine()
+        await engine.create_goal("A")
+        await engine.create_goal("B")
+        await engine.create_goal("C")
+        ready = await engine.ready_goals(limit=2)
+        assert len(ready) == 2
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_sorted_by_priority(self) -> None:
+        engine = GoalEngine()
+        await engine.create_goal("Low", priority=10)
+        await engine.create_goal("High", priority=90)
+        await engine.create_goal("Mid", priority=50)
+        ready = await engine.ready_goals(limit=3)
+        assert len(ready) == 3
+        assert ready[0].description == "High"
+        assert ready[1].description == "Mid"
+        assert ready[2].description == "Low"
+
+    @pytest.mark.asyncio
+    async def test_ready_goals_activates_pending(self) -> None:
+        engine = GoalEngine()
+        g = await engine.create_goal("Pending")
+        assert g.status == "pending"
+        ready = await engine.ready_goals()
+        assert len(ready) == 1
+        assert ready[0].status == "active"
+
+
+class TestIsComplete:
+    """Tests for is_complete."""
+
+    def test_is_complete_empty(self) -> None:
+        engine = GoalEngine()
+        assert engine.is_complete() is True
+
+    @pytest.mark.asyncio
+    async def test_is_complete_all_terminal(self) -> None:
+        engine = GoalEngine()
+        g1 = await engine.create_goal("A")
+        g2 = await engine.create_goal("B")
+        await engine.complete_goal(g1.id)
+        await engine.fail_goal(g2.id, allow_retry=False)
+        assert engine.is_complete() is True
+
+    @pytest.mark.asyncio
+    async def test_is_complete_pending(self) -> None:
+        engine = GoalEngine()
+        await engine.create_goal("Pending")
+        assert engine.is_complete() is False
+
+
+class TestNextGoalDelegation:
+    """Tests for next_goal delegating to ready_goals."""
+
+    @pytest.mark.asyncio
+    async def test_next_goal_delegates(self) -> None:
+        engine = GoalEngine()
+        await engine.create_goal("A", priority=50)
+        await engine.create_goal("B", priority=90)
+        next_g = await engine.next_goal()
+        ready = await engine.ready_goals(limit=1)
+        assert next_g is not None
+        assert len(ready) == 1
+        assert next_g.id == ready[0].id
+
+
+class TestGoalFields:
+    """Tests for Goal model fields (depends_on, report)."""
+
+    def test_goal_depends_on_default(self) -> None:
+        goal = Goal(description="Test")
+        assert goal.depends_on == []
+
+    def test_goal_report_field(self) -> None:
+        goal = Goal(description="Test")
+        assert goal.report is None

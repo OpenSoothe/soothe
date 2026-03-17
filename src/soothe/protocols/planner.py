@@ -77,6 +77,44 @@ class PlanContext(BaseModel):
     completed_steps: list[StepResult] = Field(default_factory=list)
 
 
+class StepReport(BaseModel):
+    """Report from a single executed step (RFC-0009).
+
+    Args:
+        step_id: The step that was executed.
+        description: Step description.
+        status: Final step status.
+        result: Output text (truncated).
+        duration_ms: Execution time in milliseconds.
+    """
+
+    step_id: str
+    description: str
+    status: Literal["completed", "failed", "skipped"]
+    result: str = ""
+    duration_ms: int = 0
+
+
+class GoalReport(BaseModel):
+    """Aggregate report from a completed goal (RFC-0009).
+
+    Args:
+        goal_id: Goal identifier.
+        description: Goal description.
+        step_reports: Reports from all steps.
+        summary: Brief summary of results.
+        status: Final goal status.
+        duration_ms: Total execution time.
+    """
+
+    goal_id: str
+    description: str
+    step_reports: list[StepReport] = Field(default_factory=list)
+    summary: str = ""
+    status: Literal["completed", "failed"] = "completed"
+    duration_ms: int = 0
+
+
 class Reflection(BaseModel):
     """Planner's assessment of plan progress.
 

@@ -20,6 +20,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0005](./RFC-0005.md) | Weaver Agent Architecture Design | Implemented | RFC-0001, RFC-0002, RFC-0003, RFC-0004 |
 | [RFC-0006](./RFC-0006.md) | Context and Memory Architecture Design | Implemented | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0007](./RFC-0007.md) | Autonomous Iteration Loop | Implemented | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0009](./RFC-0009.md) | DAG-Based Execution and Unified Concurrency | Draft | RFC-0001, RFC-0002, RFC-0007 |
 
 ### Implementation Interface Design
 

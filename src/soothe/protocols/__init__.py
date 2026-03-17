@@ -11,11 +11,13 @@ from soothe.protocols.durability import (
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
 from soothe.protocols.persistence import PersistStore
 from soothe.protocols.planner import (
+    GoalReport,
     Plan,
     PlanContext,
     PlannerProtocol,
     PlanStep,
     Reflection,
+    StepReport,
     StepResult,
 )
 from soothe.protocols.policy import (
@@ -37,6 +39,7 @@ __all__ = [
     "ContextProjection",
     "ContextProtocol",
     "DurabilityProtocol",
+    "GoalReport",
     "MemoryItem",
     "MemoryProtocol",
     "Permission",
@@ -52,6 +55,7 @@ __all__ = [
     "PolicyProtocol",
     "Reflection",
     "RemoteAgentProtocol",
+    "StepReport",
     "StepResult",
     "ThreadFilter",
     "ThreadInfo",

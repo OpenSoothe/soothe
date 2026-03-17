@@ -28,8 +28,10 @@ class Goal(BaseModel):
         status: Current lifecycle status.
         priority: Scheduling priority (0-100, higher = first).
         parent_id: Optional parent goal for hierarchical decomposition.
+        depends_on: IDs of goals that must complete before this one (DAG edges).
         retry_count: Number of retries attempted so far.
         max_retries: Maximum retries before permanent failure.
+        report: JSON-serialized GoalReport from execution (set on completion).
         created_at: Creation timestamp.
         updated_at: Last update timestamp.
     """
@@ -39,8 +41,10 @@ class Goal(BaseModel):
     status: GoalStatus = "pending"
     priority: int = 50
     parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
     retry_count: int = 0
     max_retries: int = 2
+    report: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -94,22 +98,60 @@ class GoalEngine:
         return goal
 
     async def next_goal(self) -> Goal | None:
-        """Return the highest-priority pending or active goal.
+        """Return the highest-priority ready goal (backward-compatible).
 
-        Scheduling: ``(priority DESC, created_at ASC)``.
+        Delegates to ``ready_goals(1)`` for DAG-aware scheduling.
 
         Returns:
             Next goal to process, or None if no executable goals.
         """
-        executable = [g for g in self._goals.values() if g.status in ("pending", "active")]
-        if not executable:
-            return None
-        executable.sort(key=lambda g: (-g.priority, g.created_at))
-        goal = executable[0]
-        if goal.status == "pending":
-            goal.status = "active"
-            goal.updated_at = datetime.now(UTC)
-        return goal
+        goals = await self.ready_goals(limit=1)
+        return goals[0] if goals else None
+
+    async def ready_goals(self, limit: int = 1) -> list[Goal]:
+        """Return goals whose dependencies are all completed (RFC-0009).
+
+        Goals are eligible if they are ``pending`` or ``active`` and all
+        goals in their ``depends_on`` list are ``completed``.  Results
+        are sorted by ``(priority DESC, created_at ASC)``.
+
+        Args:
+            limit: Max goals to return.
+
+        Returns:
+            List of ready goals, activated to ``active`` status.
+        """
+        ready: list[Goal] = []
+        for goal in self._goals.values():
+            if goal.status not in ("pending", "active"):
+                continue
+            deps_met = all(
+                self._goals.get(dep_id) is not None and self._goals[dep_id].status == "completed"
+                for dep_id in goal.depends_on
+            )
+            if not deps_met:
+                continue
+            ready.append(goal)
+
+        ready.sort(key=lambda g: (-g.priority, g.created_at))
+        result = ready[:limit]
+
+        for goal in result:
+            if goal.status == "pending":
+                goal.status = "active"
+                goal.updated_at = datetime.now(UTC)
+
+        return result
+
+    def is_complete(self) -> bool:
+        """Check if all goals are terminal (completed or failed).
+
+        Returns:
+            True if no pending or active goals remain.
+        """
+        if not self._goals:
+            return True
+        return all(g.status in ("completed", "failed") for g in self._goals.values())
 
     async def complete_goal(self, goal_id: str) -> Goal:
         """Mark a goal as completed.

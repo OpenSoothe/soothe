@@ -163,6 +163,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
 | [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
 | [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
+| [RFC-0009](docs/specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
 
 ### Implementation Guides
 
@@ -188,6 +189,8 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
 | [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
 | [IG-020](docs/impl/020-detached-daemon-autonomous-capability.md) | Detached Daemon Autonomous Capability |
+| [IG-021](docs/impl/021-dag-execution-unified-concurrency.md) | DAG-Based Execution and Unified Concurrency |
+| [IG-022](docs/impl/022-rfc0009-gaps-tests-tui-dag.md) | RFC-0009 Gaps, Tests, TUI DAG, and Log Enhancements |
 
 ## Interaction Rules
 

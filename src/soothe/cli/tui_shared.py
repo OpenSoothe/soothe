@@ -75,14 +75,17 @@ def extract_text_from_ai_message(msg: Any) -> list[str]:
 
 
 def render_plan_tree(plan: Plan, title: str | None = None) -> Tree:
-    """Render a plan as a Rich Tree with status markers."""
+    """Render a plan as a Rich Tree with status markers and DAG dependencies."""
     label = title or f"Plan: {plan.goal}"
     tree = Tree(Text(label, style="bold cyan"))
     for step in plan.steps:
         marker, style = _STATUS_MARKERS.get(step.status, ("[ ]", "dim"))
         step_style = {"in_progress": "yellow", "completed": "green"}.get(step.status, "dim")
-        line = Text.assemble(Text(marker, style=style), " ", Text(step.description, style=step_style))
-        tree.add(line)
+        parts: list[Text | str] = [Text(marker, style=style), " ", Text(step.description, style=step_style)]
+        if step.depends_on:
+            dep_str = ", ".join(step.depends_on)
+            parts.append(Text(f"  (< {dep_str})", style="dim italic"))
+        tree.add(Text.assemble(*parts))
     return tree
 
 
@@ -218,11 +221,21 @@ def _add_activity(state: TuiState, line: Text) -> None:
 
 
 def _set_plan_step_status(state: TuiState, index: int, status: str) -> None:
-    """Update a plan step status if the current plan exists."""
+    """Update a plan step status by index if the current plan exists."""
     if not state.current_plan:
         return
     if 0 <= index < len(state.current_plan.steps):
         state.current_plan.steps[index].status = status
+
+
+def _set_plan_step_status_by_id(state: TuiState, step_id: str, status: str) -> None:
+    """Update a plan step status by step ID (RFC-0009)."""
+    if not state.current_plan:
+        return
+    for step in state.current_plan.steps:
+        if step.id == step_id:
+            step.status = status
+            return
 
 
 def _handle_protocol_event(
@@ -261,6 +274,7 @@ def _handle_protocol_event(
                     id=s.get("id", str(i)),
                     description=s.get("description", ""),
                     status=s.get("status", "pending"),
+                    depends_on=s.get("depends_on", []),
                 )
                 for i, s in enumerate(steps_data)
             ]
@@ -271,22 +285,48 @@ def _handle_protocol_event(
     elif etype == "soothe.plan.reflected":
         assessment = data.get("assessment", "")[:60]
         _add_activity(state, Text.assemble(("  . ", "dim"), (f"Reflected: {assessment}", "dim italic")))
+    elif etype == "soothe.plan.batch_started":
+        parallel = data.get("parallel_count", 1)
+        if parallel > 1:
+            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Batch: {parallel} steps in parallel", "cyan bold")))
     elif etype == "soothe.plan.step_started":
+        step_id = data.get("step_id", "")
         index = int(data.get("index", -1))
         description = data.get("description", "")
-        _set_plan_step_status(state, index, "in_progress")
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {index + 1}: {description}", "yellow")))
+        if step_id:
+            _set_plan_step_status_by_id(state, step_id, "in_progress")
+            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: {description}", "yellow")))
+        elif index >= 0:
+            _set_plan_step_status(state, index, "in_progress")
+            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {index + 1}: {description}", "yellow")))
     elif etype == "soothe.plan.step_completed":
+        step_id = data.get("step_id", "")
         index = int(data.get("index", -1))
         success = bool(data.get("success", False))
-        _set_plan_step_status(state, index, "completed" if success else "failed")
+        duration = data.get("duration_ms", 0)
+        status = "completed" if success else "failed"
+        if step_id:
+            _set_plan_step_status_by_id(state, step_id, status)
+            dur_str = f" ({duration}ms)" if duration else ""
+            label = f"Step {step_id}: {'done' if success else 'failed'}{dur_str}"
+        elif index >= 0:
+            _set_plan_step_status(state, index, status)
+            label = f"Step {index + 1}: {'done' if success else 'failed'}"
+        else:
+            label = f"Step: {'done' if success else 'failed'}"
         _add_activity(
             state,
-            Text.assemble(
-                ("  . ", "dim"),
-                (f"Step {index + 1}: {'done' if success else 'failed'}", "green" if success else "red"),
-            ),
+            Text.assemble(("  . ", "dim"), (label, "green" if success else "red")),
         )
+    elif etype == "soothe.plan.step_failed":
+        step_id = data.get("step_id", "")
+        error = data.get("error", "")[:80]
+        if step_id:
+            _set_plan_step_status_by_id(state, step_id, "failed")
+        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: FAILED - {error}", "bold red")))
+    elif etype == "soothe.goal.batch_started":
+        parallel = data.get("parallel_count", 1)
+        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Goals: {parallel} running in parallel", "cyan bold")))
     elif etype == "soothe.policy.checked":
         verdict = data.get("verdict", "?")
         profile = data.get("profile")
