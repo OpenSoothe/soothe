@@ -278,12 +278,18 @@ class SootheRunner:
             await self._safe_close(store)
 
     async def _safe_close(self, obj: Any) -> None:
-        """Close an object that exposes an async close method."""
+        """Close an object that exposes a close method (sync or async)."""
         close_method = getattr(obj, "close", None)
         if not callable(close_method):
             return
         try:
-            await close_method()
+            # Check if it's a coroutine function
+            import asyncio
+
+            if asyncio.iscoroutinefunction(close_method):
+                await close_method()
+            else:
+                close_method()  # Call synchronously
         except Exception:
             logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
 

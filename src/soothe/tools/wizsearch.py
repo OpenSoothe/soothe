@@ -120,6 +120,7 @@ class WizsearchSearchTool(BaseTool):
     default_timeout: int = Field(default=30)
     default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
     config: dict[str, Any] = Field(default_factory=dict)
+    _debug_mode: bool = False
 
     def __init__(self, **data: Any) -> None:
         """Initialize wizsearch search tool with optional config override.
@@ -137,6 +138,43 @@ class WizsearchSearchTool(BaseTool):
                 self.default_max_results_per_engine = self.config["max_results_per_engine"]
             if "timeout" in self.config:
                 self.default_timeout = self.config["timeout"]
+            # Extract debug mode from Soothe config
+            self._debug_mode = self.config.get("debug", False)
+
+    def _log_engine_diagnostics(self, engines: list[str]) -> None:
+        """Log diagnostic information about search engine configurations."""
+        # Check Tavily API key
+        if "tavily" in engines:
+            tavily_key = os.environ.get("TAVILY_API_KEY") or os.environ.get("WIZSEARCH_TAVILY_API_KEY")
+            if tavily_key:
+                logger.info("Tavily API key found (length: %d)", len(tavily_key))
+            else:
+                logger.warning("Tavily API key NOT FOUND - Tavily search will fail")
+
+        # Log proxy configuration
+        https_proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+        if https_proxy or http_proxy:
+            logger.info("Proxy configured: HTTPS=%s, HTTP=%s", https_proxy, http_proxy)
+
+    def _validate_engine_config(self, engines: list[str]) -> list[dict[str, Any]]:
+        """Validate configuration for requested engines and return warnings."""
+        warnings = []
+
+        for engine in engines:
+            if engine == "tavily":
+                key = os.environ.get("TAVILY_API_KEY") or os.environ.get("WIZSEARCH_TAVILY_API_KEY")
+                if not key:
+                    warnings.append(
+                        {
+                            "engine": engine,
+                            "issue": "missing_api_key",
+                            "message": "TAVILY_API_KEY not found in environment",
+                            "action": "Set TAVILY_API_KEY or WIZSEARCH_TAVILY_API_KEY environment variable",
+                        }
+                    )
+
+        return warnings
 
     def _build_result_payload(self, result: object) -> dict[str, object]:
         """Build a stable JSON-serializable output payload."""
@@ -164,10 +202,21 @@ class WizsearchSearchTool(BaseTool):
         config_kwargs: dict[str, object] = {
             "max_results_per_engine": max_results_per_engine or self.default_max_results_per_engine,
             "timeout": timeout_seconds or self.default_timeout,
-            "fail_silently": True,
+            # Disable fail_silently when Soothe debug mode is enabled
+            "fail_silently": not self._debug_mode,
         }
         normalized = _normalize_engines(engines) or self.default_engines
         config_kwargs["enabled_engines"] = normalized
+
+        # Log debug mode status
+        if self._debug_mode:
+            logger.info("Wizsearch debug mode enabled: fail_silently=False, output_suppression=False")
+
+        # Run diagnostics and validation
+        self._log_engine_diagnostics(normalized)
+        validation_warnings = self._validate_engine_config(normalized)
+        for warning in validation_warnings:
+            logger.warning("Engine %s: %s - %s", warning["engine"], warning["issue"], warning["message"])
 
         # Emit progress event before search
         emit_progress(
@@ -180,10 +229,17 @@ class WizsearchSearchTool(BaseTool):
         )
 
         try:
-            # Capture third-party library output
-            with capture_subagent_output("wizsearch", suppress=True):
+            # Suppress output unless in debug mode
+            with capture_subagent_output("wizsearch", suppress=not self._debug_mode):
                 searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
                 result = await searcher.search(query=query)
+
+                # Log which engines succeeded/failed
+                if hasattr(result, "metadata") and result.metadata:
+                    engine_status = result.metadata.get("engine_status", {})
+                    for engine_name, status in engine_status.items():
+                        logger.debug("Engine %s: %s", engine_name, status)
+
                 payload = self._build_result_payload(result)
 
                 # Emit completion event
@@ -202,9 +258,16 @@ class WizsearchSearchTool(BaseTool):
 
         try:
             config_kwargs["enabled_engines"] = self.default_engines
-            with capture_subagent_output("wizsearch", suppress=True):
+            with capture_subagent_output("wizsearch", suppress=not self._debug_mode):
                 searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
                 result = await searcher.search(query=query)
+
+                # Log which engines succeeded/failed
+                if hasattr(result, "metadata") and result.metadata:
+                    engine_status = result.metadata.get("engine_status", {})
+                    for engine_name, status in engine_status.items():
+                        logger.debug("Engine %s: %s", engine_name, status)
+
                 payload = self._build_result_payload(result)
 
                 # Emit completion event
@@ -221,12 +284,15 @@ class WizsearchSearchTool(BaseTool):
         except Exception as exc:
             logger.exception("Search failed even with default engines")
 
-            # Emit failure event
+            # Emit failure event with engine status if available
             emit_progress(
                 {
                     "type": "soothe.tool.search.failed",
                     "query": query,
                     "error": str(exc),
+                    "engines": normalized,
+                    "engine_status": getattr(exc, "engine_status", {}),
+                    "debug_mode": self._debug_mode,
                 },
                 logger,
             )
@@ -366,12 +432,22 @@ class WizsearchCrawlPageTool(BaseTool):
         except Exception as exc:
             logger.exception("Crawl failed for %s", validated_url)
 
+            # Add specific error type logging
+            error_str = str(exc).lower()
+            if "timeout" in error_str:
+                logger.warning("Crawl timed out - consider increasing timeout or checking network")
+            elif "connection" in error_str:
+                logger.warning("Connection failed - check URL accessibility and proxy settings")
+            elif "javascript" in error_str or "render" in error_str:
+                logger.warning("JavaScript rendering issue - page may require JS execution")
+
             # Emit failure event
             emit_progress(
                 {
                     "type": "soothe.tool.crawl.failed",
                     "url": validated_url,
                     "error": str(exc),
+                    "error_type": type(exc).__name__,
                 },
                 logger,
             )

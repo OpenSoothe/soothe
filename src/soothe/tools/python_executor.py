@@ -214,9 +214,9 @@ class PythonExecutorTool(BaseTool):
                 "error": error_msg,
             }
 
-    async def _arun(self, code: str, workdir: str | None = None, timeout_seconds: int | None = None) -> dict[str, Any]:
+    async def _arun(self, code: str, workdir: str | None = None) -> dict[str, Any]:
         """Async wrapper for sync execution."""
-        return self._run(code, workdir, timeout_seconds)
+        return self._run(code, workdir)
 
 
 def create_python_executor_tools() -> list[BaseTool]:

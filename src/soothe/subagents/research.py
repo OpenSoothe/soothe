@@ -163,15 +163,17 @@ def _web_research(state: dict[str, Any], search_tool: Any) -> dict[str, Any]:
     try:
         results = search_tool.invoke(query)
         summary = str(results) if results else f"No results for: {query}"
+        result_count = len(results.get("sources", [])) if isinstance(results, dict) else 0
     except Exception:
         logger.exception("Search failed for query: %s", query)
         summary = f"Search failed for: {query}"
+        result_count = 0
 
     _emit_progress(
         {
             "type": "soothe.research.search_done",
             "query": query,
-            "result_length": len(summary),
+            "result_count": result_count,
         }
     )
     return {"summary": summary, "query": query}

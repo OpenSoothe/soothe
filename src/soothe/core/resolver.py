@@ -149,6 +149,9 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
                 "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
                 "timeout": config.tools_settings.wizsearch.timeout,
             }
+        # Pass debug flag from Soothe config
+        if config and hasattr(config, "debug"):
+            wizsearch_config["debug"] = config.debug
         return list(create_wizsearch_tools(wizsearch_config))
     if name == "datetime":
         from soothe.tools.datetime import create_datetime_tools
