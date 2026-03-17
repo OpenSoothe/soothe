@@ -685,9 +685,14 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
         dsn = config.resolve_persistence_postgres_dsn()
         result = _resolve_postgres_checkpointer(dsn)
         if result:
-            return result  # (checkpointer, pool)
+            return result  # (None, pool)
+        # Fall through to MemorySaver if PostgreSQL setup failed
+        logger.info("PostgreSQL checkpointer unavailable, using MemorySaver")
+    elif backend == "memory":
+        logger.debug("Using memory checkpointer")
+    else:
+        logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
 
-    logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
     return MemorySaver()
 
 
@@ -695,21 +700,24 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
     """Initialize PostgreSQL checkpointer with provided DSN.
 
     Returns:
-        A tuple of (AsyncPostgresSaver, AsyncConnectionPool) if successful, None otherwise.
-        The pool must be closed during cleanup.
+        A tuple of (None, AsyncConnectionPool) if successful, None otherwise.
+        The checkpointer will be created from the pool in async context, and the pool must be closed during cleanup.
+
+    Note:
+        We defer AsyncPostgresSaver creation to async context to avoid "no running event loop" errors.
+        The runner will create the checkpointer from the pool after opening it.
     """
     if not dsn:
         logger.warning("PostgreSQL checkpointer requires DSN configuration")
         return None
 
     try:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
         from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
     except ImportError:
         logger.warning(
-            "PostgreSQL checkpointer requires 'langgraph[postgres]' and 'psycopg-pool'. "
-            "Install with: pip install 'langgraph[postgres]' 'psycopg-pool'"
+            "PostgreSQL checkpointer requires 'psycopg-pool'. "
+            "Install with: pip install 'psycopg-pool'"
         )
         return None
 
@@ -725,14 +733,14 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
             },
             open=False,  # Don't open connections yet
         )
-        checkpointer = AsyncPostgresSaver(pool)
 
-        logger.info("Using AsyncPostgresSaver with connection pool, DSN: %s", _mask_dsn(dsn))
+        logger.info("PostgreSQL connection pool created, DSN: %s", _mask_dsn(dsn))
     except Exception as exc:
-        logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
+        logger.warning("Failed to create PostgreSQL connection pool: %s", exc)
         return None
     else:
-        return (checkpointer, pool)
+        # Return (None, pool) - checkpointer will be created from pool in async context
+        return (None, pool)  # type: ignore[return-value]
 
 
 def _mask_dsn(dsn: str) -> str:

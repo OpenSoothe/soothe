@@ -137,7 +137,12 @@ class SootheRunner:
         checkpointer_result = resolve_checkpointer(self._config)
         # Handle both tuple (PostgreSQL with pool) and single checkpointer (MemorySaver)
         if isinstance(checkpointer_result, tuple):
-            self._checkpointer, self._checkpointer_pool = checkpointer_result
+            # PostgreSQL case: pool is available, checkpointer will be created in async context
+            # Use MemorySaver temporarily during agent creation
+            from langgraph.checkpoint.memory import MemorySaver
+
+            self._checkpointer_pool = checkpointer_result[1]
+            self._checkpointer = MemorySaver()  # Temporary checkpointer
             self._checkpointer_initialized = False
         else:
             self._checkpointer = checkpointer_result
@@ -754,17 +759,25 @@ class SootheRunner:
         if not self._checkpointer_initialized and self._checkpointer_pool is not None:
             try:
                 await self._checkpointer_pool.open()
-                await self._checkpointer.setup()
+
+                # Create the AsyncPostgresSaver now that we're in async context
+                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+                checkpointer = AsyncPostgresSaver(self._checkpointer_pool)
+                await checkpointer.setup()
+
+                # Replace the temporary MemorySaver with the real checkpointer
+                self._checkpointer = checkpointer
+                self._agent.checkpointer = checkpointer
+
                 self._checkpointer_initialized = True
-                logger.info("AsyncPostgresSaver pool opened and tables initialized")
+                logger.info("AsyncPostgresSaver pool opened and tables initialized, checkpointer replaced")
             except Exception as exc:
                 logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
-                # Fall back to memory saver
-                from langgraph.checkpoint.memory import MemorySaver
-
-                self._checkpointer = MemorySaver()
+                # Fall back to memory saver (already set)
                 self._checkpointer_pool = None
                 self._checkpointer_initialized = True
+                logger.info("Using MemorySaver as fallback")
 
         hitl_iterations = 0
         while True:
