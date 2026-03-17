@@ -11,6 +11,9 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.utils.tool_error_handler import tool_error_handler
+from soothe.utils.url_validation import validate_url
+
 JINA_READER_BASE = "https://r.jina.ai"
 
 
@@ -35,19 +38,31 @@ class JinaReaderTool(BaseTool):
             kwargs["api_key"] = os.environ.get("JINA_API_KEY", "")
         super().__init__(**kwargs)
 
+    @tool_error_handler("jina_get_web_content", return_type="str")
     def _run(self, url: str) -> str:
         import requests
+
+        # Validate URL
+        validated_url, error = validate_url(url)
+        if error:
+            return f"Error: {error}"
 
         headers: dict[str, str] = {"Accept": "text/plain"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
-        resp = requests.get(f"{JINA_READER_BASE}/{url}", headers=headers, timeout=30)
+        resp = requests.get(f"{JINA_READER_BASE}/{validated_url}", headers=headers, timeout=30)
         resp.raise_for_status()
         return resp.text
 
+    @tool_error_handler("jina_get_web_content", return_type="str")
     async def _arun(self, url: str) -> str:
         import aiohttp
+
+        # Validate URL
+        validated_url, error = validate_url(url)
+        if error:
+            return f"Error: {error}"
 
         headers: dict[str, str] = {"Accept": "text/plain"}
         if self.api_key:
@@ -55,7 +70,9 @@ class JinaReaderTool(BaseTool):
 
         async with (
             aiohttp.ClientSession() as session,
-            session.get(f"{JINA_READER_BASE}/{url}", headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp,
+            session.get(
+                f"{JINA_READER_BASE}/{validated_url}", headers=headers, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp,
         ):
             resp.raise_for_status()
             return await resp.text()

@@ -13,6 +13,8 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.utils.tool_error_handler import tool_error_handler
+
 SERPER_BASE_URL = "https://google.serper.dev"
 
 
@@ -42,6 +44,7 @@ class SerperSearchTool(BaseTool):
             kwargs["api_key"] = os.environ.get("SERPER_API_KEY", "")
         super().__init__(**kwargs)
 
+    @tool_error_handler("serper_search", return_type="dict")
     def _make_request(
         self,
         endpoint: str,
@@ -95,6 +98,7 @@ class SerperSearchTool(BaseTool):
 
         return self._make_request(endpoint, payload)
 
+    @tool_error_handler("serper_search", return_type="dict")
     async def _arun(
         self,
         query: str,

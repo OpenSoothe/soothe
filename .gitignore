@@ -210,3 +210,5 @@ __marimo__/
 .python-version
 thirdparty/
 .cursor/
+large_tool_results/
+plot_*

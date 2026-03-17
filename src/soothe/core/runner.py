@@ -812,7 +812,9 @@ class SootheRunner:
                 from soothe.utils.error_format import emit_error_event
 
                 yield _custom(emit_error_event(exc))
-                break
+                # Don't break - let agent handle error and continue
+                # Tools return error dicts/strings, so exceptions here are unexpected
+                # but we shouldn't crash the entire conversation
 
             if not interrupt_occurred:
                 break

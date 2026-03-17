@@ -248,3 +248,114 @@ class TestDirectPlanner:
 
         assert "step_1" in prompt
         assert "step_2" in prompt
+
+    def test_normalize_hints_in_dict_invalid_values(self) -> None:
+        """Test normalizing invalid execution_hint values in dictionary."""
+        mock_model = MagicMock()
+        planner = DirectPlanner(mock_model)
+
+        data = {
+            "goal": "test goal",
+            "steps": [
+                {"id": "step_1", "description": "Step 1", "execution_hint": "scout"},
+                {"id": "step_2", "description": "Step 2", "execution_hint": "browser"},
+                {"id": "step_3", "description": "Step 3", "execution_hint": "research"},
+                {"id": "step_4", "description": "Step 4", "execution_hint": "weaver"},
+                {"id": "step_5", "description": "Step 5", "execution_hint": "tool"},
+            ],
+        }
+
+        normalized_data = planner._normalize_hints_in_dict(data)
+
+        # Invalid hints should be mapped to subagent
+        assert normalized_data["steps"][0]["execution_hint"] == "subagent"  # scout
+        assert normalized_data["steps"][1]["execution_hint"] == "subagent"  # browser
+        assert normalized_data["steps"][2]["execution_hint"] == "subagent"  # research
+        assert normalized_data["steps"][3]["execution_hint"] == "subagent"  # weaver
+        # Valid hint should remain unchanged
+        assert normalized_data["steps"][4]["execution_hint"] == "tool"
+
+    def test_parse_json_from_response_markdown_block(self) -> None:
+        """Test parsing Plan from JSON wrapped in markdown code blocks."""
+        mock_model = MagicMock()
+        planner = DirectPlanner(mock_model)
+
+        content = """```json
+{
+  "goal": "test goal",
+  "steps": [
+    {"id": "step_1", "description": "First step", "execution_hint": "tool"},
+    {"id": "step_2", "description": "Second step", "execution_hint": "auto"}
+  ]
+}
+```"""
+
+        plan = planner._parse_json_from_response(content, "fallback goal")
+
+        assert plan is not None
+        assert plan.goal == "test goal"
+        assert len(plan.steps) == 2
+        assert plan.steps[0].id == "step_1"
+
+    def test_parse_json_from_response_plain_json(self) -> None:
+        """Test parsing Plan from plain JSON."""
+        mock_model = MagicMock()
+        planner = DirectPlanner(mock_model)
+
+        content = """{
+  "goal": "test goal",
+  "steps": [
+    {"id": "step_1", "description": "First step", "execution_hint": "tool"}
+  ]
+}"""
+
+        plan = planner._parse_json_from_response(content, "fallback goal")
+
+        assert plan is not None
+        assert plan.goal == "test goal"
+        assert len(plan.steps) == 1
+
+    def test_parse_json_from_response_normalizes_hints(self) -> None:
+        """Test that parsing normalizes invalid execution hints."""
+        mock_model = MagicMock()
+        planner = DirectPlanner(mock_model)
+
+        content = """{
+  "goal": "test goal",
+  "steps": [
+    {"id": "step_1", "description": "Step 1", "execution_hint": "scout"},
+    {"id": "step_2", "description": "Step 2", "execution_hint": "browser"}
+  ]
+}"""
+
+        plan = planner._parse_json_from_response(content, "fallback goal")
+
+        assert plan is not None
+        assert plan.steps[0].execution_hint == "subagent"
+        assert plan.steps[1].execution_hint == "subagent"
+
+    @pytest.mark.asyncio
+    async def test_create_plan_manual_parse_fallback(self) -> None:
+        """Test plan creation falls back to manual parsing on structured output failure."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(side_effect=Exception("Invalid JSON"))
+
+        # Mock successful manual parse
+        mock_response = MagicMock()
+        mock_response.content = """{
+  "goal": "test goal",
+  "steps": [
+    {"id": "step_1", "description": "Step", "execution_hint": "tool"}
+  ]
+}"""
+        mock_model.ainvoke = AsyncMock(return_value=mock_response)
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        planner = DirectPlanner(mock_model)
+        context = PlanContext()
+
+        plan = await planner.create_plan("test goal", context)
+
+        assert plan.goal == "test goal"
+        assert len(plan.steps) == 1

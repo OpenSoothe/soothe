@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Any, ClassVar
@@ -81,22 +82,35 @@ class DirectPlanner:
                 return template_plan
 
         # Fall back to LLM
-        structured_model = self._model.with_structured_output(Plan)
         prompt = self._build_plan_prompt(goal, context)
+
+        # Try structured output first
         try:
+            structured_model = self._model.with_structured_output(Plan)
             plan: Plan = await structured_model.ainvoke(prompt)
+            # Post-process to fix execution_hint values if needed
+            return self._normalize_execution_hints(plan)
         except Exception as e:
-            logger.warning("Structured plan creation failed, using fallback: %s", e)
+            logger.warning("Structured plan creation failed, trying manual parse: %s", e)
+
+            # Try manual parsing as fallback
+            try:
+                response = await self._model.ainvoke(prompt)
+                content = response.content if hasattr(response, "content") else str(response)
+                plan = self._parse_json_from_response(content, goal)
+                if plan:
+                    return plan
+            except Exception as manual_error:
+                logger.warning("Manual parse also failed: %s", manual_error)
+
+            # Ultimate fallback
             return Plan(
                 goal=goal,
                 steps=[PlanStep(id="step_1", description=goal)],
             )
-        else:
-            return plan
 
     async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
         """Revise a plan based on reflection feedback."""
-        structured_model = self._model.with_structured_output(Plan)
         prompt = (
             f"Revise this plan based on the feedback.\n\n"
             f"Current plan goal: {plan.goal}\n"
@@ -104,14 +118,87 @@ class DirectPlanner:
             f"Feedback: {reflection}\n\n"
             f"Return a revised plan."
         )
+
         try:
+            structured_model = self._model.with_structured_output(Plan)
             revised: Plan = await structured_model.ainvoke(prompt)
             revised.status = "revised"
+            # Post-process to fix execution_hint values if needed
+            return self._normalize_execution_hints(revised)
         except Exception as e:
-            logger.warning("Plan revision failed, keeping original: %s", e)
+            logger.warning("Plan revision failed, trying manual parse: %s", e)
+
+            # Try manual parsing as fallback
+            try:
+                response = await self._model.ainvoke(prompt)
+                content = response.content if hasattr(response, "content") else str(response)
+                revised = self._parse_json_from_response(content, plan.goal)
+                if revised:
+                    revised.status = "revised"
+                    return revised
+            except Exception as manual_error:
+                logger.warning("Manual parse also failed: %s", manual_error)
+
             return plan
-        else:
-            return revised
+
+    def _parse_json_from_response(self, content: str, goal: str) -> Plan | None:  # noqa: ARG002
+        """Parse Plan from LLM response content.
+
+        Handles JSON wrapped in markdown code blocks.
+        """
+        try:
+            # Try to extract JSON from markdown code blocks
+            json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                data = json.loads(json_str)
+                # Normalize hints in dict before creating Plan
+                data = self._normalize_hints_in_dict(data)
+                return Plan(**data)
+
+            # Try direct JSON parse
+            data = json.loads(content)
+            # Normalize hints in dict before creating Plan
+            data = self._normalize_hints_in_dict(data)
+            return Plan(**data)
+        except Exception as parse_error:
+            logger.debug("JSON parse failed: %s", parse_error)
+            return None
+
+    def _normalize_hints_in_dict(self, data: dict) -> dict:
+        """Normalize execution_hint values in a dict before creating Plan.
+
+        Args:
+            data: Dictionary with 'steps' key containing step dicts.
+
+        Returns:
+            Modified dict with normalized execution_hint values.
+        """
+        hint_mapping = {
+            "scout": "subagent",
+            "browser": "subagent",
+            "research": "subagent",
+            "weaver": "subagent",
+            "skillify": "subagent",
+            "search": "tool",
+            "web": "tool",
+            "api": "tool",
+        }
+
+        if "steps" in data:
+            for step in data["steps"]:
+                if "execution_hint" in step:
+                    hint = step["execution_hint"]
+                    if hint not in ("tool", "subagent", "remote", "auto"):
+                        normalized = hint_mapping.get(hint, "auto")
+                        logger.warning(
+                            "Normalizing invalid execution_hint '%s' to '%s'",
+                            hint,
+                            normalized,
+                        )
+                        step["execution_hint"] = normalized
+
+        return data
 
     async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
         """Trivial reflection for simple plans."""
@@ -176,10 +263,50 @@ class DirectPlanner:
             "{\n"
             '  "goal": "<the goal text>",\n'
             '  "steps": [\n'
-            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto|tool|subagent"},\n'
-            '    {"id": "step_2", "description": "<action>", "execution_hint": "auto|tool|subagent"}\n'
+            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto"},\n'
+            '    {"id": "step_2", "description": "<action>", "execution_hint": "tool"}\n'
             "  ]\n"
             "}\n\n"
-            "Important: Return the flat structure shown above, NOT nested under a 'plan' key."
+            "IMPORTANT execution_hint rules:\n"
+            "- Must be one of: 'tool', 'subagent', 'remote', 'auto'\n"
+            "- Use 'tool' for tool-based operations\n"
+            "- Use 'subagent' for delegating to specialized subagents\n"
+            "- Use 'auto' for LLM reasoning or synthesis\n"
+            "- Do NOT use other values like 'scout', 'browser', 'research', etc.\n\n"
+            "Important: Return the flat structure shown above, NOT nested under a 'plan' key. "
+            "Return ONLY valid JSON, NOT wrapped in markdown code blocks."
         )
         return "\n\n".join(parts)
+
+    def _normalize_execution_hints(self, plan: Plan) -> Plan:
+        """Normalize execution_hint values to valid options.
+
+        Some LLMs may return invalid hints like 'scout', 'browser', etc.
+        This method maps them to valid values.
+        """
+        # Map common invalid values to valid ones
+        hint_mapping = {
+            "scout": "subagent",
+            "browser": "subagent",
+            "research": "subagent",
+            "weaver": "subagent",
+            "skillify": "subagent",
+            "search": "tool",
+            "web": "tool",
+            "api": "tool",
+        }
+
+        for step in plan.steps:
+            if step.execution_hint not in ("tool", "subagent", "remote", "auto"):
+                original = step.execution_hint
+                # Try to map to a valid value
+                normalized = hint_mapping.get(original, "auto")
+                logger.warning(
+                    "Normalizing invalid execution_hint '%s' to '%s' for step %s",
+                    original,
+                    normalized,
+                    step.id,
+                )
+                step.execution_hint = normalized
+
+        return plan

@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.utils.url_validation import validate_url
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -300,11 +302,33 @@ class WizsearchCrawlPageTool(BaseTool):
         if selected_format not in {"markdown", "html", "text"}:
             selected_format = self.default_content_format
 
+        # Validate URL
+        validated_url, error = validate_url(url)
+        if error:
+            logger.warning("Invalid URL: %s", error)
+            emit_progress(
+                {
+                    "type": "soothe.tool.crawl.failed",
+                    "url": url,
+                    "error": error,
+                },
+                logger,
+            )
+            return {
+                "url": url,
+                "content_format": selected_format,
+                "only_text": only_text,
+                "headless": True,
+                "content": "",
+                "content_length": 0,
+                "error": error,
+            }
+
         # Emit progress event before crawling
         emit_progress(
             {
                 "type": "soothe.tool.crawl.started",
-                "url": url,
+                "url": validated_url,
                 "content_format": selected_format,
             },
             logger,
@@ -315,14 +339,14 @@ class WizsearchCrawlPageTool(BaseTool):
             with capture_subagent_output("wizsearch", suppress=True):
                 # PageCrawler runs in headless mode by default (BrowserConfig default)
                 crawler = PageCrawler(
-                    url=url,
+                    url=validated_url,
                     content_format=selected_format,
                     only_text=only_text,
                 )
                 content = await crawler.crawl()
 
             payload = {
-                "url": url,
+                "url": validated_url,
                 "content_format": selected_format,
                 "only_text": only_text,
                 "headless": True,  # Always true - wizsearch default
@@ -334,25 +358,25 @@ class WizsearchCrawlPageTool(BaseTool):
             emit_progress(
                 {
                     "type": "soothe.tool.crawl.completed",
-                    "url": url,
+                    "url": validated_url,
                     "content_length": len(content or ""),
                 },
                 logger,
             )
         except Exception as exc:
-            logger.exception("Crawl failed for %s", url)
+            logger.exception("Crawl failed for %s", validated_url)
 
             # Emit failure event
             emit_progress(
                 {
                     "type": "soothe.tool.crawl.failed",
-                    "url": url,
+                    "url": validated_url,
                     "error": str(exc),
                 },
                 logger,
             )
             return {
-                "url": url,
+                "url": validated_url,
                 "content_format": selected_format,
                 "only_text": only_text,
                 "headless": True,

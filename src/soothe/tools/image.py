@@ -12,6 +12,9 @@ import io
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.utils.tool_error_handler import tool_error_handler
+from soothe.utils.url_validation import validate_url
+
 
 def _image_to_base64(image_path: str, max_size: int = 1024) -> str:
     """Load an image and convert to base64, resizing if needed.
@@ -22,13 +25,22 @@ def _image_to_base64(image_path: str, max_size: int = 1024) -> str:
 
     Returns:
         Base64-encoded JPEG string.
+
+    Raises:
+        ValueError: If URL is invalid.
+        Exception: If image loading fails.
     """
     from PIL import Image
 
     if image_path.startswith(("http://", "https://")):
         import requests
 
-        resp = requests.get(image_path, timeout=30)
+        # Validate URL
+        validated_url, error = validate_url(image_path)
+        if error:
+            raise ValueError(error)
+
+        resp = requests.get(validated_url, timeout=30)
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content))
     else:
@@ -53,6 +65,7 @@ class ImageAnalysisTool(BaseTool):
     )
     model_name: str = Field(default="gpt-4o")
 
+    @tool_error_handler("analyze_image", return_type="str")
     def _run(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
         from langchain.chat_models import init_chat_model
 
@@ -71,6 +84,7 @@ class ImageAnalysisTool(BaseTool):
         )
         return str(msg.content)
 
+    @tool_error_handler("analyze_image", return_type="str")
     async def _arun(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
         from langchain.chat_models import init_chat_model
 
@@ -97,6 +111,7 @@ class ExtractTextFromImageTool(BaseTool):
     description: str = "Extract all visible text from an image via OCR. Provide `image_path` (local path or URL)."
     model_name: str = Field(default="gpt-4o")
 
+    @tool_error_handler("extract_text_from_image", return_type="str")
     def _run(self, image_path: str) -> str:
         from langchain.chat_models import init_chat_model
 
@@ -118,6 +133,7 @@ class ExtractTextFromImageTool(BaseTool):
         )
         return str(msg.content)
 
+    @tool_error_handler("extract_text_from_image", return_type="str")
     async def _arun(self, image_path: str) -> str:
         from langchain.chat_models import init_chat_model
 

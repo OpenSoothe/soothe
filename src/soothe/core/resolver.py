@@ -197,8 +197,8 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             from langchain_community.tools import ArxivQueryRun
 
             return [ArxivQueryRun()]
-        except Exception:
-            logger.debug("Failed to load arxiv tool, skipping", exc_info=True)
+        except ImportError:
+            logger.debug("arxiv tool not available (install with: pip install arxiv)")
             return []
     if name == "wikipedia":
         try:
@@ -206,8 +206,8 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             from langchain_community.utilities import WikipediaAPIWrapper
 
             return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
-        except Exception:
-            logger.debug("Failed to load wikipedia tool, skipping", exc_info=True)
+        except ImportError:
+            logger.debug("wikipedia tool not available (install with: pip install wikipedia)")
             return []
     if name == "github":
         from langchain_community.utilities import GitHubAPIWrapper
@@ -715,10 +715,7 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
         from psycopg.rows import dict_row
         from psycopg_pool import AsyncConnectionPool
     except ImportError:
-        logger.warning(
-            "PostgreSQL checkpointer requires 'psycopg-pool'. "
-            "Install with: pip install 'psycopg-pool'"
-        )
+        logger.warning("PostgreSQL checkpointer requires 'psycopg-pool'. Install with: pip install 'psycopg-pool'")
         return None
 
     # Create an async connection pool (better for long-running daemon)

@@ -262,7 +262,7 @@ class BrowserSubagentConfig(BaseModel):
     disable_telemetry: bool = True
     enable_existing_browser: bool = True
     browser_start_timeout: int = 90
-    profile_mode: Literal["persistent", "ephemeral"] = "persistent"
+    profile_mode: Literal["persistent", "ephemeral"] = "ephemeral"
 
 
 class WizsearchConfig(BaseModel):
