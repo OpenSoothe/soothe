@@ -65,7 +65,9 @@ class TestSootheConfig:
 
     def test_resolve_system_prompt_override(self) -> None:
         cfg = SootheConfig(system_prompt="Custom prompt here")
-        assert cfg.resolve_system_prompt() == "Custom prompt here"
+        result = cfg.resolve_system_prompt()
+        assert result.startswith("Custom prompt here")
+        assert "Today's date is" in result
 
     def test_planner_routing_default(self) -> None:
         cfg = SootheConfig()

@@ -85,8 +85,8 @@ class DirectPlanner:
         prompt = self._build_plan_prompt(goal, context)
         try:
             plan: Plan = await structured_model.ainvoke(prompt)
-        except Exception:
-            logger.warning("Structured plan creation failed, using fallback")
+        except Exception as e:
+            logger.warning("Structured plan creation failed, using fallback: %s", e)
             return Plan(
                 goal=goal,
                 steps=[PlanStep(id="step_1", description=goal)],
@@ -107,8 +107,8 @@ class DirectPlanner:
         try:
             revised: Plan = await structured_model.ainvoke(prompt)
             revised.status = "revised"
-        except Exception:
-            logger.warning("Plan revision failed, keeping original")
+        except Exception as e:
+            logger.warning("Plan revision failed, keeping original: %s", e)
             return plan
         else:
             return revised
@@ -172,8 +172,14 @@ class DirectPlanner:
         if context.completed_steps:
             parts.append(f"Already completed: {[s.step_id for s in context.completed_steps]}")
         parts.append(
-            "Return a Plan with concrete, actionable steps. "
-            "Each step should have an id (step_1, step_2, ...), "
-            "description, and execution_hint."
+            "Return a JSON object with exactly this structure:\n"
+            "{\n"
+            '  "goal": "<the goal text>",\n'
+            '  "steps": [\n'
+            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto|tool|subagent"},\n'
+            '    {"id": "step_2", "description": "<action>", "execution_hint": "auto|tool|subagent"}\n'
+            "  ]\n"
+            "}\n\n"
+            "Important: Return the flat structure shown above, NOT nested under a 'plan' key."
         )
         return "\n\n".join(parts)

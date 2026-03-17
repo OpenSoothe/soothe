@@ -55,6 +55,7 @@ Each implementation guide follows the template in `templates/impl-guide-template
 - [IG-022: Unified Persistence Storage](022-unified-persistence-storage.md)
 - [IG-023: Postgres DB Separation and Persistence Deadlock Fix](023-postgres-db-separation-and-persistence-deadlock-fix.md)
 - [IG-024: Existing Browser Connection](024-existing-browser-connection.md)
+- [IG-025: Subagent Progress Visibility and Output Capture](025-subagent-progress-visibility.md)
 
 ## Related Documents
 

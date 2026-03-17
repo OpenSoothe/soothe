@@ -35,6 +35,7 @@ from soothe.cli.tui_shared import (
     _handle_generic_custom_activity,
     _handle_protocol_event,
     _handle_subagent_custom,
+    _handle_subagent_progress,
     _handle_subagent_text_activity,
     _handle_tool_call_activity,
     _handle_tool_result_activity,
@@ -319,6 +320,15 @@ class SootheApp(App):
                     etype = data.get("type", "")
                     if "plan" in etype:
                         self._refresh_plan()
+                elif category == "subagent_progress" and should_show(category, self._progress_verbosity):
+                    _handle_subagent_progress(
+                        namespace,
+                        data,
+                        self._state,
+                        verbosity=self._progress_verbosity,
+                    )
+                    self._flush_new_activity()
+                    self._update_status("Running")
                 elif category == "subagent_custom" and not is_main:
                     _handle_subagent_custom(
                         namespace,

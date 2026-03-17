@@ -823,6 +823,9 @@ def config(
         sys.exit(1)
 
 
+_MAX_INLINE_QUERIES = 3
+
+
 def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
     """Render a soothe.* event as a structured progress line to stderr."""
     etype = data.get("type", "")
@@ -836,7 +839,68 @@ def _render_progress_event(data: dict, *, prefix: str | None = None) -> None:
         tag = "custom"
     parts: list[str] = []
 
-    if etype == "soothe.context.projected":
+    # Tool activity events
+    if etype == "soothe.tool.search.started":
+        query = data.get("query", "")
+        engines = data.get("engines", [])
+        parts = ["Searching:", str(query)[:40]]
+        if engines:
+            parts.append(f"({', '.join(engines[:3])})")
+    elif etype == "soothe.tool.search.completed":
+        count = data.get("result_count", 0)
+        response_time = data.get("response_time")
+        parts = [f"Found {count} results"]
+        if response_time:
+            parts.append(f"({response_time:.1f}s)")
+    elif etype == "soothe.tool.search.failed":
+        error = data.get("error", "unknown error")
+        parts = [f"Search failed: {str(error)[:40]}"]
+    elif etype == "soothe.tool.crawl.started":
+        url = data.get("url", "")
+        parts = [f"Crawling: {str(url)[:50]}"]
+    elif etype == "soothe.tool.crawl.completed":
+        content_length = data.get("content_length", 0)
+        parts = [f"Crawl complete: {content_length} bytes"]
+    elif etype == "soothe.tool.crawl.failed":
+        error = data.get("error", "unknown error")
+        parts = [f"Crawl failed: {str(error)[:40]}"]
+    # Subagent progress events
+    elif etype == "soothe.browser.step":
+        step = data.get("step", "?")
+        action = str(data.get("action", ""))[:40]
+        url = str(data.get("url", ""))[:35]
+        parts = [f"Step {step}"]
+        if action:
+            parts.append(f": {action}")
+        if url:
+            parts.append(f"@ {url}")
+    elif etype == "soothe.browser.cdp":
+        status = data.get("status", "")
+        if status == "connected":
+            parts = ["Connected to existing browser"]
+        elif status == "not_found":
+            parts = ["No existing browser found, launching new"]
+        else:
+            parts = [f"Browser CDP: {status}"]
+    elif etype == "soothe.research.web_search":
+        query = data.get("query", "")
+        engines = data.get("engines", [])
+        parts = ["Searching:", str(query)[:40]]
+        if engines:
+            parts.append(f"({', '.join(engines[:3])})")
+    elif etype == "soothe.research.search_done":
+        count = data.get("result_count", 0)
+        parts = [f"Found {count} results"]
+    elif etype == "soothe.research.queries_generated":
+        count = data.get("count", 0)
+        queries = data.get("queries", [])
+        parts = [f"Generated {count} search queries"]
+        if queries and len(queries) <= _MAX_INLINE_QUERIES:
+            parts.append(f": {', '.join(str(q)[:30] for q in queries[:_MAX_INLINE_QUERIES])}")
+    elif etype == "soothe.research.complete":
+        parts = ["Research completed"]
+    # Protocol events
+    elif etype == "soothe.context.projected":
         parts = [f"{data.get('entries', 0)} entries, {data.get('tokens', 0)} tokens"]
     elif etype == "soothe.memory.recalled":
         parts = [f"{data.get('count', 0)} items recalled"]

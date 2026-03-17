@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
+
+_MAX_ERROR_MSG_LENGTH = 100
 
 
 def format_cli_error(
@@ -52,15 +50,14 @@ def format_cli_error(
             if show_type:
                 return f"{context} failed: {error_type}: {simplified_msg}"
             return f"{context} failed: {simplified_msg}"
-        elif show_type:
+        if show_type:
             return f"{error_type}: {simplified_msg}"
         return simplified_msg
-    else:
-        # String error message
-        error_str = str(error)
-        if context:
-            return f"{context} failed: {error_str}"
-        return error_str
+    # String error message
+    error_str = str(error)
+    if context:
+        return f"{context} failed: {error_str}"
+    return error_str
 
 
 def _simplify_error_message(error_type: str, error_msg: str) -> str:
@@ -104,7 +101,7 @@ def _simplify_error_message(error_type: str, error_msg: str) -> str:
         return "System error"
 
     # For other errors, return original message if it's concise
-    if len(error_msg) <= 100:
+    if len(error_msg) <= _MAX_ERROR_MSG_LENGTH:
         return error_msg
 
     # Truncate very long messages
@@ -150,14 +147,12 @@ def emit_error_event(
     error: Exception | str,
     *,
     context: str | None = None,
-    namespace: Sequence[str] = (),
 ) -> dict[str, str]:
     """Create a soothe.error event dict with simplified message.
 
     Args:
         error: Exception or error message.
         context: Optional context about what failed.
-        namespace: Component namespace for the event.
 
     Returns:
         Event dict with type='soothe.error' and simplified message.

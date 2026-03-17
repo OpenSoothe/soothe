@@ -19,6 +19,7 @@ class TestProgressVerbosity:
         assert should_show("assistant_text", "normal")
         assert should_show("protocol", "normal")
         assert should_show("error", "normal")
+        assert should_show("subagent_progress", "normal")
         assert not should_show("tool_activity", "normal")
         assert not should_show("subagent_custom", "normal")
 
@@ -54,8 +55,16 @@ class TestProgressVerbosity:
         assert classify_custom_event(("tools:abc",), {"type": "some_event"}) == "subagent_custom"
 
     def test_classify_custom_event_subagent_from_soothe_prefix(self) -> None:
-        assert classify_custom_event((), {"type": "soothe.browser.step"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.research.web_search"}) == "subagent_custom"
+        # Key progress events are classified as subagent_progress
+        assert classify_custom_event((), {"type": "soothe.browser.step"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.browser.cdp"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.research.web_search"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.research.search_done"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.research.queries_generated"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.research.complete"}) == "subagent_progress"
+
+        # Other subagent events are classified as subagent_custom
+        assert classify_custom_event((), {"type": "soothe.research.reflect"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.claude.text"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.claude.tool_use"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.claude.result"}) == "subagent_custom"

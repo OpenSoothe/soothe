@@ -762,17 +762,25 @@ class SootheConfig(BaseSettings):
         return embeddings
 
     def resolve_system_prompt(self) -> str:
-        """Return the effective system prompt.
+        """Return the effective system prompt with current date context.
 
         Uses ``system_prompt`` if set, otherwise generates a default prompt
-        using ``assistant_name``.
+        using ``assistant_name``. Automatically injects the current date
+        to help the agent understand time-sensitive queries like "latest"
+        or "recent".
 
         Returns:
             The system prompt string.
         """
-        if self.system_prompt:
-            return self.system_prompt
-        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self.assistant_name)
+        import datetime as dt
+
+        now = dt.datetime.now(dt.UTC).astimezone()
+        current_date = now.strftime("%Y-%m-%d")
+
+        base_prompt = self.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self.assistant_name)
+
+        # Inject current date context for time-sensitive queries
+        return f"{base_prompt}\n\nToday's date is {current_date}."
 
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.

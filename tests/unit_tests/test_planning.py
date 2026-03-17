@@ -220,7 +220,7 @@ class TestDirectPlanner:
         prompt = planner._build_plan_prompt("test goal", context)
 
         assert "test goal" in prompt
-        assert "Plan" in prompt
+        assert "plan" in prompt.lower()
 
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""

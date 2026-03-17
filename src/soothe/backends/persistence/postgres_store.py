@@ -118,6 +118,7 @@ class PostgreSQLPersistStore:
             data: JSON-serializable data
         """
         pool = self._ensure_pool()
+        adapted_data = self._adapt_data(data)
         with pool.connection() as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -126,9 +127,30 @@ class PostgreSQLPersistStore:
                 ON CONFLICT (namespace, key)
                 DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP
                 """,
-                (key, self._namespace, json.dumps(data, default=str)),
+                (key, self._namespace, adapted_data),
             )
             conn.commit()
+
+    def _adapt_data(self, data: Any) -> Any:
+        """Adapt data for PostgreSQL JSONB storage.
+
+        psycopg3 handles JSONB automatically, but we use json.dumps with
+        a custom default handler for non-serializable types.
+
+        Args:
+            data: Python object to adapt
+
+        Returns:
+            JSON-serializable object or Json wrapper
+        """
+        # Use Json adapter for proper JSONB handling
+        try:
+            from psycopg.types.json import Json
+
+            return Json(data)
+        except ImportError:
+            # Fallback for older psycopg versions
+            return json.dumps(data, default=str)
 
     def load(self, key: str) -> Any | None:
         """Load data for the given key.
@@ -148,11 +170,23 @@ class PostgreSQLPersistStore:
             row = cur.fetchone()
             if row is None:
                 return None
-            try:
-                return json.loads(row[0])
-            except (json.JSONDecodeError, TypeError):
-                logger.warning("Failed to decode PostgreSQL value for key %s", key)
-                return None
+            # PostgreSQL JSONB column returns already-parsed Python objects (list/dict)
+            # not JSON strings, so we can return directly
+            data = row[0]
+            if isinstance(data, (str, bytes, bytearray)):
+                # Fallback for JSON strings (shouldn't happen with JSONB but be defensive)
+                try:
+                    return json.loads(data)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(
+                        "Failed to decode PostgreSQL value for key %s: %s (value type: %s)",
+                        key,
+                        e,
+                        type(data).__name__,
+                    )
+                    return None
+            # Data is already a Python object (list/dict/None/etc.)
+            return data
 
     def delete(self, key: str) -> None:
         """Delete data for the given key.

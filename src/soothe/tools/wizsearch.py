@@ -107,10 +107,11 @@ class WizsearchSearchTool(BaseTool):
     name: str = "wizsearch_search"
     description: str = (
         "Search the web with multiple engines using wizsearch. "
-        "Inputs: `query` and optional `engines` (list or comma-separated string; "
-        "available: tavily, duckduckgo, brave, baidu, wechat, searxng, bing, google), "
+        "For time-sensitive queries (e.g., 'latest news', 'recent events'), "
+        "first use the current_datetime tool to know today's date, then include appropriate "
+        "time qualifiers (year, month) in your search query to get the most recent results. "
+        "Inputs: `query` (required), `engines` (optional, omit to use configured defaults), "
         "`max_results_per_engine` (default: 10), and `timeout` seconds (default: 30). "
-        "If engines is omitted the configured defaults (tavily, duckduckgo) are used. "
         "Returns query, answer, sources, response_time, and metadata."
     )
     default_max_results_per_engine: int = Field(default=10)
@@ -152,6 +153,9 @@ class WizsearchSearchTool(BaseTool):
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> dict[str, object]:
+        from soothe.utils.output_capture import capture_subagent_output
+        from soothe.utils.progress import emit_progress
+
         _require_wizsearch()
         _maybe_apply_tavily_key()
 
@@ -163,20 +167,67 @@ class WizsearchSearchTool(BaseTool):
         normalized = _normalize_engines(engines) or self.default_engines
         config_kwargs["enabled_engines"] = normalized
 
+        # Emit progress event before search
+        emit_progress(
+            {
+                "type": "soothe.tool.search.started",
+                "query": query,
+                "engines": normalized,
+            },
+            logger,
+        )
+
         try:
-            searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
-            result = await searcher.search(query=query)
-            return self._build_result_payload(result)
+            # Capture third-party library output
+            with capture_subagent_output("wizsearch", suppress=True):
+                searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
+                result = await searcher.search(query=query)
+                payload = self._build_result_payload(result)
+
+                # Emit completion event
+                emit_progress(
+                    {
+                        "type": "soothe.tool.search.completed",
+                        "query": query,
+                        "result_count": len(payload.get("sources", [])),
+                        "response_time": payload.get("response_time"),
+                    },
+                    logger,
+                )
+                return payload
         except Exception:
             logger.warning("Search failed with engines %s, retrying with defaults", normalized, exc_info=True)
 
         try:
             config_kwargs["enabled_engines"] = self.default_engines
-            searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
-            result = await searcher.search(query=query)
-            return self._build_result_payload(result)
+            with capture_subagent_output("wizsearch", suppress=True):
+                searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
+                result = await searcher.search(query=query)
+                payload = self._build_result_payload(result)
+
+                # Emit completion event
+                emit_progress(
+                    {
+                        "type": "soothe.tool.search.completed",
+                        "query": query,
+                        "result_count": len(payload.get("sources", [])),
+                        "response_time": payload.get("response_time"),
+                    },
+                    logger,
+                )
+                return payload
         except Exception as exc:
             logger.exception("Search failed even with default engines")
+
+            # Emit failure event
+            emit_progress(
+                {
+                    "type": "soothe.tool.search.failed",
+                    "query": query,
+                    "error": str(exc),
+                },
+                logger,
+            )
             return {
                 "query": query,
                 "answer": None,
@@ -241,26 +292,76 @@ class WizsearchCrawlPageTool(BaseTool):
         *,
         only_text: bool = False,
     ) -> dict[str, object]:
+        from soothe.utils.output_capture import capture_subagent_output
+        from soothe.utils.progress import emit_progress
+
         _require_wizsearch()
         selected_format = (content_format or self.default_content_format).strip().lower()
         if selected_format not in {"markdown", "html", "text"}:
             selected_format = self.default_content_format
 
-        # PageCrawler runs in headless mode by default (BrowserConfig default)
-        crawler = PageCrawler(
-            url=url,
-            content_format=selected_format,
-            only_text=only_text,
+        # Emit progress event before crawling
+        emit_progress(
+            {
+                "type": "soothe.tool.crawl.started",
+                "url": url,
+                "content_format": selected_format,
+            },
+            logger,
         )
-        content = await crawler.crawl()
-        return {
-            "url": url,
-            "content_format": selected_format,
-            "only_text": only_text,
-            "headless": True,  # Always true - wizsearch default
-            "content": content or "",
-            "content_length": len(content or ""),
-        }
+
+        try:
+            # Capture third-party library output (Crawl4AI initialization messages, etc.)
+            with capture_subagent_output("wizsearch", suppress=True):
+                # PageCrawler runs in headless mode by default (BrowserConfig default)
+                crawler = PageCrawler(
+                    url=url,
+                    content_format=selected_format,
+                    only_text=only_text,
+                )
+                content = await crawler.crawl()
+
+            payload = {
+                "url": url,
+                "content_format": selected_format,
+                "only_text": only_text,
+                "headless": True,  # Always true - wizsearch default
+                "content": content or "",
+                "content_length": len(content or ""),
+            }
+
+            # Emit completion event
+            emit_progress(
+                {
+                    "type": "soothe.tool.crawl.completed",
+                    "url": url,
+                    "content_length": len(content or ""),
+                },
+                logger,
+            )
+        except Exception as exc:
+            logger.exception("Crawl failed for %s", url)
+
+            # Emit failure event
+            emit_progress(
+                {
+                    "type": "soothe.tool.crawl.failed",
+                    "url": url,
+                    "error": str(exc),
+                },
+                logger,
+            )
+            return {
+                "url": url,
+                "content_format": selected_format,
+                "only_text": only_text,
+                "headless": True,
+                "content": "",
+                "content_length": 0,
+                "error": str(exc),
+            }
+        else:
+            return payload
 
     def _run(
         self,

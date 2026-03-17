@@ -21,6 +21,7 @@ from soothe.protocols.planner import Plan
 logger = logging.getLogger(__name__)
 
 _ACTIVITY_MAX = 300
+_MAX_INLINE_QUERIES = 3
 _TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
 
 
@@ -235,6 +236,11 @@ def _handle_protocol_event(
         return
     etype = data.get("type", "")
 
+    # Tool activity events
+    if etype.startswith("soothe.tool."):
+        _handle_tool_activity_event(data, state, verbosity=verbosity)
+        return
+
     if etype == "soothe.context.projected":
         entries = data.get("entries", 0)
         tokens = data.get("tokens", 0)
@@ -353,6 +359,117 @@ def _handle_protocol_event(
         error = data.get("error", "unknown")
         _add_activity(state, Text.assemble(("  ! ", "bold red"), (error, "red")))
         state.errors.append(error)
+
+
+def _handle_tool_activity_event(
+    data: dict[str, Any],
+    state: TuiState,
+    *,
+    verbosity: ProgressVerbosity = "normal",
+) -> None:
+    """Render tool activity progress events."""
+    if not should_show("tool_activity", verbosity):
+        return
+
+    etype = data.get("type", "")
+
+    if etype == "soothe.tool.search.started":
+        query = data.get("query", "")
+        engines = data.get("engines", [])
+        summary = f"Searching: {_truncate(str(query), 40)}"
+        if engines:
+            summary += f" ({', '.join(engines[:3])})"
+        _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
+
+    elif etype == "soothe.tool.search.completed":
+        query = data.get("query", "")
+        count = data.get("result_count", 0)
+        response_time = data.get("response_time")
+        summary = f"Search complete: {count} results"
+        if response_time:
+            summary += f" ({response_time:.1f}s)"
+        _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
+
+    elif etype == "soothe.tool.search.failed":
+        query = data.get("query", "")
+        error = data.get("error", "unknown error")
+        summary = f"Search failed: {_truncate(str(error), 40)}"
+        _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
+
+    elif etype == "soothe.tool.crawl.started":
+        url = data.get("url", "")
+        summary = f"Crawling: {_truncate(str(url), 50)}"
+        _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
+
+    elif etype == "soothe.tool.crawl.completed":
+        url = data.get("url", "")
+        content_length = data.get("content_length", 0)
+        summary = f"Crawl complete: {content_length} bytes"
+        _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
+
+    elif etype == "soothe.tool.crawl.failed":
+        url = data.get("url", "")
+        error = data.get("error", "unknown error")
+        summary = f"Crawl failed: {_truncate(str(error), 40)}"
+        _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
+
+
+def _handle_subagent_progress(
+    namespace: tuple[str, ...],
+    data: dict[str, Any],
+    state: TuiState,
+    *,
+    verbosity: ProgressVerbosity = "normal",
+) -> None:
+    """Render key subagent progress events visible at normal verbosity."""
+    if not should_show("subagent_progress", verbosity):
+        return
+    label = _resolve_namespace_label(namespace, state)
+    state.subagent_tracker.update_from_custom(label, data)
+    tag = label or "subagent"
+    etype = data.get("type", "")
+
+    # Format progress events with user-friendly messages
+    if etype == "soothe.browser.step":
+        step = data.get("step", "?")
+        action = _truncate(str(data.get("action", "")), 50)
+        url = _truncate(str(data.get("url", "")), 35)
+        summary = f"Step {step}"
+        if action:
+            summary += f": {action}"
+        if url:
+            summary += f" @ {url}"
+    elif etype == "soothe.browser.cdp":
+        status = data.get("status", "")
+        if status == "connected":
+            summary = "Connected to existing browser"
+        elif status == "not_found":
+            summary = "No existing browser found, launching new"
+        else:
+            summary = f"Browser CDP: {status}"
+    elif etype == "soothe.research.web_search":
+        query = data.get("query", "")
+        engines = data.get("engines", [])
+        summary = f"Searching: {_truncate(str(query), 40)}"
+        if engines:
+            summary += f" ({', '.join(engines)})"
+    elif etype == "soothe.research.search_done":
+        count = data.get("result_count", 0)
+        summary = f"Found {count} results"
+    elif etype == "soothe.research.queries_generated":
+        count = data.get("count", 0)
+        queries = data.get("queries", [])
+        summary = f"Generated {count} search queries"
+        if queries and len(queries) <= _MAX_INLINE_QUERIES:
+            summary += f": {', '.join(_truncate(str(q), 30) for q in queries[:_MAX_INLINE_QUERIES])}"
+    elif etype == "soothe.research.complete":
+        summary = "Research completed"
+    else:
+        # Fallback for any other progress events
+        summary = etype.replace("soothe.", "").replace("_", " ").title()
+
+    logger.info("Subagent progress [%s]: %s", tag, summary)
+    _add_activity(state, Text.assemble(("  ", ""), (f"[{tag}] ", "cyan"), (summary, "yellow")))
 
 
 def _handle_subagent_custom(

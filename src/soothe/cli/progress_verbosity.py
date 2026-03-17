@@ -8,6 +8,7 @@ ProgressVerbosity = Literal["minimal", "normal", "detailed", "debug"]
 ProgressCategory = Literal[
     "assistant_text",
     "protocol",
+    "subagent_progress",
     "subagent_custom",
     "tool_activity",
     "thinking",
@@ -34,6 +35,19 @@ _PROTOCOL_PREFIXES = frozenset(
 )
 
 
+# Key subagent events that should be visible at normal verbosity
+_SUBAGENT_PROGRESS_EVENTS = frozenset(
+    {
+        "soothe.browser.step",
+        "soothe.browser.cdp",
+        "soothe.research.web_search",
+        "soothe.research.search_done",
+        "soothe.research.queries_generated",
+        "soothe.research.complete",
+    }
+)
+
+
 def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> ProgressCategory:
     """Classify a custom event into a verbosity category."""
     etype = str(data.get("type", ""))
@@ -42,6 +56,9 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     if etype.startswith("soothe."):
         if "thinking" in etype or "heartbeat" in etype:
             return "thinking"
+        # Key user-facing events visible at normal verbosity
+        if etype in _SUBAGENT_PROGRESS_EVENTS:
+            return "subagent_progress"
         if any(etype.startswith(prefix) for prefix in _SUBAGENT_PREFIXES):
             return "subagent_custom"
         return "protocol"
@@ -59,7 +76,14 @@ def should_show(category: ProgressCategory, verbosity: ProgressVerbosity) -> boo
     if verbosity == "debug":
         return True
     if verbosity == "detailed":
-        return category in {"assistant_text", "protocol", "subagent_custom", "tool_activity", "error"}
+        return category in {
+            "assistant_text",
+            "protocol",
+            "subagent_progress",
+            "subagent_custom",
+            "tool_activity",
+            "error",
+        }
     if verbosity == "normal":
-        return category in {"assistant_text", "protocol", "error"}
+        return category in {"assistant_text", "protocol", "subagent_progress", "error"}
     return category in {"assistant_text", "error"}

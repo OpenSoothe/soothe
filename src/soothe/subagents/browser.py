@@ -8,10 +8,8 @@ Requires the optional `browser` extra: `pip install soothe[browser]`
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 from langchain_core.messages import AIMessage
@@ -52,8 +50,9 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        response = await model.ainvoke(detection_prompt)
-        result = response.content.strip().lower() == "yes"
+        response = await model.ainvoke([{"role": "user", "content": detection_prompt}])
+        content = response.content.strip()
+        result = content.lower() == "yes"
     except Exception as e:
         logger.warning("LLM intent detection failed: %s", e)
         return False  # Fallback to new instance
@@ -170,18 +169,12 @@ def _build_browser_graph(
 
         _suppress_external_browser_loggers()
 
+        from soothe.utils.output_capture import capture_subagent_output
         from soothe.utils.progress import emit_progress as _emit
 
         try:
-            # Suppress browser-use stdout noise; stderr is left alone to avoid
-            # breaking logging handlers that reference sys.stderr.
-            devnull_path = Path(os.devnull)
-            with (
-                devnull_path.open("w", encoding="utf-8") as devnull_file,
-                contextlib.redirect_stdout(  # noqa: ASYNC230
-                    devnull_file
-                ),
-            ):
+            # Capture browser-use stdout/stderr output (Crawl4AI init, browser startup, etc.)
+            with capture_subagent_output("browser", suppress=True):
                 # Import browser-use under redirected stdio so startup logs are hidden.
                 from browser_use import Agent as BrowserAgent, BrowserSession
                 from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
