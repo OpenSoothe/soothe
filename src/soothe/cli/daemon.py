@@ -544,12 +544,14 @@ class SootheDaemon:
             raise
         except Exception as exc:
             logger.exception("Daemon query error")
+            from soothe.utils.error_format import emit_error_event
+
             await self._broadcast(
                 {
                     "type": "event",
                     "namespace": [],
                     "mode": "custom",
-                    "data": {"type": "soothe.error", "error": str(exc)},
+                    "data": emit_error_event(exc),
                 }
             )
         finally:

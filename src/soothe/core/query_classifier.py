@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from typing import ClassVar, Literal
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,26 @@ class QueryClassifier:
         self._simple_threshold = simple_word_threshold
         self._medium_threshold = medium_word_threshold
 
+    @staticmethod
+    def _count_words(text: str) -> int:
+        """Count words with CJK awareness.
+
+        CJK scripts (Chinese, Japanese, Korean) have no whitespace between
+        characters, so ``str.split()`` returns 1 token for an entire sentence.
+        Each CJK ideograph is counted as one word-equivalent so that complexity
+        thresholds work correctly for non-Latin text.
+        """
+        cjk_count = sum(1 for ch in text if unicodedata.category(ch).startswith("Lo"))
+        if cjk_count > 0:
+            non_cjk = re.sub(
+                r"[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\U00020000-\U0002a6df]",
+                " ",
+                text,
+            )
+            ascii_words = len(non_cjk.split())
+            return cjk_count + ascii_words
+        return len(text.split())
+
     def classify(self, query: str) -> ComplexityLevel:
         """Classify query complexity in < 1ms.
 
@@ -92,7 +113,7 @@ class QueryClassifier:
             return "simple"
 
         query_lower = query.lower().strip()
-        word_count = len(query.split())
+        word_count = self._count_words(query)
 
         # Check for complex keywords (highest priority)
         if any(kw in query_lower for kw in self._COMPLEX_KEYWORDS):

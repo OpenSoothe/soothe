@@ -351,6 +351,7 @@ def main() -> int:
         "check_protocols.py",
         "check_persistence.py",
         "check_tui.py",
+        "check_subagents.py",
         "check_external_apis.py",
     ]
 

@@ -87,6 +87,8 @@ subagents:
       disable_extensions: true  # Disable uBlock Origin, cookie handler, ClearURLs
       disable_cloud: true  # Disable browser-use cloud service
       disable_telemetry: true  # Disable anonymous usage telemetry
+      enable_existing_browser: true  # Allow connecting to existing Chrome via CDP
+      profile_mode: ephemeral  # for concurrent browser tasks
   claude:
     enabled: true
     # model: "anthropic:claude-sonnet-4-20250514"
@@ -149,6 +151,7 @@ tools_settings:
     enabled: true
     default_engines:
       - tavily          # Requires TAVILY_API_KEY (set in environment)
+      - duckduckgo      # No API key required
     max_results_per_engine: 10
     timeout: 30
 

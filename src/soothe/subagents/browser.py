@@ -8,10 +8,10 @@ Requires the optional `browser` extra: `pip install soothe[browser]`
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 from langchain_core.messages import AIMessage
@@ -24,6 +24,43 @@ if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
 
 logger = logging.getLogger(__name__)
+
+
+async def detect_existing_browser_intent(prompt: str, model: Any) -> bool:
+    """Use LLM to detect if user wants to use existing browser instance.
+
+    Args:
+        prompt: User's task prompt.
+        model: Language model for intent detection.
+
+    Returns:
+        True if user wants existing browser, False otherwise.
+    """
+    detection_prompt = f"""Analyze this user request and determine if the user wants to use an \
+existing browser instance (e.g., one they've already opened and logged into).
+
+User request: "{prompt}"
+
+Respond with only "yes" or "no".
+
+Examples:
+- "Use my existing browser to check Gmail" → yes
+- "Browse to example.com" → no
+- "Check my logged-in GitHub account" → yes
+- "Search for Python tutorials" → no
+- "Use the Chrome I already have open where I'm logged in" → yes
+- "Navigate to my company portal using my current session" → yes"""
+
+    try:
+        response = await model.ainvoke(detection_prompt)
+        result = response.content.strip().lower() == "yes"
+    except Exception as e:
+        logger.warning("LLM intent detection failed: %s", e)
+        return False  # Fallback to new instance
+    else:
+        logger.debug("Intent detection for '%s...': %s", prompt[:50], result)
+        return result
+
 
 BROWSER_DESCRIPTION = (
     "Browser automation specialist for web tasks. Can navigate pages, click "
@@ -96,7 +133,14 @@ def _build_browser_graph(
         # Ask browser-use to avoid chatty console logging where supported.
         os.environ.setdefault("BROWSER_USE_LOGGING_LEVEL", "result")
 
+        # Increase browser-use event timeouts for slower systems / first launch.
+        start_timeout = str(browser_config.browser_start_timeout)
+        os.environ.setdefault("TIMEOUT_BrowserStartEvent", start_timeout)
+        os.environ.setdefault("TIMEOUT_BrowserLaunchEvent", start_timeout)
+
         # Configure browser runtime directories
+        import uuid
+
         from soothe.utils.runtime import (
             get_browser_downloads_dir,
             get_browser_extensions_dir,
@@ -106,8 +150,18 @@ def _build_browser_graph(
 
         browser_runtime_dir = browser_config.runtime_dir or str(get_browser_runtime_dir())
         browser_downloads_dir = browser_config.downloads_dir or str(get_browser_downloads_dir())
-        browser_user_data_dir = browser_config.user_data_dir or str(get_browser_user_data_dir())
         browser_extensions_dir = browser_config.extensions_dir or str(get_browser_extensions_dir())
+
+        ephemeral_profile_dir: str | None = None
+        if browser_config.user_data_dir:
+            browser_user_data_dir = browser_config.user_data_dir
+        elif browser_config.profile_mode == "ephemeral":
+            profile_name = f"session-{uuid.uuid4().hex[:12]}"
+            browser_user_data_dir = str(get_browser_user_data_dir(profile_name))
+            ephemeral_profile_dir = browser_user_data_dir
+            logger.debug("Using ephemeral browser profile: %s", profile_name)
+        else:
+            browser_user_data_dir = str(get_browser_user_data_dir())
 
         # Set environment variables for browser-use
         os.environ["BROWSER_USE_CONFIG_DIR"] = browser_runtime_dir
@@ -119,84 +173,137 @@ def _build_browser_graph(
         from soothe.utils.progress import emit_progress as _emit
 
         try:
-            # Suppress browser-use stdout/stderr noise and rely on structured events.
-            # Use synchronous file object since contextlib.redirect_stdout/stderr
-            # require synchronous context managers
-            with open(os.devnull, "w", encoding="utf-8") as devnull_file:
-                with (
-                    contextlib.redirect_stdout(devnull_file),
-                    contextlib.redirect_stderr(devnull_file),
-                ):
-                    # Import browser-use under redirected stdio so startup logs are hidden.
-                    from browser_use import Agent as BrowserAgent, BrowserSession
-                    from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+            # Suppress browser-use stdout noise; stderr is left alone to avoid
+            # breaking logging handlers that reference sys.stderr.
+            devnull_path = Path(os.devnull)
+            with (
+                devnull_path.open("w", encoding="utf-8") as devnull_file,
+                contextlib.redirect_stdout(  # noqa: ASYNC230
+                    devnull_file
+                ),
+            ):
+                # Import browser-use under redirected stdio so startup logs are hidden.
+                from browser_use import Agent as BrowserAgent, BrowserSession
+                from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
 
-                    messages = state.get("messages", [])
-                    task = messages[-1].content if messages else ""
+                messages = state.get("messages", [])
+                task = messages[-1].content if messages else ""
 
-                    # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
-                    model_name = browser_model or "qwen3.5-flash"
-                    if ":" in model_name:
-                        model_name = model_name.split(":", 1)[1]
+                # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
+                model_name = browser_model or "qwen3.5-flash"
+                if ":" in model_name:
+                    model_name = model_name.split(":", 1)[1]
 
-                    llm_kwargs: dict[str, Any] = {}
-                    if browser_base_url:
-                        llm_kwargs["base_url"] = browser_base_url
-                    if browser_api_key:
-                        llm_kwargs["api_key"] = browser_api_key
-                    llm = BUChatOpenAI(model_name, **llm_kwargs)
+                llm_kwargs: dict[str, Any] = {}
+                if browser_base_url:
+                    llm_kwargs["base_url"] = browser_base_url
+                if browser_api_key:
+                    llm_kwargs["api_key"] = browser_api_key
+                llm = BUChatOpenAI(model_name, **llm_kwargs)
 
-                    browser = BrowserSession(
-                        headless=headless,
-                        downloads_path=browser_downloads_dir,
-                        user_data_dir=browser_user_data_dir,
-                    )
+                # Detect if user wants to use existing browser
+                cdp_url = None
+                use_existing = False
+                if browser_config.enable_existing_browser:
+                    use_existing = await detect_existing_browser_intent(task, llm)
+                    if use_existing:
+                        from soothe.utils.browser_cdp import find_available_cdp
 
-                    async def on_step_end(agent: Any) -> None:
-                        step_num = agent.state.n_steps
-                        last = agent.history.history[-1] if agent.history.history else None
-                        action_desc = ""
-                        page_title = ""
-                        url = None
-                        if last:
-                            if hasattr(last, "model_output") and last.model_output:
-                                action = getattr(last.model_output, "action", None)
-                                if action:
-                                    action_desc = str(action)[:80]
-                            if hasattr(last, "state"):
-                                url = getattr(last.state, "url", None)
-                                page_title = getattr(last.state, "title", "")[:60]
-                        _emit(
-                            {
-                                "type": "soothe.browser.step",
-                                "step": step_num,
-                                "url": url,
-                                "action": action_desc,
-                                "title": page_title,
-                                "is_done": agent.history.is_done(),
-                            },
-                            logger,
+                        cdp_url = await find_available_cdp()
+                        if cdp_url:
+                            logger.info("Connecting to existing browser at %s", cdp_url)
+                            _emit(
+                                {
+                                    "type": "soothe.browser.cdp",
+                                    "status": "connected",
+                                    "cdp_url": cdp_url,
+                                },
+                                logger,
+                            )
+                        else:
+                            logger.info("Existing browser requested but none found, launching new instance")
+                            _emit(
+                                {
+                                    "type": "soothe.browser.cdp",
+                                    "status": "not_found",
+                                    "message": "Existing browser requested but none found",
+                                },
+                                logger,
+                            )
+
+                if not cdp_url:
+                    from soothe.utils.browser_cdp import cleanup_stale_chrome
+
+                    killed = cleanup_stale_chrome(browser_user_data_dir)
+                    if killed:
+                        import asyncio
+
+                        logger.info(
+                            "Cleaned up %d stale Chrome process(es) using %s",
+                            killed,
+                            browser_user_data_dir,
                         )
+                        await asyncio.sleep(1)
 
-                    agent = BrowserAgent(
-                        task=task,
-                        llm=llm,
-                        browser=browser,
-                        use_vision=use_vision,
+                browser = BrowserSession(
+                    headless=headless if not cdp_url else False,
+                    downloads_path=browser_downloads_dir,
+                    user_data_dir=browser_user_data_dir,
+                    cdp_url=cdp_url,
+                )
+
+                async def on_step_end(agent: Any) -> None:
+                    step_num = agent.state.n_steps
+                    last = agent.history.history[-1] if agent.history.history else None
+                    action_desc = ""
+                    page_title = ""
+                    url = None
+                    if last:
+                        if hasattr(last, "model_output") and last.model_output:
+                            action = getattr(last.model_output, "action", None)
+                            if action:
+                                action_desc = str(action)[:80]
+                        if hasattr(last, "state"):
+                            url = getattr(last.state, "url", None)
+                            page_title = getattr(last.state, "title", "")[:60]
+                    _emit(
+                        {
+                            "type": "soothe.browser.step",
+                            "step": step_num,
+                            "url": url,
+                            "action": action_desc,
+                            "title": page_title,
+                            "is_done": agent.history.is_done(),
+                        },
+                        logger,
                     )
-                    history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
-                    result = history.final_result() or "Browser task completed (no extracted content)."
 
-                    # Clean up temporary files if requested
-                    if browser_config.cleanup_on_exit:
-                        from soothe.utils.runtime import cleanup_browser_temp_files
+                agent = BrowserAgent(
+                    task=task,
+                    llm=llm,
+                    browser=browser,
+                    use_vision=use_vision,
+                )
+                history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
+                result = history.final_result() or "Browser task completed (no extracted content)."
 
-                        cleanup_browser_temp_files()
+                # Clean up temporary files if requested
+                if browser_config.cleanup_on_exit:
+                    from soothe.utils.runtime import cleanup_browser_temp_files
+
+                    cleanup_browser_temp_files()
         except Exception as e:
             logger.exception("Browser agent failed")
-            error_type = type(e).__name__
-            error_msg = str(e)
-            result = f"Browser agent encountered an error: {error_type}: {error_msg}"
+            from soothe.utils.error_format import format_cli_error
+
+            error_msg = format_cli_error(e, context="Browser agent")
+            result = error_msg
+        finally:
+            if ephemeral_profile_dir:
+                import shutil
+
+                shutil.rmtree(ephemeral_profile_dir, ignore_errors=True)
+                logger.debug("Cleaned up ephemeral profile: %s", ephemeral_profile_dir)
 
         return {"messages": [AIMessage(content=result)]}
 

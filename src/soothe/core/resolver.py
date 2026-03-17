@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
@@ -299,7 +299,7 @@ def resolve_subagents(
         extra_kwargs = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
-        if name in ("skillify", "weaver"):
+        if name in ("skillify", "weaver", "research"):
             extra_kwargs["config"] = config
         # Pass browser-specific config
         if name == "browser":
@@ -385,7 +385,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
     # Parse combined backend: {behavior}-{storage}
     parts = config.protocols.context.backend.split("-")
-    if len(parts) != 2:
+    if len(parts) != 2:  # noqa: PLR2004
         logger.warning(
             "Invalid context backend '%s', expected format: {behavior}-{storage}",
             config.protocols.context.backend,
@@ -456,7 +456,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
 
     # Parse combined backend: {behavior}-{storage}
     parts = config.protocols.memory.backend.split("-")
-    if len(parts) != 2:
+    if len(parts) != 2:  # noqa: PLR2004
         logger.warning(
             "Invalid memory backend '%s', expected format: {behavior}-{storage}",
             config.protocols.memory.backend,
@@ -633,8 +633,10 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 
             persist_dir = config.protocols.durability.persist_dir or str(Path(SOOTHE_HOME) / "durability" / "data")
             persist_store = create_persist_store(persist_dir, backend="rocksdb")
+
             if persist_store is None:
-                raise ValueError(f"Failed to create RocksDB store at {persist_dir}")
+                msg = f"Failed to create RocksDB store at {persist_dir}"
+                raise ValueError(msg)  # noqa: TRY301
 
             logger.info("Using RocksDB durability backend at %s", persist_dir)
             return RocksDBDurability(persist_store)
@@ -702,8 +704,8 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
 
     try:
         from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-        from psycopg_pool import AsyncConnectionPool
         from psycopg.rows import dict_row
+        from psycopg_pool import AsyncConnectionPool
     except ImportError:
         logger.warning(
             "PostgreSQL checkpointer requires 'langgraph[postgres]' and 'psycopg-pool'. "
@@ -726,10 +728,11 @@ def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:
         checkpointer = AsyncPostgresSaver(pool)
 
         logger.info("Using AsyncPostgresSaver with connection pool, DSN: %s", _mask_dsn(dsn))
-        return (checkpointer, pool)
     except Exception as exc:
         logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
         return None
+    else:
+        return (checkpointer, pool)
 
 
 def _mask_dsn(dsn: str) -> str:

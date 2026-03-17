@@ -185,7 +185,10 @@ def list_subagents(
         typer.echo("\nInterrupted.")
         sys.exit(0)
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
+        logger.exception("Config generation error")
+        from soothe.utils.error_format import format_cli_error
+
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 
@@ -338,7 +341,10 @@ def run(
         typer.echo("\nInterrupted.")
         sys.exit(0)
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
+        logger.exception("CLI run error")
+        from soothe.utils.error_format import format_cli_error
+
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 
@@ -581,11 +587,17 @@ def _run_headless_via_daemon(
                 sys.stdout.write("\n")
                 sys.stdout.flush()
 
-        except (ConnectionError, OSError, TimeoutError):
+        except (ConnectionError, OSError, TimeoutError) as e:
+            logger.exception("Daemon connection failed")
+            from soothe.utils.error_format import format_cli_error
+
+            typer.echo(f"Error: {format_cli_error(e, context='daemon connection')}", err=True)
             return _DAEMON_FALLBACK_EXIT_CODE
         except Exception as e:
             logger.exception("Failed to run via daemon")
-            typer.echo(f"Error: {e}", err=True)
+            from soothe.utils.error_format import format_cli_error
+
+            typer.echo(f"Error: {format_cli_error(e)}", err=True)
             return 1
         else:
             return 1 if has_error else 0
@@ -804,7 +816,10 @@ def config(
         typer.echo("\nInterrupted.")
         sys.exit(0)
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
+        logger.exception("Config command error")
+        from soothe.utils.error_format import format_cli_error
+
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 
@@ -1308,7 +1323,10 @@ def list_subagents_status() -> None:
         typer.echo(f"\nTotal configured: {len([s for s in cfg.subagents.values() if s.enabled])} active")
         typer.echo(f"Total available: {len(_SUBAGENT_FACTORIES)}")
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
+        logger.exception("Subagents list error")
+        from soothe.utils.error_format import format_cli_error
+
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 
@@ -1377,7 +1395,10 @@ def show_config(
         typer.echo("\n" + "=" * 50)
 
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
+        logger.exception("Show config error")
+        from soothe.utils.error_format import format_cli_error
+
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 

@@ -49,7 +49,8 @@ class JsonDurability(BasePersistStoreDurability):
         # Create PersistStore
         persist_store = create_persist_store(persist_dir, backend="json")
         if persist_store is None:
-            raise ValueError(f"Failed to create JSON persist store at {persist_dir}")
+            msg = f"Failed to create JSON persist store at {persist_dir}"
+            raise ValueError(msg)
 
         super().__init__(persist_store)
 

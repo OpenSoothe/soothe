@@ -105,7 +105,6 @@ class TestBrowserSubagent:
         assert "runnable" in spec
 
 
-
 class TestClaudeSubagent:
     def test_creates_compiled_subagent_dict(self) -> None:
         from soothe.subagents.claude import create_claude_subagent
@@ -154,5 +153,5 @@ class TestResearchSubagent:
 
         tool = _create_research_search_tool()
         assert tool.name == "wizsearch_search"
-        assert tool.default_engines == ["tavily"]
+        assert tool.default_engines == ["tavily", "duckduckgo"]
         assert tool.default_max_results_per_engine == 5

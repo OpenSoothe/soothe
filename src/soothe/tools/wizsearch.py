@@ -7,11 +7,14 @@ optional ``wizsearch`` package.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -35,13 +38,27 @@ def _require_wizsearch() -> None:
 
 
 def _normalize_engines(engines: list[str] | str | None) -> list[str] | None:
-    """Normalize engine list input from list or comma-separated string."""
+    """Normalize engine list input from list, JSON string, or comma-separated string.
+
+    LLMs sometimes pass a stringified JSON array (e.g. ``'["google", "bing"]'``)
+    instead of an actual list.  We try ``json.loads`` first so the individual
+    engine names are preserved correctly.
+    """
     if engines is None:
         return None
     if isinstance(engines, list):
         normalized = [str(engine).strip() for engine in engines if str(engine).strip()]
         return normalized or None
     if isinstance(engines, str):
+        import json
+
+        try:
+            parsed = json.loads(engines)
+            if isinstance(parsed, list):
+                normalized = [str(e).strip() for e in parsed if str(e).strip()]
+                return normalized or None
+        except (json.JSONDecodeError, ValueError):
+            pass
         normalized = [part.strip() for part in engines.split(",") if part.strip()]
         return normalized or None
     return None
@@ -90,13 +107,15 @@ class WizsearchSearchTool(BaseTool):
     name: str = "wizsearch_search"
     description: str = (
         "Search the web with multiple engines using wizsearch. "
-        "Inputs: `query` and optional `engines` (list or comma-separated string), "
+        "Inputs: `query` and optional `engines` (list or comma-separated string; "
+        "available: tavily, duckduckgo, brave, baidu, wechat, searxng, bing, google), "
         "`max_results_per_engine` (default: 10), and `timeout` seconds (default: 30). "
+        "If engines is omitted the configured defaults (tavily, duckduckgo) are used. "
         "Returns query, answer, sources, response_time, and metadata."
     )
     default_max_results_per_engine: int = Field(default=10)
     default_timeout: int = Field(default=30)
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
     config: dict[str, Any] = Field(default_factory=dict)
 
     def __init__(self, **data: Any) -> None:
@@ -144,9 +163,28 @@ class WizsearchSearchTool(BaseTool):
         normalized = _normalize_engines(engines) or self.default_engines
         config_kwargs["enabled_engines"] = normalized
 
-        searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
-        result = await searcher.search(query=query)
-        return self._build_result_payload(result)
+        try:
+            searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
+            result = await searcher.search(query=query)
+            return self._build_result_payload(result)
+        except Exception:
+            logger.warning("Search failed with engines %s, retrying with defaults", normalized, exc_info=True)
+
+        try:
+            config_kwargs["enabled_engines"] = self.default_engines
+            searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
+            result = await searcher.search(query=query)
+            return self._build_result_payload(result)
+        except Exception as exc:
+            logger.exception("Search failed even with default engines")
+            return {
+                "query": query,
+                "answer": None,
+                "sources": [],
+                "response_time": None,
+                "metadata": None,
+                "error": str(exc),
+            }
 
     def _run(
         self,

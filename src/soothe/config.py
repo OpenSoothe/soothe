@@ -244,6 +244,12 @@ class BrowserSubagentConfig(BaseModel):
         disable_extensions: Disable browser extensions.
         disable_cloud: Disable browser-use cloud service.
         disable_telemetry: Disable usage telemetry.
+        enable_existing_browser: Allow connecting to existing Chrome instance via CDP.
+        browser_start_timeout: Timeout in seconds for browser launch events.
+        profile_mode: Browser profile lifecycle. ``persistent`` reuses a shared
+            profile across invocations (keeps cookies/sessions).  ``ephemeral``
+            creates a fresh UUID-named profile per invocation and deletes it on
+            exit -- safe for concurrent browser tasks.
     """
 
     runtime_dir: str = ""
@@ -254,6 +260,9 @@ class BrowserSubagentConfig(BaseModel):
     disable_extensions: bool = True
     disable_cloud: bool = True
     disable_telemetry: bool = True
+    enable_existing_browser: bool = True
+    browser_start_timeout: int = 90
+    profile_mode: Literal["persistent", "ephemeral"] = "persistent"
 
 
 class WizsearchConfig(BaseModel):
@@ -269,7 +278,7 @@ class WizsearchConfig(BaseModel):
     """
 
     enabled: bool = True
-    default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
     max_results_per_engine: int = 10
     timeout: int = 30
 

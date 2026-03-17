@@ -26,51 +26,61 @@ def check_postgresql() -> dict[str, Any]:
     """Check PostgreSQL connectivity."""
     try:
         import asyncpg
+
+        # Note: This check is limited without actual config
+        # In a real implementation, we would load config and test connection
+        return {
+            "name": "postgresql",
+            "status": "info",
+            "message": "PostgreSQL check requires config (skipped in standalone mode)",
+            "details": {
+                "note": "Run with --config to test actual database connection",
+                "asyncpg_installed": True,
+            },
+        }
     except ImportError:
         return {
             "name": "postgresql",
-            "status": "warning",
-            "message": "asyncpg not installed (PostgreSQL optional)",
+            "status": "info",
+            "message": "asyncpg not installed (PostgreSQL optional - install with: pip install asyncpg)",
+            "details": {
+                "asyncpg_installed": False,
+                "optional": True,
+            },
         }
-
-    # Note: This check is limited without actual config
-    # In a real implementation, we would load config and test connection
-    return {
-        "name": "postgresql",
-        "status": "info",
-        "message": "PostgreSQL check requires config (skipped in standalone mode)",
-        "details": {
-            "note": "Run with --config to test actual database connection",
-        },
-    }
 
 
 def check_rocksdb() -> dict[str, Any]:
     """Check RocksDB availability."""
     try:
         import rocksdb
-    except ImportError:
-        return {
-            "name": "rocksdb",
-            "status": "warning",
-            "message": "rocksdb not installed (optional dependency)",
-        }
 
-    # Check data directory
-    data_dir = Path(SOOTHE_HOME) / "data" / "rocksdb"
-    if not data_dir.parent.exists():
+        # Check data directory
+        data_dir = Path(SOOTHE_HOME) / "data" / "rocksdb"
+        if not data_dir.parent.exists():
+            return {
+                "name": "rocksdb",
+                "status": "ok",
+                "message": "rocksdb installed, data directory will be created on first use",
+                "details": {"rocksdb_installed": True},
+            }
+
         return {
             "name": "rocksdb",
             "status": "ok",
-            "message": "rocksdb installed, data directory will be created on first use",
+            "message": "rocksdb installed and ready",
+            "details": {"data_dir": str(data_dir), "rocksdb_installed": True},
         }
-
-    return {
-        "name": "rocksdb",
-        "status": "ok",
-        "message": "rocksdb installed and ready",
-        "details": {"data_dir": str(data_dir)},
-    }
+    except ImportError:
+        return {
+            "name": "rocksdb",
+            "status": "info",
+            "message": "rocksdb not installed (optional - install with: pip install python-rocksdb)",
+            "details": {
+                "rocksdb_installed": False,
+                "optional": True,
+            },
+        }
 
 
 def check_filesystem() -> dict[str, Any]:

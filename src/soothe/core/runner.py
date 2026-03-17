@@ -685,7 +685,9 @@ class SootheRunner:
 
             except Exception as exc:
                 logger.exception("Error during autonomous iteration %d", total_iterations)
-                yield _custom({"type": "soothe.error", "error": str(exc)})
+                from soothe.utils.error_format import emit_error_event
+
+                yield _custom(emit_error_event(exc, context="autonomous iteration"))
 
                 # Retry with backoff
                 updated = await self._goal_engine.fail_goal(goal.id, error=str(exc))
@@ -794,7 +796,9 @@ class SootheRunner:
 
             except Exception as exc:
                 logger.exception("Error during agent stream")
-                yield _custom({"type": "soothe.error", "error": str(exc)})
+                from soothe.utils.error_format import emit_error_event
+
+                yield _custom(emit_error_event(exc))
                 break
 
             if not interrupt_occurred:
@@ -803,12 +807,9 @@ class SootheRunner:
             hitl_iterations += 1
             if hitl_iterations > _MAX_HITL_ITERATIONS:
                 logger.warning("Exceeded HITL iteration limit (%d)", _MAX_HITL_ITERATIONS)
-                yield _custom(
-                    {
-                        "type": "soothe.error",
-                        "error": f"Exceeded {_MAX_HITL_ITERATIONS} HITL iterations",
-                    }
-                )
+                from soothe.utils.error_format import emit_error_event
+
+                yield _custom(emit_error_event(f"Exceeded {_MAX_HITL_ITERATIONS} HITL iterations"))
                 break
 
             resume_payload = self._auto_approve(pending_interrupts)

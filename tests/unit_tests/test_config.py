@@ -394,9 +394,9 @@ class TestToolsSettings:
         assert isinstance(cfg.tools_settings.wizsearch, WizsearchConfig)
 
     def test_wizsearch_default_engines(self) -> None:
-        """Test that wizsearch default_engines defaults to ['tavily']."""
+        """Test that wizsearch default_engines defaults to ['tavily', 'duckduckgo']."""
         cfg = SootheConfig()
-        assert cfg.tools_settings.wizsearch.default_engines == ["tavily"]
+        assert cfg.tools_settings.wizsearch.default_engines == ["tavily", "duckduckgo"]
         assert cfg.tools_settings.wizsearch.max_results_per_engine == 10
         assert cfg.tools_settings.wizsearch.timeout == 30
         assert cfg.tools_settings.wizsearch.enabled is True

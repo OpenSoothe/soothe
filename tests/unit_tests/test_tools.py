@@ -15,6 +15,7 @@ from soothe.tools.video import VideoInfoTool, create_video_tools
 from soothe.tools.wizsearch import (
     WizsearchCrawlPageTool,
     WizsearchSearchTool,
+    _normalize_engines,
     create_wizsearch_tools,
 )
 
@@ -130,8 +131,7 @@ class TestWizsearchTools:
         tool = WizsearchSearchTool()
         _ = tool._run(query="ai agents")
 
-        # Default engines is now ["tavily"]
-        assert captured["enabled_engines"] == ["tavily"]
+        assert captured["enabled_engines"] == ["tavily", "duckduckgo"]
 
     def test_custom_engines_via_config(self, monkeypatch) -> None:
         """Test that custom engines can be set via config parameter."""
@@ -191,6 +191,34 @@ class TestWizsearchTools:
         assert tools[0].default_engines == ["tavily"]
         assert tools[0].default_max_results_per_engine == 15
         assert tools[0].default_timeout == 45
+
+
+class TestNormalizeEngines:
+    """Test _normalize_engines handles various LLM output formats."""
+
+    def test_none_returns_none(self) -> None:
+        assert _normalize_engines(None) is None
+
+    def test_list_passthrough(self) -> None:
+        assert _normalize_engines(["tavily", "duckduckgo"]) == ["tavily", "duckduckgo"]
+
+    def test_comma_separated_string(self) -> None:
+        assert _normalize_engines("tavily, duckduckgo") == ["tavily", "duckduckgo"]
+
+    def test_json_array_string(self) -> None:
+        assert _normalize_engines('["google", "bing"]') == ["google", "bing"]
+
+    def test_json_array_no_spaces(self) -> None:
+        assert _normalize_engines('["tavily","duckduckgo"]') == ["tavily", "duckduckgo"]
+
+    def test_single_engine_string(self) -> None:
+        assert _normalize_engines("tavily") == ["tavily"]
+
+    def test_empty_list_returns_none(self) -> None:
+        assert _normalize_engines([]) is None
+
+    def test_empty_string_returns_none(self) -> None:
+        assert _normalize_engines("") is None
 
 
 class TestVideoTools:

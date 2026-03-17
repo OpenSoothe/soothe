@@ -342,21 +342,31 @@ RESEARCH_DESCRIPTION = (
 )
 
 
-def _create_research_search_tool() -> Any:
+def _create_research_search_tool(config: Any | None = None) -> Any:
     """Create the preferred search tool for the research workflow."""
     from soothe.tools.wizsearch import WizsearchSearchTool
 
-    return WizsearchSearchTool(
-        config={
-            "default_engines": ["tavily"],
+    # Use global wizsearch config if available, otherwise use research-specific defaults
+    if config and hasattr(config, "tools_settings") and hasattr(config.tools_settings, "wizsearch"):
+        wizsearch_config = {
+            "default_engines": config.tools_settings.wizsearch.default_engines,
+            "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
+            "timeout": config.tools_settings.wizsearch.timeout,
+        }
+    else:
+        # Research subagent default: fewer results per engine for focused research
+        wizsearch_config = {
+            "default_engines": ["tavily", "duckduckgo"],
             "max_results_per_engine": 5,
         }
-    )
+
+    return WizsearchSearchTool(config=wizsearch_config)
 
 
 def create_research_subagent(
     model: str | BaseChatModel | None = None,
     max_loops: int = 2,
+    config: Any | None = None,
     **_kwargs: object,
 ) -> CompiledSubAgent:
     """Create a Research subagent (CompiledSubAgent with LangGraph workflow).
@@ -367,6 +377,7 @@ def create_research_subagent(
     Args:
         model: LLM model string or instance.
         max_loops: Maximum research reflection loops.
+        config: Optional Soothe config for tool configuration.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:
@@ -393,7 +404,7 @@ def create_research_subagent(
         resolved_model = model
 
     try:
-        search_tool = _create_research_search_tool()
+        search_tool = _create_research_search_tool(config)
     except ImportError:
         try:
             from langchain_community.tools import DuckDuckGoSearchRun

@@ -122,7 +122,7 @@ def create_soothe_agent(
 
     # Use lazy loading by default for better startup performance
     tools_start = time.perf_counter()
-    config_tools = resolve_tools(config.tools, lazy=False)
+    config_tools = resolve_tools(config.tools, lazy=False, config=config)
     goal_tools = resolve_goal_tools(goal_engine)
     all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools, *goal_tools]
     if tools:

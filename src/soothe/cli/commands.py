@@ -271,7 +271,13 @@ async def _show_memory(console: Console, runner: SootheRunner) -> None:
             )
         )
     except Exception as exc:
-        console.print(f"[red]Memory stats error: {exc}[/red]")
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.exception("Memory stats error")
+        from soothe.utils.error_format import format_cli_error
+
+        console.print(f"[red]{format_cli_error(exc, context='Memory stats')}[/red]")
 
 
 async def _show_context(console: Console, runner: SootheRunner) -> None:
@@ -285,7 +291,13 @@ async def _show_context(console: Console, runner: SootheRunner) -> None:
             )
         )
     except Exception as exc:
-        console.print(f"[red]Context stats error: {exc}[/red]")
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.exception("Context stats error")
+        from soothe.utils.error_format import format_cli_error
+
+        console.print(f"[red]{format_cli_error(exc, context='Context stats')}[/red]")
 
 
 def _show_policy(console: Console, runner: SootheRunner) -> None:
@@ -384,7 +396,13 @@ async def _handle_thread_command(
                 )
             console.print(table)
         except Exception as exc:
-            console.print(f"[red]Thread list error: {exc}[/red]")
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception("Thread list error")
+            from soothe.utils.error_format import format_cli_error
+
+            console.print(f"[red]{format_cli_error(exc, context='Thread list')}[/red]")
     elif sub_cmd == "resume" and arg:
         console.print(f"[dim]Resuming thread {arg}...[/dim]")
         runner.set_current_thread_id(arg)
@@ -393,7 +411,13 @@ async def _handle_thread_command(
             await runner._durability.archive_thread(arg)
             console.print(f"[dim]Archived thread {arg}.[/dim]")
         except Exception as exc:
-            console.print(f"[red]Archive error: {exc}[/red]")
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception("Archive error")
+            from soothe.utils.error_format import format_cli_error
+
+            console.print(f"[red]{format_cli_error(exc, context='Archive thread')}[/red]")
     else:
         console.print("[yellow]Usage: /thread list | /thread resume <id> | /thread archive <id>[/yellow]")
 

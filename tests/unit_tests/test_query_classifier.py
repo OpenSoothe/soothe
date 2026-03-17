@@ -169,3 +169,25 @@ class TestQueryClassifier:
             classifier.classify("I need to refactor the entire authentication system to support OAuth2 and JWT tokens")
             == "complex"
         )
+
+    def test_cjk_word_counting(self, classifier):
+        """Test that CJK characters are counted individually as word-equivalents."""
+        # "使用浏览器获取最新的美国伊朗战争信息" = 18 CJK chars
+        assert classifier._count_words("使用浏览器获取最新的美国伊朗战争信息") == 18
+        # Short CJK: 3 chars
+        assert classifier._count_words("你好吗") == 3
+        # Mixed CJK + ASCII: 6 CJK (使用 + 获取信息) + 1 ASCII word (browser)
+        assert classifier._count_words("使用 browser 获取信息") == 7
+
+    def test_cjk_queries_not_trivial(self, classifier):
+        """Test that non-trivial CJK queries are not misclassified as trivial."""
+        # 18 CJK characters -> medium range (16-30)
+        result = classifier.classify("使用浏览器获取最新的美国伊朗战争信息")
+        assert result == "medium"
+
+        # Short CJK greeting (2 chars -> trivial)
+        assert classifier.classify("你好") == "trivial"
+
+        # Longer CJK query
+        result = classifier.classify("请帮我设计一个完整的用户认证系统，包括登录注册和密码重置功能")
+        assert result in ("medium", "complex")
