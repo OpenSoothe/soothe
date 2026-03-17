@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -86,6 +86,7 @@ class StepReport(BaseModel):
         status: Final step status.
         result: Output text (truncated).
         duration_ms: Execution time in milliseconds.
+        depends_on: IDs of steps this step depended on.
     """
 
     step_id: str
@@ -93,18 +94,21 @@ class StepReport(BaseModel):
     status: Literal["completed", "failed", "skipped"]
     result: str = ""
     duration_ms: int = 0
+    depends_on: list[str] = Field(default_factory=list)
 
 
 class GoalReport(BaseModel):
-    """Aggregate report from a completed goal (RFC-0009).
+    """Aggregate report from a completed goal (RFC-0009, RFC-0010).
 
     Args:
         goal_id: Goal identifier.
         description: Goal description.
         step_reports: Reports from all steps.
-        summary: Brief summary of results.
+        summary: Synthesized summary of results.
         status: Final goal status.
         duration_ms: Total execution time.
+        reflection_assessment: Planner reflection on this goal.
+        cross_validation_notes: Cross-validation findings.
     """
 
     goal_id: str
@@ -113,20 +117,59 @@ class GoalReport(BaseModel):
     summary: str = ""
     status: Literal["completed", "failed"] = "completed"
     duration_ms: int = 0
+    reflection_assessment: str = ""
+    cross_validation_notes: str = ""
 
 
 class Reflection(BaseModel):
-    """Planner's assessment of plan progress.
+    """Planner's assessment of plan progress (RFC-0010 enhanced).
 
     Args:
         assessment: Description of current progress.
         should_revise: Whether the plan needs revision.
         feedback: Specific feedback for revision (if needed).
+        blocked_steps: Step IDs blocked by dependency failures.
+        failed_details: Map of failed step ID to truncated error output.
     """
 
     assessment: str
     should_revise: bool
     feedback: str
+    blocked_steps: list[str] = Field(default_factory=list)
+    failed_details: dict[str, str] = Field(default_factory=dict)
+
+
+class CheckpointEnvelope(BaseModel):
+    """Progressive checkpoint for crash recovery (RFC-0010).
+
+    Stored in ``$SOOTHE_HOME/runs/{thread_id}/checkpoint.json`` via
+    ``RunArtifactStore.save_checkpoint``.
+
+    Args:
+        version: Schema version for forward compatibility.
+        timestamp: ISO-8601 checkpoint time.
+        mode: Execution mode when checkpoint was created.
+        last_query: The user's original query.
+        thread_id: Thread identifier.
+        goals: GoalEngine snapshot (autonomous mode).
+        active_goal_id: Currently executing goal.
+        plan: Serialized Plan for the active goal.
+        completed_step_ids: Steps already completed in the active plan.
+        total_iterations: Iteration counter (autonomous mode).
+        status: Whether execution is still in progress.
+    """
+
+    version: int = 1
+    timestamp: str = ""
+    mode: Literal["single_pass", "autonomous"] = "single_pass"
+    last_query: str = ""
+    thread_id: str = ""
+    goals: list[dict[str, Any]] = Field(default_factory=list)
+    active_goal_id: str | None = None
+    plan: dict[str, Any] | None = None
+    completed_step_ids: list[str] = Field(default_factory=list)
+    total_iterations: int = 0
+    status: Literal["in_progress", "completed", "failed"] = "in_progress"
 
 
 @runtime_checkable

@@ -34,7 +34,7 @@ class ThreadLogger:
     user/assistant conversation turns for lightweight in-terminal review.
 
     Args:
-        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``.
+        thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/runs/{thread_id}/``.
         thread_id: Thread ID for the log file name.
     """
 
@@ -48,12 +48,14 @@ class ThreadLogger:
         """Initialize the thread logger.
 
         Args:
-            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/threads/``.
+            thread_dir: Directory for thread logs. Defaults to ``SOOTHE_HOME/runs/{thread_id}/``.
             thread_id: Thread ID for the log file name.
             retention_days: Days to retain thread logs before cleanup.
             max_size_mb: Maximum total size for thread logs (not enforced yet).
         """
-        self._thread_dir = Path(thread_dir or Path(SOOTHE_HOME) / "threads").expanduser()
+        tid = thread_id or "default"
+        default_dir = Path(SOOTHE_HOME) / "runs" / tid
+        self._thread_dir = Path(thread_dir or default_dir).expanduser()
         self._thread_id = thread_id or "default"
         self._retention_days = retention_days
         self._max_size_mb = max_size_mb
@@ -67,12 +69,15 @@ class ThreadLogger:
     @property
     def log_path(self) -> Path:
         """Path to the current thread's JSONL file."""
-        return self._thread_dir / f"{self._thread_id}.jsonl"
+        return self._thread_dir / "conversation.jsonl"
 
     def set_thread_id(self, thread_id: str) -> None:
         """Update the thread ID (and thus the log file)."""
         self._thread_id = thread_id
+        default_dir = Path(SOOTHE_HOME) / "runs" / thread_id
+        self._thread_dir = default_dir.expanduser()
         self._initialized = False
+        logger.debug("ThreadLogger dir changed to %s", self._thread_dir)
 
     def log(
         self,

@@ -94,7 +94,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 
 | Package | Contents | Purpose |
 |---------|----------|---------|
-| `core/` | `agent`, `runner`, `resolver`, `events`, `goal_engine` | Framework logic (factory, orchestration, resolution, goal lifecycle) |
+| `core/` | `agent`, `runner`, `resolver`, `events`, `goal_engine`, `artifact_store`, `concurrency`, `step_scheduler` | Framework logic (factory, orchestration, resolution, goal lifecycle, artifact storage) |
 | `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
 | `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
 | `backends/memory/` | `KeywordMemory`, `VectorMemory` | MemoryProtocol implementations |
@@ -164,6 +164,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
 | [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
 | [RFC-0009](docs/specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
+| [RFC-0010](docs/specs/RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
 
 ### Implementation Guides
 
@@ -191,6 +192,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-020](docs/impl/020-detached-daemon-autonomous-capability.md) | Detached Daemon Autonomous Capability |
 | [IG-021](docs/impl/021-dag-execution-unified-concurrency.md) | DAG-Based Execution and Unified Concurrency |
 | [IG-022](docs/impl/022-rfc0009-gaps-tests-tui-dag.md) | RFC-0009 Gaps, Tests, TUI DAG, and Log Enhancements |
+| [IG-023](docs/impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
 
 ## Interaction Rules
 

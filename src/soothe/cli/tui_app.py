@@ -506,40 +506,13 @@ class SootheApp(App):
         # Clear previous history to prevent unbounded memory growth
         self._conversation_history.clear()
 
-        # Try both directories for backward compatibility
-        from pathlib import Path
-
-        from soothe.config import SOOTHE_HOME
-
-        sessions_dir = Path(SOOTHE_HOME) / "sessions"
-        threads_dir = Path(SOOTHE_HOME) / "threads"
-
-        # Try sessions first (preferred for backward compatibility), then threads
-        # Use file existence check instead of reading the entire file
-        for directory in [sessions_dir, threads_dir]:
-            log_file = directory / f"{thread_id}.jsonl"
-            if log_file.exists():
-                try:
-                    self._thread_logger = ThreadLogger(
-                        thread_dir=str(directory),
-                        thread_id=thread_id,
-                        retention_days=self._config.logging.thread_logging.retention_days,
-                        max_size_mb=self._config.logging.thread_logging.max_size_mb,
-                    )
-                    logger.info("Found thread history in %s for thread %s", directory, thread_id)
-                    break
-                except Exception:
-                    logger.debug("Failed to load thread history from %s", directory, exc_info=True)
-                    continue
-        else:
-            # No data found, use default directory
-            self._thread_logger = ThreadLogger(
-                thread_dir=self._config.logging.thread_logging.dir,
-                thread_id=thread_id,
-                retention_days=self._config.logging.thread_logging.retention_days,
-                max_size_mb=self._config.logging.thread_logging.max_size_mb,
-            )
-            logger.info("No existing history found for thread %s, using default directory", thread_id)
+        # Use runs/{thread_id}/ directory (RFC-0010)
+        self._thread_logger = ThreadLogger(
+            thread_id=thread_id,
+            retention_days=self._config.logging.thread_logging.retention_days,
+            max_size_mb=self._config.logging.thread_logging.max_size_mb,
+        )
+        logger.info("Thread logger initialized for thread %s", thread_id)
 
         try:
             # Load recent conversation history

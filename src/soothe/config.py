@@ -448,14 +448,28 @@ class LoggingConfig(BaseModel):
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
 
 
+class RecoveryConfig(BaseModel):
+    """Failure recovery configuration (RFC-0010).
+
+    Args:
+        progressive_checkpoints: Save checkpoint after each step/goal.
+        auto_resume_on_start: Auto-resume incomplete threads on daemon start.
+    """
+
+    progressive_checkpoints: bool = True
+    auto_resume_on_start: bool = False
+
+
 class ExecutionConfig(BaseModel):
     """Execution limits configuration.
 
     Args:
         concurrency: Concurrency limits for parallel execution.
+        recovery: Failure recovery settings.
     """
 
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
+    recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
 
 
 class SootheConfig(BaseSettings):

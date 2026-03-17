@@ -21,8 +21,6 @@ class TestJsonDurability:
         # Test public interface instead of internal implementation
         threads = await durability.list_threads()
         assert threads == []
-        state = await durability.load_state("nonexistent")
-        assert state is None
 
     @pytest.mark.asyncio
     async def test_create_thread(self, tmp_path: Path) -> None:
@@ -238,51 +236,6 @@ class TestJsonDurability:
 
         assert len(filtered_threads) == 1
         assert filtered_threads[0].thread_id == thread1.thread_id
-
-    @pytest.mark.asyncio
-    async def test_save_and_load_state(self, tmp_path: Path) -> None:
-        """Test saving and loading thread state."""
-        persist_dir = str(tmp_path)
-        durability = JsonDurability(persist_dir=persist_dir)
-
-        metadata = ThreadMetadata(plan_summary="Test Thread")
-        thread = await durability.create_thread(metadata)
-
-        state = {"step": 1, "data": "test data"}
-        await durability.save_state(thread.thread_id, state)
-
-        loaded_state = await durability.load_state(thread.thread_id)
-
-        assert loaded_state == state
-
-    @pytest.mark.asyncio
-    async def test_load_state_nonexistent_thread(self, tmp_path: Path) -> None:
-        """Test loading state for nonexistent thread returns None."""
-        persist_dir = str(tmp_path)
-        durability = JsonDurability(persist_dir=persist_dir)
-
-        state = await durability.load_state("nonexistent_id")
-
-        assert state is None
-
-    @pytest.mark.asyncio
-    async def test_save_state_overwrites(self, tmp_path: Path) -> None:
-        """Test that saving state overwrites previous state."""
-        persist_dir = str(tmp_path)
-        durability = JsonDurability(persist_dir=persist_dir)
-
-        metadata = ThreadMetadata(plan_summary="Test Thread")
-        thread = await durability.create_thread(metadata)
-
-        state1 = {"version": 1}
-        state2 = {"version": 2}
-
-        await durability.save_state(thread.thread_id, state1)
-        await durability.save_state(thread.thread_id, state2)
-
-        loaded_state = await durability.load_state(thread.thread_id)
-
-        assert loaded_state == state2
 
     @pytest.mark.asyncio
     async def test_thread_updated_at_changes(self, tmp_path: Path) -> None:

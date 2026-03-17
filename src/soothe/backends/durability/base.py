@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 from uuid import uuid4
 
 from soothe.backends.persistence import PersistStore
@@ -13,7 +12,8 @@ from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 class BasePersistStoreDurability:
     """Base implementation of DurabilityProtocol using PersistStore.
 
-    Provides common thread lifecycle management and state persistence.
+    Provides thread lifecycle management.  State persistence (checkpoints,
+    artifacts) is handled by ``RunArtifactStore`` (RFC-0010).
     Subclasses only need to provide a PersistStore instance.
     """
 
@@ -103,14 +103,6 @@ class BasePersistStoreDurability:
             results = [t for t in results if t.created_at <= thread_filter.created_before]
 
         return results
-
-    async def save_state(self, thread_id: str, state: Any) -> None:
-        """Persist arbitrary state for a thread."""
-        self._store.save(f"state:{thread_id}", state)
-
-    async def load_state(self, thread_id: str) -> Any | None:
-        """Load persisted state for a thread."""
-        return self._store.load(f"state:{thread_id}")
 
     def _update_thread_index(self, thread_id: str, action: str = "add") -> None:
         """Update the thread index for list_threads().

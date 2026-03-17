@@ -26,6 +26,7 @@ from langgraph.types import Command, Interrupt
 from pydantic import BaseModel
 
 from soothe.config import SootheConfig
+from soothe.core.artifact_store import RunArtifactStore
 from soothe.protocols.context import ContextEntry, ContextProjection, ContextProtocol
 from soothe.protocols.planner import Plan, PlanContext, PlannerProtocol, PlanStep, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext, PolicyProtocol
@@ -177,6 +178,7 @@ class SootheRunner:
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
+        self._artifact_store: RunArtifactStore | None = None
         self._concurrency = ConcurrencyController(self._config.execution.concurrency)
 
         total_ms = (time.perf_counter() - init_start) * 1000
@@ -206,6 +208,224 @@ class SootheRunner:
             thread_id: Thread ID to reuse, or ``None`` to clear.
         """
         self._current_thread_id = thread_id
+
+    # -- checkpoint and artifact helpers (RFC-0010) --------------------------
+
+    def _ensure_artifact_store(self, thread_id: str) -> RunArtifactStore:
+        """Lazily create the artifact store when thread_id is known."""
+        if self._artifact_store is None or self._artifact_store._thread_id != thread_id:
+            self._artifact_store = RunArtifactStore(thread_id)
+            logger.info("Artifact store initialized for thread %s", thread_id)
+        return self._artifact_store
+
+    async def _save_checkpoint(
+        self,
+        state: RunnerState,
+        *,
+        user_input: str,
+        mode: str = "single_pass",
+        status: str = "in_progress",
+    ) -> None:
+        """Save progressive checkpoint for crash recovery (RFC-0010)."""
+        from datetime import UTC, datetime
+
+        store = self._artifact_store
+        if not store:
+            return
+
+        plan_data = state.plan.model_dump(mode="json") if state.plan else None
+        completed = [s.id for s in (state.plan.steps if state.plan else []) if s.status == "completed"]
+        goals_data = self._goal_engine.snapshot() if self._goal_engine else []
+
+        envelope = {
+            "version": 1,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "mode": mode,
+            "last_query": user_input,
+            "thread_id": state.thread_id,
+            "goals": goals_data,
+            "active_goal_id": None,
+            "plan": plan_data,
+            "completed_step_ids": completed,
+            "total_iterations": 0,
+            "status": status,
+        }
+        try:
+            store.save_checkpoint(envelope)
+            logger.debug("Checkpoint saved: mode=%s status=%s completed=%d", mode, status, len(completed))
+        except Exception:
+            logger.debug("Checkpoint save failed", exc_info=True)
+
+    def _write_step_report_and_checkpoint(
+        self,
+        state: RunnerState,  # noqa: ARG002
+        step: PlanStep,
+        duration_ms: int,
+        *,
+        goal_id: str = "default",
+    ) -> None:
+        """Write step report to artifact store and save checkpoint.
+
+        Called synchronously after step completion in the step loop.
+
+        Args:
+            state: Current runner state.
+            step: The completed plan step.
+            duration_ms: Step execution time in milliseconds.
+            goal_id: Goal identifier for directory placement.
+        """
+        store = self._artifact_store
+        if not store:
+            return
+        logger.debug(
+            "Writing step report: goal=%s step=%s status=%s duration=%dms",
+            goal_id,
+            step.id,
+            step.status,
+            duration_ms,
+        )
+        try:
+            store.write_step_report(
+                goal_id=goal_id,
+                step_id=step.id,
+                description=step.description,
+                status=step.status or "skipped",
+                result=step.result or "",
+                duration_ms=duration_ms,
+                depends_on=step.depends_on,
+            )
+        except Exception:
+            logger.debug("Step report write failed", exc_info=True)
+
+    async def _try_recover_checkpoint(
+        self,
+        state: RunnerState,
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Attempt to restore from a progressive checkpoint (RFC-0010).
+
+        Loads checkpoint from ``RunArtifactStore``, restores goal engine
+        and plan state, marks previously completed steps so
+        ``StepScheduler`` will skip them.
+
+        Args:
+            state: Current runner state to populate with recovered data.
+
+        Yields:
+            Recovery stream events.
+        """
+        store = self._artifact_store
+        if not store:
+            return
+
+        try:
+            loaded = store.load_checkpoint()
+        except Exception:
+            logger.debug("Checkpoint load failed", exc_info=True)
+            return
+
+        if not loaded or not isinstance(loaded, dict):
+            logger.debug("No checkpoint to recover for thread %s", state.thread_id)
+            return
+        cp_status = loaded.get("status")
+        if cp_status != "in_progress":
+            logger.debug("Checkpoint status is %s, skipping recovery", cp_status)
+            return
+        if loaded.get("version", 0) < 1:
+            logger.debug("Checkpoint version too old, skipping recovery")
+            return
+
+        # Restore GoalEngine
+        goals_data = loaded.get("goals", [])
+        if goals_data and self._goal_engine:
+            self._goal_engine.restore_from_snapshot(goals_data)
+            logger.info("Recovered %d goals from checkpoint", len(goals_data))
+
+        # Restore Plan with completed step status
+        plan_data = loaded.get("plan")
+        completed_ids = set(loaded.get("completed_step_ids", []))
+        if plan_data:
+            plan = Plan.model_validate(plan_data)
+            for step in plan.steps:
+                if step.id in completed_ids:
+                    step.status = "completed"
+            state.plan = plan
+            self._current_plan = plan
+            logger.info(
+                "Recovered plan: %d/%d steps completed",
+                len(completed_ids),
+                len(plan.steps),
+            )
+
+        completed_goals = [g["id"] for g in goals_data if g.get("status") == "completed"]
+        yield _custom(
+            {
+                "type": "soothe.recovery.resumed",
+                "thread_id": state.thread_id,
+                "completed_steps": list(completed_ids),
+                "completed_goals": completed_goals,
+                "mode": loaded.get("mode", "single_pass"),
+            }
+        )
+
+    async def _synthesize_root_goal_report(
+        self,
+        goal: Any,
+        step_reports: list[Any],
+        child_goal_reports: list[Any],
+    ) -> str:
+        """Generate a cross-validated summary for a goal (RFC-0010).
+
+        Uses an LLM call to synthesize findings from all steps and child
+        goals, cross-checking for contradictions and gaps.  Falls back to
+        a heuristic summary when the LLM is unavailable.
+
+        Args:
+            goal: The goal being summarized.
+            step_reports: StepReport instances from this goal's plan.
+            child_goal_reports: GoalReport instances from dependency goals.
+
+        Returns:
+            Synthesized summary string.
+        """
+        parts: list[str] = [f"Goal: {goal.description}\n"]
+
+        if step_reports:
+            parts.append("Step results:")
+            for r in step_reports:
+                icon = "+" if r.status == "completed" else "x"
+                parts.append(f"  [{icon}] {r.step_id}: {r.description}\n      Result: {r.result[:400]}")
+
+        if child_goal_reports:
+            parts.append("\nChild goal reports:")
+            parts.extend(
+                f"  Goal {cr.goal_id}: {cr.description}\n    Summary: {cr.summary[:300]}" for cr in child_goal_reports
+            )
+
+        synthesis_prompt = "\n".join(parts) + (
+            "\n\nProduce a brief synthesis (3-5 sentences):\n"
+            "1. Summarize what was accomplished across all steps/goals.\n"
+            "2. Cross-validate: note any contradictions or conflicting information.\n"
+            "3. Identify gaps: what information is missing or incomplete?\n"
+            "4. State confidence level: high/medium/low based on source agreement.\n"
+        )
+
+        try:
+            if self._planner and hasattr(self._planner, "_invoke"):
+                summary = await self._planner._invoke(synthesis_prompt)  # type: ignore[attr-defined]
+                logger.info("LLM synthesis complete for goal %s (%d chars)", goal.id, len(summary))
+                return summary[:2000]
+        except Exception:
+            logger.debug("LLM synthesis failed, using heuristic", exc_info=True)
+
+        completed = [r for r in step_reports if r.status == "completed"]
+        failed = [r for r in step_reports if r.status == "failed"]
+        logger.info("Heuristic fallback for goal %s: %d completed, %d failed", goal.id, len(completed), len(failed))
+        lines = [f"Completed {len(completed)}/{len(step_reports)} steps."]
+        if failed:
+            lines.append(f"Failed: {', '.join(r.step_id for r in failed)}.")
+        if completed:
+            lines.append("Results: " + "; ".join(r.description[:50] for r in completed[:5]))
+        return " ".join(lines)
 
     def protocol_summary(self) -> dict[str, str]:
         """Return a summary of active protocol implementations."""
@@ -488,7 +708,10 @@ class SootheRunner:
             yield chunk
 
         if state.plan and len(state.plan.steps) > 1:
-            async for chunk in self._run_step_loop(user_input, state, state.plan):
+            sp_goal_id = "default"
+            if state.plan.goal:
+                sp_goal_id = state.plan.goal[:32].replace(" ", "_").replace("/", "_")
+            async for chunk in self._run_step_loop(user_input, state, state.plan, goal_id=sp_goal_id):
                 yield chunk
         else:
             async with self._concurrency.acquire_llm_call():
@@ -612,14 +835,14 @@ class SootheRunner:
         try:
             if self._context and hasattr(self._context, "persist"):
                 await self._context.persist(state.thread_id)
-            await self._durability.save_state(
-                state.thread_id,
-                {
-                    "last_query": user_input,
-                    "iterations": total_iterations,
-                    "goals": self._goal_engine.snapshot() if self._goal_engine else [],
-                },
+            await self._save_checkpoint(
+                state,
+                user_input=user_input,
+                mode="autonomous",
+                status="completed",
             )
+            if self._artifact_store:
+                self._artifact_store.update_status("completed")
             yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
@@ -632,7 +855,7 @@ class SootheRunner:
         *,
         parent_state: RunnerState,
         thread_id: str,
-        user_input: str,  # noqa: ARG002
+        user_input: str,
         iteration_records: list[IterationRecord],
         total_iterations: int,
         parallel_goals: int = 1,
@@ -712,7 +935,7 @@ class SootheRunner:
 
             # Step loop or single stream (RFC-0009)
             if iter_state.plan and len(iter_state.plan.steps) > 1:
-                async for chunk in self._run_step_loop(current_input, iter_state, iter_state.plan):
+                async for chunk in self._run_step_loop(current_input, iter_state, iter_state.plan, goal_id=goal.id):
                     yield chunk
             else:
                 async with self._concurrency.acquire_llm_call():
@@ -794,7 +1017,7 @@ class SootheRunner:
             )
 
             if not should_continue:
-                # Assemble GoalReport from step results (RFC-0009)
+                # Assemble GoalReport from step results (RFC-0009, RFC-0010)
                 goal_report = None
                 if iter_state.plan:
                     from soothe.protocols.planner import GoalReport, StepReport as StepReportModel
@@ -805,19 +1028,37 @@ class SootheRunner:
                             description=s.description,
                             status=s.status if s.status in ("completed", "failed") else "skipped",
                             result=s.result or "",
+                            depends_on=s.depends_on,
                         )
                         for s in iter_state.plan.steps
                         if s.status in ("completed", "failed", "pending")
                     ]
                     n_completed = sum(1 for r in sr_list if r.status == "completed")
                     n_failed = sum(1 for r in sr_list if r.status == "failed")
+
+                    # Collect child goal reports for cross-validation (RFC-0010)
+                    child_reports: list[GoalReport] = []
+                    if self._goal_engine:
+                        for dep_id in getattr(goal, "depends_on", []):
+                            dep_goal = self._goal_engine._goals.get(dep_id)
+                            if dep_goal and dep_goal.report:
+                                child_reports.append(dep_goal.report)
+
+                    # Synthesize summary with cross-validation (RFC-0010)
+                    summary = await self._synthesize_root_goal_report(goal, sr_list, child_reports)
+
+                    refl_assessment = ""
+                    if reflection:
+                        refl_assessment = reflection.assessment
+
                     goal_report = GoalReport(
                         goal_id=goal.id,
                         description=goal.description,
                         step_reports=sr_list,
-                        summary=response_text[:500],
+                        summary=summary,
                         status="completed" if n_failed == 0 else "failed",
                         duration_ms=duration_ms,
+                        reflection_assessment=refl_assessment,
                     )
                     goal.report = goal_report  # RFC-0009: store structured object
 
@@ -845,7 +1086,23 @@ class SootheRunner:
                         }
                     )
 
+                # Write goal report to artifact store (RFC-0010)
+                if self._artifact_store and goal_report:
+                    try:
+                        self._artifact_store.write_goal_report(goal_report)
+                        logger.debug("Goal report artifact written for %s", goal.id)
+                    except Exception:
+                        logger.debug("Goal report write failed", exc_info=True)
+
                 await self._goal_engine.complete_goal(goal.id)
+
+                # Propagate inner plan to parent so checkpoint captures step status
+                parent_state.plan = iter_state.plan
+
+                # Checkpoint after goal completion (RFC-0010)
+                await self._save_checkpoint(parent_state, user_input=user_input, mode="autonomous")
+                logger.debug("Post-goal checkpoint saved for goal %s", goal.id)
+
                 yield _custom(
                     {
                         "type": "soothe.goal.completed",
@@ -887,11 +1144,19 @@ class SootheRunner:
         goal_description: str,
         state: RunnerState,
         plan: Plan,
+        *,
+        goal_id: str = "default",
     ) -> AsyncGenerator[StreamChunk, None]:
         """Execute plan steps respecting DAG dependencies (RFC-0009).
 
         Iterates through batches of ready steps.  Sequential steps reuse
         the main thread; parallel steps get isolated thread IDs.
+
+        Args:
+            goal_description: Human-readable goal text.
+            state: Current runner state.
+            plan: Plan to execute.
+            goal_id: Goal identifier for artifact store directory placement.
         """
         import asyncio
 
@@ -945,6 +1210,7 @@ class SootheRunner:
             if len(ready) == 1:
                 step = ready[0]
                 dep_results = scheduler.get_dependency_results(step)
+                step_start = perf_counter()
                 async for chunk in self._execute_step(
                     step,
                     goal_description=goal_description,
@@ -954,10 +1220,12 @@ class SootheRunner:
                     batch_index=batch_index,
                 ):
                     yield chunk
+                step_dur = int((perf_counter() - step_start) * 1000)
                 if step.status == "completed":
                     scheduler.mark_completed(step.id, step.result or "")
                 elif step.status != "failed":
                     scheduler.mark_failed(step.id, step.result or "No result")
+                self._write_step_report_and_checkpoint(state, step, step_dur, goal_id=goal_id)
             else:
                 collected_chunks: dict[str, list[StreamChunk]] = {}
 
@@ -1002,6 +1270,9 @@ class SootheRunner:
                             scheduler.mark_completed(s.id, s.result or "")
                         elif s.status != "failed":
                             scheduler.mark_failed(s.id, s.result or "No result")
+                # Checkpoint after parallel batch (RFC-0010)
+                for s in ready:
+                    self._write_step_report_and_checkpoint(state, s, 0, goal_id=goal_id)
 
             batch_index += 1
 
@@ -1297,6 +1568,12 @@ class SootheRunner:
             state.thread_id = requested_thread_id or _generate_thread_id()
             self._current_thread_id = state.thread_id
 
+        # Initialize artifact store (RFC-0010)
+        store = self._ensure_artifact_store(state.thread_id)
+        if store and not store.manifest.query:
+            store._manifest.query = user_input[:200]
+            store.save_manifest()
+
         # Context restoration (when resuming a thread)
         if self._context and hasattr(self._context, "restore") and requested_thread_id:
             try:
@@ -1305,6 +1582,11 @@ class SootheRunner:
                     logger.info("Context restored for thread %s", state.thread_id)
             except Exception:
                 logger.debug("Context restore failed", exc_info=True)
+
+        # Crash recovery (RFC-0010)
+        if requested_thread_id:
+            async for chunk in self._try_recover_checkpoint(state):
+                yield chunk
 
         protocols = self.protocol_summary()
         yield _custom(
@@ -1582,15 +1864,16 @@ class SootheRunner:
             except Exception:
                 logger.debug("Plan reflection failed", exc_info=True)
 
-        # State persistence
+        # State persistence (RFC-0010: via RunArtifactStore)
         try:
-            await self._durability.save_state(
-                state.thread_id,
-                {
-                    "last_query": user_input,
-                    "response_preview": response_text[:200],
-                },
+            await self._save_checkpoint(
+                state,
+                user_input=user_input,
+                mode="single_pass",
+                status="completed",
             )
+            if self._artifact_store:
+                self._artifact_store.update_status("completed")
             yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})
         except Exception:
             logger.debug("State persistence failed", exc_info=True)

@@ -1,9 +1,9 @@
-"""DurabilityProtocol -- thread lifecycle and state persistence (RFC-0002 Module 5)."""
+"""DurabilityProtocol -- thread lifecycle management (RFC-0002 Module 5)."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -58,7 +58,11 @@ class ThreadFilter(BaseModel):
 
 @runtime_checkable
 class DurabilityProtocol(Protocol):
-    """Protocol for thread lifecycle management and state persistence."""
+    """Protocol for thread lifecycle management.
+
+    State persistence (checkpoints, artifacts) is handled by
+    ``RunArtifactStore`` (RFC-0010).
+    """
 
     async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
         """Create a new thread.
@@ -112,25 +116,5 @@ class DurabilityProtocol(Protocol):
 
         Returns:
             Matching threads.
-        """
-        ...
-
-    async def save_state(self, thread_id: str, state: Any) -> None:
-        """Persist arbitrary state for a thread.
-
-        Args:
-            thread_id: The thread to save state for.
-            state: The state to persist.
-        """
-        ...
-
-    async def load_state(self, thread_id: str) -> Any | None:
-        """Load persisted state for a thread.
-
-        Args:
-            thread_id: The thread to load state from.
-
-        Returns:
-            The persisted state, or None if not found.
         """
         ...

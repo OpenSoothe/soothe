@@ -247,7 +247,7 @@ logging:
   # Thread conversation logging for audit and recovery
   thread_logging:
     enabled: true
-    dir: ""                # Empty = SOOTHE_HOME/threads/
+    dir: ""                # Empty = SOOTHE_HOME/runs/{thread_id}/
     retention_days: 30     # Auto-delete threads older than N days
     max_size_mb: 100       # Max total size (not enforced yet)
 
@@ -264,6 +264,9 @@ execution:
     max_parallel_tools: 3         # Max tools in parallel per step (reserved)
     global_max_llm_calls: 5       # Cross-level LLM call circuit breaker
     step_parallelism: dependency  # sequential | dependency | max
+  recovery:
+    progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)
+    auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
 
 # =============================================================================
 # Vector Store

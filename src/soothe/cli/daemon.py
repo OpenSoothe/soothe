@@ -228,6 +228,9 @@ class SootheDaemon:
 
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
 
+        # Detect incomplete threads from previous daemon run (RFC-0010)
+        await self._detect_incomplete_threads()
+
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
 
     @staticmethod
@@ -251,6 +254,47 @@ class SootheDaemon:
         if self._stop_event is not None:
             loop = self._stop_event._loop  # type: ignore[attr-defined]
             loop.call_soon_threadsafe(self._stop_event.set)
+
+    async def _detect_incomplete_threads(self) -> None:
+        """Detect threads left in_progress from a previous daemon run (RFC-0010)."""
+        import json
+
+        runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"  # noqa: ASYNC240
+        if not runs_dir.exists():
+            return
+        try:
+            incomplete = []
+            for checkpoint_file in runs_dir.glob("*/checkpoint.json"):
+                try:
+                    data = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+                    if isinstance(data, dict) and data.get("status") == "in_progress":
+                        incomplete.append(
+                            {
+                                "thread_id": checkpoint_file.parent.name,
+                                "query": data.get("last_query", "")[:60],
+                                "mode": data.get("mode", ""),
+                                "completed_steps": len(data.get("completed_step_ids", [])),
+                                "goals": len(data.get("goals", [])),
+                            }
+                        )
+                except Exception:  # noqa: S112
+                    continue
+            if incomplete:
+                logger.info(
+                    "Found %d incomplete threads from previous run",
+                    len(incomplete),
+                )
+                for t in incomplete:
+                    logger.info(
+                        "  Thread %s: %s (%d steps done)",
+                        t["thread_id"],
+                        t["query"],
+                        t["completed_steps"],
+                    )
+            else:
+                logger.debug("No incomplete threads found from previous runs")
+        except Exception:
+            logger.debug("Incomplete thread detection failed", exc_info=True)
 
     async def serve_forever(self) -> None:
         """Block until the daemon is stopped.
@@ -501,7 +545,6 @@ class SootheDaemon:
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
             self._thread_logger = ThreadLogger(
-                thread_dir=self._config.logging.thread_logging.dir,
                 thread_id=thread_id,
                 retention_days=self._config.logging.thread_logging.retention_days,
                 max_size_mb=self._config.logging.thread_logging.max_size_mb,

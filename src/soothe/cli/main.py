@@ -9,7 +9,6 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-import anyio
 import typer
 
 from soothe.config import SOOTHE_HOME, SootheConfig
@@ -63,27 +62,6 @@ def setup_logging(config: SootheConfig | None = None) -> None:
     )
     for name in noisy_third_party:
         logging.getLogger(name).setLevel(logging.WARNING)
-
-
-def migrate_sessions_to_threads() -> None:
-    """Migrate old sessions/ directory to threads/ if needed.
-
-    This is a one-time migration to support the terminology change from
-    "session" to "thread" for conversation continuity.
-    """
-    home = Path(SOOTHE_HOME).expanduser()
-    sessions_dir = home / "sessions"
-    threads_dir = home / "threads"
-
-    # Only migrate if sessions/ exists and threads/ doesn't
-    if sessions_dir.exists() and not threads_dir.exists():
-        try:
-            sessions_dir.rename(threads_dir)
-            typer.echo(f"Migrated {sessions_dir} -> {threads_dir}")
-        except Exception as e:
-            # Log the error but don't fail - the user can manually move if needed
-            logger = logging.getLogger(__name__)
-            logger.warning("Failed to migrate sessions/ to threads/: %s", e)
 
 
 def migrate_rocksdb_to_data_subfolder() -> None:
@@ -312,7 +290,6 @@ def run(
             logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
             cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
-        migrate_sessions_to_threads()
         migrate_rocksdb_to_data_subfolder()
 
         # Check PostgreSQL availability if checkpointer is postgresql
@@ -1038,10 +1015,7 @@ def init_soothe() -> None:
         target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
         typer.echo(f"Created minimal {target}")
 
-    # Migrate old sessions/ to threads/ if needed
-    migrate_sessions_to_threads()
-
-    for subdir in ("threads", "generated_agents", "logs"):
+    for subdir in ("runs", "generated_agents", "logs"):
         (home / subdir).mkdir(parents=True, exist_ok=True)
 
     typer.echo(f"Soothe home initialized at {home}")
@@ -1333,11 +1307,13 @@ def thread_delete(
     runner = SootheRunner(cfg)
 
     async def _delete() -> None:
+        import shutil
+
         with contextlib.suppress(Exception):
             await runner._durability.archive_thread(thread_id)
-        thread_file = anyio.Path(SOOTHE_HOME).expanduser() / "threads" / f"{thread_id}.jsonl"
-        if await thread_file.exists():
-            await thread_file.unlink()
+        run_dir = Path(SOOTHE_HOME).expanduser() / "runs" / thread_id  # noqa: ASYNC240
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
         typer.echo(f"Deleted thread {thread_id}.")
 
     asyncio.run(_delete())

@@ -114,20 +114,49 @@ class SubagentPlanner:
             return revised
 
     async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
-        """Simple reflection based on step outcomes."""
+        """Dependency-aware reflection (RFC-0010)."""
         completed = sum(1 for r in step_results if r.success)
-        failed = sum(1 for r in step_results if not r.success)
+        failed_list = [r for r in step_results if not r.success]
         total = len(plan.steps)
-        if failed > 0:
+
+        if not failed_list:
             return Reflection(
-                assessment=f"{completed}/{total} steps completed, {failed} failed",
-                should_revise=True,
-                feedback=f"Steps failed: {[r.step_id for r in step_results if not r.success]}",
+                assessment=f"{completed}/{total} steps completed successfully",
+                should_revise=False,
+                feedback="",
             )
+
+        failed_ids = {r.step_id for r in failed_list}
+        blocked: list[str] = []
+        direct_failed: list[str] = []
+        for r in failed_list:
+            step = next((s for s in plan.steps if s.id == r.step_id), None)
+            if step and any(dep in failed_ids for dep in step.depends_on):
+                blocked.append(r.step_id)
+            else:
+                direct_failed.append(r.step_id)
+
+        failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
+
+        parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
+        if direct_failed:
+            parts.append(f"Directly failed: {direct_failed}")
+        if blocked:
+            parts.append(f"Blocked by dependencies: {blocked}")
+
+        logger.debug(
+            "Reflection: completed=%d failed=%d blocked=%d direct_failed=%d",
+            completed,
+            len(failed_list),
+            len(blocked),
+            len(direct_failed),
+        )
         return Reflection(
-            assessment=f"{completed}/{total} steps completed successfully",
-            should_revise=False,
-            feedback="",
+            assessment=". ".join(parts),
+            should_revise=True,
+            feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
+            blocked_steps=blocked,
+            failed_details=failed_details,
         )
 
     async def _invoke(self, prompt: str) -> str:

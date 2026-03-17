@@ -1,4 +1,4 @@
-# IG-023: Failure Recovery and Progressive Persistence
+# IG-023: Failure Recovery, Progressive Persistence, and Artifact Storage
 
 **Implements**: RFC-0010
 **Status**: Draft
@@ -6,181 +6,216 @@
 
 ## Overview
 
-Implements progressive checkpointing after each step/goal, crash recovery
-via `load_state` + `restore_from_snapshot`, daemon restart detection of
-incomplete threads, cross-validated final report synthesis, and enhanced
-reflection with dependency awareness.
+Implements progressive checkpointing after each step/goal, structured
+artifact storage in `$SOOTHE_HOME/runs/`, crash recovery via
+`RunArtifactStore.load_checkpoint()` + `GoalEngine.restore_from_snapshot()`,
+daemon restart detection, cross-validated final report synthesis, and
+enhanced reflection with dependency awareness.
 
-## Current State Analysis
+Hard-cut changes: `save_state`/`load_state` removed from DurabilityProtocol,
+`threads/` directory removed, no backward compatibility code.
 
-### What Exists But Is Unused
+## Phase 1: DurabilityProtocol Cleanup
 
-```python
-# DurabilityProtocol -- load_state exists, never called by runner
-async def load_state(self, thread_id: str) -> Any | None: ...
+Remove `save_state` and `load_state` from:
 
-# GoalEngine -- restore exists, never called
-def restore_from_snapshot(self, data: list[dict[str, Any]]) -> None: ...
-```
+- `protocols/durability.py` -- remove method definitions
+- `backends/durability/base.py` -- remove implementations
+- `core/runner.py` lines 615-622, 1587-1592 -- delete these blocks (replaced later)
 
-### What Is Lost on Crash
+## Phase 2: RunArtifactStore
 
-- Plan / PlanStep / StepScheduler state (memory only)
-- GoalEngine goals, DAG, status (saved at end, never restored)
-- Iteration progress (autonomous mode)
-- Current step results (in_progress step)
+New file: `src/soothe/core/artifact_store.py`
 
-### What Survives
-
-- Thread metadata (DurabilityProtocol)
-- Context ledger (context.persist/restore)
-- LangGraph checkpoints (PostgreSQL backend)
-- Memory items (MemoryProtocol backend)
-
-## Phase 1: CheckpointEnvelope and Progressive Saves
-
-### 1.1 Create `CheckpointEnvelope` in `protocols/planner.py`
+### Data Models
 
 ```python
-class CheckpointEnvelope(BaseModel):
-    """Progressive checkpoint for crash recovery (RFC-0010).
+class ArtifactEntry(BaseModel):
+    """A single artifact tracked in the run manifest."""
+    path: str
+    source: Literal["produced", "reference"]
+    original_path: str = ""
+    tool_name: str = ""
+    step_id: str = ""
+    goal_id: str = ""
+    size_bytes: int = 0
 
-    Stored via DurabilityProtocol.save_state after each step and goal
-    completion.  Loaded via load_state on thread resume.
-
-    Args:
-        version: Schema version for forward compatibility.
-        timestamp: ISO-8601 checkpoint time.
-        mode: Execution mode when checkpoint was created.
-        last_query: The user's original query.
-        thread_id: Thread identifier.
-        goals: GoalEngine snapshot (autonomous mode).
-        active_goal_id: Currently executing goal.
-        plan: Serialized Plan for the active goal.
-        completed_step_ids: Steps already completed in the active plan.
-        total_iterations: Iteration counter (autonomous mode).
-        status: Whether execution is still in progress.
-    """
-
+class RunManifest(BaseModel):
+    """Index of all artifacts and metadata for a run."""
     version: int = 1
-    timestamp: str = ""
+    thread_id: str
+    created_at: str
+    updated_at: str
+    query: str = ""
     mode: Literal["single_pass", "autonomous"] = "single_pass"
-    last_query: str = ""
-    thread_id: str = ""
-    goals: list[dict[str, Any]] = Field(default_factory=list)
-    active_goal_id: str | None = None
-    plan: dict[str, Any] | None = None
-    completed_step_ids: list[str] = Field(default_factory=list)
-    total_iterations: int = 0
     status: Literal["in_progress", "completed", "failed"] = "in_progress"
+    goals: list[str] = Field(default_factory=list)
+    artifacts: list[ArtifactEntry] = Field(default_factory=list)
 ```
 
-### 1.2 Add `_save_checkpoint()` helper to `runner.py`
+### RunArtifactStore Class
+
+```python
+class RunArtifactStore:
+    """Manages $SOOTHE_HOME/runs/{thread_id}/ directory."""
+
+    def __init__(self, thread_id: str, soothe_home: str = SOOTHE_HOME) -> None:
+        self._thread_id = thread_id
+        self._run_dir = Path(soothe_home).expanduser() / "runs" / thread_id
+        self._run_dir.mkdir(parents=True, exist_ok=True)
+        self._manifest = RunManifest(
+            thread_id=thread_id,
+            created_at=datetime.now(UTC).isoformat(),
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+
+    @property
+    def run_dir(self) -> Path: ...
+
+    @property
+    def conversation_log_path(self) -> Path:
+        return self._run_dir / "conversation.jsonl"
+
+    def ensure_step_dir(self, goal_id: str, step_id: str) -> Path:
+        d = self._run_dir / "goals" / goal_id / "steps" / step_id
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def write_step_report(self, goal_id: str, step: PlanStep, duration_ms: int) -> None:
+        step_dir = self.ensure_step_dir(goal_id, step.id)
+        report = StepReport(
+            step_id=step.id, description=step.description,
+            status=step.status if step.status in ("completed","failed") else "skipped",
+            result=step.result or "", duration_ms=duration_ms,
+            depends_on=step.depends_on,
+        )
+        (step_dir / "report.json").write_text(report.model_dump_json(indent=2))
+        md = f"# Step: {step.description}\n\n"
+        md += f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n\n"
+        if report.depends_on:
+            md += f"**Depends on**: {', '.join(report.depends_on)}\n\n"
+        md += f"## Result\n\n{report.result}\n"
+        (step_dir / "report.md").write_text(md)
+
+    def write_goal_report(self, report: GoalReport) -> None:
+        goal_dir = self._run_dir / "goals" / report.goal_id
+        goal_dir.mkdir(parents=True, exist_ok=True)
+        (goal_dir / "report.json").write_text(report.model_dump_json(indent=2))
+        md = f"# Goal: {report.description}\n\n"
+        md += f"**Status**: {report.status}  \n**Duration**: {report.duration_ms}ms\n\n"
+        md += f"## Summary\n\n{report.summary}\n"
+        if report.reflection_assessment:
+            md += f"\n## Reflection\n\n{report.reflection_assessment}\n"
+        if report.cross_validation_notes:
+            md += f"\n## Cross-Validation\n\n{report.cross_validation_notes}\n"
+        if report.step_reports:
+            md += "\n## Steps\n\n"
+            for sr in report.step_reports:
+                icon = "+" if sr.status == "completed" else "x"
+                md += f"- [{icon}] **{sr.step_id}**: {sr.description} ({sr.status})\n"
+        (goal_dir / "report.md").write_text(md)
+
+    def record_artifact(self, entry: ArtifactEntry) -> None:
+        self._manifest.artifacts.append(entry)
+        self.save_manifest()
+
+    def save_checkpoint(self, envelope: dict[str, Any]) -> None:
+        """Write checkpoint atomically (tmp + rename)."""
+        target = self._run_dir / "checkpoint.json"
+        tmp = target.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(envelope, default=str, indent=2))
+        tmp.rename(target)
+
+    def load_checkpoint(self) -> dict[str, Any] | None:
+        target = self._run_dir / "checkpoint.json"
+        if not target.exists():
+            return None
+        return json.loads(target.read_text())
+
+    def save_manifest(self) -> None:
+        self._manifest.updated_at = datetime.now(UTC).isoformat()
+        target = self._run_dir / "manifest.json"
+        target.write_text(self._manifest.model_dump_json(indent=2))
+
+    def load_manifest(self) -> RunManifest | None:
+        target = self._run_dir / "manifest.json"
+        if not target.exists():
+            return None
+        return RunManifest.model_validate_json(target.read_text())
+```
+
+## Phase 3: Protocol Model Updates (`protocols/planner.py`)
+
+- Add `CheckpointEnvelope` model
+- `StepReport`: add `depends_on: list[str]`
+- `GoalReport`: add `reflection_assessment: str`, `cross_validation_notes: str`
+- `Reflection`: add `blocked_steps: list[str]`, `failed_details: dict[str, str]`
+
+## Phase 4: Runner Integration (`core/runner.py`)
+
+### 4.1 Artifact store initialization
+
+Create `RunArtifactStore` lazily in `_pre_stream` when `thread_id` is
+resolved.  Store as `self._artifact_store`.
+
+### 4.2 `_save_checkpoint()` helper
 
 ```python
 async def _save_checkpoint(
-    self,
-    state: RunnerState,
-    *,
-    user_input: str,
-    mode: str = "single_pass",
-    status: str = "in_progress",
+    self, state: RunnerState, *, user_input: str,
+    mode: str = "single_pass", status: str = "in_progress",
 ) -> None:
-    """Save progressive checkpoint for crash recovery (RFC-0010)."""
-    from datetime import UTC, datetime
-
+    if not self._artifact_store:
+        return
     plan_data = state.plan.model_dump(mode="json") if state.plan else None
     completed = [
         s.id for s in (state.plan.steps if state.plan else [])
         if s.status == "completed"
     ]
     goals_data = self._goal_engine.snapshot() if self._goal_engine else []
-
     envelope = {
         "version": 1,
         "timestamp": datetime.now(UTC).isoformat(),
-        "mode": mode,
-        "last_query": user_input,
+        "mode": mode, "last_query": user_input,
         "thread_id": state.thread_id,
-        "goals": goals_data,
-        "active_goal_id": None,
-        "plan": plan_data,
-        "completed_step_ids": completed,
-        "total_iterations": 0,
-        "status": status,
+        "goals": goals_data, "active_goal_id": None,
+        "plan": plan_data, "completed_step_ids": completed,
+        "total_iterations": 0, "status": status,
     }
-
     try:
-        await self._durability.save_state(state.thread_id, envelope)
+        self._artifact_store.save_checkpoint(envelope)
     except Exception:
         logger.debug("Checkpoint save failed", exc_info=True)
 ```
 
-### 1.3 Insert checkpoints in `_run_step_loop`
+### 4.3 Insert checkpoints
 
-After each step completion (both sequential and parallel paths):
+- After each step in `_run_step_loop`: call `_save_checkpoint` + `write_step_report`
+- After each goal in `_execute_autonomous_goal`: call `_save_checkpoint` + `write_goal_report`
+- At end of `_run_autonomous` and `_post_stream`: `_save_checkpoint(status="completed")`
 
-```python
-# After scheduler.mark_completed or mark_failed:
-await self._save_checkpoint(state, user_input=goal_description, mode="single_pass")
-```
+### 4.4 Remove old `save_state` calls
 
-### 1.4 Insert checkpoints in `_execute_autonomous_goal`
+Delete the `durability.save_state(...)` blocks at runner.py:615-622 and 1587-1592.
 
-After each goal completes or fails:
+## Phase 5: Recovery on Resume (`core/runner.py`)
 
-```python
-# After goal_engine.complete_goal or fail_goal:
-await self._save_checkpoint(
-    parent_state, user_input=user_input, mode="autonomous"
-)
-```
-
-### 1.5 Mark completed at end
+### `_try_recover_checkpoint()`
 
 ```python
-# At end of _run_single_pass and _run_autonomous:
-await self._save_checkpoint(state, user_input=user_input, status="completed")
-```
-
-## Phase 2: Recovery on Resume
-
-### 2.1 Add `_try_recover_checkpoint()` to `runner.py`
-
-```python
-async def _try_recover_checkpoint(
-    self, state: RunnerState
-) -> bool:
-    """Attempt to restore from a progressive checkpoint (RFC-0010).
-
-    Returns True if recovery occurred and step loop should skip
-    completed steps.
-    """
-    try:
-        loaded = await self._durability.load_state(state.thread_id)
-    except Exception:
-        logger.debug("load_state failed", exc_info=True)
+async def _try_recover_checkpoint(self, state: RunnerState) -> bool:
+    if not self._artifact_store:
+        return False
+    loaded = self._artifact_store.load_checkpoint()
+    if not loaded or loaded.get("status") != "in_progress":
+        return False
+    if loaded.get("version", 0) < 1:
         return False
 
-    if not loaded or not isinstance(loaded, dict):
-        return False
-
-    if loaded.get("status") != "in_progress":
-        return False
-
-    version = loaded.get("version", 0)
-    if version < 1:
-        return False
-
-    # Restore GoalEngine
     goals_data = loaded.get("goals", [])
     if goals_data and self._goal_engine:
         self._goal_engine.restore_from_snapshot(goals_data)
-        logger.info(
-            "Recovered %d goals from checkpoint", len(goals_data)
-        )
 
-    # Restore Plan with completed step status
     plan_data = loaded.get("plan")
     completed_ids = set(loaded.get("completed_step_ids", []))
     if plan_data:
@@ -190,211 +225,79 @@ async def _try_recover_checkpoint(
                 step.status = "completed"
         state.plan = plan
         self._current_plan = plan
-        logger.info(
-            "Recovered plan: %d/%d steps completed",
-            len(completed_ids), len(plan.steps),
-        )
-
-    yield _custom({
-        "type": "soothe.recovery.resumed",
-        "thread_id": state.thread_id,
-        "completed_steps": list(completed_ids),
-        "completed_goals": [
-            g["id"] for g in goals_data
-            if g.get("status") == "completed"
-        ],
-        "mode": loaded.get("mode", "single_pass"),
-    })
 
     return True
 ```
 
-### 2.2 Call in `_pre_stream`
+Called in `_pre_stream` after `context.restore()`.
 
-After `context.restore()` and before plan creation:
+## Phase 6: CLI Hard-Cut
 
-```python
-# In _pre_stream, after context restore:
-recovered = await self._try_recover_checkpoint(state)
-if recovered and state.plan:
-    # Skip plan creation -- plan is already restored
-    yield _custom({
-        "type": "soothe.plan.created",
-        "goal": state.plan.goal,
-        "steps": [...],  # with recovered statuses
-    })
-```
+### 6.1 `cli/main.py`
 
-### 2.3 StepScheduler handles pre-completed steps
+- Delete `migrate_sessions_to_threads()` function and its call
+- Thread deletion: remove `runs/{thread_id}/` directory instead of JSONL file
 
-`StepScheduler` already works correctly with pre-completed steps:
-`ready_steps()` checks `step.status != "pending"` and skips completed
-steps.  `is_complete()` returns True when all are terminal.
+### 6.2 `cli/tui_app.py`
 
-No changes needed to `StepScheduler`.
+- Remove `sessions/threads` fallback logic
+- ThreadLogger uses `runs/{thread_id}/` (from `artifact_store.conversation_log_path`)
 
-## Phase 3: Daemon Restart Detection
+### 6.3 `cli/daemon.py`
 
-### 3.1 Add `_detect_incomplete_threads()` to daemon
+- ThreadLogger dir passed from `RunArtifactStore.conversation_log_path`
+- Add `_detect_incomplete_threads()`: scan `runs/*/checkpoint.json`
 
-```python
-async def _detect_incomplete_threads(self) -> list[dict[str, Any]]:
-    """Detect threads left in_progress from a previous daemon run."""
-    incomplete = []
-    try:
-        threads = await self._runner._durability.list_threads(
-            ThreadFilter(status="active")
-        )
-        for t in threads:
-            loaded = await self._runner._durability.load_state(t.id)
-            if loaded and isinstance(loaded, dict):
-                if loaded.get("status") == "in_progress":
-                    incomplete.append({
-                        "thread_id": t.id,
-                        "query": loaded.get("last_query", ""),
-                        "mode": loaded.get("mode", ""),
-                        "completed_steps": loaded.get("completed_step_ids", []),
-                        "goals": len(loaded.get("goals", [])),
-                    })
-    except Exception:
-        logger.debug("Incomplete thread detection failed", exc_info=True)
-    return incomplete
-```
+### 6.4 `cli/thread_logger.py`
 
-### 3.2 Log on startup
+- Default `thread_dir` parameter accepts explicit path from RunArtifactStore
 
-```python
-# In daemon start:
-incomplete = await self._detect_incomplete_threads()
-if incomplete:
-    logger.info(
-        "Found %d incomplete threads from previous run", len(incomplete)
-    )
-    for t in incomplete:
-        logger.info(
-            "  Thread %s: %s (%d steps done)",
-            t["thread_id"], t["query"][:60], len(t["completed_steps"]),
-        )
-```
+## Phase 7: Cross-Validated Final Report
 
-## Phase 4: Cross-Validated Final Report
-
-### 4.1 Add `_synthesize_root_goal_report()` to runner
+`_synthesize_root_goal_report()` in `runner.py`:
 
 ```python
 async def _synthesize_root_goal_report(
-    self,
-    goal: Goal,
-    step_reports: list[StepReport],
+    self, goal: Goal, step_reports: list[StepReport],
     child_goal_reports: list[GoalReport],
 ) -> str:
-    """Generate a cross-validated summary for the root goal (RFC-0010).
-
-    Uses an LLM call to synthesize findings from all steps and child
-    goals, cross-checking for contradictions and gaps.
-    """
     parts = [f"Goal: {goal.description}\n"]
-
     if step_reports:
         parts.append("Step results:")
         for r in step_reports:
-            status_icon = "+" if r.status == "completed" else "x"
-            parts.append(
-                f"  [{status_icon}] {r.step_id}: {r.description}\n"
-                f"      Result: {r.result[:400]}"
-            )
-
+            icon = "+" if r.status == "completed" else "x"
+            parts.append(f"  [{icon}] {r.step_id}: {r.description}\n      Result: {r.result[:400]}")
     if child_goal_reports:
         parts.append("\nChild goal reports:")
         for cr in child_goal_reports:
-            parts.append(
-                f"  Goal {cr.goal_id}: {cr.description}\n"
-                f"    Status: {cr.status}, Steps: {len(cr.step_reports)}\n"
-                f"    Summary: {cr.summary[:300]}"
-            )
-
+            parts.append(f"  Goal {cr.goal_id}: {cr.description}\n    Summary: {cr.summary[:300]}")
     synthesis_prompt = "\n".join(parts) + """
 
-Based on the above results, produce a brief synthesis (3-5 sentences):
+Produce a brief synthesis (3-5 sentences):
 1. Summarize what was accomplished across all steps/goals.
 2. Cross-validate: note any contradictions or conflicting information.
 3. Identify gaps: what information is missing or incomplete?
 4. State confidence level: high/medium/low based on source agreement.
 """
-
     try:
         if self._planner and hasattr(self._planner, "_invoke"):
-            summary = await self._planner._invoke(synthesis_prompt)
-            return summary[:2000]
+            return (await self._planner._invoke(synthesis_prompt))[:2000]
     except Exception:
         logger.debug("LLM synthesis failed, using heuristic", exc_info=True)
 
-    # Heuristic fallback
     completed = [r for r in step_reports if r.status == "completed"]
     failed = [r for r in step_reports if r.status == "failed"]
-    lines = [
-        f"Completed {len(completed)}/{len(step_reports)} steps.",
-    ]
+    lines = [f"Completed {len(completed)}/{len(step_reports)} steps."]
     if failed:
         lines.append(f"Failed: {', '.join(r.step_id for r in failed)}.")
     if completed:
-        lines.append("Results: " + "; ".join(
-            f"{r.description[:50]}" for r in completed[:5]
-        ))
+        lines.append("Results: " + "; ".join(r.description[:50] for r in completed[:5]))
     return " ".join(lines)
 ```
 
-### 4.2 Use in GoalReport assembly
+## Phase 8: Enhanced Reflection
 
-Replace `summary=response_text[:500]` with synthesized summary:
-
-```python
-# In _execute_autonomous_goal, after step loop:
-if iter_state.plan:
-    sr_list = [...]  # existing step report assembly
-
-    # Collect child goal reports for cross-validation
-    child_reports = []
-    if self._goal_engine:
-        for dep_id in goal.depends_on:
-            dep_goal = self._goal_engine.get_goal(dep_id)
-            if dep_goal and dep_goal.report:
-                child_reports.append(dep_goal.report)
-
-    # Synthesize with cross-validation
-    summary = await self._synthesize_root_goal_report(
-        goal, sr_list, child_reports
-    )
-
-    goal_report = GoalReport(
-        goal_id=goal.id,
-        description=goal.description,
-        step_reports=sr_list,
-        summary=summary,
-        status=...,
-        duration_ms=...,
-        reflection_assessment=reflection.assessment if reflection else "",
-        cross_validation_notes="",
-    )
-```
-
-## Phase 5: Enhanced Reflection
-
-### 5.1 Update `Reflection` model
-
-```python
-class Reflection(BaseModel):
-    assessment: str
-    should_revise: bool
-    feedback: str
-    blocked_steps: list[str] = Field(default_factory=list)
-    failed_details: dict[str, str] = Field(default_factory=dict)
-```
-
-### 5.2 Enhance `reflect()` in planners
-
-All planners (Direct, Claude, Subagent) share the same `reflect()` logic.
-Enhance it:
+All planners (Direct, Claude, Subagent):
 
 ```python
 async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
@@ -402,10 +305,8 @@ async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflectio
     failed_list = [r for r in step_results if not r.success]
     total = len(plan.steps)
 
-    # Identify blocked vs directly failed
     failed_ids = {r.step_id for r in failed_list}
-    blocked = []
-    direct_failed = []
+    blocked, direct_failed = [], []
     for r in failed_list:
         step = next((s for s in plan.steps if s.id == r.step_id), None)
         if step and any(dep in failed_ids for dep in step.depends_on):
@@ -413,10 +314,7 @@ async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflectio
         else:
             direct_failed.append(r.step_id)
 
-    # Build rich feedback
-    failed_details = {}
-    for r in failed_list:
-        failed_details[r.step_id] = r.output[:200] if r.output else "no output"
+    failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
 
     if failed_list:
         parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
@@ -425,73 +323,53 @@ async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflectio
         if blocked:
             parts.append(f"Blocked by dependencies: {blocked}")
         return Reflection(
-            assessment=". ".join(parts),
-            should_revise=True,
+            assessment=". ".join(parts), should_revise=True,
             feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
-            blocked_steps=blocked,
-            failed_details=failed_details,
+            blocked_steps=blocked, failed_details=failed_details,
         )
-
     return Reflection(
         assessment=f"{completed}/{total} steps completed successfully",
-        should_revise=False,
-        feedback="",
+        should_revise=False, feedback="",
     )
 ```
 
-## Phase 6: Model Updates
+## Phase 9: Configuration
 
-### 6.1 `StepReport` -- add `depends_on`
-
-```python
-class StepReport(BaseModel):
-    step_id: str
-    description: str
-    status: Literal["completed", "failed", "skipped"]
-    result: str = ""
-    duration_ms: int = 0
-    depends_on: list[str] = Field(default_factory=list)
-```
-
-### 6.2 `GoalReport` -- add reflection and cross-validation
+Add `RecoveryConfig` to `config.py`, add to `ExecutionConfig`:
 
 ```python
-class GoalReport(BaseModel):
-    goal_id: str
-    description: str
-    step_reports: list[StepReport] = Field(default_factory=list)
-    summary: str = ""
-    status: Literal["completed", "failed"] = "completed"
-    duration_ms: int = 0
-    reflection_assessment: str = ""
-    cross_validation_notes: str = ""
+class RecoveryConfig(BaseModel):
+    progressive_checkpoints: bool = True
+    auto_resume_on_start: bool = False
 ```
+
+Update `config/config.yml`.
 
 ## Testing Checklist
 
-- [ ] Checkpoint saved after each step completion
-- [ ] Checkpoint saved after each goal completion (autonomous)
-- [ ] Checkpoint marked `completed` at end of run
-- [ ] `load_state` restores plan with completed step statuses
-- [ ] `restore_from_snapshot` restores goal DAG
-- [ ] StepScheduler skips pre-completed steps
-- [ ] Daemon detects incomplete threads on startup
-- [ ] Cross-validated summary uses LLM when available
-- [ ] Heuristic fallback produces reasonable summary
-- [ ] Enhanced reflection distinguishes blocked vs failed steps
-- [ ] New model fields serialize/deserialize correctly
-- [ ] Backward compat: old checkpoint format (no version) handled gracefully
+- [ ] RunArtifactStore: create, write reports, save/load checkpoint, manifest
+- [ ] Checkpoint round-trip: save envelope, load, verify fields
+- [ ] Recovery: pre-completed steps restored, StepScheduler skips them
+- [ ] Goal DAG recovery: restore_from_snapshot with depends_on preserved
+- [ ] Enhanced reflection: blocked vs direct failed distinction
+- [ ] Model fields: StepReport.depends_on, GoalReport.reflection_assessment, etc.
+- [ ] CLI: ThreadLogger uses runs/ path, thread deletion removes run dir
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `protocols/planner.py` | `CheckpointEnvelope`, `StepReport.depends_on`, `GoalReport.reflection_assessment`+`cross_validation_notes`, `Reflection.blocked_steps`+`failed_details` |
-| `core/runner.py` | `_save_checkpoint()`, `_try_recover_checkpoint()`, `_synthesize_root_goal_report()`, checkpoint calls in step/goal loops, recovery call in `_pre_stream` |
-| `cli/daemon.py` | `_detect_incomplete_threads()`, startup logging |
+| `protocols/durability.py` | Remove `save_state`, `load_state` |
+| `backends/durability/base.py` | Remove `save_state`, `load_state` |
+| `core/artifact_store.py` | NEW: RunArtifactStore, RunManifest, ArtifactEntry |
+| `protocols/planner.py` | CheckpointEnvelope, StepReport.depends_on, GoalReport fields, Reflection fields |
+| `core/runner.py` | Artifact store integration, checkpoints, recovery, synthesis |
+| `cli/daemon.py` | Incomplete thread detection, ThreadLogger path |
+| `cli/main.py` | Delete migration, update thread deletion |
+| `cli/tui_app.py` | Remove sessions/threads fallback |
+| `cli/thread_logger.py` | Accept explicit log path |
 | `backends/planning/direct.py` | Enhanced `reflect()` |
 | `backends/planning/claude.py` | Enhanced `reflect()` |
 | `backends/planning/subagent.py` | Enhanced `reflect()` |
-| `config.py` | `RecoveryConfig` with `progressive_checkpoints` and `auto_resume_on_start` |
-| `config/config.yml` | `execution.recovery` section |
-| Tests | New tests for checkpoint save/load, recovery flow, model fields |
+| `config.py` | RecoveryConfig |
+| `config/config.yml` | execution.recovery section |

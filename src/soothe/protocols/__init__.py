@@ -11,6 +11,7 @@ from soothe.protocols.durability import (
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
 from soothe.protocols.persistence import PersistStore
 from soothe.protocols.planner import (
+    CheckpointEnvelope,
     GoalReport,
     Plan,
     PlanContext,
@@ -34,6 +35,7 @@ from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 
 __all__ = [
     "ActionRequest",
+    "CheckpointEnvelope",
     "ConcurrencyPolicy",
     "ContextEntry",
     "ContextProjection",
