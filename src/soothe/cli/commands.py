@@ -203,11 +203,11 @@ async def handle_slash_command(
         return False
 
     if command == "/memory":
-        _show_memory(console, runner)
+        await _show_memory(console, runner)
         return False
 
     if command == "/context":
-        _show_context(console, runner)
+        await _show_context(console, runner)
         return False
 
     if command == "/policy":
@@ -261,10 +261,9 @@ def _show_plan(console: Console, plan: Plan | None) -> None:
     console.print(render_plan_tree(plan))
 
 
-def _show_memory(console: Console, runner: SootheRunner) -> None:
-    loop = asyncio.get_event_loop()
+async def _show_memory(console: Console, runner: SootheRunner) -> None:
     try:
-        stats = loop.run_until_complete(runner.memory_stats())
+        stats = await runner.memory_stats()
         console.print(
             Panel(
                 json.dumps(stats, indent=2, default=str),
@@ -276,10 +275,9 @@ def _show_memory(console: Console, runner: SootheRunner) -> None:
         console.print(f"[red]Memory stats error: {exc}[/red]")
 
 
-def _show_context(console: Console, runner: SootheRunner) -> None:
-    loop = asyncio.get_event_loop()
+async def _show_context(console: Console, runner: SootheRunner) -> None:
     try:
-        stats = loop.run_until_complete(runner.context_stats())
+        stats = await runner.context_stats()
         console.print(
             Panel(
                 json.dumps(stats, indent=2, default=str),
@@ -392,9 +390,8 @@ async def _handle_thread_command(
         console.print(f"[dim]Resuming thread {arg}...[/dim]")
         runner.set_current_thread_id(arg)
     elif sub_cmd == "archive" and arg:
-        loop = asyncio.get_event_loop()
         try:
-            loop.run_until_complete(runner._durability.archive_thread(arg))
+            await runner._durability.archive_thread(arg)
             console.print(f"[dim]Archived thread {arg}.[/dim]")
         except Exception as exc:
             console.print(f"[red]Archive error: {exc}[/red]")
