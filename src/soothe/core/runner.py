@@ -225,8 +225,12 @@ class SootheRunner:
         user_input: str,
         mode: str = "single_pass",
         status: str = "in_progress",
-    ) -> None:
-        """Save progressive checkpoint for crash recovery (RFC-0010)."""
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Save progressive checkpoint for crash recovery (RFC-0010).
+
+        Yields:
+            soothe.checkpoint.saved stream event on successful save.
+        """
         from datetime import UTC, datetime
 
         store = self._artifact_store
@@ -253,6 +257,15 @@ class SootheRunner:
         try:
             store.save_checkpoint(envelope)
             logger.debug("Checkpoint saved: mode=%s status=%s completed=%d", mode, status, len(completed))
+            # Emit stream event for observability (RFC-0010)
+            yield _custom(
+                {
+                    "type": "soothe.checkpoint.saved",
+                    "thread_id": state.thread_id,
+                    "completed_steps": len(completed),
+                    "completed_goals": len(goals_data),
+                }
+            )
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
 
@@ -377,7 +390,7 @@ class SootheRunner:
 
         Uses an LLM call to synthesize findings from all steps and child
         goals, cross-checking for contradictions and gaps.  Falls back to
-        a heuristic summary when the LLM is unavailable.
+        a structured heuristic summary when the LLM is unavailable.
 
         Args:
             goal: The goal being summarized.
@@ -393,39 +406,75 @@ class SootheRunner:
             parts.append("Step results:")
             for r in step_reports:
                 icon = "+" if r.status == "completed" else "x"
-                parts.append(f"  [{icon}] {r.step_id}: {r.description}\n      Result: {r.result[:400]}")
+                parts.append(f"  [{icon}] {r.step_id}: {r.description}\n      Result: {r.result[:2000]}")
 
         if child_goal_reports:
             parts.append("\nChild goal reports:")
             parts.extend(
-                f"  Goal {cr.goal_id}: {cr.description}\n    Summary: {cr.summary[:300]}" for cr in child_goal_reports
+                f"  Goal {cr.goal_id}: {cr.description}\n    Summary: {cr.summary[:500]}" for cr in child_goal_reports
             )
 
         synthesis_prompt = "\n".join(parts) + (
-            "\n\nProduce a brief synthesis (3-5 sentences):\n"
-            "1. Summarize what was accomplished across all steps/goals.\n"
-            "2. Cross-validate: note any contradictions or conflicting information.\n"
-            "3. Identify gaps: what information is missing or incomplete?\n"
-            "4. State confidence level: high/medium/low based on source agreement.\n"
+            "\n\n---\n"
+            "Produce a comprehensive final report in Markdown for a human reader.\n"
+            "Structure the report as follows:\n"
+            "1. **Executive Summary**: 2-3 sentence overview of what was accomplished.\n"
+            "2. **Key Findings**: Consolidate the most important data points, facts,\n"
+            "   and conclusions from all steps into a coherent narrative. Use tables,\n"
+            "   bullet points, or numbered lists where appropriate. Do NOT simply\n"
+            "   repeat each step -- synthesize and deduplicate across steps.\n"
+            "3. **Cross-Validation**: Note any contradictions, conflicting data, or\n"
+            "   discrepancies found across steps. If none, state that sources agree.\n"
+            "4. **Gaps & Limitations**: What information is missing or incomplete?\n"
+            "5. **Confidence**: State high/medium/low based on source agreement.\n\n"
+            "Keep the report between 500-2000 words. Write in the same language as\n"
+            "the original goal. Use Markdown formatting for readability.\n"
         )
 
         try:
             if self._planner and hasattr(self._planner, "_invoke"):
                 summary = await self._planner._invoke(synthesis_prompt)  # type: ignore[attr-defined]
                 logger.info("LLM synthesis complete for goal %s (%d chars)", goal.id, len(summary))
-                return summary[:2000]
+                return summary[:8000]
         except Exception:
             logger.debug("LLM synthesis failed, using heuristic", exc_info=True)
 
+        return self._heuristic_goal_summary(goal, step_reports)
+
+    def _heuristic_goal_summary(self, goal: Any, step_reports: list[Any]) -> str:
+        """Build a structured heuristic summary when LLM synthesis is unavailable.
+
+        Concatenates step results into sections rather than a one-liner.
+
+        Args:
+            goal: The goal being summarized.
+            step_reports: StepReport instances from this goal's plan.
+
+        Returns:
+            Markdown-formatted summary string.
+        """
         completed = [r for r in step_reports if r.status == "completed"]
         failed = [r for r in step_reports if r.status == "failed"]
-        logger.info("Heuristic fallback for goal %s: %d completed, %d failed", goal.id, len(completed), len(failed))
-        lines = [f"Completed {len(completed)}/{len(step_reports)} steps."]
+        logger.info(
+            "Heuristic fallback for goal %s: %d completed, %d failed",
+            goal.id, len(completed), len(failed),
+        )
+
+        lines: list[str] = []
+        lines.append(f"# {goal.description}\n")
+        lines.append(f"**Status**: {len(completed)}/{len(step_reports)} steps completed")
         if failed:
-            lines.append(f"Failed: {', '.join(r.step_id for r in failed)}.")
-        if completed:
-            lines.append("Results: " + "; ".join(r.description[:50] for r in completed[:5]))
-        return " ".join(lines)
+            lines.append(f"**Failed**: {', '.join(r.step_id for r in failed)}\n")
+        else:
+            lines.append("")
+
+        for r in completed:
+            lines.append(f"## {r.description}\n")
+            result_text = r.result[:2000].strip() if r.result else "(no output)"
+            lines.append(result_text)
+            lines.append("")
+
+        return "\n".join(lines)
 
     def protocol_summary(self) -> dict[str, str]:
         """Return a summary of active protocol implementations."""
@@ -831,16 +880,30 @@ class SootheRunner:
                             yield chunk
                 total_iterations += len(ready_goals)
 
+        # Emit final report for CLI (RFC-0010 / IG-027)
+        root_report = getattr(goal, "report", None)
+        if root_report and hasattr(root_report, "summary") and root_report.summary:
+            yield _custom(
+                {
+                    "type": "soothe.autonomous.final_report",
+                    "goal_id": goal.id,
+                    "description": goal.description,
+                    "status": root_report.status,
+                    "summary": root_report.summary,
+                }
+            )
+
         # Persist final state
         try:
             if self._context and hasattr(self._context, "persist"):
                 await self._context.persist(state.thread_id)
-            await self._save_checkpoint(
+            async for chunk in self._save_checkpoint(
                 state,
                 user_input=user_input,
                 mode="autonomous",
                 status="completed",
-            )
+            ):
+                yield chunk
             if self._artifact_store:
                 self._artifact_store.update_status("completed")
             yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})
@@ -1100,7 +1163,8 @@ class SootheRunner:
                 parent_state.plan = iter_state.plan
 
                 # Checkpoint after goal completion (RFC-0010)
-                await self._save_checkpoint(parent_state, user_input=user_input, mode="autonomous")
+                async for chunk in self._save_checkpoint(parent_state, user_input=user_input, mode="autonomous"):
+                    yield chunk
                 logger.debug("Post-goal checkpoint saved for goal %s", goal.id)
 
                 yield _custom(
@@ -1866,12 +1930,13 @@ class SootheRunner:
 
         # State persistence (RFC-0010: via RunArtifactStore)
         try:
-            await self._save_checkpoint(
+            async for chunk in self._save_checkpoint(
                 state,
                 user_input=user_input,
                 mode="single_pass",
                 status="completed",
-            )
+            ):
+                yield chunk
             if self._artifact_store:
                 self._artifact_store.update_status("completed")
             yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})

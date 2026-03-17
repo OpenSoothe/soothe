@@ -130,6 +130,11 @@ class AutoPlanner:
         planner = self._best_available()
         return await planner.reflect(plan, step_results)
 
+    async def _invoke(self, prompt: str) -> str:
+        """Delegate a free-form LLM call to the best available planner."""
+        planner = self._best_available()
+        return await planner._invoke(prompt)
+
     async def _route(self, goal: str) -> Any:
         """Determine which planner to use - heuristics only (RFC-0008).
 

@@ -484,12 +484,24 @@ def _run_headless_via_daemon(
                     continue
 
                 if mode == "custom" and isinstance(data, dict):
-                    category = classify_custom_event(namespace, data)
-                    if should_show(category, verbosity):
-                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
-                        _render_progress_event(data, prefix=prefix)
-                    if category == "error":
-                        has_error = True
+                    etype = str(data.get("type", ""))
+
+                    # Final report -> stdout (IG-027)
+                    if etype == "soothe.autonomous.final_report":
+                        report_text = data.get("summary", "")
+                        if report_text:
+                            sys.stdout.write("\n\n")
+                            sys.stdout.write(report_text)
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            full_response.append(report_text)
+                    else:
+                        category = classify_custom_event(namespace, data)
+                        if should_show(category, verbosity):
+                            prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                            _render_progress_event(data, prefix=prefix)
+                        if category == "error":
+                            has_error = True
 
                 if mode == "messages":
                     message_data_tuple_length = 2
@@ -647,12 +659,24 @@ def _run_headless_standalone(
                     continue
 
                 if mode == "custom" and isinstance(data, dict):
-                    category = classify_custom_event(namespace, data)
-                    if should_show(category, verbosity):
-                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
-                        _render_progress_event(data, prefix=prefix)
-                    if category == "error":
-                        has_error = True
+                    etype = str(data.get("type", ""))
+
+                    # Final report -> stdout (IG-027)
+                    if etype == "soothe.autonomous.final_report":
+                        report_text = data.get("summary", "")
+                        if report_text:
+                            sys.stdout.write("\n\n")
+                            sys.stdout.write(report_text)
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            full_response.append(report_text)
+                    else:
+                        category = classify_custom_event(namespace, data)
+                        if should_show(category, verbosity):
+                            prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                            _render_progress_event(data, prefix=prefix)
+                        if category == "error":
+                            has_error = True
 
                 if mode == "messages":
                     if not isinstance(data, tuple) or len(data) != _msg_pair_len:

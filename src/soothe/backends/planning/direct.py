@@ -246,6 +246,11 @@ class DirectPlanner:
             failed_details=failed_details,
         )
 
+    async def _invoke(self, prompt: str) -> str:
+        """Run a free-form LLM call and return the text response."""
+        response = await self._model.ainvoke(prompt)
+        return response.content if hasattr(response, "content") else str(response)
+
     def _match_template(self, goal: str) -> Plan | None:
         """Match goal to predefined template.
 

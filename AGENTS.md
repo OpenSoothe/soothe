@@ -193,6 +193,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [IG-021](docs/impl/021-dag-execution-unified-concurrency.md) | DAG-Based Execution and Unified Concurrency |
 | [IG-022](docs/impl/022-rfc0009-gaps-tests-tui-dag.md) | RFC-0009 Gaps, Tests, TUI DAG, and Log Enhancements |
 | [IG-023](docs/impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
+| [IG-027](docs/impl/027-final-report-cli-output.md) | Final Report CLI Output and LLM Synthesis |
 
 ## Interaction Rules
 
