@@ -205,7 +205,7 @@ class TestMemUMemoryRecall:
         assert results[1].content == "Second memory"
 
         mock_memory_service.retrieve.assert_called_once_with(
-            queries=[{"query": "test query"}],
+            queries=[{"role": "user", "content": "test query"}],
             where=None,
         )
 

@@ -12,8 +12,8 @@ def test_init_command_creates_config():
     with tempfile.TemporaryDirectory() as tmpdir:
         home = Path(tmpdir) / ".soothe"
 
-        with patch("soothe.cli.main.SOOTHE_HOME", str(home)):
-            from soothe.cli.main import init_soothe
+        with patch("soothe.cli.commands.init_cmd.SOOTHE_HOME", str(home)):
+            from soothe.cli.commands.init_cmd import init_soothe
 
             init_soothe()
 
@@ -35,8 +35,8 @@ def test_init_command_idempotent():
         config_path.parent.mkdir(parents=True)
         config_path.write_text("existing config")
 
-        with patch("soothe.cli.main.SOOTHE_HOME", str(home)):
-            from soothe.cli.main import init_soothe
+        with patch("soothe.cli.commands.init_cmd.SOOTHE_HOME", str(home)):
+            from soothe.cli.commands.init_cmd import init_soothe
 
             init_soothe()
 
@@ -49,8 +49,8 @@ def test_init_creates_directories():
     with tempfile.TemporaryDirectory() as tmpdir:
         home = Path(tmpdir) / ".soothe"
 
-        with patch("soothe.cli.main.SOOTHE_HOME", str(home)):
-            from soothe.cli.main import init_soothe
+        with patch("soothe.cli.commands.init_cmd.SOOTHE_HOME", str(home)):
+            from soothe.cli.commands.init_cmd import init_soothe
 
             init_soothe()
 

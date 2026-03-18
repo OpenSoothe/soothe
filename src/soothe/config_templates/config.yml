@@ -46,10 +46,10 @@ providers:
 
 router:
   default: "openai:gpt-4o-mini"
-  # think: "openai:o3-mini"
-  # fast: "openai:gpt-4o-mini"
-  # image: "openai:gpt-4o"
-  # embedding: "openai:text-embedding-3-small"
+  think: "openai:o3-mini"
+  fast: "openai:gpt-4o-mini"
+  image: "openai:gpt-4o"
+  embedding: "openai:text-embedding-3-small"
 
 # =============================================================================
 # Agent Behavior
@@ -174,6 +174,39 @@ skills: []
 memory: []
 
 # =============================================================================
+# Security Configuration
+# =============================================================================
+# Configure filesystem access control and security policies.
+
+security:
+  # Allow access to paths outside the workspace directory
+  allow_paths_outside_workspace: true
+  # Require user approval for paths outside workspace (when above is true)
+  require_approval_for_outside_paths: false
+
+  # Path-based access control (glob patterns)
+  # Evaluation order: 1) denied_paths (highest priority), 2) allowed_paths, 3) workspace boundary
+  denied_paths:
+    - "~/.ssh/**"           # SSH keys
+    - "~/.gnupg/**"         # GPG keys
+    - "~/.aws/**"           # AWS credentials
+    - "**/.env"             # Environment files
+    - "**/credentials.json" # Credentials files
+    - "**/secrets.json"     # Secrets files
+  allowed_paths:
+    - "**"                  # Allow all paths (can be restricted for tighter security)
+
+  # File type restrictions
+  denied_file_types: []     # File extensions that are completely denied
+  require_approval_for_file_types:  # File extensions requiring user approval
+    - ".env"
+    - ".pem"
+    - ".key"
+    - ".p12"
+    - ".pfx"
+    - ".crt"
+
+# =============================================================================
 # Protocol Backends
 # =============================================================================
 # Configure the backend implementations for each core protocol.
@@ -199,6 +232,9 @@ protocols:
     enabled: true
     backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/memory/
+    # Use Soothe's model router roles (configured in router section above)
+    # llm_chat_role: fast  # Use fast model for memory operations (default)
+    # llm_embed_role: embedding  # Use embedding model for vector operations (default)
 
   # Durability Protocol: Thread lifecycle and state persistence
   durability:
@@ -264,6 +300,23 @@ autonomous:
   enable_dynamic_goals: true # Enable/disable dynamic goal creation (RFC-0011)
 
 # =============================================================================
+# Execution Limits
+# =============================================================================
+# Concurrency and resource limits for safe operation.
+
+execution:
+  concurrency:
+    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode)
+    max_parallel_steps: 1         # Max parallel plan steps (DAG-aware)
+    max_parallel_subagents: 1     # Max subagents running simultaneously (reserved)
+    max_parallel_tools: 3         # Max tools in parallel per step (reserved)
+    global_max_llm_calls: 5       # Cross-level LLM call circuit breaker
+    step_parallelism: dependency  # sequential | dependency | max
+  recovery:
+    progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)
+    auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
+
+# =============================================================================
 # Logging & Observability
 # =============================================================================
 # Configure logging, thread history, and debugging features.
@@ -292,20 +345,3 @@ logging:
     dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
     retention_days: 30       # Auto-delete threads older than N days
     max_size_mb: 100         # Max total size (not enforced yet)
-
-# =============================================================================
-# Execution Limits
-# =============================================================================
-# Concurrency and resource limits for safe operation.
-
-execution:
-  concurrency:
-    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode)
-    max_parallel_steps: 1         # Max parallel plan steps (DAG-aware)
-    max_parallel_subagents: 1     # Max subagents running simultaneously (reserved)
-    max_parallel_tools: 3         # Max tools in parallel per step (reserved)
-    global_max_llm_calls: 5       # Cross-level LLM call circuit breaker
-    step_parallelism: dependency  # sequential | dependency | max
-  recovery:
-    progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)
-    auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start

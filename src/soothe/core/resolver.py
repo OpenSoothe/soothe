@@ -144,19 +144,43 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     try:
         from soothe.backends.memory.memu import MemUMemory
 
-        # Build MemU configuration from Soothe config
-        # Extract LLM provider info from Soothe's providers
-        api_key = None
-        api_base_url = None
+        # Build MemU configuration from Soothe's model router
+        # Resolve model strings from router roles
+        chat_model_str = config.resolve_model(config.protocols.memory.llm_chat_role)
+        embed_model_str = config.resolve_model(config.protocols.memory.llm_embed_role)
 
-        # Try to get OpenAI provider credentials (most common for embeddings)
-        for provider in config.providers:
-            if provider.provider_type == "openai":
-                if provider.api_key:
-                    api_key = _resolve_env(provider.api_key)
-                if provider.api_base_url:
-                    api_base_url = _resolve_env(provider.api_base_url)
-                break
+        # Parse provider:model strings
+        chat_provider_name, _, chat_model_name = chat_model_str.partition(":")
+        embed_provider_name, _, embed_model_name = embed_model_str.partition(":")
+
+        if not chat_model_name:
+            chat_model_name = chat_provider_name
+            chat_provider_name = ""
+        if not embed_model_name:
+            embed_model_name = embed_provider_name
+            embed_provider_name = ""
+
+        # Get provider configurations
+        def get_provider_config(provider_name: str) -> tuple[dict, str]:
+            """Extract provider credentials from Soothe config."""
+            if not provider_name:
+                return {}, ""
+            provider = config._find_provider(provider_name)
+            if not provider:
+                return {}, provider_name
+
+            kwargs = {}
+            provider_type = provider.provider_type
+            if provider.api_base_url:
+                kwargs["base_url"] = _resolve_env(provider.api_base_url)
+                if provider_type == "openai":
+                    kwargs["use_responses_api"] = False
+            if provider.api_key:
+                kwargs["api_key"] = _resolve_env(provider.api_key)
+            return kwargs, provider_type
+
+        chat_kwargs, _chat_provider_type = get_provider_config(chat_provider_name)
+        embed_kwargs, _embed_provider_type = get_provider_config(embed_provider_name)
 
         # Resolve database DSN (default to Soothe's PostgreSQL DSN for postgres provider)
         database_dsn = config.protocols.memory.database_dsn
@@ -173,21 +197,26 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
             UserConfig,
         )
 
-        # Build LLM config kwargs (only include non-None values)
-        llm_kwargs = {
-            "chat_model": config.protocols.memory.llm_chat_model,
-            "embed_model": config.protocols.memory.llm_embed_model,
-        }
-        if api_key:
-            llm_kwargs["api_key"] = api_key
-        if api_base_url:
-            llm_kwargs["base_url"] = api_base_url
+        # Build LLM configs using resolved provider information
+        chat_llm_config = LLMConfig(
+            chat_model=chat_model_name,
+            embed_model=embed_model_name,
+            **chat_kwargs,
+        )
 
-        llm_config = LLMConfig(**llm_kwargs)
+        # For embedding profile, prefer embedding provider if different
+        if embed_provider_name and embed_provider_name != chat_provider_name:
+            embed_llm_config = LLMConfig(
+                chat_model=chat_model_name,
+                embed_model=embed_model_name,
+                **embed_kwargs,
+            )
+        else:
+            embed_llm_config = chat_llm_config
 
         llm_profiles = LLMProfilesConfig(
-            default=llm_config,
-            embedding=llm_config,  # Use same config for embedding
+            default=chat_llm_config,
+            embedding=embed_llm_config,
         )
 
         database_config = DatabaseConfig(
@@ -208,8 +237,10 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
         user_config = UserConfig()
 
         logger.info(
-            "Using MemU memory backend with %s storage",
+            "Using MemU memory backend with %s storage (chat: %s, embed: %s)",
             config.protocols.memory.database_provider,
+            chat_model_str,
+            embed_model_str,
         )
         return MemUMemory(
             llm_profiles=llm_profiles,
@@ -269,8 +300,22 @@ def resolve_planner(
     subagent_planner = None
     try:
         from soothe.backends.planning.subagent import SubagentPlanner
+        from soothe.built_in_skills import get_built_in_skills_paths
 
-        subagent_planner = SubagentPlanner(model=planner_model, cwd=resolved_cwd)
+        # Only load scout-then-plan skill for SubagentPlanner (not all skills)
+        # This saves context - SubagentPlanner only needs workflow guidance
+        all_skills = get_built_in_skills_paths()
+        planner_skills = None
+        for skill_path in all_skills:
+            if Path(skill_path).name == "scout-then-plan":
+                planner_skills = [skill_path]
+                break
+
+        subagent_planner = SubagentPlanner(
+            model=planner_model,
+            cwd=resolved_cwd,
+            skills=planner_skills,
+        )
     except Exception:
         logger.debug("SubagentPlanner init failed", exc_info=True)
 

@@ -94,8 +94,11 @@ ollama = [
 memory = [
     "memu-py>=1.5.0; python_version>='3.13'",
 ]
+dashscope = [
+    "dashscope>=1.25.14",
+]
 all = [
-    "soothe[research,browser,claude,serper,wizsearch,jina,media,bash,audio-full,video,document,python-executor,rocksdb,pgvector,weaviate,ollama]",
+    "soothe[research,browser,claude,serper,wizsearch,jina,media,bash,audio-full,video,document,python-executor,rocksdb,pgvector,weaviate,ollama,memory,dashscope]",
 ]
 # Note: 'memory' extra requires Python 3.13+ and is NOT included in 'all'
 # Install explicitly with: pip install soothe[memory] (Python 3.13+ only)

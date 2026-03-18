@@ -6,10 +6,12 @@ and synthesise findings with citations.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.utils import expand_path
+from soothe.utils.tool_logging import wrap_tool_with_logging
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -17,6 +19,9 @@ if TYPE_CHECKING:
     from deepagents.middleware.subagents import SubAgent
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
+
+logger = logging.getLogger(__name__)
+
 
 SCOUT_SYSTEM_PROMPT = """\
 You are an expert codebase and data exploration specialist capable of \
@@ -104,7 +109,8 @@ def create_scout_subagent(
         spec["model"] = model
 
     if tools is not None:
-        spec["tools"] = tools
+        # Wrap provided tools with logging
+        spec["tools"] = [wrap_tool_with_logging(tool, "scout", logger) for tool in tools]
     else:
         from deepagents.backends.filesystem import FilesystemBackend
         from deepagents.middleware.filesystem import FilesystemMiddleware
@@ -127,6 +133,7 @@ def create_scout_subagent(
             fs_middleware._create_glob_tool(),
             fs_middleware._create_grep_tool(),
         ]
-        spec["tools"] = read_only_tools
+        # Wrap read-only tools with logging
+        spec["tools"] = [wrap_tool_with_logging(tool, "scout", logger) for tool in read_only_tools]
 
     return spec

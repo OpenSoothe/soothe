@@ -109,6 +109,26 @@ class TestCreateFileTool:
             assert "Error" in result
             assert "outside" in result.lower() or "invalid" in result.lower()
 
+    def test_path_outside_workdir_allowed(self) -> None:
+        """Test that paths outside work directory are allowed when flag is set."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = CreateFileTool(work_dir=temp_dir, allow_outside_workdir=True)
+
+            # Create a file outside the work directory
+            outside_dir = Path(tempfile.mkdtemp())
+            try:
+                outside_file = outside_dir / "outside_test.txt"
+                result = tool._run(str(outside_file), "test content")
+
+                assert "Created:" in result
+                assert outside_file.exists()
+                assert outside_file.read_text() == "test content"
+            finally:
+                # Cleanup
+                import shutil
+
+                shutil.rmtree(outside_dir, ignore_errors=True)
+
     def test_normalize_stripped_absolute_path_into_workdir(self) -> None:
         """Stripped absolute path should normalize to a workdir-relative path."""
         with tempfile.TemporaryDirectory() as temp_dir:

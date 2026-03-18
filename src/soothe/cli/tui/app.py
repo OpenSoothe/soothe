@@ -17,118 +17,25 @@ import contextlib
 import logging
 import subprocess
 import sys
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
-from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Vertical
-from textual.widgets import Header, Input, RichLog, Static
+from textual.widgets import Header, Input
 
-from soothe.cli.commands import parse_autonomous_command
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
-from soothe.cli.progress_verbosity import classify_custom_event, should_show
+from soothe.cli.progress_verbosity import should_show
+from soothe.cli.slash_commands import parse_autonomous_command
 from soothe.cli.thread_logger import ThreadLogger
-from soothe.cli.tui_shared import (
-    TuiState,
-    _handle_generic_custom_activity,
-    _handle_protocol_event,
-    _handle_subagent_custom,
-    _handle_subagent_progress,
-    _handle_subagent_text_activity,
-    _handle_tool_call_activity,
-    _handle_tool_result_activity,
-    _resolve_namespace_label,
-    _update_name_map_from_ai_message,
-    render_plan_tree,
-)
+from soothe.cli.tui.event_processors import process_daemon_event
+from soothe.cli.tui.state import TuiState
+from soothe.cli.tui.widgets import ActivityPanel, ChatInput, ConversationPanel, InfoBar, PlanPanel
+from soothe.cli.tui_shared import render_plan_tree
 from soothe.config import SootheConfig
 
-if TYPE_CHECKING:
-    from textual.events import Key
-
 logger = logging.getLogger(__name__)
-
-_STREAM_CHUNK_LEN = 3
-_MSG_PAIR_LEN = 2
-
-
-# ---------------------------------------------------------------------------
-# Textual widgets
-# ---------------------------------------------------------------------------
-
-
-class ConversationPanel(RichLog):
-    """Scrollable chat history with markdown rendering."""
-
-
-class PlanPanel(RichLog):
-    """Plan tree display."""
-
-
-class ActivityPanel(RichLog):
-    """Scrollable activity log with configurable max lines."""
-
-
-class InfoBar(Static):
-    """Compact status bar showing thread, events, subagent status."""
-
-
-class ChatInput(Input):
-    """Chat input with UP/DOWN arrow key history navigation."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the chat input with history navigation.
-
-        Args:
-            **kwargs: Additional keyword arguments passed to Input.
-        """
-        super().__init__(**kwargs)
-        self._history: list[str] = []
-        self._history_index: int = -1
-        self._saved_input: str = ""
-
-    def set_history(self, history: list[str]) -> None:
-        """Load input history (oldest first)."""
-        self._history = list(history)
-        self._history_index = -1
-
-    def add_to_history(self, text: str) -> None:
-        """Append a new entry to the input history."""
-        stripped = text.strip()
-        if stripped and (not self._history or self._history[-1] != stripped):
-            self._history.append(stripped)
-        self._history_index = -1
-
-    async def _on_key(self, event: Key) -> None:
-        if event.key == "up":
-            event.prevent_default()
-            if not self._history:
-                return
-            if self._history_index == -1:
-                self._saved_input = self.value
-                self._history_index = len(self._history) - 1
-            elif self._history_index > 0:
-                self._history_index -= 1
-            self.value = self._history[self._history_index]
-            self.cursor_position = len(self.value)
-        elif event.key == "down":
-            event.prevent_default()
-            if self._history_index == -1:
-                return
-            if self._history_index < len(self._history) - 1:
-                self._history_index += 1
-                self.value = self._history[self._history_index]
-            else:
-                self._history_index = -1
-                self.value = self._saved_input
-            self.cursor_position = len(self.value)
-
-
-# ---------------------------------------------------------------------------
-# SootheApp
-# ---------------------------------------------------------------------------
 
 
 class SootheApp(App):
@@ -266,231 +173,45 @@ class SootheApp(App):
                 self._connected = False
                 self._log_conversation("[dim]Daemon connection closed.[/dim]")
                 break
-            self._process_daemon_event(event)
-            await asyncio.sleep(0)
 
-    # -- event processing ---------------------------------------------------
+            activity_panel = self.query_one("#activity-panel", ActivityPanel)
+            activity_panel._last_activity_count = self._last_activity_count
 
-    def _process_daemon_event(self, msg: dict[str, Any]) -> None:
-        msg_type = msg.get("type", "")
-
-        if msg_type == "status":
-            state = msg.get("state", "unknown")
-            tid = msg.get("thread_id", self._state.thread_id)
-            previous_thread_id = self._state.thread_id
-            self._state.thread_id = tid
-
-            # Load thread history when thread_id is first received or changes
-            if tid and tid != previous_thread_id:
-                self._load_thread_history(tid)
-                # Refresh the conversation panel with loaded history
-                with contextlib.suppress(Exception):
-                    panel = self.query_one("#conversation", ConversationPanel)
-                    panel.clear()
-                    for entry in self._conversation_history:
-                        panel.write(entry)
-                    # Also refresh activity panel
-                    self._flush_new_activity()
-
-            self._update_status(state)
-            # Only render assistant output in conversation at turn end.
-            if state in {"idle", "stopped"} and self._state.full_response:
-                self._append_conversation()
-
-        elif msg_type == "command_response":
-            # Display command output in conversation panel
-            content = msg.get("content", "")
-            if content:
-                self._log_conversation(content)
-
-        elif msg_type == "event":
-            namespace = tuple(msg.get("namespace", []))
-            mode = msg.get("mode", "")
-            data = msg.get("data", {})
-            is_main = not namespace
-
-            if mode == "messages":
-                self._handle_messages_event(data, namespace=namespace)
-            elif mode == "custom" and isinstance(data, dict):
-                category = classify_custom_event(namespace, data)
-                if category == "protocol" and should_show(category, self._progress_verbosity):
-                    _handle_protocol_event(data, self._state, verbosity=self._progress_verbosity)
-                    self._flush_new_activity()
-                    etype = data.get("type", "")
-                    if "plan" in etype:
-                        self._refresh_plan()
-                elif category == "subagent_progress" and should_show(category, self._progress_verbosity):
-                    _handle_subagent_progress(
-                        namespace,
-                        data,
-                        self._state,
-                        verbosity=self._progress_verbosity,
-                    )
-                    self._flush_new_activity()
-                    self._update_status("Running")
-                elif category == "subagent_custom" and not is_main:
-                    _handle_subagent_custom(
-                        namespace,
-                        data,
-                        self._state,
-                        verbosity=self._progress_verbosity,
-                    )
-                    self._flush_new_activity()
-                    self._update_status("Running")
-                elif category == "error" and should_show("error", self._progress_verbosity):
-                    _handle_protocol_event(data, self._state, verbosity="normal")
-                    self._flush_new_activity()
-                elif should_show(category, self._progress_verbosity):
-                    _handle_generic_custom_activity(
-                        namespace,
-                        data,
-                        self._state,
-                        verbosity=self._progress_verbosity,
-                    )
-                    self._flush_new_activity()
-
-    def _handle_messages_event(self, data: Any, *, namespace: tuple[str, ...]) -> None:
-        if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
-            msg, metadata = data
-        elif isinstance(data, dict):
-            return
-        else:
-            return
-
-        if metadata and isinstance(metadata, dict) and metadata.get("lc_source") == "summarization":
-            return
-
-        is_main = not namespace
-        prefix = _resolve_namespace_label(namespace, self._state) if namespace else None
-
-        # Handle LangChain objects (in-process)
-        if isinstance(msg, AIMessage):
-            _update_name_map_from_ai_message(self._state, msg)
-            msg_id = msg.id or ""
-            if not isinstance(msg, AIMessageChunk):
-                if msg_id in self._state.seen_message_ids:
-                    return
-                self._state.seen_message_ids.add(msg_id)
-            elif msg_id:
-                self._state.seen_message_ids.add(msg_id)
-
-            if hasattr(msg, "content_blocks") and msg.content_blocks:
-                for block in msg.content_blocks:
-                    if not isinstance(block, dict):
-                        continue
-                    btype = block.get("type")
-                    if btype == "text":
-                        text = block.get("text", "")
-                        if text and should_show("assistant_text", self._progress_verbosity):
-                            if is_main:
-                                self._state.full_response.append(text)
-                            else:
-                                _handle_subagent_text_activity(
-                                    namespace,
-                                    text,
-                                    self._state,
-                                    verbosity=self._progress_verbosity,
-                                )
-                                self._flush_new_activity()
-                    elif btype in ("tool_call_chunk", "tool_call"):
-                        name = block.get("name", "")
-                        _handle_tool_call_activity(
-                            self._state,
-                            name,
-                            prefix=prefix,
-                            verbosity=self._progress_verbosity,
-                        )
-                        self._flush_new_activity()
-            elif (
-                is_main
-                and isinstance(msg.content, str)
-                and msg.content
-                and should_show("assistant_text", self._progress_verbosity)
-            ):
-                self._state.full_response.append(msg.content)
-
-        # Handle deserialized dict (after JSON transport)
-        elif isinstance(msg, dict):
-            msg_id = msg.get("id", "")
-            is_chunk = msg.get("type") == "AIMessageChunk"
-
-            if not is_chunk:
-                if msg_id and msg_id in self._state.seen_message_ids:
-                    return
-                if msg_id:
-                    self._state.seen_message_ids.add(msg_id)
-            elif msg_id:
-                self._state.seen_message_ids.add(msg_id)
-
-            tool_call_chunks = msg.get("tool_call_chunks", [])
-            has_tool_chunks = isinstance(tool_call_chunks, list) and len(tool_call_chunks) > 0
-
-            blocks = msg.get("content_blocks") or []
-            if not blocks:
-                content = msg.get("content", "")
-                if isinstance(content, list):
-                    blocks = content
-                elif (
-                    is_main
-                    and isinstance(content, str)
-                    and content
-                    and should_show("assistant_text", self._progress_verbosity)
-                ):
-                    self._state.full_response.append(content)
-
-            for block in blocks:
-                if not isinstance(block, dict):
-                    continue
-                btype = block.get("type")
-                if btype == "text":
-                    text = block.get("text", "")
-                    if text and should_show("assistant_text", self._progress_verbosity):
-                        if is_main:
-                            self._state.full_response.append(text)
-                        else:
-                            _handle_subagent_text_activity(
-                                namespace,
-                                text,
-                                self._state,
-                                verbosity=self._progress_verbosity,
-                            )
-                            self._flush_new_activity()
-                elif btype in ("tool_call_chunk", "tool_call"):
-                    name = block.get("name", "")
-                    _handle_tool_call_activity(
-                        self._state,
-                        name,
-                        prefix=prefix,
-                        verbosity=self._progress_verbosity,
-                    )
-                    self._flush_new_activity()
-
-            if has_tool_chunks:
-                for tc in tool_call_chunks:
-                    if isinstance(tc, dict):
-                        name = tc.get("name", "")
-                        _handle_tool_call_activity(
-                            self._state,
-                            name,
-                            prefix=prefix,
-                            verbosity=self._progress_verbosity,
-                        )
-                        self._flush_new_activity()
-
-        # Handle ToolMessage objects
-        if isinstance(msg, ToolMessage):
-            tool_name = getattr(msg, "name", "tool")
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            _handle_tool_result_activity(
+            process_daemon_event(
+                event,
                 self._state,
-                tool_name,
-                content,
-                prefix=prefix,
+                activity_panel,
                 verbosity=self._progress_verbosity,
+                on_status_update=self._update_status,
+                on_conversation_append=self._append_conversation,
+                on_plan_refresh=self._refresh_plan,
             )
-            self._flush_new_activity()
 
-    # -- UI helpers ---------------------------------------------------------
+            self._last_activity_count = getattr(activity_panel, "_last_activity_count", len(self._state.activity_lines))
+
+            # Handle thread ID changes
+            if event.get("type") == "status":
+                tid = event.get("thread_id", self._state.thread_id)
+                previous_thread_id = self._thread_id
+                if tid and tid != previous_thread_id:
+                    self._thread_id = tid
+                    self._load_thread_history(tid)
+                    # Refresh the conversation panel with loaded history
+                    with contextlib.suppress(Exception):
+                        panel = self.query_one("#conversation", ConversationPanel)
+                        panel.clear()
+                        for entry in self._conversation_history:
+                            panel.write(entry)
+                        # Also refresh activity panel
+                        self._flush_new_activity()
+
+            # Handle command_response
+            if event.get("type") == "command_response":
+                content = event.get("content", "")
+                if content:
+                    self._log_conversation(content)
+
+            await asyncio.sleep(0)
 
     def _load_thread_history(self, thread_id: str) -> None:
         """Load conversation and activity history for a thread.
@@ -532,8 +253,12 @@ class SootheApp(App):
                 data = record.get("data", {})
                 if isinstance(data, dict):
                     # Re-render the event using existing handlers
+                    from soothe.cli.progress_verbosity import classify_custom_event
+
                     category = classify_custom_event(tuple(namespace), data)
                     if should_show(category, self._progress_verbosity):
+                        from soothe.cli.tui.renderers import _handle_generic_custom_activity
+
                         _handle_generic_custom_activity(
                             tuple(namespace),
                             data,

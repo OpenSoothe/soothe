@@ -24,6 +24,8 @@ _SUBAGENT_PREFIXES = frozenset(
         "soothe.claude.",
         "soothe.skillify.",
         "soothe.weaver.",
+        "soothe.planner.",
+        "soothe.scout.",
     }
 )
 
@@ -44,6 +46,14 @@ _SUBAGENT_PROGRESS_EVENTS = frozenset(
         "soothe.research.search_done",
         "soothe.research.queries_generated",
         "soothe.research.complete",
+        # Planner tool events
+        "soothe.planner.tool_start",
+        "soothe.planner.tool_end",
+        "soothe.planner.tool_error",
+        # Scout tool events
+        "soothe.scout.tool_start",
+        "soothe.scout.tool_end",
+        "soothe.scout.tool_error",
     }
 )
 

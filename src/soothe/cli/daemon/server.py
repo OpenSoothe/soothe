@@ -1,15 +1,9 @@
-"""Soothe daemon -- background agent runner with Unix socket IPC (RFC-0003).
-
-The daemon wraps ``SootheRunner`` and accepts TUI / headless clients over a
-Unix domain socket at ``~/.soothe/soothe.sock``.  Events stream to all
-connected clients; only the latest client may send input.
-"""
+"""Soothe daemon server - background agent runner with Unix socket IPC."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import fcntl
 import json
 import logging
 import os
@@ -19,151 +13,32 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from soothe.cli.daemon.paths import pid_path, socket_path
+from soothe.cli.daemon.protocol import decode, encode
+from soothe.cli.daemon.singleton import (
+    acquire_pid_lock,
+    cleanup_pid,
+    cleanup_socket,
+    release_pid_lock,
+)
 from soothe.cli.thread_logger import ThreadLogger
-from soothe.cli.tui_shared import extract_text_from_ai_message
 from soothe.config import SOOTHE_HOME, SootheConfig
 
 logger = logging.getLogger(__name__)
 
-_SOCKET_FILENAME = "soothe.sock"
-_PID_FILENAME = "soothe.pid"
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
 _CLEANUP_TIMEOUT_S = 3.0
 _STOP_TIMEOUT_S = 8.0
 
 
-def _soothe_dir() -> Path:
-    return Path(SOOTHE_HOME).expanduser()
-
-
-def socket_path() -> Path:
-    """Return the canonical Unix socket path."""
-    return _soothe_dir() / _SOCKET_FILENAME
-
-
-def pid_path() -> Path:
-    """Return the canonical PID file path."""
-    return _soothe_dir() / _PID_FILENAME
-
-
-# ---------------------------------------------------------------------------
-# Protocol messages
-# ---------------------------------------------------------------------------
-
-
-def _serialize_for_json(obj: Any) -> Any:
-    """Serialize objects for JSON, handling LangChain messages specially."""
-    if obj is None or isinstance(obj, (str, int, float, bool)):
-        return obj
-
-    if isinstance(obj, (list, tuple)):
-        return [_serialize_for_json(item) for item in obj]
-
-    if isinstance(obj, dict):
-        return {str(k): _serialize_for_json(v) for k, v in obj.items()}
-
-    if hasattr(obj, "model_dump"):
-        with contextlib.suppress(Exception):
-            dumped = obj.model_dump()
-            return _serialize_for_json(dumped)
-
-    if hasattr(obj, "dict"):
-        with contextlib.suppress(Exception):
-            return _serialize_for_json(obj.dict())
-
-    if hasattr(obj, "__dict__"):
-        with contextlib.suppress(Exception):
-            return _serialize_for_json(obj.__dict__)
-
-    return str(obj)
-
-
-def _encode(msg: dict[str, Any]) -> bytes:
-    serialized = _serialize_for_json(msg)
-    return (json.dumps(serialized) + "\n").encode()
-
-
-def _decode(line: bytes) -> dict[str, Any] | None:
-    text = line.decode().strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.debug("Invalid daemon protocol line: %s", text[:120])
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Client connection
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class _ClientConn:
+    """Internal client connection state."""
+
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
     can_input: bool = True
-
-
-# ---------------------------------------------------------------------------
-# PID / singleton helpers
-# ---------------------------------------------------------------------------
-
-
-def _write_pid() -> None:
-    pf = pid_path()
-    pf.parent.mkdir(parents=True, exist_ok=True)
-    pf.write_text(str(os.getpid()))
-
-
-def _cleanup_pid() -> None:
-    pf = pid_path()
-    if pf.exists():
-        with contextlib.suppress(OSError):
-            pf.unlink()
-
-
-def _cleanup_socket() -> None:
-    sock = socket_path()
-    if sock.exists():
-        with contextlib.suppress(OSError):
-            sock.unlink()
-
-
-def _acquire_pid_lock() -> int | None:
-    """Try to acquire an exclusive lock on the PID file.
-
-    Returns:
-        File descriptor on success, None if another daemon holds the lock.
-    """
-    pf = pid_path()
-    pf.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        fd = os.open(str(pf), os.O_CREAT | os.O_RDWR, 0o644)
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        pid_bytes = str(os.getpid()).encode()
-        os.write(fd, pid_bytes)
-        os.ftruncate(fd, len(pid_bytes))
-        os.fsync(fd)
-    except OSError:
-        return None
-    else:
-        return fd
-
-
-def _release_pid_lock(fd: int) -> None:
-    """Release the PID file lock and clean up."""
-    with contextlib.suppress(OSError):
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
-    _cleanup_pid()
-
-
-# ---------------------------------------------------------------------------
-# SootheDaemon
-# ---------------------------------------------------------------------------
 
 
 class SootheDaemon:
@@ -199,7 +74,7 @@ class SootheDaemon:
         from soothe.core.runner import SootheRunner
 
         # Acquire singleton lock *before* heavy init
-        self._pid_lock_fd = _acquire_pid_lock()
+        self._pid_lock_fd = acquire_pid_lock()
         if self._pid_lock_fd is None:
             raise RuntimeError("Another Soothe daemon is already running (PID lock held)")
 
@@ -210,7 +85,7 @@ class SootheDaemon:
         if sock.exists() and not self._is_socket_live(sock):
             sock.unlink()
         elif sock.exists():
-            _release_pid_lock(self._pid_lock_fd)
+            release_pid_lock(self._pid_lock_fd)
             self._pid_lock_fd = None
             raise RuntimeError("Another daemon still owns the socket")
 
@@ -257,8 +132,6 @@ class SootheDaemon:
 
     async def _detect_incomplete_threads(self) -> None:
         """Detect threads left in_progress from a previous daemon run (RFC-0010)."""
-        import json
-
         runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"  # noqa: ASYNC240
         if not runs_dir.exists():
             return
@@ -362,11 +235,11 @@ class SootheDaemon:
 
         # Release singleton lock and clean up files
         if self._pid_lock_fd is not None:
-            _release_pid_lock(self._pid_lock_fd)
+            release_pid_lock(self._pid_lock_fd)
             self._pid_lock_fd = None
         else:
-            _cleanup_pid()
-        _cleanup_socket()
+            cleanup_pid()
+        cleanup_socket()
         logger.info("Soothe daemon stopped")
 
     # -- client handling ----------------------------------------------------
@@ -383,7 +256,7 @@ class SootheDaemon:
         try:
             initial_state = "running" if self._query_running else ("idle" if self._running else "stopped")
             client.writer.write(
-                _encode(
+                encode(
                     {
                         "type": "status",
                         "state": initial_state,
@@ -400,7 +273,7 @@ class SootheDaemon:
                 line = await reader.readline()
                 if not line:
                     break
-                msg = _decode(line)
+                msg = decode(line)
                 if msg is None:
                     continue
                 await self._handle_client_message(client, msg)
@@ -504,7 +377,7 @@ class SootheDaemon:
 
         from rich.console import Console
 
-        from soothe.cli.commands import handle_slash_command
+        from soothe.cli.slash_commands import handle_slash_command
 
         output = StringIO()
         console = Console(file=output, force_terminal=False, width=100)
@@ -574,6 +447,8 @@ class SootheDaemon:
                 is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                 if not namespace and mode == "messages" and is_msg_pair:
                     msg, _metadata = data
+                    from soothe.cli.tui_shared import extract_text_from_ai_message
+
                     full_response.extend(extract_text_from_ai_message(msg))
 
                 event_msg = {
@@ -609,7 +484,7 @@ class SootheDaemon:
     # -- broadcast ----------------------------------------------------------
 
     async def _broadcast(self, msg: dict[str, Any]) -> None:
-        data = _encode(msg)
+        data = encode(msg)
         dead: list[_ClientConn] = []
         for client in self._clients:
             try:
@@ -622,7 +497,7 @@ class SootheDaemon:
 
     async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
         with contextlib.suppress(Exception):
-            client.writer.write(_encode(msg))
+            client.writer.write(encode(msg))
             await client.writer.drain()
 
     # -- static helpers -----------------------------------------------------
@@ -637,7 +512,7 @@ class SootheDaemon:
             pid = int(pf.read_text().strip())
             os.kill(pid, 0)
         except (ValueError, ProcessLookupError, PermissionError):
-            _cleanup_pid()
+            cleanup_pid()
             return False
         return True
 
@@ -663,8 +538,8 @@ class SootheDaemon:
             pid = int(pf.read_text().strip())
             os.kill(pid, signal.SIGTERM)
         except (ValueError, ProcessLookupError, PermissionError):
-            _cleanup_pid()
-            _cleanup_socket()
+            cleanup_pid()
+            cleanup_socket()
             return False
 
         start_time = time.time()
@@ -673,8 +548,8 @@ class SootheDaemon:
                 os.kill(pid, 0)
                 time.sleep(0.2)
             except ProcessLookupError:
-                _cleanup_pid()
-                _cleanup_socket()
+                cleanup_pid()
+                cleanup_socket()
                 return True
             except PermissionError:
                 time.sleep(0.2)
@@ -692,136 +567,6 @@ class SootheDaemon:
             except ProcessLookupError:
                 break
 
-        _cleanup_pid()
-        _cleanup_socket()
+        cleanup_pid()
+        cleanup_socket()
         return True
-
-
-# ---------------------------------------------------------------------------
-# DaemonClient -- used by TUI / headless to connect
-# ---------------------------------------------------------------------------
-
-
-class DaemonClient:
-    """Async client for connecting to a running SootheDaemon.
-
-    Args:
-        sock: Path to the Unix socket.
-    """
-
-    def __init__(self, sock: Path | None = None) -> None:
-        """Initialize the daemon client.
-
-        Args:
-            sock: Path to the Unix socket.
-        """
-        self._sock = sock or socket_path()
-        self._reader: asyncio.StreamReader | None = None
-        self._writer: asyncio.StreamWriter | None = None
-
-    async def connect(self) -> None:
-        """Open a connection to the daemon."""
-        # Set limit to 10MB to handle large events (e.g., search results)
-        self._reader, self._writer = await asyncio.open_unix_connection(str(self._sock), limit=10 * 1024 * 1024)
-
-    async def close(self) -> None:
-        """Close the connection."""
-        if self._writer:
-            self._writer.close()
-            with contextlib.suppress(Exception):
-                await self._writer.wait_closed()
-            self._writer = None
-            self._reader = None
-
-    async def send_input(
-        self,
-        text: str,
-        *,
-        autonomous: bool = False,
-        max_iterations: int | None = None,
-    ) -> None:
-        """Send user input to the daemon."""
-        payload: dict[str, Any] = {"type": "input", "text": text}
-        if autonomous:
-            payload["autonomous"] = True
-            if max_iterations is not None:
-                payload["max_iterations"] = max_iterations
-        await self._send(payload)
-
-    async def send_command(self, cmd: str) -> None:
-        """Send a slash command to the daemon."""
-        await self._send({"type": "command", "cmd": cmd})
-
-    async def send_detach(self) -> None:
-        """Notify the daemon that this client is detaching."""
-        await self._send({"type": "detach"})
-
-    async def send_resume_thread(self, thread_id: str) -> None:
-        """Request the daemon to resume a specific thread.
-
-        Args:
-            thread_id: The thread ID to resume.
-        """
-        await self._send({"type": "resume_thread", "thread_id": thread_id})
-
-    async def read_event(self) -> dict[str, Any] | None:
-        """Read the next event from the daemon.
-
-        Returns:
-            Parsed event dict, or ``None`` on EOF.
-        """
-        if not self._reader:
-            return None
-        try:
-            line = await self._reader.readline()
-            if not line:
-                return None
-            return _decode(line)
-        except (asyncio.CancelledError, ConnectionError):
-            return None
-
-    async def _send(self, msg: dict[str, Any]) -> None:
-        if not self._writer:
-            return
-        self._writer.write(_encode(msg))
-        await self._writer.drain()
-
-
-# ---------------------------------------------------------------------------
-# Entry point for ``soothe server start``
-# ---------------------------------------------------------------------------
-
-
-def run_daemon(config: SootheConfig | None = None) -> None:
-    """Start the daemon in the current process (blocking)."""
-    daemon = SootheDaemon(config)
-
-    async def _main() -> None:
-        await daemon.start()
-        await daemon.serve_forever()
-
-    with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_main())
-
-
-if __name__ == "__main__":
-    import argparse
-
-    from soothe.cli.main import setup_logging
-
-    parser = argparse.ArgumentParser(description="Soothe daemon")
-    parser.add_argument("--config", type=str, default=None, help="Config file path")
-    args = parser.parse_args()
-
-    cfg: SootheConfig | None = None
-    if args.config:
-        cfg = SootheConfig.from_yaml_file(args.config)
-    else:
-        from pathlib import Path
-
-        default_config = Path(SOOTHE_HOME) / "config" / "config.yml"
-        if default_config.exists():
-            cfg = SootheConfig.from_yaml_file(str(default_config))
-
-    setup_logging(cfg)
-    run_daemon(cfg)

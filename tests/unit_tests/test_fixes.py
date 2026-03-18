@@ -8,13 +8,13 @@ from typing import Any
 
 import pytest
 
-from soothe.cli.commands import (
+from soothe.cli.daemon import DaemonClient, SootheDaemon
+from soothe.cli.slash_commands import (
     _handle_thread_command,
     _show_context,
     _show_memory,
     handle_slash_command,
 )
-from soothe.cli.daemon import DaemonClient, SootheDaemon
 
 # ---------------------------------------------------------------------------
 # Fix 1: TUI Slash Commands Not Working (async issue)
@@ -130,7 +130,7 @@ async def test_thread_list_breaks_on_empty_response() -> None:
     """Test that thread list doesn't hang on empty command response."""
     import asyncio
 
-    from soothe.cli.main import _thread_list_via_daemon
+    from soothe.cli.commands.thread_cmd import _thread_list_via_daemon
 
     # Track if we complete in reasonable time
     completed = False
@@ -249,7 +249,7 @@ async def test_tui_sends_thread_id_on_connection() -> None:
     import ast
     import textwrap
 
-    from soothe.cli.tui_app import SootheApp
+    from soothe.cli.tui import SootheApp
 
     source = inspect.getsource(SootheApp._connect_and_listen)
     # Dedent the source since inspect.getsource returns indented method

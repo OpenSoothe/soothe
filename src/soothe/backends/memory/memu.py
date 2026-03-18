@@ -110,7 +110,7 @@ class MemUMemory(MemoryProtocol):
             Matching items ordered by relevance.
         """
         result = await self._service.retrieve(
-            queries=[{"query": query}],
+            queries=[{"role": "user", "content": query}],
             where=None,  # No user filtering
         )
 

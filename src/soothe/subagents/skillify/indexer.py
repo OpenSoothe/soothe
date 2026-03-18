@@ -225,10 +225,35 @@ class SkillIndexer:
         """Generate embeddings and upsert records into the vector store."""
         texts = [self._embedding_text(r) for r in records]
 
+        # Validate and sanitize texts - ensure all are non-empty strings
+        sanitized_texts = []
+        for i, text in enumerate(texts):
+            sanitized_text = text
+            if not isinstance(sanitized_text, str):
+                logger.warning("Text %d is not a string (type=%s), converting", i, type(sanitized_text).__name__)
+                sanitized_text = str(sanitized_text) if sanitized_text is not None else "Untitled skill"
+            if not sanitized_text or not sanitized_text.strip():
+                logger.warning("Text %d is empty, using placeholder", i)
+                sanitized_text = "Untitled skill"
+            sanitized_texts.append(sanitized_text)
+
+        if not sanitized_texts:
+            logger.error("No valid texts for embedding")
+            return
+
+        # Log sample of what we're sending for debugging
+        if logger.isEnabledFor(logging.DEBUG):
+            for i, text in enumerate(sanitized_texts[:3]):  # Log first 3 for debugging
+                logger.debug("Embedding text %d (length=%d): %.100s...", i, len(text), text)
+
         try:
-            vectors = await self._embeddings.aembed_documents(texts)
+            vectors = await self._embeddings.aembed_documents(sanitized_texts)
         except Exception:
-            logger.exception("Embedding generation failed for %d skills", len(records))
+            logger.exception(
+                "Embedding generation failed for %d skills. First text sample: %.200s",
+                len(records),
+                sanitized_texts[0] if sanitized_texts else "N/A",
+            )
             return
 
         payloads: list[dict[str, Any]] = []
@@ -254,12 +279,34 @@ class SkillIndexer:
     @staticmethod
     def _embedding_text(record: SkillRecord) -> str:
         """Build the text to embed for a skill record."""
-        parts = [record.name]
+        parts = []
+
+        # Ensure name is a non-empty string
+        if record.name:
+            name_str = str(record.name).strip()
+            if name_str:
+                parts.append(name_str)
+
+        # Ensure description is a non-empty string
         if record.description:
-            parts.append(record.description)
-        if record.tags:
-            parts.append("Tags: " + ", ".join(record.tags))
-        return "\n".join(parts)
+            desc_str = str(record.description).strip()
+            if desc_str:
+                parts.append(desc_str)
+
+        # Ensure tags are non-empty strings
+        if record.tags and isinstance(record.tags, (list, tuple)):
+            tag_strs = []
+            for tag in record.tags:
+                if tag is not None:
+                    tag_str = str(tag).strip()
+                    if tag_str:
+                        tag_strs.append(tag_str)
+            if tag_strs:
+                parts.append("Tags: " + ", ".join(tag_strs))
+
+        # Return joined parts or a default string if all fields were empty/invalid
+        result = "\n".join(parts)
+        return result if result.strip() else "Untitled skill"
 
     async def _ensure_collection(self) -> None:
         """Create the vector store collection if it does not exist."""

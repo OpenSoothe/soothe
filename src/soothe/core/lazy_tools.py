@@ -46,6 +46,10 @@ class LazyToolProxy:
                 tools = self._loader()
                 if tools and len(tools) > self._index:
                     self._tool = tools[self._index]
+                    # Wrap tool with progress logging
+                    from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+                    self._tool = wrap_main_agent_tool_with_logging(self._tool, logger)
                 else:
                     logger.warning(
                         "Tool group '%s' returned %d tools, index %d out of range",

@@ -171,19 +171,37 @@ skills: []
 memory: []
 
 # =============================================================================
-# Persistence Configuration
+# Security Configuration
 # =============================================================================
-# Unified persistence settings for protocol backends (not vector stores).
-# PostgreSQL is recommended for production deployments.
+# Configure filesystem access control and security policies.
 
-persistence:
-  # PostgreSQL DSN for Soothe metadata backends
-  # (checkpointer, durability, keyword context/memory backends)
-  soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+security:
+  # Allow access to paths outside the workspace directory
+  allow_paths_outside_workspace: true
+  # Require user approval for paths outside workspace (when above is true)
+  require_approval_for_outside_paths: false
 
-  # Default backend for new protocols (can be overridden per-protocol below)
-  # Options: json (simple files), rocksdb (embedded KV), postgresql (production)
-  default_backend: postgresql
+  # Path-based access control (glob patterns)
+  # Evaluation order: 1) denied_paths (highest priority), 2) allowed_paths, 3) workspace boundary
+  denied_paths:
+    - "~/.ssh/**"           # SSH keys
+    - "~/.gnupg/**"         # GPG keys
+    - "~/.aws/**"           # AWS credentials
+    - "**/.env"             # Environment files
+    - "**/credentials.json" # Credentials files
+    - "**/secrets.json"     # Secrets files
+  allowed_paths:
+    - "**"                  # Allow all paths (can be restricted for tighter security)
+
+  # File type restrictions
+  denied_file_types: []     # File extensions that are completely denied
+  require_approval_for_file_types:  # File extensions requiring user approval
+    - ".env"
+    - ".pem"
+    - ".key"
+    - ".p12"
+    - ".pfx"
+    - ".crt"
 
 # =============================================================================
 # Protocol Backends
@@ -202,19 +220,67 @@ protocols:
 
   # Context Protocol: Accumulates and projects knowledge within a thread
   context:
+    enabled: true
     backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/context/
 
   # Memory Protocol: Cross-thread long-term memory
   memory:
+    enabled: true
     backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/memory/
+    # Use Soothe's model router roles (configured in router section above)
+    llm_chat_role: fast  # Use fast model for memory operations
+    llm_embed_role: embedding  # Use embedding model for vector operations
 
   # Durability Protocol: Thread lifecycle and state persistence
   durability:
     backend: postgresql  # json | rocksdb | postgresql
     persist_dir: ""  # Empty = SOOTHE_HOME/durability/
     checkpointer: postgresql  # LangGraph checkpoint backend
+
+# =============================================================================
+# Persistence Configuration
+# =============================================================================
+# Unified persistence settings for protocol backends (not vector stores).
+# PostgreSQL is recommended for production deployments.
+
+persistence:
+  # Default backend for new protocols (can be overridden per-protocol below)
+  # Options: json (simple files), rocksdb (embedded KV), postgresql (production)
+  default_backend: postgresql
+
+  # PostgreSQL DSN for Soothe metadata backends
+  # (checkpointer, durability, keyword context/memory backends)
+  soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+
+# =============================================================================
+# Vector Store Providers
+# =============================================================================
+# Define named vector store backends for VectorContext, Skillify, and Weaver.
+# Similar to LLM providers, each vector store has a type and configuration.
+# Use vector_store_router to assign components to providers.
+
+vector_stores:
+  - name: pgvector_default
+    provider_type: pgvector
+    dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"  # Required for pgvector
+    pool_size: 5
+    index_type: hnsw
+
+vector_store_router:
+  # Map component roles to "provider_name:collection_name"
+  # Roles: context (VectorContext), skillify (SkillIndexer), weaver_reuse (ReuseIndex)
+  #
+  # Format: "provider_name:collection_name"
+  # - provider_name must match a name from vector_stores list above
+  # - collection_name is specific to each component
+  #
+  # All roles use pgvector with the configured DSN by default
+  default: pgvector_default:soothe_default
+  context: pgvector_default:soothe_context
+  skillify: pgvector_default:soothe_skillify
+  weaver_reuse: pgvector_default:soothe_weaver_reuse
 
 # =============================================================================
 # Autonomous Operation
@@ -229,36 +295,6 @@ autonomous:
   max_total_goals: 50        # Maximum goals allowed (RFC-0011)
   max_goal_depth: 5          # Maximum hierarchy depth (RFC-0011)
   enable_dynamic_goals: true # Enable/disable dynamic goal creation (RFC-0011)
-
-# =============================================================================
-# Logging & Observability
-# =============================================================================
-# Configure logging, thread history, and debugging features.
-
-logging:
-  # Backend file logging (Python logging module)
-  file:
-    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
-    path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
-    max_bytes: 10485760      # 10 MB before rotation
-    backup_count: 3          # Number of rotating backups
-
-  # Console logging (disabled by default for TUI compatibility)
-  console:
-    enabled: false           # Enable to see backend logs in terminal
-    level: WARNING           # Console logging level (typically higher than file)
-    stream: stderr           # stdout or stderr
-    format: "%(levelname)-8s %(name)s %(message)s"
-
-  # Progress event visibility (TUI/headless activity display)
-  progress_verbosity: normal  # minimal | normal | detailed | debug
-
-  # Thread conversation logging for audit and recovery
-  thread_logging:
-    enabled: true
-    dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
-    retention_days: 30       # Auto-delete threads older than N days
-    max_size_mb: 100         # Max total size (not enforced yet)
 
 # =============================================================================
 # Execution Limits
@@ -278,21 +314,31 @@ execution:
     auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
 
 # =============================================================================
-# Vector Store Providers
+# Logging & Observability
 # =============================================================================
-# Define named vector store backends. Similar to LLM providers.
-# Set vector_store_router to assign components to providers.
+# Configure logging, thread history, and debugging features.
 
-vector_stores:
-  - name: in_memory_default
-    provider_type: in_memory
+logging:
+  # Backend file logging (Python logging module)
+  file:
+    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
+    max_bytes: 10485760      # 10 MB before rotation
+    backup_count: 3          # Number of rotating backups
 
-vector_store_router:
-  # Map component roles to "provider_name:collection_name"
-  # Roles: context, skillify, weaver_reuse
-  #
-  # Examples:
-  # context: pgvector_prod:soothe_context
-  # skillify: weaviate_cloud:soothe_skillify
-  # weaver_reuse: in_memory_default:soothe_weaver_reuse
-  default: in_memory_default:soothe_default
+  # Console logging (disabled by default for TUI compatibility)
+  console:
+    enabled: false           # Enable to see backend logs in terminal
+    level: WARNING           # Console logging level (typically higher than file)
+    stream: stderr           # stdout or stderr
+    format: "%(levelname)-8s %(name)s %(message)s"
+
+  # Progress event visibility (TUI/headless activity display)
+  progress_verbosity: detailed  # minimal | normal | detailed | debug
+
+  # Thread conversation logging for audit and recovery
+  thread_logging:
+    enabled: true
+    dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
+    retention_days: 30       # Auto-delete threads older than N days
+    max_size_mb: 100         # Max total size (not enforced yet)

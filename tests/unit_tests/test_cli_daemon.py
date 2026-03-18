@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from soothe.cli.daemon import DaemonClient, SootheDaemon, _ClientConn
+from soothe.cli.daemon import DaemonClient, SootheDaemon
+from soothe.cli.daemon.server import _ClientConn
 from soothe.config import SootheConfig
 
 

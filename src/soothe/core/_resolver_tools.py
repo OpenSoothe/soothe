@@ -19,6 +19,7 @@ from soothe.subagents.scout import create_scout_subagent
 from soothe.subagents.skillify import create_skillify_subagent
 from soothe.subagents.weaver import create_weaver_subagent
 from soothe.utils import expand_path
+from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -79,7 +80,9 @@ def resolve_tools(tool_names: list[str], *, lazy: bool = False, config: SootheCo
                 logger.debug("Created lazy proxy for tool '%s' in %.1fms", name, elapsed_ms)
             else:
                 resolved = _resolve_single_tool_group(name, config)
-                tools.extend(resolved)
+                # Wrap tools with progress logging
+                wrapped = [wrap_main_agent_tool_with_logging(tool, logger) for tool in resolved]
+                tools.extend(wrapped)
         except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
 
@@ -178,7 +181,10 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         from soothe.tools.file_edit import create_file_edit_tools
 
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
-        return list(create_file_edit_tools(work_dir=resolved_cwd))
+        allow_outside = (
+            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
+        )
+        return list(create_file_edit_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
 
     if name == "document":
         from soothe.tools.document import create_document_tools

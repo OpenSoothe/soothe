@@ -1,6 +1,6 @@
 """Tests for autonomous slash command parsing."""
 
-from soothe.cli.commands import parse_autonomous_command
+from soothe.cli.slash_commands import parse_autonomous_command
 
 
 def test_parse_autonomous_command_without_limit() -> None:

@@ -75,6 +75,7 @@ class CreateFileTool(BaseTool):
     backup_enabled: bool = Field(default=True)
     backup_dir: str = Field(default="")
     max_file_size: int = Field(default=10 * 1024 * 1024)  # 10MB
+    allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory.
@@ -86,14 +87,14 @@ class CreateFileTool(BaseTool):
             Resolved absolute path.
 
         Raises:
-            ValueError: If path is outside work directory.
+            ValueError: If path is outside work directory and not allowed.
         """
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
         path = Path(normalized_input)
 
-        # If absolute path, validate it's within work_dir
+        # If absolute path, validate it's within work_dir (unless allowed outside)
         if path.is_absolute():
-            if self.work_dir:
+            if self.work_dir and not self.allow_outside_workdir:
                 work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
@@ -210,6 +211,7 @@ class ReadFileTool(BaseTool):
 
     work_dir: str = Field(default="")
     max_file_size: int = Field(default=10 * 1024 * 1024)  # 10MB
+    allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
@@ -217,7 +219,7 @@ class ReadFileTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir:
+            if self.work_dir and not self.allow_outside_workdir:
                 work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
@@ -300,6 +302,7 @@ class DeleteFileTool(BaseTool):
     work_dir: str = Field(default="")
     backup_enabled: bool = Field(default=True)
     backup_dir: str = Field(default="")
+    allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
@@ -307,7 +310,7 @@ class DeleteFileTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir:
+            if self.work_dir and not self.allow_outside_workdir:
                 work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
@@ -537,6 +540,7 @@ class GetFileInfoTool(BaseTool):
     )
 
     work_dir: str = Field(default="")
+    allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
@@ -544,7 +548,7 @@ class GetFileInfoTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir:
+            if self.work_dir and not self.allow_outside_workdir:
                 work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
@@ -598,18 +602,26 @@ class GetFileInfoTool(BaseTool):
         return self._run(file_path)
 
 
-def create_file_edit_tools(*, work_dir: str = "") -> list[BaseTool]:
+def create_file_edit_tools(
+    *,
+    work_dir: str = "",
+    allow_outside_workdir: bool = False,
+) -> list[BaseTool]:
     """Create file operation tools.
+
+    Args:
+        work_dir: Working directory for relative paths.
+        allow_outside_workdir: Allow access to paths outside work directory.
 
     Returns:
         List of file tools: create_file, read_file, delete_file, list_files,
         search_in_files, get_file_info.
     """
     return [
-        CreateFileTool(work_dir=work_dir),
-        ReadFileTool(work_dir=work_dir),
-        DeleteFileTool(work_dir=work_dir),
+        CreateFileTool(work_dir=work_dir, allow_outside_workdir=allow_outside_workdir),
+        ReadFileTool(work_dir=work_dir, allow_outside_workdir=allow_outside_workdir),
+        DeleteFileTool(work_dir=work_dir, allow_outside_workdir=allow_outside_workdir),
         ListFilesTool(work_dir=work_dir),
         SearchInFilesTool(work_dir=work_dir),
-        GetFileInfoTool(work_dir=work_dir),
+        GetFileInfoTool(work_dir=work_dir, allow_outside_workdir=allow_outside_workdir),
     ]

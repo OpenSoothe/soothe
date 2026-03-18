@@ -655,6 +655,20 @@ class AutonomousMixin:
                     }
                 )
 
+        # Log updated DAG if any directives were applied
+        if any(
+            changes[cat]
+            for cat in [
+                "created",
+                "decomposed",
+                "priority_adjusted",
+                "dependencies_added",
+                "failed",
+                "completed",
+            ]
+        ):
+            logger.info(self._goal_engine._format_goal_dag())
+
         return changes
 
     async def _apply_goal_directive(

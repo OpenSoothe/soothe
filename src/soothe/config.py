@@ -448,10 +448,8 @@ class MemUConfig(BaseModel):
         enabled: Whether MemU memory backend is enabled.
         database_provider: Database provider (inmemory, sqlite, postgres).
         database_dsn: Database DSN. Defaults to Soothe's PostgreSQL persistence DSN.
-        llm_profile_default: Default LLM profile for MemU operations.
-        llm_profile_embedding: Embedding LLM profile for vector operations.
-        llm_chat_model: Chat model name for extraction/categorization.
-        llm_embed_model: Embedding model name for vector search.
+        llm_chat_role: Router role for chat model (extraction/categorization).
+        llm_embed_role: Router role for embedding model (vector search).
         enable_auto_categorization: Enable automatic categorization using LLM.
         enable_category_summaries: Enable category summary generation.
         memory_categories: Predefined memory categories.
@@ -461,11 +459,9 @@ class MemUConfig(BaseModel):
     database_provider: Literal["inmemory", "sqlite", "postgres"] = "postgres"
     database_dsn: str | None = None  # Defaults to Soothe's PostgreSQL persistence DSN
 
-    # LLM configuration (integrates with Soothe's providers)
-    llm_profile_default: str = "default"
-    llm_profile_embedding: str = "embedding"
-    llm_chat_model: str = "gpt-4o-mini"  # Extracted from Soothe's providers
-    llm_embed_model: str = "text-embedding-3-small"  # Extracted from Soothe's providers
+    # LLM configuration using Soothe's model router
+    llm_chat_role: str = "fast"  # Router role for chat operations (default, think, fast, image)
+    llm_embed_role: str = "embedding"  # Router role for embedding operations
 
     # MemU features
     enable_auto_categorization: bool = True
@@ -1109,6 +1105,17 @@ class SootheConfig(BaseSettings):
 
         provider_type, kwargs = self._provider_kwargs(provider_name)
         kwargs.pop("use_responses_api", None)
+
+        # Use DashScope wrapper for dashscope providers
+        if provider_name == "dashscope":
+            from soothe.utils.embeddings_dashscope import DashScopeEmbeddings
+
+            # Pass dimension from config
+            embeddings = DashScopeEmbeddings(model=model_name, dimension=self.embedding_dims, **kwargs)
+            self._embedding_cache[cache_key] = embeddings
+            logger.debug("Created and cached DashScope embedding model for '%s'", model_str)
+            return embeddings
+
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
 
         # Create and cache the embedding model

@@ -95,8 +95,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Modified request with optimized system prompt.
         """
-        # Check if optimization is enabled
-        if not self._config.performance.enabled or not self._config.performance.optimize_system_prompts:
+        # Check if optimization is enabled (requires both system prompt optimization and unified classification)
+        if (
+            not self._config.performance.enabled
+            or not self._config.performance.optimize_system_prompts
+            or not self._config.performance.unified_classification
+        ):
             return request
 
         # Get classification from state (determined by UnifiedClassifier's LLM)

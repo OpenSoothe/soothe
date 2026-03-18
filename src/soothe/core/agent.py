@@ -169,8 +169,12 @@ def create_soothe_agent(
             )
         )
 
-    # Add system prompt optimization middleware if enabled
-    if config.performance.enabled and config.performance.optimize_system_prompts:
+    # Add system prompt optimization middleware if enabled (requires both features)
+    if (
+        config.performance.enabled
+        and config.performance.optimize_system_prompts
+        and config.performance.unified_classification
+    ):
         default_middleware.append(SystemPromptOptimizationMiddleware(config=config))
         logger.info("System prompt optimization middleware enabled")
 

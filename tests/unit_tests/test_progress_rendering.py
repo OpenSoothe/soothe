@@ -6,19 +6,19 @@ from io import StringIO
 
 from rich.console import Console
 
-from soothe.cli.main import _render_progress_event
-from soothe.cli.tui_shared import (
-    TuiState,
+from soothe.cli.rendering.progress_renderer import render_progress_event
+from soothe.cli.tui.renderers import (
     _handle_protocol_event,
     _handle_subagent_text_activity,
     _set_plan_step_status_by_id,
-    render_plan_tree,
 )
+from soothe.cli.tui.state import TuiState
+from soothe.cli.tui_shared import render_plan_tree
 from soothe.protocols.planner import Plan, PlanStep
 
 
 def test_render_progress_event_policy_includes_profile(capsys) -> None:
-    _render_progress_event({"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"})
+    render_progress_event({"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"})
     captured = capsys.readouterr()
     assert "[policy] allow (profile=strict)" in captured.err
 

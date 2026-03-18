@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.cli import tui_app
+from soothe.cli.tui import app as tui_app
 from soothe.config import SootheConfig
 
 
