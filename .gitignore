@@ -212,3 +212,4 @@ thirdparty/
 .cursor/
 large_tool_results/
 plot_*
+.claude/

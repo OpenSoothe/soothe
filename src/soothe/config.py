@@ -353,9 +353,17 @@ class PlannerProtocolConfig(BaseModel):
 
     Args:
         routing: Routing strategy (auto, always_direct, always_planner, always_claude).
+        routing_mode: Classification mode for auto routing.
+            ``heuristic`` uses keyword/word-count only (zero latency).
+            ``llm`` always uses the fast model for classification.
+            ``hybrid`` (default) uses heuristic first with LLM fallback
+            for ambiguous/non-English goals.
+        planner_model: Model role used for planning (resolved via ModelRouter).
     """
 
     routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
+    routing_mode: Literal["heuristic", "llm", "hybrid"] = "hybrid"
+    planner_model: str = "think"
 
 
 class PolicyProtocolConfig(BaseModel):

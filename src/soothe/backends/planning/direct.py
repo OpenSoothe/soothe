@@ -7,9 +7,9 @@ import logging
 import re
 from typing import Any, ClassVar
 
+from soothe.backends.planning._shared import reflect_heuristic
 from soothe.protocols.planner import (
     GoalContext,
-    GoalDirective,
     Plan,
     PlanContext,
     PlanStep,
@@ -19,12 +19,18 @@ from soothe.protocols.planner import (
 
 logger = logging.getLogger(__name__)
 
+_INTENT_CLASSIFY_PROMPT = """\
+Classify this user request into exactly one category.
+Reply with a single word: question, search, analysis, or implementation.
+
+Request: {goal}
+"""
+
 
 class DirectPlanner:
     """PlannerProtocol implementation using a single LLM structured output call.
 
     For simple/routine tasks. Produces flat plans (typically 1-3 steps).
-    Reflection returns a trivial pass-through.
 
     With RFC-0008 optimizations: Uses template matching for common patterns
     to avoid LLM calls for simple queries.
@@ -33,6 +39,7 @@ class DirectPlanner:
         model: A langchain BaseChatModel instance (or any object supporting
             `with_structured_output` and `ainvoke`).
         use_templates: Enable template matching for common patterns (default: True).
+        fast_model: Optional fast LLM for intent classification of non-English goals.
     """
 
     _PLAN_TEMPLATES: ClassVar[dict[str, Plan]] = {
@@ -64,38 +71,41 @@ class DirectPlanner:
         ),
     }
 
-    def __init__(self, model: Any, *, use_templates: bool = True) -> None:
+    def __init__(
+        self,
+        model: Any,
+        *,
+        use_templates: bool = True,
+        fast_model: Any | None = None,
+    ) -> None:
         """Initialize the direct planner.
 
         Args:
             model: A langchain BaseChatModel instance supporting structured output.
             use_templates: Whether to use template matching (default: True).
+            fast_model: Optional fast LLM for non-English intent classification.
         """
         self._model = model
         self._use_templates = use_templates
+        self._fast_model = fast_model
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create a plan via single LLM call with structured output."""
-        # Try template matching first (RFC-0008 Phase 2)
         if self._use_templates:
-            template_plan = self._match_template(goal)
+            template_plan = await self._match_template(goal)
             if template_plan:
                 logger.info("DirectPlanner: using template plan for: %s", goal[:50])
                 return template_plan
 
-        # Fall back to LLM
         prompt = self._build_plan_prompt(goal, context)
 
-        # Try structured output first
         try:
             structured_model = self._model.with_structured_output(Plan)
             plan: Plan = await structured_model.ainvoke(prompt)
-            # Post-process to fix execution_hint values if needed
             return self._normalize_execution_hints(plan)
         except Exception as e:
             logger.warning("Structured plan creation failed, trying manual parse: %s", e)
 
-            # Try manual parsing as fallback
             try:
                 response = await self._model.ainvoke(prompt)
                 content = response.content if hasattr(response, "content") else str(response)
@@ -105,7 +115,6 @@ class DirectPlanner:
             except Exception as manual_error:
                 logger.warning("Manual parse also failed: %s", manual_error)
 
-            # Ultimate fallback
             return Plan(
                 goal=goal,
                 steps=[PlanStep(id="step_1", description=goal)],
@@ -125,12 +134,10 @@ class DirectPlanner:
             structured_model = self._model.with_structured_output(Plan)
             revised: Plan = await structured_model.ainvoke(prompt)
             revised.status = "revised"
-            # Post-process to fix execution_hint values if needed
             return self._normalize_execution_hints(revised)
         except Exception as e:
             logger.warning("Plan revision failed, trying manual parse: %s", e)
 
-            # Try manual parsing as fallback
             try:
                 response = await self._model.ainvoke(prompt)
                 content = response.content if hasattr(response, "content") else str(response)
@@ -149,18 +156,14 @@ class DirectPlanner:
         Handles JSON wrapped in markdown code blocks.
         """
         try:
-            # Try to extract JSON from markdown code blocks
             json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
                 data = json.loads(json_str)
-                # Normalize hints in dict before creating Plan
                 data = self._normalize_hints_in_dict(data)
                 return Plan(**data)
 
-            # Try direct JSON parse
             data = json.loads(content)
-            # Normalize hints in dict before creating Plan
             data = self._normalize_hints_in_dict(data)
             return Plan(**data)
         except Exception as parse_error:
@@ -208,122 +211,64 @@ class DirectPlanner:
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
     ) -> Reflection:
-        """Enhanced reflection with goal awareness (RFC-0010, RFC-0011)."""
-        completed = sum(1 for r in step_results if r.success)
-        failed_list = [r for r in step_results if not r.success]
-        total = len(plan.steps)
-
-        if not failed_list:
-            return Reflection(
-                assessment=f"{completed}/{total} steps completed successfully",
-                should_revise=False,
-                feedback="",
-                goal_directives=[],
-            )
-
-        failed_ids = {r.step_id for r in failed_list}
-        blocked: list[str] = []
-        direct_failed: list[str] = []
-        for r in failed_list:
-            step = next((s for s in plan.steps if s.id == r.step_id), None)
-            if step and any(dep in failed_ids for dep in step.depends_on):
-                blocked.append(r.step_id)
-            else:
-                direct_failed.append(r.step_id)
-
-        failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
-
-        parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
-        if direct_failed:
-            parts.append(f"Directly failed: {direct_failed}")
-        if blocked:
-            parts.append(f"Blocked by dependencies: {blocked}")
-
-        logger.debug(
-            "Reflection: completed=%d failed=%d blocked=%d direct_failed=%d",
-            completed,
-            len(failed_list),
-            len(blocked),
-            len(direct_failed),
-        )
-
-        # NEW: Generate goal directives for critical failures (RFC-0011)
-        goal_directives: list[GoalDirective] = []
-        if goal_context and direct_failed:
-            # Heuristic: if step result mentions missing dependency, spawn prerequisite goal
-            for step_id in direct_failed[:1]:  # Only first failure
-                step = next((s for s in plan.steps if s.id == step_id), None)
-                if not step or not step.result:
-                    continue
-
-                result_lower = step.result.lower()
-                if "missing" in result_lower or "not found" in result_lower or "not installed" in result_lower:
-                    # Extract current goal priority
-                    current_priority = 50
-                    if goal_context.all_goals:
-                        for g in goal_context.all_goals:
-                            if g.get("id") == goal_context.current_goal_id:
-                                current_priority = g.get("priority", 50)
-                                break
-
-                    goal_directives.append(
-                        GoalDirective(
-                            action="create",
-                            description=f"Resolve prerequisite for: {step.description[:80]}",
-                            priority=min(current_priority + 10, 100),  # Higher priority
-                            parent_id=None,
-                            depends_on=[],
-                            rationale=f"Step {step_id} failed due to missing prerequisite",
-                        )
-                    )
-                    break  # Only one directive per reflection
-
-        return Reflection(
-            assessment=". ".join(parts),
-            should_revise=True,
-            feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
-            blocked_steps=blocked,
-            failed_details=failed_details,
-            goal_directives=goal_directives,
-        )
+        """Dependency-aware reflection using shared heuristic (RFC-0010, RFC-0011)."""
+        return reflect_heuristic(plan, step_results, goal_context)
 
     async def _invoke(self, prompt: str) -> str:
         """Run a free-form LLM call and return the text response."""
         response = await self._model.ainvoke(prompt)
         return response.content if hasattr(response, "content") else str(response)
 
-    def _match_template(self, goal: str) -> Plan | None:
+    async def _match_template(self, goal: str) -> Plan | None:
         """Match goal to predefined template.
 
-        Returns None if no match (will use LLM).
+        Tries English regex patterns first (zero cost). Falls back to
+        fast-model intent classification for non-English goals.
+
+        Returns None if no match (will use full LLM).
         """
         goal_lower = goal.lower()
 
-        # Question patterns
         if re.match(r"^(who|what|where|when|why|how)\s+", goal_lower):
-            plan = self._PLAN_TEMPLATES["question"].model_copy(deep=True)
-            plan.goal = goal
-            plan.steps[0].description = goal
-            return plan
+            return self._apply_template("question", goal)
 
-        # Search patterns
         if re.match(r"^(search|find|look up|google)\s+", goal_lower):
-            plan = self._PLAN_TEMPLATES["search"].model_copy(deep=True)
-            plan.goal = goal
-            return plan
+            return self._apply_template("search", goal)
 
-        # Analysis patterns
         if re.match(r"^(analyze|analyse|review|examine|investigate)\s+", goal_lower):
-            plan = self._PLAN_TEMPLATES["analysis"].model_copy(deep=True)
-            plan.goal = goal
-            return plan
+            return self._apply_template("analysis", goal)
 
-        # Implementation patterns
         if re.match(r"^(implement|create|build|write|develop)\s+", goal_lower):
-            plan = self._PLAN_TEMPLATES["implementation"].model_copy(deep=True)
-            plan.goal = goal
-            return plan
+            return self._apply_template("implementation", goal)
 
+        # Non-English / ambiguous: use fast model for intent classification
+        if self._fast_model:
+            intent = await self._classify_intent(goal)
+            if intent and intent in self._PLAN_TEMPLATES:
+                logger.info("DirectPlanner: fast-model classified intent as '%s'", intent)
+                return self._apply_template(intent, goal)
+
+        return None
+
+    def _apply_template(self, template_key: str, goal: str) -> Plan:
+        """Create a plan from a template, setting the goal text."""
+        plan = self._PLAN_TEMPLATES[template_key].model_copy(deep=True)
+        plan.goal = goal
+        if template_key == "question":
+            plan.steps[0].description = goal
+        return plan
+
+    async def _classify_intent(self, goal: str) -> str | None:
+        """Classify goal intent via fast LLM (language-agnostic)."""
+        try:
+            prompt = _INTENT_CLASSIFY_PROMPT.format(goal=goal[:300])
+            response = await self._fast_model.ainvoke(prompt)
+            text = response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
+            for category in ("question", "search", "analysis", "implementation"):
+                if category in text:
+                    return category
+        except Exception:
+            logger.debug("DirectPlanner intent classification failed", exc_info=True)
         return None
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
@@ -358,7 +303,6 @@ class DirectPlanner:
         Some LLMs may return invalid hints like 'scout', 'browser', etc.
         This method maps them to valid values.
         """
-        # Map common invalid values to valid ones
         hint_mapping = {
             "scout": "subagent",
             "browser": "subagent",
@@ -373,7 +317,6 @@ class DirectPlanner:
         for step in plan.steps:
             if step.execution_hint not in ("tool", "subagent", "remote", "auto"):
                 original = step.execution_hint
-                # Try to map to a valid value
                 normalized = hint_mapping.get(original, "auto")
                 logger.warning(
                     "Normalizing invalid execution_hint '%s' to '%s' for step %s",

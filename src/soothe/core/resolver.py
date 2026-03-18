@@ -200,24 +200,29 @@ def resolve_planner(
     Returns:
         A PlannerProtocol instance.
     """
+    planner_role = config.protocols.planner.planner_model or "think"
     planner_model = model
     if planner_model is None:
         try:
-            planner_model = config.create_chat_model("think")
+            planner_model = config.create_chat_model(planner_role)
         except Exception:
             try:
                 planner_model = config.create_chat_model("default")
             except Exception:
                 logger.warning("Failed to create model for planner")
 
+    fast_model = None
+    with contextlib.suppress(Exception):
+        fast_model = config.create_chat_model("fast")
+
     resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     from soothe.backends.planning.direct import DirectPlanner
 
-    direct = DirectPlanner(model=planner_model) if planner_model else None
+    direct = DirectPlanner(model=planner_model, fast_model=fast_model) if planner_model else None
 
     if config.protocols.planner.routing == "always_direct":
-        return direct or DirectPlanner(model=planner_model)
+        return direct or DirectPlanner(model=planner_model, fast_model=fast_model)
 
     subagent_planner = None
     try:
@@ -234,7 +239,7 @@ def resolve_planner(
     try:
         from soothe.backends.planning.claude import ClaudePlanner
 
-        claude_planner = ClaudePlanner(cwd=resolved_cwd)
+        claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model)
     except Exception:
         logger.info("Claude CLI not available for planning")
 
@@ -243,15 +248,12 @@ def resolve_planner(
 
     from soothe.backends.planning.router import AutoPlanner
 
-    fast_model = None
-    with contextlib.suppress(Exception):
-        fast_model = config.create_chat_model("fast")
-
     return AutoPlanner(
         claude=claude_planner,
         subagent=subagent_planner,
         direct=direct,
         fast_model=fast_model,
+        routing_mode=config.protocols.planner.routing_mode,
     )
 
 

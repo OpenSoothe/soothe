@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import (
+        GoalContext,
         Plan,
         PlanContext,
         Reflection,
@@ -15,7 +16,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Word count thresholds for complexity classification
 _COMPLEX_WORD_COUNT_THRESHOLD = 80
 _SIMPLE_WORD_COUNT_THRESHOLD = 15
 
@@ -81,8 +81,12 @@ Task: {goal}
 class AutoPlanner:
     """Hybrid complexity router that delegates to the best available planner.
 
-    Heuristic pass first; falls back to a fast LLM classifier for ambiguous
-    cases. Routes to:
+    Supports three routing modes:
+    - ``heuristic``: keyword + word-count only (zero latency)
+    - ``llm``: always use fast LLM for classification
+    - ``hybrid`` (default): heuristic first; LLM fallback for ambiguous cases
+
+    Routes to:
     - Claude (complex problems, explicit requests)
     - SubagentPlanner (medium complexity)
     - DirectPlanner (simple tasks)
@@ -92,6 +96,7 @@ class AutoPlanner:
         subagent: SubagentPlanner instance (or None if unavailable).
         direct: DirectPlanner instance (or None -- should always be present).
         fast_model: Fast LLM for ambiguity classification (optional).
+        routing_mode: Classification strategy.
     """
 
     def __init__(
@@ -101,6 +106,7 @@ class AutoPlanner:
         subagent: Any | None = None,
         direct: Any | None = None,
         fast_model: Any | None = None,
+        routing_mode: Literal["heuristic", "llm", "hybrid"] = "hybrid",
     ) -> None:
         """Initialize the auto planner with available planner backends.
 
@@ -109,11 +115,13 @@ class AutoPlanner:
             subagent: SubagentPlanner instance (or None if unavailable).
             direct: DirectPlanner instance (or None -- should always be present).
             fast_model: Fast LLM for ambiguity classification (optional).
+            routing_mode: Classification strategy.
         """
         self._claude = claude
         self._subagent = subagent
         self._direct = direct
         self._fast_model = fast_model
+        self._routing_mode = routing_mode
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Route to the best planner based on complexity, then create plan."""
@@ -125,10 +133,15 @@ class AutoPlanner:
         planner = self._best_available()
         return await planner.revise_plan(plan, reflection)
 
-    async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
+    async def reflect(
+        self,
+        plan: Plan,
+        step_results: list[StepResult],
+        goal_context: GoalContext | None = None,
+    ) -> Reflection:
         """Delegate reflection to the best available planner."""
         planner = self._best_available()
-        return await planner.reflect(plan, step_results)
+        return await planner.reflect(plan, step_results, goal_context)
 
     async def _invoke(self, prompt: str) -> str:
         """Delegate a free-form LLM call to the best available planner."""
@@ -136,29 +149,38 @@ class AutoPlanner:
         return await planner._invoke(prompt)
 
     async def _route(self, goal: str) -> Any:
-        """Determine which planner to use - heuristics only (RFC-0008).
+        """Determine which planner to use based on ``routing_mode``.
 
-        Note: LLM classification removed for performance (saves 500-1000ms).
-        Heuristics are sufficient for routing decisions.
+        - ``heuristic``: keyword / word-count only
+        - ``llm``: always use ``_llm_classify``
+        - ``hybrid``: heuristic first, LLM fallback for ambiguous
         """
         goal_lower = goal.lower()
 
-        # Explicit Claude request
         if any(kw in goal_lower for kw in _EXPLICIT_CLAUDE_KEYWORDS) and self._claude:
             logger.info("AutoPlanner: explicit Claude request")
             return self._claude
 
-        # Heuristic classification (no LLM call)
+        if self._routing_mode == "llm" and self._fast_model:
+            level = await self._llm_classify(goal)
+            return self._planner_for_level(level)
+
         level = self._heuristic_classify(goal)
 
+        if level is None and self._routing_mode == "hybrid" and self._fast_model:
+            level = await self._llm_classify(goal)
+            logger.info("AutoPlanner: LLM classified ambiguous goal as %s", level)
+
+        return self._planner_for_level(level)
+
+    def _planner_for_level(self, level: str | None) -> Any:
+        """Map a complexity level to the best available planner."""
         if level == "complex":
             return self._claude or self._subagent or self._direct
         if level == "medium":
             return self._subagent or self._direct
         if level == "simple":
             return self._direct or self._subagent
-
-        # Default to DirectPlanner for ambiguous cases (no LLM classification)
         return self._direct or self._subagent
 
     def _heuristic_classify(self, goal: str) -> str | None:
@@ -185,7 +207,10 @@ class AutoPlanner:
         return None
 
     async def _llm_classify(self, goal: str) -> str:
-        """Use a fast LLM call to classify ambiguous goals."""
+        """Use a fast LLM call to classify ambiguous goals.
+
+        Language-agnostic since the LLM understands multilingual input.
+        """
         try:
             prompt = _COMPLEXITY_PROMPT.format(goal=goal[:500])
             response = await self._fast_model.ainvoke(prompt)

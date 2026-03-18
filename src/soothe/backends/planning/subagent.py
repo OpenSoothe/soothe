@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from soothe.backends.planning._shared import (
+    parse_plan_from_text,
+    reflect_heuristic,
+    reflect_with_llm,
+)
 from soothe.protocols.planner import (
+    GoalContext,
     Plan,
     PlanContext,
     PlanStep,
@@ -17,35 +22,6 @@ from soothe.protocols.planner import (
 )
 
 logger = logging.getLogger(__name__)
-
-_MIN_STEP_DESCRIPTION_LENGTH = 5
-
-_PLAN_EXTRACTION_RE = re.compile(
-    r"\*\*Step\s+(\d+)[:\s]*(.+?)\*\*",
-    re.IGNORECASE,
-)
-
-
-def _parse_plan_from_text(goal: str, text: str) -> Plan:
-    """Best-effort extraction of Plan from planner subagent markdown output."""
-    steps: list[PlanStep] = []
-    matches = _PLAN_EXTRACTION_RE.findall(text)
-    for i, (_num, title) in enumerate(matches, 1):
-        steps.append(
-            PlanStep(
-                id=f"step_{i}",
-                description=title.strip(),
-            )
-        )
-    if not steps:
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        for i, line in enumerate(lines[:10], 1):
-            cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", line)
-            if cleaned and len(cleaned) > _MIN_STEP_DESCRIPTION_LENGTH:
-                steps.append(PlanStep(id=f"step_{i}", description=cleaned))
-    if not steps:
-        steps = [PlanStep(id="step_1", description=goal)]
-    return Plan(goal=goal, steps=steps)
 
 
 class SubagentPlanner:
@@ -89,7 +65,7 @@ class SubagentPlanner:
         prompt = self._build_prompt(goal, context)
         try:
             text = await self._invoke(prompt)
-            return _parse_plan_from_text(goal, text)
+            return parse_plan_from_text(goal, text)
         except Exception:
             logger.warning("SubagentPlanner create_plan failed, using fallback", exc_info=True)
             return Plan(goal=goal, steps=[PlanStep(id="step_1", description=goal)])
@@ -105,7 +81,7 @@ class SubagentPlanner:
         )
         try:
             text = await self._invoke(prompt)
-            revised = _parse_plan_from_text(plan.goal, text)
+            revised = parse_plan_from_text(plan.goal, text)
             revised.status = "revised"
         except Exception:
             logger.warning("SubagentPlanner revise_plan failed", exc_info=True)
@@ -113,51 +89,17 @@ class SubagentPlanner:
         else:
             return revised
 
-    async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
-        """Dependency-aware reflection (RFC-0010)."""
-        completed = sum(1 for r in step_results if r.success)
+    async def reflect(
+        self,
+        plan: Plan,
+        step_results: list[StepResult],
+        goal_context: GoalContext | None = None,
+    ) -> Reflection:
+        """Reflection with LLM-assisted analysis when failures exist (RFC-0010, RFC-0011)."""
         failed_list = [r for r in step_results if not r.success]
-        total = len(plan.steps)
-
-        if not failed_list:
-            return Reflection(
-                assessment=f"{completed}/{total} steps completed successfully",
-                should_revise=False,
-                feedback="",
-            )
-
-        failed_ids = {r.step_id for r in failed_list}
-        blocked: list[str] = []
-        direct_failed: list[str] = []
-        for r in failed_list:
-            step = next((s for s in plan.steps if s.id == r.step_id), None)
-            if step and any(dep in failed_ids for dep in step.depends_on):
-                blocked.append(r.step_id)
-            else:
-                direct_failed.append(r.step_id)
-
-        failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
-
-        parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
-        if direct_failed:
-            parts.append(f"Directly failed: {direct_failed}")
-        if blocked:
-            parts.append(f"Blocked by dependencies: {blocked}")
-
-        logger.debug(
-            "Reflection: completed=%d failed=%d blocked=%d direct_failed=%d",
-            completed,
-            len(failed_list),
-            len(blocked),
-            len(direct_failed),
-        )
-        return Reflection(
-            assessment=". ".join(parts),
-            should_revise=True,
-            feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
-            blocked_steps=blocked,
-            failed_details=failed_details,
-        )
+        if failed_list and self._model:
+            return await reflect_with_llm(self._model, plan, step_results, goal_context)
+        return reflect_heuristic(plan, step_results, goal_context)
 
     async def _invoke(self, prompt: str) -> str:
         """Run the compiled planner graph and extract the final AI response."""

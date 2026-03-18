@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from soothe.backends.planning._shared import (
+    parse_plan_from_text,
+    reflect_heuristic,
+    reflect_with_llm,
+)
 from soothe.protocols.planner import (
+    GoalContext,
     Plan,
     PlanContext,
     PlanStep,
@@ -18,8 +23,6 @@ from soothe.protocols.planner import (
 )
 
 logger = logging.getLogger(__name__)
-
-_MIN_STEP_DESCRIPTION_LENGTH = 5
 
 _PLANNING_SYSTEM_PROMPT = """\
 You are a senior technical architect and planning specialist.
@@ -41,14 +44,12 @@ End with a brief summary of total effort, key risks, and prerequisites.
 Do NOT implement anything -- only plan.
 """
 
-_PLAN_STEP_RE = re.compile(r"\*\*Step\s+(\d+)[:\s]*(.+?)\*\*", re.IGNORECASE)
-
 
 def _check_claude_available() -> None:
     """Validate that the Claude CLI and required env vars are present.
 
     Raises:
-        RuntimeError: If ``claude`` CLI is not found or ``ANTHROPIC_API_KEY``
+        RuntimeError: If ``claude`` CLI is not found or ``ANTHROPIC_*``
             is not set.
     """
     if not shutil.which("claude"):
@@ -60,23 +61,6 @@ def _check_claude_available() -> None:
         raise RuntimeError(msg)
 
 
-def _parse_plan_from_text(goal: str, text: str) -> Plan:
-    """Extract a Plan from Claude's markdown output."""
-    steps: list[PlanStep] = []
-    matches = _PLAN_STEP_RE.findall(text)
-    for i, (_num, title) in enumerate(matches, 1):
-        steps.append(PlanStep(id=f"step_{i}", description=title.strip()))
-    if not steps:
-        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-        for i, line in enumerate(lines[:10], 1):
-            cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", line)
-            if cleaned and len(cleaned) > _MIN_STEP_DESCRIPTION_LENGTH:
-                steps.append(PlanStep(id=f"step_{i}", description=cleaned))
-    if not steps:
-        steps = [PlanStep(id="step_1", description=goal)]
-    return Plan(goal=goal, steps=steps)
-
-
 class ClaudePlanner:
     """PlannerProtocol via compiled Claude subagent graph.
 
@@ -85,16 +69,24 @@ class ClaudePlanner:
 
     Args:
         cwd: Working directory for the Claude CLI.
+        reflection_model: Optional LLM for LLM-assisted reflection. Claude CLI
+            is used for planning but a standard chat model is more efficient
+            for reflection analysis.
 
     Raises:
         RuntimeError: If Claude CLI or ANTHROPIC_ env vars are missing.
     """
 
-    def __init__(self, cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        cwd: str | None = None,
+        reflection_model: object | None = None,
+    ) -> None:
         """Initialize the Claude planner.
 
         Args:
             cwd: Working directory for the Claude CLI.
+            reflection_model: Optional chat model for LLM-assisted reflection.
 
         Raises:
             RuntimeError: If Claude CLI or ANTHROPIC_ env vars are missing.
@@ -109,6 +101,7 @@ class ClaudePlanner:
             cwd=cwd,
         )
         self._runnable = spec["runnable"]
+        self._reflection_model = reflection_model
         self._call_count = 0
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
@@ -116,7 +109,7 @@ class ClaudePlanner:
         prompt = self._build_prompt(goal, context)
         try:
             text = await self._invoke(prompt)
-            return _parse_plan_from_text(goal, text)
+            return parse_plan_from_text(goal, text)
         except Exception:
             logger.warning("ClaudePlanner create_plan failed", exc_info=True)
             return Plan(goal=goal, steps=[PlanStep(id="step_1", description=goal)])
@@ -132,7 +125,7 @@ class ClaudePlanner:
         )
         try:
             text = await self._invoke(prompt)
-            revised = _parse_plan_from_text(plan.goal, text)
+            revised = parse_plan_from_text(plan.goal, text)
             revised.status = "revised"
         except Exception:
             logger.warning("ClaudePlanner revise_plan failed", exc_info=True)
@@ -140,51 +133,17 @@ class ClaudePlanner:
         else:
             return revised
 
-    async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
-        """Dependency-aware reflection (RFC-0010)."""
-        completed = sum(1 for r in step_results if r.success)
+    async def reflect(
+        self,
+        plan: Plan,
+        step_results: list[StepResult],
+        goal_context: GoalContext | None = None,
+    ) -> Reflection:
+        """Reflection with LLM-assisted analysis when failures exist (RFC-0010, RFC-0011)."""
         failed_list = [r for r in step_results if not r.success]
-        total = len(plan.steps)
-
-        if not failed_list:
-            return Reflection(
-                assessment=f"{completed}/{total} steps completed successfully",
-                should_revise=False,
-                feedback="",
-            )
-
-        failed_ids = {r.step_id for r in failed_list}
-        blocked: list[str] = []
-        direct_failed: list[str] = []
-        for r in failed_list:
-            step = next((s for s in plan.steps if s.id == r.step_id), None)
-            if step and any(dep in failed_ids for dep in step.depends_on):
-                blocked.append(r.step_id)
-            else:
-                direct_failed.append(r.step_id)
-
-        failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
-
-        parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
-        if direct_failed:
-            parts.append(f"Directly failed: {direct_failed}")
-        if blocked:
-            parts.append(f"Blocked by dependencies: {blocked}")
-
-        logger.debug(
-            "Reflection: completed=%d failed=%d blocked=%d direct_failed=%d",
-            completed,
-            len(failed_list),
-            len(blocked),
-            len(direct_failed),
-        )
-        return Reflection(
-            assessment=". ".join(parts),
-            should_revise=True,
-            feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
-            blocked_steps=blocked,
-            failed_details=failed_details,
-        )
+        if failed_list and self._reflection_model:
+            return await reflect_with_llm(self._reflection_model, plan, step_results, goal_context)
+        return reflect_heuristic(plan, step_results, goal_context)
 
     async def _invoke(self, prompt: str) -> str:
         """Run the compiled Claude graph and extract final response."""
