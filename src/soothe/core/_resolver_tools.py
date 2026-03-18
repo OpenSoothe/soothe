@@ -279,7 +279,6 @@ def resolve_subagents(
     eager_subagents = {"planner"}
 
     cwd_subagents = {"planner", "scout", "claude"}
-    string_model_subagents = {"claude"}
     resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
     subagents: list[SubAgent | CompiledSubAgent] = []
@@ -295,8 +294,10 @@ def resolve_subagents(
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
 
-        if name in string_model_subagents:
-            model_override = sub_cfg.model or config.resolve_model("default")
+        # Claude subagent uses environment variables directly (ANTHROPIC_API_KEY, model)
+        # So we don't set model_override for Claude - it reads from env vars
+        if name == "claude":
+            model_override = None
         else:
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
 

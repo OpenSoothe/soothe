@@ -111,7 +111,6 @@ class ModelRouter(BaseModel):
         fast: Cheap/fast model for classification and scoring.
         image: Vision-capable model for image understanding.
         embedding: Embedding model for vector operations.
-        web_search: Model for web search tasks.
     """
 
     default: str = "openai:gpt-4o-mini"
@@ -119,7 +118,6 @@ class ModelRouter(BaseModel):
     fast: str | None = None
     image: str | None = None
     embedding: str | None = None
-    web_search: str | None = None
 
 
 class SubagentConfig(BaseModel):
@@ -644,7 +642,7 @@ class SootheConfig(BaseSettings):
         role has no explicit mapping.
 
         Args:
-            role: Purpose role (default, think, image, embedding, fast, web_search).
+            role: Purpose role (default, think, image, embedding, fast).
 
         Returns:
             A ``provider_name:model_name`` string.
@@ -707,7 +705,7 @@ class SootheConfig(BaseSettings):
         Caches the result to avoid recreating models.
 
         Args:
-            role: Purpose role (default, think, fast, image, web_search).
+            role: Purpose role (default, think, fast, image).
 
         Returns:
             A configured ``BaseChatModel`` instance.

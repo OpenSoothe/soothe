@@ -50,7 +50,6 @@ router:
   # fast: "openai:gpt-4o-mini"
   # image: "openai:gpt-4o"
   # embedding: "openai:text-embedding-3-small"
-  # web_search: "openai:gpt-4o-mini"
 
 # =============================================================================
 # Agent Behavior
@@ -91,7 +90,9 @@ subagents:
       profile_mode: ephemeral  # for concurrent browser tasks
   claude:
     enabled: true
-    # model: "anthropic:claude-sonnet-4-20250514"
+    # Claude subagent uses ANTHROPIC_API_KEY and model from environment
+    # Set environment variables: ANTHROPIC_API_KEY, ANTHROPIC_MODEL (optional)
+    # No model configuration needed here
 
   skillify:
     enabled: true

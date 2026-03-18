@@ -26,7 +26,7 @@ Current `SootheConfig` has flat, single-provider fields (`llm_provider`, `llm_ap
 
 - `ModelProviderConfig` -- name, api_base_url, api_key (supports `${ENV_VAR}`), provider_type, models list
 - `ModelRouter` -- maps role names to `provider_name:model_name` strings
-  - Roles: `default`, `think`, `fast`, `image`, `embedding`, `web_search`
+  - Roles: `default`, `think`, `fast`, `image`, `embedding`
   - Unset roles fall back to `default`
 
 **New methods** on `SootheConfig`:

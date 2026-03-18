@@ -1432,7 +1432,7 @@ def show_config(
 
         typer.echo("\n[Model Router]")
         typer.echo(f"  default: {cfg.router.default}")
-        for role in ("think", "fast", "image", "embedding", "web_search"):
+        for role in ("think", "fast", "image", "embedding"):
             value = getattr(cfg.router, role, None)
             if value:
                 typer.echo(f"  {role}: {value}")

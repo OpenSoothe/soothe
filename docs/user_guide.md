@@ -599,7 +599,6 @@ The router maps purpose-based roles to specific models:
 | `fast` | Classification, scoring | Falls back to default |
 | `image` | Vision/image understanding | Falls back to default |
 | `embedding` | Vector operations | Falls back to default |
-| `web_search` | Web search tasks | Falls back to default |
 
 ### Message Surfacing Behavior
 

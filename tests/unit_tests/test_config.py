@@ -152,7 +152,6 @@ class TestModelRouter:
                 fast="e:f",
                 image="g:h",
                 embedding="i:j",
-                web_search="k:l",
             )
         )
         assert cfg.resolve_model("default") == "a:b"
@@ -160,7 +159,6 @@ class TestModelRouter:
         assert cfg.resolve_model("fast") == "e:f"
         assert cfg.resolve_model("image") == "g:h"
         assert cfg.resolve_model("embedding") == "i:j"
-        assert cfg.resolve_model("web_search") == "k:l"
 
     def test_unknown_role_fallback(self) -> None:
         cfg = SootheConfig(router=ModelRouter(default="test:model"))
