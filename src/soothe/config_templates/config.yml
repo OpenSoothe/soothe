@@ -209,11 +209,13 @@ protocols:
 
   # Context Protocol: Accumulates and projects knowledge within a thread
   context:
+    enabled: true
     backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/context/
 
   # Memory Protocol: Cross-thread long-term memory
   memory:
+    enabled: true
     backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/memory/
 
