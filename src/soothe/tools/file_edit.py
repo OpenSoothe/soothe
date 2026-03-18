@@ -17,6 +17,46 @@ from pydantic import Field
 logger = logging.getLogger(__name__)
 
 
+def _normalize_workspace_relative_input(file_path: str, work_dir: str) -> str:
+    """Normalize stripped-absolute inputs into workspace-relative paths.
+
+    Some model/tool chains may drop the leading "/" from absolute paths, producing
+    values like ``Users/name/workspace/project/tests/out.md``. If this prefix matches
+    the current ``work_dir``, convert it back to a path relative to ``work_dir`` so
+    writes stay inside the expected workspace tree.
+    """
+    if not work_dir:
+        return file_path
+
+    path = Path(file_path)
+    if path.is_absolute():
+        return file_path
+
+    parts = path.parts
+    if not parts:
+        return file_path
+
+    work_parts = Path(work_dir).resolve().parts
+    stripped_work_parts = work_parts[1:] if work_parts and work_parts[0] == "/" else work_parts
+    if (
+        stripped_work_parts
+        and len(parts) > len(stripped_work_parts)
+        and tuple(parts[: len(stripped_work_parts)]) == stripped_work_parts
+    ):
+        return str(Path(*parts[len(stripped_work_parts) :]))
+    return file_path
+
+
+def _display_path(path: Path, work_dir: str) -> str:
+    """Render a path relative to work_dir when possible."""
+    if work_dir:
+        try:
+            return str(path.relative_to(Path(work_dir).resolve()))
+        except ValueError:
+            pass
+    return str(path)
+
+
 class CreateFileTool(BaseTool):
     """Create or update files with backup support."""
 
@@ -46,7 +86,8 @@ class CreateFileTool(BaseTool):
         Raises:
             ValueError: If path is outside work directory.
         """
-        path = Path(file_path)
+        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        path = Path(normalized_input)
 
         # If absolute path, validate it's within work_dir
         if path.is_absolute():
@@ -55,7 +96,7 @@ class CreateFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    msg = f"Path {file_path} is outside work directory"
+                    msg = f"Path {normalized_input} is outside work directory"
                     raise ValueError(msg) from err
             return path
 
@@ -138,7 +179,7 @@ class CreateFileTool(BaseTool):
             # Write file
             resolved.write_text(content, encoding="utf-8")
 
-            result = f"Created: {resolved}"
+            result = f"Created: {_display_path(resolved, self.work_dir)}"
             if backup_path:
                 result += f" (backup: {backup_path.name})"
 
@@ -151,7 +192,7 @@ class CreateFileTool(BaseTool):
             return result
 
     async def _arun(self, file_path: str, content: str, *, overwrite: bool = False) -> str:
-        return self._run(file_path, content, overwrite)
+        return self._run(file_path, content, overwrite=overwrite)
 
 
 class ReadFileTool(BaseTool):
@@ -170,7 +211,8 @@ class ReadFileTool(BaseTool):
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
-        path = Path(file_path)
+        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        path = Path(normalized_input)
 
         if path.is_absolute():
             if self.work_dir:
@@ -178,7 +220,7 @@ class ReadFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    msg = f"Path {file_path} is outside work directory"
+                    msg = f"Path {normalized_input} is outside work directory"
                     raise ValueError(msg) from err
             return path
 
@@ -259,7 +301,8 @@ class DeleteFileTool(BaseTool):
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
-        path = Path(file_path)
+        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        path = Path(normalized_input)
 
         if path.is_absolute():
             if self.work_dir:
@@ -267,7 +310,7 @@ class DeleteFileTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    msg = f"Path {file_path} is outside work directory"
+                    msg = f"Path {normalized_input} is outside work directory"
                     raise ValueError(msg) from err
             return path
 
@@ -316,7 +359,7 @@ class DeleteFileTool(BaseTool):
             # Delete file
             resolved.unlink()
 
-            result = f"Deleted: {resolved}"
+            result = f"Deleted: {_display_path(resolved, self.work_dir)}"
             if backup_path:
                 result += f" (backup: {backup_path.name})"
 
@@ -329,7 +372,7 @@ class DeleteFileTool(BaseTool):
             return result
 
     async def _arun(self, file_path: str, *, backup: bool = True) -> str:
-        return self._run(file_path, backup)
+        return self._run(file_path, backup=backup)
 
 
 class ListFilesTool(BaseTool):
@@ -401,7 +444,7 @@ class ListFilesTool(BaseTool):
         *,
         recursive: bool = False,
     ) -> str:
-        return self._run(path, pattern, recursive)
+        return self._run(path, pattern, recursive=recursive)
 
 
 class SearchInFilesTool(BaseTool):
@@ -495,7 +538,8 @@ class GetFileInfoTool(BaseTool):
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
-        path = Path(file_path)
+        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        path = Path(normalized_input)
 
         if path.is_absolute():
             if self.work_dir:
@@ -503,7 +547,7 @@ class GetFileInfoTool(BaseTool):
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
-                    msg = f"Path {file_path} is outside work directory"
+                    msg = f"Path {normalized_input} is outside work directory"
                     raise ValueError(msg) from err
             return path
 
@@ -552,7 +596,7 @@ class GetFileInfoTool(BaseTool):
         return self._run(file_path)
 
 
-def create_file_edit_tools() -> list[BaseTool]:
+def create_file_edit_tools(*, work_dir: str = "") -> list[BaseTool]:
     """Create file operation tools.
 
     Returns:
@@ -560,10 +604,10 @@ def create_file_edit_tools() -> list[BaseTool]:
         search_in_files, get_file_info.
     """
     return [
-        CreateFileTool(),
-        ReadFileTool(),
-        DeleteFileTool(),
-        ListFilesTool(),
-        SearchInFilesTool(),
-        GetFileInfoTool(),
+        CreateFileTool(work_dir=work_dir),
+        ReadFileTool(work_dir=work_dir),
+        DeleteFileTool(work_dir=work_dir),
+        ListFilesTool(work_dir=work_dir),
+        SearchInFilesTool(work_dir=work_dir),
+        GetFileInfoTool(work_dir=work_dir),
     ]

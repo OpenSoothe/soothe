@@ -191,15 +191,57 @@ class WeaverConfig(BaseModel):
 class ComplexityThresholds(BaseModel):
     """Query complexity classification thresholds.
 
+    Supports token-based thresholds for accurate LLM context management.
+
     Args:
-        trivial_words: Maximum words for a query to be classified as trivial.
-        simple_words: Maximum words for a query to be classified as simple.
-        medium_words: Maximum words for a query to be classified as medium.
+        trivial_tokens: Maximum tokens for trivial queries (default: 10).
+        simple_tokens: Maximum tokens for simple queries (default: 30).
+        medium_tokens: Maximum tokens for medium queries (default: 60).
+        use_tiktoken: Use tiktoken for token counting if available.
+
+    Legacy (for backward compatibility):
+        trivial_words: Maximum words (converted to tokens x 2).
+        simple_words: Maximum words (converted to tokens x 2).
+        medium_words: Maximum words (converted to tokens x 2).
     """
 
-    trivial_words: int = 5
-    simple_words: int = 15
-    medium_words: int = 30
+    # Token-based thresholds (new default)
+    trivial_tokens: int = 10
+    simple_tokens: int = 30
+    medium_tokens: int = 60
+
+    # Configuration options
+    use_tiktoken: bool = False  # Use tiktoken if available
+
+    # Legacy word-based thresholds (for backward compat)
+    trivial_words: int | None = None
+    simple_words: int | None = None
+    medium_words: int | None = None
+
+    def get_trivial_threshold(self) -> int:
+        """Get trivial threshold in tokens.
+
+        Priority: word-based thresholds > token-based thresholds
+        (for backward compatibility with existing configs that only set words)
+        """
+        # Use word-based if explicitly set (backward compat)
+        if self.trivial_words is not None:
+            # Convert words to tokens (rough: 2 tokens per word)
+            return self.trivial_words * 2
+        # Otherwise use token-based
+        return self.trivial_tokens
+
+    def get_simple_threshold(self) -> int:
+        """Get simple threshold in tokens."""
+        if self.simple_words is not None:
+            return self.simple_words * 2
+        return self.simple_tokens
+
+    def get_medium_threshold(self) -> int:
+        """Get medium threshold in tokens."""
+        if self.medium_words is not None:
+            return self.medium_words * 2
+        return self.medium_tokens
 
 
 class PerformanceConfig(BaseModel):
@@ -484,6 +526,58 @@ class ExecutionConfig(BaseModel):
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
 
 
+class SecurityConfig(BaseModel):
+    """Security policy configuration for filesystem access control.
+
+    Args:
+        allow_paths_outside_workspace: Allow access to paths outside workspace root.
+        require_approval_for_outside_paths: Require user approval for outside paths.
+
+        denied_paths: Glob patterns for explicitly denied paths.
+            Examples: ["~/.ssh/**", "~/.gnupg/**", "**/.env", "**/credentials.json"]
+            Priority: High (evaluated first)
+
+        allowed_paths: Glob patterns for explicitly allowed paths (overrides denied).
+            Examples: ["**"] (allow all), ["/tmp/**"] (only /tmp)
+            Priority: Medium (evaluated after denied)
+
+        denied_file_types: File extensions that require approval or are denied.
+            Examples: [".env", ".pem", ".key", ".p12", ".pfx"]
+
+        require_approval_for_file_types: File types that need user approval.
+            Examples: [".env", ".pem", ".key"] - User will be prompted before access
+
+    Path Evaluation Order:
+    1. Check denied_paths - if matched, deny immediately
+    2. Check allowed_paths - if matched, allow
+    3. Check workspace boundary
+    4. Apply file type restrictions
+    5. Default deny
+    """
+
+    allow_paths_outside_workspace: bool = False
+    require_approval_for_outside_paths: bool = True
+
+    # Path-based access control
+    denied_paths: list[str] = Field(
+        default_factory=lambda: [
+            "~/.ssh/**",
+            "~/.gnupg/**",
+            "~/.aws/**",
+            "**/.env",
+            "**/credentials.json",
+            "**/secrets.json",
+        ]
+    )
+    allowed_paths: list[str] = Field(default_factory=lambda: ["**"])
+
+    # File type restrictions
+    denied_file_types: list[str] = Field(default_factory=list)
+    require_approval_for_file_types: list[str] = Field(
+        default_factory=lambda: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
+    )
+
+
 class SootheConfig(BaseSettings):
     """Top-level configuration for a Soothe agent.
 
@@ -604,6 +698,9 @@ class SootheConfig(BaseSettings):
 
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     """Execution limits configuration."""
+
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
+    """Security policy configuration."""
 
     # --- Performance optimization (RFC-0008) ---
 

@@ -9,7 +9,7 @@ from typing import ClassVar
 from soothe.core.classification import (
     ComplexityLevel,
     classify_by_keywords,
-    count_words,
+    count_tokens,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,10 @@ class QueryClassifier:
     No LLM calls to maintain sub-millisecond latency.
 
     Args:
-        trivial_word_threshold: Max words for trivial queries (default: 5).
-        simple_word_threshold: Max words for simple queries (default: 15).
-        medium_word_threshold: Max words for medium queries (default: 30).
+        trivial_token_threshold: Max tokens for trivial queries (default: 10).
+        simple_token_threshold: Max tokens for simple queries (default: 30).
+        medium_token_threshold: Max tokens for medium queries (default: 60).
+        use_tiktoken: Use tiktoken for token counting (default: True).
     """
 
     _TRIVIAL_PATTERNS: ClassVar[list[str]] = [
@@ -40,25 +41,29 @@ class QueryClassifier:
 
     def __init__(
         self,
-        trivial_word_threshold: int = 5,
-        simple_word_threshold: int = 15,
-        medium_word_threshold: int = 30,
+        trivial_token_threshold: int = 10,
+        simple_token_threshold: int = 30,
+        medium_token_threshold: int = 60,
+        *,
+        use_tiktoken: bool = True,
     ) -> None:
-        """Initialize the classifier with configurable thresholds.
+        """Initialize the classifier with token thresholds.
 
         Args:
-            trivial_word_threshold: Max words for trivial queries.
-            simple_word_threshold: Max words for simple queries.
-            medium_word_threshold: Max words for medium queries.
+            trivial_token_threshold: Max tokens for trivial queries.
+            simple_token_threshold: Max tokens for simple queries.
+            medium_token_threshold: Max tokens for medium queries.
+            use_tiktoken: Use tiktoken for token counting (default: True).
         """
-        self._trivial_threshold = trivial_word_threshold
-        self._simple_threshold = simple_word_threshold
-        self._medium_threshold = medium_word_threshold
+        self._trivial_threshold = trivial_token_threshold
+        self._simple_threshold = simple_token_threshold
+        self._medium_threshold = medium_token_threshold
+        self._use_tiktoken = use_tiktoken
 
     def classify(self, query: str) -> ComplexityLevel:
         """Classify query complexity in < 1ms.
 
-        Uses pattern matching and word count heuristics.
+        Uses pattern matching and token count heuristics.
         No LLM calls to maintain sub-millisecond latency.
 
         Args:
@@ -71,7 +76,9 @@ class QueryClassifier:
             return "simple"
 
         query_lower = query.lower().strip()
-        word_count = count_words(query)
+
+        # Count tokens instead of words (offline, no model needed)
+        token_count = count_tokens(query, use_tiktoken=self._use_tiktoken)
 
         # Check keywords using shared function
         keyword_result = classify_by_keywords(query)
@@ -88,29 +95,29 @@ class QueryClassifier:
                 logger.debug("Query classified as trivial due to pattern match: %s", query[:50])
                 return "trivial"
 
-        # Check for simple patterns (before word count check)
+        # Check for simple patterns (before token count check)
         for pattern in self._SIMPLE_PATTERNS:
             if re.match(pattern, query_lower):
                 logger.debug("Query classified as simple due to pattern match: %s", query[:50])
                 return "simple"
 
-        # Word count heuristics with FIXED boundary (>= instead of >)
-        # This ensures exactly N words is classified at the higher level
-        # Examples: exactly 5 words -> simple (not trivial)
-        #           exactly 15 words -> medium (not simple)
-        #           exactly 30 words -> complex (not medium)
-        if word_count >= self._medium_threshold:
-            logger.debug("Query classified as complex due to word count (%d): %s", word_count, query[:50])
+        # Token count heuristics with FIXED boundary (>= instead of >)
+        # This ensures exactly N tokens is classified at the higher level
+        # Examples: exactly 10 tokens -> simple (not trivial)
+        #           exactly 30 tokens -> medium (not simple)
+        #           exactly 60 tokens -> complex (not medium)
+        if token_count >= self._medium_threshold:
+            logger.debug("Query classified as complex due to token count (%d): %s", token_count, query[:50])
             return "complex"
 
-        if word_count >= self._simple_threshold:
-            logger.debug("Query classified as medium due to word count (%d): %s", word_count, query[:50])
+        if token_count >= self._simple_threshold:
+            logger.debug("Query classified as medium due to token count (%d): %s", token_count, query[:50])
             return "medium"
 
-        if word_count >= self._trivial_threshold:
-            logger.debug("Query classified as simple due to word count (%d): %s", word_count, query[:50])
+        if token_count >= self._trivial_threshold:
+            logger.debug("Query classified as simple due to token count (%d): %s", token_count, query[:50])
             return "simple"
 
         # Default to trivial for very short queries
-        logger.debug("Query classified as trivial due to short length (%d words): %s", word_count, query[:50])
+        logger.debug("Query classified as trivial due to short length (%d tokens): %s", token_count, query[:50])
         return "trivial"

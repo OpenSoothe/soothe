@@ -6,16 +6,12 @@ import logging
 import re
 
 from soothe.backends.persistence import PersistStore
+from soothe.core.classification import count_tokens
 from soothe.protocols.context import ContextEntry, ContextProjection
 
 logger = logging.getLogger(__name__)
 
-_CHARS_PER_TOKEN = 4
 _SUMMARY_LIMIT = 10
-
-
-def _estimate_tokens(text: str) -> int:
-    return len(text) // _CHARS_PER_TOKEN
 
 
 def _tokenize(text: str) -> set[str]:
@@ -30,15 +26,17 @@ class KeywordContext:
     Supports JSON, RocksDB, or PostgreSQL persistence backends.
     """
 
-    def __init__(self, persist_store: PersistStore | None = None) -> None:
+    def __init__(self, persist_store: PersistStore | None = None, *, use_tiktoken: bool = False) -> None:
         """Initialize KeywordContext.
 
         Args:
             persist_store: Optional PersistStore instance for persistence.
                           None for in-memory only (no persistence).
+            use_tiktoken: Use tiktoken for token counting if available (default: False).
         """
         self._entries: list[ContextEntry] = []
         self._store = persist_store
+        self._use_tiktoken = use_tiktoken
 
     @property
     def entries(self) -> list[ContextEntry]:
@@ -130,7 +128,8 @@ class KeywordContext:
         selected: list[ContextEntry] = []
         used = 0
         for _, entry in scored:
-            entry_tokens = _estimate_tokens(entry.content)
+            # Use shared token counting (offline, no model needed)
+            entry_tokens = count_tokens(entry.content, use_tiktoken=self._use_tiktoken)
             if used + entry_tokens > token_budget:
                 continue
             selected.append(entry)

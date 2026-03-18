@@ -6,6 +6,7 @@ import logging
 import uuid
 from typing import TYPE_CHECKING
 
+from soothe.core.classification import count_tokens
 from soothe.protocols.context import ContextEntry, ContextProjection
 
 if TYPE_CHECKING:
@@ -15,12 +16,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CHARS_PER_TOKEN = 4
 _SUMMARY_LIMIT = 10
-
-
-def _estimate_tokens(text: str) -> int:
-    return len(text) // _CHARS_PER_TOKEN
 
 
 class VectorContext:
@@ -34,16 +30,20 @@ class VectorContext:
         self,
         vector_store: VectorStoreProtocol,
         embeddings: Embeddings,
+        *,
+        use_tiktoken: bool = False,
     ) -> None:
         """Initialize VectorContext.
 
         Args:
             vector_store: Vector database for storing embedded context entries.
             embeddings: Langchain embeddings model for generating vectors.
+            use_tiktoken: Use tiktoken for token counting if available (default: False).
         """
         self._store = vector_store
         self._embeddings = embeddings
         self._entries: list[ContextEntry] = []
+        self._use_tiktoken = use_tiktoken
 
     @property
     def entries(self) -> list[ContextEntry]:
@@ -82,7 +82,8 @@ class VectorContext:
                 entry = ContextEntry.model_validate(record.payload)
             except (TypeError, ValueError):
                 continue
-            entry_tokens = _estimate_tokens(entry.content)
+            # Use shared token counting (offline, no model needed)
+            entry_tokens = count_tokens(entry.content, use_tiktoken=self._use_tiktoken)
             if used + entry_tokens > token_budget:
                 continue
             selected.append(entry)

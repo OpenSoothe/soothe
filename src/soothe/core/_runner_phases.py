@@ -108,6 +108,8 @@ class PhasesMixin:
 
             except Exception as exc:
                 logger.exception("Error during agent stream")
+                if hasattr(state, "stream_error"):
+                    state.stream_error = str(exc)
                 from soothe.utils.error_format import emit_error_event
 
                 yield _custom(emit_error_event(exc))

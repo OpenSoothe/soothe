@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from soothe.core.classification import (
     classify_by_keywords,
+    count_tokens,
 )
 
 if TYPE_CHECKING:
@@ -19,9 +20,6 @@ if TYPE_CHECKING:
     )
 
 logger = logging.getLogger(__name__)
-
-_COMPLEX_WORD_COUNT_THRESHOLD = 80
-_SIMPLE_WORD_COUNT_THRESHOLD = 15
 
 _EXPLICIT_CLAUDE_KEYWORDS = frozenset(
     {
@@ -44,7 +42,7 @@ class AutoPlanner:
     """Hybrid complexity router that delegates to the best available planner.
 
     Supports three routing modes:
-    - ``heuristic``: keyword + word-count only (zero latency)
+    - ``heuristic``: keyword + token-count only (zero latency)
     - ``llm``: always use fast LLM for classification
     - ``hybrid`` (default): heuristic first; LLM fallback for ambiguous cases
 
@@ -59,6 +57,9 @@ class AutoPlanner:
         direct: DirectPlanner instance (or None -- should always be present).
         fast_model: Fast LLM for ambiguity classification (optional).
         routing_mode: Classification strategy.
+        simple_token_threshold: Max tokens for simple planning (default: 30).
+        complex_token_threshold: Max tokens for complex planning (default: 160).
+        use_tiktoken: Use tiktoken for token counting (default: True).
     """
 
     def __init__(
@@ -69,6 +70,9 @@ class AutoPlanner:
         direct: Any | None = None,
         fast_model: Any | None = None,
         routing_mode: Literal["heuristic", "llm", "hybrid"] = "hybrid",
+        simple_token_threshold: int = 30,
+        complex_token_threshold: int = 160,
+        use_tiktoken: bool = True,
     ) -> None:
         """Initialize the auto planner with available planner backends.
 
@@ -78,12 +82,18 @@ class AutoPlanner:
             direct: DirectPlanner instance (or None -- should always be present).
             fast_model: Fast LLM for ambiguity classification (optional).
             routing_mode: Classification strategy.
+            simple_token_threshold: Max tokens for simple planning.
+            complex_token_threshold: Max tokens for complex planning.
+            use_tiktoken: Use tiktoken for token counting (default: True).
         """
         self._claude = claude
         self._subagent = subagent
         self._direct = direct
         self._fast_model = fast_model
         self._routing_mode = routing_mode
+        self._simple_threshold = simple_token_threshold
+        self._complex_threshold = complex_token_threshold
+        self._use_tiktoken = use_tiktoken
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Route to the best planner based on complexity, then create plan."""
@@ -146,7 +156,7 @@ class AutoPlanner:
         return self._direct or self._subagent
 
     def _heuristic_classify(self, goal: str) -> str | None:
-        """Classify goal complexity using heuristics.
+        """Classify goal complexity using token-based heuristics.
 
         Returns:
             ``"simple"``, ``"medium"``, ``"complex"``, or ``None`` if ambiguous.
@@ -160,12 +170,13 @@ class AutoPlanner:
         if keyword_result == "trivial":
             return "simple"
 
-        # Word count check
-        word_count = len(goal.split())
-        if word_count > _COMPLEX_WORD_COUNT_THRESHOLD:
+        # Token count check (offline, no model needed)
+        token_count = count_tokens(goal, use_tiktoken=self._use_tiktoken)
+
+        if token_count >= self._complex_threshold:
             return "complex"
 
-        if word_count < _SIMPLE_WORD_COUNT_THRESHOLD:
+        if token_count < self._simple_threshold:
             return "simple"
 
         return None

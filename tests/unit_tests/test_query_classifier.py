@@ -2,7 +2,8 @@
 
 import pytest
 
-from soothe.core.classification import count_words
+from soothe.config import ComplexityThresholds
+from soothe.core.classification import count_tokens
 from soothe.core.query_classifier import QueryClassifier
 
 
@@ -57,20 +58,19 @@ class TestQueryClassifier:
         assert classifier.classify("start the server") == "simple"
 
     def test_medium_tasks(self, classifier):
-        """Test that multi-step tasks are classified based on keywords and word count."""
+        """Test that multi-step tasks are classified based on keywords and token count."""
         # These have medium keywords -> medium (not simple)
         assert classifier.classify("implement a function to parse JSON") == "medium"  # "implement" keyword
         assert classifier.classify("debug the error in my code") == "medium"  # "debug" keyword
-        assert classifier.classify("write tests for the auth module") == "simple"  # no keywords, 6 words
+        assert classifier.classify("write tests for the auth module") == "trivial"  # no keywords, 6 tokens
 
-        # No keywords, just word count
-        # 7 words, no keywords -> simple
-        # Note: "planner" contains "plan" as substring, so it matches medium keyword
-        assert classifier.classify("can you explain how this system works") == "simple"
+        # No keywords, just token count
+        # 7 tokens, no keywords -> trivial (< 10)
+        assert classifier.classify("can you explain how this system works") == "trivial"
 
-        # Medium requires >=15 words (no keywords)
-        query_20_words = " ".join(["word"] * 20)
-        assert classifier.classify(query_20_words) == "medium"
+        # Medium requires >=30 tokens (no keywords)
+        query_31_tokens = "word " * 30  # ~31 tokens
+        assert classifier.classify(query_31_tokens) == "medium"
 
     def test_complex_keywords(self, classifier):
         """Test that queries with complex keywords are classified as complex."""
@@ -83,18 +83,43 @@ class TestQueryClassifier:
         assert classifier.classify("develop a full-stack application") == "complex"
 
     def test_word_count_thresholds(self, classifier):
-        """Test that word count affects classification."""
+        """Test that token count affects classification (now token-based)."""
         # Very short (trivial)
-        assert classifier.classify("hi there") == "trivial"
+        assert classifier.classify("hi there") == "trivial"  # 2 tokens
 
-        query_10_words = " ".join(["word"] * 10)
-        assert classifier.classify(query_10_words) == "simple"
+        # 6 tokens -> trivial (< 10)
+        query_6_tokens = "word " * 5  # ~6 tokens
+        assert classifier.classify(query_6_tokens) == "trivial"
 
-        query_20_words = " ".join(["word"] * 20)
-        assert classifier.classify(query_20_words) == "medium"
+        # 16 tokens -> simple (>= 10, < 30)
+        query_16_tokens = "word " * 15  # ~16 tokens
+        assert classifier.classify(query_16_tokens) == "simple"
 
-        query_40_words = " ".join(["word"] * 40)
-        assert classifier.classify(query_40_words) == "complex"
+        # 31 tokens -> medium (>= 30, < 60)
+        query_31_tokens = "word " * 30  # ~31 tokens
+        assert classifier.classify(query_31_tokens) == "medium"
+
+        # 61 tokens -> complex (>= 60)
+        query_61_tokens = "word " * 60  # ~61 tokens
+        assert classifier.classify(query_61_tokens) == "complex"
+
+    def test_token_thresholds(self, classifier):
+        """Test token-based thresholds."""
+        # 3 tokens -> trivial (< 10)
+        query_3 = "hello world test"  # 3 tokens
+        assert classifier.classify(query_3) == "trivial"
+
+        # 16 tokens -> simple (>= 10, < 30)
+        query_16 = "word " * 15  # ~16 tokens
+        assert classifier.classify(query_16) == "simple"
+
+        # 31 tokens -> medium (>= 30, < 60)
+        query_31 = "word " * 30  # ~31 tokens
+        assert classifier.classify(query_31) == "medium"
+
+        # 61 tokens -> complex (>= 60)
+        query_61 = "word " * 60  # ~61 tokens
+        assert classifier.classify(query_61) == "complex"
 
     def test_empty_query(self, classifier):
         """Test handling of empty queries."""
@@ -115,21 +140,25 @@ class TestQueryClassifier:
         assert classifier.classify("read the file please") == "simple"  # 4 words, matches simple pattern
 
     def test_custom_thresholds(self):
-        """Test classifier with custom thresholds."""
+        """Test classifier with custom token thresholds."""
         custom_classifier = QueryClassifier(
-            trivial_word_threshold=3,
-            simple_word_threshold=10,
-            medium_word_threshold=20,
+            trivial_token_threshold=2,
+            simple_token_threshold=10,
+            medium_token_threshold=20,
+            use_tiktoken=True,
         )
 
         # With custom thresholds
-        assert custom_classifier.classify("hi") == "trivial"  # 1 word < 3
-        # 3 words = trivial threshold, but with fixed boundary (>=), it's "simple"
-        assert custom_classifier.classify("hi there friend") == "simple"
+        assert custom_classifier.classify("hi") == "trivial"  # 1 token < 2
 
-        query_15_words = " ".join(["word"] * 15)
-        # 15 words: >= simple threshold (10) -> medium
-        assert custom_classifier.classify(query_15_words) == "medium"
+        # 3 tokens = >= trivial threshold (2) -> simple
+        query_3_tokens = "hello world test"  # 3 tokens
+        result = custom_classifier.classify(query_3_tokens)
+        assert result == "simple"
+
+        query_16_tokens = "word " * 15  # ~16 tokens
+        # 16 tokens: >= simple threshold (10), < medium threshold (20) -> medium
+        assert custom_classifier.classify(query_16_tokens) == "medium"
 
     def test_edge_cases(self, classifier):
         """Test edge cases and boundary conditions."""
@@ -174,27 +203,18 @@ class TestQueryClassifier:
             == "complex"
         )
 
-    def test_cjk_word_counting(self, classifier):
-        """Test that CJK characters are counted individually as word-equivalents."""
-        # "使用浏览器获取最新的美国伊朗战争信息" = 18 CJK chars
-        assert count_words("使用浏览器获取最新的美国伊朗战争信息") == 18
-        # Short CJK: 3 chars
-        assert count_words("你好吗") == 3
-        # Mixed CJK + ASCII: 6 CJK (使用 + 获取信息) + 1 ASCII word (browser)
-        assert count_words("使用 browser 获取信息") == 7
-
     def test_cjk_queries_not_trivial(self, classifier):
         """Test that non-trivial CJK queries are not misclassified as trivial."""
-        # 18 CJK characters -> medium range (16-30)
+        # 21 tokens -> simple range (>= 10, < 30)
         result = classifier.classify("使用浏览器获取最新的美国伊朗战争信息")
-        assert result == "medium"
+        assert result == "simple"
 
-        # Short CJK greeting (2 chars -> trivial)
+        # Short CJK greeting (2 chars -> 2 tokens -> trivial)
         assert classifier.classify("你好") == "trivial"
 
-        # Longer CJK query
+        # Longer CJK query -> 24 tokens -> simple (>= 10, < 30)
         result = classifier.classify("请帮我设计一个完整的用户认证系统，包括登录注册和密码重置功能")
-        assert result in ("medium", "complex")
+        assert result == "simple"
 
     def test_planning_query_is_medium(self, classifier):
         """Test that planning queries are classified as medium.
@@ -214,18 +234,28 @@ class TestQueryClassifier:
     def test_boundary_fix(self, classifier):
         """Test that boundary conditions use >= instead of >.
 
-        Bug fix: Exactly 5 words should be "simple" (not trivial).
+        Bug fix: Exactly 10 tokens should be "simple" (not trivial).
         """
-        # Exactly 5 words -> simple (not trivial)
-        assert classifier.classify("read the config file now") == "simple"
+        # Create a classifier where we can test exact boundaries
+        custom = QueryClassifier(trivial_token_threshold=3, use_tiktoken=True)
 
-        # Exactly 15 words -> medium (not simple)
-        query_15 = " ".join(["word"] * 15)
-        assert classifier.classify(query_15) == "medium"
+        # Exactly 3 tokens -> simple (>= trivial threshold)
+        query_3 = "hello world test"  # 3 tokens
+        result = custom.classify(query_3)
+        assert result == "simple"
 
-        # Exactly 30 words -> complex
-        query_30 = " ".join(["word"] * 30)
-        assert classifier.classify(query_30) == "complex"
+        # For default classifier: >= 10 tokens -> simple
+        # 16 tokens -> simple (>= 10, < 30)
+        query_16 = "word " * 15  # ~16 tokens
+        assert classifier.classify(query_16) == "simple"
+
+        # 31 tokens -> medium (>= 30)
+        query_31 = "word " * 30  # ~31 tokens
+        assert classifier.classify(query_31) == "medium"
+
+        # 61 tokens -> complex (>= 60)
+        query_61 = "word " * 60  # ~61 tokens
+        assert classifier.classify(query_61) == "complex"
 
     def test_medium_keywords(self, classifier):
         """Test that medium keywords from shared module are recognized."""
@@ -245,25 +275,68 @@ class TestQueryClassifier:
         assert classifier.classify("overhaul the system") == "complex"
 
     def test_keyword_priority_over_word_count(self, classifier):
-        """Test that keywords take priority over word count heuristics."""
+        """Test that keywords take priority over token count heuristics."""
         # Short query with complex keyword -> complex
         assert classifier.classify("refactor this") == "complex"
 
         # Short query with medium keyword -> medium
         assert classifier.classify("plan it") == "medium"
 
-        # Long query without keywords -> medium (word count)
-        query_20 = " ".join(["the"] * 20)
-        assert classifier.classify(query_20) == "medium"
+        # Long query without keywords -> simple (token count: 21 tokens)
+        query_21_tokens = "the " * 20  # ~21 tokens
+        assert classifier.classify(query_21_tokens) == "simple"
 
-    def test_uses_shared_word_count(self, classifier):
-        """Test that QueryClassifier uses shared count_words function."""
+    def test_uses_shared_token_count(self, classifier):
+        """Test that QueryClassifier uses shared count_tokens function."""
         # Verify it's using the shared function from classification module
-        from soothe.core.classification import count_words as shared_count_words
+        from soothe.core.classification import count_tokens as shared_count_tokens
 
         test_text = "hello world"
-        assert count_words(test_text) == shared_count_words(test_text)
+        # Both should give the same result
+        assert count_tokens(test_text) == shared_count_tokens(test_text)
 
-        # Test CJK awareness is preserved
+        # Test with CJK text
         cjk_text = "使用浏览器获取最新的美国伊朗战争信息"
-        assert count_words(cjk_text) == shared_count_words(cjk_text)
+        assert count_tokens(cjk_text) == shared_count_tokens(cjk_text)
+
+    def test_backward_compat_word_config(self):
+        """Test backward compatibility with word-based config."""
+        thresholds = ComplexityThresholds(
+            trivial_words=5,
+            simple_words=15,
+            medium_words=30,
+        )
+
+        # Should convert to tokens (words * 2)
+        assert thresholds.get_trivial_threshold() == 10
+        assert thresholds.get_simple_threshold() == 30
+        assert thresholds.get_medium_threshold() == 60
+
+    def test_token_config_preferred(self):
+        """Test that token-based config is used when words are not set."""
+        # When only tokens are set, use them
+        thresholds = ComplexityThresholds(
+            trivial_tokens=15,
+            simple_tokens=40,
+            medium_tokens=80,
+        )
+
+        # Should use token values
+        assert thresholds.get_trivial_threshold() == 15
+        assert thresholds.get_simple_threshold() == 40
+        assert thresholds.get_medium_threshold() == 80
+
+    def test_word_config_overrides_tokens(self):
+        """Test that word-based config overrides token config for backward compat."""
+        # When both are set, word-based takes precedence (backward compat)
+        thresholds = ComplexityThresholds(
+            trivial_tokens=15,
+            simple_tokens=40,
+            medium_tokens=80,
+            trivial_words=5,  # Overrides trivial_tokens
+        )
+
+        # Should use word values converted to tokens
+        assert thresholds.get_trivial_threshold() == 10  # 5 * 2
+        assert thresholds.get_simple_threshold() == 40  # No word override
+        assert thresholds.get_medium_threshold() == 80  # No word override

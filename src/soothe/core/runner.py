@@ -99,6 +99,7 @@ class RunnerState:
     context_projection: Any = None
     recalled_memories: list[Any] = field(default_factory=list)
     seen_message_ids: set[str] = field(default_factory=set)
+    stream_error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +134,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
         if self._config.performance.enabled and self._config.performance.complexity_detection:
             self._classifier = QueryClassifier(
-                trivial_word_threshold=self._config.performance.thresholds.trivial_words,
-                simple_word_threshold=self._config.performance.thresholds.simple_words,
-                medium_word_threshold=self._config.performance.thresholds.medium_words,
+                trivial_token_threshold=self._config.performance.thresholds.get_trivial_threshold(),
+                simple_token_threshold=self._config.performance.thresholds.get_simple_threshold(),
+                medium_token_threshold=self._config.performance.thresholds.get_medium_threshold(),
+                use_tiktoken=self._config.performance.thresholds.use_tiktoken,
             )
             logger.debug("Query classifier initialized")
         else:
@@ -473,7 +475,18 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
-        if state.plan and len(state.plan.steps) > 1:
+        from soothe.core.classification import is_plan_only_request
+
+        if state.plan and is_plan_only_request(user_input):
+            yield _custom(
+                {
+                    "type": "soothe.plan.plan_only",
+                    "thread_id": state.thread_id,
+                    "goal": state.plan.goal,
+                    "step_count": len(state.plan.steps),
+                }
+            )
+        elif state.plan and len(state.plan.steps) > 1:
             sp_goal_id = "default"
             if state.plan.goal:
                 sp_goal_id = state.plan.goal[:32].replace(" ", "_").replace("/", "_")

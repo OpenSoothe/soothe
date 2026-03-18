@@ -32,6 +32,8 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 - Memory MUST use deepagents' `MemoryMiddleware` (AGENTS.md format).
 - Protocols MUST be defined as `typing.Protocol` with no runtime dependencies in signatures.
 - All protocol implementations MUST be swappable via `SootheConfig`.
+- **Configuration changes MUST update the config template.** When modifying `src/soothe/config.py`,
+  you MUST also update `src/soothe/config_templates/config.yml` to reflect the changes.
 
 ## Code Standards
 

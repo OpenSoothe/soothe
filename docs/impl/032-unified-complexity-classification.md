@@ -61,7 +61,7 @@ src/soothe/core/
 │   ├── COMPLEX_KEYWORDS     # Unified keyword sets
 │   ├── MEDIUM_KEYWORDS
 │   ├── DEFAULT_THRESHOLDS   # Documented thresholds
-│   ├── count_words()        # CJK-aware word counting
+│   ├── count_tokens()       # Token counting with tiktoken
 │   └── classify_by_keywords()
 │
 ├── query_classifier.py      # UPDATED: Use shared module
@@ -111,24 +111,22 @@ MEDIUM_KEYWORDS = frozenset({
 
 # Thresholds with clear documentation
 DEFAULT_THRESHOLDS = {
-    "trivial": 5,   # QueryClassifier: greetings, very short queries
-    "simple": 15,   # Both: direct operations, basic searches
-    "medium": 30,   # QueryClassifier: multi-step tasks
-    "complex": 80,  # AutoPlanner: architectural decisions (higher threshold)
+    "trivial": 10,   # QueryClassifier: greetings, very short queries (<10 tokens)
+    "simple": 30,    # Both: direct operations, basic searches (<30 tokens)
+    "medium": 60,    # QueryClassifier: multi-step tasks (<60 tokens)
+    "complex": 160,  # AutoPlanner: architectural decisions (>=160 tokens, higher threshold)
 }
 
-def count_words(text: str) -> int:
-    """Count words with CJK awareness."""
-    cjk_count = sum(1 for ch in text if unicodedata.category(ch).startswith("Lo"))
-    if cjk_count > 0:
-        non_cjk = re.sub(
-            r"[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\U00020000-\U0002a6df]",
-            " ",
-            text,
-        )
-        ascii_words = len(non_cjk.split())
-        return cjk_count + ascii_words
-    return len(text.split())
+def count_tokens(text: str, *, use_tiktoken: bool = True) -> int:
+    """Count tokens using offline tokenizers."""
+    if use_tiktoken:
+        try:
+            import tiktoken
+            encoding = tiktoken.get_encoding("cl100k_base")
+            return len(encoding.encode(text))
+        except ImportError:
+            pass
+    return len(text) // 4
 
 def classify_by_keywords(text: str) -> ComplexityLevel | None:
     """Classify based on keywords only."""
@@ -145,7 +143,7 @@ def classify_by_keywords(text: str) -> ComplexityLevel | None:
 
 **Key Features**:
 - Single source of truth for keyword sets
-- CJK-aware word counting (supports Chinese, Japanese, Korean)
+- Token-based counting with tiktoken support (accurate for all languages including CJK)
 - Clear documentation of thresholds and their purposes
 - Simple utility functions for reuse
 
@@ -156,7 +154,7 @@ def classify_by_keywords(text: str) -> ComplexityLevel | None:
 **Changes**:
 1. Import keywords and utilities from `classification.py`
 2. Remove duplicate keyword definitions
-3. Remove duplicate `_count_words` method
+3. Remove duplicate token counting logic
 4. Use `classify_by_keywords()` for keyword matching
 5. Fix boundary conditions: change `>` to `>=`
 
@@ -212,9 +210,9 @@ def _heuristic_classify(self, goal: str) -> str | None:
     if keyword_result == "trivial":
         return "simple"
 
-    # Word count check
-    word_count = len(goal.split())
-    if word_count > _COMPLEX_WORD_COUNT_THRESHOLD:
+    # Token count check
+    token_count = len(goal.split())
+    if token_count > _COMPLEX_WORD_COUNT_THRESHOLD:
         return "complex"
     if word_count < _SIMPLE_WORD_COUNT_THRESHOLD:
         return "simple"
@@ -234,8 +232,8 @@ Test coverage:
 - Unified keyword sets (complex and medium keywords)
 - Keyword disjointness verification
 - `classify_by_keywords()` function
-- `count_words()` with CJK support
-- Mixed CJK + ASCII text
+- `count_tokens()` with tiktoken support
+- Token estimation fallback
 - Case-insensitive classification
 - Keyword priority (complex > medium)
 
@@ -251,9 +249,9 @@ Test coverage:
 
 2. `test_boundary_fix()` - Boundary condition fix
    ```python
-   assert classifier.classify("read the config file now") == "simple"  # exactly 5 words
-   query_15 = " ".join(["word"] * 15)
-   assert classifier.classify(query_15) == "medium"  # exactly 15 words
+   assert classifier.classify("read the config file now") == "simple"  # exactly 10 tokens
+   query_30 = "word " * 29  # ~30 tokens
+   assert classifier.classify(query_30) == "medium"  # exactly 30 tokens
    ```
 
 3. `test_medium_keywords()` - Unified medium keywords
@@ -312,14 +310,14 @@ print(f'Result: {result}')  # Expected: 'medium'
 
 ## Edge Cases Handled
 
-### 1. Boundary Queries (Exactly N Words)
+### 1. Boundary Queries (Exactly N Tokens)
 
 **Problem**: Strict inequality `>` caused off-by-one errors
 **Solution**: Use `>=` for inclusive thresholds
 **Result**:
-- Exactly 5 words → "simple" (not "trivial")
-- Exactly 15 words → "medium" (not "simple")
-- Exactly 30 words → "complex" (not "medium")
+- Exactly 10 tokens → "simple" (not "trivial")
+- Exactly 30 tokens → "medium" (not "simple")
+- Exactly 60 tokens → "complex" (not "medium")
 
 ### 2. "trivial" Level Mismatch
 
@@ -329,15 +327,15 @@ print(f'Result: {result}')  # Expected: 'medium'
 
 ### 3. Threshold Differences
 
-**Problem**: Different "complex" thresholds (30 vs 80 words)
+**Problem**: Different "complex" thresholds (60 vs 160 tokens)
 **Solution**: Document difference clearly, keep separate thresholds
 **Rationale**:
-- QueryClassifier (30 words): Earlier optimization of memory/context
-- AutoPlanner (80 words): Architectural decisions need more context
+- QueryClassifier (60 tokens): Earlier optimization of memory/context
+- AutoPlanner (160 tokens): Architectural decisions need more context
 
 ### 4. Pattern Conflicts
 
-**Priority**: Complex keywords > Medium keywords > Trivial patterns > Word count
+**Priority**: Complex keywords > Medium keywords > Trivial patterns > Token count
 
 **Examples**:
 - "plan the migration" → "complex" (keyword "migration" in COMPLEX_KEYWORDS)
@@ -347,7 +345,7 @@ print(f'Result: {result}')  # Expected: 'medium'
 
 ### 5. Non-English Queries
 
-**CJK Support**: Shared `count_words()` has CJK awareness
+**Token Counting**: Shared `count_tokens()` uses tiktoken which handles all languages correctly including CJK
 **Keywords**: English-only (current limitation)
 **Future**: AutoPlanner can use fast LLM for multilingual classification
 

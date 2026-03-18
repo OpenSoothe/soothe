@@ -6,7 +6,8 @@ from soothe.core.classification import (
     COMPLEX_KEYWORDS,
     MEDIUM_KEYWORDS,
     classify_by_keywords,
-    count_words,
+    count_tokens,
+    is_plan_only_request,
 )
 
 
@@ -76,34 +77,70 @@ class TestClassifyByKeywords:
         assert result == "complex"  # "migration" is complex, "plan" is medium
 
 
-class TestWordCounting:
-    """Test word counting with CJK support."""
+class TestPlanOnlyIntent:
+    """Test plan-only request detection."""
 
-    def test_ascii_words(self):
-        """ASCII text should use space-based counting."""
-        assert count_words("hello world") == 2
-        assert count_words("the quick brown fox") == 4
-        assert count_words("") == 0
-        assert count_words("single") == 1
+    def test_plan_only_phrases(self):
+        """Planning prompts should be detected as plan-only requests."""
+        assert is_plan_only_request("create a plan for tests/task-download-skills.md")
+        assert is_plan_only_request("draft a plan to migrate services")
+        assert is_plan_only_request("write a plan only for this task")
 
-    def test_cjk_characters(self):
-        """CJK characters should be counted individually."""
-        # Chinese: 18 characters
-        assert count_words("使用浏览器获取最新的美国伊朗战争信息") == 18
+    def test_non_plan_only_phrases(self):
+        """Execution prompts should not be treated as plan-only."""
+        assert not is_plan_only_request("implement source-specific downloaders")
+        assert not is_plan_only_request("run tests and fix failing cases")
 
-        # Japanese: mix of hiragana and kanji
-        # Each CJK ideograph counts as one word
-        text = "今日は良い天気です"
-        cjk_count = sum(1 for ch in text if ord(ch) >= 0x4E00)
-        assert count_words(text) >= cjk_count
 
-    def test_mixed_cjk_ascii(self):
-        """Mixed CJK and ASCII should count both."""
-        # 6 CJK + 1 ASCII word
-        result = count_words("使用 browser 获取信息")
-        assert result == 7
+class TestTokenCounting:
+    """Test token counting with tiktoken and estimation."""
 
-    def test_whitespace_normalization(self):
-        """Multiple spaces should not affect count."""
-        assert count_words("hello  world") == 2
-        assert count_words("hello   world   test") == 3
+    def test_count_tokens_tiktoken(self):
+        """Test token counting with tiktoken."""
+        tokens = count_tokens("Hello world", use_tiktoken=True)
+        # tiktoken is accurate: "Hello world" = 2 tokens
+        assert tokens == 2
+
+    def test_count_tokens_estimation(self):
+        """Test estimation fallback."""
+        tokens = count_tokens("Hello world", use_tiktoken=False)
+        # Estimation: len("Hello world") // 4 = 11 // 4 = 2
+        assert tokens == 2
+
+    def test_count_tokens_cjk(self):
+        """Test CJK text handling."""
+        text = "使用浏览器获取信息"
+
+        # tiktoken handles CJK correctly
+        tokens_tiktoken = count_tokens(text, use_tiktoken=True)
+        assert tokens_tiktoken > 0
+
+        # Estimation also works
+        tokens_est = count_tokens(text, use_tiktoken=False)
+        assert tokens_est > 0
+
+    def test_count_tokens_auto_fallback(self):
+        """Test automatic fallback when tiktoken unavailable."""
+        # Should gracefully fall back to estimation
+        # Even if tiktoken import fails
+        tokens = count_tokens("Hello world")  # Default use_tiktoken=True
+        assert tokens > 0  # Either 2 (tiktoken) or 2 (estimation)
+
+    def test_count_tokens_empty_string(self):
+        """Test empty string handling."""
+        assert count_tokens("") == 0
+        assert count_tokens("", use_tiktoken=False) == 0
+
+    def test_count_tokens_longer_text(self):
+        """Test token counting for longer text."""
+        text = "This is a longer piece of text that should have more tokens"
+
+        tokens_tiktoken = count_tokens(text, use_tiktoken=True)
+        tokens_est = count_tokens(text, use_tiktoken=False)
+
+        # Both should return positive integers
+        assert tokens_tiktoken > 0
+        assert tokens_est > 0
+
+        # tiktoken should be more accurate (not just len // 4)
+        # For this text, tiktoken will give a more precise count

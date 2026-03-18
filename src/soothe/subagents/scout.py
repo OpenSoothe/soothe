@@ -107,10 +107,18 @@ def create_scout_subagent(
         from deepagents.backends.filesystem import FilesystemBackend
         from deepagents.middleware.filesystem import FilesystemMiddleware
 
+        from soothe.backends.filesystem_secure import SecureFilesystemBackend
+
         resolved_cwd = cwd or str(Path.cwd())
-        fs_middleware = FilesystemMiddleware(
-            backend=FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True),
+        base_backend = FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True)
+        secure_backend = SecureFilesystemBackend(
+            backend=base_backend,
+            root_dir=resolved_cwd,
+            policy=None,
+            policy_context=None,
+            allow_outside_root=False,
         )
+        fs_middleware = FilesystemMiddleware(backend=secure_backend)
         read_only_tools = [
             fs_middleware._create_ls_tool(),
             fs_middleware._create_read_file_tool(),

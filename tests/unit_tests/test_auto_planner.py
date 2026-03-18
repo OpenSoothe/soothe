@@ -101,7 +101,8 @@ class TestAutoPlanner:
         subagent = _make_planner("subagent")
         auto = AutoPlanner(direct=direct, subagent=subagent, routing_mode="heuristic")
 
-        long_goal = " ".join(["word"] * 85)
+        # 170 tokens -> complex (>= 160 threshold)
+        long_goal = " ".join(["word"] * 170)
         await auto.create_plan(long_goal, PlanContext())
         subagent.create_plan.assert_awaited_once()
 
@@ -147,7 +148,9 @@ class TestAutoRoutingModes:
         fast_model = MagicMock()
         auto = AutoPlanner(direct=direct, fast_model=fast_model, routing_mode="heuristic")
 
-        await auto.create_plan("ambiguous twenty word goal " * 2, PlanContext())
+        # 40 tokens, no keywords -- would be ambiguous in hybrid mode
+        goal = " ".join(["something"] * 40)
+        await auto.create_plan(goal, PlanContext())
         fast_model.ainvoke.assert_not_called()
 
     @pytest.mark.asyncio
@@ -168,8 +171,8 @@ class TestAutoRoutingModes:
             routing_mode="hybrid",
         )
 
-        # 20 words, no keywords -- ambiguous for heuristic
-        goal = " ".join(["something"] * 20)
+        # 40 tokens, no keywords -- ambiguous for heuristic (between 30 and 160)
+        goal = " ".join(["something"] * 40)
         await auto.create_plan(goal, PlanContext())
         fast_model.ainvoke.assert_awaited_once()
         subagent.create_plan.assert_awaited_once()
@@ -216,7 +219,8 @@ class TestAutoRoutingModes:
 
         auto = AutoPlanner(direct=direct, fast_model=fast_model, routing_mode="hybrid")
 
-        goal = " ".join(["something"] * 20)
+        # 40 tokens, no keywords -- ambiguous
+        goal = " ".join(["something"] * 40)
         await auto.create_plan(goal, PlanContext())
         # Should still produce a plan via fallback
         direct.create_plan.assert_awaited_once()

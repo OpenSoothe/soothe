@@ -1,5 +1,6 @@
 """Tests for File Edit tools functionality."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 
@@ -108,6 +109,28 @@ class TestCreateFileTool:
             assert "Error" in result
             assert "outside" in result.lower() or "invalid" in result.lower()
 
+    def test_normalize_stripped_absolute_path_into_workdir(self) -> None:
+        """Stripped absolute path should normalize to a workdir-relative path."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = CreateFileTool(work_dir=temp_dir)
+
+            stripped_abs = str(Path(temp_dir).resolve()).lstrip("/") + "/nested/test.txt"
+            result = tool._run(stripped_abs, "Hello")
+
+            assert "Created:" in result
+            assert "nested/test.txt" in result
+            assert (Path(temp_dir) / "nested" / "test.txt").exists()
+
+    def test_async_create_honors_overwrite_keyword(self) -> None:
+        """Async wrapper should pass overwrite as keyword-only."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tool = CreateFileTool(work_dir=temp_dir)
+            tool._run("async.txt", "old")
+
+            result = asyncio.run(tool._arun("async.txt", "new", overwrite=True))
+            assert "Created:" in result
+            assert (Path(temp_dir) / "async.txt").read_text() == "new"
+
 
 class TestReadFileTool:
     """Test ReadFileTool functionality."""
@@ -206,6 +229,18 @@ class TestDeleteFileTool:
 
             assert "backup:" in result.lower()
 
+    def test_async_delete_honors_backup_keyword(self) -> None:
+        """Async wrapper should pass backup as keyword-only."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = Path(temp_dir) / "test.txt"
+            file_path.write_text("Hello, World!")
+            tool = DeleteFileTool(work_dir=temp_dir, backup_enabled=False)
+
+            result = asyncio.run(tool._arun("test.txt", backup=False))
+
+            assert "Deleted:" in result
+            assert not file_path.exists()
+
 
 class TestListFilesTool:
     """Test ListFilesTool functionality."""
@@ -244,6 +279,18 @@ class TestListFilesTool:
 
             assert "file1.txt" in result
             assert "file2.py" not in result
+
+    def test_async_list_honors_recursive_keyword(self) -> None:
+        """Async wrapper should pass recursive as keyword-only."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            nested = Path(temp_dir) / "nested"
+            nested.mkdir(parents=True, exist_ok=True)
+            (nested / "deep.txt").write_text("content")
+
+            tool = ListFilesTool(work_dir=temp_dir)
+            result = asyncio.run(tool._arun(".", pattern="*.txt", recursive=True))
+
+            assert "deep.txt" in result
 
 
 class TestSearchInFilesTool:
@@ -349,3 +396,11 @@ class TestCreateFileEditTools:
         assert "list_files" in tool_names
         assert "search_in_files" in tool_names
         assert "get_file_info" in tool_names
+
+    def test_create_file_edit_tools_propagates_work_dir(self) -> None:
+        """Factory should propagate work_dir to all file tools."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tools = create_file_edit_tools(work_dir=temp_dir)
+            expected = Path(temp_dir).resolve()
+            for tool in tools:
+                assert Path(getattr(tool, "work_dir", "")).resolve() == expected

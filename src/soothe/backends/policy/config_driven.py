@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import fnmatch
 import logging
+from pathlib import Path
+from typing import Any
 
 from soothe.protocols.policy import (
     ActionRequest,
@@ -111,24 +114,34 @@ class ConfigDrivenPolicy:
     Args:
         profiles: Mapping of profile name to PolicyProfile.
         child_restrictions: Per-child permission overrides.
+        config: SootheConfig instance for security policy checks.
     """
 
     def __init__(
         self,
         profiles: dict[str, PolicyProfile] | None = None,
         child_restrictions: dict[str, frozenset[Permission]] | None = None,
+        config: Any = None,
     ) -> None:
         """Initialize the config-driven policy.
 
         Args:
             profiles: Mapping of profile name to PolicyProfile.
             child_restrictions: Per-child permission overrides.
+            config: SootheConfig instance for security policy checks.
         """
         self._profiles = profiles or dict(DEFAULT_PROFILES)
         self._child_restrictions = child_restrictions or {}
+        self._config = config
 
     def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
         """Check if an action is permitted under the active profile."""
+        # Check filesystem-specific security policy first
+        if action.action_type == "tool_call" and action.tool_name and action.tool_name.startswith("fs_"):
+            fs_decision = self._check_filesystem_permission(action, context)
+            if fs_decision.verdict != "allow":
+                return fs_decision
+
         required = _extract_required_permission(action)
         if required is None:
             return PolicyDecision(verdict="allow", reason="No permission required")
@@ -180,3 +193,103 @@ class ConfigDrivenPolicy:
             if profile.permissions is permissions:
                 return profile
         return None
+
+    def _check_filesystem_permission(
+        self,
+        action: ActionRequest,
+        context: PolicyContext,  # noqa: ARG002
+    ) -> PolicyDecision:
+        """Check filesystem access permissions.
+
+        Handles:
+        - Path blacklist/whitelist patterns
+        - File type restrictions
+        - Workspace boundary enforcement
+        - User approval requirements
+        """
+        if not self._config or not hasattr(self._config, "security"):
+            return PolicyDecision(verdict="allow", reason="No security config")
+
+        security = self._config.security
+        file_path = action.tool_args.get("file_path", "")
+
+        if not file_path:
+            return PolicyDecision(verdict="allow", reason="No file path specified")
+
+        resolved_path = Path(file_path).resolve()
+
+        # 1. Check denied_paths (blacklist) - highest priority
+        for pattern in security.denied_paths:
+            expanded_pattern = self._expand_path_pattern(pattern)
+            if self._path_matches_pattern(resolved_path, expanded_pattern):
+                return PolicyDecision(
+                    verdict="deny",
+                    reason=f"Path '{file_path}' matches denied pattern '{pattern}'",
+                )
+
+        # 2. Check allowed_paths (whitelist)
+        is_allowed = False
+        for pattern in security.allowed_paths:
+            expanded_pattern = self._expand_path_pattern(pattern)
+            if self._path_matches_pattern(resolved_path, expanded_pattern):
+                is_allowed = True
+                break
+
+        if not is_allowed:
+            return PolicyDecision(
+                verdict="deny",
+                reason=f"Path '{file_path}' does not match any allowed pattern",
+            )
+
+        # 3. Check workspace boundary
+        if hasattr(self._config, "workspace_dir") and self._config.workspace_dir:
+            workspace = Path(self._config.workspace_dir).resolve()
+            try:
+                resolved_path.relative_to(workspace)
+            except ValueError:
+                # Outside workspace
+                if not security.allow_paths_outside_workspace:
+                    return PolicyDecision(
+                        verdict="deny",
+                        reason=f"Path '{file_path}' is outside workspace",
+                    )
+                if security.require_approval_for_outside_paths:
+                    return PolicyDecision(
+                        verdict="need_approval",
+                        reason=f"Path '{file_path}' is outside workspace and requires approval",
+                    )
+
+        # 4. Check file type restrictions
+        file_ext = resolved_path.suffix.lower()
+
+        if file_ext in security.denied_file_types:
+            return PolicyDecision(
+                verdict="deny",
+                reason=f"File type '{file_ext}' is explicitly denied",
+            )
+
+        if file_ext in security.require_approval_for_file_types:
+            return PolicyDecision(
+                verdict="need_approval",
+                reason=f"Access to '{file_ext}' files requires approval",
+            )
+
+        # 5. All checks passed
+        return PolicyDecision(verdict="allow", reason="All security checks passed")
+
+    def _expand_path_pattern(self, pattern: str) -> str:
+        """Expand ~ and environment variables in path patterns."""
+        if pattern.startswith("~"):
+            return str(Path(pattern).expanduser())
+        return pattern
+
+    def _path_matches_pattern(self, path: Path, pattern: str) -> bool:
+        """Check if a path matches a glob pattern.
+
+        Supports:
+        - ** recursive wildcard
+        - * single-level wildcard
+        - Exact path matching
+        """
+        path_str = str(path)
+        return fnmatch.fnmatch(path_str, pattern) or path_str.startswith(pattern.rstrip("*"))

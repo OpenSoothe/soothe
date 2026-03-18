@@ -144,9 +144,18 @@ def create_soothe_agent(
     if resolved_backend is None:
         from deepagents.backends.filesystem import FilesystemBackend
 
-        resolved_backend = FilesystemBackend(
+        from soothe.backends.filesystem_secure import SecureFilesystemBackend
+
+        base_backend = FilesystemBackend(
             root_dir=resolved_workspace,
             virtual_mode=True,
+        )
+        resolved_backend = SecureFilesystemBackend(
+            backend=base_backend,
+            root_dir=resolved_workspace,
+            policy=resolved_policy,
+            policy_context=None,  # Will be set during tool execution
+            allow_outside_root=False,  # Configure via security policy
         )
 
     default_middleware: list[AgentMiddleware] = []

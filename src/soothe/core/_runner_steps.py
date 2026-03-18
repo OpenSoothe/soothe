@@ -227,7 +227,24 @@ class StepLoopMixin:
         response_text = "".join(step_state.full_response)
         duration_ms = int((perf_counter() - step_start) * 1000)
 
-        if response_text.strip():
+        if step_state.stream_error:
+            step.status = "failed"
+            step.result = f"Stream error: {step_state.stream_error}"
+            blocked = [
+                s.id
+                for s in (self._current_plan.steps if self._current_plan else [])
+                if step.id in s.depends_on and s.status == "pending"
+            ]
+            yield _custom(
+                {
+                    "type": "soothe.plan.step_failed",
+                    "step_id": step.id,
+                    "error": step.result,
+                    "blocked_steps": blocked,
+                    "duration_ms": duration_ms,
+                }
+            )
+        elif response_text.strip():
             step.status = "completed"
             step.result = response_text[:2000]
             yield _custom(

@@ -91,7 +91,11 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             )
             embeddings = config.create_embedding_model()
             logger.info("Using vector context backend")
-            return VectorContext(vector_store=vs, embeddings=embeddings)
+            return VectorContext(
+                vector_store=vs,
+                embeddings=embeddings,
+                use_tiktoken=config.performance.thresholds.use_tiktoken,
+            )
         except Exception:
             logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
     elif behavior == "vector":
@@ -117,7 +121,10 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
         )
 
     logger.info("Using keyword context backend with %s storage", storage)
-    return KeywordContext(persist_store=persist_store)
+    return KeywordContext(
+        persist_store=persist_store,
+        use_tiktoken=config.performance.thresholds.use_tiktoken,
+    )
 
 
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
@@ -254,18 +261,21 @@ def resolve_planner(
         direct=direct,
         fast_model=fast_model,
         routing_mode=config.protocols.planner.routing_mode,
+        simple_token_threshold=30,
+        complex_token_threshold=160,
+        use_tiktoken=config.performance.thresholds.use_tiktoken,
     )
 
 
-def resolve_policy(_config: SootheConfig) -> PolicyProtocol | None:
+def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
     """Instantiate the PolicyProtocol implementation from config.
 
     Args:
-        _config: Soothe configuration (unused - ConfigDrivenPolicy reads from env).
+        config: Soothe configuration.
 
     Returns:
         A PolicyProtocol instance.
     """
     from soothe.backends.policy.config_driven import ConfigDrivenPolicy
 
-    return ConfigDrivenPolicy()
+    return ConfigDrivenPolicy(config=config)

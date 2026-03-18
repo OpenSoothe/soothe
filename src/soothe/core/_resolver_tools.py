@@ -176,7 +176,8 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
     if name == "file_edit":
         from soothe.tools.file_edit import create_file_edit_tools
 
-        return list(create_file_edit_tools())
+        resolved_cwd = str(Path(config.workspace_dir).resolve()) if config and config.workspace_dir else str(Path.cwd())
+        return list(create_file_edit_tools(work_dir=resolved_cwd))
 
     if name == "document":
         from soothe.tools.document import create_document_tools
