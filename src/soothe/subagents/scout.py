@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.utils import expand_path
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -109,7 +111,7 @@ def create_scout_subagent(
 
         from soothe.backends.filesystem_secure import SecureFilesystemBackend
 
-        resolved_cwd = cwd or str(Path.cwd())
+        resolved_cwd = str(expand_path(cwd)) if cwd else str(Path.cwd())
         base_backend = FilesystemBackend(root_dir=resolved_cwd, virtual_mode=True)
         secure_backend = SecureFilesystemBackend(
             backend=base_backend,

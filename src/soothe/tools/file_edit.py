@@ -14,6 +14,8 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.utils import expand_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +38,7 @@ def _normalize_workspace_relative_input(file_path: str, work_dir: str) -> str:
     if not parts:
         return file_path
 
-    work_parts = Path(work_dir).resolve().parts
+    work_parts = expand_path(work_dir).parts
     stripped_work_parts = work_parts[1:] if work_parts and work_parts[0] == "/" else work_parts
     if (
         stripped_work_parts
@@ -51,7 +53,7 @@ def _display_path(path: Path, work_dir: str) -> str:
     """Render a path relative to work_dir when possible."""
     if work_dir:
         try:
-            return str(path.relative_to(Path(work_dir).resolve()))
+            return str(path.relative_to(expand_path(work_dir)))
         except ValueError:
             pass
     return str(path)
@@ -92,7 +94,7 @@ class CreateFileTool(BaseTool):
         # If absolute path, validate it's within work_dir
         if path.is_absolute():
             if self.work_dir:
-                work = Path(self.work_dir).resolve()
+                work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
@@ -101,7 +103,7 @@ class CreateFileTool(BaseTool):
             return path
 
         # Relative path - resolve against work_dir or cwd
-        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -216,7 +218,7 @@ class ReadFileTool(BaseTool):
 
         if path.is_absolute():
             if self.work_dir:
-                work = Path(self.work_dir).resolve()
+                work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
@@ -224,7 +226,7 @@ class ReadFileTool(BaseTool):
                     raise ValueError(msg) from err
             return path
 
-        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -306,7 +308,7 @@ class DeleteFileTool(BaseTool):
 
         if path.is_absolute():
             if self.work_dir:
-                work = Path(self.work_dir).resolve()
+                work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
@@ -314,7 +316,7 @@ class DeleteFileTool(BaseTool):
                     raise ValueError(msg) from err
             return path
 
-        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -407,7 +409,7 @@ class ListFilesTool(BaseTool):
             File listing or error.
         """
         try:
-            base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
             target = (base / path).resolve() if path != "." else base
 
@@ -478,7 +480,7 @@ class SearchInFilesTool(BaseTool):
             Search results or error.
         """
         try:
-            base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
             target = (base / path).resolve() if path != "." else base
 
@@ -543,7 +545,7 @@ class GetFileInfoTool(BaseTool):
 
         if path.is_absolute():
             if self.work_dir:
-                work = Path(self.work_dir).resolve()
+                work = expand_path(self.work_dir)
                 try:
                     path.resolve().relative_to(work)
                 except ValueError as err:
@@ -551,7 +553,7 @@ class GetFileInfoTool(BaseTool):
                     raise ValueError(msg) from err
             return path
 
-        base = Path(self.work_dir).resolve() if self.work_dir else Path.cwd()
+        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
 

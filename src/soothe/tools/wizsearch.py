@@ -82,7 +82,7 @@ def _to_serializable_sources(result: object) -> list[dict[str, object]]:
 _T = TypeVar("_T")
 
 
-def _run_coro(coro: Awaitable[_T]) -> _T:
+def _run_coro[T](coro: Awaitable[_T]) -> _T:
     """Run an async coroutine from sync tool entrypoint."""
     try:
         loop = asyncio.get_running_loop()

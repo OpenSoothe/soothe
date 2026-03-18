@@ -9,11 +9,14 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Literal
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
+
+from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,36 @@ ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 # Module-level storage for shell instances
 _shell_instances: dict[str, Any] = {}
+
+
+@dataclass
+class ShellHealthState:
+    """Track shell health across command executions.
+
+    Enables intelligent responsiveness testing that skips redundant checks
+    when the shell is healthy, reducing log noise and improving performance.
+
+    Attributes:
+        last_command_success: Whether the previous command succeeded.
+        last_command_timestamp: When the previous command executed.
+        consecutive_failures: Number of consecutive command failures.
+        last_test_timestamp: When the last responsiveness test was performed.
+        shell_recovered: Whether the shell was recently recovered.
+        first_command_executed: Whether any command has been executed yet.
+        last_trouble_sign: Type of trouble detected in last command.
+    """
+
+    last_command_success: bool = True
+    last_command_timestamp: datetime | None = None
+    consecutive_failures: int = 0
+    last_test_timestamp: datetime | None = None
+    shell_recovered: bool = False
+    first_command_executed: bool = False
+    last_trouble_sign: Literal["timeout", "eof", "error", "unexpected_output", "none"] = "none"
+
+
+# Module-level storage for shell health states
+_shell_health_states: dict[str, ShellHealthState] = {}
 
 
 class CliTool(BaseTool):
@@ -139,13 +172,12 @@ class CliTool(BaseTool):
             output = child.before or ""
 
             if "__validation__" not in output:
-                raise RuntimeError(
-                    f"Shell prompt validation failed. Expected '__validation__' in output, got: {output[:100]}"
-                )
+                msg = f"Shell prompt validation failed. Expected '__validation__' in output, got: {output[:100]}"
+                raise RuntimeError(msg)
 
             # STEP 7: Set workspace if configured
             if self.workspace_root:
-                workspace = str(Path(self.workspace_root).resolve())
+                workspace = str(expand_path(self.workspace_root))
                 child.sendline(f"cd '{workspace}'")
                 child.expect(custom_prompt, timeout=self.quick_timeout)
 
@@ -159,8 +191,8 @@ class CliTool(BaseTool):
             logger.warning("pexpect not installed; cli tool will not work")
             self.custom_prompt = ""
 
-        except Exception as e:
-            logger.error(f"Failed to initialize shell: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Failed to initialize shell")
             self.custom_prompt = ""
 
             # Clean up partial initialization
@@ -191,7 +223,7 @@ class CliTool(BaseTool):
             True if shell responds correctly, False otherwise
 
         Invariants:
-        - MUST complete in <5 seconds (2 attempts × 2s timeout + sleep)
+        - MUST complete in <5 seconds (2 attempts x 2s timeout + sleep)
         - MUST NOT raise exceptions (returns bool only)
         - MUST NOT modify shell state on failure
         """
@@ -211,15 +243,15 @@ class CliTool(BaseTool):
                 output = child.before or ""
 
                 if "__test__" in output:
-                    logger.debug(f"Shell responsiveness test passed (attempt {attempt + 1})")
+                    logger.debug("Shell responsiveness test passed (attempt %d)", attempt + 1)
                     return True
 
-                logger.warning(f"Shell test attempt {attempt + 1} failed: unexpected output '{output[:50]}'")
+                logger.warning("Shell test attempt %d failed: unexpected output '%s'", attempt + 1, output[:50])
 
             except pexpect.TIMEOUT:
-                logger.warning(f"Shell test attempt {attempt + 1} timed out after {self.responsiveness_timeout}s")
+                logger.warning("Shell test attempt %d timed out after %ds", attempt + 1, self.responsiveness_timeout)
             except Exception as e:
-                logger.warning(f"Shell test attempt {attempt + 1} failed: {e}")
+                logger.warning("Shell test attempt %d failed: %s", attempt + 1, e)
 
             # Brief pause before retry
             if attempt < max_attempts - 1:
@@ -227,6 +259,88 @@ class CliTool(BaseTool):
 
         logger.error("Shell responsiveness test failed after all attempts")
         return False
+
+    def _should_test_responsiveness(self, shell_id: str = "default") -> bool:
+        """Determine if responsiveness test is needed based on shell health.
+
+        Implements smart testing to avoid redundant checks when shell is healthy.
+
+        Args:
+            shell_id: Shell identifier (default: "default")
+
+        Returns:
+            True if test should be performed, False to skip
+
+        Decision Logic:
+        - First command ever: TEST (validate initialization)
+        - Previous command successful AND no recovery: SKIP
+        - Previous command failed: TEST (check if shell broke)
+        - Shell was recovered: TEST (validate new shell)
+        - Consecutive failures >= 2: TEST (persistent issue)
+        - Trouble signs detected: TEST
+        """
+        health = _shell_health_states.get(shell_id)
+
+        # No health state yet - first command
+        if health is None:
+            logger.debug("Testing responsiveness: first command")
+            return True
+
+        # Shell was recently recovered - validate it works
+        if health.shell_recovered:
+            logger.debug("Testing responsiveness: shell was recovered")
+            return True
+
+        # First command hasn't been executed yet
+        if not health.first_command_executed:
+            logger.debug("Testing responsiveness: validating initialization")
+            return True
+
+        # Previous command failed - check if shell broke
+        if not health.last_command_success:
+            logger.debug("Testing responsiveness: previous command failed")
+            return True
+
+        # Consecutive failures - persistent issue
+        consecutive_failure_threshold = 2
+        if health.consecutive_failures >= consecutive_failure_threshold:
+            logger.debug("Testing responsiveness: consecutive failures detected")
+            return True
+
+        # Trouble signs detected
+        if health.last_trouble_sign != "none":
+            logger.debug("Testing responsiveness: trouble sign detected (%s)", health.last_trouble_sign)
+            return True
+
+        # Shell is healthy - skip test
+        logger.debug("Skipping responsiveness test: shell healthy")
+        return False
+
+    def _detect_trouble_sign(
+        self, error: Exception | None = None, _output: str = ""
+    ) -> Literal["timeout", "eof", "error", "unexpected_output", "none"]:
+        """Detect trouble signs from command execution.
+
+        Args:
+            error: Exception that occurred during execution (if any)
+            output: Command output (if any)
+
+        Returns:
+            Type of trouble sign detected, or "none" if healthy
+        """
+        import pexpect
+
+        if error is None:
+            return "none"
+
+        if isinstance(error, pexpect.TIMEOUT):
+            return "timeout"
+        if isinstance(error, pexpect.EOF):
+            return "eof"
+        if isinstance(error, Exception):
+            return "error"
+
+        return "none"
 
     def _recover_shell(self, max_retries: int = 2) -> None:
         """Recover the shell if it becomes unresponsive.
@@ -267,24 +381,24 @@ class CliTool(BaseTool):
 
                 # STEP 4: Reset workspace
                 if self.workspace_root:
-                    workspace = str(Path(self.workspace_root).resolve())
+                    workspace = str(expand_path(self.workspace_root))
                     child = _shell_instances.get("default")
                     if child:
                         child.sendline(f"cd '{workspace}'")
                         child.expect(self.custom_prompt, timeout=self.quick_timeout)
 
-                logger.info(f"Shell recovered successfully (attempt {attempt + 1})")
-                return
+                logger.info("Shell recovered successfully (attempt %d)", attempt + 1)
 
             except Exception as e:
-                logger.error(f"Recovery attempt {attempt + 1} failed: {e}")
+                logger.exception("Recovery attempt %d failed", attempt + 1)
 
                 if attempt < max_retries - 1:
                     logger.info("Retrying recovery...")
                     time.sleep(1)
                 else:
-                    logger.error("All recovery attempts failed")
-                    raise RuntimeError(f"Shell recovery failed after {max_retries} attempts: {e}") from e
+                    logger.exception("All recovery attempts failed")
+                    msg = f"Shell recovery failed after {max_retries} attempts: {e}"
+                    raise RuntimeError(msg) from e
 
     def _run(self, command: str) -> str:
         """Execute CLI command with recovery support.
@@ -296,7 +410,7 @@ class CliTool(BaseTool):
             Command output (stripped, ANSI-cleaned) or error message
 
         Invariants:
-        - MUST check shell responsiveness before execution
+        - MUST check shell responsiveness before execution (smart testing)
         - MUST attempt recovery if shell unresponsive
         - MUST return clear, actionable error messages
         - MUST NOT leave shell in inconsistent state
@@ -311,14 +425,26 @@ class CliTool(BaseTool):
             logger.warning("Banned command attempted: %s", command)
             return "Error: Command not allowed for security reasons."
 
+        # Get or create health state
+        health = _shell_health_states.get("default")
+        if health is None:
+            health = ShellHealthState()
+            _shell_health_states["default"] = health
+
         try:
-            # Test responsiveness
-            if not self._test_shell_responsive():
-                logger.warning("Shell not responsive, attempting recovery")
-                try:
-                    self._recover_shell()
-                except RuntimeError as e:
-                    return f"Error: Shell recovery failed. Please restart the application. Details: {e}"
+            # Smart responsiveness testing
+            if self._should_test_responsiveness("default"):
+                if not self._test_shell_responsive():
+                    logger.warning("Shell not responsive, attempting recovery")
+                    try:
+                        self._recover_shell()
+                        # Mark that shell was recovered
+                        health.shell_recovered = True
+                    except RuntimeError as e:
+                        return f"Error: Shell recovery failed. Please restart the application. Details: {e}"
+            else:
+                # Reset recovery flag if we're skipping test (shell healthy)
+                health.shell_recovered = False
 
             # Execute command
             child = _shell_instances["default"]
@@ -328,6 +454,14 @@ class CliTool(BaseTool):
             try:
                 child.expect(self.custom_prompt, timeout=self.timeout)
             except pexpect.TIMEOUT:
+                # Update health state - command failed
+                trouble_sign = self._detect_trouble_sign(error=TimeoutError(f"Timeout after {self.timeout}s"))
+                health.last_command_success = False
+                health.last_command_timestamp = datetime.now()
+                health.consecutive_failures += 1
+                health.last_trouble_sign = trouble_sign
+                health.first_command_executed = True
+
                 return (
                     f"Error: Command timed out after {self.timeout}s. "
                     f"For long-running operations, use run_cli_background instead, "
@@ -341,17 +475,40 @@ class CliTool(BaseTool):
             if len(output) > self.max_output_length:
                 output = output[: self.max_output_length] + "\n... (output truncated)"
 
+            # Update health state - command succeeded
+            health.last_command_success = True
+            health.last_command_timestamp = datetime.now()
+            health.consecutive_failures = 0
+            health.last_trouble_sign = "none"
+            health.first_command_executed = True
+
             return output.strip()
 
-        except pexpect.EOF:
+        except pexpect.EOF as e:
             logger.exception("Shell process terminated unexpectedly")
+            # Update health state - shell crashed
+            trouble_sign = self._detect_trouble_sign(error=e)
+            health.last_command_success = False
+            health.last_command_timestamp = datetime.now()
+            health.consecutive_failures += 1
+            health.last_trouble_sign = trouble_sign
+
             self._recover_shell()
+            health.shell_recovered = True
             return "Error: Shell terminated unexpectedly. Shell has been restarted. Please retry your command."
 
         except Exception as e:
             logger.exception("CLI command failed")
+            # Update health state - command failed
+            trouble_sign = self._detect_trouble_sign(error=e)
+            health.last_command_success = False
+            health.last_command_timestamp = datetime.now()
+            health.consecutive_failures += 1
+            health.last_trouble_sign = trouble_sign
+
             with contextlib.suppress(Exception):
                 self._recover_shell()
+                health.shell_recovered = True
             return f"Error executing command: {e}"
 
     async def _arun(self, command: str) -> str:
@@ -360,11 +517,14 @@ class CliTool(BaseTool):
 
     @classmethod
     def cleanup(cls) -> None:
-        """Clean up shell resources."""
+        """Clean up shell resources and health states."""
         if "default" in _shell_instances:
             with contextlib.suppress(Exception):
                 _shell_instances["default"].close()
             del _shell_instances["default"]
+
+        # Clear health state
+        _shell_health_states.pop("default", None)
 
 
 class GetCurrentDirTool(BaseTool):

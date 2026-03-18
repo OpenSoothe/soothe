@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.utils import expand_path
+
 if TYPE_CHECKING:
     from soothe.protocols.policy import PolicyContext, PolicyProtocol
 
@@ -37,7 +39,7 @@ class SecureFilesystemBackend:
             allow_outside_root: Allow access outside root_dir without policy check.
         """
         self._backend = backend
-        self._root = Path(root_dir).resolve()
+        self._root = expand_path(root_dir)
         self._policy = policy
         self._policy_context = policy_context
         self._allow_outside_root = allow_outside_root
@@ -55,7 +57,7 @@ class SecureFilesystemBackend:
         Raises:
             ValueError: If path is invalid or outside root without permission
         """
-        path = Path(file_path)
+        path = expand_path(file_path)
 
         # Case 1: Relative path - resolve under root_dir (virtual path behavior)
         if not path.is_absolute():

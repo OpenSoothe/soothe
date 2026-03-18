@@ -24,31 +24,53 @@ app = typer.Typer(
 
 
 def setup_logging(config: SootheConfig | None = None) -> None:
-    """Configure the ``soothe`` logger hierarchy with a file handler.
+    """Configure the ``soothe`` logger hierarchy with file and optional console handlers.
 
     Writes to ``SOOTHE_HOME/logs/soothe.log`` (rotating, 10 MB max, 3 backups).
+    Optionally outputs to console when enabled in config.
 
     Args:
-        config: Optional config to read ``logging_config.level`` and ``logging_config.file`` from.
+        config: Optional config to read logging configuration from.
     """
     cfg = config or SootheConfig()
     log_dir = Path(SOOTHE_HOME) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = cfg.logging.file or str(log_dir / "soothe.log")
-    level_name = cfg.logging.level.upper() if cfg.logging.level else "INFO"
+    # Determine log levels
+    file_level_name = cfg.logging.file.level.upper()
+    console_level_name = cfg.logging.console.level.upper()
+
     if cfg.debug:
-        level_name = "DEBUG"
-    level = getattr(logging, level_name, logging.INFO)
+        file_level_name = "DEBUG"
+        console_level_name = "DEBUG"
 
+    file_level = getattr(logging, file_level_name, logging.INFO)
+    console_level = getattr(logging, console_level_name, logging.WARNING)
+
+    # Set root logger level to minimum of file and console levels
     root_logger = logging.getLogger("soothe")
-    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
-        handler = RotatingFileHandler(log_file, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8")
-        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s"))
-        handler.setLevel(level)
-        root_logger.addHandler(handler)
-    root_logger.setLevel(level)
+    root_logger.setLevel(min(file_level, console_level))
 
+    # Setup file handler
+    log_file = cfg.logging.file.path or str(log_dir / "soothe.log")
+    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=cfg.logging.file.max_bytes, backupCount=cfg.logging.file.backup_count, encoding="utf-8"
+        )
+        file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s"))
+        file_handler.setLevel(file_level)
+        root_logger.addHandler(file_handler)
+
+    # Setup console handler (optional, disabled by default)
+    if cfg.logging.console.enabled:
+        stream = sys.stderr if cfg.logging.console.stream == "stderr" else sys.stdout
+        if not any(isinstance(h, logging.StreamHandler) and h.stream == stream for h in root_logger.handlers):
+            console_handler = logging.StreamHandler(stream)
+            console_handler.setFormatter(logging.Formatter(cfg.logging.console.format))
+            console_handler.setLevel(console_level)
+            root_logger.addHandler(console_handler)
+
+    # Suppress noisy third-party loggers
     noisy_third_party = (
         "httpx",
         "httpcore",
@@ -807,7 +829,9 @@ def config(
             general_table.add_row("Memory Backend", cfg.protocols.memory.backend.title())
             general_table.add_row("Policy Profile", cfg.protocols.policy.profile)
             general_table.add_row("Progress Verbosity", cfg.logging.progress_verbosity)
-            general_table.add_row("Vector Store Provider", cfg.vector_store_provider.title())
+            # Show vector store providers count
+            vs_count = len(cfg.vector_stores)
+            general_table.add_row("Vector Store Providers", f"{vs_count} configured")
 
             typer.echo(Panel(providers_table, border_style="blue"))
             typer.echo(Panel(subagents_table, border_style="blue"))
@@ -1494,7 +1518,22 @@ def show_config(
         typer.echo(f"  context_backend: {cfg.protocols.context.backend}")
         typer.echo(f"  memory_backend: {cfg.protocols.memory.backend}")
         typer.echo(f"  planner_routing: {cfg.protocols.planner.routing}")
-        typer.echo(f"  vector_store_provider: {cfg.vector_store_provider}")
+
+        typer.echo("\n[Vector Stores]")
+        if cfg.vector_stores:
+            for vs in cfg.vector_stores:
+                typer.echo(f"  - {vs.name} ({vs.provider_type})")
+        else:
+            typer.echo("  (none)")
+
+        if cfg.vector_store_router.default:
+            typer.echo(f"\n  Router default: {cfg.vector_store_router.default}")
+        if cfg.vector_store_router.context:
+            typer.echo(f"  Router context: {cfg.vector_store_router.context}")
+        if cfg.vector_store_router.skillify:
+            typer.echo(f"  Router skillify: {cfg.vector_store_router.skillify}")
+        if cfg.vector_store_router.weaver_reuse:
+            typer.echo(f"  Router weaver_reuse: {cfg.vector_store_router.weaver_reuse}")
 
         typer.echo("\n" + "=" * 50)
 

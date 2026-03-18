@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
 from langchain_core.messages import SystemMessage
+from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -16,6 +17,17 @@ if TYPE_CHECKING:
     from soothe.core.unified_classifier import UnifiedClassification
 
 logger = logging.getLogger(__name__)
+
+
+class _OptimizationState(TypedDict):
+    """State schema for SystemPromptOptimizationMiddleware.
+
+    LangGraph merges all middleware state schemas to build the final graph state.
+    This schema declares the unified_classification field so it propagates correctly.
+    """
+
+    messages: list[Any]  # Inherited from base
+    unified_classification: NotRequired[Any]  # Type: UnifiedClassification
 
 
 class SystemPromptOptimizationMiddleware(AgentMiddleware):
@@ -34,6 +46,8 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
     Args:
         config: Soothe configuration for resolving prompt templates.
     """
+
+    state_schema = _OptimizationState
 
     def __init__(self, config: SootheConfig) -> None:
         """Initialize the system prompt optimization middleware.
@@ -92,7 +106,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return request
 
         complexity = classification.runtime_complexity
-        logger.info("Optimizing system prompt for %s query based on LLM classification", complexity)
+        logger.info(
+            "Optimizing system prompt for %s query based on LLM classification (complexity: %s, plan_only: %s)",
+            complexity,
+            complexity,
+            classification.is_plan_only,
+        )
 
         # Get appropriate prompt
         optimized_prompt = self._get_prompt_for_complexity(complexity)

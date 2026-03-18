@@ -1,5 +1,7 @@
 """Tests for SootheConfig."""
 
+import pytest
+
 from soothe.config import (
     MCPServerConfig,
     ModelProviderConfig,
@@ -90,6 +92,60 @@ class TestSootheConfig:
         for level in ("minimal", "normal", "detailed", "debug"):
             cfg = SootheConfig(logging={"progress_verbosity": level})
             assert cfg.logging.progress_verbosity == level
+
+
+class TestLoggingConfig:
+    """Tests for logging configuration."""
+
+    def test_file_logging_defaults(self) -> None:
+        """Test that file logging has correct defaults."""
+        cfg = SootheConfig()
+        assert cfg.logging.file.level == "INFO"
+        assert cfg.logging.file.path is None
+        assert cfg.logging.file.max_bytes == 10485760  # 10 MB
+        assert cfg.logging.file.backup_count == 3
+
+    def test_console_logging_defaults(self) -> None:
+        """Test that console logging is disabled by default."""
+        cfg = SootheConfig()
+        assert cfg.logging.console.enabled is False
+        assert cfg.logging.console.level == "WARNING"
+        assert cfg.logging.console.stream == "stderr"
+        assert cfg.logging.console.format == "%(levelname)-8s %(name)s %(message)s"
+
+    def test_file_logging_custom_config(self) -> None:
+        """Test custom file logging configuration."""
+        cfg = SootheConfig(
+            logging={
+                "file": {
+                    "level": "DEBUG",
+                    "path": "/custom/path.log",
+                    "max_bytes": 20971520,
+                    "backup_count": 5,
+                }
+            }
+        )
+        assert cfg.logging.file.level == "DEBUG"
+        assert cfg.logging.file.path == "/custom/path.log"
+        assert cfg.logging.file.max_bytes == 20971520
+        assert cfg.logging.file.backup_count == 5
+
+    def test_console_logging_custom_config(self) -> None:
+        """Test custom console logging configuration."""
+        cfg = SootheConfig(
+            logging={
+                "console": {
+                    "enabled": True,
+                    "level": "INFO",
+                    "stream": "stdout",
+                    "format": "%(name)s: %(message)s",
+                }
+            }
+        )
+        assert cfg.logging.console.enabled is True
+        assert cfg.logging.console.level == "INFO"
+        assert cfg.logging.console.stream == "stdout"
+        assert cfg.logging.console.format == "%(name)s: %(message)s"
 
     def test_custom_subagents(self) -> None:
         cfg = SootheConfig(
@@ -383,11 +439,165 @@ class TestProtocolConfig:
         assert cfg.protocols.memory.database_provider == "postgres"
 
     def test_vector_store_config(self) -> None:
+        """Test vector store multi-provider configuration."""
         cfg = SootheConfig(
-            vector_store_provider="pgvector",
-            vector_store_collection="my_collection",
-            vector_store_config={"dsn": "postgresql://localhost/test"},
+            vector_stores=[
+                {
+                    "name": "pgvector_prod",
+                    "provider_type": "pgvector",
+                    "dsn": "postgresql://localhost/test",
+                    "pool_size": 10,
+                }
+            ],
+            vector_store_router={
+                "default": "pgvector_prod:soothe_default",
+                "context": "pgvector_prod:soothe_context",
+            },
         )
+        assert len(cfg.vector_stores) == 1
+        assert cfg.vector_stores[0].name == "pgvector_prod"
+        assert cfg.vector_stores[0].provider_type == "pgvector"
+        assert cfg.vector_store_router.default == "pgvector_prod:soothe_default"
+        assert cfg.vector_store_router.context == "pgvector_prod:soothe_context"
+
+    def test_resolve_vector_store_role_with_default(self) -> None:
+        """Test that role resolution falls back to default."""
+        cfg = SootheConfig(
+            vector_store_router={
+                "default": "in_memory:soothe_default",
+                "context": "pgvector:soothe_context",
+            }
+        )
+        assert cfg.resolve_vector_store_role("context") == "pgvector:soothe_context"
+        assert cfg.resolve_vector_store_role("skillify") == "in_memory:soothe_default"
+
+    def test_resolve_vector_store_role_no_default(self) -> None:
+        """Test that role resolution returns None when no assignment and no default."""
+        cfg = SootheConfig()
+        assert cfg.resolve_vector_store_role("context") is None
+
+    def test_vector_store_instance_caching(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that vector store instances are cached."""
+        from unittest.mock import MagicMock
+
+        mock_create = MagicMock()
+        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+
+        cfg = SootheConfig(
+            vector_stores=[{"name": "test_provider", "provider_type": "in_memory"}],
+            vector_store_router={"default": "test_provider:collection1"},
+        )
+
+        # First call should create
+        vs1 = cfg.create_vector_store_for_role("skillify")
+        assert mock_create.call_count == 1
+
+        # Second call should use cache
+        vs2 = cfg.create_vector_store_for_role("skillify")
+        assert mock_create.call_count == 1
+        assert vs1 is vs2
+
+    def test_vector_store_env_var_resolution(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test environment variable resolution for vector store fields."""
+        monkeypatch.setenv("TEST_DSN", "postgresql://user:pass@host:5432/db")
+
+        cfg = SootheConfig(
+            vector_stores=[
+                {
+                    "name": "pgvector_test",
+                    "provider_type": "pgvector",
+                    "dsn": "${TEST_DSN}",
+                }
+            ],
+            vector_store_router={"default": "pgvector_test:collection"},
+        )
+
+        # Verify that creating the vector store resolves the env var
+        from unittest.mock import MagicMock
+
+        mock_create = MagicMock()
+        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+
+        cfg.create_vector_store_for_role("skillify")
+        call_kwargs = mock_create.call_args[0][2]
+        assert call_kwargs["dsn"] == "postgresql://user:pass@host:5432/db"
+
+    def test_pgvector_dsn_required(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that pgvector DSN is required (no fallback)."""
+        from unittest.mock import MagicMock
+
+        mock_create = MagicMock()
+        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+
+        cfg = SootheConfig(
+            vector_stores=[
+                {
+                    "name": "pgvector_no_dsn",
+                    "provider_type": "pgvector",
+                    # No dsn field - should pass None to create_vector_store
+                }
+            ],
+            vector_store_router={"default": "pgvector_no_dsn:collection"},
+        )
+
+        cfg.create_vector_store_for_role("skillify")
+        call_kwargs = mock_create.call_args[0][2]
+        # DSN should be None if not provided in config
+        assert call_kwargs.get("dsn") is None
+
+    def test_invalid_router_format(self) -> None:
+        """Test ValueError for malformed router strings."""
+        cfg = SootheConfig(vector_store_router={"default": "invalid_format_no_colon"})
+        with pytest.raises(ValueError, match="Invalid router format"):
+            cfg.create_vector_store_for_role("skillify")
+
+    def test_missing_provider(self) -> None:
+        """Test ValueError when provider name not found."""
+        cfg = SootheConfig(
+            vector_stores=[{"name": "provider1", "provider_type": "in_memory"}],
+            vector_store_router={"default": "provider2:collection"},
+        )
+        with pytest.raises(ValueError, match="Vector store provider 'provider2' not found"):
+            cfg.create_vector_store_for_role("skillify")
+
+    def test_missing_role_assignment(self) -> None:
+        """Test ValueError when role has no assignment and no default."""
+        cfg = SootheConfig(
+            vector_store_router={"context": "provider:collection"}  # No default
+        )
+        with pytest.raises(ValueError, match="has no assignment and no default"):
+            cfg.create_vector_store_for_role("skillify")
+
+    def test_mixed_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test using different providers for different roles."""
+        from unittest.mock import MagicMock
+
+        mock_create = MagicMock()
+        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+
+        cfg = SootheConfig(
+            vector_stores=[
+                {"name": "pgvector_prod", "provider_type": "pgvector", "dsn": "postgresql://localhost/db"},
+                {"name": "weaviate_cloud", "provider_type": "weaviate", "url": "http://localhost:8080"},
+                {"name": "in_memory_dev", "provider_type": "in_memory"},
+            ],
+            vector_store_router={
+                "context": "pgvector_prod:soothe_context",
+                "skillify": "weaviate_cloud:soothe_skillify",
+                "weaver_reuse": "in_memory_dev:soothe_weaver",
+            },
+        )
+
+        # Create for each role
+        cfg.create_vector_store_for_role("context")
+        cfg.create_vector_store_for_role("skillify")
+        cfg.create_vector_store_for_role("weaver_reuse")
+
+        # Verify each call had the correct provider type
+        calls = mock_create.call_args_list
+        assert calls[0][0][0] == "pgvector"
+        assert calls[1][0][0] == "weaviate"
+        assert calls[2][0][0] == "in_memory"
 
 
 class TestToolsSettings:
@@ -466,15 +676,3 @@ class TestToolsSettings:
             }
         )
         assert cfg.resolve_persistence_postgres_dsn() == "postgresql://localhost/soothe_new"
-
-    def test_resolve_vector_store_config_falls_back_to_vector_dsn(self) -> None:
-        cfg = SootheConfig(
-            vector_store_provider="pgvector",
-            vector_store_config={"pool_size": 3},
-            persistence={
-                "vector_postgres_dsn": "postgresql://localhost/vectordb_new",
-            },
-        )
-        resolved = cfg.resolve_vector_store_config()
-        assert resolved["dsn"] == "postgresql://localhost/vectordb_new"
-        assert resolved["pool_size"] == 3

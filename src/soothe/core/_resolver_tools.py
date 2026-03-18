@@ -18,6 +18,7 @@ from soothe.subagents.research import create_research_subagent
 from soothe.subagents.scout import create_scout_subagent
 from soothe.subagents.skillify import create_skillify_subagent
 from soothe.subagents.weaver import create_weaver_subagent
+from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -176,7 +177,7 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
     if name == "file_edit":
         from soothe.tools.file_edit import create_file_edit_tools
 
-        resolved_cwd = str(Path(config.workspace_dir).resolve()) if config and config.workspace_dir else str(Path.cwd())
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
         return list(create_file_edit_tools(work_dir=resolved_cwd))
 
     if name == "document":
@@ -280,7 +281,7 @@ def resolve_subagents(
     eager_subagents = {"planner"}
 
     cwd_subagents = {"planner", "scout", "claude"}
-    resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
+    resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     subagents: list[SubAgent | CompiledSubAgent] = []
     total_start = time.perf_counter()

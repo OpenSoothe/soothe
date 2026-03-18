@@ -11,8 +11,8 @@ from soothe.protocols.vector_store import VectorRecord
 class InMemoryVectorStore:
     """Simple in-memory vector store implementing VectorStoreProtocol.
 
-    Intended as a lightweight fallback when ``vector_store_provider`` is
-    ``none``.  Not suitable for production workloads.
+    Intended as a lightweight fallback when no external vector store providers
+    are configured. Not suitable for production workloads.
 
     Args:
         collection: Collection name (for logging/identification only).

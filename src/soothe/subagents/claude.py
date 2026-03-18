@@ -18,6 +18,8 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.utils import expand_path
+
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
 
@@ -188,7 +190,7 @@ def create_claude_subagent(
         `CompiledSubAgent` dict compatible with deepagents.
     """
     # Default to current working directory if not specified
-    resolved_cwd = cwd or str(Path.cwd())
+    resolved_cwd = str(expand_path(cwd)) if cwd else str(Path.cwd())
 
     runnable = _build_claude_graph(
         claude_model=model,

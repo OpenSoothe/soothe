@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.config import SOOTHE_HOME, SootheConfig, _resolve_env
-
-# Re-export tool/subagent resolution (backward compat for agent.py, cli/main.py)
 from soothe.core._resolver_infra import resolve_checkpointer, resolve_durability
 from soothe.core._resolver_tools import (
     SUBAGENT_FACTORIES,
@@ -24,6 +22,7 @@ from soothe.core._resolver_tools import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -79,21 +78,20 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
     behavior, storage = parts
 
-    # Only attempt vector backend if vector_store_provider is configured
-    if behavior == "vector" and config.vector_store_provider == "none":
-        logger.info("Context backend is 'vector' but vector_store_provider is 'none'; falling back to keyword")
-        behavior = "keyword"
+    # Only attempt vector backend if vector store role is configured
+    if behavior == "vector":
+        router_str = config.resolve_vector_store_role("context")
+        if not router_str:
+            logger.info(
+                "Context backend is 'vector' but no vector store assigned for 'context' role; falling back to keyword"
+            )
+            behavior = "keyword"
 
     if behavior == "vector":
         try:
             from soothe.backends.context.vector import VectorContext
-            from soothe.backends.vector_store import create_vector_store
 
-            vs = create_vector_store(
-                config.vector_store_provider,
-                f"{config.vector_store_collection}_context",
-                config.resolve_vector_store_config(),
-            )
+            vs = config.create_vector_store_for_role("context")
             embeddings = config.create_embedding_model()
             logger.info("Using vector context backend")
             return VectorContext(
@@ -224,8 +222,8 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     except ImportError:
         logger.exception("MemU memory backend requires 'memory' extra: pip install soothe[memory]")
         raise
-    except Exception as e:
-        logger.exception("Failed to initialize MemU memory backend: %s", e)
+    except Exception:
+        logger.exception("Failed to initialize MemU memory backend")
         raise
 
 
@@ -259,7 +257,7 @@ def resolve_planner(
     with contextlib.suppress(Exception):
         fast_model = config.create_chat_model("fast")
 
-    resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
+    resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     from soothe.backends.planning.simple import SimplePlanner
 

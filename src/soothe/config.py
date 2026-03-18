@@ -118,6 +118,34 @@ class ModelProviderConfig(BaseModel):
     models: list[str] = Field(default_factory=list)
 
 
+class VectorStoreProviderConfig(BaseModel):
+    """Configuration for a single vector store provider.
+
+    Args:
+        name: Provider identifier (used in router).
+        provider_type: Backend type (pgvector, weaviate, in_memory).
+        dsn: PostgreSQL DSN (pgvector). Supports ${ENV_VAR}.
+        pool_size: Connection pool size (pgvector).
+        index_type: Index type (pgvector): hnsw, ivfflat, none.
+        url: Weaviate server URL. Supports ${ENV_VAR}.
+        api_key: Weaviate Cloud API key. Supports ${ENV_VAR}.
+        grpc_port: Weaviate gRPC port.
+    """
+
+    name: str
+    provider_type: Literal["pgvector", "weaviate", "in_memory"] = "in_memory"
+
+    # pgvector options
+    dsn: str | None = None
+    pool_size: int = 5
+    index_type: Literal["hnsw", "ivfflat", "none"] = "hnsw"
+
+    # Weaviate options
+    url: str | None = None
+    api_key: str | None = None
+    grpc_port: int = 50051
+
+
 class ModelRouter(BaseModel):
     """Maps purpose-based roles to ``provider_name:model_name`` strings.
 
@@ -136,6 +164,25 @@ class ModelRouter(BaseModel):
     fast: str | None = None
     image: str | None = None
     embedding: str | None = None
+
+
+class VectorStoreRouter(BaseModel):
+    """Maps component roles to "provider:collection" strings.
+
+    Format: "provider_name:collection_name"
+    Example: "pgvector_prod:soothe_context"
+
+    Args:
+        default: Default assignment for unspecified roles.
+        context: VectorContext protocol assignment.
+        skillify: Skillify subagent assignment.
+        weaver_reuse: Weaver reuse index assignment.
+    """
+
+    default: str | None = None
+    context: str | None = None
+    skillify: str | None = None
+    weaver_reuse: str | None = None
 
 
 class SubagentConfig(BaseModel):
@@ -364,17 +411,15 @@ class ToolsSettings(BaseModel):
 
 
 class PersistenceConfig(BaseModel):
-    """Unified persistence settings for all backends.
+    """Unified persistence settings for protocol backends.
 
     Args:
         soothe_postgres_dsn: PostgreSQL DSN used by persistence/checkpointer/
             durability metadata storage.
-        vector_postgres_dsn: PostgreSQL DSN used by pgvector-based vector store.
         default_backend: Default backend for new protocols (can be overridden).
     """
 
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    vector_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/vectordb"
     default_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
 
 
@@ -508,6 +553,38 @@ class AutonomousConfig(BaseModel):
     enable_dynamic_goals: bool = Field(default=True)
 
 
+class FileLoggingConfig(BaseModel):
+    """File logging configuration.
+
+    Args:
+        level: Logging level for file output.
+        path: Log file path (empty = SOOTHE_HOME/logs/soothe.log).
+        max_bytes: Maximum file size before rotation.
+        backup_count: Number of rotating backup files.
+    """
+
+    level: str = "INFO"
+    path: str | None = None
+    max_bytes: int = 10485760  # 10 MB
+    backup_count: int = 3
+
+
+class ConsoleLoggingConfig(BaseModel):
+    """Console logging configuration.
+
+    Args:
+        enabled: Whether to output logs to console (disabled by default for TUI compatibility).
+        level: Logging level for console output.
+        stream: Output stream ('stdout' or 'stderr').
+        format: Log format string for console output.
+    """
+
+    enabled: bool = False
+    level: str = "WARNING"
+    stream: Literal["stdout", "stderr"] = "stderr"
+    format: str = "%(levelname)-8s %(name)s %(message)s"
+
+
 class ThreadLoggingConfig(BaseModel):
     """Thread logging configuration.
 
@@ -528,14 +605,14 @@ class LoggingConfig(BaseModel):
     """Logging and observability configuration.
 
     Args:
-        level: Python logging level.
-        file: Log file path.
-        progress_verbosity: Progress visibility level.
+        file: File logging configuration.
+        console: Console logging configuration.
+        progress_verbosity: Progress event visibility level (TUI/headless activity display).
         thread_logging: Thread logging configuration.
     """
 
-    level: str = "INFO"
-    file: str | None = None
+    file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
+    console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
     progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
 
@@ -747,14 +824,15 @@ class SootheConfig(BaseSettings):
 
     # --- Vector store config ---
 
-    vector_store_provider: Literal["pgvector", "weaviate", "none"] = "none"
-    """Vector store backend for VectorContext."""
+    # Vector store multi-provider configuration
+    vector_stores: list[VectorStoreProviderConfig] = Field(default_factory=list)
+    """Vector store provider configurations."""
 
-    vector_store_collection: str = "soothe_default"
-    """Default collection name for the vector store."""
+    vector_store_router: VectorStoreRouter = Field(default_factory=VectorStoreRouter)
+    """Maps component roles to provider:collection pairs."""
 
-    vector_store_config: dict[str, Any] = Field(default_factory=dict)
-    """Provider-specific vector store configuration (dsn, url, etc.)."""
+    _vector_store_cache: dict[str, Any] = {}
+    """Cache for vector store instances."""
 
     def resolve_persistence_postgres_dsn(self) -> str:
         """Resolve the effective PostgreSQL DSN for persistence components.
@@ -764,23 +842,141 @@ class SootheConfig(BaseSettings):
         """
         return _resolve_env(self.persistence.soothe_postgres_dsn)
 
-    def resolve_vector_store_config(self) -> dict[str, Any]:
-        """Resolve provider-specific vector store config with DSN fallbacks.
+    def resolve_vector_store_role(self, role: str) -> str | None:
+        """Resolve a vector store assignment for a given role.
+
+        Falls back to default if role is unset.
+
+        Args:
+            role: Component role (context, skillify, weaver_reuse).
 
         Returns:
-            A copy of ``vector_store_config`` with env placeholders resolved. For
-            ``pgvector``, fills ``dsn`` from ``persistence.vector_postgres_dsn``
-            when missing.
+            "provider:collection" string or None.
         """
-        resolved = dict(self.vector_store_config)
-        for key, value in list(resolved.items()):
-            if isinstance(value, str):
-                resolved[key] = _resolve_env(value)
+        value = getattr(self.vector_store_router, role, None)
+        if value:
+            return value
+        return self.vector_store_router.default
 
-        if self.vector_store_provider == "pgvector" and not resolved.get("dsn"):
-            resolved["dsn"] = _resolve_env(self.persistence.vector_postgres_dsn)
+    def _find_vector_store_provider(self, provider_name: str) -> VectorStoreProviderConfig | None:
+        """Find a vector store provider config by name.
 
-        return resolved
+        Args:
+            provider_name: Provider name to look up.
+
+        Returns:
+            Provider config or None if not found.
+        """
+        for p in self.vector_stores:
+            if p.name == provider_name:
+                return p
+        return None
+
+    def _vector_store_provider_kwargs(self, provider_name: str) -> tuple[str, dict[str, Any]]:
+        """Build provider_type and kwargs for a provider.
+
+        Handles environment variable resolution.
+
+        Args:
+            provider_name: Provider name from router string.
+
+        Returns:
+            Tuple of (provider_type, kwargs_dict).
+
+        Raises:
+            ValueError: If provider name is not found in vector_stores list.
+        """
+        provider = self._find_vector_store_provider(provider_name)
+        kwargs: dict[str, Any] = {}
+
+        if not provider:
+            msg = (
+                f"Vector store provider '{provider_name}' not found. "
+                f"Add it to the vector_stores list in your configuration."
+            )
+            raise ValueError(msg)
+
+        provider_type = provider.provider_type
+
+        if provider_type == "pgvector":
+            if provider.dsn:
+                kwargs["dsn"] = _resolve_provider_env(
+                    provider.dsn,
+                    provider_name=provider.name,
+                    field_name="dsn",
+                )
+            kwargs["pool_size"] = provider.pool_size
+            kwargs["index_type"] = provider.index_type
+
+        elif provider_type == "weaviate":
+            if provider.url:
+                kwargs["url"] = _resolve_provider_env(
+                    provider.url,
+                    provider_name=provider.name,
+                    field_name="url",
+                )
+            if provider.api_key:
+                kwargs["api_key"] = _resolve_provider_env(
+                    provider.api_key,
+                    provider_name=provider.name,
+                    field_name="api_key",
+                )
+            kwargs["grpc_port"] = provider.grpc_port
+
+        return provider_type, kwargs
+
+    def create_vector_store_for_role(
+        self,
+        role: str,
+    ) -> Any:
+        """Create a vector store instance for a given role with caching.
+
+        Args:
+            role: Component role (context, skillify, weaver_reuse).
+
+        Returns:
+            Cached or newly created VectorStoreProtocol instance.
+
+        Raises:
+            ValueError: If role has no assignment and no default is set.
+        """
+        import logging
+
+        from soothe.backends.vector_store import create_vector_store
+
+        logger = logging.getLogger(__name__)
+
+        # Resolve role to "provider:collection" string
+        router_str = self.resolve_vector_store_role(role)
+        if not router_str:
+            msg = (
+                f"Vector store role '{role}' has no assignment and no default is set. "
+                f"Configure vector_store_router.{role} or vector_store_router.default."
+            )
+            raise ValueError(msg)
+
+        # Parse "provider:collection" string
+        if ":" not in router_str:
+            msg = f"Invalid router format '{router_str}'. Expected 'provider_name:collection_name'."
+            raise ValueError(msg)
+
+        provider_name, collection_name = router_str.split(":", 1)
+
+        # Check cache
+        cache_key = router_str
+        if cache_key in self._vector_store_cache:
+            logger.debug("Using cached vector store for '%s'", router_str)
+            return self._vector_store_cache[cache_key]
+
+        # Build kwargs and create vector store
+        provider_type, kwargs = self._vector_store_provider_kwargs(provider_name)
+        vs = create_vector_store(provider_type, collection_name, kwargs)
+
+        # Cache and return
+        self._vector_store_cache[cache_key] = vs
+        logger.debug("Created and cached vector store for '%s'", router_str)
+
+        return vs
 
     # --- Model resolution ---
 

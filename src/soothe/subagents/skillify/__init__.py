@@ -225,24 +225,11 @@ def create_skillify_subagent(
 
 def _resolve_dependencies(
     cfg: Any,
-    skillify_cfg: Any,
+    _skillify_cfg: Any,
 ) -> tuple[Any, Any]:
     """Resolve VectorStore and Embeddings from config."""
-    from soothe.backends.vector_store import create_vector_store
-
-    collection = getattr(skillify_cfg, "index_collection", "soothe_skillify") if skillify_cfg else "soothe_skillify"
-    vector_store_config = cfg.resolve_vector_store_config()
-
-    if cfg.vector_store_provider != "none":
-        vs = create_vector_store(
-            cfg.vector_store_provider,
-            collection,
-            vector_store_config,
-        )
-    else:
-        from soothe.backends.vector_store.in_memory import InMemoryVectorStore
-
-        vs = InMemoryVectorStore(collection)
+    # Use the vector store assigned to the 'skillify' role
+    vs = cfg.create_vector_store_for_role("skillify")
 
     # Return a factory function to create fresh embedding instances
     embeddings_factory = cfg.create_embedding_model

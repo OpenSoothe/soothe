@@ -173,17 +173,13 @@ memory: []
 # =============================================================================
 # Persistence Configuration
 # =============================================================================
-# Unified persistence settings for all backends. PostgreSQL is recommended
-# for production deployments with persistence requirements.
+# Unified persistence settings for protocol backends (not vector stores).
+# PostgreSQL is recommended for production deployments.
 
 persistence:
   # PostgreSQL DSN for Soothe metadata backends
-  # (checkpointer, context, memory, durability/thread state)
+  # (checkpointer, durability, keyword context/memory backends)
   soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
-
-  # PostgreSQL DSN for pgvector vector storage
-  # (used when vector_store_provider=pgvector and vector_store_config.dsn is omitted)
-  vector_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
 
   # Default backend for new protocols (can be overridden per-protocol below)
   # Options: json (simple files), rocksdb (embedded KV), postgresql (production)
@@ -240,16 +236,29 @@ autonomous:
 # Configure logging, thread history, and debugging features.
 
 logging:
-  level: INFO              # Python logging level (DEBUG, INFO, WARNING, ERROR)
-  file: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
+  # Backend file logging (Python logging module)
+  file:
+    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
+    max_bytes: 10485760      # 10 MB before rotation
+    backup_count: 3          # Number of rotating backups
+
+  # Console logging (disabled by default for TUI compatibility)
+  console:
+    enabled: false           # Enable to see backend logs in terminal
+    level: WARNING           # Console logging level (typically higher than file)
+    stream: stderr           # stdout or stderr
+    format: "%(levelname)-8s %(name)s %(message)s"
+
+  # Progress event visibility (TUI/headless activity display)
   progress_verbosity: normal  # minimal | normal | detailed | debug
 
   # Thread conversation logging for audit and recovery
   thread_logging:
     enabled: true
-    dir: ""                # Empty = SOOTHE_HOME/runs/{thread_id}/
-    retention_days: 30     # Auto-delete threads older than N days
-    max_size_mb: 100       # Max total size (not enforced yet)
+    dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
+    retention_days: 30       # Auto-delete threads older than N days
+    max_size_mb: 100         # Max total size (not enforced yet)
 
 # =============================================================================
 # Execution Limits
@@ -269,12 +278,21 @@ execution:
     auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
 
 # =============================================================================
-# Vector Store
+# Vector Store Providers
 # =============================================================================
+# Define named vector store backends. Similar to LLM providers.
+# Set vector_store_router to assign components to providers.
 
-vector_store_provider: none
-vector_store_collection: soothe_default
-# vector_store_config:
-#   # Optional override. If omitted for pgvector, uses persistence.vector_postgres_dsn.
-#   dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
-#   url: "http://localhost:8080"
+vector_stores:
+  - name: in_memory_default
+    provider_type: in_memory
+
+vector_store_router:
+  # Map component roles to "provider_name:collection_name"
+  # Roles: context, skillify, weaver_reuse
+  #
+  # Examples:
+  # context: pgvector_prod:soothe_context
+  # skillify: weaviate_cloud:soothe_skillify
+  # weaver_reuse: in_memory_default:soothe_weaver_reuse
+  default: in_memory_default:soothe_default

@@ -121,7 +121,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
     def __init__(self, config: SootheConfig | None = None) -> None:
         """Initialize the runner with optional config."""
-        import contextlib
         import time
 
         from soothe.core.agent import create_soothe_agent
@@ -137,15 +136,30 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         # Initialize unified classifier (RFC-0012)
         if self._config.performance.enabled and self._config.performance.unified_classification:
             fast_model = None
-            with contextlib.suppress(Exception):
+            fast_model_error = None
+
+            try:
                 fast_model = self._config.create_chat_model("fast")
+            except Exception as e:
+                fast_model_error = e
+                logger.warning(
+                    "Failed to create fast model for classification, falling back to token-count heuristics: %s",
+                    e,
+                )
 
             self._unified_classifier = UnifiedClassifier(
                 fast_model=fast_model,
                 classification_mode=self._config.performance.classification_mode,
                 use_tiktoken=self._config.performance.thresholds.use_tiktoken,
             )
-            logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
+
+            if fast_model_error is None:
+                logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
+            else:
+                logger.info(
+                    "Unified classifier initialized in %s mode (fast model unavailable, using fallback)",
+                    self._config.performance.classification_mode,
+                )
         else:
             self._unified_classifier = None
 

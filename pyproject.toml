@@ -160,6 +160,8 @@ ignore = [
     "EM101",    # Exception with f-string
     "TC001",    # Move application import into type-checking block (false positive for Pydantic)
     "TC003",    # Move standard library import into type-checking block (false positive for Pydantic)
+    "TRY301",   # Abstract raise to inner function
+    "DTZ005",   # datetime.now() without timezone
 ]
 
 [tool.ruff.lint.pyupgrade]

@@ -25,6 +25,7 @@ from soothe.core.resolver import (
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -139,7 +140,7 @@ def create_soothe_agent(
     subagents_ms = (time.perf_counter() - subagents_start) * 1000
     logger.info("Subagents resolved in %.1fms", subagents_ms)
 
-    resolved_workspace = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
+    resolved_workspace = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     resolved_backend = backend
     if resolved_backend is None:

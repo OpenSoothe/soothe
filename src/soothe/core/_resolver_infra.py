@@ -62,7 +62,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 
             if persist_store is None:
                 msg = f"Failed to create RocksDB store at {persist_dir}"
-                raise ValueError(msg)  # noqa: TRY301
+                raise ValueError(msg)
 
             logger.info("Using RocksDB durability backend at %s", persist_dir)
             return RocksDBDurability(persist_store)

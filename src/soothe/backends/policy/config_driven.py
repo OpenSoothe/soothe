@@ -15,6 +15,7 @@ from soothe.protocols.policy import (
     PolicyDecision,
     PolicyProfile,
 )
+from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ class ConfigDrivenPolicy:
         if not file_path:
             return PolicyDecision(verdict="allow", reason="No file path specified")
 
-        resolved_path = Path(file_path).resolve()
+        resolved_path = expand_path(file_path)
 
         # 1. Check denied_paths (blacklist) - highest priority
         for pattern in security.denied_paths:
@@ -243,7 +244,7 @@ class ConfigDrivenPolicy:
 
         # 3. Check workspace boundary
         if hasattr(self._config, "workspace_dir") and self._config.workspace_dir:
-            workspace = Path(self._config.workspace_dir).resolve()
+            workspace = expand_path(self._config.workspace_dir)
             try:
                 resolved_path.relative_to(workspace)
             except ValueError:
