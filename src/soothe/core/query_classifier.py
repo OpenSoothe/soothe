@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
-from typing import ClassVar, Literal
+from typing import ClassVar
+
+from soothe.core.classification import (
+    ComplexityLevel,
+    classify_by_keywords,
+    count_words,
+)
 
 logger = logging.getLogger(__name__)
-
-ComplexityLevel = Literal["trivial", "simple", "medium", "complex"]
 
 
 class QueryClassifier:
@@ -35,31 +38,6 @@ class QueryClassifier:
         r".*\b(run|execute|start)\s+",  # Direct execution
     ]
 
-    _COMPLEX_KEYWORDS = frozenset(
-        [
-            "architect",
-            "architecture",
-            "design system",
-            "migrate",
-            "migration",
-            "refactor",
-            "redesign",
-            "rewrite",
-            "overhaul",
-            "scale",
-            "multi-phase",
-            "roadmap",
-            "strategy",
-            "comprehensive",
-            "end-to-end",
-            "full-stack",
-            "infrastructure",
-            "system design",
-            "framework",
-            "microservice",
-        ]
-    )
-
     def __init__(
         self,
         trivial_word_threshold: int = 5,
@@ -77,26 +55,6 @@ class QueryClassifier:
         self._simple_threshold = simple_word_threshold
         self._medium_threshold = medium_word_threshold
 
-    @staticmethod
-    def _count_words(text: str) -> int:
-        """Count words with CJK awareness.
-
-        CJK scripts (Chinese, Japanese, Korean) have no whitespace between
-        characters, so ``str.split()`` returns 1 token for an entire sentence.
-        Each CJK ideograph is counted as one word-equivalent so that complexity
-        thresholds work correctly for non-Latin text.
-        """
-        cjk_count = sum(1 for ch in text if unicodedata.category(ch).startswith("Lo"))
-        if cjk_count > 0:
-            non_cjk = re.sub(
-                r"[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\U00020000-\U0002a6df]",
-                " ",
-                text,
-            )
-            ascii_words = len(non_cjk.split())
-            return cjk_count + ascii_words
-        return len(text.split())
-
     def classify(self, query: str) -> ComplexityLevel:
         """Classify query complexity in < 1ms.
 
@@ -113,12 +71,16 @@ class QueryClassifier:
             return "simple"
 
         query_lower = query.lower().strip()
-        word_count = self._count_words(query)
+        word_count = count_words(query)
 
-        # Check for complex keywords (highest priority)
-        if any(kw in query_lower for kw in self._COMPLEX_KEYWORDS):
+        # Check keywords using shared function
+        keyword_result = classify_by_keywords(query)
+        if keyword_result == "complex":
             logger.debug("Query classified as complex due to keyword: %s", query[:50])
             return "complex"
+        if keyword_result == "medium":
+            logger.debug("Query classified as medium due to keyword: %s", query[:50])
+            return "medium"
 
         # Check for trivial patterns
         for pattern in self._TRIVIAL_PATTERNS:
@@ -132,19 +94,23 @@ class QueryClassifier:
                 logger.debug("Query classified as simple due to pattern match: %s", query[:50])
                 return "simple"
 
-        # Word count heuristics
-        if word_count > self._medium_threshold:
+        # Word count heuristics with FIXED boundary (>= instead of >)
+        # This ensures exactly N words is classified at the higher level
+        # Examples: exactly 5 words -> simple (not trivial)
+        #           exactly 15 words -> medium (not simple)
+        #           exactly 30 words -> complex (not medium)
+        if word_count >= self._medium_threshold:
             logger.debug("Query classified as complex due to word count (%d): %s", word_count, query[:50])
             return "complex"
 
-        if word_count > self._simple_threshold:
+        if word_count >= self._simple_threshold:
             logger.debug("Query classified as medium due to word count (%d): %s", word_count, query[:50])
             return "medium"
 
-        if word_count > self._trivial_threshold:
+        if word_count >= self._trivial_threshold:
             logger.debug("Query classified as simple due to word count (%d): %s", word_count, query[:50])
             return "simple"
 
-        # Default to trivial for very short queries (strictly less than threshold)
+        # Default to trivial for very short queries
         logger.debug("Query classified as trivial due to short length (%d words): %s", word_count, query[:50])
         return "trivial"

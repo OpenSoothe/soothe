@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
+from soothe.core.classification import (
+    classify_by_keywords,
+)
+
 if TYPE_CHECKING:
     from soothe.protocols.planner import (
         GoalContext,
@@ -18,48 +22,6 @@ logger = logging.getLogger(__name__)
 
 _COMPLEX_WORD_COUNT_THRESHOLD = 80
 _SIMPLE_WORD_COUNT_THRESHOLD = 15
-
-_COMPLEX_KEYWORDS = frozenset(
-    {
-        "architect",
-        "architecture",
-        "design system",
-        "migrate",
-        "migration",
-        "refactor entire",
-        "redesign",
-        "rewrite",
-        "overhaul",
-        "scale",
-        "multi-phase",
-        "roadmap",
-        "strategy",
-        "comprehensive plan",
-        "end-to-end",
-        "full-stack",
-        "infrastructure",
-    }
-)
-
-_MEDIUM_KEYWORDS = frozenset(
-    {
-        "plan",
-        "implement",
-        "build",
-        "create feature",
-        "add support",
-        "integrate",
-        "optimise",
-        "optimize",
-        "debug",
-        "investigate",
-        "analyse",
-        "analyze",
-        "review",
-        "test suite",
-        "refactor",
-    }
-)
 
 _EXPLICIT_CLAUDE_KEYWORDS = frozenset(
     {
@@ -189,17 +151,19 @@ class AutoPlanner:
         Returns:
             ``"simple"``, ``"medium"``, ``"complex"``, or ``None`` if ambiguous.
         """
-        goal_lower = goal.lower()
+        # Use shared keyword classification
+        keyword_result = classify_by_keywords(goal)
+        if keyword_result in ("complex", "medium"):
+            return keyword_result
 
-        if any(kw in goal_lower for kw in _COMPLEX_KEYWORDS):
-            return "complex"
+        # Map "trivial" to "simple" for planning purposes
+        if keyword_result == "trivial":
+            return "simple"
 
+        # Word count check
         word_count = len(goal.split())
         if word_count > _COMPLEX_WORD_COUNT_THRESHOLD:
             return "complex"
-
-        if any(kw in goal_lower for kw in _MEDIUM_KEYWORDS):
-            return "medium"
 
         if word_count < _SIMPLE_WORD_COUNT_THRESHOLD:
             return "simple"

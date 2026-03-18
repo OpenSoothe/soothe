@@ -110,11 +110,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe"]
-artifacts = ["src/soothe/built_in_skills/**/*.md"]
+artifacts = [
+    "src/soothe/built_in_skills/**/*.md",
+    "src/soothe/config_templates/*.yml"
+]
 
 [tool.hatch.build.targets.sdist]
 packages = ["src/soothe"]
-artifacts = ["src/soothe/built_in_skills/**/*.md"]
+artifacts = [
+    "src/soothe/built_in_skills/**/*.md",
+    "src/soothe/config_templates/*.yml"
+]
 
 [project.scripts]
 soothe = "soothe.cli:app"

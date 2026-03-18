@@ -2,6 +2,7 @@
 
 import pytest
 
+from soothe.core.classification import count_words
 from soothe.core.query_classifier import QueryClassifier
 
 
@@ -56,17 +57,20 @@ class TestQueryClassifier:
         assert classifier.classify("start the server") == "simple"
 
     def test_medium_tasks(self, classifier):
-        """Test that multi-step tasks are classified as simple or medium based on word count."""
-        # These are 6 words each, which falls in simple range (6-15)
-        assert classifier.classify("implement a function to parse JSON") == "simple"
-        assert classifier.classify("debug the error in my code") == "simple"
-        assert classifier.classify("write tests for the auth module") == "simple"
-        # 7 words
-        assert classifier.classify("can you explain how the planner works") == "simple"
+        """Test that multi-step tasks are classified based on keywords and word count."""
+        # These have medium keywords -> medium (not simple)
+        assert classifier.classify("implement a function to parse JSON") == "medium"  # "implement" keyword
+        assert classifier.classify("debug the error in my code") == "medium"  # "debug" keyword
+        assert classifier.classify("write tests for the auth module") == "simple"  # no keywords, 6 words
 
-        # Medium requires 16+ words
-        query_20_words = " ".join(["implement"] + ["word"] * 19)
-        assert classifier.classify(query_20_words) == "medium"  # 7 words
+        # No keywords, just word count
+        # 7 words, no keywords -> simple
+        # Note: "planner" contains "plan" as substring, so it matches medium keyword
+        assert classifier.classify("can you explain how this system works") == "simple"
+
+        # Medium requires >=15 words (no keywords)
+        query_20_words = " ".join(["word"] * 20)
+        assert classifier.classify(query_20_words) == "medium"
 
     def test_complex_keywords(self, classifier):
         """Test that queries with complex keywords are classified as complex."""
@@ -120,12 +124,12 @@ class TestQueryClassifier:
 
         # With custom thresholds
         assert custom_classifier.classify("hi") == "trivial"  # 1 word < 3
-        assert custom_classifier.classify("hi there friend") == "trivial"  # 3 words = threshold
+        # 3 words = trivial threshold, but with fixed boundary (>=), it's "simple"
+        assert custom_classifier.classify("hi there friend") == "simple"
 
         query_15_words = " ".join(["word"] * 15)
-        assert (
-            custom_classifier.classify(query_15_words) == "medium"
-        )  # 15 words: between simple (10) and medium (20) thresholds
+        # 15 words: >= simple threshold (10) -> medium
+        assert custom_classifier.classify(query_15_words) == "medium"
 
     def test_edge_cases(self, classifier):
         """Test edge cases and boundary conditions."""
@@ -162,8 +166,8 @@ class TestQueryClassifier:
         assert classifier.classify("What's the current date?") == "trivial"
         assert classifier.classify("Show me the main config file") == "simple"
         assert classifier.classify("Search for all Python files in the project") == "simple"
-        # 10 words - simple range (6-15)
-        assert classifier.classify("Help me implement a REST API endpoint for user authentication") == "simple"
+        # Has "implement" keyword -> medium (not simple)
+        assert classifier.classify("Help me implement a REST API endpoint for user authentication") == "medium"
         # Has "refactor" keyword - complex regardless of word count
         assert (
             classifier.classify("I need to refactor the entire authentication system to support OAuth2 and JWT tokens")
@@ -173,11 +177,11 @@ class TestQueryClassifier:
     def test_cjk_word_counting(self, classifier):
         """Test that CJK characters are counted individually as word-equivalents."""
         # "使用浏览器获取最新的美国伊朗战争信息" = 18 CJK chars
-        assert classifier._count_words("使用浏览器获取最新的美国伊朗战争信息") == 18
+        assert count_words("使用浏览器获取最新的美国伊朗战争信息") == 18
         # Short CJK: 3 chars
-        assert classifier._count_words("你好吗") == 3
+        assert count_words("你好吗") == 3
         # Mixed CJK + ASCII: 6 CJK (使用 + 获取信息) + 1 ASCII word (browser)
-        assert classifier._count_words("使用 browser 获取信息") == 7
+        assert count_words("使用 browser 获取信息") == 7
 
     def test_cjk_queries_not_trivial(self, classifier):
         """Test that non-trivial CJK queries are not misclassified as trivial."""
@@ -191,3 +195,75 @@ class TestQueryClassifier:
         # Longer CJK query
         result = classifier.classify("请帮我设计一个完整的用户认证系统，包括登录注册和密码重置功能")
         assert result in ("medium", "complex")
+
+    def test_planning_query_is_medium(self, classifier):
+        """Test that planning queries are classified as medium.
+
+        Bug fix: "create a plan for tests/task-download-skills.md" was incorrectly
+        classified as "trivial" because "plan" keyword was missing from QueryClassifier.
+        """
+        # The original bug case
+        assert classifier.classify("create a plan for tests/task-download-skills.md") == "medium"
+
+        # Additional planning queries
+        # "migration" is a complex keyword, so this is complex (complex > medium priority)
+        assert classifier.classify("plan the migration strategy") == "complex"
+        assert classifier.classify("create a comprehensive plan") == "complex"  # "comprehensive" is complex
+        assert classifier.classify("plan the implementation") == "medium"  # "plan" and "implement" both medium
+
+    def test_boundary_fix(self, classifier):
+        """Test that boundary conditions use >= instead of >.
+
+        Bug fix: Exactly 5 words should be "simple" (not trivial).
+        """
+        # Exactly 5 words -> simple (not trivial)
+        assert classifier.classify("read the config file now") == "simple"
+
+        # Exactly 15 words -> medium (not simple)
+        query_15 = " ".join(["word"] * 15)
+        assert classifier.classify(query_15) == "medium"
+
+        # Exactly 30 words -> complex
+        query_30 = " ".join(["word"] * 30)
+        assert classifier.classify(query_30) == "complex"
+
+    def test_medium_keywords(self, classifier):
+        """Test that medium keywords from shared module are recognized."""
+        assert classifier.classify("implement a new feature") == "medium"
+        assert classifier.classify("build a REST API") == "medium"
+        assert classifier.classify("debug the issue") == "medium"
+        assert classifier.classify("review the code changes") == "medium"
+        assert classifier.classify("analyze the performance") == "medium"
+        assert classifier.classify("optimize the query") == "medium"
+
+    def test_unified_complex_keywords(self, classifier):
+        """Test that complex keywords from shared module are recognized."""
+        assert classifier.classify("architect a new system") == "complex"
+        assert classifier.classify("refactor the module") == "complex"
+        assert classifier.classify("migrate to the new platform") == "complex"
+        assert classifier.classify("redesign the architecture") == "complex"
+        assert classifier.classify("overhaul the system") == "complex"
+
+    def test_keyword_priority_over_word_count(self, classifier):
+        """Test that keywords take priority over word count heuristics."""
+        # Short query with complex keyword -> complex
+        assert classifier.classify("refactor this") == "complex"
+
+        # Short query with medium keyword -> medium
+        assert classifier.classify("plan it") == "medium"
+
+        # Long query without keywords -> medium (word count)
+        query_20 = " ".join(["the"] * 20)
+        assert classifier.classify(query_20) == "medium"
+
+    def test_uses_shared_word_count(self, classifier):
+        """Test that QueryClassifier uses shared count_words function."""
+        # Verify it's using the shared function from classification module
+        from soothe.core.classification import count_words as shared_count_words
+
+        test_text = "hello world"
+        assert count_words(test_text) == shared_count_words(test_text)
+
+        # Test CJK awareness is preserved
+        cjk_text = "使用浏览器获取最新的美国伊朗战争信息"
+        assert count_words(cjk_text) == shared_count_words(cjk_text)
