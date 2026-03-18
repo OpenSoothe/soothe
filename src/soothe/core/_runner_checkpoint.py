@@ -49,7 +49,7 @@ class CheckpointMixin:
         user_input: str,
         mode: str = "single_pass",
         status: str = "in_progress",
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Save progressive checkpoint for crash recovery (RFC-0010).
 
         Yields:
@@ -136,7 +136,7 @@ class CheckpointMixin:
     async def _try_recover_checkpoint(
         self,
         state: Any,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Attempt to restore from a progressive checkpoint (RFC-0010).
 
         Loads checkpoint from ``RunArtifactStore``, restores goal engine

@@ -413,7 +413,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         thread_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
         Yields ``(namespace, mode, data)`` tuples in the deepagents-canonical
@@ -447,7 +447,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         user_input: str,
         *,
         thread_id: str | None = None,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Single-pass execution with DAG step loop (RFC-0009).
 
         Pre-stream creates the plan.  If the plan has multiple steps,

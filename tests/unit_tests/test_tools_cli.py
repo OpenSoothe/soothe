@@ -217,13 +217,24 @@ class TestCliToolExecution:
 
         soothe.tools.cli._shell_instances.clear()
 
-        with patch.dict("sys.modules", {"pexpect": None}):
-            tool = CliTool()
+        # Remove pexpect from sys.modules if it was already imported
+        import sys
 
-            result = tool._run("echo test")
+        pexpect_module = sys.modules.pop("pexpect", None)
 
-            assert "Error" in result
-            assert "pexpect" in result.lower()
+        try:
+            # Patch pexpect to None to simulate it not being installed
+            with patch.dict("sys.modules", {"pexpect": None}):
+                tool = CliTool()
+
+                result = tool._run("echo test")
+
+                assert "Error" in result
+                assert "pexpect" in result.lower()
+        finally:
+            # Restore pexpect module if it was previously imported
+            if pexpect_module is not None:
+                sys.modules["pexpect"] = pexpect_module
 
 
 class TestGetCurrentDirTool:

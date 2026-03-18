@@ -45,7 +45,7 @@ class AutonomousMixin:
         *,
         thread_id: str | None = None,
         max_iterations: int = 10,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009).
 
         Creates goals, executes plans via the step loop, reflects, revises,
@@ -193,7 +193,7 @@ class AutonomousMixin:
         iteration_records: list[Any],
         total_iterations: int,
         parallel_goals: int = 1,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Execute a single goal in the autonomous loop (RFC-0009).
 
         Runs plan creation, step loop, reflection, and optional revision
@@ -235,7 +235,13 @@ class AutonomousMixin:
                 except Exception:
                     logger.debug("Context projection failed", exc_info=True)
 
-            if self._planner:
+            # Reuse existing plan from parent_state if available (avoids duplicate plan creation)
+            if parent_state and hasattr(parent_state, "plan") and parent_state.plan:
+                iter_state.plan = parent_state.plan
+                self._current_plan = iter_state.plan
+                logger.info("Reusing existing plan with %d steps", len(iter_state.plan.steps))
+            elif self._planner:
+                # Only create new plan if none exists
                 try:
                     capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
                     completed = [

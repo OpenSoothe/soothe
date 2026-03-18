@@ -358,21 +358,29 @@ class TestProtocolConfig:
             assert cfg.protocols.context.backend == backend
 
     def test_memory_backend_options(self) -> None:
-        """Test memory backend with combined format."""
-        for backend in ("keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"):
-            cfg = SootheConfig(protocols={"memory": {"backend": backend}})
-            assert cfg.protocols.memory.backend == backend
+        """Test MemU memory backend configuration."""
+        # Test enabled/disabled
+        cfg = SootheConfig(protocols={"memory": {"enabled": False}})
+        assert cfg.protocols.memory.enabled is False
+
+        cfg = SootheConfig(protocols={"memory": {"enabled": True}})
+        assert cfg.protocols.memory.enabled is True
+
+        # Test database provider options
+        for provider in ("inmemory", "sqlite", "postgres"):
+            cfg = SootheConfig(protocols={"memory": {"database_provider": provider}})
+            assert cfg.protocols.memory.database_provider == provider
 
     def test_combined_backend_options(self) -> None:
         """Test combined backend format for context and memory."""
         cfg = SootheConfig(
             protocols={
                 "context": {"backend": "keyword-rocksdb"},
-                "memory": {"backend": "keyword-rocksdb"},
+                "memory": {"database_provider": "postgres"},
             }
         )
         assert cfg.protocols.context.backend == "keyword-rocksdb"
-        assert cfg.protocols.memory.backend == "keyword-rocksdb"
+        assert cfg.protocols.memory.database_provider == "postgres"
 
     def test_vector_store_config(self) -> None:
         cfg = SootheConfig(

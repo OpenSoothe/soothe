@@ -4,15 +4,13 @@ version = "0.1.3"
 description = "Multi-agent harness built on deepagents and langchain/langgraph."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11,<4.0"
+requires-python = ">=3.13,<4.0"
 keywords = ["agents", "ai", "llm", "langgraph", "langchain", "multi-agent", "subagents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -93,9 +91,14 @@ weaviate = [
 ollama = [
     "langchain-ollama>=0.3.0",
 ]
+memory = [
+    "memu-py>=1.5.0; python_version>='3.13'",
+]
 all = [
     "soothe[research,browser,claude,serper,wizsearch,jina,media,bash,audio-full,video,document,python-executor,rocksdb,pgvector,weaviate,ollama]",
 ]
+# Note: 'memory' extra requires Python 3.13+ and is NOT included in 'all'
+# Install explicitly with: pip install soothe[memory] (Python 3.13+ only)
 
 [dependency-groups]
 test = [

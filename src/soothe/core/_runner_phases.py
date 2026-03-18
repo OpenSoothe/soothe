@@ -48,7 +48,7 @@ class PhasesMixin:
         self,
         user_input: str,
         state: Any,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Run the LangGraph stream with HITL interrupt loop."""
         enriched_messages = self._build_enriched_input(
             user_input,
@@ -143,7 +143,7 @@ class PhasesMixin:
         self,
         user_input: str,
         state: Any,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Run protocol pre-processing before the LangGraph stream."""
         from soothe.core.runner import _generate_thread_id
         from soothe.protocols.durability import ThreadMetadata
@@ -339,6 +339,7 @@ class PhasesMixin:
                     recent_messages=[user_input],
                     available_capabilities=capabilities,
                     completed_steps=[],
+                    unified_classification=state.unified_classification,
                 )
 
                 if (
@@ -385,7 +386,7 @@ class PhasesMixin:
         self,
         user_input: str,
         state: Any,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Run protocol post-processing after the LangGraph stream."""
         response_text = "".join(state.full_response)
 

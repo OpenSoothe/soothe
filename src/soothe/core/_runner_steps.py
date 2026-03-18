@@ -40,7 +40,7 @@ class StepLoopMixin:
         plan: Plan,
         *,
         goal_id: str = "default",
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Execute plan steps respecting DAG dependencies (RFC-0009).
 
         Iterates through batches of ready steps.  Sequential steps reuse
@@ -177,7 +177,7 @@ class StepLoopMixin:
         thread_id: str,
         state: Any,  # noqa: ARG002
         batch_index: int = 0,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         """Execute a single plan step as a LangGraph invocation (RFC-0009).
 
         Builds step-specific input enriched with dependency results, runs

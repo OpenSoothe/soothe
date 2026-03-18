@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.config import SOOTHE_HOME, SootheConfig, _resolve_env
 
 # Re-export tool/subagent resolution (backward compat for agent.py, cli/main.py)
 from soothe.core._resolver_infra import resolve_checkpointer, resolve_durability
@@ -79,7 +79,12 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
     behavior, storage = parts
 
-    if behavior == "vector" and config.vector_store_provider != "none":
+    # Only attempt vector backend if vector_store_provider is configured
+    if behavior == "vector" and config.vector_store_provider == "none":
+        logger.info("Context backend is 'vector' but vector_store_provider is 'none'; falling back to keyword")
+        behavior = "keyword"
+
+    if behavior == "vector":
         try:
             from soothe.backends.context.vector import VectorContext
             from soothe.backends.vector_store import create_vector_store
@@ -98,9 +103,8 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             )
         except Exception:
             logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
-    elif behavior == "vector":
-        logger.warning("vector context requires vector_store_provider; falling back to keyword")
 
+    # Keyword backend (default or fallback)
     from soothe.backends.context.keyword import KeywordContext
     from soothe.backends.persistence import create_persist_store
 
@@ -128,9 +132,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
 
 
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
-    """Instantiate the MemoryProtocol implementation from config.
-
-    Falls back to keyword backend when vector initialisation fails.
+    """Instantiate the MemoryProtocol implementation using MemU.
 
     Args:
         config: Soothe configuration.
@@ -138,58 +140,93 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
     Returns:
         A MemoryProtocol instance, or None if disabled.
     """
-    if config.protocols.memory.backend == "none":
+    if not config.protocols.memory.enabled:
         return None
-
-    parts = config.protocols.memory.backend.split("-")
-    if len(parts) != 2:  # noqa: PLR2004
-        logger.warning(
-            "Invalid memory backend '%s', expected format: {behavior}-{storage}",
-            config.protocols.memory.backend,
-        )
-        return None
-
-    behavior, storage = parts
-
-    if behavior == "vector" and config.vector_store_provider != "none":
-        try:
-            from soothe.backends.memory.vector import VectorMemory
-            from soothe.backends.vector_store import create_vector_store
-
-            vs = create_vector_store(
-                config.vector_store_provider,
-                f"{config.vector_store_collection}_memory",
-                config.resolve_vector_store_config(),
-            )
-            embeddings = config.create_embedding_model()
-            logger.info("Using vector memory backend")
-            return VectorMemory(vector_store=vs, embeddings=embeddings)
-        except Exception:
-            logger.warning("Vector memory init failed, falling back to keyword", exc_info=True)
-    elif behavior == "vector":
-        logger.warning("vector memory requires vector_store_provider; falling back to keyword")
-
-    from soothe.backends.memory.keyword import KeywordMemory
-    from soothe.backends.persistence import create_persist_store
-
-    persist_dir = config.protocols.memory.persist_dir or str(Path(SOOTHE_HOME) / "memory" / "data")
 
     try:
-        persist_store = create_persist_store(
-            persist_dir=persist_dir,
-            backend=storage,
-            dsn=config.resolve_persistence_postgres_dsn() if storage == "postgresql" else None,
-            namespace="memory",
-        )
-    except Exception as e:
-        logger.warning("Failed to create memory persist store, falling back to json: %s", e)
-        persist_store = create_persist_store(
-            persist_dir=persist_dir,
-            backend="json",
+        from soothe.backends.memory.memu import MemUMemory
+
+        # Build MemU configuration from Soothe config
+        # Extract LLM provider info from Soothe's providers
+        api_key = None
+        api_base_url = None
+
+        # Try to get OpenAI provider credentials (most common for embeddings)
+        for provider in config.providers:
+            if provider.provider_type == "openai":
+                if provider.api_key:
+                    api_key = _resolve_env(provider.api_key)
+                if provider.api_base_url:
+                    api_base_url = _resolve_env(provider.api_base_url)
+                break
+
+        # Resolve database DSN (default to Soothe's PostgreSQL DSN for postgres provider)
+        database_dsn = config.protocols.memory.database_dsn
+        if not database_dsn and config.protocols.memory.database_provider == "postgres":
+            database_dsn = config.resolve_persistence_postgres_dsn()
+
+        # Build MemU configs
+        from memu.app.settings import (
+            DatabaseConfig,
+            LLMConfig,
+            LLMProfilesConfig,
+            MemorizeConfig,
+            RetrieveConfig,
+            UserConfig,
         )
 
-    logger.info("Using keyword memory backend with %s storage", storage)
-    return KeywordMemory(persist_store=persist_store)
+        # Build LLM config kwargs (only include non-None values)
+        llm_kwargs = {
+            "chat_model": config.protocols.memory.llm_chat_model,
+            "embed_model": config.protocols.memory.llm_embed_model,
+        }
+        if api_key:
+            llm_kwargs["api_key"] = api_key
+        if api_base_url:
+            llm_kwargs["base_url"] = api_base_url
+
+        llm_config = LLMConfig(**llm_kwargs)
+
+        llm_profiles = LLMProfilesConfig(
+            default=llm_config,
+            embedding=llm_config,  # Use same config for embedding
+        )
+
+        database_config = DatabaseConfig(
+            provider=config.protocols.memory.database_provider,
+            dsn=database_dsn,
+        )
+
+        memorize_config = MemorizeConfig(
+            enable_auto_categorization=config.protocols.memory.enable_auto_categorization,
+            enable_category_summaries=config.protocols.memory.enable_category_summaries,
+            categories=config.protocols.memory.memory_categories,
+        )
+
+        retrieve_config = RetrieveConfig(
+            method="rag",  # Use vector-based retrieval by default
+        )
+
+        user_config = UserConfig()
+
+        logger.info(
+            "Using MemU memory backend with %s storage",
+            config.protocols.memory.database_provider,
+        )
+        return MemUMemory(
+            llm_profiles=llm_profiles,
+            database_config=database_config,
+            memorize_config=memorize_config,
+            retrieve_config=retrieve_config,
+            user_config=user_config,
+        )
+
+    except ImportError:
+        logger.exception("MemU memory backend requires 'memory' extra: pip install soothe[memory]")
+        raise
+    except Exception as e:
+        logger.exception("Failed to initialize MemU memory backend: %s", e)
+        raise
 
 
 def resolve_planner(

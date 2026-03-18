@@ -3,7 +3,7 @@
 
 Validates:
 - Context protocol backends (vector, keyword)
-- Memory protocol backends (vector, keyword)
+- Memory protocol backend (MemU)
 - Planner protocol backends (direct, subagent, claude)
 - Policy protocol backend (config-driven)
 - Durability protocol backends (JSON, RocksDB, PostgreSQL)
@@ -72,28 +72,20 @@ def check_context_protocols() -> dict[str, Any]:
 
 
 def check_memory_protocols() -> dict[str, Any]:
-    """Check memory protocol backends."""
+    """Check memory protocol backend."""
     checks = []
 
-    # Check vector memory backend
-    result = check_import("soothe.backends.memory.vector", "VectorMemory")
+    # Check MemU memory backend
+    result = check_import("soothe.backends.memory.memu", "MemUMemory")
     checks.append({
-        "name": "memory_vector",
+        "name": "memory_memu",
         "status": result["status"],
-        "message": "Vector memory backend: " + result["message"],
-    })
-
-    # Check keyword memory backend
-    result = check_import("soothe.backends.memory.keyword", "KeywordMemory")
-    checks.append({
-        "name": "memory_keyword",
-        "status": result["status"],
-        "message": "Keyword memory backend: " + result["message"],
+        "message": "MemU memory backend: " + result["message"],
     })
 
     return {
         "name": "memory_protocols",
-        "status": "ok" if all(c["status"] == "ok" for c in checks) else "error",
+        "status": "ok" if all(c["status"] == "ok" for c in checks) else "warning",
         "checks": checks,
     }
 

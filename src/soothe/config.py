@@ -396,22 +396,42 @@ class ContextProtocolConfig(BaseModel):
     persist_dir: str | None = None
 
 
-class MemoryProtocolConfig(BaseModel):
-    """Memory Protocol configuration.
+class MemUConfig(BaseModel):
+    """MemU memory backend configuration.
 
     Args:
-        backend: Combined behavior and storage backend.
-                 Format: {behavior}-{storage} or 'none'
-                 Behaviors: keyword, vector
-                 Storage: json, rocksdb, postgresql
-                 Examples: keyword-postgresql, vector-postgresql, keyword-json
-        persist_dir: Directory for memory persistence.
+        enabled: Whether MemU memory backend is enabled.
+        database_provider: Database provider (inmemory, sqlite, postgres).
+        database_dsn: Database DSN. Defaults to Soothe's PostgreSQL persistence DSN.
+        llm_profile_default: Default LLM profile for MemU operations.
+        llm_profile_embedding: Embedding LLM profile for vector operations.
+        llm_chat_model: Chat model name for extraction/categorization.
+        llm_embed_model: Embedding model name for vector search.
+        enable_auto_categorization: Enable automatic categorization using LLM.
+        enable_category_summaries: Enable category summary generation.
+        memory_categories: Predefined memory categories.
     """
 
-    backend: Literal["keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"] = (
-        "keyword-postgresql"
-    )
-    persist_dir: str | None = None
+    enabled: bool = True
+    database_provider: Literal["inmemory", "sqlite", "postgres"] = "postgres"
+    database_dsn: str | None = None  # Defaults to Soothe's PostgreSQL persistence DSN
+
+    # LLM configuration (integrates with Soothe's providers)
+    llm_profile_default: str = "default"
+    llm_profile_embedding: str = "embedding"
+    llm_chat_model: str = "gpt-4o-mini"  # Extracted from Soothe's providers
+    llm_embed_model: str = "text-embedding-3-small"  # Extracted from Soothe's providers
+
+    # MemU features
+    enable_auto_categorization: bool = True
+    enable_category_summaries: bool = True
+    memory_categories: list[dict[str, str]] = [
+        {"name": "personal_info", "description": "Personal information"},
+        {"name": "preferences", "description": "User preferences and interests"},
+        {"name": "knowledge", "description": "Facts and learned information"},
+        {"name": "experiences", "description": "Past experiences and events"},
+        {"name": "goals", "description": "Goals and objectives"},
+    ]
 
 
 class PlannerProtocolConfig(BaseModel):
@@ -455,14 +475,14 @@ class ProtocolsConfig(BaseModel):
 
     Args:
         context: Context Protocol configuration.
-        memory: Memory Protocol configuration.
+        memory: MemU memory backend configuration.
         planner: Planner Protocol configuration.
         policy: Policy Protocol configuration.
         durability: Durability Protocol configuration.
     """
 
     context: ContextProtocolConfig = Field(default_factory=ContextProtocolConfig)
-    memory: MemoryProtocolConfig = Field(default_factory=MemoryProtocolConfig)
+    memory: MemUConfig = Field(default_factory=MemUConfig)
     planner: PlannerProtocolConfig = Field(default_factory=PlannerProtocolConfig)
     policy: PolicyProtocolConfig = Field(default_factory=PolicyProtocolConfig)
     durability: DurabilityProtocolConfig = Field(default_factory=DurabilityProtocolConfig)
@@ -728,7 +748,7 @@ class SootheConfig(BaseSettings):
     # --- Vector store config ---
 
     vector_store_provider: Literal["pgvector", "weaviate", "none"] = "none"
-    """Vector store backend for VectorContext/VectorMemory."""
+    """Vector store backend for VectorContext."""
 
     vector_store_collection: str = "soothe_default"
     """Default collection name for the vector store."""

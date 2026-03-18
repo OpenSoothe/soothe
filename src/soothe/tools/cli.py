@@ -95,8 +95,9 @@ class CliTool(BaseTool):
         - If initialization fails, shell MUST be cleaned up
         """
         try:
-            import pexpect
             import time
+
+            import pexpect
 
             custom_prompt = "soothe-cli>> "
 
@@ -124,6 +125,13 @@ class CliTool(BaseTool):
             # STEP 5: Wait for prompt (validation)
             # Uses quick_timeout (5s) instead of full timeout
             child.expect(custom_prompt, timeout=self.quick_timeout)
+
+            # STEP 5.5: Clear any residual buffer content
+            # Rationale: Initialization commands may leave output in buffer
+            # Send a harmless echo command and consume its output
+            child.sendline("echo '__buffer_clear__'")
+            child.expect(custom_prompt, timeout=self.quick_timeout)
+            # Buffer is now clean - previous output consumed
 
             # STEP 6: Verify prompt is working
             child.sendline("echo '__validation__'")
@@ -187,8 +195,9 @@ class CliTool(BaseTool):
         - MUST NOT raise exceptions (returns bool only)
         - MUST NOT modify shell state on failure
         """
-        import pexpect
         import time
+
+        import pexpect
 
         child = _shell_instances.get("default")
         if not child:
@@ -292,11 +301,11 @@ class CliTool(BaseTool):
         - MUST return clear, actionable error messages
         - MUST NOT leave shell in inconsistent state
         """
-        import pexpect
-
         # Pre-checks
         if "default" not in _shell_instances:
             return "Error: Shell not initialized. Install pexpect: pip install pexpect"
+
+        import pexpect
 
         if self._is_banned(command):
             logger.warning("Banned command attempted: %s", command)

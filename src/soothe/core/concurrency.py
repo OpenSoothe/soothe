@@ -44,7 +44,7 @@ class ConcurrencyController:
         self._llm_sem = asyncio.Semaphore(policy.global_max_llm_calls)
 
     @asynccontextmanager
-    async def acquire_goal(self) -> AsyncGenerator[None, None]:
+    async def acquire_goal(self) -> AsyncGenerator[None]:
         """Acquire a goal execution slot.
 
         Yields:
@@ -54,7 +54,7 @@ class ConcurrencyController:
             yield
 
     @asynccontextmanager
-    async def acquire_step(self) -> AsyncGenerator[None, None]:
+    async def acquire_step(self) -> AsyncGenerator[None]:
         """Acquire a step execution slot.
 
         Yields:
@@ -64,7 +64,7 @@ class ConcurrencyController:
             yield
 
     @asynccontextmanager
-    async def acquire_llm_call(self) -> AsyncGenerator[None, None]:
+    async def acquire_llm_call(self) -> AsyncGenerator[None]:
         """Acquire a global LLM call slot (circuit breaker).
 
         This is the cross-level budget that prevents goals * steps from

@@ -1,5 +1,5 @@
 """Memory protocol backends."""
 
-from soothe.backends.memory.keyword import KeywordMemory
+from soothe.backends.memory.memu import MemUMemory
 
-__all__ = ["KeywordMemory"]
+__all__ = ["MemUMemory"]

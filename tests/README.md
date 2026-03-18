@@ -74,9 +74,10 @@ The test suite covers the following modules:
    - WeaviateVectorStore: interface compliance, UUID generation
    - create_vector_store factory function
 
-4. **Memory Stores** (`test_memory_store.py`)
-   - StoreBackedMemory: remember, recall, forget, update operations
-   - VectorMemory: semantic memory operations (with mocked dependencies)
+4. **Memory Stores** (`test_memory_memu.py`)
+   - MemUMemory: remember, recall, recall_by_tags, forget, update operations
+   - Integration with MemU MemoryService (with mocked dependencies)
+   - Importance score computation from reinforcement tracking
 
 5. **Durability** (`test_durability.py`)
    - InMemoryDurability: thread lifecycle, state persistence
