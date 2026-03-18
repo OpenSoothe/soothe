@@ -1,4 +1,4 @@
-"""DirectPlanner -- single LLM call planner for simple tasks."""
+"""SimplePlanner -- single LLM call planner for simple tasks."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ Request: {goal}
 """
 
 
-class DirectPlanner:
+class SimplePlanner:
     """PlannerProtocol implementation using a single LLM structured output call.
 
     For simple/routine tasks. Produces flat plans (typically 1-3 steps).
@@ -78,7 +78,7 @@ class DirectPlanner:
         use_templates: bool = True,
         fast_model: Any | None = None,
     ) -> None:
-        """Initialize the direct planner.
+        """Initialize the simple planner.
 
         Args:
             model: A langchain BaseChatModel instance supporting structured output.
@@ -94,7 +94,7 @@ class DirectPlanner:
         if self._use_templates:
             template_plan = await self._match_template(goal)
             if template_plan:
-                logger.info("DirectPlanner: using template plan for: %s", goal[:50])
+                logger.info("SimplePlanner: using template plan for: %s", goal[:50])
                 return template_plan
 
         prompt = self._build_plan_prompt(goal, context)
@@ -245,7 +245,7 @@ class DirectPlanner:
         if self._fast_model:
             intent = await self._classify_intent(goal)
             if intent and intent in self._PLAN_TEMPLATES:
-                logger.info("DirectPlanner: fast-model classified intent as '%s'", intent)
+                logger.info("SimplePlanner: fast-model classified intent as '%s'", intent)
                 return self._apply_template(intent, goal)
 
         return None
@@ -268,7 +268,7 @@ class DirectPlanner:
                 if category in text:
                     return category
         except Exception:
-            logger.debug("DirectPlanner intent classification failed", exc_info=True)
+            logger.debug("SimplePlanner intent classification failed", exc_info=True)
         return None
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:

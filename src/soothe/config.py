@@ -245,13 +245,15 @@ class ComplexityThresholds(BaseModel):
 
 
 class PerformanceConfig(BaseModel):
-    """Performance optimization configuration (RFC-0008).
+    """Performance optimization configuration (RFC-0008, RFC-0012).
 
     Args:
         enabled: Master switch for all performance optimizations.
-        complexity_detection: Enable query complexity classification.
-        skip_memory_for_simple: Skip memory recall for trivial/simple queries.
-        skip_context_for_simple: Skip context projection for trivial/simple queries.
+        unified_classification: Enable LLM-based unified classification.
+        classification_mode: Classification mode for unified system.
+            ``llm`` uses fast model for classification (default).
+            ``fallback`` uses token-count heuristics only.
+            ``disabled`` returns default classification.
         template_planning: Use template plans for simple queries.
         parallel_pre_stream: Run memory/context operations in parallel.
         cache_size: LRU cache size for embeddings (future).
@@ -261,9 +263,8 @@ class PerformanceConfig(BaseModel):
     """
 
     enabled: bool = True
-    complexity_detection: bool = True
-    skip_memory_for_simple: bool = True
-    skip_context_for_simple: bool = True
+    unified_classification: bool = True
+    classification_mode: Literal["llm", "fallback", "disabled"] = "llm"
     template_planning: bool = True
     parallel_pre_stream: bool = True
     cache_size: int = 100
@@ -395,16 +396,10 @@ class PlannerProtocolConfig(BaseModel):
 
     Args:
         routing: Routing strategy (auto, always_direct, always_planner, always_claude).
-        routing_mode: Classification mode for auto routing.
-            ``heuristic`` uses keyword/word-count only (zero latency).
-            ``llm`` always uses the fast model for classification.
-            ``hybrid`` (default) uses heuristic first with LLM fallback
-            for ambiguous/non-English goals.
         planner_model: Model role used for planning (resolved via ModelRouter).
     """
 
     routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
-    routing_mode: Literal["heuristic", "llm", "hybrid"] = "hybrid"
     planner_model: str = "think"
 
 

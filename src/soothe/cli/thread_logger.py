@@ -41,7 +41,7 @@ class ThreadLogger:
     def __init__(
         self,
         thread_dir: str | None = None,
-        thread_id: str | None = None,
+        thread_id: str | int | None = None,
         retention_days: int = 100,
         max_size_mb: int = 100,
     ) -> None:
@@ -53,10 +53,10 @@ class ThreadLogger:
             retention_days: Days to retain thread logs before cleanup.
             max_size_mb: Maximum total size for thread logs (not enforced yet).
         """
-        tid = thread_id or "default"
+        tid = str(thread_id or "default")
         default_dir = Path(SOOTHE_HOME) / "runs" / tid
         self._thread_dir = Path(thread_dir or default_dir).expanduser()
-        self._thread_id = thread_id or "default"
+        self._thread_id = tid
         self._retention_days = retention_days
         self._max_size_mb = max_size_mb
         self._initialized = False
@@ -71,10 +71,11 @@ class ThreadLogger:
         """Path to the current thread's JSONL file."""
         return self._thread_dir / "conversation.jsonl"
 
-    def set_thread_id(self, thread_id: str) -> None:
+    def set_thread_id(self, thread_id: str | int) -> None:
         """Update the thread ID (and thus the log file)."""
-        self._thread_id = thread_id
-        default_dir = Path(SOOTHE_HOME) / "runs" / thread_id
+        tid = str(thread_id)
+        self._thread_id = tid
+        default_dir = Path(SOOTHE_HOME) / "runs" / tid
         self._thread_dir = default_dir.expanduser()
         self._initialized = False
         logger.debug("ThreadLogger dir changed to %s", self._thread_dir)

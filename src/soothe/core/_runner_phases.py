@@ -139,10 +139,20 @@ class PhasesMixin:
         from soothe.core.runner import _generate_thread_id
         from soothe.protocols.durability import ThreadMetadata
 
-        complexity = "medium"
-        if self._config.performance.enabled and self._config.performance.complexity_detection:
-            complexity = self._classify_query(user_input)
-            logger.info("Query classified as: %s (%s)", complexity, user_input[:50])
+        # Unified classification (RFC-0012)
+        if self._unified_classifier:
+            state.unified_classification = await self._unified_classifier.classify(user_input)
+            complexity = state.unified_classification.runtime_complexity
+            logger.info(
+                "Unified classification: runtime=%s, planner=%s, plan_only=%s - %s",
+                state.unified_classification.runtime_complexity,
+                state.unified_classification.planner_complexity,
+                state.unified_classification.is_plan_only,
+                user_input[:50],
+            )
+        else:
+            complexity = "medium"
+            state.unified_classification = None
 
         requested_thread_id = state.thread_id
         try:
@@ -233,11 +243,7 @@ class PhasesMixin:
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
 
-        should_run_memory_context = (
-            not self._config.performance.enabled
-            or not self._config.performance.skip_memory_for_simple
-            or complexity in ("medium", "complex")
-        )
+        should_run_memory_context = not self._config.performance.enabled or complexity in ("medium", "complex")
 
         if should_run_memory_context:
             if self._config.performance.enabled and self._config.performance.parallel_pre_stream:

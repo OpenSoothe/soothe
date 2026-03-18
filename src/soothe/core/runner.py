@@ -100,6 +100,7 @@ class RunnerState:
     recalled_memories: list[Any] = field(default_factory=list)
     seen_message_ids: set[str] = field(default_factory=set)
     stream_error: str | None = None
+    unified_classification: Any = None  # Type: UnifiedClassification
 
 
 # ---------------------------------------------------------------------------
@@ -120,28 +121,33 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
     def __init__(self, config: SootheConfig | None = None) -> None:
         """Initialize the runner with optional config."""
+        import contextlib
         import time
 
         from soothe.core.agent import create_soothe_agent
         from soothe.core.concurrency import ConcurrencyController
-        from soothe.core.query_classifier import QueryClassifier
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
+        from soothe.core.unified_classifier import UnifiedClassifier
 
         init_start = time.perf_counter()
 
         self._config = config or SootheConfig()
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
-        if self._config.performance.enabled and self._config.performance.complexity_detection:
-            self._classifier = QueryClassifier(
-                trivial_token_threshold=self._config.performance.thresholds.get_trivial_threshold(),
-                simple_token_threshold=self._config.performance.thresholds.get_simple_threshold(),
-                medium_token_threshold=self._config.performance.thresholds.get_medium_threshold(),
+        # Initialize unified classifier (RFC-0012)
+        if self._config.performance.enabled and self._config.performance.unified_classification:
+            fast_model = None
+            with contextlib.suppress(Exception):
+                fast_model = self._config.create_chat_model("fast")
+
+            self._unified_classifier = UnifiedClassifier(
+                fast_model=fast_model,
+                classification_mode=self._config.performance.classification_mode,
                 use_tiktoken=self._config.performance.thresholds.use_tiktoken,
             )
-            logger.debug("Query classifier initialized")
+            logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
         else:
-            self._classifier = None
+            self._unified_classifier = None
 
         checkpointer_start = time.perf_counter()
         checkpointer_result = resolve_checkpointer(self._config)
@@ -298,27 +304,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         except Exception:
             logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
 
-    # -- query classification helpers (RFC-0008) ----------------------------
-
-    def _classify_query(self, query: str) -> str:
-        """Classify query complexity for adaptive processing.
-
-        Args:
-            query: User input text.
-
-        Returns:
-            Complexity level: "trivial", "simple", "medium", or "complex".
-        """
-        if not self._classifier:
-            return "medium"
-
-        from soothe.core.query_classifier import ComplexityLevel
-
-        level: ComplexityLevel = self._classifier.classify(query)
-        return level
+    # -- query classification helpers (RFC-0008, RFC-0012) -----------------
 
     def _get_template_plan(self, goal: str, complexity: str) -> Plan | None:
-        """Get template plan for trivial/simple queries.
+        """Get template plan for simple queries (RFC-0012: merged trivial into simple).
 
         Args:
             goal: The user's goal.
@@ -329,11 +318,8 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         """
         import re
 
-        if complexity == "trivial":
-            return Plan(
-                goal=goal,
-                steps=[PlanStep(id="step_1", description=goal, execution_hint="auto")],
-            )
+        if complexity != "simple":
+            return None
 
         goal_lower = goal.lower()
 
@@ -365,6 +351,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 ],
             )
 
+        # Default single-step plan for simple queries
         return Plan(
             goal=goal,
             steps=[PlanStep(id="step_1", description=goal, execution_hint="auto")],
@@ -475,9 +462,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
-        from soothe.core.classification import is_plan_only_request
+        # Use unified classification for plan-only detection (RFC-0012)
+        is_plan_only = state.unified_classification and state.unified_classification.is_plan_only
 
-        if state.plan and is_plan_only_request(user_input):
+        if state.plan and is_plan_only:
             yield _custom(
                 {
                     "type": "soothe.plan.plan_only",

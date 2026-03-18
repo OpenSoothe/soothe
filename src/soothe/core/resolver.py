@@ -198,7 +198,7 @@ def resolve_planner(
 ) -> PlannerProtocol:
     """Instantiate the PlannerProtocol implementation from config.
 
-    Always returns a planner -- at minimum DirectPlanner is used as fallback.
+    Always returns a planner -- at minimum SimplePlanner is used as fallback.
 
     Args:
         config: Soothe configuration.
@@ -224,12 +224,12 @@ def resolve_planner(
 
     resolved_cwd = str(Path(config.workspace_dir).resolve()) if config.workspace_dir else str(Path.cwd())
 
-    from soothe.backends.planning.direct import DirectPlanner
+    from soothe.backends.planning.simple import SimplePlanner
 
-    direct = DirectPlanner(model=planner_model, fast_model=fast_model) if planner_model else None
+    simple = SimplePlanner(model=planner_model, fast_model=fast_model) if planner_model else None
 
     if config.protocols.planner.routing == "always_direct":
-        return direct or DirectPlanner(model=planner_model, fast_model=fast_model)
+        return simple or SimplePlanner(model=planner_model, fast_model=fast_model)
 
     subagent_planner = None
     try:
@@ -240,7 +240,7 @@ def resolve_planner(
         logger.debug("SubagentPlanner init failed", exc_info=True)
 
     if config.protocols.planner.routing == "always_planner":
-        return subagent_planner or direct  # type: ignore[return-value]
+        return subagent_planner or simple  # type: ignore[return-value]
 
     claude_planner = None
     try:
@@ -251,16 +251,15 @@ def resolve_planner(
         logger.info("Claude CLI not available for planning")
 
     if config.protocols.planner.routing == "always_claude":
-        return claude_planner or subagent_planner or direct  # type: ignore[return-value]
+        return claude_planner or subagent_planner or simple  # type: ignore[return-value]
 
     from soothe.backends.planning.router import AutoPlanner
 
     return AutoPlanner(
         claude=claude_planner,
         subagent=subagent_planner,
-        direct=direct,
+        simple=simple,
         fast_model=fast_model,
-        routing_mode=config.protocols.planner.routing_mode,
         simple_token_threshold=30,
         complex_token_threshold=160,
         use_tiktoken=config.performance.thresholds.use_tiktoken,

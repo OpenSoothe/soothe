@@ -1,8 +1,8 @@
-"""Tests for AutoPlanner routing and goal_context forwarding."""
+"""Tests for AutoPlanner routing with unified classification (RFC-0012)."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -44,67 +44,85 @@ def _make_planner(name: str) -> MagicMock:
     return planner
 
 
+def _make_classification(planner_complexity: str) -> MagicMock:
+    """Create a mock unified classification."""
+    classification = MagicMock()
+    classification.planner_complexity = planner_complexity
+    classification.runtime_complexity = planner_complexity
+    classification.is_plan_only = False
+    return classification
+
+
 class TestAutoPlanner:
-    """Unit tests for AutoPlanner routing."""
+    """Unit tests for AutoPlanner routing with unified classification."""
 
     @pytest.mark.asyncio
-    async def test_simple_goal_routes_to_direct(self) -> None:
-        direct = _make_planner("direct")
+    async def test_simple_goal_routes_to_simple_planner(self) -> None:
+        """Simple classification routes to SimplePlanner."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
-        auto = AutoPlanner(direct=direct, subagent=subagent, routing_mode="heuristic")
+        auto = AutoPlanner(simple=simple, subagent=subagent)
 
-        await auto.create_plan("hello world", PlanContext())
-        direct.create_plan.assert_awaited_once()
+        context = PlanContext(unified_classification=_make_classification("simple"))
+        await auto.create_plan("hello world", context)
+        simple.create_plan.assert_awaited_once()
         subagent.create_plan.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_medium_goal_routes_to_subagent(self) -> None:
-        direct = _make_planner("direct")
+        """Medium classification routes to SubagentPlanner."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
-        auto = AutoPlanner(direct=direct, subagent=subagent, routing_mode="heuristic")
+        auto = AutoPlanner(simple=simple, subagent=subagent)
 
-        await auto.create_plan("implement user authentication", PlanContext())
+        context = PlanContext(unified_classification=_make_classification("medium"))
+        await auto.create_plan("implement user authentication", context)
         subagent.create_plan.assert_awaited_once()
-        direct.create_plan.assert_not_awaited()
+        simple.create_plan.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_complex_goal_routes_to_claude(self) -> None:
-        direct = _make_planner("direct")
+        """Complex classification routes to ClaudePlanner."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
         claude = _make_planner("claude")
-        auto = AutoPlanner(claude=claude, subagent=subagent, direct=direct, routing_mode="heuristic")
+        auto = AutoPlanner(claude=claude, subagent=subagent, simple=simple)
 
-        await auto.create_plan("architect a new microservices system", PlanContext())
+        context = PlanContext(unified_classification=_make_classification("complex"))
+        await auto.create_plan("architect a new microservices system", context)
         claude.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_complex_fallback_to_subagent_when_no_claude(self) -> None:
-        direct = _make_planner("direct")
+        """Complex classification falls back to SubagentPlanner when Claude is unavailable."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
-        auto = AutoPlanner(claude=None, subagent=subagent, direct=direct, routing_mode="heuristic")
+        auto = AutoPlanner(claude=None, subagent=subagent, simple=simple)
 
-        await auto.create_plan("architect a new microservices system", PlanContext())
+        context = PlanContext(unified_classification=_make_classification("complex"))
+        await auto.create_plan("architect a new microservices system", context)
         subagent.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_explicit_claude_keyword(self) -> None:
-        direct = _make_planner("direct")
-        claude = _make_planner("claude")
-        auto = AutoPlanner(claude=claude, direct=direct, routing_mode="heuristic")
+    async def test_medium_fallback_to_simple_when_no_subagent(self) -> None:
+        """Medium classification falls back to SimplePlanner when Subagent is unavailable."""
+        simple = _make_planner("simple")
+        auto = AutoPlanner(simple=simple, subagent=None)
 
-        await auto.create_plan("use claude to plan this task", PlanContext())
-        claude.create_plan.assert_awaited_once()
+        context = PlanContext(unified_classification=_make_classification("medium"))
+        await auto.create_plan("implement feature", context)
+        simple.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_word_count_complex_threshold(self) -> None:
-        direct = _make_planner("direct")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(direct=direct, subagent=subagent, routing_mode="heuristic")
+    async def test_fallback_when_no_unified_classification(self) -> None:
+        """Without unified classification, falls back to token-count heuristic."""
+        simple = _make_planner("simple")
+        auto = AutoPlanner(simple=simple, use_tiktoken=False)
 
-        # 170 tokens -> complex (>= 160 threshold)
-        long_goal = " ".join(["word"] * 170)
-        await auto.create_plan(long_goal, PlanContext())
-        subagent.create_plan.assert_awaited_once()
+        # Short goal -> simple (< 30 tokens)
+        context = PlanContext()
+        await auto.create_plan("hello world", context)
+        simple.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_reflect_forwards_goal_context(self) -> None:
@@ -128,99 +146,61 @@ class TestAutoPlanner:
     @pytest.mark.asyncio
     async def test_reflect_without_goal_context(self) -> None:
         """AutoPlanner.reflect works without goal_context (single-pass mode)."""
-        direct = _make_planner("direct")
-        auto = AutoPlanner(direct=direct)
+        simple = _make_planner("simple")
+        auto = AutoPlanner(simple=simple)
 
         plan = Plan(goal="test", steps=[PlanStep(id="s1", description="step")])
         results = [StepResult(step_id="s1", output="ok", success=True)]
 
         await auto.reflect(plan, results)
-        direct.reflect.assert_awaited_once_with(plan, results, None)
+        simple.reflect.assert_awaited_once_with(plan, results, None)
 
 
-class TestAutoRoutingModes:
-    """Test different routing_mode configurations."""
-
-    @pytest.mark.asyncio
-    async def test_heuristic_mode_no_llm_call(self) -> None:
-        """In heuristic mode, _llm_classify is never called."""
-        direct = _make_planner("direct")
-        fast_model = MagicMock()
-        auto = AutoPlanner(direct=direct, fast_model=fast_model, routing_mode="heuristic")
-
-        # 40 tokens, no keywords -- would be ambiguous in hybrid mode
-        goal = " ".join(["something"] * 40)
-        await auto.create_plan(goal, PlanContext())
-        fast_model.ainvoke.assert_not_called()
+class TestAutoPlannerFallback:
+    """Test fallback routing without unified classification."""
 
     @pytest.mark.asyncio
-    async def test_hybrid_mode_calls_llm_for_ambiguous(self) -> None:
-        """In hybrid mode, ambiguous goals trigger LLM classification."""
-        direct = _make_planner("direct")
+    async def test_fallback_simple_threshold(self) -> None:
+        """Fallback routes short goals to SimplePlanner."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
+        auto = AutoPlanner(simple=simple, subagent=subagent, use_tiktoken=False)
 
-        mock_response = MagicMock()
-        mock_response.content = "medium"
-        fast_model = MagicMock()
-        fast_model.ainvoke = AsyncMock(return_value=mock_response)
+        # < 30 tokens -> simple
+        context = PlanContext()
+        await auto.create_plan("hello world", context)
+        simple.create_plan.assert_awaited_once()
+        subagent.create_plan.assert_not_awaited()
 
-        auto = AutoPlanner(
-            direct=direct,
-            subagent=subagent,
-            fast_model=fast_model,
-            routing_mode="hybrid",
-        )
+    @pytest.mark.asyncio
+    async def test_fallback_complex_threshold(self) -> None:
+        """Fallback routes long goals to best available planner."""
+        simple = _make_planner("simple")
+        subagent = _make_planner("subagent")
+        auto = AutoPlanner(simple=simple, subagent=subagent, use_tiktoken=False, complex_token_threshold=160)
 
-        # 40 tokens, no keywords -- ambiguous for heuristic (between 30 and 160)
-        goal = " ".join(["something"] * 40)
-        await auto.create_plan(goal, PlanContext())
-        fast_model.ainvoke.assert_awaited_once()
+        # Very long goal (>= 160 tokens) -> complex
+        long_goal = " ".join(["word"] * 200)
+        context = PlanContext()
+        await auto.create_plan(long_goal, context)
+        # Without claude, should use subagent
         subagent.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_llm_mode_always_classifies(self) -> None:
-        """In llm mode, classification always uses the fast model."""
-        direct = _make_planner("direct")
+    async def test_fallback_medium_range(self) -> None:
+        """Fallback routes medium-length goals to SubagentPlanner."""
+        simple = _make_planner("simple")
         subagent = _make_planner("subagent")
-
-        mock_response = MagicMock()
-        mock_response.content = "simple"
-        fast_model = MagicMock()
-        fast_model.ainvoke = AsyncMock(return_value=mock_response)
-
         auto = AutoPlanner(
-            direct=direct,
+            simple=simple,
             subagent=subagent,
-            fast_model=fast_model,
-            routing_mode="llm",
+            use_tiktoken=False,
+            simple_token_threshold=30,
+            complex_token_threshold=160,
         )
 
-        await auto.create_plan("implement auth", PlanContext())
-        fast_model.ainvoke.assert_awaited_once()
-        direct.create_plan.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_hybrid_skips_llm_when_heuristic_matches(self) -> None:
-        """In hybrid mode, clear matches don't trigger LLM classification."""
-        direct = _make_planner("direct")
-        fast_model = MagicMock()
-        auto = AutoPlanner(direct=direct, fast_model=fast_model, routing_mode="hybrid")
-
-        await auto.create_plan("hello", PlanContext())
-        fast_model.ainvoke.assert_not_called()
-        direct.create_plan.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_hybrid_fallback_when_llm_fails(self) -> None:
-        """When LLM classification fails, falls back to default routing."""
-        direct = _make_planner("direct")
-        fast_model = MagicMock()
-        fast_model.ainvoke = AsyncMock(side_effect=Exception("LLM error"))
-
-        auto = AutoPlanner(direct=direct, fast_model=fast_model, routing_mode="hybrid")
-
-        # 40 tokens, no keywords -- ambiguous
-        goal = " ".join(["something"] * 40)
-        await auto.create_plan(goal, PlanContext())
-        # Should still produce a plan via fallback
-        direct.create_plan.assert_awaited_once()
+        # Between 30 and 160 tokens -> medium
+        medium_goal = " ".join(["word"] * 50)
+        context = PlanContext()
+        await auto.create_plan(medium_goal, context)
+        subagent.create_plan.assert_awaited_once()

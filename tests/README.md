@@ -82,7 +82,7 @@ The test suite covers the following modules:
    - InMemoryDurability: thread lifecycle, state persistence
 
 6. **Planning** (`test_planning.py`)
-   - DirectPlanner: plan creation, revision, reflection
+   - SimplePlanner: plan creation, revision, reflection
 
 7. **Policy** (`test_policy.py`)
    - ConfigDrivenPolicy: permission checking, profile management
