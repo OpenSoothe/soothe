@@ -41,6 +41,24 @@ Guidelines:
 - Maintain context across the conversation and build on prior results.
 - For complex tasks, create a structured plan before diving into implementation.\
 """
+
+_SIMPLE_SYSTEM_PROMPT = """\
+You are {assistant_name}, a helpful AI assistant.
+
+You provide direct, concise responses. Focus on answering questions quickly and accurately.
+"""
+
+_MEDIUM_SYSTEM_PROMPT = """\
+You are {assistant_name}, a proactive AI assistant.
+
+You excel at multi-step problem-solving and can research, explore codebases, and automate tasks.
+Take initiative and suggest next steps when appropriate.
+
+Guidelines:
+- Be direct and concise. Lead with answers, not preambles.
+- For multi-step tasks, outline your approach briefly, then execute.
+- If you encounter an obstacle, explain what happened and suggest alternatives.
+"""
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
@@ -267,6 +285,11 @@ class PerformanceConfig(BaseModel):
     classification_mode: Literal["llm", "fallback", "disabled"] = "llm"
     template_planning: bool = True
     parallel_pre_stream: bool = True
+
+    # System prompt optimization
+    optimize_system_prompts: bool = True
+    """Enable dynamic system prompt adjustment based on LLM query classification."""
+
     cache_size: int = 100
     log_timing: bool = False
     slow_query_threshold_ms: int = 3000

@@ -55,7 +55,16 @@ class PhasesMixin:
             state.context_projection,
             state.recalled_memories,
         )
+
+        # Inject classification into agent state for middleware access
         stream_input: dict[str, Any] | Command = {"messages": enriched_messages}
+        if state.unified_classification:
+            stream_input["unified_classification"] = state.unified_classification
+            logger.debug(
+                "Injected LLM classification into agent state: runtime=%s",
+                state.unified_classification.runtime_complexity,
+            )
+
         config = {"configurable": {"thread_id": state.thread_id}}
 
         if not self._checkpointer_initialized and self._checkpointer_pool is not None:

@@ -31,6 +31,11 @@ providers:
       - MiniMax-M2.5
       - text-embedding-v4
 
+  - name: ollama
+    provider_type: ollama
+    api_base_url: http://localhost:11434
+    models: [qwen3.5:0.8b, nomic-embed-text:latest]
+
 # =============================================================================
 # Model Router
 # =============================================================================

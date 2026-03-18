@@ -50,7 +50,10 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        response = await model.ainvoke([{"role": "user", "content": detection_prompt}])
+        # browser-use ChatOpenAI expects browser_use.llm.messages.UserMessage
+        from browser_use.llm.messages import UserMessage
+
+        response = await model.ainvoke([UserMessage(content=detection_prompt)])
         content = response.content.strip()
         result = content.lower() == "yes"
     except Exception as e:

@@ -24,6 +24,7 @@ from soothe.core.resolver import (
 )
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
+from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -166,6 +167,12 @@ def create_soothe_agent(
                 profile_name=config.protocols.policy.profile,
             )
         )
+
+    # Add system prompt optimization middleware if enabled
+    if config.performance.enabled and config.performance.optimize_system_prompts:
+        default_middleware.append(SystemPromptOptimizationMiddleware(config=config))
+        logger.info("System prompt optimization middleware enabled")
+
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))
 
