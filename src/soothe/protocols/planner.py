@@ -121,8 +121,50 @@ class GoalReport(BaseModel):
     cross_validation_notes: str = ""
 
 
+class GoalDirective(BaseModel):
+    """A single goal management directive from reflection (RFC-0011).
+
+    Args:
+        action: 'create' | 'decompose' | 'adjust_priority' | 'add_dependency' | 'fail' | 'complete'
+        goal_id: Target goal ID (for existing goals).
+        description: Goal description (for create).
+        priority: Priority value (for create/adjust_priority).
+        parent_id: Parent goal ID (for decomposition).
+        depends_on: Dependency list (for create/add_dependency).
+        rationale: Why this directive was issued.
+    """
+
+    action: Literal["create", "decompose", "adjust_priority", "add_dependency", "fail", "complete"]
+    goal_id: str = ""
+    description: str = ""
+    priority: int | None = None
+    parent_id: str | None = None
+    depends_on: list[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
+class GoalContext(BaseModel):
+    """Context about goal state for reflection (RFC-0011).
+
+    Args:
+        current_goal_id: ID of the goal being executed.
+        all_goals: List of all goals in the engine (serialized).
+        completed_goals: Goal IDs that have completed.
+        failed_goals: Goal IDs that have failed.
+        ready_goals: Goal IDs ready for execution.
+        max_parallel_goals: Concurrency limit.
+    """
+
+    current_goal_id: str
+    all_goals: list[dict[str, Any]] = Field(default_factory=list)
+    completed_goals: list[str] = Field(default_factory=list)
+    failed_goals: list[str] = Field(default_factory=list)
+    ready_goals: list[str] = Field(default_factory=list)
+    max_parallel_goals: int = 1
+
+
 class Reflection(BaseModel):
-    """Planner's assessment of plan progress (RFC-0010 enhanced).
+    """Planner's assessment of plan progress (RFC-0010 enhanced, RFC-0011 extended).
 
     Args:
         assessment: Description of current progress.
@@ -130,6 +172,7 @@ class Reflection(BaseModel):
         feedback: Specific feedback for revision (if needed).
         blocked_steps: Step IDs blocked by dependency failures.
         failed_details: Map of failed step ID to truncated error output.
+        goal_directives: List of goal management actions.
     """
 
     assessment: str
@@ -137,6 +180,7 @@ class Reflection(BaseModel):
     feedback: str
     blocked_steps: list[str] = Field(default_factory=list)
     failed_details: dict[str, str] = Field(default_factory=dict)
+    goal_directives: list[GoalDirective] = Field(default_factory=list)
 
 
 class CheckpointEnvelope(BaseModel):
@@ -200,14 +244,20 @@ class PlannerProtocol(Protocol):
         """
         ...
 
-    async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
-        """Evaluate plan progress and determine if revision is needed.
+    async def reflect(
+        self,
+        plan: Plan,
+        step_results: list[StepResult],
+        goal_context: GoalContext | None = None,
+    ) -> Reflection:
+        """Evaluate plan progress and recommend goal changes.
 
         Args:
             plan: The current plan.
             step_results: Results from completed steps.
+            goal_context: Optional context about goal state.
 
         Returns:
-            A reflection with assessment and revision recommendation.
+            A reflection with assessment, revision recommendation, and goal directives.
         """
         ...

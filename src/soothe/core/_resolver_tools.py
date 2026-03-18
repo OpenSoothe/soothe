@@ -168,10 +168,10 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
 
         return list(create_tabular_tools())
 
-    if name == "bash":
-        from soothe.tools.bash import create_bash_tools
+    if name == "cli":
+        from soothe.tools.cli import create_cli_tools
 
-        return list(create_bash_tools())
+        return list(create_cli_tools())
 
     if name == "file_edit":
         from soothe.tools.file_edit import create_file_edit_tools
@@ -296,10 +296,7 @@ def resolve_subagents(
 
         # Claude subagent uses environment variables directly (ANTHROPIC_API_KEY, model)
         # So we don't set model_override for Claude - it reads from env vars
-        if name == "claude":
-            model_override = None
-        else:
-            model_override = sub_cfg.model or default_model or config.resolve_model("default")
+        model_override = None if name == "claude" else sub_cfg.model or default_model or config.resolve_model("default")
 
         extra_kwargs = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:

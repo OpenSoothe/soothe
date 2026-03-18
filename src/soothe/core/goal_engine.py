@@ -77,18 +77,39 @@ class GoalEngine:
         priority: int = 50,
         parent_id: str | None = None,
         max_retries: int | None = None,
+        _validate_depth: bool = True,
+        _max_depth: int = 5,
     ) -> Goal:
-        """Create a new goal.
+        """Create a new goal with safety validation.
 
         Args:
             description: Human-readable goal text.
             priority: Scheduling priority (0-100).
             parent_id: Optional parent goal ID.
             max_retries: Override default max retries.
+            _validate_depth: Whether to validate goal depth.
+            _max_depth: Maximum allowed goal depth.
 
         Returns:
             The created Goal.
+
+        Raises:
+            ValueError: If depth limit exceeded or parent not found.
         """
+        # Validate parent exists
+        if parent_id:
+            parent = self._goals.get(parent_id)
+            if not parent:
+                msg = f"Parent goal {parent_id} not found"
+                raise ValueError(msg)
+
+            # Check depth limit
+            if _validate_depth:
+                depth = self._calculate_goal_depth(parent_id)
+                if depth >= _max_depth:
+                    msg = f"Goal depth limit ({_max_depth}) exceeded. Parent {parent_id} is at depth {depth}."
+                    raise ValueError(msg)
+
         goal = Goal(
             description=description,
             priority=priority,
@@ -252,6 +273,122 @@ class GoalEngine:
             The Goal, or None if not found.
         """
         return self._goals.get(goal_id)
+
+    def _calculate_goal_depth(self, goal_id: str) -> int:
+        """Calculate depth in goal hierarchy.
+
+        Args:
+            goal_id: Goal ID to calculate depth for.
+
+        Returns:
+            Depth value (0 = no parent, 1 = one parent, etc.).
+        """
+        max_depth_limit = 20  # Safety limit to prevent infinite loops
+        depth = 0
+        current_id = goal_id
+        visited = set()
+
+        while current_id:
+            if current_id in visited:
+                break  # Cycle detected
+            visited.add(current_id)
+
+            goal = self._goals.get(current_id)
+            if not goal:
+                break
+
+            depth += 1
+            current_id = goal.parent_id
+
+            if depth > max_depth_limit:
+                break
+
+        return depth
+
+    def _would_create_cycle(self, goal_id: str, new_deps: list[str]) -> bool:
+        """Check if adding new_deps to goal_id would create a cycle using DFS.
+
+        Args:
+            goal_id: Target goal ID.
+            new_deps: Proposed new dependencies.
+
+        Returns:
+            True if adding dependencies would create a cycle.
+        """
+        visited = set()
+
+        def _dfs(current_id: str) -> bool:
+            if current_id == goal_id:
+                return True  # Cycle detected
+            if current_id in visited:
+                return False
+            visited.add(current_id)
+
+            current_goal = self._goals.get(current_id)
+            if current_goal:
+                return any(_dfs(dep_id) for dep_id in current_goal.depends_on)
+            return False
+
+        return any(_dfs(dep_id) for dep_id in new_deps)
+
+    async def validate_dependency(self, goal_id: str, depends_on: list[str]) -> tuple[bool, str]:
+        """Validate that adding dependencies won't create a cycle.
+
+        Args:
+            goal_id: Target goal ID.
+            depends_on: Proposed new dependencies.
+
+        Returns:
+            Tuple of (is_valid, error_message).
+        """
+        # Check dependencies exist
+        for dep_id in depends_on:
+            if dep_id not in self._goals:
+                return False, f"Dependency goal {dep_id} does not exist"
+
+        # Check for self-dependency
+        if goal_id in depends_on:
+            msg = f"Goal {goal_id} cannot depend on itself"
+            return False, msg
+
+        # Check for cycles
+        if self._would_create_cycle(goal_id, depends_on):
+            return False, "Adding dependencies would create a cycle"
+
+        return True, ""
+
+    async def add_dependencies(self, goal_id: str, depends_on: list[str]) -> Goal:
+        """Add dependencies to a goal with cycle validation.
+
+        Args:
+            goal_id: Target goal ID.
+            depends_on: Dependencies to add.
+
+        Returns:
+            The updated Goal.
+
+        Raises:
+            ValueError: If dependencies would create a cycle.
+            KeyError: If goal not found.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            msg = f"Goal {goal_id} not found"
+            raise KeyError(msg)
+
+        is_valid, error = await self.validate_dependency(goal_id, depends_on)
+        if not is_valid:
+            raise ValueError(error)
+
+        # Add new dependencies (avoid duplicates)
+        existing = set(goal.depends_on)
+        for dep_id in depends_on:
+            if dep_id not in existing:
+                goal.depends_on.append(dep_id)
+
+        goal.updated_at = datetime.now(UTC)
+        logger.info("Added dependencies to goal %s: %s", goal_id, depends_on)
+        return goal
 
     def snapshot(self) -> list[dict[str, Any]]:
         """Serialize all goals to a list of dicts for persistence."""

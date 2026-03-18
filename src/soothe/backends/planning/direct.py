@@ -8,6 +8,8 @@ import re
 from typing import Any, ClassVar
 
 from soothe.protocols.planner import (
+    GoalContext,
+    GoalDirective,
     Plan,
     PlanContext,
     PlanStep,
@@ -200,8 +202,13 @@ class DirectPlanner:
 
         return data
 
-    async def reflect(self, plan: Plan, step_results: list[StepResult]) -> Reflection:
-        """Dependency-aware reflection (RFC-0010)."""
+    async def reflect(
+        self,
+        plan: Plan,
+        step_results: list[StepResult],
+        goal_context: GoalContext | None = None,
+    ) -> Reflection:
+        """Enhanced reflection with goal awareness (RFC-0010, RFC-0011)."""
         completed = sum(1 for r in step_results if r.success)
         failed_list = [r for r in step_results if not r.success]
         total = len(plan.steps)
@@ -211,6 +218,7 @@ class DirectPlanner:
                 assessment=f"{completed}/{total} steps completed successfully",
                 should_revise=False,
                 feedback="",
+                goal_directives=[],
             )
 
         failed_ids = {r.step_id for r in failed_list}
@@ -238,12 +246,45 @@ class DirectPlanner:
             len(blocked),
             len(direct_failed),
         )
+
+        # NEW: Generate goal directives for critical failures (RFC-0011)
+        goal_directives: list[GoalDirective] = []
+        if goal_context and direct_failed:
+            # Heuristic: if step result mentions missing dependency, spawn prerequisite goal
+            for step_id in direct_failed[:1]:  # Only first failure
+                step = next((s for s in plan.steps if s.id == step_id), None)
+                if not step or not step.result:
+                    continue
+
+                result_lower = step.result.lower()
+                if "missing" in result_lower or "not found" in result_lower or "not installed" in result_lower:
+                    # Extract current goal priority
+                    current_priority = 50
+                    if goal_context.all_goals:
+                        for g in goal_context.all_goals:
+                            if g.get("id") == goal_context.current_goal_id:
+                                current_priority = g.get("priority", 50)
+                                break
+
+                    goal_directives.append(
+                        GoalDirective(
+                            action="create",
+                            description=f"Resolve prerequisite for: {step.description[:80]}",
+                            priority=min(current_priority + 10, 100),  # Higher priority
+                            parent_id=None,
+                            depends_on=[],
+                            rationale=f"Step {step_id} failed due to missing prerequisite",
+                        )
+                    )
+                    break  # Only one directive per reflection
+
         return Reflection(
             assessment=". ".join(parts),
             should_revise=True,
             feedback=f"Failed steps: {direct_failed}. Blocked: {blocked}.",
             blocked_steps=blocked,
             failed_details=failed_details,
+            goal_directives=goal_directives,
         )
 
     async def _invoke(self, prompt: str) -> str:

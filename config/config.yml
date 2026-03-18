@@ -125,7 +125,7 @@ tools:
   - datetime          # Current date/time for time-awareness
   - file_edit         # Create, read, delete, search files with backup
   - python_executor   # Execute Python code with matplotlib support
-  - bash              # Persistent bash shell execution
+  - cli               # Persistent CLI shell execution
   - tabular           # Inspect and validate tabular data (CSV, Excel, etc.)
   - document          # Extract text from documents (PDF, DOCX, etc.)
 

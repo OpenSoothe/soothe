@@ -407,11 +407,17 @@ class AutonomousConfig(BaseModel):
         enabled_by_default: Whether new runs default to autonomous mode.
         max_iterations: Maximum iterations per autonomous thread.
         max_retries: Maximum retries per goal on failure.
+        max_total_goals: Maximum goals allowed (RFC-0011).
+        max_goal_depth: Maximum hierarchy depth (RFC-0011).
+        enable_dynamic_goals: Enable/disable dynamic creation (RFC-0011).
     """
 
     enabled_by_default: bool = False
     max_iterations: int = 10
     max_retries: int = 2
+    max_total_goals: int = Field(default=50, ge=1, le=500)
+    max_goal_depth: int = Field(default=5, ge=1, le=10)
+    enable_dynamic_goals: bool = Field(default=True)
 
 
 class ThreadLoggingConfig(BaseModel):
@@ -535,7 +541,7 @@ class SootheConfig(BaseSettings):
             "datetime",
             "file_edit",
             "python_executor",
-            "bash",
+            "cli",
             "tabular",
             "document",
             "wizsearch",

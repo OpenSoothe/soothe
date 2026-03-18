@@ -16,7 +16,7 @@ This guide details the implementation of six tool enhancements for Soothe:
 |------|--------|----------|--------|
 | **audio** (enhance) | ⚠️ Partial (OpenAI only) | 🔴 High | Medium |
 | **video** (enhance) | ⚠️ Stub | 🔴 High | Medium |
-| **bash** (new) | ❌ Missing | 🔴 Critical | High |
+| **cli** (new) | ✅ Complete | 🔴 Critical | High |
 | **file_edit** (new) | ❌ Missing | 🔴 Critical | Medium |
 | **document** (new) | ❌ Missing | 🟡 Medium | Medium |
 | **python_executor** (new) | ❌ Missing | 🔴 Critical | High |
@@ -56,7 +56,7 @@ soothe/
 └── tools/
     ├── audio.py             # ✨ Enhanced: OpenAI + Aliyun NLS + audio_qa
     ├── video.py             # ✨ Enhanced: Full Gemini integration
-    ├── bash.py              # ✨ New: Persistent shell execution
+    ├── cli.py               # ✨ Complete: Persistent shell execution (renamed from bash)
     ├── file_edit.py         # ✨ New: File operations with backup
     ├── document.py          # ✨ New: Multi-format document parsing
     ├── python_executor.py   # ✨ New: IPython execution with matplotlib
@@ -70,9 +70,9 @@ All tools integrate via `src/soothe/core/resolver.py`:
 ```python
 def _resolve_single_tool_group(name: str) -> list[BaseTool]:
     # New tool registration points
-    if name == "bash":
-        from soothe.tools.bash import create_bash_tools
-        return list(create_bash_tools())
+    if name == "cli":
+        from soothe.tools.cli import create_cli_tools
+        return list(create_cli_tools())
     # ... etc
 ```
 
@@ -98,7 +98,7 @@ src/soothe/tools/{tool_name}.py
 ```toml
 # pyproject.toml additions
 [project.optional-dependencies]
-bash = ["pexpect>=4.9.0"]
+cli = ["pexpect>=4.9.0"]
 audio-full = ["aliyun-python-sdk-core>=2.15", "aliyun-python-sdk-nls-filetrans>=0.0.1"]
 video = ["google-genai>=0.3.0"]
 document = ["PyMuPDF>=1.24.0"]
@@ -299,11 +299,13 @@ video = ["google-genai>=0.3.0"]
 
 ---
 
-### 5.3 Bash Toolkit (New)
+### 5.3 CLI Toolkit (New)
 
-**File**: `src/soothe/tools/bash.py`
+**File**: `src/soothe/tools/cli.py`
 
 **Priority**: 🔴 Critical - Required for coding agents
+
+**Status**: ✅ Complete - Renamed from bash to better reflect capabilities
 
 #### Core Design
 
@@ -313,55 +315,42 @@ import re
 
 ANSI_ESCAPE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
-class BashTool(BaseTool):
-    """Persistent bash shell execution with security controls."""
+class CliTool(BaseTool):
+    """Persistent CLI shell execution with security controls."""
 
-    name: str = "run_bash"
+    name: str = "run_cli"
     workspace_root: str = Field(default="")
     timeout: int = Field(default=60)
     max_output_length: int = Field(default=10000)
 
-    # Security configuration
+    # Security configuration - substring match
     banned_commands: list[str] = Field(default_factory=lambda: [
-        "rm -rf /", "rm -rf ~", "mkfs", "dd if=", ":(){ :|:& };:"
+        "rm -rf /", "rm -rf ~", "rm -rf ./*", "rm -rf *",
+        "mkfs", "dd if=", ":(){ :|:& };:",
+        "sudo rm", "sudo dd",
+        "chmod -R 777 /", "chown -R",
+    ])
+
+    # Security configuration - regex patterns
+    banned_command_patterns: list[str] = Field(default_factory=lambda: [
+        r"git\s+init", r"git\s+commit", r"git\s+add",
+        r"rm\s+-rf\s+/", r"sudo\s+rm\s+-rf",
     ])
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.child = None
-        self.custom_prompt = "soothe-bash>> "
         self._initialize_shell()
 
     def _initialize_shell(self):
-        """Start persistent bash shell with custom prompt."""
-        self.child = pexpect.spawn(
-            "/bin/bash",
-            encoding="utf-8",
-            echo=False,
-            timeout=self.timeout
-        )
-        self.child.sendline(f"PS1='{self.custom_prompt}'")
-        self.child.expect(self.custom_prompt)
-
-    def _run(self, command: str) -> str:
-        """Execute bash command in persistent shell."""
-        # Validate command
-        if self._is_banned(command):
-            return f"Error: Command not allowed"
-
-        # Execute in shell
-        self.child.sendline(command)
-        self.child.expect(self.custom_prompt)
-
-        # Clean output
-        output = ANSI_ESCAPE.sub("", self.child.before)
-        return output[:self.max_output_length]
+        """Start persistent shell with custom prompt."""
+        custom_prompt = "soothe-cli>> "
+        # ... initialization code
 ```
 
 #### Security Features
 
 1. **Command Filtering**
-   - Banned command list (exact match)
+   - Banned command list (substring match)
    - Banned regex patterns
    - Configurable restrictions
 
@@ -375,16 +364,20 @@ class BashTool(BaseTool):
 
 4. **Shell Recovery**
    - Auto-restart on crash
+   - Responsiveness testing
    - State persistence
 
 #### Tools Provided
 
 ```python
-def create_bash_tools() -> list[BaseTool]:
+def create_cli_tools() -> list[BaseTool]:
     return [
-        BashTool(),           # run_bash
-        GetCurrentDirTool(),  # get_current_directory
-        ListDirTool(),        # list_directory
+        CliTool(),                # run_cli
+        GetCurrentDirTool(),      # get_current_directory
+        ListDirTool(),            # list_directory
+        RunCliBackgroundTool(),   # run_cli_background
+        KillProcessTool(),        # kill_process
+        CheckCommandExistsTool(), # check_command_exists
     ]
 ```
 
@@ -392,7 +385,7 @@ def create_bash_tools() -> list[BaseTool]:
 
 ```toml
 [project.optional-dependencies]
-bash = ["pexpect>=4.9.0"]
+cli = ["pexpect>=4.9.0"]
 ```
 
 #### Critical Considerations
@@ -400,6 +393,7 @@ bash = ["pexpect>=4.9.0"]
 - **Platform**: Only works on Unix-like systems (macOS, Linux)
 - **Security**: Essential for coding agents, dangerous if misconfigured
 - **State Persistence**: Shell state (env vars, cwd) persists across commands
+- **Enhancements**: Includes regex banned patterns, shell recovery, background execution
 
 ---
 
@@ -739,12 +733,12 @@ tools:
   - arxiv
   - wikipedia
   - wizsearch
-  - bash          # New
-  - file_edit     # New
+  - cli            # New (renamed from bash)
+  - file_edit      # New
   - python_executor  # New
-  - audio         # Enhanced
-  - video         # Enhanced
-  - document      # New
+  - audio          # Enhanced
+  - video          # Enhanced
+  - document       # New
 ```
 
 ### Tool-Specific Config
@@ -775,16 +769,16 @@ tool_config:
 - Output format
 
 ```python
-def test_bash_tool():
-    tool = BashTool()
+def test_cli_tool():
+    tool = CliTool()
     result = tool._run("echo 'hello'")
     assert "hello" in result
 
-def test_bash_tool_banned_command():
-    tool = BashTool()
+def test_cli_tool_banned_command():
+    tool = CliTool()
     result = tool._run("rm -rf /")
     assert "Error" in result
-    assert "banned" in result.lower()
+    assert "not allowed" in result.lower()
 ```
 
 ### Integration Tests
@@ -798,11 +792,11 @@ def test_bash_tool_banned_command():
 - Error propagation
 
 ```python
-def test_resolve_bash_tools():
+def test_resolve_cli_tools():
     from soothe.core.resolver import resolve_tools
-    tools = resolve_tools(["bash"])
-    assert len(tools) == 3
-    assert any(t.name == "run_bash" for t in tools)
+    tools = resolve_tools(["cli"])
+    assert len(tools) == 6
+    assert any(t.name == "run_cli" for t in tools)
 ```
 
 ### Test Fixtures
@@ -823,9 +817,11 @@ tests/fixtures/
 
 ### Phase 1: Critical Tools (Week 1-2)
 
-1. **Bash Toolkit** ✅
+1. **CLI Toolkit** ✅
    - Implement core execution
-   - Add security filtering
+   - Add security filtering (substring + regex patterns)
+   - Add shell recovery and responsiveness testing
+   - Add background execution and process management
    - Write unit tests
 
 2. **Python Executor Toolkit** ✅
@@ -905,7 +901,7 @@ tests/fixtures/
 
 ```
 thirdparty/noesium/noesium/src/noesium/toolkits/
-├── bash_toolkit.py           # 337 lines
+├── bash_toolkit.py           # 337 lines (ported to cli.py with enhancements)
 ├── file_edit_toolkit.py      # 585 lines
 ├── document_toolkit.py       # 467 lines
 ├── python_executor_toolkit.py # 337 lines
@@ -922,9 +918,9 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
     # ... existing tools ...
 
     # New tools
-    if name == "bash":
-        from soothe.tools.bash import create_bash_tools
-        return list(create_bash_tools())
+    if name == "cli":
+        from soothe.tools.cli import create_cli_tools
+        return list(create_cli_tools())
 
     if name == "file_edit":
         from soothe.tools.file_edit import create_file_edit_tools
@@ -980,7 +976,7 @@ def _resolve_single_tool_group(name: str) -> list[BaseTool]:
 ### A. Dependency Graph
 
 ```
-bash → pexpect
+cli → pexpect
 python_executor → ipython, matplotlib
 file_edit → (stdlib only)
 document → PyMuPDF, aiohttp
@@ -993,11 +989,12 @@ video → google-genai
 ```python
 from pydantic import BaseModel
 
-class BashConfig(BaseModel):
+class CliConfig(BaseModel):
     workspace_root: str = "/tmp/soothe/workspace"
     timeout: int = 60
     max_output_length: int = 10000
     banned_commands: list[str] = []
+    banned_command_patterns: list[str] = []
 
 class AudioConfig(BaseModel):
     provider: Literal["openai", "aliyun"] = "openai"
@@ -1020,7 +1017,7 @@ class AudioConfig(BaseModel):
 
 | Tool | Target Latency | Max Memory |
 |------|----------------|------------|
-| bash | < 100ms startup | 50MB |
+| cli | < 100ms startup | 50MB |
 | python_executor | < 1s execution | 500MB |
 | file_edit | < 50ms read | 100MB |
 | document | < 5s parse | 200MB |

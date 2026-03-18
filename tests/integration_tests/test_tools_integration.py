@@ -6,54 +6,54 @@ from pathlib import Path
 import pytest
 
 
-class TestBashToolIntegration:
-    """Integration tests for BashTool with real shell (requires pexpect)."""
+class TestCliToolIntegration:
+    """Integration tests for CliTool with real shell (requires pexpect)."""
 
     @pytest.fixture
-    def bash_tool(self):
-        """Create a BashTool instance for testing."""
-        from soothe.tools.bash import BashTool
+    def cli_tool(self):
+        """Create a CliTool instance for testing."""
+        from soothe.tools.cli import CliTool
 
-        return BashTool(
+        return CliTool(
             workspace_root=tempfile.mkdtemp(),
             timeout=30,
         )
 
-    def test_real_command_execution(self, bash_tool) -> None:
+    def test_real_command_execution(self, cli_tool) -> None:
         """Test real command execution (requires pexpect)."""
         pytest.importorskip("pexpect")
 
         # Initialize shell
-        bash_tool._initialize_shell()
+        cli_tool._initialize_shell()
 
         # Test basic command
-        result = bash_tool._run("echo 'Hello World'")
+        result = cli_tool._run("echo 'Hello World'")
         assert "Hello World" in result
 
-    def test_real_shell_persistence(self, bash_tool) -> None:
+    def test_real_shell_persistence(self, cli_tool) -> None:
         """Test that shell state persists between commands."""
         pytest.importorskip("pexpect")
 
         # Initialize shell
-        bash_tool._initialize_shell()
+        cli_tool._initialize_shell()
 
         # Set environment variable
-        bash_tool._run("export TEST_VAR=hello")
+        cli_tool._run("export TEST_VAR=hello")
 
         # Check that it persists
-        result = bash_tool._run("echo $TEST_VAR")
+        result = cli_tool._run("echo $TEST_VAR")
         assert "hello" in result
 
-    def test_real_directory_operations(self, bash_tool) -> None:
+    def test_real_directory_operations(self, cli_tool) -> None:
         """Test real directory operations."""
         pytest.importorskip("pexpect")
 
         # Initialize shell
-        bash_tool._initialize_shell()
+        cli_tool._initialize_shell()
 
         # Create and list directory
-        bash_tool._run("mkdir -p /tmp/test_dir")
-        result = bash_tool._run("ls /tmp/test_dir")
+        cli_tool._run("mkdir -p /tmp/test_dir")
+        result = cli_tool._run("ls /tmp/test_dir")
         assert result is not None
 
 

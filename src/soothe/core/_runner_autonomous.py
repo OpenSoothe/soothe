@@ -1,4 +1,4 @@
-"""Autonomous iteration loop mixin for SootheRunner (RFC-0007, RFC-0009).
+"""Autonomous iteration loop mixin for SootheRunner (RFC-0007, RFC-0009, RFC-0011).
 
 Extracted from ``runner.py`` to isolate the autonomous goal-driven
 execution logic from the main runner orchestration.
@@ -7,6 +7,7 @@ execution logic from the main runner orchestration.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
@@ -308,7 +309,22 @@ class AutonomousMixin:
                         if s.status in ("completed", "failed")
                     ]
                     if step_results:
-                        reflection = await self._planner.reflect(iter_state.plan, step_results)
+                        # Build goal context for reflection (RFC-0011)
+                        goal_context = None
+                        if self._goal_engine:
+                            from soothe.protocols.planner import GoalContext
+
+                            all_goals = await self._goal_engine.list_goals()
+                            goal_context = GoalContext(
+                                current_goal_id=goal.id,
+                                all_goals=[g.model_dump(mode="json") for g in all_goals],
+                                completed_goals=[g.id for g in all_goals if g.status == "completed"],
+                                failed_goals=[g.id for g in all_goals if g.status == "failed"],
+                                ready_goals=[g.id for g in all_goals if g.status in ("pending", "active")],
+                                max_parallel_goals=self._concurrency.max_parallel_goals,
+                            )
+
+                        reflection = await self._planner.reflect(iter_state.plan, step_results, goal_context)
                         yield _custom(
                             {
                                 "type": "soothe.plan.reflected",
@@ -316,6 +332,59 @@ class AutonomousMixin:
                                 "assessment": reflection.assessment[:200],
                             }
                         )
+
+                        # Process goal directives from reflection (RFC-0011)
+                        if reflection.goal_directives:
+                            goal_changes = await self._process_goal_directives(
+                                reflection.goal_directives,
+                                current_goal=goal,
+                            )
+
+                            yield _custom(
+                                {
+                                    "type": "soothe.goal.directives_applied",
+                                    "goal_id": goal.id,
+                                    "directives_count": len(reflection.goal_directives),
+                                    "changes": goal_changes,
+                                }
+                            )
+
+                            # CRITICAL: Handle DAG state changes
+                            # If the current goal now has unmet dependencies, reset it to pending
+                            # and abort the current iteration
+                            should_abort = await self._check_goal_dag_consistency(goal)
+
+                            if should_abort:
+                                logger.info("Goal %s now has unmet dependencies, resetting to pending", goal.id)
+                                goal.status = "pending"
+                                goal.updated_at = datetime.now(UTC)
+
+                                # Note: The plan and any completed steps remain attached to this goal.
+                                # When the goal is rescheduled after its dependencies complete,
+                                # the planner can decide whether to create a new plan or revise the existing one.
+                                # The existing plan provides context for the next iteration.
+
+                                yield _custom(
+                                    {
+                                        "type": "soothe.goal.deferred",
+                                        "goal_id": goal.id,
+                                        "reason": "dependencies_added",
+                                        "plan_preserved": iter_state.plan is not None,
+                                    }
+                                )
+
+                                # Save checkpoint and exit - scheduler will pick up prerequisite goals
+                                async for chunk in self._save_checkpoint(
+                                    parent_state, user_input=user_input, mode="autonomous"
+                                ):
+                                    yield chunk
+                                return  # Exit _execute_autonomous_goal early
+
+                            # Save checkpoint after goal mutations
+                            async for chunk in self._save_checkpoint(
+                                parent_state, user_input=user_input, mode="autonomous"
+                            ):
+                                yield chunk
                 except Exception:
                     logger.debug("Plan reflection failed", exc_info=True)
 
@@ -515,3 +584,253 @@ class AutonomousMixin:
         except Exception:
             logger.debug("Continuation synthesis failed, reusing original goal", exc_info=True)
             return original_goal
+
+    async def _check_goal_dag_consistency(self, goal: Any) -> bool:
+        """Check if goal's dependencies are still met after DAG mutations (RFC-0011).
+
+        Returns:
+            True if goal should be aborted (dependencies now unmet), False otherwise.
+        """
+        if not self._goal_engine:
+            return False
+
+        # Check if any dependency is not completed
+        for dep_id in goal.depends_on:
+            dep_goal = await self._goal_engine.get_goal(dep_id)
+            if not dep_goal or dep_goal.status != "completed":
+                logger.info(
+                    "Goal %s dependency %s is not completed (status: %s)",
+                    goal.id,
+                    dep_id,
+                    dep_goal.status if dep_goal else "missing",
+                )
+                return True  # Should abort
+
+        return False  # Dependencies are fine, continue
+
+    async def _process_goal_directives(
+        self,
+        directives: list[Any],
+        current_goal: Any,
+    ) -> dict[str, Any]:
+        """Process goal management directives from reflection (RFC-0011)."""
+        if not self._goal_engine:
+            logger.warning("Goal engine not available, skipping directives")
+            return {"error": "goal_engine_unavailable"}
+
+        changes = {
+            "created": [],
+            "decomposed": [],
+            "priority_adjusted": [],
+            "dependencies_added": [],
+            "failed": [],
+            "completed": [],
+            "rejected": [],
+        }
+
+        for directive in directives:
+            try:
+                result = await self._apply_goal_directive(directive, current_goal)
+                if result.get("applied"):
+                    changes[result["category"]].append(result["summary"])
+                else:
+                    changes["rejected"].append(
+                        {
+                            "directive": directive.action,
+                            "reason": result.get("reason"),
+                        }
+                    )
+            except Exception as e:
+                logger.exception("Failed to apply directive: %s", directive)
+                changes["rejected"].append(
+                    {
+                        "directive": directive.action,
+                        "reason": str(e),
+                    }
+                )
+
+        return changes
+
+    async def _apply_goal_directive(
+        self,
+        directive: Any,
+        current_goal: Any,
+    ) -> dict[str, Any]:
+        """Apply a single goal directive with validation (RFC-0011)."""
+        # CREATE: Spawn new goal
+        if directive.action == "create":
+            # Safety: limit goal proliferation
+            total_goals = len(await self._goal_engine.list_goals())
+            active_goals = len([g for g in await self._goal_engine.list_goals() if g.status in ("pending", "active")])
+
+            max_total = getattr(self._config.autonomous, "max_total_goals", 50)
+            if total_goals >= max_total:
+                return {
+                    "applied": False,
+                    "reason": f"Max goals limit reached ({max_total})",
+                }
+
+            if active_goals >= self._concurrency.max_parallel_goals * 3:
+                return {
+                    "applied": False,
+                    "reason": f"Too many active goals ({active_goals})",
+                }
+
+            # Create the goal
+            new_goal = await self._goal_engine.create_goal(
+                description=directive.description,
+                priority=directive.priority or 50,
+                parent_id=directive.parent_id,
+                max_retries=self._config.autonomous.max_retries if hasattr(self._config, "autonomous") else 2,
+            )
+
+            # Add dependencies if specified
+            if directive.depends_on:
+                try:
+                    await self._goal_engine.add_dependencies(new_goal.id, directive.depends_on)
+                except ValueError as e:
+                    logger.warning("Failed to add dependencies to new goal: %s", e)
+
+            logger.info(
+                "Created goal %s via reflection: %s (priority=%d)",
+                new_goal.id,
+                directive.description[:50],
+                new_goal.priority,
+            )
+
+            return {
+                "applied": True,
+                "category": "created",
+                "summary": {
+                    "goal_id": new_goal.id,
+                    "description": directive.description[:100],
+                    "priority": new_goal.priority,
+                    "parent_id": directive.parent_id,
+                },
+            }
+
+        # ADJUST_PRIORITY: Change goal priority
+        if directive.action == "adjust_priority":
+            if not directive.goal_id or directive.priority is None:
+                return {"applied": False, "reason": "goal_id and priority required"}
+
+            goal = await self._goal_engine.get_goal(directive.goal_id)
+            if not goal:
+                return {"applied": False, "reason": f"Goal {directive.goal_id} not found"}
+
+            old_priority = goal.priority
+            goal.priority = max(0, min(100, directive.priority))
+            goal.updated_at = datetime.now(UTC)
+
+            logger.info(
+                "Adjusted goal %s priority: %d -> %d",
+                directive.goal_id,
+                old_priority,
+                goal.priority,
+            )
+
+            return {
+                "applied": True,
+                "category": "priority_adjusted",
+                "summary": {
+                    "goal_id": directive.goal_id,
+                    "old_priority": old_priority,
+                    "new_priority": goal.priority,
+                },
+            }
+
+        # ADD_DEPENDENCY: Add dependency to existing goal
+        if directive.action == "add_dependency":
+            if not directive.goal_id or not directive.depends_on:
+                return {"applied": False, "reason": "goal_id and depends_on required"}
+
+            try:
+                await self._goal_engine.add_dependencies(directive.goal_id, directive.depends_on)
+            except ValueError as e:
+                return {"applied": False, "reason": str(e)}
+
+            return {
+                "applied": True,
+                "category": "dependencies_added",
+                "summary": {
+                    "goal_id": directive.goal_id,
+                    "new_dependencies": directive.depends_on,
+                },
+            }
+
+        # DECOMPOSE: Create sub-goal from existing goal
+        if directive.action == "decompose":
+            target_id = directive.goal_id or current_goal.id
+            target_goal = await self._goal_engine.get_goal(target_id)
+
+            if not target_goal:
+                return {"applied": False, "reason": f"Goal {target_id} not found"}
+
+            if target_goal.status != "pending":
+                return {"applied": False, "reason": f"Goal {target_id} is {target_goal.status}"}
+
+            sub_goal = await self._goal_engine.create_goal(
+                description=directive.description,
+                priority=directive.priority or target_goal.priority,
+                parent_id=target_id,
+                max_retries=target_goal.max_retries,
+            )
+
+            logger.info(
+                "Decomposed goal %s into sub-goal %s: %s",
+                target_id,
+                sub_goal.id,
+                directive.description[:50],
+            )
+
+            return {
+                "applied": True,
+                "category": "decomposed",
+                "summary": {
+                    "parent_goal_id": target_id,
+                    "sub_goal_id": sub_goal.id,
+                    "description": directive.description[:100],
+                },
+            }
+
+        # FAIL: Mark goal as failed
+        if directive.action == "fail":
+            if not directive.goal_id:
+                return {"applied": False, "reason": "goal_id required"}
+
+            goal = await self._goal_engine.fail_goal(
+                directive.goal_id,
+                error=directive.rationale or "Failed via reflection directive",
+                allow_retry=False,
+            )
+
+            logger.warning("Failed goal %s via reflection: %s", directive.goal_id, directive.rationale)
+
+            return {
+                "applied": True,
+                "category": "failed",
+                "summary": {
+                    "goal_id": directive.goal_id,
+                    "reason": directive.rationale,
+                },
+            }
+
+        # COMPLETE: Mark goal as completed
+        if directive.action == "complete":
+            if not directive.goal_id:
+                return {"applied": False, "reason": "goal_id required"}
+
+            goal = await self._goal_engine.complete_goal(directive.goal_id)
+
+            logger.info("Completed goal %s via reflection: %s", directive.goal_id, directive.rationale)
+
+            return {
+                "applied": True,
+                "category": "completed",
+                "summary": {
+                    "goal_id": directive.goal_id,
+                    "reason": directive.rationale,
+                },
+            }
+
+        return {"applied": False, "reason": f"Unknown action: {directive.action}"}

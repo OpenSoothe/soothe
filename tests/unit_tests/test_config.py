@@ -21,7 +21,7 @@ class TestSootheConfig:
             "datetime",
             "file_edit",
             "python_executor",
-            "bash",
+            "cli",
             "tabular",
             "document",
             "wizsearch",
