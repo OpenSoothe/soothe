@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import uuid
 from typing import Any
 
 try:
@@ -31,6 +32,68 @@ except ImportError:
 from soothe.protocols.memory import MemoryItem as SootheMemoryItem, MemoryProtocol
 
 logger = logging.getLogger(__name__)
+
+
+def _patch_memu_1_5_0() -> None:
+    """Patch MemU 1.5.0 bug: missing resource_id in _patch_create_memory_item.
+
+    MemU 1.5.0's CRUDMixin._patch_create_memory_item() doesn't pass the required
+    `resource_id` parameter to repository.create_item(). This monkey patch fixes it.
+    """
+    if not MEMU_AVAILABLE:
+        return
+
+    try:
+        from memu.app.crud import CRUDMixin
+
+        async def patched_patch_create(self: CRUDMixin, state: dict[str, Any], step_context: Any) -> dict[str, Any]:
+            """Patched version that includes resource_id parameter."""
+            memory_payload = state["memory_payload"]
+            ctx = state["ctx"]
+            store = state["store"]
+            user = state["user"]
+            propagate = state["propagate"]
+            category_memory_updates: dict[str, tuple[Any, Any]] = {}
+
+            embed_payload = [memory_payload["content"]]
+            content_embedding = (await self._get_step_embedding_client(step_context).embed(embed_payload))[0]
+
+            # Generate a resource_id if not present (this is the fix)
+            resource_id = str(uuid.uuid4())
+
+            item = store.memory_item_repo.create_item(
+                resource_id=resource_id,  # Add missing parameter
+                memory_type=memory_payload["type"],
+                summary=memory_payload["content"],
+                embedding=content_embedding,
+                user_data=dict(user or {}),
+            )
+            cat_names = memory_payload["categories"]
+            mapped_cat_ids = self._map_category_names_to_ids(cat_names, ctx)
+            for cid in mapped_cat_ids:
+                store.category_item_repo.link_item_category(item.id, cid, user_data=dict(user or {}))
+                if propagate:
+                    category_memory_updates[cid] = (None, memory_payload["content"])
+
+            state["memory_item"] = self._model_dump_without_embeddings(item)
+            state["category_memory_updates"] = category_memory_updates
+
+            response = {
+                "memory_item": state["memory_item"],
+            }
+            state["response"] = response
+            return state
+
+        # Apply the patch
+        CRUDMixin._patch_create_memory_item = patched_patch_create
+        logger.debug("Applied MemU 1.5.0 resource_id patch")
+
+    except Exception as e:
+        logger.warning("Failed to apply MemU patch (may not be needed for newer versions): %s", e)
+
+
+# Apply the patch when module loads
+_patch_memu_1_5_0()
 
 
 class MemUMemory(MemoryProtocol):

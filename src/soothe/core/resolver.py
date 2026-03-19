@@ -297,31 +297,6 @@ def resolve_planner(
     if config.protocols.planner.routing == "always_direct":
         return simple or SimplePlanner(model=planner_model, fast_model=fast_model)
 
-    subagent_planner = None
-    try:
-        from soothe.backends.planning.subagent import SubagentPlanner
-        from soothe.built_in_skills import get_built_in_skills_paths
-
-        # Only load scout-then-plan skill for SubagentPlanner (not all skills)
-        # This saves context - SubagentPlanner only needs workflow guidance
-        all_skills = get_built_in_skills_paths()
-        planner_skills = None
-        for skill_path in all_skills:
-            if Path(skill_path).name == "scout-then-plan":
-                planner_skills = [skill_path]
-                break
-
-        subagent_planner = SubagentPlanner(
-            model=planner_model,
-            cwd=resolved_cwd,
-            skills=planner_skills,
-        )
-    except Exception:
-        logger.debug("SubagentPlanner init failed", exc_info=True)
-
-    if config.protocols.planner.routing == "always_planner":
-        return subagent_planner or simple  # type: ignore[return-value]
-
     claude_planner = None
     try:
         from soothe.backends.planning.claude import ClaudePlanner
@@ -331,16 +306,15 @@ def resolve_planner(
         logger.info("Claude CLI not available for planning")
 
     if config.protocols.planner.routing == "always_claude":
-        return claude_planner or subagent_planner or simple  # type: ignore[return-value]
+        return claude_planner or simple  # type: ignore[return-value]
 
     from soothe.backends.planning.router import AutoPlanner
 
     return AutoPlanner(
         claude=claude_planner,
-        subagent=subagent_planner,
         simple=simple,
         fast_model=fast_model,
-        simple_token_threshold=30,
+        medium_token_threshold=30,
         complex_token_threshold=160,
         use_tiktoken=config.performance.thresholds.use_tiktoken,
     )

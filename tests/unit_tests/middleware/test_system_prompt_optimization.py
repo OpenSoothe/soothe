@@ -65,14 +65,13 @@ class MockModelRequest(ModelRequest[dict]):
 
 
 def test_simple_query_gets_minimal_prompt():
-    """Simple queries (LLM-classified) should receive minimal system prompt."""
+    """Chitchat queries (LLM-classified) should receive minimal system prompt."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    # LLM classified this as "simple"
+    # LLM classified this as "chitchat"
     classification = UnifiedClassification(
-        runtime_complexity="simple",
-        planner_complexity="simple",
+        task_complexity="chitchat",
         is_plan_only=False,
         reasoning="Greeting/quick question",
     )
@@ -96,8 +95,7 @@ def test_medium_query_gets_medium_prompt():
 
     # LLM classified this as "medium"
     classification = UnifiedClassification(
-        runtime_complexity="medium",
-        planner_complexity="medium",
+        task_complexity="medium",
         is_plan_only=False,
         reasoning="Multi-step task",
     )
@@ -121,8 +119,7 @@ def test_complex_query_gets_full_prompt():
 
     # LLM classified this as "complex"
     classification = UnifiedClassification(
-        runtime_complexity="complex",
-        planner_complexity="complex",
+        task_complexity="complex",
         is_plan_only=False,
         reasoning="Architectural decision",
     )
@@ -162,8 +159,7 @@ def test_optimization_disabled_uses_default_prompt():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = UnifiedClassification(
-        runtime_complexity="simple",
-        planner_complexity="simple",
+        task_complexity="chitchat",
         is_plan_only=False,
         reasoning="Greeting",
     )
@@ -185,8 +181,7 @@ def test_performance_disabled_uses_default_prompt():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = UnifiedClassification(
-        runtime_complexity="simple",
-        planner_complexity="simple",
+        task_complexity="chitchat",
         is_plan_only=False,
         reasoning="Greeting",
     )
@@ -208,8 +203,7 @@ def test_custom_system_prompt_for_complex_queries():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     classification = UnifiedClassification(
-        runtime_complexity="complex",
-        planner_complexity="complex",
+        task_complexity="complex",
         is_plan_only=False,
         reasoning="Complex task",
     )
@@ -236,10 +230,9 @@ def test_all_prompts_include_current_date():
     expected_date = now.strftime("%Y-%m-%d")
 
     # Test all complexity levels
-    for complexity in ["simple", "medium", "complex"]:
+    for complexity in ["chitchat", "medium", "complex"]:
         classification = UnifiedClassification(
-            runtime_complexity=complexity,
-            planner_complexity=complexity,
+            task_complexity=complexity,
             is_plan_only=False,
             reasoning="Test",
         )
@@ -252,17 +245,16 @@ def test_all_prompts_include_current_date():
         assert f"Today's date is {expected_date}" in modified.system_message.content
 
 
-def test_trivial_query_treated_as_simple():
-    """Trivial queries should be treated as simple for prompt selection."""
+def test_chitchat_query_treated_as_chitchat():
+    """Chitchat queries should be treated as chitchat for prompt selection."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    # Trivial complexity maps to simple in the middleware
+    # Chitchat complexity maps to simple prompt
     classification = UnifiedClassification(
-        runtime_complexity="simple",
-        planner_complexity="simple",
+        task_complexity="chitchat",
         is_plan_only=False,
-        reasoning="Trivial greeting",
+        reasoning="Chitchat greeting",
     )
 
     request = MockModelRequest(
@@ -271,6 +263,6 @@ def test_trivial_query_treated_as_simple():
 
     modified = middleware.modify_request(request)
 
-    # Should get simple prompt (trivial not explicitly handled, maps to simple)
+    # Should get simple prompt
     assert "helpful AI assistant" in modified.system_message.content
     assert len(modified.system_message.content) < 200

@@ -75,13 +75,15 @@ class TestProgressVerbosity:
         assert classify_custom_event((), {"type": "soothe.thinking.heartbeat"}) == "thinking"
 
     def test_subagent_prefixes_complete(self) -> None:
-        expected = frozenset({
-            "soothe.research.",
-            "soothe.browser.",
-            "soothe.claude.",
-            "soothe.skillify.",
-            "soothe.weaver.",
-            "soothe.planner.",
-            "soothe.scout.",
-        })
+        expected = frozenset(
+            {
+                "soothe.research.",
+                "soothe.browser.",
+                "soothe.claude.",
+                "soothe.skillify.",
+                "soothe.weaver.",
+                "soothe.planner.",
+                "soothe.scout.",
+            }
+        )
         assert expected == _SUBAGENT_PREFIXES

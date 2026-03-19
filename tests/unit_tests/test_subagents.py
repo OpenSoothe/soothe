@@ -2,31 +2,7 @@
 
 import os
 
-from soothe.subagents.planner import create_planner_subagent
 from soothe.subagents.scout import create_scout_subagent
-
-
-class TestPlannerSubagent:
-    def test_creates_subagent_dict(self) -> None:
-        spec = create_planner_subagent()
-        assert spec["name"] == "planner"
-        assert "description" in spec
-        assert "system_prompt" in spec
-
-    def test_model_override(self) -> None:
-        spec = create_planner_subagent(model="gpt-4o")
-        assert spec["model"] == "gpt-4o"
-
-    def test_system_prompt_content(self) -> None:
-        spec = create_planner_subagent()
-        prompt = spec["system_prompt"]
-        assert "planning specialist" in prompt.lower()
-        assert "dependencies" in prompt.lower()
-        assert "verification" in prompt.lower()
-
-    def test_cwd_is_supported(self) -> None:
-        spec_with_cwd = create_planner_subagent(cwd=os.getcwd())
-        assert spec_with_cwd["name"] == "planner"
 
 
 class TestScoutSubagent:

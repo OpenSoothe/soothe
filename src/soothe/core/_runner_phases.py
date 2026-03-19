@@ -42,6 +42,43 @@ class PhasesMixin:
     on the concrete class.
     """
 
+    # -- chitchat fast path -------------------------------------------------
+
+    async def _run_chitchat(
+        self,
+        user_input: str,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Direct LLM call for chitchat - no planning, no context, no memory, no thread.
+
+        Maximum speed path for greetings and simple questions.
+        """
+        from langchain_core.messages import HumanMessage
+
+        yield _custom({"type": "soothe.chitchat.started", "query": user_input[:100]})
+
+        try:
+            # Get default model
+            model = self._config.create_chat_model("default")
+
+            # Direct LLM call with simple prompt
+            response = await model.ainvoke([HumanMessage(content=user_input)])
+
+            # Yield response as stream chunk
+            yield _custom(
+                {
+                    "type": "soothe.chitchat.response",
+                    "content": response.content,
+                }
+            )
+
+            logger.info("Chitchat completed for query: %s", user_input[:50])
+
+        except Exception as exc:
+            logger.exception("Chitchat LLM call failed")
+            from soothe.utils.error_format import emit_error_event
+
+            yield _custom(emit_error_event(exc))
+
     # -- LangGraph stream with HITL loop ------------------------------------
 
     async def _stream_phase(
@@ -61,8 +98,8 @@ class PhasesMixin:
         if state.unified_classification:
             stream_input["unified_classification"] = state.unified_classification
             logger.debug(
-                "Injected LLM classification into agent state: runtime=%s",
-                state.unified_classification.runtime_complexity,
+                "Injected LLM classification into agent state: task_complexity=%s",
+                state.unified_classification.task_complexity,
             )
 
         config = {"configurable": {"thread_id": state.thread_id}}
@@ -148,20 +185,8 @@ class PhasesMixin:
         from soothe.core.runner import _generate_thread_id
         from soothe.protocols.durability import ThreadMetadata
 
-        # Unified classification (RFC-0012)
-        if self._unified_classifier:
-            state.unified_classification = await self._unified_classifier.classify(user_input)
-            complexity = state.unified_classification.runtime_complexity
-            logger.info(
-                "Unified classification: runtime=%s, planner=%s, plan_only=%s - %s",
-                state.unified_classification.runtime_complexity,
-                state.unified_classification.planner_complexity,
-                state.unified_classification.is_plan_only,
-                user_input[:50],
-            )
-        else:
-            complexity = "medium"
-            state.unified_classification = None
+        # Classification already done in _run_single_pass
+        complexity = state.unified_classification.task_complexity if state.unified_classification else "medium"
 
         requested_thread_id = state.thread_id
         try:
@@ -342,15 +367,7 @@ class PhasesMixin:
                     unified_classification=state.unified_classification,
                 )
 
-                if (
-                    self._config.performance.enabled
-                    and self._config.performance.template_planning
-                    and complexity in ("trivial", "simple")
-                ):
-                    plan = self._get_template_plan(user_input, complexity)
-                    logger.info("Using template plan for %s query", complexity)
-                else:
-                    plan = await self._planner.create_plan(user_input, context)
+                plan = await self._planner.create_plan(user_input, context)
 
                 state.plan = plan
                 self._current_plan = plan

@@ -26,17 +26,15 @@ class AutoPlanner:
     Falls back to token-count heuristics if classification unavailable.
 
     Routes to:
-    - Claude (complex problems, explicit requests)
-    - SubagentPlanner (medium complexity)
-    - SimplePlanner (simple tasks)
+    - Claude (complex problems)
+    - SimplePlanner (medium complexity)
 
     Args:
         claude: ClaudePlanner instance (or None if unavailable).
-        subagent: SubagentPlanner instance (or None if unavailable).
         simple: SimplePlanner instance (or None -- should always be present).
         fast_model: Fast LLM (kept for potential future use, unused in RFC-0012).
-        simple_token_threshold: Max tokens for simple planning (default: 30).
-        complex_token_threshold: Max tokens for complex planning (default: 160).
+        medium_token_threshold: Min tokens for medium planning (default: 30).
+        complex_token_threshold: Min tokens for complex planning (default: 160).
         use_tiktoken: Use tiktoken for token counting (default: True).
     """
 
@@ -44,10 +42,9 @@ class AutoPlanner:
         self,
         *,
         claude: Any | None = None,
-        subagent: Any | None = None,
         simple: Any | None = None,
         fast_model: Any | None = None,
-        simple_token_threshold: int = 30,
+        medium_token_threshold: int = 30,
         complex_token_threshold: int = 160,
         use_tiktoken: bool = True,
     ) -> None:
@@ -55,18 +52,16 @@ class AutoPlanner:
 
         Args:
             claude: ClaudePlanner instance (or None if unavailable).
-            subagent: SubagentPlanner instance (or None if unavailable).
             simple: SimplePlanner instance (or None -- should always be present).
             fast_model: Fast LLM (kept for potential future use, unused in RFC-0012).
-            simple_token_threshold: Max tokens for simple planning.
-            complex_token_threshold: Max tokens for complex planning.
+            medium_token_threshold: Min tokens for medium planning.
+            complex_token_threshold: Min tokens for complex planning.
             use_tiktoken: Use tiktoken for token counting (default: True).
         """
         self._claude = claude
-        self._subagent = subagent
         self._simple = simple
         self._fast_model = fast_model
-        self._simple_threshold = simple_token_threshold
+        self._medium_threshold = medium_token_threshold
         self._complex_threshold = complex_token_threshold
         self._use_tiktoken = use_tiktoken
 
@@ -74,7 +69,7 @@ class AutoPlanner:
         """Route to the best planner based on unified classification, then create plan."""
         # Use pre-computed unified classification (RFC-0012)
         if context.unified_classification:
-            complexity = context.unified_classification.planner_complexity
+            complexity = context.unified_classification.task_complexity
             planner = self._planner_for_level(complexity)
             logger.info("AutoPlanner using unified classification: %s", complexity)
         else:
@@ -113,23 +108,22 @@ class AutoPlanner:
 
         if token_count >= self._complex_threshold:
             level = "complex"
-        elif token_count < self._simple_threshold:
-            level = "simple"
-        else:
+        elif token_count >= self._medium_threshold:
             level = "medium"
+        else:
+            level = "medium"  # Default to medium for short queries (chitchat shouldn't reach here)
 
         return self._planner_for_level(level)
 
     def _planner_for_level(self, level: str) -> Any:
         """Map a complexity level to the best available planner."""
         if level == "complex":
-            return self._claude or self._subagent or self._simple
-        if level == "medium":
-            return self._subagent or self._simple
-        if level == "simple":
-            return self._simple or self._subagent
-        return self._simple or self._subagent
+            return self._claude or self._simple
+        if level in ["chitchat", "medium"]:
+            # chitchat shouldn't reach here, but fallback to simple if it does
+            return self._simple
+        return self._simple
 
     def _best_available(self) -> Any:
         """Return the most capable available planner."""
-        return self._claude or self._subagent or self._simple
+        return self._claude or self._simple

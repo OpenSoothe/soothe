@@ -44,11 +44,10 @@ def _make_planner(name: str) -> MagicMock:
     return planner
 
 
-def _make_classification(planner_complexity: str) -> MagicMock:
+def _make_classification(task_complexity: str) -> MagicMock:
     """Create a mock unified classification."""
     classification = MagicMock()
-    classification.planner_complexity = planner_complexity
-    classification.runtime_complexity = planner_complexity
+    classification.task_complexity = task_complexity
     classification.is_plan_only = False
     return classification
 
@@ -57,60 +56,44 @@ class TestAutoPlanner:
     """Unit tests for AutoPlanner routing with unified classification."""
 
     @pytest.mark.asyncio
-    async def test_simple_goal_routes_to_simple_planner(self) -> None:
-        """Simple classification routes to SimplePlanner."""
+    async def test_chitchat_goal_routes_to_simple_planner(self) -> None:
+        """Chitchat classification routes to SimplePlanner (shouldn't reach here normally)."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(simple=simple, subagent=subagent)
+        auto = AutoPlanner(simple=simple)
 
-        context = PlanContext(unified_classification=_make_classification("simple"))
+        context = PlanContext(unified_classification=_make_classification("chitchat"))
         await auto.create_plan("hello world", context)
         simple.create_plan.assert_awaited_once()
-        subagent.create_plan.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_medium_goal_routes_to_subagent(self) -> None:
-        """Medium classification routes to SubagentPlanner."""
+    async def test_medium_goal_routes_to_simple_planner(self) -> None:
+        """Medium classification routes to SimplePlanner."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(simple=simple, subagent=subagent)
+        auto = AutoPlanner(simple=simple)
 
         context = PlanContext(unified_classification=_make_classification("medium"))
         await auto.create_plan("implement user authentication", context)
-        subagent.create_plan.assert_awaited_once()
-        simple.create_plan.assert_not_awaited()
+        simple.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_complex_goal_routes_to_claude(self) -> None:
         """Complex classification routes to ClaudePlanner."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
         claude = _make_planner("claude")
-        auto = AutoPlanner(claude=claude, subagent=subagent, simple=simple)
+        auto = AutoPlanner(claude=claude, simple=simple)
 
         context = PlanContext(unified_classification=_make_classification("complex"))
         await auto.create_plan("architect a new microservices system", context)
         claude.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_complex_fallback_to_subagent_when_no_claude(self) -> None:
-        """Complex classification falls back to SubagentPlanner when Claude is unavailable."""
+    async def test_complex_fallback_to_simple_when_no_claude(self) -> None:
+        """Complex classification falls back to SimplePlanner when Claude is unavailable."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(claude=None, subagent=subagent, simple=simple)
+        auto = AutoPlanner(claude=None, simple=simple)
 
         context = PlanContext(unified_classification=_make_classification("complex"))
         await auto.create_plan("architect a new microservices system", context)
-        subagent.create_plan.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_medium_fallback_to_simple_when_no_subagent(self) -> None:
-        """Medium classification falls back to SimplePlanner when Subagent is unavailable."""
-        simple = _make_planner("simple")
-        auto = AutoPlanner(simple=simple, subagent=None)
-
-        context = PlanContext(unified_classification=_make_classification("medium"))
-        await auto.create_plan("implement feature", context)
         simple.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -163,39 +146,35 @@ class TestAutoPlannerFallback:
     async def test_fallback_simple_threshold(self) -> None:
         """Fallback routes short goals to SimplePlanner."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(simple=simple, subagent=subagent, use_tiktoken=False)
+        auto = AutoPlanner(simple=simple, use_tiktoken=False)
 
-        # < 30 tokens -> simple
+        # < 30 tokens -> medium (chitchat shouldn't reach here, defaults to medium)
         context = PlanContext()
         await auto.create_plan("hello world", context)
         simple.create_plan.assert_awaited_once()
-        subagent.create_plan.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_fallback_complex_threshold(self) -> None:
         """Fallback routes long goals to best available planner."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
-        auto = AutoPlanner(simple=simple, subagent=subagent, use_tiktoken=False, complex_token_threshold=160)
+        claude = _make_planner("claude")
+        auto = AutoPlanner(claude=claude, simple=simple, use_tiktoken=False, complex_token_threshold=160)
 
         # Very long goal (>= 160 tokens) -> complex
         long_goal = " ".join(["word"] * 200)
         context = PlanContext()
         await auto.create_plan(long_goal, context)
-        # Without claude, should use subagent
-        subagent.create_plan.assert_awaited_once()
+        # Should use claude
+        claude.create_plan.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_fallback_medium_range(self) -> None:
-        """Fallback routes medium-length goals to SubagentPlanner."""
+        """Fallback routes medium-length goals to SimplePlanner."""
         simple = _make_planner("simple")
-        subagent = _make_planner("subagent")
         auto = AutoPlanner(
             simple=simple,
-            subagent=subagent,
             use_tiktoken=False,
-            simple_token_threshold=30,
+            medium_token_threshold=30,
             complex_token_threshold=160,
         )
 
@@ -203,4 +182,4 @@ class TestAutoPlannerFallback:
         medium_goal = " ".join(["word"] * 50)
         context = PlanContext()
         await auto.create_plan(medium_goal, context)
-        subagent.create_plan.assert_awaited_once()
+        simple.create_plan.assert_awaited_once()

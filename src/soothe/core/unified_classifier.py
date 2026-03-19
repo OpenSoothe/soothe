@@ -4,9 +4,8 @@ This module provides a single classification system that replaces all keyword-ba
 classification with intelligent LLM-based analysis. It makes one fast LLM call per
 query to determine:
 
-1. Runtime complexity (for memory/context optimization)
-2. Planner complexity (for backend selection)
-3. Plan-only intent (for execution control)
+1. Task complexity (for routing and optimization)
+2. Plan-only intent (for execution control)
 
 Architecture Decision (RFC-0012):
 - Single LLM call provides all classifications at once
@@ -30,23 +29,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Token count thresholds for fallback classification
-_TOKEN_THRESHOLD_RUNTIME_MEDIUM = 30
-_TOKEN_THRESHOLD_RUNTIME_COMPLEX = 60
-_TOKEN_THRESHOLD_PLANNER_MEDIUM = 30
-_TOKEN_THRESHOLD_PLANNER_COMPLEX = 160
+_TOKEN_THRESHOLD_MEDIUM = 30
+_TOKEN_THRESHOLD_COMPLEX = 160
 
 
 class UnifiedClassification(BaseModel):
     """Result of unified LLM classification."""
 
-    runtime_complexity: Literal["simple", "medium", "complex"] = Field(
-        description="Query complexity for runtime optimization (trivial merged into simple)"
-    )
-    planner_complexity: Literal["simple", "medium", "complex"] = Field(
-        description="Query complexity for planner backend selection"
+    task_complexity: Literal["chitchat", "medium", "complex"] = Field(
+        description="Query complexity for routing: chitchat (direct LLM), medium (subagent), complex (Claude)"
     )
     is_plan_only: bool = Field(description="True if user only wants planning without execution")
-    reasoning: str | None = Field(default=None, description="Brief explanation of classification decisions")
+    reasoning: str | None = Field(default=None, description="Brief explanation of classification")
 
 
 _UNIFIED_CLASSIFICATION_PROMPT = """\
@@ -56,17 +50,12 @@ User request: {query}
 
 Provide classifications in JSON format with these fields:
 
-1. "runtime_complexity": One of "simple", "medium", "complex"
-   - simple: Greetings, direct operations, basic searches, short queries
-   - medium: Multi-step tasks, debugging, code review, planning
-   - complex: Architectural decisions, migrations, large-scale refactoring
+1. "task_complexity": One of "chitchat", "medium", "complex"
+   - chitchat: Greetings, simple questions, short queries (< 30 tokens) - NO planning, NO context/memory
+   - medium: Multi-step tasks, debugging, code review, planning (90% of tasks)
+   - complex: Architecture design, migrations, large refactoring (10% of tasks)
 
-2. "planner_complexity": One of "simple", "medium", "complex"
-   - simple: Single-step tasks, direct operations
-   - medium: Multi-step implementation, debugging, review
-   - complex: Architecture design, migration, large refactoring
-
-3. "is_plan_only": true or false
+2. "is_plan_only": true or false
    - true: User explicitly requests planning without execution
    - false: User expects both planning and execution
 
@@ -137,9 +126,8 @@ class UnifiedClassifier:
             return self._token_count_fallback(query)
         else:
             logger.debug(
-                "LLM classification: runtime=%s, planner=%s, plan_only=%s",
-                result.runtime_complexity,
-                result.planner_complexity,
+                "LLM classification: task_complexity=%s, plan_only=%s",
+                result.task_complexity,
                 result.is_plan_only,
             )
             return result
@@ -153,21 +141,13 @@ class UnifiedClassifier:
         """Token-count based fallback (NO keywords)."""
         token_count = count_tokens(query, use_tiktoken=self._use_tiktoken)
 
-        # Runtime complexity (merged trivial into simple)
-        if token_count >= _TOKEN_THRESHOLD_RUNTIME_COMPLEX:
-            runtime = "complex"
-        elif token_count >= _TOKEN_THRESHOLD_RUNTIME_MEDIUM:
-            runtime = "medium"
+        # Task complexity based on token count
+        if token_count >= _TOKEN_THRESHOLD_COMPLEX:
+            task_complexity = "complex"
+        elif token_count >= _TOKEN_THRESHOLD_MEDIUM:
+            task_complexity = "medium"
         else:
-            runtime = "simple"  # All queries < 30 tokens
-
-        # Planner complexity
-        if token_count >= _TOKEN_THRESHOLD_PLANNER_COMPLEX:
-            planner = "complex"
-        elif token_count >= _TOKEN_THRESHOLD_PLANNER_MEDIUM:
-            planner = "medium"
-        else:
-            planner = "simple"
+            task_complexity = "chitchat"  # All queries < 30 tokens
 
         # Plan-only detection (simple heuristic)
         query_lower = query.lower().strip()
@@ -178,14 +158,11 @@ class UnifiedClassifier:
         )
 
         return UnifiedClassification(
-            runtime_complexity=runtime,
-            planner_complexity=planner,
+            task_complexity=task_complexity,
             is_plan_only=is_plan,
             reasoning=f"Fallback: {token_count} tokens",
         )
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:
         """Safe default when everything fails."""
-        return UnifiedClassification(
-            runtime_complexity="medium", planner_complexity="medium", is_plan_only=False, reasoning=reason
-        )
+        return UnifiedClassification(task_complexity="medium", is_plan_only=False, reasoning=reason)

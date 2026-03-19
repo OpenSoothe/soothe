@@ -22,6 +22,7 @@ class PGVectorStore:
         dsn: PostgreSQL connection string.
         pool_size: Connection pool size.
         index_type: Index type (``hnsw``, ``ivfflat``, or ``none``).
+        vector_size: Dimension of vectors (default: 1536).
     """
 
     def __init__(
@@ -30,6 +31,7 @@ class PGVectorStore:
         dsn: str = "postgresql://localhost/soothe",
         pool_size: int = 5,
         index_type: str = "hnsw",
+        vector_size: int = 1536,
     ) -> None:
         """Initialize PGVectorStore.
 
@@ -38,11 +40,13 @@ class PGVectorStore:
             dsn: PostgreSQL connection string.
             pool_size: Connection pool size.
             index_type: Index type (``hnsw``, ``ivfflat``, or ``none``).
+            vector_size: Dimension of vectors (default: 1536).
         """
         self._collection = collection
         self._dsn = dsn
         self._pool_size = pool_size
         self._index_type = index_type
+        self._vector_size = vector_size
         self._pool: Any = None
 
     async def _ensure_pool(self) -> Any:
@@ -53,8 +57,16 @@ class PGVectorStore:
             await self._pool.open()
         return self._pool
 
-    async def create_collection(self, vector_size: int, distance: str = "cosine") -> None:
-        """Create the vector table and index if they don't exist."""
+    async def create_collection(self, vector_size: int | None = None, distance: str = "cosine") -> None:
+        """Create the vector table and index if they don't exist.
+
+        Args:
+            vector_size: Vector dimension. If None, uses instance's vector_size.
+            distance: Distance metric (cosine, l2, ip).
+        """
+        # Use provided vector_size or fall back to instance's vector_size
+        actual_vector_size = vector_size if vector_size is not None else self._vector_size
+
         pool = await self._ensure_pool()
 
         dist_ops = {
@@ -69,7 +81,7 @@ class PGVectorStore:
             await conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS {self._collection} (
                     id TEXT PRIMARY KEY,
-                    embedding vector({vector_size}),
+                    embedding vector({actual_vector_size}),
                     payload JSONB DEFAULT '{{}}'::jsonb
                 )
             """)
@@ -87,6 +99,33 @@ class PGVectorStore:
                     WITH (lists = 100)
                 """)
 
+    async def _ensure_collection(self) -> None:
+        """Ensure the collection/table exists with proper schema."""
+        pool = await self._ensure_pool()
+
+        async with pool.connection() as conn:
+            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            await conn.execute(f"""
+                CREATE TABLE IF NOT EXISTS {self._collection} (
+                    id TEXT PRIMARY KEY,
+                    embedding vector({self._vector_size}),
+                    payload JSONB DEFAULT '{{}}'::jsonb
+                )
+            """)
+            if self._index_type == "hnsw":
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._collection}_hnsw
+                    ON {self._collection}
+                    USING hnsw (embedding vector_cosine_ops)
+                """)
+            elif self._index_type == "ivfflat":
+                await conn.execute(f"""
+                    CREATE INDEX IF NOT EXISTS idx_{self._collection}_ivfflat
+                    ON {self._collection}
+                    USING ivfflat (embedding vector_cosine_ops)
+                    WITH (lists = 100)
+                """)
+
     async def insert(
         self,
         vectors: list[list[float]],
@@ -95,6 +134,9 @@ class PGVectorStore:
     ) -> None:
         """Insert vectors into the table."""
         import json
+
+        # Ensure collection exists before inserting
+        await self._ensure_collection()
 
         pool = await self._ensure_pool()
         payloads = payloads or [{}] * len(vectors)

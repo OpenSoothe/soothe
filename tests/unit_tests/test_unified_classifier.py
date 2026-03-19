@@ -14,20 +14,15 @@ class TestUnifiedClassification:
 
     def test_model_creation(self) -> None:
         """Test creating a UnifiedClassification instance."""
-        classification = UnifiedClassification(
-            runtime_complexity="medium", planner_complexity="complex", is_plan_only=True, reasoning="Test reasoning"
-        )
+        classification = UnifiedClassification(task_complexity="medium", is_plan_only=True, reasoning="Test reasoning")
 
-        assert classification.runtime_complexity == "medium"
-        assert classification.planner_complexity == "complex"
+        assert classification.task_complexity == "medium"
         assert classification.is_plan_only is True
         assert classification.reasoning == "Test reasoning"
 
     def test_model_defaults(self) -> None:
         """Test default values for UnifiedClassification."""
-        classification = UnifiedClassification(
-            runtime_complexity="simple", planner_complexity="simple", is_plan_only=False
-        )
+        classification = UnifiedClassification(task_complexity="chitchat", is_plan_only=False)
 
         assert classification.reasoning is None
 
@@ -61,8 +56,7 @@ class TestUnifiedClassifier:
 
         result = await classifier.classify("test query")
 
-        assert result.runtime_complexity == "medium"
-        assert result.planner_complexity == "medium"
+        assert result.task_complexity == "medium"
         assert result.is_plan_only is False
         assert "disabled" in result.reasoning.lower()
 
@@ -71,10 +65,9 @@ class TestUnifiedClassifier:
         """Test classification in fallback mode (token-count only)."""
         classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
 
-        # Short query -> simple
+        # Short query -> chitchat
         result = await classifier.classify("hello world")
-        assert result.runtime_complexity == "simple"
-        assert result.planner_complexity == "simple"
+        assert result.task_complexity == "chitchat"
         assert result.is_plan_only is False
 
         # Medium query -> medium (needs to be 30+ tokens)
@@ -84,15 +77,13 @@ class TestUnifiedClassifier:
             "in our microservices architecture including security considerations and deployment strategies"
         )
         result = await classifier.classify(medium_query)
-        assert result.runtime_complexity == "medium"
-        assert result.planner_complexity == "medium"
+        assert result.task_complexity == "medium"
         assert result.is_plan_only is True  # Starts with "create a plan"
 
         # Long query -> complex (simulate with repeated text)
         long_query = "architect a comprehensive system design " * 20
         result = await classifier.classify(long_query)
-        assert result.runtime_complexity == "complex"
-        assert result.planner_complexity == "complex"
+        assert result.task_complexity == "complex"
 
     @pytest.mark.asyncio
     async def test_classify_llm_mode_success(self) -> None:
@@ -100,9 +91,7 @@ class TestUnifiedClassifier:
         mock_model = MagicMock()
         mock_structured = AsyncMock()
         mock_structured.ainvoke = AsyncMock(
-            return_value=UnifiedClassification(
-                runtime_complexity="complex", planner_complexity="complex", is_plan_only=False, reasoning="LLM analysis"
-            )
+            return_value=UnifiedClassification(task_complexity="complex", is_plan_only=False, reasoning="LLM analysis")
         )
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
@@ -110,8 +99,7 @@ class TestUnifiedClassifier:
 
         result = await classifier.classify("implement complex architecture")
 
-        assert result.runtime_complexity == "complex"
-        assert result.planner_complexity == "complex"
+        assert result.task_complexity == "complex"
         assert result.is_plan_only is False
         assert result.reasoning == "LLM analysis"
 
@@ -128,7 +116,7 @@ class TestUnifiedClassifier:
         result = await classifier.classify("test query")
 
         # Should use fallback (token-count)
-        assert result.runtime_complexity == "simple"
+        assert result.task_complexity == "chitchat"
         assert "fallback" in result.reasoning.lower()
 
     @pytest.mark.asyncio
@@ -143,7 +131,7 @@ class TestUnifiedClassifier:
         result = await classifier.classify("test query")
 
         # Should use fallback
-        assert result.runtime_complexity == "simple"
+        assert result.task_complexity == "chitchat"
         assert "fallback" in result.reasoning.lower()
 
 
@@ -151,44 +139,24 @@ class TestTokenCountFallback:
     """Test token-count fallback logic."""
 
     @pytest.mark.asyncio
-    async def test_runtime_complexity_thresholds(self) -> None:
-        """Test runtime complexity thresholds (30, 60 tokens)."""
+    async def test_task_complexity_thresholds(self) -> None:
+        """Test task complexity thresholds (30, 160 tokens)."""
         classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
 
-        # < 30 tokens -> simple
+        # < 30 tokens -> chitchat
         short = "a" * 100  # 25 tokens
         result = await classifier.classify(short)
-        assert result.runtime_complexity == "simple"
-
-        # 30-59 tokens -> medium
-        medium = "a" * 140  # 35 tokens
-        result = await classifier.classify(medium)
-        assert result.runtime_complexity == "medium"
-
-        # >= 60 tokens -> complex
-        long = "a" * 280  # 70 tokens
-        result = await classifier.classify(long)
-        assert result.runtime_complexity == "complex"
-
-    @pytest.mark.asyncio
-    async def test_planner_complexity_thresholds(self) -> None:
-        """Test planner complexity thresholds (30, 160 tokens)."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
-
-        # < 30 tokens -> simple
-        short = "a" * 100  # 25 tokens
-        result = await classifier.classify(short)
-        assert result.planner_complexity == "simple"
+        assert result.task_complexity == "chitchat"
 
         # 30-159 tokens -> medium
         medium = "a" * 140  # 35 tokens
         result = await classifier.classify(medium)
-        assert result.planner_complexity == "medium"
+        assert result.task_complexity == "medium"
 
         # >= 160 tokens -> complex
         long = "a" * 680  # 170 tokens
         result = await classifier.classify(long)
-        assert result.planner_complexity == "complex"
+        assert result.task_complexity == "complex"
 
     @pytest.mark.asyncio
     async def test_plan_only_detection(self) -> None:
@@ -215,8 +183,7 @@ class TestEdgeCases:
         classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback")
 
         result = await classifier.classify("")
-        assert result.runtime_complexity == "simple"  # 0 tokens
-        assert result.planner_complexity == "simple"
+        assert result.task_complexity == "chitchat"  # 0 tokens
         assert result.is_plan_only is False
 
     @pytest.mark.asyncio
@@ -226,8 +193,7 @@ class TestEdgeCases:
         mock_structured = AsyncMock()
         mock_structured.ainvoke = AsyncMock(
             return_value=UnifiedClassification(
-                runtime_complexity="medium",
-                planner_complexity="medium",
+                task_complexity="medium",
                 is_plan_only=True,
                 reasoning="Multilingual plan request",
             )
@@ -249,8 +215,7 @@ class TestEdgeCases:
         long_query = "implement a comprehensive system " * 50
         result = await classifier.classify(long_query)
 
-        assert result.runtime_complexity == "complex"
-        assert result.planner_complexity == "complex"
+        assert result.task_complexity == "complex"
 
     @pytest.mark.asyncio
     async def test_whitespace_handling(self) -> None:
@@ -271,8 +236,7 @@ class TestDefaultClassification:
 
         result = classifier._default_classification("Test reason")
 
-        assert result.runtime_complexity == "medium"
-        assert result.planner_complexity == "medium"
+        assert result.task_complexity == "medium"
         assert result.is_plan_only is False
         assert result.reasoning == "Test reason"
 

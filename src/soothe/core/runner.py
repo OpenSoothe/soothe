@@ -35,7 +35,7 @@ from soothe.core._runner_checkpoint import CheckpointMixin
 from soothe.core._runner_phases import PhasesMixin
 from soothe.core._runner_steps import StepLoopMixin
 from soothe.protocols.context import ContextProtocol
-from soothe.protocols.planner import Plan, PlannerProtocol, PlanStep
+from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
 if TYPE_CHECKING:
@@ -320,57 +320,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
     # -- query classification helpers (RFC-0008, RFC-0012) -----------------
 
-    def _get_template_plan(self, goal: str, complexity: str) -> Plan | None:
-        """Get template plan for simple queries (RFC-0012: merged trivial into simple).
-
-        Args:
-            goal: The user's goal.
-            complexity: Query complexity level.
-
-        Returns:
-            Template plan, or None if no template matches.
-        """
-        import re
-
-        if complexity != "simple":
-            return None
-
-        goal_lower = goal.lower()
-
-        if re.match(r"^(search|find|look up)\s+", goal_lower):
-            return Plan(
-                goal=goal,
-                steps=[
-                    PlanStep(id="step_1", description="Search for information", execution_hint="tool"),
-                    PlanStep(id="step_2", description="Summarize findings", execution_hint="auto"),
-                ],
-            )
-
-        if re.match(r"^(analyze|analyse|review|examine|investigate)\s+", goal_lower):
-            return Plan(
-                goal=goal,
-                steps=[
-                    PlanStep(id="step_1", description="Analyze the content", execution_hint="auto"),
-                    PlanStep(id="step_2", description="Provide insights", execution_hint="auto"),
-                ],
-            )
-
-        if re.match(r"^(implement|create|build|write|develop)\s+", goal_lower):
-            return Plan(
-                goal=goal,
-                steps=[
-                    PlanStep(id="step_1", description="Understand requirements", execution_hint="auto"),
-                    PlanStep(id="step_2", description="Implement the solution", execution_hint="tool"),
-                    PlanStep(id="step_3", description="Test and validate", execution_hint="tool"),
-                ],
-            )
-
-        # Default single-step plan for simple queries
-        return Plan(
-            goal=goal,
-            steps=[PlanStep(id="step_1", description=goal, execution_hint="auto")],
-        )
-
     async def _pre_stream_parallel_memory_context(
         self,
         user_input: str,
@@ -462,17 +411,38 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         *,
         thread_id: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Single-pass execution with DAG step loop (RFC-0009).
+        """Single-pass execution with complexity-based routing.
 
-        Pre-stream creates the plan.  If the plan has multiple steps,
-        the step loop drives execution via ``StepScheduler``.  Single-step
-        plans fall through to a direct ``_stream_phase`` call for
-        backward-compatible behavior.
+        Routes based on unified classification:
+        - chitchat: Fast path with direct LLM call, no planning, no state
+        - medium: Normal flow with memory/context/planning
+        - complex: Normal flow with memory/context/planning
         """
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
+        # Early classification for chitchat routing
+        if self._unified_classifier:
+            state.unified_classification = await self._unified_classifier.classify(user_input)
+            complexity = state.unified_classification.task_complexity
+            logger.info(
+                "Unified classification: task_complexity=%s, plan_only=%s - %s",
+                state.unified_classification.task_complexity,
+                state.unified_classification.is_plan_only,
+                user_input[:50],
+            )
+        else:
+            complexity = "medium"
+            state.unified_classification = None
+
+        # Fast path for chitchat
+        if complexity == "chitchat":
+            async for chunk in self._run_chitchat(user_input):
+                yield chunk
+            return
+
+        # Normal path for medium/complex
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 

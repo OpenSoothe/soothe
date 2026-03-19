@@ -38,7 +38,6 @@ class TestSootheConfig:
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
-        assert "planner" in cfg.subagents
         assert "scout" in cfg.subagents
         assert "research" in cfg.subagents
         assert "browser" in cfg.subagents
@@ -150,12 +149,12 @@ class TestLoggingConfig:
     def test_custom_subagents(self) -> None:
         cfg = SootheConfig(
             subagents={
-                "planner": SubagentConfig(enabled=True),
-                "scout": SubagentConfig(enabled=False),
+                "scout": SubagentConfig(enabled=True),
+                "research": SubagentConfig(enabled=False),
             }
         )
-        assert cfg.subagents["planner"].enabled is True
-        assert cfg.subagents["scout"].enabled is False
+        assert cfg.subagents["scout"].enabled is True
+        assert cfg.subagents["research"].enabled is False
 
     def test_mcp_server_config_stdio(self) -> None:
         cfg = MCPServerConfig(command="npx", args=["-y", "@my/server"])

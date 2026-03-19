@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
 from soothe.subagents.claude import create_claude_subagent
-from soothe.subagents.planner import create_planner_subagent
 from soothe.subagents.research import create_research_subagent
 from soothe.subagents.scout import create_scout_subagent
 from soothe.subagents.skillify import create_skillify_subagent
@@ -33,7 +32,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
-    "planner": create_planner_subagent,
     "scout": create_scout_subagent,
     "research": create_research_subagent,
     "browser": create_browser_subagent,
@@ -284,9 +282,9 @@ def resolve_subagents(
 
     from soothe.core.lazy_tools import LazySubagentSpec
 
-    eager_subagents = {"planner"}
+    eager_subagents: set[str] = set()  # All subagents can be lazy loaded
 
-    cwd_subagents = {"planner", "scout", "claude"}
+    cwd_subagents = {"scout", "claude"}
     resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     subagents: list[SubAgent | CompiledSubAgent] = []

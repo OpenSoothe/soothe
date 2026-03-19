@@ -1,75 +1,50 @@
-"""SimplePlanner -- single LLM call planner for simple tasks."""
+"""SimplePlanner -- single LLM call planner for simple/medium tasks."""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
-from typing import Any, ClassVar
+from typing import Any
 
 from soothe.backends.planning._shared import reflect_heuristic
+from soothe.backends.planning._templates import PlanTemplates, classify_intent
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
     PlanContext,
-    PlanStep,
     Reflection,
     StepResult,
 )
 
 logger = logging.getLogger(__name__)
 
-_INTENT_CLASSIFY_PROMPT = """\
-Classify this user request into exactly one category.
-Reply with a single word: question, search, analysis, or implementation.
-
-Request: {goal}
-"""
+_SIMPLE_PLANNER_HINT_MAP = {
+    "scout": "subagent",
+    "browser": "subagent",
+    "research": "subagent",
+    "weaver": "subagent",
+    "search": "tool",
+    "web": "tool",
+    "api": "tool",
+}
 
 
 class SimplePlanner:
-    """PlannerProtocol implementation using a single LLM structured output call.
+    """PlannerProtocol using single LLM call with optional templates.
 
-    For simple/routine tasks. Produces flat plans (typically 1-3 steps).
+    For simple/medium tasks. Produces flat plans (typically 1-3 steps).
 
-    With RFC-0008 optimizations: Uses template matching for common patterns
-    to avoid LLM calls for simple queries.
+    Optimizations:
+    - Template matching for common patterns (avoids LLM calls)
+    - Fast intent classification for non-English goals
+    - Heuristic reflection (no LLM needed)
 
     Args:
-        model: A langchain BaseChatModel instance (or any object supporting
-            `with_structured_output` and `ainvoke`).
-        use_templates: Enable template matching for common patterns (default: True).
-        fast_model: Optional fast LLM for intent classification of non-English goals.
+        model: Langchain BaseChatModel supporting structured output.
+        use_templates: Enable template matching (default: True).
+        fast_model: Optional fast LLM for non-English intent classification.
     """
-
-    _PLAN_TEMPLATES: ClassVar[dict[str, Plan]] = {
-        "question": Plan(
-            goal="",
-            steps=[PlanStep(id="step_1", description="", execution_hint="auto")],
-        ),
-        "search": Plan(
-            goal="",
-            steps=[
-                PlanStep(id="step_1", description="Search for information", execution_hint="tool"),
-                PlanStep(id="step_2", description="Summarize findings", execution_hint="auto"),
-            ],
-        ),
-        "analysis": Plan(
-            goal="",
-            steps=[
-                PlanStep(id="step_1", description="Analyze the content", execution_hint="auto"),
-                PlanStep(id="step_2", description="Provide insights", execution_hint="auto"),
-            ],
-        ),
-        "implementation": Plan(
-            goal="",
-            steps=[
-                PlanStep(id="step_1", description="Understand requirements", execution_hint="auto"),
-                PlanStep(id="step_2", description="Implement the solution", execution_hint="tool"),
-                PlanStep(id="step_3", description="Test and validate", execution_hint="tool"),
-            ],
-        ),
-    }
 
     def __init__(
         self,
@@ -78,11 +53,11 @@ class SimplePlanner:
         use_templates: bool = True,
         fast_model: Any | None = None,
     ) -> None:
-        """Initialize the simple planner.
+        """Initialize SimplePlanner.
 
         Args:
-            model: A langchain BaseChatModel instance supporting structured output.
-            use_templates: Whether to use template matching (default: True).
+            model: Langchain BaseChatModel supporting structured output.
+            use_templates: Enable template matching (default: True).
             fast_model: Optional fast LLM for non-English intent classification.
         """
         self._model = model
@@ -90,120 +65,36 @@ class SimplePlanner:
         self._fast_model = fast_model
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
-        """Create a plan via single LLM call with structured output."""
+        """Create plan via template matching or LLM structured output."""
+        # Try template matching first
         if self._use_templates:
-            template_plan = await self._match_template(goal)
-            if template_plan:
-                logger.info("SimplePlanner: using template plan for: %s", goal[:50])
-                return template_plan
+            if template := PlanTemplates.match(goal):
+                logger.info("Using template plan for: %s", goal[:50])
+                return template
 
-        prompt = self._build_plan_prompt(goal, context)
+            # Try fast-model intent classification for non-English
+            if (
+                self._fast_model
+                and (intent := await classify_intent(goal, self._fast_model))
+                and (template := PlanTemplates.get(intent))
+            ):
+                return template
 
-        try:
-            structured_model = self._model.with_structured_output(Plan)
-            plan: Plan = await structured_model.ainvoke(prompt)
-            return self._normalize_execution_hints(plan)
-        except Exception as e:
-            logger.warning("Structured plan creation failed, trying manual parse: %s", e)
-
-            try:
-                response = await self._model.ainvoke(prompt)
-                content = response.content if hasattr(response, "content") else str(response)
-                plan = self._parse_json_from_response(content, goal)
-                if plan:
-                    return plan
-            except Exception as manual_error:
-                logger.warning("Manual parse also failed: %s", manual_error)
-
-            return Plan(
-                goal=goal,
-                steps=[PlanStep(id="step_1", description=goal)],
-            )
+        # Fallback to LLM structured output
+        return await self._create_plan_via_llm(goal, context)
 
     async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
-        """Revise a plan based on reflection feedback."""
-        prompt = (
-            f"Revise this plan based on the feedback.\n\n"
-            f"Current plan goal: {plan.goal}\n"
-            f"Current steps: {[s.description for s in plan.steps]}\n"
-            f"Feedback: {reflection}\n\n"
-            f"Return a revised plan."
-        )
+        """Revise plan based on reflection feedback."""
+        prompt = self._build_revision_prompt(plan, reflection)
 
         try:
             structured_model = self._model.with_structured_output(Plan)
-            revised: Plan = await structured_model.ainvoke(prompt)
+            revised = await structured_model.ainvoke(prompt)
             revised.status = "revised"
-            return self._normalize_execution_hints(revised)
+            return self._normalize_hints(revised)
         except Exception as e:
-            logger.warning("Plan revision failed, trying manual parse: %s", e)
-
-            try:
-                response = await self._model.ainvoke(prompt)
-                content = response.content if hasattr(response, "content") else str(response)
-                revised = self._parse_json_from_response(content, plan.goal)
-                if revised:
-                    revised.status = "revised"
-                    return revised
-            except Exception as manual_error:
-                logger.warning("Manual parse also failed: %s", manual_error)
-
+            logger.warning("Plan revision failed: %s", e)
             return plan
-
-    def _parse_json_from_response(self, content: str, goal: str) -> Plan | None:  # noqa: ARG002
-        """Parse Plan from LLM response content.
-
-        Handles JSON wrapped in markdown code blocks.
-        """
-        try:
-            json_match = re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                data = json.loads(json_str)
-                data = self._normalize_hints_in_dict(data)
-                return Plan(**data)
-
-            data = json.loads(content)
-            data = self._normalize_hints_in_dict(data)
-            return Plan(**data)
-        except Exception as parse_error:
-            logger.debug("JSON parse failed: %s", parse_error)
-            return None
-
-    def _normalize_hints_in_dict(self, data: dict) -> dict:
-        """Normalize execution_hint values in a dict before creating Plan.
-
-        Args:
-            data: Dictionary with 'steps' key containing step dicts.
-
-        Returns:
-            Modified dict with normalized execution_hint values.
-        """
-        hint_mapping = {
-            "scout": "subagent",
-            "browser": "subagent",
-            "research": "subagent",
-            "weaver": "subagent",
-            "skillify": "subagent",
-            "search": "tool",
-            "web": "tool",
-            "api": "tool",
-        }
-
-        if "steps" in data:
-            for step in data["steps"]:
-                if "execution_hint" in step:
-                    hint = step["execution_hint"]
-                    if hint not in ("tool", "subagent", "remote", "auto"):
-                        normalized = hint_mapping.get(hint, "auto")
-                        logger.warning(
-                            "Normalizing invalid execution_hint '%s' to '%s'",
-                            hint,
-                            normalized,
-                        )
-                        step["execution_hint"] = normalized
-
-        return data
 
     async def reflect(
         self,
@@ -211,119 +102,107 @@ class SimplePlanner:
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
     ) -> Reflection:
-        """Dependency-aware reflection using shared heuristic (RFC-0010, RFC-0011)."""
+        """Heuristic reflection (no LLM needed for simple plans)."""
         return reflect_heuristic(plan, step_results, goal_context)
 
-    async def _invoke(self, prompt: str) -> str:
-        """Run a free-form LLM call and return the text response."""
-        response = await self._model.ainvoke(prompt)
-        return response.content if hasattr(response, "content") else str(response)
+    async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
+        """Create plan via LLM structured output with fallback parsing."""
+        prompt = self._build_plan_prompt(goal, context)
 
-    async def _match_template(self, goal: str) -> Plan | None:
-        """Match goal to predefined template.
-
-        Tries English regex patterns first (zero cost). Falls back to
-        fast-model intent classification for non-English goals.
-
-        Returns None if no match (will use full LLM).
-        """
-        goal_lower = goal.lower()
-
-        if re.match(r"^(who|what|where|when|why|how)\s+", goal_lower):
-            return self._apply_template("question", goal)
-
-        if re.match(r"^(search|find|look up|google)\s+", goal_lower):
-            return self._apply_template("search", goal)
-
-        if re.match(r"^(analyze|analyse|review|examine|investigate)\s+", goal_lower):
-            return self._apply_template("analysis", goal)
-
-        if re.match(r"^(implement|create|build|write|develop)\s+", goal_lower):
-            return self._apply_template("implementation", goal)
-
-        # Non-English / ambiguous: use fast model for intent classification
-        if self._fast_model:
-            intent = await self._classify_intent(goal)
-            if intent and intent in self._PLAN_TEMPLATES:
-                logger.info("SimplePlanner: fast-model classified intent as '%s'", intent)
-                return self._apply_template(intent, goal)
-
-        return None
-
-    def _apply_template(self, template_key: str, goal: str) -> Plan:
-        """Create a plan from a template, setting the goal text."""
-        plan = self._PLAN_TEMPLATES[template_key].model_copy(deep=True)
-        plan.goal = goal
-        if template_key == "question":
-            plan.steps[0].description = goal
-        return plan
-
-    async def _classify_intent(self, goal: str) -> str | None:
-        """Classify goal intent via fast LLM (language-agnostic)."""
         try:
-            prompt = _INTENT_CLASSIFY_PROMPT.format(goal=goal[:300])
-            response = await self._fast_model.ainvoke(prompt)
-            text = response.content.strip().lower() if hasattr(response, "content") else str(response).strip().lower()
-            for category in ("question", "search", "analysis", "implementation"):
-                if category in text:
-                    return category
-        except Exception:
-            logger.debug("SimplePlanner intent classification failed", exc_info=True)
-        return None
+            structured_model = self._model.with_structured_output(Plan)
+            plan = await structured_model.ainvoke(prompt)
+            return self._normalize_hints(plan)
+        except Exception as e:
+            logger.warning("Structured output failed, trying manual parse: %s", e)
+            return await self._fallback_parse(goal, prompt)
+
+    async def _fallback_parse(self, goal: str, prompt: str) -> Plan:
+        """Fallback plan parsing from raw LLM response."""
+        try:
+            response = await self._model.ainvoke(prompt)
+            content = getattr(response, "content", str(response))
+            return self._parse_json_from_response(content, goal)
+        except Exception as e:
+            logger.warning("Fallback parsing failed: %s", e)
+            return Plan(goal=goal, steps=[{"id": "step_1", "description": goal}])
+
+    def _parse_json_from_response(self, content: str, fallback_goal: str) -> Plan:
+        """Parse Plan from JSON content, optionally wrapped in markdown.
+
+        Args:
+            content: JSON string, optionally wrapped in ```json``` markdown block
+            fallback_goal: Goal to use if parsing fails
+
+        Returns:
+            Parsed Plan object or fallback single-step plan
+        """
+        try:
+            # Try JSON extraction from markdown code blocks
+            if json_match := re.search(r"```(?:json)?\s*\n(.*?)\n```", content, re.DOTALL):
+                data = json.loads(json_match.group(1))
+                return Plan(**self._normalize_hints_in_dict(data))
+
+            # Try plain JSON
+            data = json.loads(content)
+            return Plan(**self._normalize_hints_in_dict(data))
+        except Exception as e:
+            logger.warning("JSON parsing failed: %s", e)
+            return Plan(goal=fallback_goal, steps=[{"id": "step_1", "description": fallback_goal}])
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
+        """Build planning prompt."""
         parts = [f"Create a plan to accomplish this goal: {goal}"]
+
         if context.available_capabilities:
             parts.append(f"Available tools/subagents: {', '.join(context.available_capabilities)}")
+
         if context.completed_steps:
-            parts.append(f"Already completed: {[s.step_id for s in context.completed_steps]}")
+            completed_info = "\n".join(
+                f"- {step.step_id}: {'success' if step.success else 'failed'} - {step.output}"
+                for step in context.completed_steps
+            )
+            parts.append(f"Previously completed steps:\n{completed_info}")
+
         parts.append(
-            "Return a JSON object with exactly this structure:\n"
+            "Return a JSON object with this structure:\n"
             "{\n"
-            '  "goal": "<the goal text>",\n'
+            '  "goal": "<goal text>",\n'
             '  "steps": [\n'
-            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto"},\n'
-            '    {"id": "step_2", "description": "<action>", "execution_hint": "tool"}\n'
+            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto"}\n'
             "  ]\n"
             "}\n\n"
-            "IMPORTANT execution_hint rules:\n"
-            "- Must be one of: 'tool', 'subagent', 'remote', 'auto'\n"
-            "- Use 'tool' for tool-based operations\n"
-            "- Use 'subagent' for delegating to specialized subagents\n"
-            "- Use 'auto' for LLM reasoning or synthesis\n"
-            "- Do NOT use other values like 'scout', 'browser', 'research', etc.\n\n"
-            "Important: Return the flat structure shown above, NOT nested under a 'plan' key. "
-            "Return ONLY valid JSON, NOT wrapped in markdown code blocks."
+            "execution_hint must be one of: 'tool', 'subagent', 'remote', 'auto'\n"
+            "Return ONLY valid JSON, no markdown code blocks."
         )
         return "\n\n".join(parts)
 
-    def _normalize_execution_hints(self, plan: Plan) -> Plan:
-        """Normalize execution_hint values to valid options.
+    def _build_revision_prompt(self, plan: Plan, reflection: str) -> str:
+        """Build plan revision prompt."""
+        return (
+            f"Revise this plan based on feedback.\n\n"
+            f"Goal: {plan.goal}\n"
+            f"Current steps: {[s.description for s in plan.steps]}\n"
+            f"Feedback: {reflection}\n\n"
+            f"Return a revised plan with the same JSON structure."
+        )
 
-        Some LLMs may return invalid hints like 'scout', 'browser', etc.
-        This method maps them to valid values.
-        """
-        hint_mapping = {
-            "scout": "subagent",
-            "browser": "subagent",
-            "research": "subagent",
-            "weaver": "subagent",
-            "skillify": "subagent",
-            "search": "tool",
-            "web": "tool",
-            "api": "tool",
-        }
-
+    def _normalize_hints(self, plan: Plan) -> Plan:
+        """Normalize execution_hint values to valid options."""
         for step in plan.steps:
             if step.execution_hint not in ("tool", "subagent", "remote", "auto"):
                 original = step.execution_hint
-                normalized = hint_mapping.get(original, "auto")
-                logger.warning(
-                    "Normalizing invalid execution_hint '%s' to '%s' for step %s",
-                    original,
-                    normalized,
-                    step.id,
-                )
-                step.execution_hint = normalized
+                step.execution_hint = _SIMPLE_PLANNER_HINT_MAP.get(original, "auto")
+                logger.warning("Normalized hint '%s' to '%s'", original, step.execution_hint)
 
         return plan
+
+    def _normalize_hints_in_dict(self, data: dict) -> dict:
+        """Normalize execution_hint in dict before Plan creation."""
+        if "steps" in data:
+            for step in data["steps"]:
+                if "execution_hint" in step:
+                    hint = step["execution_hint"]
+                    if hint not in ("tool", "subagent", "remote", "auto"):
+                        step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
+        return data

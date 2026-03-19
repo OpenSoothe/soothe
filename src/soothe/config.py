@@ -739,7 +739,6 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(
         default_factory=lambda: {
             "research": SubagentConfig(),
-            "planner": SubagentConfig(),
             "scout": SubagentConfig(),
             "browser": SubagentConfig(),
             "claude": SubagentConfig(),

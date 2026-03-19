@@ -33,9 +33,9 @@ class _OptimizationState(TypedDict):
 class SystemPromptOptimizationMiddleware(AgentMiddleware):
     """Dynamically adjust system prompts based on LLM query classification.
 
-    Uses runtime_complexity from UnifiedClassification (determined by fast LLM)
+    Uses task_complexity from UnifiedClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
-    - simple: Minimal prompt for greetings and quick questions
+    - chitchat: Minimal prompt for greetings and quick questions
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context
 
@@ -61,7 +61,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """Get appropriate prompt template for complexity level.
 
         Args:
-            complexity: One of "simple", "medium", "complex" (from LLM classification).
+            complexity: One of "chitchat", "medium", "complex" (from LLM classification).
 
         Returns:
             Formatted prompt string with assistant_name and current date.
@@ -69,7 +69,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         from soothe.config import _DEFAULT_SYSTEM_PROMPT, _MEDIUM_SYSTEM_PROMPT, _SIMPLE_SYSTEM_PROMPT
 
         # Get base prompt for complexity level
-        if complexity == "simple":
+        if complexity == "chitchat":
             base_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         elif complexity == "medium":
             base_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
@@ -109,7 +109,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             logger.debug("No classification found in state, using default prompt")
             return request
 
-        complexity = classification.runtime_complexity
+        complexity = classification.task_complexity
         logger.info(
             "Optimizing system prompt for %s query based on LLM classification (complexity: %s, plan_only: %s)",
             complexity,
