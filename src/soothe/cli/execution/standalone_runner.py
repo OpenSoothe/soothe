@@ -10,6 +10,15 @@ from soothe.config import SootheConfig
 logger = logging.getLogger(__name__)
 
 
+def _headless_tool_brief(tool_name: str, content: str) -> str:
+    """One-line summary of a tool result for headless stderr output."""
+    if tool_name.startswith("wizsearch"):
+        first_line = content.split("\n", 1)[0].strip()
+        if first_line:
+            return first_line[:120]
+    return content.replace("\n", " ")[:120]
+
+
 async def run_headless_standalone(
     cfg: SootheConfig,
     prompt: str,
@@ -142,7 +151,7 @@ async def run_headless_standalone(
                 elif isinstance(msg, ToolMessage) and should_show("tool_activity", verbosity):
                     tool_name = getattr(msg, "name", "tool")
                     content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                    brief = content.replace("\n", " ")[:120]
+                    brief = _headless_tool_brief(tool_name, content)
                     # Add newline before stderr output if needed
                     if needs_stdout_newline:
                         sys.stdout.write("\n")

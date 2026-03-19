@@ -29,23 +29,47 @@ class PlanTemplates:
         "search": Plan(
             goal="",
             steps=[
-                PlanStep(id="step_1", description="Search for information", execution_hint="tool"),
-                PlanStep(id="step_2", description="Summarize findings", execution_hint="auto"),
+                PlanStep(
+                    id="step_1",
+                    description="Use the wizsearch tool to search the web for relevant, up-to-date information",
+                    execution_hint="tool",
+                ),
+                PlanStep(
+                    id="step_2",
+                    description="Synthesize the search results into a clear, structured answer",
+                    execution_hint="auto",
+                    depends_on=["step_1"],
+                ),
             ],
         ),
         "analysis": Plan(
             goal="",
             steps=[
                 PlanStep(id="step_1", description="Analyze the content", execution_hint="auto"),
-                PlanStep(id="step_2", description="Provide insights", execution_hint="auto"),
+                PlanStep(
+                    id="step_2",
+                    description="Provide insights and conclusions",
+                    execution_hint="auto",
+                    depends_on=["step_1"],
+                ),
             ],
         ),
         "implementation": Plan(
             goal="",
             steps=[
                 PlanStep(id="step_1", description="Understand requirements", execution_hint="auto"),
-                PlanStep(id="step_2", description="Implement the solution", execution_hint="tool"),
-                PlanStep(id="step_3", description="Test and validate", execution_hint="tool"),
+                PlanStep(
+                    id="step_2",
+                    description="Implement the solution using file_edit and cli tools",
+                    execution_hint="tool",
+                    depends_on=["step_1"],
+                ),
+                PlanStep(
+                    id="step_3",
+                    description="Test and validate using cli or python_executor",
+                    execution_hint="tool",
+                    depends_on=["step_2"],
+                ),
             ],
         ),
     }

@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.protocols.planner import Plan, PlanStep
 
 if TYPE_CHECKING:
@@ -17,13 +18,6 @@ if TYPE_CHECKING:
     from soothe.core.artifact_store import RunArtifactStore
 
 logger = logging.getLogger(__name__)
-
-StreamChunk = tuple[tuple[str, ...], str, Any]
-
-
-def _custom(data: dict[str, Any]) -> StreamChunk:
-    """Build a soothe protocol custom event chunk."""
-    return ((), "custom", data)
 
 
 class CheckpointMixin:
@@ -36,9 +30,11 @@ class CheckpointMixin:
     def _ensure_artifact_store(self, thread_id: str) -> RunArtifactStore:
         """Lazily create the artifact store when thread_id is known."""
         from soothe.core.artifact_store import RunArtifactStore
+        from soothe.utils.runtime import current_run_dir
 
         if self._artifact_store is None or self._artifact_store._thread_id != thread_id:
             self._artifact_store = RunArtifactStore(thread_id)
+            current_run_dir.set(self._artifact_store.run_dir)
             logger.info("Artifact store initialized for thread %s", thread_id)
         return self._artifact_store
 

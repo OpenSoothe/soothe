@@ -33,6 +33,7 @@ from soothe.config import SootheConfig
 from soothe.core._runner_autonomous import AutonomousMixin
 from soothe.core._runner_checkpoint import CheckpointMixin
 from soothe.core._runner_phases import PhasesMixin
+from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.core._runner_steps import StepLoopMixin
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
@@ -47,16 +48,6 @@ if TYPE_CHECKING:
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
-
-StreamChunk = tuple[tuple[str, ...], str, Any]
-"""Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
-
-_MIN_MEMORY_STORAGE_LENGTH = 50
-
-
-def _custom(data: dict[str, Any]) -> StreamChunk:
-    """Build a soothe protocol custom event chunk."""
-    return ((), "custom", data)
 
 
 def _generate_thread_id() -> str:

@@ -46,53 +46,86 @@ SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 # ---------------------------------------------------------------------------
 
 
-def resolve_tools(tool_names: list[str], *, lazy: bool = False, config: SootheConfig | None = None) -> list[BaseTool]:
+def resolve_tools(
+    tool_names: list[str],
+    *,
+    lazy: bool = False,
+    config: SootheConfig | None = None,
+) -> list[BaseTool]:
     """Resolve tool group names to instantiated langchain BaseTool lists.
 
     Args:
         tool_names: Enabled tool group names from config.
-        lazy: If True, defer tool loading until first use (improves startup time).
+        lazy: If True, load tool groups in parallel using a thread pool
+            for faster startup.  Historically this created lazy proxies,
+            but those are incompatible with langgraph ToolNode's eager
+            metadata probing.
         config: Optional Soothe config for tool configuration.
 
     Returns:
-        Flat list of `BaseTool` instances (or lazy proxies).
+        Flat list of fully-initialised `BaseTool` instances.
     """
     import time
 
-    from soothe.core.lazy_tools import LazyToolProxy
-
-    tools: list[BaseTool] = []
     total_start = time.perf_counter()
 
-    for name in tool_names:
-        tool_start = time.perf_counter()
-        try:
-            if lazy:
-                proxy = LazyToolProxy(
-                    tool_name=name,
-                    loader=lambda n=name, c=config: _resolve_single_tool_group_uncached(n, c),
-                    index=0,
-                )
-                tools.append(proxy)
-                elapsed_ms = (time.perf_counter() - tool_start) * 1000
-                logger.debug("Created lazy proxy for tool '%s' in %.1fms", name, elapsed_ms)
-            else:
-                resolved = _resolve_single_tool_group(name, config)
-                # Wrap tools with progress logging
-                wrapped = [wrap_main_agent_tool_with_logging(tool, logger) for tool in resolved]
-                tools.extend(wrapped)
-        except Exception:
-            logger.warning("Failed to load tool group '%s'", name, exc_info=True)
+    parallel = lazy and len(tool_names) > 1
+    tools = _resolve_tools_parallel(tool_names, config) if parallel else _resolve_tools_sequential(tool_names, config)
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(
-        "Loaded %d tool groups (%d tools) in %.1fms (lazy=%s)",
+        "Resolved %d tool groups (%d tools) in %.1fms (parallel=%s)",
         len(tool_names),
         len(tools),
         total_elapsed_ms,
-        lazy,
+        parallel,
     )
 
+    return tools
+
+
+def _resolve_tools_sequential(
+    tool_names: list[str],
+    config: SootheConfig | None = None,
+) -> list[BaseTool]:
+    """Load tool groups one-by-one, skipping failures."""
+    tools: list[BaseTool] = []
+    for name in tool_names:
+        try:
+            resolved = _resolve_single_tool_group(name, config)
+            wrapped = [wrap_main_agent_tool_with_logging(tool, logger) for tool in resolved]
+            tools.extend(wrapped)
+        except Exception:
+            logger.warning("Failed to load tool group '%s'", name, exc_info=True)
+    return tools
+
+
+def _resolve_tools_parallel(
+    tool_names: list[str],
+    config: SootheConfig | None = None,
+) -> list[BaseTool]:
+    """Load tool groups concurrently via ThreadPoolExecutor.
+
+    Overlaps I/O-bound module imports and network initialisation across
+    tool groups while preserving the original ordering in the result.
+    Failed groups are logged and skipped.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    max_workers = min(len(tool_names), 4)
+    results: dict[str, list[BaseTool]] = {}
+
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="tool-load") as pool:
+        futures = {name: pool.submit(_resolve_single_tool_group, name, config) for name in tool_names}
+        for name in tool_names:
+            try:
+                results[name] = futures[name].result()
+            except Exception:
+                logger.warning("Failed to load tool group '%s'", name, exc_info=True)
+
+    tools: list[BaseTool] = []
+    for name in tool_names:
+        tools.extend(wrap_main_agent_tool_with_logging(t, logger) for t in results.get(name, []))
     return tools
 
 
@@ -199,8 +232,8 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             from langchain_community.tools import ArxivQueryRun
 
             return [ArxivQueryRun()]
-        except ImportError:
-            logger.debug("arxiv tool not available (install with: pip install arxiv)")
+        except Exception:
+            logger.debug("arxiv tool not available (pip install arxiv)", exc_info=True)
             return []
     if name == "wikipedia":
         try:
@@ -208,14 +241,18 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             from langchain_community.utilities import WikipediaAPIWrapper
 
             return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
-        except ImportError:
-            logger.debug("wikipedia tool not available (install with: pip install wikipedia)")
+        except Exception:
+            logger.debug("wikipedia tool not available (pip install wikipedia)", exc_info=True)
             return []
     if name == "github":
-        from langchain_community.utilities import GitHubAPIWrapper
+        try:
+            from langchain_community.utilities import GitHubAPIWrapper
 
-        wrapper = GitHubAPIWrapper()
-        return wrapper.get_tools()
+            wrapper = GitHubAPIWrapper()
+            return wrapper.get_tools()
+        except Exception:
+            logger.debug("github tool not available (pip install pygithub)", exc_info=True)
+            return []
 
     if name == "goals":
         return []
@@ -268,43 +305,37 @@ def resolve_subagents(
     *,
     lazy: bool = False,
 ) -> list[SubAgent | CompiledSubAgent]:
-    """Build subagent specs from config with optional lazy loading.
+    """Build subagent specs from config.
 
     Args:
         config: Soothe configuration.
         default_model: Pre-configured model instance to use as default.
-        lazy: If True, defer subagent initialization until first use.
+        lazy: If True, create subagent specs in parallel using a thread
+            pool for faster startup.
 
     Returns:
         List of subagent specs for deepagents.
     """
     import time
 
-    from soothe.core.lazy_tools import LazySubagentSpec
+    total_start = time.perf_counter()
 
-    eager_subagents: set[str] = set()  # All subagents can be lazy loaded
-
+    # Collect (name, factory, kwargs) tuples for enabled subagents
+    pending: list[tuple[str, Callable, dict]] = []
     cwd_subagents = {"scout", "claude"}
     resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
-
-    subagents: list[SubAgent | CompiledSubAgent] = []
-    total_start = time.perf_counter()
 
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:
             continue
-
-        sub_start = time.perf_counter()
         factory = SUBAGENT_FACTORIES.get(name)
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
 
-        # Claude subagent uses environment variables directly (ANTHROPIC_API_KEY, model)
-        # So we don't set model_override for Claude - it reads from env vars
         model_override = None if name == "claude" else sub_cfg.model or default_model or config.resolve_model("default")
 
-        extra_kwargs = dict(sub_cfg.config)
+        extra_kwargs: dict = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
         if name in ("skillify", "weaver", "research"):
@@ -312,24 +343,10 @@ def resolve_subagents(
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
 
-        if lazy and name not in eager_subagents:
-            spec = LazySubagentSpec(
-                name=name,
-                factory=factory,
-                kwargs={"model": model_override, **extra_kwargs},
-            )
-            elapsed_ms = (time.perf_counter() - sub_start) * 1000
-            logger.debug("Created lazy spec for subagent '%s' in %.1fms", name, elapsed_ms)
-        else:
-            try:
-                spec = factory(model=model_override, **extra_kwargs)
-                elapsed_ms = (time.perf_counter() - sub_start) * 1000
-                logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
-            except Exception:
-                logger.exception("Failed to load subagent '%s'", name)
-                continue
+        pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
-        subagents.append(spec)
+    parallel = lazy and len(pending) > 1
+    subagents = _resolve_subagents_parallel(pending) if parallel else _resolve_subagents_sequential(pending)
 
     generated = _resolve_generated_subagents(config)
     if generated:
@@ -338,12 +355,59 @@ def resolve_subagents(
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(
-        "Loaded %d subagents in %.1fms (lazy=%s)",
+        "Resolved %d subagents in %.1fms (parallel=%s)",
         len(subagents),
         total_elapsed_ms,
-        lazy,
+        parallel,
     )
 
+    return subagents
+
+
+def _resolve_subagents_sequential(
+    pending: list[tuple[str, Callable, dict]],
+) -> list[SubAgent | CompiledSubAgent]:
+    """Build subagent specs one-by-one, skipping failures."""
+    import time
+
+    subagents: list[SubAgent | CompiledSubAgent] = []
+    for name, factory, kwargs in pending:
+        start = time.perf_counter()
+        try:
+            spec = factory(**kwargs)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
+            subagents.append(spec)
+        except Exception:
+            logger.exception("Failed to load subagent '%s'", name)
+    return subagents
+
+
+def _resolve_subagents_parallel(
+    pending: list[tuple[str, Callable, dict]],
+) -> list[SubAgent | CompiledSubAgent]:
+    """Build subagent specs concurrently, preserving order."""
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    max_workers = min(len(pending), 4)
+
+    def _build(entry: tuple[str, Callable, dict]) -> SubAgent | CompiledSubAgent:
+        name, factory, kwargs = entry
+        start = time.perf_counter()
+        spec = factory(**kwargs)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info("Loaded subagent '%s' in %.1fms", name, elapsed_ms)
+        return spec
+
+    subagents: list[SubAgent | CompiledSubAgent] = []
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="subagent-load") as pool:
+        futures = [(entry[0], pool.submit(_build, entry)) for entry in pending]
+        for name, future in futures:
+            try:
+                subagents.append(future.result())
+            except Exception:
+                logger.exception("Failed to load subagent '%s'", name)
     return subagents
 
 

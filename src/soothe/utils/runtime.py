@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import shutil
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from soothe.config import SOOTHE_HOME
 
 # Minimum length for UUID-like suffix in directory names
 _UUID_SUFFIX_MIN_LENGTH = 8
+
+current_run_dir: contextvars.ContextVar[Path | None] = contextvars.ContextVar("current_run_dir", default=None)
 
 
 def get_subagent_runtime_dir(subagent_name: str) -> Path:

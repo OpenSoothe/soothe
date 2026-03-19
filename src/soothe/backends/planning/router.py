@@ -95,8 +95,15 @@ class AutoPlanner:
         return await planner.reflect(plan, step_results, goal_context)
 
     async def _invoke(self, prompt: str) -> str:
-        """Delegate a free-form LLM call to the best available planner."""
-        planner = self._best_available()
+        """Delegate a free-form LLM call (e.g. synthesis) to a lightweight planner.
+
+        Uses SimplePlanner (direct LLM call) rather than ClaudePlanner which
+        runs a full agent with tools.  Synthesis only needs summarisation, not
+        independent web searches or tool invocations.
+        """
+        planner = self._simple or self._claude
+        if planner is None:
+            return ""
         return await planner._invoke(prompt)
 
     def _fallback_route(self, goal: str) -> Any:

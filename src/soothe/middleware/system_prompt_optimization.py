@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from typing import TYPE_CHECKING, Any, NotRequired
+from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AnyMessage, SystemMessage
+from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:
@@ -24,9 +25,14 @@ class _OptimizationState(TypedDict):
 
     LangGraph merges all middleware state schemas to build the final graph state.
     This schema declares the unified_classification field so it propagates correctly.
+
+    The ``messages`` key MUST use ``Annotated[..., add_messages]`` to preserve
+    the reducer from the base ``AgentState``.  A plain ``list`` annotation
+    silently downgrades the channel to ``LastValue``, which raises
+    ``InvalidUpdateError`` when parallel tool calls return in the same step.
     """
 
-    messages: list[Any]  # Inherited from base
+    messages: Annotated[list[AnyMessage], add_messages]
     unified_classification: NotRequired[Any]  # Type: UnifiedClassification
 
 

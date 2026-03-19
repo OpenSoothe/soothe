@@ -10,6 +10,7 @@ import logging
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import Plan, PlanStep
 
@@ -17,13 +18,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
-
-StreamChunk = tuple[tuple[str, ...], str, Any]
-
-
-def _custom(data: dict[str, Any]) -> StreamChunk:
-    """Build a soothe protocol custom event chunk."""
-    return ((), "custom", data)
 
 
 class StepLoopMixin:
@@ -191,6 +185,25 @@ class StepLoopMixin:
         if dependency_results:
             dep_text = "\n".join(f"- [{desc}]: {result[:300]}" for desc, result in dependency_results)
             parts.append(f"Results from prior steps:\n{dep_text}")
+
+        hint = getattr(step, "execution_hint", None) or ""
+        if hint.startswith("tool:"):
+            preferred_tool = hint.split(":", 1)[1]
+            parts.append(
+                f"Instruction: Use the {preferred_tool} tool directly for this step. Do NOT delegate to a subagent."
+            )
+        elif hint == "llm_only":
+            parts.append(
+                "Instruction: Answer using only the information already available "
+                "from prior steps. Do NOT call any tools or subagents."
+            )
+        elif hint == "tool":
+            parts.append(
+                "Instruction: Use the appropriate direct tool for this step. "
+                "Prefer direct tools (wizsearch, file_edit, cli, python_executor) "
+                "over delegating to a subagent."
+            )
+
         step_input = "\n\n".join(parts)
 
         yield _custom(

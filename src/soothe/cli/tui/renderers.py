@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from rich.text import Text
@@ -13,6 +14,32 @@ from soothe.cli.tui.state import TuiState
 logger = logging.getLogger(__name__)
 
 _ACTIVITY_MAX = 300
+
+_INTERNAL_TAG_PATTERN = re.compile(
+    r"<search_data>.*?</search_data>\s*"
+    r"(?:Synthesize the search data into a clear answer\.\s*"
+    r"Do NOT reproduce raw results, source listings, or URLs\.\s*)?",
+    re.DOTALL,
+)
+_LEFTOVER_TAG_PATTERN = re.compile(r"</?search_data>")
+_SYNTHESIS_INSTRUCTION_PATTERN = re.compile(
+    r"Synthesize the search data into a clear answer\.\s*"
+    r"Do NOT reproduce raw results, source listings, or URLs\.\s*"
+)
+
+
+def strip_internal_tags(text: str) -> str:
+    """Strip internal tool tags from assistant text for clean display.
+
+    Removes `<search_data>...</search_data>` blocks and associated
+    synthesis instructions that should not be shown to users.
+    """
+    result = _INTERNAL_TAG_PATTERN.sub("", text)
+    result = _LEFTOVER_TAG_PATTERN.sub("", result)
+    result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
+    return result.strip()
+
+
 _MAX_INLINE_QUERIES = 3
 _STATUS_MARKERS: dict[str, tuple[str, str]] = {
     "pending": ("[ ]", "dim"),
@@ -220,22 +247,30 @@ def _handle_protocol_event(
     elif etype == "soothe.chitchat.response":
         content = data.get("content", "")
         if content and should_show("assistant_text", verbosity):
-            state.full_response.append(content)
+            cleaned = strip_internal_tags(content)
+            if cleaned:
+                state.full_response.append(cleaned)
     elif etype == "soothe.autonomous.final_report":
         summary = data.get("summary", "")
         if summary and should_show("assistant_text", verbosity):
-            state.full_response.append(summary)
+            cleaned = strip_internal_tags(summary)
+            if cleaned:
+                state.full_response.append(cleaned)
     # Handle text output from subagents
     elif etype.endswith(".text"):
         # Text output from any subagent (claude, browser, etc.)
         text = data.get("text", "")
         if text and should_show("assistant_text", verbosity):
-            state.full_response.append(text)
+            cleaned = strip_internal_tags(text)
+            if cleaned:
+                state.full_response.append(cleaned)
     elif etype.endswith(".response"):
         # Response content from any subagent
         content = data.get("content", "")
         if content and should_show("assistant_text", verbosity):
-            state.full_response.append(content)
+            cleaned = strip_internal_tags(content)
+            if cleaned:
+                state.full_response.append(cleaned)
 
 
 def _handle_tool_activity_event(
@@ -453,7 +488,7 @@ def _handle_tool_result_activity(
     """Render tool-result activity line based on verbosity."""
     if not should_show("tool_activity", verbosity):
         return
-    brief = content.replace("\n", " ")[:80]
+    brief = _extract_tool_brief(tool_name, content)
     if prefix:
         _add_activity(
             state,
@@ -461,6 +496,20 @@ def _handle_tool_result_activity(
         )
     else:
         _add_activity(state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim")))
+
+
+def _extract_tool_brief(tool_name: str, content: str) -> str:
+    """Extract a concise one-line summary from tool result content.
+
+    For search tools the first line is a human-readable header like
+    ``20 results in 15.0s for "query"`` — use that instead of the raw
+    content which may contain XML tags and source data.
+    """
+    if tool_name.startswith("wizsearch"):
+        first_line = content.split("\n", 1)[0].strip()
+        if first_line:
+            return first_line[:120]
+    return content.replace("\n", " ")[:80]
 
 
 def _handle_generic_custom_activity(

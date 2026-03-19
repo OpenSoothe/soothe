@@ -130,10 +130,40 @@ def create_soothe_agent(
 
     # Resolve protocols with timing
     resolve_start = time.perf_counter()
-    resolved_context = context or resolve_context(config)
-    resolved_memory = memory_store or resolve_memory(config)
-    resolved_planner = planner or resolve_planner(config, default_model_instance)
-    resolved_policy = policy or resolve_policy(config)
+
+    # Use parallel resolution when enabled and protocols not provided
+    if config.performance.parallel_protocol_resolution and not any([context, memory_store, planner, policy]):
+        try:
+            import asyncio
+
+            async def resolve_protocols_parallel() -> list[object]:
+                return await asyncio.gather(
+                    asyncio.to_thread(resolve_context, config),
+                    asyncio.to_thread(resolve_memory, config),
+                    asyncio.to_thread(resolve_planner, config, default_model_instance),
+                    asyncio.to_thread(resolve_policy, config),
+                    return_exceptions=True,
+                )
+
+            # Run async (will fail if we're in an async context)
+            results = asyncio.run(resolve_protocols_parallel())
+            resolved_context, resolved_memory, resolved_planner, resolved_policy = [
+                r if not isinstance(r, Exception) else None for r in results
+            ]
+        except RuntimeError:
+            # Already in async context, fall back to sequential
+            logger.debug("Parallel protocol resolution not available in async context, using sequential")
+            resolved_context = context or resolve_context(config)
+            resolved_memory = memory_store or resolve_memory(config)
+            resolved_planner = planner or resolve_planner(config, default_model_instance)
+            resolved_policy = policy or resolve_policy(config)
+    else:
+        # Sequential fallback
+        resolved_context = context or resolve_context(config)
+        resolved_memory = memory_store or resolve_memory(config)
+        resolved_planner = planner or resolve_planner(config, default_model_instance)
+        resolved_policy = policy or resolve_policy(config)
+
     resolve_ms = (time.perf_counter() - resolve_start) * 1000
     logger.debug("Protocols resolved in %.1fms", resolve_ms)
 
@@ -148,9 +178,8 @@ def create_soothe_agent(
 
     goal_engine = resolve_goal_engine(config)
 
-    # Use lazy loading by default for better startup performance
     tools_start = time.perf_counter()
-    config_tools = resolve_tools(config.tools, lazy=False, config=config)
+    config_tools = resolve_tools(config.tools, lazy=config.performance.parallel_tool_loading, config=config)
     goal_tools = resolve_goal_tools(goal_engine)
     all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools, *goal_tools]
     if tools:
@@ -159,7 +188,9 @@ def create_soothe_agent(
     logger.info("Tools resolved in %.1fms", tools_ms)
 
     subagents_start = time.perf_counter()
-    config_subagents = resolve_subagents(config, default_model=default_model_instance, lazy=False)
+    config_subagents = resolve_subagents(
+        config, default_model=default_model_instance, lazy=config.performance.parallel_subagent_loading
+    )
     all_subagents: list[SubAgent | CompiledSubAgent] = [*config_subagents]
     if subagents:
         all_subagents.extend(subagents)

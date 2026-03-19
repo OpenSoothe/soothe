@@ -17,6 +17,7 @@ from soothe.cli.tui.renderers import (
     _handle_subagent_text_activity,
     _handle_tool_call_activity,
     _handle_tool_result_activity,
+    strip_internal_tags,
 )
 from soothe.cli.tui.state import TuiState
 from soothe.cli.tui_shared import _resolve_namespace_label, _update_name_map_from_ai_message
@@ -159,7 +160,9 @@ def handle_messages_event(
                     text = block.get("text", "")
                     if text and should_show("assistant_text", verbosity):
                         if is_main:
-                            state.full_response.append(text)
+                            cleaned = strip_internal_tags(text)
+                            if cleaned:
+                                state.full_response.append(cleaned)
                         else:
                             _handle_subagent_text_activity(namespace, text, state, verbosity=verbosity)
                             _flush_new_activity(state, activity_panel)
@@ -168,7 +171,9 @@ def handle_messages_event(
                     _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
                     _flush_new_activity(state, activity_panel)
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
-            state.full_response.append(msg.content)
+            cleaned = strip_internal_tags(msg.content)
+            if cleaned:
+                state.full_response.append(cleaned)
 
     # Handle deserialized dict (after JSON transport)
     elif isinstance(msg, dict):
@@ -192,7 +197,9 @@ def handle_messages_event(
             if isinstance(content, list):
                 blocks = content
             elif is_main and isinstance(content, str) and content and should_show("assistant_text", verbosity):
-                state.full_response.append(content)
+                cleaned = strip_internal_tags(content)
+                if cleaned:
+                    state.full_response.append(cleaned)
 
         for block in blocks:
             if not isinstance(block, dict):
@@ -202,7 +209,9 @@ def handle_messages_event(
                 text = block.get("text", "")
                 if text and should_show("assistant_text", verbosity):
                     if is_main:
-                        state.full_response.append(text)
+                        cleaned = strip_internal_tags(text)
+                        if cleaned:
+                            state.full_response.append(cleaned)
                     else:
                         _handle_subagent_text_activity(namespace, text, state, verbosity=verbosity)
                         _flush_new_activity(state, activity_panel)

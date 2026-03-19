@@ -1,7 +1,4 @@
-"""File operations with backup and safety features.
-
-Ported from noesium's file_edit_toolkit.py for coding agent support.
-"""
+"""File operation tool classes."""
 
 from __future__ import annotations
 
@@ -14,49 +11,10 @@ from pathlib import Path
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.tools.file_edit.utils import _display_path, _normalize_workspace_relative_input
 from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_workspace_relative_input(file_path: str, work_dir: str) -> str:
-    """Normalize stripped-absolute inputs into workspace-relative paths.
-
-    Some model/tool chains may drop the leading "/" from absolute paths, producing
-    values like ``Users/name/workspace/project/tests/out.md``. If this prefix matches
-    the current ``work_dir``, convert it back to a path relative to ``work_dir`` so
-    writes stay inside the expected workspace tree.
-    """
-    if not work_dir:
-        return file_path
-
-    path = Path(file_path)
-    if path.is_absolute():
-        return file_path
-
-    parts = path.parts
-    if not parts:
-        return file_path
-
-    work_parts = expand_path(work_dir).parts
-    stripped_work_parts = work_parts[1:] if work_parts and work_parts[0] == "/" else work_parts
-    if (
-        stripped_work_parts
-        and len(parts) > len(stripped_work_parts)
-        and tuple(parts[: len(stripped_work_parts)]) == stripped_work_parts
-    ):
-        return str(Path(*parts[len(stripped_work_parts) :]))
-    return file_path
-
-
-def _display_path(path: Path, work_dir: str) -> str:
-    """Render a path relative to work_dir when possible."""
-    if work_dir:
-        try:
-            return str(path.relative_to(expand_path(work_dir)))
-        except ValueError:
-            pass
-    return str(path)
 
 
 class CreateFileTool(BaseTool):
@@ -92,7 +50,6 @@ class CreateFileTool(BaseTool):
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
         path = Path(normalized_input)
 
-        # If absolute path, validate it's within work_dir (unless allowed outside)
         if path.is_absolute():
             if self.work_dir and not self.allow_outside_workdir:
                 work = expand_path(self.work_dir)
@@ -103,7 +60,6 @@ class CreateFileTool(BaseTool):
                     raise ValueError(msg) from err
             return path
 
-        # Relative path - resolve against work_dir or cwd
         base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
 
         return (base / path).resolve()
@@ -117,9 +73,7 @@ class CreateFileTool(BaseTool):
         Returns:
             Sanitized filename.
         """
-        # Keep only alphanumeric, dash, underscore, dot
         safe = re.sub(r"[^\w\-_.]", "_", filename)
-        # Remove leading/trailing underscores and dots
         return safe.strip("_.")
 
     def _create_backup(self, file_path: Path) -> Path | None:
@@ -134,12 +88,10 @@ class CreateFileTool(BaseTool):
         if not self.backup_enabled or not file_path.exists():
             return None
 
-        # Determine backup directory
         backup_base = Path(self.backup_dir) if self.backup_dir else file_path.parent / ".backups"
 
         backup_base.mkdir(parents=True, exist_ok=True)
 
-        # Create timestamped backup
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_name = f"{file_path.stem}_{timestamp}{file_path.suffix}"
         backup_path = backup_base / backup_name
@@ -161,25 +113,19 @@ class CreateFileTool(BaseTool):
             Success message or error.
         """
         try:
-            # Resolve path
             resolved = self._resolve_path(file_path)
 
-            # Check if file exists
             if resolved.exists() and not overwrite:
                 return f"Error: File already exists: {resolved}. Use overwrite=True to replace."
 
-            # Check content size
             content_size = len(content.encode("utf-8"))
             if content_size > self.max_file_size:
                 return f"Error: Content size ({content_size} bytes) exceeds limit ({self.max_file_size} bytes)"
 
-            # Create backup if file exists
             backup_path = self._create_backup(resolved) if resolved.exists() else None
 
-            # Ensure parent directory exists
             resolved.parent.mkdir(parents=True, exist_ok=True)
 
-            # Write file
             resolved.write_text(content, encoding="utf-8")
 
             result = f"Created: {_display_path(resolved, self.work_dir)}"
@@ -257,17 +203,14 @@ class ReadFileTool(BaseTool):
             if not resolved.is_file():
                 return f"Error: Not a file: {resolved}"
 
-            # Check file size
             file_size = resolved.stat().st_size
             if file_size > self.max_file_size:
                 return f"Error: File size ({file_size} bytes) exceeds limit ({self.max_file_size} bytes)"
 
-            # Read file
             lines = resolved.read_text(encoding="utf-8").splitlines(keepends=True)
 
-            # Apply line range
             if start_line is not None or end_line is not None:
-                start = (start_line or 1) - 1  # Convert to 0-indexed
+                start = (start_line or 1) - 1
                 end = end_line or len(lines)
                 lines = lines[start:end]
 
@@ -358,10 +301,8 @@ class DeleteFileTool(BaseTool):
             if not resolved.is_file():
                 return f"Error: Not a file: {resolved}"
 
-            # Create backup if requested
             backup_path = self._create_backup(resolved) if backup else None
 
-            # Delete file
             resolved.unlink()
 
             result = f"Deleted: {_display_path(resolved, self.work_dir)}"
@@ -422,10 +363,8 @@ class ListFilesTool(BaseTool):
             if not target.is_dir():
                 return f"Error: Not a directory: {target}"
 
-            # Collect files
             files = list(target.rglob(pattern)) if recursive else list(target.glob(pattern))
 
-            # Format output
             lines = []
             for f in sorted(files):
                 if f.is_file():
@@ -490,10 +429,8 @@ class SearchInFilesTool(BaseTool):
             if not target.exists():
                 return f"Error: Directory not found: {target}"
 
-            # Compile pattern
             regex = re.compile(pattern, re.IGNORECASE)
 
-            # Search files
             results = []
             for f in target.rglob(file_pattern):
                 if not f.is_file():
@@ -512,7 +449,7 @@ class SearchInFilesTool(BaseTool):
             if not results:
                 return f"No matches found for pattern '{pattern}'"
 
-            return "\n".join(results[:100])  # Limit to 100 results
+            return "\n".join(results[:100])
 
         except re.error as e:
             return f"Error: Invalid regex pattern: {e}"

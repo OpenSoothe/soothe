@@ -144,14 +144,12 @@ def _build_browser_graph(
         import uuid
 
         from soothe.utils.runtime import (
-            get_browser_downloads_dir,
             get_browser_extensions_dir,
             get_browser_runtime_dir,
             get_browser_user_data_dir,
         )
 
         browser_runtime_dir = browser_config.runtime_dir or str(get_browser_runtime_dir())
-        browser_downloads_dir = browser_config.downloads_dir or str(get_browser_downloads_dir())
         browser_extensions_dir = browser_config.extensions_dir or str(get_browser_extensions_dir())
 
         ephemeral_profile_dir: str | None = None
@@ -176,16 +174,13 @@ def _build_browser_graph(
         from soothe.utils.progress import emit_progress as _emit
 
         try:
-            # Capture browser-use stdout/stderr output (Crawl4AI init, browser startup, etc.)
             with capture_subagent_output("browser", suppress=True):
-                # Import browser-use under redirected stdio so startup logs are hidden.
-                from browser_use import Agent as BrowserAgent, BrowserSession
+                from browser_use import Agent as BrowserAgent, Browser, BrowserConfig as BUBrowserConfig
                 from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
 
                 messages = state.get("messages", [])
                 task = messages[-1].content if messages else ""
 
-                # Strip provider prefix if present (e.g., "openai:qwen3.5-flash" -> "qwen3.5-flash")
                 model_name = browser_model or "qwen3.5-flash"
                 if ":" in model_name:
                     model_name = model_name.split(":", 1)[1]
@@ -197,9 +192,7 @@ def _build_browser_graph(
                     llm_kwargs["api_key"] = browser_api_key
                 llm = BUChatOpenAI(model_name, **llm_kwargs)
 
-                # Detect if user wants to use existing browser
                 cdp_url = None
-                use_existing = False
                 if browser_config.enable_existing_browser:
                     use_existing = await detect_existing_browser_intent(task, llm)
                     if use_existing:
@@ -208,24 +201,10 @@ def _build_browser_graph(
                         cdp_url = await find_available_cdp()
                         if cdp_url:
                             logger.info("Connecting to existing browser at %s", cdp_url)
-                            _emit(
-                                {
-                                    "type": "soothe.browser.cdp",
-                                    "status": "connected",
-                                    "cdp_url": cdp_url,
-                                },
-                                logger,
-                            )
+                            _emit({"type": "soothe.browser.cdp", "status": "connected", "cdp_url": cdp_url}, logger)
                         else:
-                            logger.info("Existing browser requested but none found, launching new instance")
-                            _emit(
-                                {
-                                    "type": "soothe.browser.cdp",
-                                    "status": "not_found",
-                                    "message": "Existing browser requested but none found",
-                                },
-                                logger,
-                            )
+                            logger.info("No existing browser found, launching new instance")
+                            _emit({"type": "soothe.browser.cdp", "status": "not_found"}, logger)
 
                 if not cdp_url:
                     from soothe.utils.browser_cdp import cleanup_stale_chrome
@@ -234,19 +213,16 @@ def _build_browser_graph(
                     if killed:
                         import asyncio
 
-                        logger.info(
-                            "Cleaned up %d stale Chrome process(es) using %s",
-                            killed,
-                            browser_user_data_dir,
-                        )
+                        logger.info("Cleaned up %d stale Chrome process(es)", killed)
                         await asyncio.sleep(1)
 
-                browser = BrowserSession(
+                extra_args = [f"--user-data-dir={browser_user_data_dir}"]
+                bu_config = BUBrowserConfig(
                     headless=headless if not cdp_url else False,
-                    downloads_path=browser_downloads_dir,
-                    user_data_dir=browser_user_data_dir,
                     cdp_url=cdp_url,
+                    extra_chromium_args=extra_args,
                 )
+                browser_instance = Browser(bu_config)
 
                 async def on_step_end(agent: Any) -> None:
                     step_num = agent.state.n_steps
@@ -277,13 +253,12 @@ def _build_browser_graph(
                 agent = BrowserAgent(
                     task=task,
                     llm=llm,
-                    browser=browser,
+                    browser=browser_instance,
                     use_vision=use_vision,
                 )
                 history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
                 result = history.final_result() or "Browser task completed (no extracted content)."
 
-                # Clean up temporary files if requested
                 if browser_config.cleanup_on_exit:
                     from soothe.utils.runtime import cleanup_browser_temp_files
 

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 
+from soothe.core._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
 from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
@@ -22,17 +23,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-StreamChunk = tuple[tuple[str, ...], str, Any]
-
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 _MAX_HITL_ITERATIONS = 50
-_MIN_MEMORY_STORAGE_LENGTH = 50
-
-
-def _custom(data: dict[str, Any]) -> StreamChunk:
-    """Build a soothe protocol custom event chunk."""
-    return ((), "custom", data)
 
 
 class PhasesMixin:

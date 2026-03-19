@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 _DAEMON_FALLBACK_EXIT_CODE = 42
 
 
+def _daemon_tool_brief(tool_name: str, content: object) -> str:
+    """One-line summary of a tool result for daemon headless output."""
+    text = content if isinstance(content, str) else str(content)
+    if tool_name.startswith("wizsearch"):
+        first_line = text.split("\n", 1)[0].strip()
+        if first_line:
+            return first_line[:120]
+    return text.replace("\n", " ")[:120]
+
+
 async def run_headless_via_daemon(
     cfg: SootheConfig,
     prompt: str,
@@ -193,7 +203,7 @@ async def run_headless_via_daemon(
                 elif msg_type in ("tool", "ToolMessage") and should_show("tool_activity", verbosity):
                     tool_name = msg_data.get("name", "tool")
                     content = msg_data.get("content", "")
-                    brief = content.replace("\n", " ")[:120] if isinstance(content, str) else str(content)[:120]
+                    brief = _daemon_tool_brief(tool_name, content)
                     # Add newline before stderr output if needed
                     if needs_stdout_newline:
                         sys.stdout.write("\n")

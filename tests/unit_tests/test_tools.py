@@ -93,15 +93,15 @@ class TestWizsearchTools:
         assert "crawl" in crawl_tool.description.lower()
 
     def test_missing_dependency_error(self, monkeypatch) -> None:
-        import soothe.tools.wizsearch as wizsearch_mod
+        import soothe.tools.wizsearch._helpers as wizsearch_helpers
 
-        monkeypatch.setattr(wizsearch_mod, "WIZSEARCH_AVAILABLE", False)
+        monkeypatch.setattr(wizsearch_helpers, "WIZSEARCH_AVAILABLE", False)
         tool = WizsearchSearchTool()
         with pytest.raises(ImportError, match="wizsearch package is not installed"):
             tool._run(query="latest ai research")
 
     def test_default_engines(self, monkeypatch) -> None:
-        import soothe.tools.wizsearch as wizsearch_mod
+        import soothe.tools.wizsearch._helpers as wizsearch_helpers
 
         captured: dict[str, object] = {}
 
@@ -124,9 +124,12 @@ class TestWizsearchTools:
 
                 return DummyResult(query)
 
-        monkeypatch.setattr(wizsearch_mod, "WIZSEARCH_AVAILABLE", True)
-        monkeypatch.setattr(wizsearch_mod, "WizSearchConfig", DummyConfig)
-        monkeypatch.setattr(wizsearch_mod, "WizSearch", DummySearch)
+        monkeypatch.setattr(wizsearch_helpers, "WIZSEARCH_AVAILABLE", True)
+
+        import wizsearch as _wiz_pkg
+
+        monkeypatch.setattr(_wiz_pkg, "WizSearchConfig", DummyConfig)
+        monkeypatch.setattr(_wiz_pkg, "WizSearch", DummySearch)
 
         tool = WizsearchSearchTool()
         _ = tool._run(query="ai agents")
@@ -135,7 +138,7 @@ class TestWizsearchTools:
 
     def test_custom_engines_via_config(self, monkeypatch) -> None:
         """Test that custom engines can be set via config parameter."""
-        import soothe.tools.wizsearch as wizsearch_mod
+        import soothe.tools.wizsearch._helpers as wizsearch_helpers
 
         captured: dict[str, object] = {}
 
@@ -158,9 +161,12 @@ class TestWizsearchTools:
 
                 return DummyResult(query)
 
-        monkeypatch.setattr(wizsearch_mod, "WIZSEARCH_AVAILABLE", True)
-        monkeypatch.setattr(wizsearch_mod, "WizSearchConfig", DummyConfig)
-        monkeypatch.setattr(wizsearch_mod, "WizSearch", DummySearch)
+        monkeypatch.setattr(wizsearch_helpers, "WIZSEARCH_AVAILABLE", True)
+
+        import wizsearch as _wiz_pkg
+
+        monkeypatch.setattr(_wiz_pkg, "WizSearchConfig", DummyConfig)
+        monkeypatch.setattr(_wiz_pkg, "WizSearch", DummySearch)
 
         # Test with custom engines
         tool = WizsearchSearchTool(

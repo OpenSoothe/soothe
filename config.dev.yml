@@ -74,8 +74,6 @@ activity_max_lines: 300
 subagents:
   research:
     enabled: true
-  planner:
-    enabled: true
   scout:
     enabled: true
   browser:
@@ -341,7 +339,7 @@ logging:
     format: "%(levelname)-8s %(name)s %(message)s"
 
   # Progress event visibility (TUI/headless activity display)
-  progress_verbosity: detailed  # minimal | normal | detailed | debug
+  progress_verbosity: normal  # minimal | normal | detailed | debug
 
   # Thread conversation logging for audit and recovery
   thread_logging:

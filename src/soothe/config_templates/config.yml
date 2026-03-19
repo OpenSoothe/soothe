@@ -300,6 +300,16 @@ autonomous:
   enable_dynamic_goals: true # Enable/disable dynamic goal creation (RFC-0011)
 
 # =============================================================================
+# Performance & Startup
+# =============================================================================
+# Tune agent startup and runtime performance optimizations.
+
+performance:
+  parallel_tool_loading: true       # Load tool groups concurrently at startup
+  parallel_subagent_loading: true   # Load subagent specs concurrently at startup
+  parallel_protocol_resolution: true # Resolve protocols in parallel at startup
+
+# =============================================================================
 # Execution Limits
 # =============================================================================
 # Concurrency and resource limits for safe operation.
