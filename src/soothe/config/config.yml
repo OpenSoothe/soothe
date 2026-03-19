@@ -133,6 +133,9 @@ tools:
   - wikipedia         # Encyclopedia lookup (no API key)
   - arxiv             # Academic paper search (no API key)
 
+  # Deep research (tool-agnostic inquiry engine)
+  - inquiry           # Iterative research across web/code/docs (uses InquiryEngine)
+
   # Optional tools (require API keys or external services):
   # - serper          # Google search via Serper (SERPER_API_KEY)
   # - jina            # Web page reader via Jina (JINA_API_KEY)

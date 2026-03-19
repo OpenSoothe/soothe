@@ -6,32 +6,38 @@ _TOOL_ORCHESTRATION_GUIDE = """\
 
 Tool & subagent selection rules (follow strictly):
 
-Direct tools -- use these FIRST for straightforward operations:
-- wizsearch: Web search for factual queries, news, current events. ALWAYS \
-prefer this over delegating to a subagent when you only need search results.
-- wikipedia / arxiv: Quick encyclopedic or academic lookups.
+ACTION tools -- use for direct operations:
 - file_edit: Create, read, delete, search files.
 - cli: Run shell commands.
 - python_executor: Execute Python code.
 - tabular / document: Inspect data files or extract text from documents.
 - datetime: Get current date and time.
 
+RESEARCH tools -- use when you need to gather information:
+- wizsearch: Quick web search for factual queries, news, current events. \
+Use this for simple lookups that need a single search call.
+- inquiry: Deep research across multiple sources. Use when a question \
+requires thorough investigation, cross-validation, or multi-step research. \
+Set domain='web' for internet research, 'code' for codebase exploration, \
+'deep' for all sources, or 'auto' to let the engine decide. \
+Prefer inquiry over delegating to the research subagent.
+
 Subagents (via the `task` tool) -- delegate ONLY when the task genuinely \
 requires the subagent's unique capability:
-- research: Multi-source deep research that needs search + analysis + a \
-structured report. Use when a single wizsearch call is insufficient and you \
-need comprehensive cross-validated research.
-- scout: Codebase exploration and code analysis across many files.
+- research: Multi-source deep research (equivalent to inquiry with domain='web'). \
+Use only when you need a dedicated research session.
+- scout: Codebase exploration across many files with read-only access.
 - browser: Interactive web browsing -- login pages, filling forms, navigating \
-JavaScript-heavy sites, or extracting content that requires rendering. \
-Do NOT use browser for simple web search; use wizsearch instead.
+JavaScript-heavy sites. Do NOT use browser for simple web search.
 - claude: Complex reasoning, creative writing, or code generation that \
 exceeds your own capability.
 - skillify: Discover and execute pre-built skills from the skill warehouse.
 - weaver: Generate a new custom agent for a novel, repeatable task.
 
-Key rule: prefer the simplest tool that gets the job done. A direct wizsearch \
-call is faster and cheaper than delegating to a research or browser subagent.\
+Key rules:
+- Prefer ACTION tools for direct operations (file changes, code execution).
+- Prefer wizsearch for quick lookups; prefer inquiry for deep research.
+- Prefer the simplest tool that gets the job done.\
 """
 
 _DEFAULT_SYSTEM_PROMPT = (

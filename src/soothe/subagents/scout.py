@@ -2,6 +2,12 @@
 
 Explores codebases, documents, and data sources to gather information
 and synthesise findings with citations.
+
+The scout follows the same inquiry paradigm (explore -> reflect -> iterate ->
+synthesise) used by the InquiryEngine, but runs as a deepagents SubAgent
+with read-only filesystem tools.  For complex cross-domain exploration that
+needs web + code sources, the InquiryEngine's ``code`` or ``deep`` profiles
+are a better fit.
 """
 
 from __future__ import annotations
@@ -43,7 +49,9 @@ You work across source types including:
 - Data (CSV, Excel, JSON, logs)
 - Structured content (APIs, outputs, configs)
 
-## Process
+## Process (Inquiry Paradigm)
+
+Follow this iterative loop:
 
 1. **Target analysis** -- determine what you are exploring and categorise it \
 (code, document, data, media, general). Identify the key questions to answer.
@@ -53,7 +61,9 @@ for, and in what order. Prioritise high-signal sources.
 systematically gather information. Track all sources.
 4. **Reflection** -- after each exploration pass, evaluate whether findings are \
 sufficient to answer the original question. Identify knowledge gaps.
-5. **Synthesis** -- combine all findings into a clear summary with source \
+5. **Follow-up** -- if gaps remain, generate targeted follow-up queries and \
+repeat from step 3.
+6. **Synthesis** -- combine all findings into a clear summary with source \
 citations and a confidence score.
 
 ## Output Format
@@ -95,7 +105,7 @@ def create_scout_subagent(
         tools: Optional list of tools. If not specified, the scout will be
             given read-only filesystem tools (ls, read_file, glob, grep).
         cwd: Working directory for filesystem exploration tools.
-        **kwargs: Additional config (ignored for forward compat).
+        **_kwargs: Additional config (ignored for forward compat).
 
     Returns:
         `SubAgent` dict compatible with deepagents.
@@ -109,7 +119,6 @@ def create_scout_subagent(
         spec["model"] = model
 
     if tools is not None:
-        # Wrap provided tools with logging
         spec["tools"] = [wrap_tool_with_logging(tool, "scout", logger) for tool in tools]
     else:
         from deepagents.backends.filesystem import FilesystemBackend
@@ -133,7 +142,6 @@ def create_scout_subagent(
             fs_middleware._create_glob_tool(),
             fs_middleware._create_grep_tool(),
         ]
-        # Wrap read-only tools with logging
         spec["tools"] = [wrap_tool_with_logging(tool, "scout", logger) for tool in read_only_tools]
 
     return spec

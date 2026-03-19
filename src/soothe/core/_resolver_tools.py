@@ -254,6 +254,12 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             logger.debug("github tool not available (pip install pygithub)", exc_info=True)
             return []
 
+    if name == "inquiry":
+        from soothe.tools.inquiry import create_inquiry_tools
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        return list(create_inquiry_tools(config=config, work_dir=resolved_cwd))
+
     if name == "goals":
         return []
 

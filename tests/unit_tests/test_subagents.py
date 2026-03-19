@@ -124,10 +124,11 @@ class TestResearchSubagent:
         with pytest.raises(ValueError, match="requires a model"):
             create_research_subagent(model=None)
 
-    def test_uses_wizsearch_defaults(self) -> None:
-        from soothe.subagents.research import _create_research_search_tool
+    def test_uses_inquiry_engine_sources(self) -> None:
+        from soothe.subagents.research import _build_inquiry_sources
 
-        tool = _create_research_search_tool()
-        assert tool.name == "wizsearch_search"
-        assert tool.default_engines == ["tavily", "duckduckgo"]
-        assert tool.default_max_results_per_engine == 5
+        sources = _build_inquiry_sources()
+        assert len(sources) == 2
+        types = {s.source_type for s in sources}
+        assert "web" in types
+        assert "academic" in types
