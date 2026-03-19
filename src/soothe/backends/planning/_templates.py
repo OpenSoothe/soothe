@@ -22,16 +22,12 @@ class PlanTemplates:
     """
 
     _TEMPLATES: ClassVar[dict[str, Plan]] = {
-        "question": Plan(
-            goal="",
-            steps=[PlanStep(id="step_1", description="", execution_hint="auto")],
-        ),
         "search": Plan(
             goal="",
             steps=[
                 PlanStep(
                     id="step_1",
-                    description="Use the wizsearch tool to search the web for relevant, up-to-date information",
+                    description="Use the websearch tool to search the web for relevant, up-to-date information",
                     execution_hint="tool",
                 ),
                 PlanStep(
@@ -60,13 +56,13 @@ class PlanTemplates:
                 PlanStep(id="step_1", description="Understand requirements", execution_hint="auto"),
                 PlanStep(
                     id="step_2",
-                    description="Implement the solution using file_edit and cli tools",
+                    description="Implement the solution using workspace and execute tools",
                     execution_hint="tool",
                     depends_on=["step_1"],
                 ),
                 PlanStep(
                     id="step_3",
-                    description="Test and validate using cli or python_executor",
+                    description="Test and validate using execute tool",
                     execution_hint="tool",
                     depends_on=["step_2"],
                 ),
@@ -75,7 +71,6 @@ class PlanTemplates:
     }
 
     _PATTERNS: ClassVar[list[tuple[str, re.Pattern]]] = [
-        ("question", re.compile(r"^(who|what|where|when|why|how)\s+", re.IGNORECASE)),
         ("search", re.compile(r"^(search|find|look up|google)\s+", re.IGNORECASE)),
         ("analysis", re.compile(r"^(analyze|analyse|review|examine|investigate)\s+", re.IGNORECASE)),
         ("implementation", re.compile(r"^(implement|create|build|write|develop)\s+", re.IGNORECASE)),
@@ -125,6 +120,4 @@ class PlanTemplates:
         """
         plan = cls._TEMPLATES[template_key].model_copy(deep=True)
         plan.goal = goal
-        if template_key == "question":
-            plan.steps[0].description = goal
         return plan

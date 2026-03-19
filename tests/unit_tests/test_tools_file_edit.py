@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from soothe.tools.file_edit import (
+from soothe.tools._internal.file_edit import (
     CreateFileTool,
     DeleteFileTool,
     GetFileInfoTool,

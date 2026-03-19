@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from deepagents import create_deep_agent
 from langchain_core.language_models import BaseChatModel
 
-from soothe.built_in_skills import get_built_in_skills_paths
 from soothe.config import SootheConfig
 from soothe.core.resolver import (
     SUBAGENT_FACTORIES,
@@ -25,6 +24,7 @@ from soothe.core.resolver import (
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.skills import get_built_in_skills_paths
 from soothe.utils import expand_path
 
 

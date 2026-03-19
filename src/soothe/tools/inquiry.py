@@ -1,10 +1,13 @@
-"""Inquiry tool -- exposes the InquiryEngine as a direct tool for the main agent.
+"""Research tool -- exposes the InquiryEngine as a direct tool for the main agent.
 
-This is the unified "deep research" capability.  The main agent uses this
-tool when it needs to *research* something (as opposed to directly *acting*
-with file_edit, cli, etc.).  The ``domain`` parameter lets the LLM hint
-at which information sources are most relevant, while the InquiryEngine
-handles source routing internally.
+This is the unified "deep research" capability (RFC-0014).  The main agent
+uses this tool when it needs to *research* something (as opposed to directly
+*acting* with workspace, execute, etc.).  The ``domain`` parameter lets the
+LLM hint at which information sources are most relevant, while the
+InquiryEngine handles source routing internally.
+
+The tool name is ``research`` (user-facing), backed by the InquiryEngine
+internally.  The old ``inquiry`` tool group name is kept as an alias.
 """
 
 from __future__ import annotations
@@ -27,11 +30,12 @@ class InquiryTool(BaseTool):
     multiple sources (web, academic, filesystem, CLI, documents).
     """
 
-    name: str = "inquiry"
+    name: str = "research"
     description: str = (
         "Deep research tool that iteratively searches, analyses, and synthesises "
         "information from multiple sources. Use when a question requires thorough "
-        "investigation beyond a single search. "
+        "investigation, cross-validation, or multi-step research beyond a single "
+        "web search. "
         "Inputs: `topic` (required, the research question), "
         "`domain` (optional, one of 'auto', 'web', 'code', 'deep'; default 'auto'). "
         "- 'web': Internet research (web search + academic papers). "

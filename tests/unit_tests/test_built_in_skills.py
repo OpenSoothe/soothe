@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from soothe.built_in_skills import get_built_in_skills_paths
+from soothe.skills import get_built_in_skills_paths
 
 
 def test_get_built_in_skills_paths_returns_list() -> None:

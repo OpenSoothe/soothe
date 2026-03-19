@@ -3,14 +3,14 @@
 Re-exports all public names so ``from soothe.tools.cli import X`` works.
 """
 
-from soothe.tools.cli.shell import (
+from soothe.tools._internal.cli.shell import (
     ANSI_ESCAPE,
     ShellHealthState,
     _shell_health_states,
     _shell_instances,
     cleanup_shell,
 )
-from soothe.tools.cli.tools import (
+from soothe.tools._internal.cli.tools import (
     CheckCommandExistsTool,
     CliTool,
     GetCurrentDirTool,

@@ -2,42 +2,68 @@
 
 from __future__ import annotations
 
-_TOOL_ORCHESTRATION_GUIDE = """\
+# ---------------------------------------------------------------------------
+# Domain-scoped tool guides (RFC-0014)
+# Injected selectively by SystemPromptOptimizationMiddleware based on
+# UnifiedClassification.capability_domains.
+# ---------------------------------------------------------------------------
+
+_RESEARCH_GUIDE = """\
+Research tools:
+- websearch: Quick web search for factual lookups, news, current events (single call).
+- research: Deep investigation requiring multiple sources, iteration, and synthesis. \
+Set domain='web' for internet, 'code' for codebase, 'deep' for all, 'auto' to decide.\
+"""
+
+_WORKSPACE_GUIDE = """\
+Workspace tool:
+- workspace: All file operations. Use action='read', 'write', 'delete', 'search' \
+(grep-like pattern search), 'list', or 'info'.\
+"""
+
+_EXECUTE_GUIDE = """\
+Execute tool:
+- execute: Run shell commands (mode='shell'), Python code (mode='python'), \
+or long-running processes (mode='background'). Use 'kill <pid>' to stop background processes.\
+"""
+
+_DATA_GUIDE = """\
+Data tool:
+- data: Inspect any data file or document. Provide file_path and optional operation \
+('inspect', 'summary', 'quality', 'extract', 'info', 'ask'). \
+Supports CSV, Excel, JSON, Parquet, PDF, DOCX, TXT.\
+"""
+
+_SUBAGENT_GUIDE = """\
+Subagents (via the `task` tool) -- delegate ONLY when the task requires \
+the subagent's unique capability:
+- browser: Interactive web browsing (login, forms, JavaScript-heavy sites). \
+NOT for simple search.
+- claude: Complex reasoning, creative writing, or superior code generation.
+- skillify: Discover and execute pre-built skills from the skill warehouse.
+- weaver: Generate a new custom agent for a novel, repeatable task.\
+"""
+
+_TOOL_ORCHESTRATION_GUIDE = f"""\
 
 Tool & subagent selection rules (follow strictly):
 
-ACTION tools -- use for direct operations:
-- file_edit: Create, read, delete, search files.
-- cli: Run shell commands.
-- python_executor: Execute Python code.
-- tabular / document: Inspect data files or extract text from documents.
+{_WORKSPACE_GUIDE}
+
+{_EXECUTE_GUIDE}
+
+{_DATA_GUIDE}
+
+{_RESEARCH_GUIDE}
+
 - datetime: Get current date and time.
 
-RESEARCH tools -- use when you need to gather information:
-- wizsearch: Quick web search for factual queries, news, current events. \
-Use this for simple lookups that need a single search call.
-- inquiry: Deep research across multiple sources. Use when a question \
-requires thorough investigation, cross-validation, or multi-step research. \
-Set domain='web' for internet research, 'code' for codebase exploration, \
-'deep' for all sources, or 'auto' to let the engine decide. \
-Prefer inquiry over delegating to the research subagent.
-
-Subagents (via the `task` tool) -- delegate ONLY when the task genuinely \
-requires the subagent's unique capability:
-- research: Multi-source deep research (equivalent to inquiry with domain='web'). \
-Use only when you need a dedicated research session.
-- scout: Codebase exploration across many files with read-only access.
-- browser: Interactive web browsing -- login pages, filling forms, navigating \
-JavaScript-heavy sites. Do NOT use browser for simple web search.
-- claude: Complex reasoning, creative writing, or code generation that \
-exceeds your own capability.
-- skillify: Discover and execute pre-built skills from the skill warehouse.
-- weaver: Generate a new custom agent for a novel, repeatable task.
+{_SUBAGENT_GUIDE}
 
 Key rules:
-- Prefer ACTION tools for direct operations (file changes, code execution).
-- Prefer wizsearch for quick lookups; prefer inquiry for deep research.
-- Prefer the simplest tool that gets the job done.\
+- Prefer the simplest tool that gets the job done.
+- Use websearch for quick lookups; use research for thorough investigation.
+- Use workspace for file operations, execute for running commands/code.\
 """
 
 _DEFAULT_SYSTEM_PROMPT = (

@@ -68,12 +68,6 @@ activity_max_lines: 300
 # All subagents are enabled by default. Set enabled: false to disable.
 
 subagents:
-  research:
-    enabled: true
-  planner:
-    enabled: true
-  scout:
-    enabled: true
   browser:
     enabled: true
     config:
@@ -114,35 +108,26 @@ subagents:
     #   max_generated_agents: 100
 
 # =============================================================================
-# Tools
+# Tools (RFC-0014 Capability Abstraction)
 # =============================================================================
-# Enable tool groups. Some require API keys (see config/env.example).
-# Default tools are powerful and require no external API keys (except wizsearch).
+# Six consolidated capability tools replace the previous 20+ individual tools.
+# The LLM picks *what* capability to use; each tool routes to the right backend.
 
 tools:
-  # Core tools (no external dependencies)
   - datetime          # Current date/time for time-awareness
-  - file_edit         # Create, read, delete, search files with backup
-  - python_executor   # Execute Python code with matplotlib support
-  - cli               # Persistent CLI shell execution
-  - tabular           # Inspect and validate tabular data (CSV, Excel, etc.)
-  - document          # Extract text from documents (PDF, DOCX, etc.)
-
-  # Web accesses (wizsearch taivily engine requires API key)
-  - wizsearch         # Multi-engine web search and page crawling
-  - wikipedia         # Encyclopedia lookup (no API key)
-  - arxiv             # Academic paper search (no API key)
-
-  # Deep research (tool-agnostic inquiry engine)
-  - inquiry           # Iterative research across web/code/docs (uses InquiryEngine)
+  - workspace         # File ops: read, write, delete, search, list, info
+  - execute           # Run shell commands, Python code, background processes
+  - data              # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
+  - websearch         # Quick single-call web search
+  - research          # Deep multi-source iterative research (InquiryEngine)
 
   # Optional tools (require API keys or external services):
-  # - serper          # Google search via Serper (SERPER_API_KEY)
-  # - jina            # Web page reader via Jina (JINA_API_KEY)
   # - image           # Image analysis (OpenAI GPT-4o)
   # - audio           # Audio transcription (OpenAI Whisper)
   # - video           # Video analysis (Google Gemini)
   # - github          # GitHub API (GITHUB_TOKEN)
+  # - serper          # Google search via Serper (SERPER_API_KEY)
+  # - jina            # Web page reader via Jina (JINA_API_KEY)
 
 # =============================================================================
 # Tools Settings

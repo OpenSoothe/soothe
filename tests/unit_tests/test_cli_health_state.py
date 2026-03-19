@@ -1,6 +1,6 @@
 """Tests for CLI shell health state tracking."""
 
-from soothe.tools.cli import (
+from soothe.tools._internal.cli import (
     CliTool,
     ShellHealthState,
     _shell_health_states,

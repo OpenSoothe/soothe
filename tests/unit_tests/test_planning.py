@@ -257,23 +257,21 @@ class TestSimplePlanner:
         data = {
             "goal": "test goal",
             "steps": [
-                {"id": "step_1", "description": "Step 1", "execution_hint": "scout"},
-                {"id": "step_2", "description": "Step 2", "execution_hint": "browser"},
-                {"id": "step_3", "description": "Step 3", "execution_hint": "research"},
-                {"id": "step_4", "description": "Step 4", "execution_hint": "weaver"},
-                {"id": "step_5", "description": "Step 5", "execution_hint": "tool"},
+                {"id": "step_1", "description": "Step 1", "execution_hint": "browser"},
+                {"id": "step_2", "description": "Step 2", "execution_hint": "weaver"},
+                {"id": "step_3", "description": "Step 3", "execution_hint": "search"},
+                {"id": "step_4", "description": "Step 4", "execution_hint": "tool"},
+                {"id": "step_5", "description": "Step 5", "execution_hint": "unknown"},
             ],
         }
 
         normalized_data = planner._normalize_hints_in_dict(data)
 
-        # Invalid hints should be mapped to subagent
-        assert normalized_data["steps"][0]["execution_hint"] == "subagent"  # scout
-        assert normalized_data["steps"][1]["execution_hint"] == "subagent"  # browser
-        assert normalized_data["steps"][2]["execution_hint"] == "subagent"  # research
-        assert normalized_data["steps"][3]["execution_hint"] == "subagent"  # weaver
-        # Valid hint should remain unchanged
-        assert normalized_data["steps"][4]["execution_hint"] == "tool"
+        assert normalized_data["steps"][0]["execution_hint"] == "subagent"  # browser
+        assert normalized_data["steps"][1]["execution_hint"] == "subagent"  # weaver
+        assert normalized_data["steps"][2]["execution_hint"] == "tool"  # search
+        assert normalized_data["steps"][3]["execution_hint"] == "tool"  # valid, unchanged
+        assert normalized_data["steps"][4]["execution_hint"] == "auto"  # unknown → auto
 
     def test_parse_json_from_response_markdown_block(self) -> None:
         """Test parsing Plan from JSON wrapped in markdown code blocks."""
@@ -323,8 +321,8 @@ class TestSimplePlanner:
         content = """{
   "goal": "test goal",
   "steps": [
-    {"id": "step_1", "description": "Step 1", "execution_hint": "scout"},
-    {"id": "step_2", "description": "Step 2", "execution_hint": "browser"}
+    {"id": "step_1", "description": "Step 1", "execution_hint": "browser"},
+    {"id": "step_2", "description": "Step 2", "execution_hint": "weaver"}
   ]
 }"""
 

@@ -38,17 +38,35 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# -- Tool implementation extras --
 research = [
     "wizsearch>=1.1.7,<2.0.0",
     "tavily-python>=0.5.0",
     "langchain-tavily>=0.2.17",
+    "arxiv>=2.1.0",
+    "wikipedia>=1.4.0",
 ]
 websearch = [
     "browser-use<=0.12.0",
-    "wikipedia>=1.4.0",
     "wizsearch>=1.1.7,<2.0.0",
     "langchain-tavily>=0.2.17",
 ]
+tabular = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "pyarrow>=14.0.0",
+]
+document = [
+    "PyMuPDF>=1.24.0",
+]
+cli = [
+    "pexpect>=4.9.0",
+]
+python-executor = [
+    "ipython>=8.0.0",
+    "matplotlib>=3.8.0",
+]
+# -- Subagent / provider extras --
 claude = [
     "claude-agent-sdk>=0.1.40,<0.1.49",
 ]
@@ -56,19 +74,10 @@ media = [
     "pillow>=10.0.0",
     "openai>=1.0.0",
 ]
-bash = [
-    "pexpect>=4.9.0",
-]
 video = [
     "google-genai>=0.3.0",
 ]
-document = [
-    "PyMuPDF>=1.24.0",
-]
-python-executor = [
-    "ipython>=8.0.0",
-    "matplotlib>=3.8.0",
-]
+# -- Persistence / infra extras --
 rocksdb = [
     "rocksdict>=0.3",
 ]
@@ -89,11 +98,16 @@ memory = [
 dashscope = [
     "dashscope>=1.25.14",
 ]
+# -- Meta extras --
 all = [
-    "soothe[research,websearch,claude,media,bash,video,document,python-executor,rocksdb,pgvector,weaviate,ollama,memory,dashscope]",
+    "soothe[research,websearch,tabular,document,cli,python-executor,claude,media,video,rocksdb,pgvector,weaviate,ollama,memory,dashscope]",
 ]
 # Note: 'memory' extra requires Python 3.13+ and is NOT included in 'all'
 # Install explicitly with: pip install soothe[memory] (Python 3.13+ only)
+# Legacy alias: 'bash' maps to 'cli'
+bash = [
+    "pexpect>=4.9.0",
+]
 
 [dependency-groups]
 test = [
@@ -110,14 +124,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe"]
 artifacts = [
-    "src/soothe/built_in_skills/**/*.md",
+    "src/soothe/skills/**/*.md",
     "src/soothe/config/*.yml"
 ]
 
 [tool.hatch.build.targets.sdist]
 packages = ["src/soothe"]
 artifacts = [
-    "src/soothe/built_in_skills/**/*.md",
+    "src/soothe/skills/**/*.md",
     "src/soothe/config/*.yml"
 ]
 

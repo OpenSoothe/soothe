@@ -20,9 +20,7 @@ from soothe.protocols.planner import (
 logger = logging.getLogger(__name__)
 
 _SIMPLE_PLANNER_HINT_MAP = {
-    "scout": "subagent",
     "browser": "subagent",
-    "research": "subagent",
     "weaver": "subagent",
     "search": "tool",
     "web": "tool",
@@ -187,14 +185,18 @@ class SimplePlanner:
             parts.append(f"Previously completed steps:\n{completed_info}")
 
         parts.append(
+            "Break the goal into 2-5 concrete, actionable steps.\n\n"
             "Return a JSON object with this structure:\n"
             "{\n"
             '  "goal": "<goal text>",\n'
             '  "steps": [\n'
-            '    {"id": "step_1", "description": "<action>", "execution_hint": "auto"}\n'
+            '    {"id": "step_1", "description": "<concrete action>", "execution_hint": "auto"},\n'
+            '    {"id": "step_2", "description": "<next action>", "execution_hint": "auto", '
+            '"depends_on": ["step_1"]}\n'
             "  ]\n"
             "}\n\n"
-            "execution_hint must be one of: 'tool', 'subagent', 'remote', 'auto'\n"
+            "execution_hint must be one of: 'tool', 'subagent', 'remote', 'auto'.\n"
+            "Use depends_on to express step ordering when later steps need earlier results.\n"
             "Return ONLY valid JSON, no markdown code blocks."
         )
         return "\n\n".join(parts)

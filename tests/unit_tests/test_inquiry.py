@@ -323,12 +323,12 @@ class TestDocumentSourceHelpers:
 
 class TestResearchSubagentRefactor:
     def test_description_updated(self) -> None:
-        from soothe.subagents.research import RESEARCH_DESCRIPTION
+        from soothe.subagents._internal.research import RESEARCH_DESCRIPTION
 
         assert "multi-source" in RESEARCH_DESCRIPTION.lower()
 
     def test_build_inquiry_sources(self) -> None:
-        from soothe.subagents.research import _build_inquiry_sources
+        from soothe.subagents._internal.research import _build_inquiry_sources
 
         sources = _build_inquiry_sources()
         assert len(sources) == 2
@@ -347,7 +347,7 @@ class TestInquiryTool:
         from soothe.tools.inquiry import InquiryTool
 
         tool = InquiryTool()
-        assert tool.name == "inquiry"
+        assert tool.name == "research"
         assert "domain" in tool.description.lower()
         assert "deep" in tool.description.lower()
 
@@ -393,8 +393,8 @@ class TestInquiryTool:
 
 
 class TestPromptIntegration:
-    def test_tool_orchestration_guide_mentions_inquiry(self) -> None:
+    def test_tool_orchestration_guide_mentions_research(self) -> None:
         from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE
 
-        assert "inquiry" in _TOOL_ORCHESTRATION_GUIDE.lower()
+        assert "research" in _TOOL_ORCHESTRATION_GUIDE.lower()
         assert "domain" in _TOOL_ORCHESTRATION_GUIDE.lower()

@@ -45,7 +45,7 @@ class WebSource:
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
             return
-        from soothe.tools.wizsearch import WizsearchSearchTool
+        from soothe.tools._internal.wizsearch import WizsearchSearchTool
 
         wizsearch_config: dict[str, Any] = {}
         if self._config and hasattr(self._config, "tools_settings"):

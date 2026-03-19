@@ -12,7 +12,7 @@ class TestCliToolIntegration:
     @pytest.fixture
     def cli_tool(self):
         """Create a CliTool instance for testing."""
-        from soothe.tools.cli import CliTool
+        from soothe.tools._internal.cli import CliTool
 
         return CliTool(
             workspace_root=tempfile.mkdtemp(),
@@ -64,7 +64,7 @@ class TestPythonExecutorIntegration:
         """Test real error traceback with IPython."""
         pytest.importorskip("IPython")
 
-        from soothe.tools.python_executor import PythonExecutorTool
+        from soothe.tools._internal.python_executor import PythonExecutorTool
 
         tool = PythonExecutorTool()
 
@@ -80,7 +80,7 @@ class TestPythonExecutorIntegration:
         pytest.importorskip("IPython")
         pytest.importorskip("matplotlib")
 
-        from soothe.tools.python_executor import PythonExecutorTool
+        from soothe.tools._internal.python_executor import PythonExecutorTool
 
         tool = PythonExecutorTool()
 

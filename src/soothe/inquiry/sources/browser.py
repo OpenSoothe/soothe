@@ -33,7 +33,7 @@ class BrowserSource:
         if self._crawl_tool is not None:
             return
         try:
-            from soothe.tools.wizsearch.crawl import WizsearchCrawlPageTool
+            from soothe.tools._internal.wizsearch.crawl import WizsearchCrawlPageTool
 
             self._crawl_tool = WizsearchCrawlPageTool()
         except Exception:

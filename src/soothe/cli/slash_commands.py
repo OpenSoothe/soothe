@@ -27,6 +27,7 @@ SLASH_COMMANDS: dict[str, str] = {
     "/detach": "Detach TUI; daemon keeps running (reconnect with 'soothe attach')",
     "/auto <prompt>": "Run prompt in autonomous mode",
     "/auto <max_iterations> <prompt>": "Run prompt in autonomous mode with iteration limit",
+    "/autopilot": "Alias for /auto",
     "/plan": "Show current task plan",
     "/memory": "Show memory stats",
     "/context": "Show context stats",
@@ -48,17 +49,21 @@ _AUTO_TWO_PARTS = 2
 
 
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
-    """Parse `/auto` command payload.
+    """Parse `/auto` or `/autopilot` command payload.
 
     Args:
-        cmd: Raw slash command, e.g. ``/auto 20 Crawl all skills``.
+        cmd: Raw slash command, e.g. ``/auto 20 Crawl all skills`` or ``/autopilot 20 Crawl all skills``.
 
     Returns:
         ``(max_iterations, prompt)`` for valid input, otherwise ``None``.
     """
     stripped = cmd.strip()
-    if not stripped.startswith("/auto"):
+    if not (stripped.startswith("/auto") or stripped.startswith("/autopilot")):
         return None
+
+    # Normalize /autopilot to /auto for parsing
+    if stripped.startswith("/autopilot"):
+        stripped = stripped.replace("/autopilot", "/auto", 1)
 
     parts = stripped.split(maxsplit=_AUTO_MAX_SPLIT)
     if len(parts) == _AUTO_MIN_PARTS:

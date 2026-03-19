@@ -32,7 +32,7 @@ class DocumentSource:
             return
         self._loaded = True
         try:
-            from soothe.tools.document import create_document_tools
+            from soothe.tools._internal.document import create_document_tools
 
             tools = create_document_tools()
             if tools:

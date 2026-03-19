@@ -2,7 +2,7 @@
 
 import os
 
-from soothe.subagents.scout import create_scout_subagent
+from soothe.subagents._internal.scout import create_scout_subagent
 
 
 class TestScoutSubagent:
@@ -119,13 +119,13 @@ class TestResearchSubagent:
     def test_requires_model(self) -> None:
         import pytest
 
-        from soothe.subagents.research import create_research_subagent
+        from soothe.subagents._internal.research import create_research_subagent
 
         with pytest.raises(ValueError, match="requires a model"):
             create_research_subagent(model=None)
 
     def test_uses_inquiry_engine_sources(self) -> None:
-        from soothe.subagents.research import _build_inquiry_sources
+        from soothe.subagents._internal.research import _build_inquiry_sources
 
         sources = _build_inquiry_sources()
         assert len(sources) == 2

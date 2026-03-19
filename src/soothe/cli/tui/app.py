@@ -150,6 +150,7 @@ class SootheApp(App):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
 
+        self._refresh_plan()
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
     async def _connect_and_listen(self) -> None:
@@ -340,7 +341,7 @@ class SootheApp(App):
             self._last_activity_count = len(self._state.activity_lines)
 
     def _refresh_plan(self) -> None:
-        with contextlib.suppress(Exception):
+        try:
             panel = self.query_one("#plan-panel", PlanPanel)
             panel.clear()
             if self._state.current_plan:
@@ -348,6 +349,8 @@ class SootheApp(App):
                 panel.write(tree)
             else:
                 panel.write("[dim]No active plan.[/dim]")
+        except Exception:
+            logger.debug("Failed to refresh plan panel", exc_info=True)
 
     def _update_status(self, state: str) -> None:
         with contextlib.suppress(Exception):

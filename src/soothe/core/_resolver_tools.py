@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
 from soothe.subagents.claude import create_claude_subagent
-from soothe.subagents.research import create_research_subagent
-from soothe.subagents.scout import create_scout_subagent
 from soothe.subagents.skillify import create_skillify_subagent
 from soothe.subagents.weaver import create_weaver_subagent
 from soothe.utils import expand_path
@@ -32,8 +30,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
-    "scout": create_scout_subagent,
-    "research": create_research_subagent,
     "browser": create_browser_subagent,
     "claude": create_claude_subagent,
     "skillify": create_skillify_subagent,
@@ -169,19 +165,6 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         from soothe.tools.serper import create_serper_tools
 
         return list(create_serper_tools())
-    if name == "wizsearch":
-        from soothe.tools.wizsearch import create_wizsearch_tools
-
-        wizsearch_config = {}
-        if config and hasattr(config, "tools_settings") and hasattr(config.tools_settings, "wizsearch"):
-            wizsearch_config = {
-                "default_engines": config.tools_settings.wizsearch.default_engines,
-                "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
-                "timeout": config.tools_settings.wizsearch.timeout,
-            }
-        if config and hasattr(config, "debug"):
-            wizsearch_config["debug"] = config.debug
-        return list(create_wizsearch_tools(wizsearch_config))
     if name == "datetime":
         from soothe.tools.datetime import create_datetime_tools
 
@@ -198,52 +181,6 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         from soothe.tools.video import create_video_tools
 
         return list(create_video_tools())
-    if name == "tabular":
-        from soothe.tools.tabular import create_tabular_tools
-
-        return list(create_tabular_tools())
-
-    if name == "cli":
-        from soothe.tools.cli import create_cli_tools
-
-        return list(create_cli_tools())
-
-    if name == "file_edit":
-        from soothe.tools.file_edit import create_file_edit_tools
-
-        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
-        allow_outside = (
-            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
-        )
-        return list(create_file_edit_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
-
-    if name == "document":
-        from soothe.tools.document import create_document_tools
-
-        return list(create_document_tools())
-
-    if name == "python_executor":
-        from soothe.tools.python_executor import create_python_executor_tools
-
-        return list(create_python_executor_tools())
-
-    if name == "arxiv":
-        try:
-            from langchain_community.tools import ArxivQueryRun
-
-            return [ArxivQueryRun()]
-        except Exception:
-            logger.debug("arxiv tool not available (pip install arxiv)", exc_info=True)
-            return []
-    if name == "wikipedia":
-        try:
-            from langchain_community.tools import WikipediaQueryRun
-            from langchain_community.utilities import WikipediaAPIWrapper
-
-            return [WikipediaQueryRun(api_wrapper=WikipediaAPIWrapper())]
-        except Exception:
-            logger.debug("wikipedia tool not available (pip install wikipedia)", exc_info=True)
-            return []
     if name == "github":
         try:
             from langchain_community.utilities import GitHubAPIWrapper
@@ -254,11 +191,45 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             logger.debug("github tool not available (pip install pygithub)", exc_info=True)
             return []
 
-    if name == "inquiry":
+    if name == "research":
         from soothe.tools.inquiry import create_inquiry_tools
 
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
         return list(create_inquiry_tools(config=config, work_dir=resolved_cwd))
+
+    if name == "websearch":
+        from soothe.tools.websearch import create_websearch_tools
+
+        wizsearch_config: dict = {}
+        if config and hasattr(config, "tools_settings") and hasattr(config.tools_settings, "wizsearch"):
+            wizsearch_config = {
+                "default_engines": config.tools_settings.wizsearch.default_engines,
+                "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
+                "timeout": config.tools_settings.wizsearch.timeout,
+            }
+        if config and hasattr(config, "debug"):
+            wizsearch_config["debug"] = config.debug
+        return list(create_websearch_tools(wizsearch_config))
+
+    if name == "workspace":
+        from soothe.tools.workspace import create_workspace_tools
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        allow_outside = (
+            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
+        )
+        return list(create_workspace_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
+
+    if name == "execute":
+        from soothe.tools.execute import create_execute_tools
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        return list(create_execute_tools(workspace_root=resolved_cwd))
+
+    if name == "data":
+        from soothe.tools.data import create_data_tools
+
+        return list(create_data_tools())
 
     if name == "goals":
         return []
@@ -328,7 +299,7 @@ def resolve_subagents(
 
     # Collect (name, factory, kwargs) tuples for enabled subagents
     pending: list[tuple[str, Callable, dict]] = []
-    cwd_subagents = {"scout", "claude"}
+    cwd_subagents = {"claude"}
     resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     for name, sub_cfg in config.subagents.items():
@@ -344,7 +315,7 @@ def resolve_subagents(
         extra_kwargs: dict = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
-        if name in ("skillify", "weaver", "research"):
+        if name in ("skillify", "weaver"):
             extra_kwargs["config"] = config
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)

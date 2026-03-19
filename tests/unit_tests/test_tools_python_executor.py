@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe.tools.python_executor import PythonExecutorTool, create_python_executor_tools
+from soothe.tools._internal.python_executor import PythonExecutorTool, create_python_executor_tools
 
 
 class TestPythonExecutorToolInitialization:

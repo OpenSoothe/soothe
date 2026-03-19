@@ -83,8 +83,6 @@ class SootheConfig(BaseSettings):
 
     subagents: dict[str, SubagentConfig] = Field(
         default_factory=lambda: {
-            "research": SubagentConfig(),
-            "scout": SubagentConfig(),
             "browser": SubagentConfig(),
             "claude": SubagentConfig(),
             "skillify": SubagentConfig(),
@@ -96,15 +94,14 @@ class SootheConfig(BaseSettings):
     tools: list[str] = Field(
         default_factory=lambda: [
             "datetime",
-            "file_edit",
-            "python_executor",
-            "cli",
-            "tabular",
-            "document",
-            "wizsearch",
+            "workspace",
+            "execute",
+            "data",
+            "websearch",
+            "research",
         ]
     )
-    """Enabled tool group names (e.g. ``["jina", "serper", "image"]``)."""
+    """Enabled tool group names (RFC-0014 consolidated tools)."""
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     """MCP server configurations (Claude Desktop JSON format)."""

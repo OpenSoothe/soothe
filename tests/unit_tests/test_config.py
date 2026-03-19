@@ -21,12 +21,11 @@ class TestSootheConfig:
         assert cfg.debug is False
         assert cfg.tools == [
             "datetime",
-            "file_edit",
-            "python_executor",
-            "cli",
-            "tabular",
-            "document",
-            "wizsearch",
+            "workspace",
+            "execute",
+            "data",
+            "websearch",
+            "research",
         ]
         assert cfg.mcp_servers == []
         assert cfg.skills == []
@@ -38,12 +37,12 @@ class TestSootheConfig:
 
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
-        assert "scout" in cfg.subagents
-        assert "research" in cfg.subagents
         assert "browser" in cfg.subagents
         assert "claude" in cfg.subagents
         assert "skillify" in cfg.subagents
         assert "weaver" in cfg.subagents
+        assert "scout" not in cfg.subagents
+        assert "research" not in cfg.subagents
         for name, sub_cfg in cfg.subagents.items():
             assert sub_cfg.enabled is True, f"{name} should be enabled by default"
 

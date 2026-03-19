@@ -8,7 +8,7 @@ Successfully implemented the scout-then-plan skill to optimize subagent planning
 
 ### 1. Created Scout-Then-Plan Skill
 
-**Location**: `src/soothe/built_in_skills/scout-then-plan/`
+**Location**: `src/soothe/skills/scout-then-plan/`
 
 **Files Created**:
 - `SKILL.md` (287 lines) - Main skill documentation with YAML frontmatter
@@ -201,15 +201,15 @@ User → SubagentPlanner → Agent with Scout + Planner
 ## Files Modified
 
 ### Created
-- `src/soothe/built_in_skills/scout-then-plan/SKILL.md`
-- `src/soothe/built_in_skills/scout-then-plan/references/WORKFLOW_PATTERNS.md`
-- `src/soothe/built_in_skills/scout-then-plan/references/OUTPUT_TEMPLATES.md`
+- `src/soothe/skills/scout-then-plan/SKILL.md`
+- `src/soothe/skills/scout-then-plan/references/WORKFLOW_PATTERNS.md`
+- `src/soothe/skills/scout-then-plan/references/OUTPUT_TEMPLATES.md`
 
 ### Modified
 - `src/soothe/backends/planning/subagent.py` - Rewrote to provide both scout and planner subagents
 
 ### No Changes Required
-- `src/soothe/built_in_skills/__init__.py` - Automatic discovery already works
+- `src/soothe/skills/__init__.py` - Automatic discovery already works
 - `src/soothe/subagents/scout.py` - Existing implementation sufficient
 - `src/soothe/subagents/planner.py` - Existing implementation sufficient
 - Core agent framework - SkillsMiddleware already handles skill loading

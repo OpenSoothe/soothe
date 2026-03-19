@@ -2,22 +2,22 @@
 
 import pytest
 
-from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
-from soothe.tools.jina import JinaReaderTool, create_jina_tools
-from soothe.tools.serper import SerperSearchTool, create_serper_tools
-from soothe.tools.tabular import (
+from soothe.tools._internal.tabular import (
     TabularColumnsTool,
     TabularQualityTool,
     TabularSummaryTool,
     create_tabular_tools,
 )
-from soothe.tools.video import VideoInfoTool, create_video_tools
-from soothe.tools.wizsearch import (
+from soothe.tools._internal.wizsearch import (
     WizsearchCrawlPageTool,
     WizsearchSearchTool,
     _normalize_engines,
     create_wizsearch_tools,
 )
+from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
+from soothe.tools.jina import JinaReaderTool, create_jina_tools
+from soothe.tools.serper import SerperSearchTool, create_serper_tools
+from soothe.tools.video import VideoInfoTool, create_video_tools
 
 
 class TestDatetimeTools:
@@ -93,7 +93,7 @@ class TestWizsearchTools:
         assert "crawl" in crawl_tool.description.lower()
 
     def test_missing_dependency_error(self, monkeypatch) -> None:
-        import soothe.tools.wizsearch._helpers as wizsearch_helpers
+        import soothe.tools._internal.wizsearch._helpers as wizsearch_helpers
 
         monkeypatch.setattr(wizsearch_helpers, "WIZSEARCH_AVAILABLE", False)
         tool = WizsearchSearchTool()
@@ -101,7 +101,7 @@ class TestWizsearchTools:
             tool._run(query="latest ai research")
 
     def test_default_engines(self, monkeypatch) -> None:
-        import soothe.tools.wizsearch._helpers as wizsearch_helpers
+        import soothe.tools._internal.wizsearch._helpers as wizsearch_helpers
 
         captured: dict[str, object] = {}
 
@@ -138,7 +138,7 @@ class TestWizsearchTools:
 
     def test_custom_engines_via_config(self, monkeypatch) -> None:
         """Test that custom engines can be set via config parameter."""
-        import soothe.tools.wizsearch._helpers as wizsearch_helpers
+        import soothe.tools._internal.wizsearch._helpers as wizsearch_helpers
 
         captured: dict[str, object] = {}
 

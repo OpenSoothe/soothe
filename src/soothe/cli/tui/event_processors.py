@@ -86,10 +86,18 @@ def process_daemon_event(
             handle_messages_event(data, state, namespace=namespace, activity_panel=activity_panel, verbosity=verbosity)
         elif mode == "custom" and isinstance(data, dict):
             category = classify_custom_event(namespace, data)
-            if category == "protocol" and should_show(category, verbosity):
+            etype = data.get("type", "")
+
+            # Plan state must always be updated regardless of verbosity
+            if category == "protocol" and "plan" in etype:
+                _handle_protocol_event(data, state, verbosity="normal")
+                if should_show(category, verbosity):
+                    _flush_new_activity(state, activity_panel)
+                if on_plan_refresh:
+                    on_plan_refresh()
+            elif category == "protocol" and should_show(category, verbosity):
                 _handle_protocol_event(data, state, verbosity=verbosity)
                 _flush_new_activity(state, activity_panel)
-                etype = data.get("type", "")
                 if "plan" in etype and on_plan_refresh:
                     on_plan_refresh()
             elif category == "subagent_progress" and should_show(category, verbosity):

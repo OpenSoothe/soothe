@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools.wizsearch._helpers import _require_wizsearch, _run_coro
+from soothe.tools._internal.wizsearch._helpers import _require_wizsearch, _run_coro
 from soothe.utils.url_validation import validate_url
 
 logger = logging.getLogger(__name__)

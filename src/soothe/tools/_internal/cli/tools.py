@@ -11,7 +11,7 @@ from typing import Any, Literal
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools.cli.shell import (
+from soothe.tools._internal.cli.shell import (
     ANSI_ESCAPE,
     ShellHealthState,
     _shell_health_states,
@@ -407,7 +407,7 @@ class CliTool(BaseTool):
     @classmethod
     def cleanup(cls) -> None:
         """Clean up shell resources and health states."""
-        from soothe.tools.cli.shell import cleanup_shell
+        from soothe.tools._internal.cli.shell import cleanup_shell
 
         cleanup_shell("default")
 

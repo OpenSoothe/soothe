@@ -54,7 +54,7 @@ class CLISource:
     def _ensure_tool(self) -> None:
         if self._cli_tool is not None:
             return
-        from soothe.tools.cli.tools import CliTool
+        from soothe.tools._internal.cli.tools import CliTool
 
         self._cli_tool = CliTool(workspace_root=self._workspace_root)
 

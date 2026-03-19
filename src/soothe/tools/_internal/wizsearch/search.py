@@ -9,7 +9,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools.wizsearch._helpers import (
+from soothe.tools._internal.wizsearch._helpers import (
     _extract_domain,
     _maybe_apply_tavily_key,
     _normalize_engines,

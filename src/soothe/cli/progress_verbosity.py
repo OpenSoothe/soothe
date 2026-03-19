@@ -19,12 +19,9 @@ ProgressCategory = Literal[
 
 _SUBAGENT_PREFIXES = frozenset(
     {
-        "soothe.research.",
         "soothe.browser.",
         "soothe.skillify.",
         "soothe.weaver.",
-        "soothe.planner.",
-        "soothe.scout.",
         "soothe.claude.",
     }
 )
@@ -42,18 +39,6 @@ _SUBAGENT_PROGRESS_EVENTS = frozenset(
     {
         "soothe.browser.step",
         "soothe.browser.cdp",
-        "soothe.research.web_search",
-        "soothe.research.search_done",
-        "soothe.research.queries_generated",
-        "soothe.research.complete",
-        # Planner tool events
-        "soothe.planner.tool_start",
-        "soothe.planner.tool_end",
-        "soothe.planner.tool_error",
-        # Scout tool events
-        "soothe.scout.tool_start",
-        "soothe.scout.tool_end",
-        "soothe.scout.tool_error",
     }
 )
 

@@ -11,7 +11,7 @@ For example, when user requests "find ArXiv paper during last week on Agent Memo
 Weaver would do following things:
 - Call Skillify agent to fetch related Skills (returned a set of Skill paths)
 - Find related tools and MCPs that are available
-- Call bundled `create-subagent` skill (soothe/built_in_skills/createa-subagent) to create a new subagent which could be loaded by Soothe.
+- Call bundled `create-subagent` skill (soothe/skills/create-subagent) to create a new subagent which could be loaded by Soothe.
 - The fetched skills from Skillify would be COPY into <generate_agent_name>/skills/
 - Then the generated agent could be loaded dynamically and called by Soothe to response user request.
 - The generated agents in future would be reused by Soothe in future, the same as built-in subagents.

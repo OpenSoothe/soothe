@@ -13,8 +13,8 @@ def get_built_in_skills_paths() -> list[str]:
         List of directory paths containing SKILL.md files.
     """
     try:
-        # Get the built_in_skills package location using modern importlib.resources API
-        skills_package = files("soothe.built_in_skills")
+        # Get the skills package location using modern importlib.resources API
+        skills_package = files("soothe.skills")
 
         # Convert to Path if it's a MultiplexedPath or similar
         if hasattr(skills_package, "_paths"):
@@ -37,9 +37,9 @@ def get_built_in_skills_paths() -> list[str]:
 
     except (TypeError, AttributeError, FileNotFoundError):
         # Fallback for development/editable installs
-        import soothe.built_in_skills
+        import soothe.skills
 
-        base_path = Path(soothe.built_in_skills.__file__).parent
+        base_path = Path(soothe.skills.__file__).parent
         skill_dirs = []
 
         for skill_dir in base_path.iterdir():
@@ -50,19 +50,6 @@ def get_built_in_skills_paths() -> list[str]:
 
         return skill_dirs
     else:
-        return skill_dirs
-        # Fallback for development/editable installs
-        import soothe.built_in_skills
-
-        base_path = Path(soothe.built_in_skills.__file__).parent
-        skill_dirs = []
-
-        for skill_dir in base_path.iterdir():
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                if skill_file.exists():
-                    skill_dirs.append(str(skill_dir))
-
         return skill_dirs
 
 

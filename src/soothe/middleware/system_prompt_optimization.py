@@ -74,26 +74,87 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """
         from soothe.config import _DEFAULT_SYSTEM_PROMPT, _MEDIUM_SYSTEM_PROMPT, _SIMPLE_SYSTEM_PROMPT
 
-        # Get base prompt for complexity level
         if complexity == "chitchat":
             base_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         elif complexity == "medium":
             base_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
         elif self._config.system_prompt:
-            # Complex with custom prompt
             base_prompt = self._config.system_prompt.format(assistant_name=self._config.assistant_name)
         else:
-            # Complex with default prompt
             base_prompt = _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
 
-        # Inject current date (consistent with resolve_system_prompt behavior)
         now = dt.datetime.now(dt.UTC).astimezone()
         current_date = now.strftime("%Y-%m-%d")
 
         return f"{base_prompt}\n\nToday's date is {current_date}."
 
+    def _get_domain_scoped_prompt(self, classification: UnifiedClassification) -> str:
+        """Build a prompt with only the relevant domain tool guides.
+
+        Injects domain-specific guidance based on ``capability_domains``
+        instead of the monolithic tool orchestration guide (RFC-0014).
+
+        Args:
+            classification: LLM classification with capability_domains.
+
+        Returns:
+            Formatted prompt with domain-scoped tool guidance.
+        """
+        from soothe.config.prompts import (
+            _DATA_GUIDE,
+            _EXECUTE_GUIDE,
+            _RESEARCH_GUIDE,
+            _SUBAGENT_GUIDE,
+            _WORKSPACE_GUIDE,
+        )
+
+        complexity = classification.task_complexity
+        domains = classification.capability_domains
+
+        if complexity == "chitchat":
+            return self._get_prompt_for_complexity("chitchat")
+
+        from soothe.config import _MEDIUM_SYSTEM_PROMPT
+
+        if complexity == "medium":
+            base = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+        elif self._config.system_prompt:
+            base = self._config.system_prompt.format(assistant_name=self._config.assistant_name)
+        else:
+            from soothe.config import _DEFAULT_SYSTEM_PROMPT
+
+            parts = _DEFAULT_SYSTEM_PROMPT.split("\n\nTool & subagent selection rules")
+            base = parts[0].format(assistant_name=self._config.assistant_name)
+
+        domain_map = {
+            "research": _RESEARCH_GUIDE,
+            "workspace": _WORKSPACE_GUIDE,
+            "execute": _EXECUTE_GUIDE,
+            "data": _DATA_GUIDE,
+        }
+        guide_parts: list[str] = [domain_map[d] for d in domains if d in domain_map]
+
+        need_subagent_guide = bool({"browse", "reason", "compose"} & set(domains))
+        if need_subagent_guide:
+            guide_parts.append(_SUBAGENT_GUIDE)
+
+        guide_parts.append("- datetime: Get current date and time.")
+        guide_parts.append("- Prefer the simplest tool that gets the job done.")
+
+        now = dt.datetime.now(dt.UTC).astimezone()
+        current_date = now.strftime("%Y-%m-%d")
+
+        if guide_parts:
+            tool_section = "\n\nTool guidance:\n" + "\n\n".join(guide_parts)
+            return f"{base}{tool_section}\n\nToday's date is {current_date}."
+
+        return f"{base}\n\nToday's date is {current_date}."
+
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         """Replace system prompt based on LLM classification.
+
+        Uses domain-scoped prompt guidance (RFC-0014) when capability_domains
+        are available, falling back to complexity-only optimization.
 
         Args:
             request: Model request to modify.
@@ -101,7 +162,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Modified request with optimized system prompt.
         """
-        # Check if optimization is enabled (requires both system prompt optimization and unified classification)
         if (
             not self._config.performance.enabled
             or not self._config.performance.optimize_system_prompts
@@ -109,26 +169,26 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         ):
             return request
 
-        # Get classification from state (determined by UnifiedClassifier's LLM)
         classification: UnifiedClassification | None = request.state.get("unified_classification")
         if not classification:
             logger.debug("No classification found in state, using default prompt")
             return request
 
         complexity = classification.task_complexity
+        domains = classification.capability_domains
         logger.info(
-            "Optimizing system prompt for %s query based on LLM classification (complexity: %s, plan_only: %s)",
+            "Optimizing prompt: complexity=%s, domains=%s, plan_only=%s",
             complexity,
-            complexity,
+            domains,
             classification.is_plan_only,
         )
 
-        # Get appropriate prompt
-        optimized_prompt = self._get_prompt_for_complexity(complexity)
+        if domains:
+            optimized_prompt = self._get_domain_scoped_prompt(classification)
+        else:
+            optimized_prompt = self._get_prompt_for_complexity(complexity)
 
-        # Replace the entire system message
         new_system_message = SystemMessage(content=optimized_prompt)
-
         return request.override(system_message=new_system_message)
 
     def wrap_model_call(

@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
 
-from soothe.subagents.scout import create_scout_subagent
+from soothe.subagents._internal.scout import create_scout_subagent
 from _shared.streaming import run_with_streaming
 
 load_dotenv()

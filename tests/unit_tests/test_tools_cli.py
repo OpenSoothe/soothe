@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from soothe.tools.cli import (
+from soothe.tools._internal.cli import (
     CheckCommandExistsTool,
     CliTool,
     GetCurrentDirTool,
@@ -185,7 +185,7 @@ class TestShellRecovery:
         tool._recover_shell()
 
         # Shell should be initialized after recovery
-        from soothe.tools.cli import _shell_instances
+        from soothe.tools._internal.cli import _shell_instances
 
         assert "default" in _shell_instances
 
@@ -213,9 +213,9 @@ class TestCliToolExecution:
     def test_run_without_pexpect(self) -> None:
         """Test execution when pexpect is not available."""
         # Clear any existing shell instances from previous tests
-        import soothe.tools.cli
+        import soothe.tools._internal.cli
 
-        soothe.tools.cli._shell_instances.clear()
+        soothe.tools._internal.cli._shell_instances.clear()
 
         # Remove pexpect from sys.modules if it was already imported
         import sys

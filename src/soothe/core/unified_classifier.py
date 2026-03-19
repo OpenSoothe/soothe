@@ -5,8 +5,9 @@ for intelligent query analysis. It determines:
 
 1. Task complexity (for routing and optimization)
 2. Plan-only intent (for execution control)
+3. Capability domains needed (RFC-0014, for domain-scoped prompt guidance)
 
-Architecture Decision (RFC-0012):
+Architecture Decision (RFC-0012, RFC-0014):
 - Single fast LLM call provides all classifications at once
 - No keyword maintenance or token-count heuristics
 - Handles multilingual and nuanced queries semantically
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+CapabilityDomain = Literal["research", "workspace", "execute", "data", "browse", "reason", "compose"]
+
+
 class UnifiedClassification(BaseModel):
     """Result of unified LLM classification."""
 
@@ -40,6 +44,16 @@ class UnifiedClassification(BaseModel):
     is_plan_only: bool = Field(description="True if user only wants planning without execution")
     template_intent: Literal["question", "search", "analysis", "implementation"] | None = Field(
         default=None, description="Template intent for planning (question|search|analysis|implementation|null)"
+    )
+    capability_domains: list[CapabilityDomain] = Field(
+        default_factory=list,
+        description=(
+            "Capability domains the query likely needs. "
+            "Options: research (web/deep search), workspace (file ops), "
+            "execute (shell/python), data (tabular/document inspection), "
+            "browse (interactive web), reason (complex thinking), "
+            "compose (agent/skill generation). Empty for chitchat."
+        ),
     )
     reasoning: str | None = Field(default=None, description="Brief explanation of classification")
 
@@ -56,6 +70,7 @@ Response format (JSON only, no additional text):
   "task_complexity": "chitchat" | "medium" | "complex",
   "is_plan_only": true | false,
   "template_intent": "question" | "search" | "analysis" | "implementation" | null,
+  "capability_domains": ["research", "workspace", "execute", "data", "browse", "reason", "compose"],
   "reasoning": "brief explanation"
 }}
 
@@ -71,11 +86,20 @@ Template intent guide:
 - implementation: User wants to build/create something (implement/create/build/write)
 - null: Chitchat queries or queries that don't fit other categories
 
+Capability domains (select ALL that apply, empty for chitchat):
+- research: Needs web search, deep investigation, academic lookup
+- workspace: Needs file read/write/search/list operations
+- execute: Needs to run shell commands or Python code
+- data: Needs to inspect tabular data (CSV, Excel) or documents (PDF, DOCX)
+- browse: Needs interactive web browsing (login, forms, JavaScript sites)
+- reason: Needs complex reasoning beyond standard capabilities
+- compose: Needs to generate agents or discover skills
+
 Rules:
 - Use semantic complexity, NOT query length
 - Current events/research/debugging → medium (even if short)
 - "plan only" → is_plan_only=true
-- chitchat queries → template_intent=null
+- chitchat queries → template_intent=null, capability_domains=[]
 - When uncertain → medium complexity, appropriate template_intent or null
 """
 
@@ -159,4 +183,9 @@ class UnifiedClassifier:
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:
         """Safe default when everything fails."""
-        return UnifiedClassification(task_complexity="medium", is_plan_only=False, reasoning=reason)
+        return UnifiedClassification(
+            task_complexity="medium",
+            is_plan_only=False,
+            capability_domains=["research", "workspace", "execute"],
+            reasoning=reason,
+        )

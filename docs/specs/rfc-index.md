@@ -25,6 +25,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0010](./RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
 | [RFC-0011](./RFC-0011.md) | Dynamic Goal Management During Reflection | Draft | RFC-0007, RFC-0009, RFC-0010 |
 | [RFC-0013](./RFC-0013.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Draft | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0014](./RFC-0014.md) | Capability Abstraction and Tool Consolidation | Draft | RFC-0001, RFC-0002, RFC-0008 |
 
 ### Implementation Interface Design
 
@@ -42,6 +43,7 @@ RFC-0001 (System Conceptual Design)
 │   │   │   └── RFC-0005 (Weaver)
 │   │   ├── RFC-0006 (Context & Memory)
 │   │   └── RFC-0013 (Unified Daemon Protocol)
+│   ├── RFC-0014 (Capability Abstraction)
 │   ├── RFC-0007 (Autonomous Iteration)
 │   │   ├── RFC-0008 (Request Processing)
 │   │   ├── RFC-0009 (DAG Execution)

@@ -3,7 +3,7 @@
 Re-exports all public names so ``from soothe.tools.wizsearch import X`` works.
 """
 
-from soothe.tools.wizsearch._helpers import (
+from soothe.tools._internal.wizsearch._helpers import (
     WIZSEARCH_AVAILABLE,
     _check_wizsearch_available,
     _extract_domain,
@@ -14,8 +14,8 @@ from soothe.tools.wizsearch._helpers import (
     _save_raw_results,
     _to_serializable_sources,
 )
-from soothe.tools.wizsearch.crawl import WizsearchCrawlPageTool
-from soothe.tools.wizsearch.search import WizsearchSearchTool
+from soothe.tools._internal.wizsearch.crawl import WizsearchCrawlPageTool
+from soothe.tools._internal.wizsearch.search import WizsearchSearchTool
 
 __all__ = [
     "WIZSEARCH_AVAILABLE",

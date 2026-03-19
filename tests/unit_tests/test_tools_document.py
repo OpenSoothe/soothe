@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe.tools.document import (
+from soothe.tools._internal.document import (
     DocumentQATool,
     ExtractTextTool,
     GetDocumentInfoTool,
