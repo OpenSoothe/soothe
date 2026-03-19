@@ -49,9 +49,9 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "idealab:pai/glm-5"
-  think: "idealab:pai/glm-5"
-  fast: "idealab:pai/glm-5"
+  default: "coding-plan:glm-5"
+  think: "coding-plan:glm-5"
+  fast: "coding-plan:glm-5"
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:text-embedding-v4"
 
