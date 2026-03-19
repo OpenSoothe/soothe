@@ -1,6 +1,0 @@
-[submodule "thirdparty/noesium"]
-	path = thirdparty/noesium
-	url = https://github.com/mirasoth/noesium.git
-[submodule "thirdparty/deepagents"]
-	path = thirdparty/deepagents
-	url = https://github.com/langchain-ai/deepagents.git
