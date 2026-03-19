@@ -167,11 +167,20 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             or not self._config.performance.optimize_system_prompts
             or not self._config.performance.unified_classification
         ):
+            logger.debug(
+                "System prompt optimization disabled (enabled=%s, optimize=%s, classification=%s)",
+                self._config.performance.enabled,
+                self._config.performance.optimize_system_prompts,
+                self._config.performance.unified_classification,
+            )
             return request
 
         classification: UnifiedClassification | None = request.state.get("unified_classification")
         if not classification:
-            logger.debug("No classification found in state, using default prompt")
+            logger.debug(
+                "No classification found in state (keys=%s), using default prompt",
+                list(request.state.keys()) if hasattr(request.state, "keys") else "N/A",
+            )
             return request
 
         complexity = classification.task_complexity

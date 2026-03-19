@@ -29,11 +29,13 @@ async def detect_existing_browser_intent(prompt: str, model: Any) -> bool:
 
     Args:
         prompt: User's task prompt.
-        model: Language model for intent detection.
+        model: Language model for intent detection (LangChain BaseChatModel).
 
     Returns:
         True if user wants existing browser, False otherwise.
     """
+    from langchain_core.messages import HumanMessage, SystemMessage
+
     detection_prompt = f"""Analyze this user request and determine if the user wants to use an \
 existing browser instance (e.g., one they've already opened and logged into).
 
@@ -50,10 +52,11 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        # browser-use ChatOpenAI expects browser_use.llm.messages.UserMessage
-        from browser_use.llm.messages import UserMessage
-
-        response = await model.ainvoke([UserMessage(content=detection_prompt)])
+        messages = [
+            SystemMessage(content=detection_prompt),
+            HumanMessage(content=prompt),
+        ]
+        response = await model.ainvoke(messages)
         content = response.content.strip()
         result = content.lower() == "yes"
     except Exception as e:
@@ -176,7 +179,7 @@ def _build_browser_graph(
         try:
             with capture_subagent_output("browser", suppress=True):
                 from browser_use import Agent as BrowserAgent, Browser, BrowserConfig as BUBrowserConfig
-                from browser_use.llm.openai.chat import ChatOpenAI as BUChatOpenAI
+                from langchain_openai import ChatOpenAI
 
                 messages = state.get("messages", [])
                 task = messages[-1].content if messages else ""
@@ -185,12 +188,12 @@ def _build_browser_graph(
                 if ":" in model_name:
                     model_name = model_name.split(":", 1)[1]
 
-                llm_kwargs: dict[str, Any] = {}
+                llm_kwargs: dict[str, Any] = {"model": model_name}
                 if browser_base_url:
                     llm_kwargs["base_url"] = browser_base_url
                 if browser_api_key:
                     llm_kwargs["api_key"] = browser_api_key
-                llm = BUChatOpenAI(model_name, **llm_kwargs)
+                llm = ChatOpenAI(**llm_kwargs)
 
                 cdp_url = None
                 if browser_config.enable_existing_browser:

@@ -293,8 +293,14 @@ autonomous:
 # Tune agent startup and runtime performance optimizations.
 
 performance:
-  parallel_tool_loading: true       # Load tool groups concurrently at startup
-  parallel_subagent_loading: true   # Load subagent specs concurrently at startup
+  enabled: true                      # Master switch for all performance optimizations
+  unified_classification: true       # Enable LLM-based query classification
+  classification_mode: llm           # llm | disabled
+  optimize_system_prompts: true      # Enable dynamic system prompt adjustment
+  template_planning: true            # Use template plans for simple queries
+  parallel_pre_stream: true          # Run memory/context operations in parallel
+  parallel_tool_loading: true        # Load tool groups concurrently at startup
+  parallel_subagent_loading: true    # Load subagent specs concurrently at startup
   parallel_protocol_resolution: true # Resolve protocols in parallel at startup
 
 # =============================================================================
