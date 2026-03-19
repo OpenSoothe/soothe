@@ -292,10 +292,10 @@ def resolve_planner(
 
     from soothe.backends.planning.simple import SimplePlanner
 
-    simple = SimplePlanner(model=planner_model, fast_model=fast_model) if planner_model else None
+    simple = SimplePlanner(model=planner_model) if planner_model else None
 
     if config.protocols.planner.routing == "always_direct":
-        return simple or SimplePlanner(model=planner_model, fast_model=fast_model)
+        return simple or SimplePlanner(model=planner_model)
 
     claude_planner = None
     try:

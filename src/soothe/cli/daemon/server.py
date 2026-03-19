@@ -21,7 +21,7 @@ from soothe.cli.daemon.singleton import (
     cleanup_socket,
     release_pid_lock,
 )
-from soothe.cli.thread_logger import ThreadLogger
+from soothe.cli.thread_logger import InputHistory, ThreadLogger
 from soothe.config import SOOTHE_HOME, SootheConfig
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class SootheDaemon:
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._cleanup_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
+        self._input_history: InputHistory | None = None
         self._pid_lock_fd: int | None = None
 
     # -- lifecycle ----------------------------------------------------------
@@ -91,6 +92,10 @@ class SootheDaemon:
 
         # Run heavy SootheRunner init off the event loop
         self._runner = await asyncio.to_thread(SootheRunner, self._config)
+
+        # Initialize persistent input history
+        self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
+        logger.info("Input history initialized with %d entries", len(self._input_history.history))
 
         self._stop_event = asyncio.Event()
         self._server = await asyncio.start_unix_server(
@@ -255,15 +260,14 @@ class SootheDaemon:
 
         try:
             initial_state = "running" if self._query_running else ("idle" if self._running else "stopped")
-            client.writer.write(
-                encode(
-                    {
-                        "type": "status",
-                        "state": initial_state,
-                        "thread_id": self._runner.current_thread_id or "",
-                    }
-                )
-            )
+            initial_msg = {
+                "type": "status",
+                "state": initial_state,
+                "thread_id": self._runner.current_thread_id or "",
+                "input_history": self._input_history.history[-100:],  # Last 100 entries
+            }
+
+            client.writer.write(encode(initial_msg))
             await client.writer.drain()
         except Exception:
             logger.exception("Failed to send initial status to client")
@@ -388,7 +392,7 @@ class SootheDaemon:
             console,
             current_plan=None,
             thread_logger=self._thread_logger,
-            input_history=None,
+            input_history=self._input_history,
         )
 
         response_text = output.getvalue()
@@ -425,6 +429,10 @@ class SootheDaemon:
 
         if self._thread_logger:
             self._thread_logger.log_user_input(text)
+
+        # Persist to input history
+        if self._input_history:
+            self._input_history.add(text)
 
         self._query_running = True
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
@@ -476,10 +484,21 @@ class SootheDaemon:
         finally:
             self._query_running = False
 
+        # Re-initialize thread logger if the runner assigned a new thread_id
+        # during execution (e.g., _pre_stream created a fresh UUID).
+        final_thread_id = self._runner.current_thread_id or ""
+        if final_thread_id and final_thread_id != thread_id:
+            self._thread_logger = ThreadLogger(
+                thread_id=final_thread_id,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
+            self._thread_logger.log_user_input(text)
+
         if full_response:
             self._thread_logger.log_assistant_response("".join(full_response))
 
-        await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
+        await self._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
 
     # -- broadcast ----------------------------------------------------------
 

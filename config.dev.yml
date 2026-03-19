@@ -31,6 +31,13 @@ providers:
       - MiniMax-M2.5
       - text-embedding-v4
 
+  - name: idealab
+    provider_type: openai
+    api_key: "${IDEALAB_API_KEY}"
+    api_base_url: "${IDEALAB_BASE_URL}"
+    models:
+      - pai/glm-5
+
   - name: ollama
     provider_type: ollama
     api_base_url: http://localhost:11434
@@ -42,9 +49,9 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "coding-plan:glm-5"
-  think: "coding-plan:glm-5"
-  fast: "dashscope:qwen3.5-flash"
+  default: "idealab:pai/glm-5"
+  think: "idealab:pai/glm-5"
+  fast: "idealab:pai/glm-5"
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:text-embedding-v4"
 

@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from soothe.backends.planning._shared import reflect_heuristic
-from soothe.backends.planning._templates import PlanTemplates, classify_intent
+from soothe.backends.planning._templates import PlanTemplates
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -37,13 +37,12 @@ class SimplePlanner:
 
     Optimizations:
     - Template matching for common patterns (avoids LLM calls)
-    - Fast intent classification for non-English goals
+    - Pre-computed template intent from UnifiedClassification
     - Heuristic reflection (no LLM needed)
 
     Args:
         model: Langchain BaseChatModel supporting structured output.
         use_templates: Enable template matching (default: True).
-        fast_model: Optional fast LLM for non-English intent classification.
     """
 
     def __init__(
@@ -51,33 +50,37 @@ class SimplePlanner:
         model: Any,
         *,
         use_templates: bool = True,
-        fast_model: Any | None = None,
     ) -> None:
         """Initialize SimplePlanner.
 
         Args:
             model: Langchain BaseChatModel supporting structured output.
             use_templates: Enable template matching (default: True).
-            fast_model: Optional fast LLM for non-English intent classification.
         """
         self._model = model
         self._use_templates = use_templates
-        self._fast_model = fast_model
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via template matching or LLM structured output."""
         # Try template matching first
         if self._use_templates:
+            # Try regex-based template matching
             if template := PlanTemplates.match(goal):
                 logger.info("Using template plan for: %s", goal[:50])
                 return template
 
-            # Try fast-model intent classification for non-English
+            # Try pre-computed template intent from unified classification
             if (
-                self._fast_model
-                and (intent := await classify_intent(goal, self._fast_model))
-                and (template := PlanTemplates.get(intent))
+                context.unified_classification
+                and hasattr(context.unified_classification, "template_intent")
+                and context.unified_classification.template_intent
+                and (template := PlanTemplates.get(context.unified_classification.template_intent))
             ):
+                logger.info(
+                    "Using pre-classified template '%s' for: %s",
+                    context.unified_classification.template_intent,
+                    goal[:50],
+                )
                 return template
 
         # Fallback to LLM structured output
@@ -104,6 +107,25 @@ class SimplePlanner:
     ) -> Reflection:
         """Heuristic reflection (no LLM needed for simple plans)."""
         return reflect_heuristic(plan, step_results, goal_context)
+
+    async def _invoke(self, prompt: str) -> str:
+        """Invoke the LLM with a free-form prompt and return the response.
+
+        Used for synthesis and other LLM-based operations.
+
+        Args:
+            prompt: The prompt to send to the LLM.
+
+        Returns:
+            The LLM's response as a string.
+        """
+        try:
+            response = await self._model.ainvoke(prompt)
+            content = getattr(response, "content", str(response))
+            return content if isinstance(content, str) else str(content)
+        except Exception as e:
+            logger.warning("SimplePlanner._invoke failed: %s", e)
+            return ""
 
     async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output with fallback parsing."""

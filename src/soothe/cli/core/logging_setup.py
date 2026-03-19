@@ -61,6 +61,8 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         "httpcore",
         "openai",
         "anthropic",
+        "langchain_core",
+        "langgraph",
         "browser_use",
         "bubus",
         "cdp_use",

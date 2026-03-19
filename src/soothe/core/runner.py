@@ -136,30 +136,22 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         # Initialize unified classifier (RFC-0012)
         if self._config.performance.enabled and self._config.performance.unified_classification:
             fast_model = None
-            fast_model_error = None
 
             try:
                 fast_model = self._config.create_chat_model("fast")
-            except Exception as e:
-                fast_model_error = e
-                logger.warning(
-                    "Failed to create fast model for classification, falling back to token-count heuristics: %s",
-                    e,
+            except Exception:
+                logger.exception("Failed to create fast model for classification. Classification will be disabled.")
+                fast_model = None
+
+            if fast_model:
+                self._unified_classifier = UnifiedClassifier(
+                    fast_model=fast_model,
+                    classification_mode=self._config.performance.classification_mode,
                 )
-
-            self._unified_classifier = UnifiedClassifier(
-                fast_model=fast_model,
-                classification_mode=self._config.performance.classification_mode,
-                use_tiktoken=self._config.performance.thresholds.use_tiktoken,
-            )
-
-            if fast_model_error is None:
                 logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
             else:
-                logger.info(
-                    "Unified classifier initialized in %s mode (fast model unavailable, using fallback)",
-                    self._config.performance.classification_mode,
-                )
+                logger.warning("No fast model available, classification disabled")
+                self._unified_classifier = None
         else:
             self._unified_classifier = None
 

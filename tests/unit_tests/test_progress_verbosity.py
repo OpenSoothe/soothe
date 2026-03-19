@@ -65,11 +65,14 @@ class TestProgressVerbosity:
 
         # Other subagent events are classified as subagent_custom
         assert classify_custom_event((), {"type": "soothe.research.reflect"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.claude.text"}) == "subagent_custom"
+        # Text output events are now classified as protocol for visibility
+        assert classify_custom_event((), {"type": "soothe.claude.text"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.claude.tool_use"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.claude.result"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.claude.result"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.skillify.search"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.weaver.generate"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.chitchat.response"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.autonomous.final_report"}) == "protocol"
 
     def test_classify_custom_event_thinking(self) -> None:
         assert classify_custom_event((), {"type": "soothe.thinking.heartbeat"}) == "thinking"
@@ -79,11 +82,11 @@ class TestProgressVerbosity:
             {
                 "soothe.research.",
                 "soothe.browser.",
-                "soothe.claude.",
                 "soothe.skillify.",
                 "soothe.weaver.",
                 "soothe.planner.",
                 "soothe.scout.",
+                "soothe.claude.",
             }
         )
         assert expected == _SUBAGENT_PREFIXES

@@ -14,10 +14,13 @@ class TestUnifiedClassification:
 
     def test_model_creation(self) -> None:
         """Test creating a UnifiedClassification instance."""
-        classification = UnifiedClassification(task_complexity="medium", is_plan_only=True, reasoning="Test reasoning")
+        classification = UnifiedClassification(
+            task_complexity="medium", is_plan_only=True, template_intent="question", reasoning="Test reasoning"
+        )
 
         assert classification.task_complexity == "medium"
         assert classification.is_plan_only is True
+        assert classification.template_intent == "question"
         assert classification.reasoning == "Test reasoning"
 
     def test_model_defaults(self) -> None:
@@ -25,6 +28,7 @@ class TestUnifiedClassification:
         classification = UnifiedClassification(task_complexity="chitchat", is_plan_only=False)
 
         assert classification.reasoning is None
+        assert classification.template_intent is None
 
 
 class TestUnifiedClassifier:
@@ -43,10 +47,10 @@ class TestUnifiedClassifier:
 
     def test_init_without_model(self) -> None:
         """Test initialization without a fast model."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback")
+        classifier = UnifiedClassifier(fast_model=None, classification_mode="llm")
 
         assert classifier._fast_model is None
-        assert classifier._mode == "fallback"
+        assert classifier._mode == "llm"
         assert classifier._structured_model is None
 
     @pytest.mark.asyncio
@@ -61,37 +65,17 @@ class TestUnifiedClassifier:
         assert "disabled" in result.reasoning.lower()
 
     @pytest.mark.asyncio
-    async def test_classify_fallback_mode(self) -> None:
-        """Test classification in fallback mode (token-count only)."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
-
-        # Short query -> chitchat
-        result = await classifier.classify("hello world")
-        assert result.task_complexity == "chitchat"
-        assert result.is_plan_only is False
-
-        # Medium query -> medium (needs to be 30+ tokens)
-        # Use query that starts with "create a plan" to trigger plan-only heuristic
-        medium_query = (
-            "create a plan for implementing user authentication with OAuth2 and JWT tokens "
-            "in our microservices architecture including security considerations and deployment strategies"
-        )
-        result = await classifier.classify(medium_query)
-        assert result.task_complexity == "medium"
-        assert result.is_plan_only is True  # Starts with "create a plan"
-
-        # Long query -> complex (simulate with repeated text)
-        long_query = "architect a comprehensive system design " * 20
-        result = await classifier.classify(long_query)
-        assert result.task_complexity == "complex"
-
-    @pytest.mark.asyncio
     async def test_classify_llm_mode_success(self) -> None:
         """Test successful LLM classification."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
         mock_structured.ainvoke = AsyncMock(
-            return_value=UnifiedClassification(task_complexity="complex", is_plan_only=False, reasoning="LLM analysis")
+            return_value=UnifiedClassification(
+                task_complexity="complex",
+                is_plan_only=False,
+                template_intent="implementation",
+                reasoning="LLM analysis",
+            )
         )
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
@@ -101,77 +85,118 @@ class TestUnifiedClassifier:
 
         assert result.task_complexity == "complex"
         assert result.is_plan_only is False
+        assert result.template_intent == "implementation"
         assert result.reasoning == "LLM analysis"
 
     @pytest.mark.asyncio
-    async def test_classify_llm_mode_fallback_on_error(self) -> None:
-        """Test LLM mode falls back on error."""
-        mock_model = MagicMock()
-        mock_structured = AsyncMock()
-        mock_structured.ainvoke = AsyncMock(side_effect=Exception("LLM error"))
-        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
-
-        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm", use_tiktoken=False)
-
-        result = await classifier.classify("test query")
-
-        # Should use fallback (token-count)
-        assert result.task_complexity == "chitchat"
-        assert "fallback" in result.reasoning.lower()
-
-    @pytest.mark.asyncio
-    async def test_classify_no_model_fallback(self) -> None:
-        """Test that missing model triggers fallback."""
+    async def test_classify_no_model_returns_default(self) -> None:
+        """Test that missing fast model returns safe default."""
         classifier = UnifiedClassifier(
             fast_model=None,
             classification_mode="llm",  # Request LLM but no model provided
-            use_tiktoken=False,
         )
 
         result = await classifier.classify("test query")
 
-        # Should use fallback
-        assert result.task_complexity == "chitchat"
-        assert "fallback" in result.reasoning.lower()
+        # Should return safe default (medium), not chitchat
+        assert result.task_complexity == "medium"
+        assert "No fast model" in result.reasoning
 
 
-class TestTokenCountFallback:
-    """Test token-count fallback logic."""
+class TestLLMClassification:
+    """Test LLM-based classification with improved prompt."""
 
     @pytest.mark.asyncio
-    async def test_task_complexity_thresholds(self) -> None:
-        """Test task complexity thresholds (30, 160 tokens)."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
+    async def test_short_current_events_query(self) -> None:
+        """Test short query about current events is classified as medium."""
+        # This is the core fix for the reported issue
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="question",
+                reasoning="Current events query requiring research",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        # < 30 tokens -> chitchat
-        short = "a" * 100  # 25 tokens
-        result = await classifier.classify(short)
-        assert result.task_complexity == "chitchat"
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
 
-        # 30-159 tokens -> medium
-        medium = "a" * 140  # 35 tokens
-        result = await classifier.classify(medium)
+        result = await classifier.classify("伊朗战争最新进展")
         assert result.task_complexity == "medium"
 
-        # >= 160 tokens -> complex
-        long = "a" * 680  # 170 tokens
-        result = await classifier.classify(long)
-        assert result.task_complexity == "complex"
+        # English equivalent
+        result = await classifier.classify("latest developments in Iran war")
+        assert result.task_complexity == "medium"
 
     @pytest.mark.asyncio
-    async def test_plan_only_detection(self) -> None:
-        """Test plan-only intent detection."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback")
+    async def test_short_technical_question(self) -> None:
+        """Test short technical question is classified as medium."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="question",
+                reasoning="Technical debugging question",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        # Should detect plan-only
-        assert (await classifier.classify("create a plan for authentication")).is_plan_only is True
-        assert (await classifier.classify("make a plan")).is_plan_only is True
-        assert (await classifier.classify("plan only please")).is_plan_only is True
-        assert (await classifier.classify("only plan, don't execute")).is_plan_only is True
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
 
-        # Should not detect plan-only
-        assert (await classifier.classify("implement authentication")).is_plan_only is False
-        assert (await classifier.classify("create a user authentication system")).is_plan_only is False
+        result = await classifier.classify("debug this error")
+        assert result.task_complexity == "medium"
+
+        result = await classifier.classify("how to fix this bug")
+        assert result.task_complexity == "medium"
+
+    @pytest.mark.asyncio
+    async def test_simple_greeting_is_chitchat(self) -> None:
+        """Test simple greetings are still classified as chitchat."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                reasoning="Simple greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        for greeting in ["hello", "hi", "good morning", "你好", "您好"]:
+            result = await classifier.classify(greeting)
+            assert result.task_complexity == "chitchat"
+
+    @pytest.mark.asyncio
+    async def test_complex_architecture_query(self) -> None:
+        """Test architecture queries are classified as complex."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="complex",
+                is_plan_only=False,
+                template_intent="implementation",
+                reasoning="Architecture design task",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("migrate from REST to GraphQL")
+        assert result.task_complexity == "complex"
+
+        result = await classifier.classify("design microservices architecture")
+        assert result.task_complexity == "complex"
 
 
 class TestEdgeCases:
@@ -180,10 +205,22 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_query(self) -> None:
         """Test classification of empty query."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback")
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                reasoning="Empty query",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
 
         result = await classifier.classify("")
-        assert result.task_complexity == "chitchat"  # 0 tokens
+        assert result.task_complexity == "chitchat"
         assert result.is_plan_only is False
 
     @pytest.mark.asyncio
@@ -195,6 +232,7 @@ class TestEdgeCases:
             return_value=UnifiedClassification(
                 task_complexity="medium",
                 is_plan_only=True,
+                template_intent=None,
                 reasoning="Multilingual plan request",
             )
         )
@@ -209,22 +247,25 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_very_long_query(self) -> None:
         """Test classification of very long query."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback", use_tiktoken=False)
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="complex",
+                is_plan_only=False,
+                template_intent="implementation",
+                reasoning="Complex architectural task",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        # Very long query (> 200 tokens)
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        # Very long query
         long_query = "implement a comprehensive system " * 50
         result = await classifier.classify(long_query)
 
         assert result.task_complexity == "complex"
-
-    @pytest.mark.asyncio
-    async def test_whitespace_handling(self) -> None:
-        """Test that whitespace is handled correctly."""
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="fallback")
-
-        # Query with extra whitespace
-        result = await classifier.classify("  create a plan  ")
-        assert result.is_plan_only is True
 
 
 class TestDefaultClassification:
@@ -247,3 +288,112 @@ class TestDefaultClassification:
         result = classifier._default_classification()
 
         assert result.reasoning == "Default"
+
+
+class TestTemplateIntent:
+    """Test template intent classification."""
+
+    @pytest.mark.asyncio
+    async def test_question_intent_classification(self) -> None:
+        """Test question queries get correct template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="question",
+                reasoning="Question about a topic",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("what is machine learning")
+        assert result.task_complexity == "medium"
+        assert result.template_intent == "question"
+
+    @pytest.mark.asyncio
+    async def test_search_intent_classification(self) -> None:
+        """Test search queries get correct template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="search",
+                reasoning="Search for information",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("find information about Python")
+        assert result.task_complexity == "medium"
+        assert result.template_intent == "search"
+
+    @pytest.mark.asyncio
+    async def test_analysis_intent_classification(self) -> None:
+        """Test analysis queries get correct template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="analysis",
+                reasoning="Analyze the code",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("analyze this code")
+        assert result.task_complexity == "medium"
+        assert result.template_intent == "analysis"
+
+    @pytest.mark.asyncio
+    async def test_implementation_intent_classification(self) -> None:
+        """Test implementation queries get correct template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="implementation",
+                reasoning="Build something",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("implement a REST API endpoint")
+        assert result.task_complexity == "medium"
+        assert result.template_intent == "implementation"
+
+    @pytest.mark.asyncio
+    async def test_chitchat_has_null_intent(self) -> None:
+        """Test chitchat queries have null template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                reasoning="Simple greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("hello")
+        assert result.task_complexity == "chitchat"
+        assert result.template_intent is None

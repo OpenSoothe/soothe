@@ -1,0 +1,2 @@
+- Support Dual protocols, domain socket and WebSocket
+- Optimize SootheRunner starting speed

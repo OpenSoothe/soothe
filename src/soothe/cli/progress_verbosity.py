@@ -21,11 +21,11 @@ _SUBAGENT_PREFIXES = frozenset(
     {
         "soothe.research.",
         "soothe.browser.",
-        "soothe.claude.",
         "soothe.skillify.",
         "soothe.weaver.",
         "soothe.planner.",
         "soothe.scout.",
+        "soothe.claude.",
     }
 )
 
@@ -63,6 +63,12 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     etype = str(data.get("type", ""))
     if etype == "soothe.error":
         return "error"
+
+    # Text output from subagents should be treated as protocol-level (visible at normal verbosity)
+    # and handled specially to populate the conversation panel
+    if etype.endswith((".text", ".response", ".result")) and etype.startswith("soothe."):
+        return "protocol"
+
     if etype.startswith("soothe."):
         if "thinking" in etype or "heartbeat" in etype:
             return "thinking"

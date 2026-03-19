@@ -27,6 +27,32 @@ from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 from soothe.utils import expand_path
 
+
+# ---------------------------------------------------------------------------
+# Patch: deepagents SummarizationMiddleware._apply_event_to_messages does not
+# handle langgraph's Overwrite wrapper that PatchToolCallsMiddleware may leave
+# in request.messages.  Unwrap it so ``list(messages)`` succeeds.
+# ---------------------------------------------------------------------------
+def _patch_summarization_overwrite_handling() -> None:
+    try:
+        from deepagents.middleware.summarization import SummarizationMiddleware
+        from langgraph.types import Overwrite
+    except ImportError:
+        return
+
+    _original = SummarizationMiddleware._apply_event_to_messages
+
+    @staticmethod  # type: ignore[misc]
+    def _patched(messages: Any, event: Any) -> list[Any]:
+        if isinstance(messages, Overwrite):
+            messages = messages.value
+        return _original(messages, event)
+
+    SummarizationMiddleware._apply_event_to_messages = _patched  # type: ignore[assignment]
+
+
+_patch_summarization_overwrite_handling()
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 

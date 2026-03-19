@@ -329,7 +329,6 @@ class PerformanceConfig(BaseModel):
         unified_classification: Enable LLM-based unified classification.
         classification_mode: Classification mode for unified system.
             ``llm`` uses fast model for classification (default).
-            ``fallback`` uses token-count heuristics only.
             ``disabled`` returns default classification.
         template_planning: Use template plans for simple queries.
         parallel_pre_stream: Run memory/context operations in parallel.
@@ -341,7 +340,7 @@ class PerformanceConfig(BaseModel):
 
     enabled: bool = True
     unified_classification: bool = True
-    classification_mode: Literal["llm", "fallback", "disabled"] = "llm"
+    classification_mode: Literal["llm", "disabled"] = "llm"
     template_planning: bool = True
     parallel_pre_stream: bool = True
 

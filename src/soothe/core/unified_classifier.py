@@ -1,17 +1,21 @@
 """Unified LLM-based classification system.
 
-This module provides a single classification system that replaces all keyword-based
-classification with intelligent LLM-based analysis. It makes one fast LLM call per
-query to determine:
+This module provides a single classification system that uses fast LLM
+for intelligent query analysis. It determines:
 
 1. Task complexity (for routing and optimization)
 2. Plan-only intent (for execution control)
 
 Architecture Decision (RFC-0012):
-- Single LLM call provides all classifications at once
-- Eliminates keyword maintenance burden
-- Handles multilingual and nuanced queries
-- Falls back to token-count heuristics if LLM unavailable
+- Single fast LLM call provides all classifications at once
+- No keyword maintenance or token-count heuristics
+- Handles multilingual and nuanced queries semantically
+- Returns safe default ("medium") if LLM fails or unavailable
+
+Classification Tiers:
+- chitchat: Simple greetings and conversational fillers (skips planning/memory)
+- medium: Questions requiring research/planning, multi-step tasks (default)
+- complex: Architecture design, migrations, large refactoring
 """
 
 from __future__ import annotations
@@ -21,16 +25,10 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.core.classification import count_tokens
-
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
-
-# Token count thresholds for fallback classification
-_TOKEN_THRESHOLD_MEDIUM = 30
-_TOKEN_THRESHOLD_COMPLEX = 160
 
 
 class UnifiedClassification(BaseModel):
@@ -40,128 +38,124 @@ class UnifiedClassification(BaseModel):
         description="Query complexity for routing: chitchat (direct LLM), medium (subagent), complex (Claude)"
     )
     is_plan_only: bool = Field(description="True if user only wants planning without execution")
+    template_intent: Literal["question", "search", "analysis", "implementation"] | None = Field(
+        default=None, description="Template intent for planning (question|search|analysis|implementation|null)"
+    )
     reasoning: str | None = Field(default=None, description="Brief explanation of classification")
 
 
 _UNIFIED_CLASSIFICATION_PROMPT = """\
-Analyze this user request and classify it for routing decisions.
+Current time: {current_time}
+
+Classify this user request for routing decisions.
 
 User request: {query}
 
-Provide classifications in JSON format with these fields:
+Response format (JSON only, no additional text):
+{{
+  "task_complexity": "chitchat" | "medium" | "complex",
+  "is_plan_only": true | false,
+  "template_intent": "question" | "search" | "analysis" | "implementation" | null,
+  "reasoning": "brief explanation"
+}}
 
-1. "task_complexity": One of "chitchat", "medium", "complex"
-   - chitchat: Greetings, simple questions, short queries (< 30 tokens) - NO planning, NO context/memory
-   - medium: Multi-step tasks, debugging, code review, planning (90% of tasks)
-   - complex: Architecture design, migrations, large refactoring (10% of tasks)
+Classification guide:
+- chitchat: Simple greetings/fillers needing no action (hello, thanks, 你好)
+- medium: Current events, research, debugging, planning, multi-step tasks (DEFAULT)
+- complex: Architecture design, migrations, large refactoring
 
-2. "is_plan_only": true or false
-   - true: User explicitly requests planning without execution
-   - false: User expects both planning and execution
+Template intent guide:
+- question: User is asking a question (who/what/where/when/why/how)
+- search: User wants to search/find information (search/find/look up)
+- analysis: User wants analysis (analyze/review/examine/investigate)
+- implementation: User wants to build/create something (implement/create/build/write)
+- null: Chitchat queries or queries that don't fit other categories
 
-Respond with only valid JSON, no additional text.
+Rules:
+- Use semantic complexity, NOT query length
+- Current events/research/debugging → medium (even if short)
+- "plan only" → is_plan_only=true
+- chitchat queries → template_intent=null
+- When uncertain → medium complexity, appropriate template_intent or null
 """
 
 
 class UnifiedClassifier:
     """Unified LLM-based classification system.
 
-    Replaces all keyword-based classification with a single fast LLM call.
+    Uses fast LLM for all classifications with no fallback to heuristics.
+    Returns safe default if LLM unavailable.
 
     Args:
         fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
-        classification_mode: "llm", "fallback", or "disabled".
-        use_tiktoken: Use tiktoken for fallback token counting.
+        classification_mode: "llm" or "disabled".
     """
 
     def __init__(
         self,
         fast_model: BaseChatModel | None = None,
-        classification_mode: Literal["llm", "fallback", "disabled"] = "llm",
-        *,
-        use_tiktoken: bool = True,
+        classification_mode: Literal["llm", "disabled"] = "llm",
     ) -> None:
         """Initialize the unified classifier.
 
         Args:
             fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
-            classification_mode: "llm", "fallback", or "disabled".
-            use_tiktoken: Use tiktoken for fallback token counting.
+            classification_mode: "llm" or "disabled".
         """
         self._fast_model = fast_model
         self._mode = classification_mode
-        self._use_tiktoken = use_tiktoken
 
         # Use structured output if model available
         if fast_model:
-            self._structured_model = fast_model.with_structured_output(UnifiedClassification)
+            # Use json_mode for broader API compatibility (works with idealab, etc.)
+            self._structured_model = fast_model.with_structured_output(UnifiedClassification, method="json_mode")
         else:
             self._structured_model = None
 
     async def classify(self, query: str) -> UnifiedClassification:
         """Classify query for routing decisions.
 
-        Single LLM call returns all needed classifications.
-        Falls back to token-count heuristics if LLM fails.
+        Uses fast LLM for all classifications. No fallback to heuristics.
 
         Args:
             query: User input text.
 
         Returns:
-            UnifiedClassification with all routing decisions.
+            UnifiedClassification with routing decisions.
         """
-        # Disabled mode
+        # Disabled mode (return safe default)
         if self._mode == "disabled":
             return self._default_classification("Classification disabled")
 
-        # Fallback mode (no LLM)
-        if self._mode == "fallback" or not self._fast_model:
-            return self._token_count_fallback(query)
+        # No fast model available (return safe default)
+        if not self._fast_model:
+            logger.warning("No fast model available for classification, using safe default")
+            return self._default_classification("No fast model configured")
 
-        # LLM mode (primary)
+        # LLM classification (primary path)
         try:
             result = await self._llm_classify(query)
         except Exception as e:
-            logger.warning("LLM classification failed, using fallback: %s", e)
-            return self._token_count_fallback(query)
-        else:
-            logger.debug(
-                "LLM classification: task_complexity=%s, plan_only=%s",
-                result.task_complexity,
-                result.is_plan_only,
-            )
-            return result
+            logger.exception("LLM classification failed")
+            # Return safe default instead of fallback
+            return self._default_classification(f"Classification failed: {e}")
+
+        logger.debug(
+            "LLM classification: task_complexity=%s, plan_only=%s, template_intent=%s, reasoning=%s",
+            result.task_complexity,
+            result.is_plan_only,
+            result.template_intent,
+            result.reasoning,
+        )
+        return result
 
     async def _llm_classify(self, query: str) -> UnifiedClassification:
         """Use fast LLM for unified classification."""
-        prompt = _UNIFIED_CLASSIFICATION_PROMPT.format(query=query)
+        from datetime import UTC, datetime
+
+        current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        prompt = _UNIFIED_CLASSIFICATION_PROMPT.format(query=query, current_time=current_time)
         return await self._structured_model.ainvoke(prompt)
-
-    def _token_count_fallback(self, query: str) -> UnifiedClassification:
-        """Token-count based fallback (NO keywords)."""
-        token_count = count_tokens(query, use_tiktoken=self._use_tiktoken)
-
-        # Task complexity based on token count
-        if token_count >= _TOKEN_THRESHOLD_COMPLEX:
-            task_complexity = "complex"
-        elif token_count >= _TOKEN_THRESHOLD_MEDIUM:
-            task_complexity = "medium"
-        else:
-            task_complexity = "chitchat"  # All queries < 30 tokens
-
-        # Plan-only detection (simple heuristic)
-        query_lower = query.lower().strip()
-        is_plan = (
-            "plan only" in query_lower
-            or "only plan" in query_lower
-            or query_lower.startswith(("create a plan", "make a plan"))
-        )
-
-        return UnifiedClassification(
-            task_complexity=task_complexity,
-            is_plan_only=is_plan,
-            reasoning=f"Fallback: {token_count} tokens",
-        )
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:
         """Safe default when everything fails."""

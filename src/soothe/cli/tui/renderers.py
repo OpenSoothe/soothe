@@ -221,6 +221,21 @@ def _handle_protocol_event(
         content = data.get("content", "")
         if content and should_show("assistant_text", verbosity):
             state.full_response.append(content)
+    elif etype == "soothe.autonomous.final_report":
+        summary = data.get("summary", "")
+        if summary and should_show("assistant_text", verbosity):
+            state.full_response.append(summary)
+    # Handle text output from subagents
+    elif etype.endswith(".text"):
+        # Text output from any subagent (claude, browser, etc.)
+        text = data.get("text", "")
+        if text and should_show("assistant_text", verbosity):
+            state.full_response.append(text)
+    elif etype.endswith(".response"):
+        # Response content from any subagent
+        content = data.get("content", "")
+        if content and should_show("assistant_text", verbosity):
+            state.full_response.append(content)
 
 
 def _handle_tool_activity_event(

@@ -235,6 +235,7 @@ class AutonomousMixin:
         try:
             iter_state = RunnerState()
             iter_state.thread_id = thread_id
+            iter_state.unified_classification = parent_state.unified_classification
 
             if self._memory:
                 try:

@@ -107,7 +107,7 @@ def _build_claude_graph(
                             _emit(
                                 {
                                     "type": "soothe.claude.text",
-                                    "text": block.text[:200],
+                                    "text": block.text,  # Full text for conversation panel
                                 },
                                 logger,
                             )

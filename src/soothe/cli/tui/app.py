@@ -22,7 +22,7 @@ from typing import Any, ClassVar
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.widgets import Header, Input
 
 from soothe.cli.daemon import DaemonClient, SootheDaemon, socket_path
@@ -44,25 +44,29 @@ class SootheApp(App):
     TITLE = "Soothe"
     CSS = """
     #main-layout {
-        layout: grid;
-        grid-size: 2 1;
-        grid-columns: 3fr 2fr;
-        grid-rows: 1fr;
+        layout: vertical;
         height: 1fr;
+    }
+    #conversation-row {
+        height: 4fr;
+        margin-bottom: 1;
     }
     #conversation {
         border: solid $primary;
-    }
-    #right-col {
         height: 100%;
     }
+    #panels-row {
+        layout: horizontal;
+        height: 1fr;
+        margin-bottom: 1;
+    }
     #plan-panel {
-        height: 2fr;
+        width: 1fr;
         border: solid $accent;
-        border-bottom: dashed $surface;
+        margin-right: 1;
     }
     #activity-panel {
-        height: 3fr;
+        width: 1fr;
         border: solid $accent;
     }
     #info-bar {
@@ -73,7 +77,6 @@ class SootheApp(App):
         padding: 0 1;
     }
     #chat-input {
-        dock: bottom;
         height: 3;
         padding: 0 1;
     }
@@ -107,19 +110,23 @@ class SootheApp(App):
         self._last_activity_count = 0
         self._progress_verbosity = self._config.logging.progress_verbosity
         self._thread_logger: ThreadLogger | None = None
+        self._was_running = False
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: 3-row layout."""
         max_lines = self._config.activity_max_lines
         yield Header()
         with Container(id="main-layout"):
-            yield ConversationPanel(
-                id="conversation",
-                highlight=True,
-                markup=True,
-                wrap=True,
-            )
-            with Vertical(id="right-col"):
+            # Row 1: Conversation panel (largest height)
+            with Container(id="conversation-row"):
+                yield ConversationPanel(
+                    id="conversation",
+                    highlight=True,
+                    markup=True,
+                    wrap=True,
+                )
+            # Row 2: Plan and Activity panels (equal width, side by side)
+            with Container(id="panels-row"):
                 yield PlanPanel(
                     id="plan-panel",
                     highlight=True,
@@ -133,8 +140,9 @@ class SootheApp(App):
                     wrap=True,
                     max_lines=max_lines,
                 )
+            # Row 3: Chat input
+            yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
         yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
-        yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
@@ -191,19 +199,44 @@ class SootheApp(App):
 
             # Handle thread ID changes
             if event.get("type") == "status":
+                state_str = event.get("state", "")
+
+                # Load input history
+                history = event.get("input_history", [])
+                if history:
+                    chat_input = self.query_one("#chat-input", ChatInput)
+                    chat_input.set_history(history)
+
                 tid = event.get("thread_id", self._state.thread_id)
                 previous_thread_id = self._thread_id
                 if tid and tid != previous_thread_id:
                     self._thread_id = tid
-                    self._load_thread_history(tid)
-                    # Refresh the conversation panel with loaded history
-                    with contextlib.suppress(Exception):
-                        panel = self.query_one("#conversation", ConversationPanel)
-                        panel.clear()
-                        for entry in self._conversation_history:
-                            panel.write(entry)
-                        # Also refresh activity panel
-                        self._flush_new_activity()
+                    if self._was_running:
+                        # Post-query thread change: the runner assigned a new
+                        # thread_id during execution.  Preserve the in-memory
+                        # conversation (already rendered) and just update the
+                        # thread logger so future persistence uses the right id.
+                        self._thread_logger = ThreadLogger(
+                            thread_id=tid,
+                            retention_days=self._config.logging.thread_logging.retention_days,
+                            max_size_mb=self._config.logging.thread_logging.max_size_mb,
+                        )
+                        logger.info("Thread logger initialized for thread %s", tid)
+                    else:
+                        # Explicit thread switch (initial connect, resume):
+                        # reload history from disk.
+                        self._load_thread_history(tid)
+                        with contextlib.suppress(Exception):
+                            panel = self.query_one("#conversation", ConversationPanel)
+                            panel.clear()
+                            for entry in self._conversation_history:
+                                panel.write(entry)
+                            self._flush_new_activity()
+
+                if state_str == "running":
+                    self._was_running = True
+                elif state_str in ("idle", "stopped"):
+                    self._was_running = False
 
             # Handle command_response
             if event.get("type") == "command_response":
@@ -287,12 +320,15 @@ class SootheApp(App):
         with contextlib.suppress(Exception):
             panel = self.query_one("#conversation", ConversationPanel)
             response_text = "".join(self._state.full_response)
-            if not response_text:
-                return
+
+            # Always show conversation history, even if response is empty
             panel.clear()
             for entry in self._conversation_history:
                 panel.write(entry)
-            panel.write(response_text, scroll_end=True)
+
+            # Append response if available
+            if response_text:
+                panel.write(response_text, scroll_end=True)
 
     def _flush_new_activity(self) -> None:
         """Append only new activity lines (append-only, no clear)."""
@@ -364,6 +400,7 @@ class SootheApp(App):
                 max_iterations, prompt = parsed_auto
                 self._log_conversation("[bold green]Assistant:[/bold green] ")
                 await self._client.send_input(prompt, autonomous=True, max_iterations=max_iterations)
+                # Don't return - let the user input be logged above
                 return
             await self._client.send_command(text.strip())
         else:
