@@ -1,11 +1,20 @@
 """Progress event rendering for CLI output."""
 
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from soothe.cli.progress_verbosity import ProgressVerbosity
 
 _MAX_INLINE_QUERIES = 3
 
 
-def render_progress_event(data: dict, *, prefix: str | None = None) -> None:
+def render_progress_event(
+    data: dict,
+    *,
+    prefix: str | None = None,
+    verbosity: "ProgressVerbosity" = "normal",
+) -> None:
     """Render a soothe.* event as a structured progress line to stderr."""
     etype = data.get("type", "")
     if etype.startswith("soothe."):
@@ -133,9 +142,15 @@ def render_progress_event(data: dict, *, prefix: str | None = None) -> None:
     elif etype == "soothe.policy.checked":
         verdict = data.get("verdict", "?")
         profile = data.get("profile")
-        parts = [verdict]
-        if profile:
-            parts.append(f"(profile={profile})")
+        # In debug mode, show all policy events
+        # In normal mode, suppress "allow" messages but show "deny" messages
+        if verdict == "deny" or verbosity == "debug":
+            parts = [verdict]
+            if profile:
+                parts.append(f"(profile={profile})")
+        else:
+            # Skip rendering "allow" events to stderr in normal mode
+            return
     elif etype == "soothe.policy.denied":
         reason = data.get("reason", "denied")
         profile = data.get("profile")

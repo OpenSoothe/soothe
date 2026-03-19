@@ -17,21 +17,92 @@ from soothe.cli.tui_shared import render_plan_tree
 from soothe.protocols.planner import Plan, PlanStep
 
 
-def test_render_progress_event_policy_includes_profile(capsys) -> None:
-    render_progress_event({"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"})
+def test_render_progress_event_policy_allow_suppressed(capsys) -> None:
+    """Policy 'allow' events should be suppressed in headless stderr output."""
+    render_progress_event(
+        {"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"}, verbosity="normal"
+    )
     captured = capsys.readouterr()
+    # Allow messages should not appear in stderr
+    assert "[policy] allow" not in captured.err
+    assert captured.err == ""
+
+
+def test_render_progress_event_policy_deny_shown(capsys) -> None:
+    """Policy 'deny' events should be shown in headless stderr output."""
+    render_progress_event({"type": "soothe.policy.checked", "verdict": "deny", "profile": "strict"}, verbosity="normal")
+    captured = capsys.readouterr()
+    # Deny messages should appear in stderr
+    assert "[policy] deny (profile=strict)" in captured.err
+
+
+def test_render_progress_event_policy_allow_shown_in_debug(capsys) -> None:
+    """Policy 'allow' events should be shown in debug mode."""
+    render_progress_event({"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"}, verbosity="debug")
+    captured = capsys.readouterr()
+    # Allow messages should appear in stderr in debug mode
     assert "[policy] allow (profile=strict)" in captured.err
 
 
-def test_tui_policy_activity_includes_profile() -> None:
+def test_render_progress_event_policy_denied_shown(capsys) -> None:
+    """Policy 'denied' events should always be shown in headless stderr output."""
+    render_progress_event(
+        {"type": "soothe.policy.denied", "reason": "unauthorized action", "profile": "strict"}, verbosity="normal"
+    )
+    captured = capsys.readouterr()
+    # Denied messages should appear in stderr
+    assert "[policy] unauthorized action (profile=strict)" in captured.err
+
+
+def test_tui_policy_allow_suppressed() -> None:
+    """Policy 'allow' events should be suppressed in TUI activity panel."""
     state = TuiState()
     _handle_protocol_event(
         {"type": "soothe.policy.checked", "verdict": "allow", "profile": "standard"},
         state,
         verbosity="normal",
     )
+    # Allow messages should not appear in TUI activity lines
+    assert len(state.activity_lines) == 0
+
+
+def test_tui_policy_allow_shown_in_debug() -> None:
+    """Policy 'allow' events should be shown in TUI activity panel in debug mode."""
+    state = TuiState()
+    _handle_protocol_event(
+        {"type": "soothe.policy.checked", "verdict": "allow", "profile": "standard"},
+        state,
+        verbosity="debug",
+    )
+    # Allow messages should appear in TUI activity lines in debug mode
     assert len(state.activity_lines) == 1
     assert "Policy: allow (profile=standard)" in state.activity_lines[0].plain
+
+
+def test_tui_policy_deny_shown() -> None:
+    """Policy 'deny' events should be shown in TUI activity panel."""
+    state = TuiState()
+    _handle_protocol_event(
+        {"type": "soothe.policy.checked", "verdict": "deny", "profile": "strict"},
+        state,
+        verbosity="normal",
+    )
+    # Deny messages should appear in TUI activity lines
+    assert len(state.activity_lines) == 1
+    assert "Policy: deny (profile=strict)" in state.activity_lines[0].plain
+
+
+def test_tui_policy_denied_shown() -> None:
+    """Policy 'denied' events should always be shown in TUI activity panel."""
+    state = TuiState()
+    _handle_protocol_event(
+        {"type": "soothe.policy.denied", "reason": "unauthorized action", "profile": "strict"},
+        state,
+        verbosity="normal",
+    )
+    # Denied messages should appear in TUI activity lines
+    assert len(state.activity_lines) == 1
+    assert "Denied: unauthorized action (profile=strict)" in state.activity_lines[0].plain
 
 
 def test_subagent_text_activity_respects_verbosity() -> None:

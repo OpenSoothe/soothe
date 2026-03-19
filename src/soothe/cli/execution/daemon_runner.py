@@ -133,7 +133,7 @@ async def run_headless_via_daemon(
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
                         prefix = resolve_namespace_label(namespace, name_map) if namespace else None
-                        render_progress_event(data, prefix=prefix)
+                        render_progress_event(data, prefix=prefix, verbosity=verbosity)
                     if category == "error":
                         has_error = True
 

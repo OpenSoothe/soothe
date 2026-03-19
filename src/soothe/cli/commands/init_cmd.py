@@ -23,7 +23,7 @@ def init_soothe() -> None:
     # Try loading from installed package resources first
     template_found = False
     try:
-        config_resource = files("soothe.config_templates").joinpath("config.yml")
+        config_resource = files("soothe.config").joinpath("config.yml")
         with as_file(config_resource) as template_path:
             if template_path.exists():
                 shutil.copy2(template_path, target)

@@ -294,7 +294,7 @@ vector_store_router:
 # explicit user activation per thread for safety.
 
 autonomous:
-  enabled_by_default: true   # New threads start in autonomous mode
+  enabled_by_default: false  # New threads start in autonomous mode
   max_iterations: 10         # Stop after N iterations without user input
   max_retries: 2             # Retry failed goals before giving up
   max_total_goals: 50        # Maximum goals allowed (RFC-0011)

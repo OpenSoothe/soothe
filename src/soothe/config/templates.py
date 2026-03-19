@@ -14,7 +14,7 @@ def get_config_template_path() -> Path | None:
         Path to config.yml template, or None if not found.
     """
     try:
-        config_package = files("soothe.config_templates")
+        config_package = files("soothe.config")
 
         # Handle MultiplexedPath (e.g., when in editable install)
         if hasattr(config_package, "_paths"):

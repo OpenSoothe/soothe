@@ -111,14 +111,14 @@ build-backend = "hatchling.build"
 packages = ["src/soothe"]
 artifacts = [
     "src/soothe/built_in_skills/**/*.md",
-    "src/soothe/config_templates/*.yml"
+    "src/soothe/config/*.yml"
 ]
 
 [tool.hatch.build.targets.sdist]
 packages = ["src/soothe"]
 artifacts = [
     "src/soothe/built_in_skills/**/*.md",
-    "src/soothe/config_templates/*.yml"
+    "src/soothe/config/*.yml"
 ]
 
 [project.scripts]

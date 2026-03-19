@@ -175,10 +175,22 @@ def _handle_protocol_event(
         detail = f"Policy: {verdict}"
         if profile:
             detail += f" (profile={profile})"
-        _add_activity(
-            state,
-            Text.assemble(("  . ", "dim"), (detail, "cyan" if verdict == "allow" else "bold red")),
-        )
+
+        # In debug mode, show all policy events in TUI
+        if verbosity == "debug":
+            _add_activity(
+                state,
+                Text.assemble(("  . ", "dim"), (detail, "cyan" if verdict == "allow" else "bold red")),
+            )
+        # In normal mode, suppress "allow" messages but show "deny" messages
+        elif verdict == "deny":
+            _add_activity(
+                state,
+                Text.assemble(("  . ", "dim"), (detail, "bold red")),
+            )
+        else:
+            # Log "allow" events to file without displaying in TUI
+            logger.info("Activity:   . %s", detail)
     elif etype == "soothe.policy.denied":
         reason = data.get("reason", "")
         profile = data.get("profile")

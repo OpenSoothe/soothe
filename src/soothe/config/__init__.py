@@ -47,6 +47,7 @@ from soothe.config.prompts import (
     _TOOL_ORCHESTRATION_GUIDE,
 )
 from soothe.config.settings import SootheConfig
+from soothe.config.templates import get_config_template_path
 
 __all__ = [
     "SOOTHE_HOME",
@@ -86,4 +87,5 @@ __all__ = [
     "WizsearchConfig",
     "_resolve_env",
     "_resolve_provider_env",
+    "get_config_template_path",
 ]
