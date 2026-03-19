@@ -111,6 +111,14 @@ async def run_headless_via_daemon(
                         sys.stdout.write("\n")
                         sys.stdout.flush()
                         full_response.append(report_text)
+                # Chitchat response -> stdout
+                elif etype == "soothe.chitchat.response":
+                    chitchat_content = data.get("content", "")
+                    if chitchat_content:
+                        sys.stdout.write(chitchat_content)
+                        sys.stdout.write("\n")
+                        sys.stdout.flush()
+                        full_response.append(chitchat_content)
                 else:
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):

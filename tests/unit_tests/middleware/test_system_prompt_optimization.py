@@ -84,7 +84,7 @@ def test_simple_query_gets_minimal_prompt():
 
     # Should have minimal prompt
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 200
+    assert len(modified.system_message.content) < 500  # Simple prompt with creator info
     assert "Today's date is" in modified.system_message.content
 
 
@@ -109,7 +109,7 @@ def test_medium_query_gets_medium_prompt():
     # Should have medium prompt with guidelines
     assert "proactive AI assistant" in modified.system_message.content
     assert "Be direct and concise" in modified.system_message.content
-    assert 150 < len(modified.system_message.content) < 500  # Updated upper bound
+    assert 300 < len(modified.system_message.content) < 800  # Medium prompt with creator info
 
 
 def test_complex_query_gets_full_prompt():
@@ -265,4 +265,4 @@ def test_chitchat_query_treated_as_chitchat():
 
     # Should get simple prompt
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 200
+    assert len(modified.system_message.content) < 500  # Simple prompt with creator info

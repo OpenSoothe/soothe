@@ -179,7 +179,7 @@ def check_subagent_routing() -> dict[str, Any]:
         )
 
         # Check display names
-        expected_subagents = {"planner", "scout", "research", "browser", "claude", "skillify", "weaver"}
+        expected_subagents = {"scout", "research", "browser", "claude", "skillify", "weaver"}
         actual_subagents = set(BUILTIN_SUBAGENT_NAMES)
 
         if expected_subagents != actual_subagents:
@@ -197,8 +197,8 @@ def check_subagent_routing() -> dict[str, Any]:
             }
 
         # Test display name function
-        test_name = get_subagent_display_name("planner")
-        if test_name != "Planner":
+        test_name = get_subagent_display_name("scout")
+        if test_name != "Scout":
             return {
                 "name": "subagent_routing",
                 "status": "warning",

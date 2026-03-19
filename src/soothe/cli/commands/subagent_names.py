@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "planner": "Planner",
     "scout": "Scout",
     "research": "Research",
     "browser": "Browser",
@@ -42,8 +41,8 @@ def parse_subagent_prefix_from_input(user_input: str) -> tuple[list[str], str]:
         but should not be used in new implementations.
 
     Numeric prefixes select subagents:
-    ``1`` = Main, ``2`` = Planner, ``3`` = Scout, ``4`` = Research,
-    ``5`` = Browser, ``6`` = Claude.
+    ``1`` = Main, ``2`` = Scout, ``3`` = Research, ``4`` = Browser,
+    ``5`` = Claude, ``6`` = Skillify, ``7`` = Weaver.
 
     Args:
         user_input: Raw user input string.

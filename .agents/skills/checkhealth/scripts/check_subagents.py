@@ -73,7 +73,6 @@ def check_subagent_config() -> dict[str, Any]:
 def check_subagent_imports() -> dict[str, Any]:
     """Check if subagent modules can be imported."""
     subagent_modules = {
-        "planner": "soothe.subagents.planner",
         "scout": "soothe.subagents.scout",
         "research": "soothe.subagents.research",
         "browser": "soothe.subagents.browser",
@@ -128,7 +127,6 @@ def check_subagent_dependencies() -> dict[str, Any]:
         "claude": ["claude_agent_sdk"],
         "skillify": [],  # Uses standard deps
         "weaver": [],  # Uses standard deps
-        "planner": [],  # Uses standard deps
         "scout": [],  # Uses standard deps
     }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+from pathlib import Path
 
 from soothe.cli.daemon.server import SootheDaemon
 from soothe.config import SOOTHE_HOME, SootheConfig
@@ -26,8 +27,9 @@ def run_daemon(config: SootheConfig | None = None) -> None:
         asyncio.run(_main())
 
 
-if __name__ == "__main__":
-    from soothe.cli.main import setup_logging
+def main() -> None:
+    """CLI entry point for the daemon module."""
+    from soothe.cli.core import setup_logging
 
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument("--config", type=str, default=None, help="Config file path")
@@ -37,11 +39,13 @@ if __name__ == "__main__":
     if args.config:
         cfg = SootheConfig.from_yaml_file(args.config)
     else:
-        from pathlib import Path
-
         default_config = Path(SOOTHE_HOME) / "config" / "config.yml"
         if default_config.exists():
             cfg = SootheConfig.from_yaml_file(str(default_config))
 
     setup_logging(cfg)
     run_daemon(cfg)
+
+
+if __name__ == "__main__":
+    main()

@@ -52,7 +52,11 @@ class PhasesMixin:
 
         Maximum speed path for greetings and simple questions.
         """
-        from langchain_core.messages import HumanMessage
+        import datetime as dt
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from soothe.config import _SIMPLE_SYSTEM_PROMPT
 
         yield _custom({"type": "soothe.chitchat.started", "query": user_input[:100]})
 
@@ -60,8 +64,16 @@ class PhasesMixin:
             # Get default model
             model = self._config.create_chat_model("default")
 
-            # Direct LLM call with simple prompt
-            response = await model.ainvoke([HumanMessage(content=user_input)])
+            # Use simple system prompt for chitchat (consistent with SystemPromptOptimizationMiddleware)
+            now = dt.datetime.now(dt.UTC).astimezone()
+            current_date = now.strftime("%Y-%m-%d")
+            system_prompt = (
+                f"{_SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)}\n\n"
+                f"Today's date is {current_date}."
+            )
+
+            # Direct LLM call with system prompt and user input
+            response = await model.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
 
             # Yield response as stream chunk
             yield _custom(

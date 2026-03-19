@@ -214,6 +214,13 @@ def _handle_protocol_event(
         error = data.get("error", "unknown")
         _add_activity(state, Text.assemble(("  ! ", "bold red"), (error, "red")))
         state.errors.append(error)
+    elif etype == "soothe.chitchat.started":
+        query = _truncate(str(data.get("query", "")), 50)
+        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Chitchat: {query}", "dim")))
+    elif etype == "soothe.chitchat.response":
+        content = data.get("content", "")
+        if content and should_show("assistant_text", verbosity):
+            state.full_response.append(content)
 
 
 def _handle_tool_activity_event(

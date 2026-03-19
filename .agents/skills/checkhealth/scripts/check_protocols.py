@@ -90,36 +90,36 @@ def check_memory_protocols() -> dict[str, Any]:
     }
 
 
-def check_planner_protocols() -> dict[str, Any]:
-    """Check planner protocol backends."""
+def check_planning_protocols() -> dict[str, Any]:
+    """Check planning protocol backends."""
     checks = []
 
-    # Check direct planner
-    result = check_import("soothe.backends.planning.direct", "DirectPlanner")
+    # Check simple planner
+    result = check_import("soothe.backends.planning.simple", "SimplePlanner")
     checks.append({
-        "name": "planner_direct",
+        "name": "planning_simple",
         "status": result["status"],
-        "message": "Direct planner: " + result["message"],
+        "message": "Simple planner: " + result["message"],
     })
 
-    # Check subagent planner
-    result = check_import("soothe.backends.planning.subagent", "SubagentPlanner")
+    # Check auto planner
+    result = check_import("soothe.backends.planning.router", "AutoPlanner")
     checks.append({
-        "name": "planner_subagent",
+        "name": "planning_auto",
         "status": result["status"],
-        "message": "Subagent planner: " + result["message"],
+        "message": "Auto planner: " + result["message"],
     })
 
     # Check claude planner
     result = check_import("soothe.backends.planning.claude", "ClaudePlanner")
     checks.append({
-        "name": "planner_claude",
+        "name": "planning_claude",
         "status": result["status"],
         "message": "Claude planner: " + result["message"],
     })
 
     return {
-        "name": "planner_protocols",
+        "name": "planning_protocols",
         "status": "ok" if all(c["status"] == "ok" for c in checks) else "error",
         "checks": checks,
     }

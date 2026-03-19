@@ -39,12 +39,14 @@ def _patch_memu_1_5_0() -> None:
 
     MemU 1.5.0's CRUDMixin._patch_create_memory_item() doesn't pass the required
     `resource_id` parameter to repository.create_item(). This monkey patch fixes it.
+    Also patches _model_dump_without_embeddings to handle dict objects.
     """
     if not MEMU_AVAILABLE:
         return
 
     try:
         from memu.app.crud import CRUDMixin
+        from memu.app.service import MemoryService
 
         async def patched_patch_create(self: CRUDMixin, state: dict[str, Any], step_context: Any) -> dict[str, Any]:
             """Patched version that includes resource_id parameter."""
@@ -77,6 +79,7 @@ def _patch_memu_1_5_0() -> None:
 
             state["memory_item"] = self._model_dump_without_embeddings(item)
             state["category_memory_updates"] = category_memory_updates
+            state["category_updates"] = category_memory_updates  # Required by persist_index step
 
             response = {
                 "memory_item": state["memory_item"],
@@ -84,9 +87,18 @@ def _patch_memu_1_5_0() -> None:
             state["response"] = response
             return state
 
-        # Apply the patch
+        def patched_model_dump_without_embeddings(_self: Any, obj: Any) -> dict[str, Any]:
+            """Patched version that handles both Pydantic models and dicts."""
+            if isinstance(obj, dict):
+                # Already a dict, just exclude embedding if present
+                return {k: v for k, v in obj.items() if k != "embedding"}
+            # Pydantic model, use model_dump
+            return obj.model_dump(exclude={"embedding"})
+
+        # Apply the patches
         CRUDMixin._patch_create_memory_item = patched_patch_create
-        logger.debug("Applied MemU 1.5.0 resource_id patch")
+        MemoryService._model_dump_without_embeddings = patched_model_dump_without_embeddings
+        logger.debug("Applied MemU 1.5.0 patches (resource_id and model_dump)")
 
     except Exception as e:
         logger.warning("Failed to apply MemU patch (may not be needed for newer versions): %s", e)

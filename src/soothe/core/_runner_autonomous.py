@@ -63,6 +63,21 @@ class AutonomousMixin:
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
+        # Perform unified classification for proper routing
+        if self._unified_classifier:
+            state.unified_classification = await self._unified_classifier.classify(user_input)
+            logger.info(
+                "Autonomous mode: unified classification task_complexity=%s - %s",
+                state.unified_classification.task_complexity,
+                user_input[:50],
+            )
+
+        # Fast path for chitchat - skip goal engine and planning
+        if state.unified_classification and state.unified_classification.task_complexity == "chitchat":
+            async for chunk in self._run_chitchat(user_input):
+                yield chunk
+            return
+
         async for chunk in self._pre_stream(user_input, state):
             yield chunk
 
@@ -252,6 +267,7 @@ class AutonomousMixin:
                         recent_messages=[current_input],
                         available_capabilities=capabilities,
                         completed_steps=completed,
+                        unified_classification=parent_state.unified_classification,
                     )
                     plan = await self._planner.create_plan(current_input, context)
                     iter_state.plan = plan
