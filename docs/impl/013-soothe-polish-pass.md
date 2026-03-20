@@ -132,11 +132,12 @@ Create `src/soothe/cli/daemon.py` with `SootheDaemon` class:
 ### 3.3 Textual TUI
 
 Create `src/soothe/cli/tui_app.py` with `SootheApp(App)`:
-- Always-on two-column layout from startup
-- Integrated chat input widget at bottom
-- ConversationPanel, PlanPanel, ActivityPanel, SubagentPanel, StatusBar
+- Vertical three-row layout with cleaner design
+- Integrated chat input widget at bottom (height: 6)
+- ConversationPanel (with border, 4fr height), ActivityInfo (borderless, last 5 lines), PlanTree (borderless, toggleable, max 15 lines), InfoBar
 - Connects to daemon, receives events, sends input
 - `/detach` disconnects TUI, daemon keeps running
+- `Ctrl+T` toggles plan tree visibility
 
 ### 3.4 CLI integration
 

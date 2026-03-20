@@ -1,11 +1,6 @@
-"""Shared classification utilities.
+"""Token counting utilities.
 
-This module provides shared utilities for complexity classification.
-
-Architecture Decision (RFC-0012):
-- UnifiedClassifier replaces all keyword-based classification
-- This module now only provides token counting utilities
-- All classification logic moved to unified_classifier.py
+This module provides utilities for counting tokens in text.
 """
 
 from __future__ import annotations

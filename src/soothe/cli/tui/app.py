@@ -19,6 +19,9 @@ import subprocess
 import sys
 from typing import Any, ClassVar
 
+import pyperclip
+from rich.markdown import Markdown
+from rich.panel import Panel
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -31,7 +34,7 @@ from soothe.cli.slash_commands import parse_autonomous_command
 from soothe.cli.thread_logger import ThreadLogger
 from soothe.cli.tui.event_processors import process_daemon_event
 from soothe.cli.tui.state import TuiState
-from soothe.cli.tui.widgets import ActivityPanel, ChatInput, ConversationPanel, InfoBar, PlanPanel
+from soothe.cli.tui.widgets import ActivityInfo, ChatInput, ConversationPanel, InfoBar, PlanTree
 from soothe.cli.tui_shared import render_plan_tree
 from soothe.config import SootheConfig
 
@@ -42,6 +45,7 @@ class SootheApp(App):
     """Textual application for the Soothe TUI."""
 
     TITLE = "Soothe"
+    SUB_TITLE = "^q: Quit | ^d: Detach | ^c: Cancel | ^e: Focus | ^y: Copy | ^t: Toggle Plan"
     CSS = """
     #main-layout {
         layout: vertical;
@@ -55,19 +59,23 @@ class SootheApp(App):
         border: solid $primary;
         height: 100%;
     }
-    #panels-row {
-        layout: horizontal;
-        height: 1fr;
+    #info-row {
+        layout: vertical;
+        height: auto;
         margin-bottom: 1;
     }
-    #plan-panel {
-        width: 1fr;
-        border: solid $accent;
-        margin-right: 1;
+    #activity-info {
+        height: auto;
+        max-height: 5;
+        padding: 0 1;
     }
-    #activity-panel {
-        width: 1fr;
-        border: solid $accent;
+    #plan-tree {
+        height: auto;
+        max-height: 15;
+        padding: 0 1;
+    }
+    #plan-tree.hidden {
+        display: none;
     }
     #info-bar {
         dock: bottom;
@@ -77,7 +85,7 @@ class SootheApp(App):
         padding: 0 1;
     }
     #chat-input {
-        height: 3;
+        height: 6;
         padding: 0 1;
     }
     """
@@ -85,6 +93,10 @@ class SootheApp(App):
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("ctrl+d", "detach", "Detach"),
         Binding("ctrl+q", "quit_app", "Quit"),
+        Binding("ctrl+c", "cancel_job", "Cancel Job"),
+        Binding("ctrl+e", "focus_input", "Focus Input"),
+        Binding("ctrl+y", "copy_last", "Copy Last Message"),
+        Binding("ctrl+t", "toggle_plan", "Toggle Plan"),
     ]
 
     def __init__(
@@ -106,15 +118,18 @@ class SootheApp(App):
         self._client: DaemonClient | None = None
         self._state = TuiState()
         self._connected = False
-        self._conversation_history: list[str] = []
+        self._conversation_history: list[str | Panel] = []
+        self._message_history: list[dict[str, str]] = []
         self._last_activity_count = 0
         self._progress_verbosity = self._config.logging.progress_verbosity
         self._thread_logger: ThreadLogger | None = None
         self._was_running = False
+        self._typing_indicator_task: asyncio.Task | None = None
+        self._typing_frame = 0
+        self._is_running = False
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: 3-row layout."""
-        max_lines = self._config.activity_max_lines
         yield Header()
         with Container(id="main-layout"):
             # Row 1: Conversation panel (largest height)
@@ -125,21 +140,10 @@ class SootheApp(App):
                     markup=True,
                     wrap=True,
                 )
-            # Row 2: Plan and Activity panels (equal width, side by side)
-            with Container(id="panels-row"):
-                yield PlanPanel(
-                    id="plan-panel",
-                    highlight=True,
-                    markup=True,
-                    wrap=True,
-                )
-                yield ActivityPanel(
-                    id="activity-panel",
-                    highlight=True,
-                    markup=True,
-                    wrap=True,
-                    max_lines=max_lines,
-                )
+            # Row 2: Activity info and Plan tree (vertical layout)
+            with Container(id="info-row"):
+                yield ActivityInfo(id="activity-info")
+                yield PlanTree(id="plan-tree", classes="" if self._state.plan_visible else "hidden")
             # Row 3: Chat input
             yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
         yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
@@ -183,20 +187,17 @@ class SootheApp(App):
                 self._log_conversation("[dim]Daemon connection closed.[/dim]")
                 break
 
-            activity_panel = self.query_one("#activity-panel", ActivityPanel)
-            activity_panel._last_activity_count = self._last_activity_count
-
             process_daemon_event(
                 event,
                 self._state,
-                activity_panel,
                 verbosity=self._progress_verbosity,
                 on_status_update=self._update_status,
                 on_conversation_append=self._append_conversation,
                 on_plan_refresh=self._refresh_plan,
             )
 
-            self._last_activity_count = getattr(activity_panel, "_last_activity_count", len(self._state.activity_lines))
+            # Update activity display after processing event
+            self._flush_new_activity()
 
             # Handle thread ID changes
             if event.get("type") == "status":
@@ -245,6 +246,10 @@ class SootheApp(App):
                 if content:
                     self._log_conversation(content)
 
+            # Handle clear event
+            if event.get("type") == "clear":
+                self._handle_clear()
+
             await asyncio.sleep(0)
 
     def _load_thread_history(self, thread_id: str) -> None:
@@ -260,6 +265,7 @@ class SootheApp(App):
 
         # Clear previous history to prevent unbounded memory growth
         self._conversation_history.clear()
+        self._message_history.clear()
 
         # Use runs/{thread_id}/ directory (RFC-0010)
         self._thread_logger = ThreadLogger(
@@ -276,9 +282,19 @@ class SootheApp(App):
                 role = record.get("role", "unknown")
                 text = record.get("text", "")
                 if role == "user":
-                    self._conversation_history.append(f"\n[bold cyan]User:[/bold cyan] {text}")
+                    # Create panel with cyan border for user messages
+                    panel = Panel(text, title="👤 User", border_style="cyan", padding=(0, 1))
+                    self._conversation_history.append(panel)
+                    self._message_history.append({"role": "user", "content": text, "index": len(self._message_history)})
                 elif role == "assistant":
-                    self._conversation_history.append(f"\n[bold green]Assistant:[/bold green] {text}")
+                    # Create panel with green border for assistant messages
+                    # Use Markdown renderer for proper formatting
+                    markdown_content = Markdown(text)
+                    panel = Panel(markdown_content, title="🤖 Assistant", border_style="green", padding=(0, 1))
+                    self._conversation_history.append(panel)
+                    self._message_history.append(
+                        {"role": "assistant", "content": text, "index": len(self._message_history)}
+                    )
 
             # Load recent activity
             events = self._thread_logger.recent_actions(limit=100)
@@ -310,11 +326,38 @@ class SootheApp(App):
             logger.debug("Failed to load thread history", exc_info=True)
 
     def _log_conversation(self, text: str) -> None:
-        self._conversation_history.append(text)
-        logger.info("Conversation: %s", text.replace("\n", " ")[:200])
-        with contextlib.suppress(Exception):
-            panel = self.query_one("#conversation", ConversationPanel)
-            panel.write(text)
+        # Check if this is a user message
+        if "👤 User:" in text:
+            # Extract the raw message content
+            raw_content = text.split("👤 User:", 1)[-1].strip()
+            # Remove Rich markup tags
+            import re
+
+            raw_content = re.sub(r"\[/?[^\]]+\]", "", raw_content)
+
+            # Store for copying
+            self._message_history.append({"role": "user", "content": raw_content, "index": len(self._message_history)})
+
+            # Create panel with cyan border
+            panel_widget = Panel(
+                raw_content,
+                title="👤 User",
+                border_style="cyan",
+                padding=(0, 1),
+            )
+            self._conversation_history.append(panel_widget)
+            logger.info("Conversation: User message - %s", raw_content[:200])
+
+            with contextlib.suppress(Exception):
+                conv_panel = self.query_one("#conversation", ConversationPanel)
+                conv_panel.write(panel_widget)
+        else:
+            # Non-user messages (system messages, etc.) - keep as plain text
+            self._conversation_history.append(text)
+            logger.info("Conversation: %s", text.replace("\n", " ")[:200])
+            with contextlib.suppress(Exception):
+                conv_panel = self.query_one("#conversation", ConversationPanel)
+                conv_panel.write(text)
 
     def _append_conversation(self) -> None:
         """Rewrite the conversation panel with history + accumulated streaming text."""
@@ -329,30 +372,145 @@ class SootheApp(App):
 
             # Append response if available
             if response_text:
-                panel.write(response_text, scroll_end=True)
+                # Remove Rich markup for raw storage
+                import re
+
+                raw_content = re.sub(r"\[/?[^\]]+\]", "", response_text)
+
+                # Check if we already have this assistant message stored
+                # (streaming continues on the same message)
+                if self._message_history and self._message_history[-1]["role"] == "assistant":
+                    # Update the last assistant message content
+                    self._message_history[-1]["content"] = raw_content
+                else:
+                    # New assistant message - add to history
+                    self._message_history.append(
+                        {"role": "assistant", "content": raw_content, "index": len(self._message_history)}
+                    )
+
+                # Convert to Markdown for proper formatting (headings, spacing, etc.)
+                markdown_content = Markdown(response_text)
+
+                # Create panel with green border (always create fresh for streaming)
+                assistant_panel = Panel(
+                    markdown_content,
+                    title="🤖 Assistant",
+                    border_style="green",
+                    padding=(0, 1),
+                )
+                panel.write(assistant_panel, scroll_end=True)
 
     def _flush_new_activity(self) -> None:
-        """Append only new activity lines (append-only, no clear)."""
+        """Update activity info with last 5 lines."""
         with contextlib.suppress(Exception):
-            panel = self.query_one("#activity-panel", ActivityPanel)
-            new_lines = self._state.activity_lines[self._last_activity_count :]
-            for line in new_lines:
-                panel.write(line)
-            self._last_activity_count = len(self._state.activity_lines)
+            activity_info = self.query_one("#activity-info", ActivityInfo)
+            # Get last 5 lines
+            last_5 = self._state.activity_lines[-5:] if self._state.activity_lines else []
+            if last_5:
+                # Join lines with newlines for Static display
+                content = "\n".join(str(line) for line in last_5)
+                activity_info.update(content)
+            else:
+                activity_info.update("[dim]No recent activity.[/dim]")
 
     def _refresh_plan(self) -> None:
+        """Update plan tree display."""
         try:
-            panel = self.query_one("#plan-panel", PlanPanel)
-            panel.clear()
+            plan_tree = self.query_one("#plan-tree", PlanTree)
             if self._state.current_plan:
                 tree = render_plan_tree(self._state.current_plan)
-                panel.write(tree)
+                # Render Tree to string using Console
+                from io import StringIO
+
+                from rich.console import Console
+
+                console = Console(file=StringIO(), force_terminal=True)
+                console.print(tree)
+                plan_tree.update(console.file.getvalue())
             else:
-                panel.write("[dim]No active plan.[/dim]")
+                plan_tree.update("[dim]No active plan.[/dim]")
         except Exception:
-            logger.debug("Failed to refresh plan panel", exc_info=True)
+            logger.debug("Failed to refresh plan tree", exc_info=True)
+
+    def _handle_clear(self) -> None:
+        """Clear all TUI panels."""
+        try:
+            # Clear conversation panel
+            conv_panel = self.query_one("#conversation", ConversationPanel)
+            conv_panel.clear()
+
+            # Clear activity info
+            activity_info = self.query_one("#activity-info", ActivityInfo)
+            activity_info.update("[dim]No recent activity.[/dim]")
+
+            # Clear plan tree
+            plan_tree = self.query_one("#plan-tree", PlanTree)
+            plan_tree.update("[dim]No active plan.[/dim]")
+
+            # Clear internal state
+            self._conversation_history.clear()
+            self._message_history.clear()
+            self._state.full_response.clear()
+            self._state.activity_lines.clear()
+            self._state.tool_call_buffers.clear()
+            self._state.errors.clear()
+            self._state.seen_message_ids.clear()
+            self._last_activity_count = 0
+
+            logger.info("TUI panels cleared")
+        except Exception:
+            logger.exception("Failed to clear TUI panels")
 
     def _update_status(self, state: str) -> None:
+        # Start/stop typing indicator based on state
+        if state == "running":
+            self._is_running = True
+            self._start_typing_indicator()
+        else:
+            self._is_running = False
+            self._stop_typing_indicator()
+            # Update status bar when not running
+            self._update_status_bar(state.title())
+
+    def _start_typing_indicator(self) -> None:
+        """Start the animated typing indicator."""
+        if self._typing_indicator_task is None or self._typing_indicator_task.done():
+            self._typing_indicator_task = asyncio.create_task(self._animate_typing_indicator())
+
+    def _stop_typing_indicator(self) -> None:
+        """Stop the animated typing indicator."""
+        if self._typing_indicator_task and not self._typing_indicator_task.done():
+            self._typing_indicator_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                pass
+            self._typing_indicator_task = None
+
+    async def _animate_typing_indicator(self) -> None:
+        """Animate typing indicator in the info bar."""
+        # Spinner frames
+        frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        messages = ["Thinking", "Processing", "Working", "Analyzing"]
+        msg_idx = 0
+
+        try:
+            while self._is_running:
+                frame = frames[self._typing_frame % len(frames)]
+                message = messages[msg_idx % len(messages)]
+                indicator = f"{frame} {message}..."
+
+                # Update info bar with indicator
+                self._update_status_bar(indicator)
+
+                self._typing_frame += 1
+                if self._typing_frame % 10 == 0:  # Change message every 10 frames
+                    msg_idx += 1
+
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            self._typing_indicator_task = None
+
+    def _update_status_bar(self, status_text: str) -> None:
+        """Update the info bar with current status."""
         with contextlib.suppress(Exception):
             bar = self.query_one("#info-bar", InfoBar)
             tid = self._state.thread_id or "-"
@@ -362,7 +520,7 @@ class SootheApp(App):
             if subagent_lines:
                 last = subagent_lines[-1]
                 sub_summary = f"  |  {last.plain}" if hasattr(last, "plain") else ""
-            bar.update(f"Thread: {tid}  Events: {events}  {state.title()}{sub_summary}")
+            bar.update(f"Thread: {tid}  Events: {events}  {status_text}{sub_summary}")
 
     # -- input handling -----------------------------------------------------
 
@@ -379,9 +537,23 @@ class SootheApp(App):
             chat_input.add_to_history(text)
 
         if self._state.full_response:
-            self._conversation_history.append("".join(self._state.full_response))
+            # Store the previous assistant response in conversation history
+            response_text = "".join(self._state.full_response)
 
-        self._log_conversation(f"\n[bold cyan]User:[/bold cyan] {text}")
+            # Convert to Markdown for proper formatting
+            markdown_content = Markdown(response_text)
+
+            # Create and store panel
+            assistant_panel = Panel(
+                markdown_content,
+                title="🤖 Assistant",
+                border_style="green",
+                padding=(0, 1),
+            )
+            self._conversation_history.append(assistant_panel)
+            # Note: _message_history is already updated during streaming in _append_conversation
+
+        self._log_conversation(f"\n[bold cyan]👤 User:[/bold cyan] {text}")
         self._state.full_response.clear()
         self._state.seen_message_ids.clear()
         self._state.last_user_input = text
@@ -401,13 +573,23 @@ class SootheApp(App):
             parsed_auto = parse_autonomous_command(text.strip())
             if parsed_auto is not None:
                 max_iterations, prompt = parsed_auto
-                self._log_conversation("[bold green]Assistant:[/bold green] ")
                 await self._client.send_input(prompt, autonomous=True, max_iterations=max_iterations)
                 # Don't return - let the user input be logged above
                 return
+            # Check for subagent subcommands
+            from soothe.cli.commands.subagent_names import parse_subagent_from_input
+
+            subagent_name, cleaned_text = parse_subagent_from_input(text)
+            if subagent_name:
+                # Route to subagent
+                await self._client.send_input(
+                    cleaned_text,
+                    autonomous=self._config.autonomous.enabled_by_default,
+                    subagent=subagent_name,
+                )
+                return
             await self._client.send_command(text.strip())
         else:
-            self._log_conversation("[bold green]Assistant:[/bold green] ")
             await self._client.send_input(
                 text,
                 autonomous=self._config.autonomous.enabled_by_default,
@@ -417,6 +599,7 @@ class SootheApp(App):
 
     async def action_detach(self) -> None:
         """Detach from daemon, keep it running."""
+        self._stop_typing_indicator()
         if self._client:
             await self._client.send_detach()
             await self._client.close()
@@ -425,11 +608,51 @@ class SootheApp(App):
 
     async def action_quit_app(self) -> None:
         """Stop daemon and quit."""
+        self._stop_typing_indicator()
         if self._client:
-            await self._client.send_command("/exit")
-            await self._client.close()
+            try:
+                await self._client.send_command("/exit")
+                await self._client.close()
+            except (ConnectionResetError, ConnectionError, BrokenPipeError):
+                # Connection already closed or lost, just exit gracefully
+                pass
         self._connected = False
         self.exit()
+
+    async def action_cancel_job(self) -> None:
+        """Cancel the currently running job."""
+        if self._client and self._connected:
+            await self._client.send_command("/cancel")
+
+    async def action_copy_last(self) -> None:
+        """Copy the last message to clipboard."""
+        if not self._message_history:
+            self._log_conversation("[dim]No messages to copy.[/dim]")
+            return
+
+        last_msg = self._message_history[-1]
+        try:
+            pyperclip.copy(last_msg["content"])
+            role = last_msg["role"].title()
+            self._log_conversation(f"[dim]✓ Copied {role} message to clipboard[/dim]")
+        except Exception:
+            logger.exception("Failed to copy to clipboard")
+            self._log_conversation("[red]Failed to copy to clipboard[/red]")
+
+    async def action_focus_input(self) -> None:
+        """Focus the chat input field."""
+        with contextlib.suppress(Exception):
+            chat_input = self.query_one("#chat-input", ChatInput)
+            chat_input.focus()
+
+    async def action_toggle_plan(self) -> None:
+        """Toggle plan tree visibility."""
+        try:
+            plan_tree = self.query_one("#plan-tree", PlanTree)
+            plan_tree.toggle_class("hidden")
+            self._state.plan_visible = not self._state.plan_visible
+        except Exception:
+            logger.debug("Failed to toggle plan tree", exc_info=True)
 
 
 # ---------------------------------------------------------------------------

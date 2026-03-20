@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "scout": "Scout",
-    "research": "Research",
     "browser": "Browser",
     "claude": "Claude",
     "skillify": "Skillify",
@@ -12,8 +10,6 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
 }
 
 BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_DISPLAY_NAMES.keys())
-
-_FIRST_SUBAGENT_INDEX = 2
 
 
 def get_subagent_display_name(technical_name: str) -> str:
@@ -31,48 +27,43 @@ def get_subagent_display_name(technical_name: str) -> str:
     )
 
 
-def parse_subagent_prefix_from_input(user_input: str) -> tuple[list[str], str]:
-    """Parse leading numeric selector from input.
+def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
+    """Parse subagent subcommand from user input.
 
-    .. deprecated::
-        Numeric prefix routing is deprecated and not used in Soothe.
-        The LLM naturally routes to appropriate subagents via the `task` tool.
-        This function is retained for backward compatibility with external code
-        but should not be used in new implementations.
-
-    Numeric prefixes select subagents:
-    ``1`` = Main, ``2`` = Scout, ``3`` = Research, ``4`` = Browser,
-    ``5`` = Claude, ``6`` = Skillify, ``7`` = Weaver.
+    Detects subagent subcommands (e.g., /browser, /claude) anywhere in the text
+    and extracts the subagent name along with the cleaned input text.
 
     Args:
         user_input: Raw user input string.
 
     Returns:
-        Tuple of ``(subagent_names, message)``.  Empty list means main agent.
+        Tuple of ``(subagent_name, cleaned_text)``.
+        ``subagent_name`` is ``None`` if no valid subcommand found.
+        The subcommand is removed from ``cleaned_text``.
 
     Examples:
-        ``"4 quantum papers"`` -> ``(["research"], "quantum papers")``
-        ``"hello world"`` -> ``([], "hello world")``
+        ``"/browser check this"`` -> ``("browser", "check this")``
+        ``"Can you /claude analyze this"`` -> ``("claude", "Can you analyze this")``
+        ``"hello world"`` -> ``(None, "hello world")``
     """
-    tokens = user_input.strip().split()
-    i = 0
-    while i < len(tokens) and tokens[i].replace(",", "").strip().isdigit():
-        i += 1
-    if i == 0:
-        return ([], user_input.strip())
+    # Find the first subagent subcommand in the text
+    first_match: tuple[int, str] | None = None
 
-    prefix_str = " ".join(tokens[:i])
-    message = " ".join(tokens[i:]).strip()
-    names: list[str] = []
-    for token in prefix_str.replace(",", " ").split():
-        cleaned = token.strip()
-        if not cleaned.isdigit():
-            continue
-        idx = int(cleaned)
-        if idx == 1:
-            continue
-        if _FIRST_SUBAGENT_INDEX <= idx <= len(BUILTIN_SUBAGENT_NAMES) + 1:
-            name = BUILTIN_SUBAGENT_NAMES[idx - _FIRST_SUBAGENT_INDEX]
-            if name not in names:
-                names.append(name)
-    return (names, message)
+    for subagent_name in BUILTIN_SUBAGENT_NAMES:
+        subcommand = f"/{subagent_name}"
+        # Case-insensitive search for the subcommand
+        idx = user_input.lower().find(subcommand)
+        # Keep track of the earliest match
+        if idx != -1 and (first_match is None or idx < first_match[0]):
+            first_match = (idx, subagent_name)
+
+    if first_match:
+        idx, subagent_name = first_match
+        subcommand = f"/{subagent_name}"
+        # Remove the subcommand from the text
+        cleaned = user_input[:idx] + user_input[idx + len(subcommand) :]
+        # Clean up extra whitespace
+        cleaned = " ".join(cleaned.split())
+        return (subagent_name, cleaned)
+
+    return (None, user_input)

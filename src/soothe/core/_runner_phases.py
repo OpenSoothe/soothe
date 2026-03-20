@@ -78,7 +78,7 @@ class PhasesMixin:
         # Safety net: should not be reached if classifier post-processing works.
         logger.warning("Chitchat classification missing piggybacked response, using canned reply")
         name = self._config.assistant_name
-        from soothe.core.unified_classifier import _looks_chinese
+        from soothe.cognition import _looks_chinese
 
         if _looks_chinese(user_input):
             fallback = f"你好! 我是 {name}, 有什么可以帮你的吗?"
@@ -86,6 +86,43 @@ class PhasesMixin:
             fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
         yield _custom(ChitchatResponseEvent(content=fallback).to_dict())
         logger.info("Chitchat completed (canned fallback) for query: %s", user_input[:50])
+
+    # -- direct subagent routing --------------------------------------------
+
+    async def _run_direct_subagent(
+        self,
+        user_input: str,
+        subagent_name: str,
+        state: Any,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Direct routing to a specific subagent bypassing classification.
+
+        Args:
+            user_input: The user's query text.
+            subagent_name: Name of the subagent to route to.
+            state: Runner state (for thread_id tracking).
+        """
+        from soothe.cognition import RoutingResult, UnifiedClassification
+
+        logger.info("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
+
+        # Create minimal classification that routes to the specified subagent
+        routing = RoutingResult(
+            task_complexity="medium",
+            preferred_subagent=subagent_name,
+            routing_hint="subagent",
+        )
+        state.unified_classification = UnifiedClassification.from_tiers(routing, None)
+
+        # Run pre-stream work then stream directly
+        collected_chunks = [
+            chunk async for chunk in self._pre_stream_independent(user_input, state, complexity="medium")
+        ]
+        for chunk in collected_chunks:
+            yield chunk
+
+        async for chunk in self._stream_phase(user_input, state):
+            yield chunk
 
     # -- LangGraph stream with HITL loop ------------------------------------
 
@@ -184,17 +221,28 @@ class PhasesMixin:
 
     # -- pre-stream ---------------------------------------------------------
 
-    async def _pre_stream(
+    async def _pre_stream_independent(
         self,
         user_input: str,
         state: Any,
+        complexity: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Run protocol pre-processing before the LangGraph stream."""
+        """Independent pre-stream: thread, policy, memory, context.
+
+        Does NOT require enrichment results.  Safe to run concurrently
+        with the tier-2 enrichment LLM call.
+
+        Args:
+            user_input: User query text.
+            state: Mutable RunnerState.
+            complexity: Override complexity (when known from tier-1 routing).
+                Falls back to state.unified_classification or "medium".
+        """
         from soothe.core.runner import _generate_thread_id
         from soothe.protocols.durability import ThreadMetadata
 
-        # Classification already done in _run_single_pass
-        complexity = state.unified_classification.task_complexity if state.unified_classification else "medium"
+        if complexity is None:
+            complexity = state.unified_classification.task_complexity if state.unified_classification else "medium"
 
         requested_thread_id = state.thread_id
         try:
@@ -353,6 +401,16 @@ class PhasesMixin:
                     except Exception:
                         logger.debug("Context projection failed", exc_info=True)
 
+    async def _pre_stream_planning(
+        self,
+        user_input: str,
+        state: Any,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Planning phase of pre-stream.  Requires enrichment (template_intent) in state.
+
+        Must be called after tier-2 enrichment completes and
+        ``state.unified_classification`` is populated.
+        """
         if self._planner:
             try:
                 capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]

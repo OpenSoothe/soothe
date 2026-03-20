@@ -6,8 +6,8 @@ import logging
 import re
 
 from soothe.backends.persistence import PersistStore
-from soothe.core.classification import count_tokens
 from soothe.protocols.context import ContextEntry, ContextProjection
+from soothe.utils import count_tokens
 
 logger = logging.getLogger(__name__)
 

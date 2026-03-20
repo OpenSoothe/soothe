@@ -59,7 +59,7 @@ def check_slash_commands() -> dict[str, Any]:
             "/exit",
             "/quit",
             "/detach",
-            "/auto",
+            "/autopilot",
             "/plan",
             "/memory",
             "/context",
@@ -74,7 +74,7 @@ def check_slash_commands() -> dict[str, Any]:
         # Check that key commands exist
         missing = []
         for cmd in expected_commands:
-            # Handle commands with args like "/auto <prompt>"
+            # Handle commands with args like "/autopilot <prompt>"
             base_cmd = cmd.split()[0]
             if not any(k.startswith(base_cmd) for k in SLASH_COMMANDS):
                 missing.append(cmd)
@@ -123,9 +123,9 @@ def check_command_parser() -> dict[str, Any]:
 
         # Test valid autonomous commands
         test_cases = [
-            ("/auto test prompt", (None, "test prompt")),
-            ("/auto 20 test with limit", (20, "test with limit")),
-            ("/auto", None),  # Invalid - no prompt
+            ("/autopilot test prompt", (None, "test prompt")),
+            ("/autopilot 20 test with limit", (20, "test with limit")),
+            ("/autopilot", None),  # Invalid - no prompt
         ]
 
         results = []
@@ -179,7 +179,7 @@ def check_subagent_routing() -> dict[str, Any]:
         )
 
         # Check display names
-        expected_subagents = {"scout", "research", "browser", "claude", "skillify", "weaver"}
+        expected_subagents = {"browser", "claude", "skillify", "weaver"}
         actual_subagents = set(BUILTIN_SUBAGENT_NAMES)
 
         if expected_subagents != actual_subagents:
@@ -197,8 +197,8 @@ def check_subagent_routing() -> dict[str, Any]:
             }
 
         # Test display name function
-        test_name = get_subagent_display_name("scout")
-        if test_name != "Scout":
+        test_name = get_subagent_display_name("browser")
+        if test_name != "Browser":
             return {
                 "name": "subagent_routing",
                 "status": "warning",

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
+_THREAD_COMMAND_MIN_PARTS = 3
 
 
 class DaemonHandlersMixin:
@@ -83,12 +84,15 @@ class DaemonHandlersMixin:
                 parsed_max: int | None = (
                     max_iterations if isinstance(max_iterations, int) and max_iterations > 0 else None
                 )
+                subagent = msg.get("subagent")
+                subagent = subagent.strip() or None if isinstance(subagent, str) else None
                 await self._current_input_queue.put(
                     {
                         "type": "input",
                         "text": text,
                         "autonomous": bool(msg.get("autonomous", False)),
                         "max_iterations": parsed_max,
+                        "subagent": subagent,
                     }
                 )
         elif msg_type == "command":
@@ -126,6 +130,9 @@ class DaemonHandlersMixin:
                         if self._stop_event:
                             self._stop_event.set()
                         break
+                    if cmd.strip().lower() == "/cancel":
+                        await self._cancel_current_query()
+                        continue
                     await self._handle_command(cmd)
                 elif msg_type == "input":
                     text = msg["text"]
@@ -133,6 +140,7 @@ class DaemonHandlersMixin:
                         text,
                         autonomous=bool(msg.get("autonomous", False)),
                         max_iterations=msg.get("max_iterations"),
+                        subagent=msg.get("subagent"),
                     )
             except asyncio.CancelledError:
                 break
@@ -163,6 +171,22 @@ class DaemonHandlersMixin:
 
         from soothe.cli.slash_commands import handle_slash_command
 
+        # Handle /clear command specially
+        if cmd.strip().lower() == "/clear":
+            await self._broadcast({"type": "clear"})
+            return
+
+        # Handle /thread resume specially to broadcast thread change
+        parts = cmd.strip().split(maxsplit=2)
+        if len(parts) >= _THREAD_COMMAND_MIN_PARTS and parts[0].lower() == "/thread" and parts[1].lower() == "resume":
+            thread_id = parts[2].strip()
+            if thread_id:
+                self._runner.set_current_thread_id(thread_id)
+                await self._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+                )
+                return
+
         output = StringIO()
         console = Console(file=output, force_terminal=False, width=100)
 
@@ -190,14 +214,61 @@ class DaemonHandlersMixin:
             if self._stop_event:
                 self._stop_event.set()
 
+    async def _cancel_current_query(self) -> None:
+        """Cancel the currently running query if any."""
+        if not self._query_running:
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "content": "[yellow]No running query to cancel.[/yellow]",
+                }
+            )
+            return
+
+        if self._current_query_task and not self._current_query_task.done():
+            logger.info("Cancelling current query task")
+            self._current_query_task.cancel()
+
+            # Wait for the task to actually be cancelled
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._current_query_task
+
+            self._query_running = False
+            self._current_query_task = None
+
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "content": "[green]Query cancelled successfully.[/green]",
+                }
+            )
+            await self._broadcast(
+                {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+            )
+        else:
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "content": "[yellow]No active query task found.[/yellow]",
+                }
+            )
+
     async def _run_query(
         self,
         text: str,
         *,
         autonomous: bool = False,
         max_iterations: int | None = None,
+        subagent: str | None = None,
     ) -> None:
-        """Stream a query through SootheRunner and broadcast events."""
+        """Stream a query through SootheRunner and broadcast events.
+
+        Args:
+            text: The user input text.
+            autonomous: Whether to run in autonomous mode.
+            max_iterations: Maximum iterations for autonomous mode.
+            subagent: Optional subagent name to route the query to.
+        """
         thread_id = self._runner.current_thread_id or ""
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
@@ -218,50 +289,70 @@ class DaemonHandlersMixin:
 
         full_response: list[str] = []
 
+        # Create task for cancellation support
+        async def _run_stream() -> None:
+            try:
+                stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
+                if autonomous:
+                    stream_kwargs["autonomous"] = True
+                    if max_iterations is not None:
+                        stream_kwargs["max_iterations"] = max_iterations
+                if subagent is not None:
+                    stream_kwargs["subagent"] = subagent
+                async for chunk in self._runner.astream(text, **stream_kwargs):
+                    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
+                        continue
+                    namespace, mode, data = chunk
+
+                    self._thread_logger.log(tuple(namespace), mode, data)
+
+                    is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
+                    if not namespace and mode == "messages" and is_msg_pair:
+                        msg, _metadata = data
+                        from soothe.cli.tui_shared import extract_text_from_ai_message
+
+                        full_response.extend(extract_text_from_ai_message(msg))
+
+                    event_msg = {
+                        "type": "event",
+                        "namespace": list(namespace),
+                        "mode": mode,
+                        "data": data,
+                    }
+                    await self._broadcast(event_msg)
+            except asyncio.CancelledError:
+                logger.info("Query cancelled by user")
+                await self._broadcast(
+                    {
+                        "type": "event",
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": {"type": ERROR, "error": "Query cancelled by user"},
+                    }
+                )
+                raise
+            except Exception as exc:
+                logger.exception("Daemon query error")
+                from soothe.utils.error_format import emit_error_event
+
+                await self._broadcast(
+                    {
+                        "type": "event",
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": emit_error_event(exc),
+                    }
+                )
+            finally:
+                self._query_running = False
+
         try:
-            stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
-            if autonomous:
-                stream_kwargs["autonomous"] = True
-                if max_iterations is not None:
-                    stream_kwargs["max_iterations"] = max_iterations
-            async for chunk in self._runner.astream(text, **stream_kwargs):
-                if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
-                    continue
-                namespace, mode, data = chunk
-
-                self._thread_logger.log(tuple(namespace), mode, data)
-
-                is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
-                if not namespace and mode == "messages" and is_msg_pair:
-                    msg, _metadata = data
-                    from soothe.cli.tui_shared import extract_text_from_ai_message
-
-                    full_response.extend(extract_text_from_ai_message(msg))
-
-                event_msg = {
-                    "type": "event",
-                    "namespace": list(namespace),
-                    "mode": mode,
-                    "data": data,
-                }
-                await self._broadcast(event_msg)
+            self._current_query_task = asyncio.create_task(_run_stream())
+            await self._current_query_task
         except asyncio.CancelledError:
-            logger.info("Query cancelled during shutdown")
-            raise
-        except Exception as exc:
-            logger.exception("Daemon query error")
-            from soothe.utils.error_format import emit_error_event
-
-            await self._broadcast(
-                {
-                    "type": "event",
-                    "namespace": [],
-                    "mode": "custom",
-                    "data": emit_error_event(exc),
-                }
-            )
+            logger.info("Query task cancelled")
         finally:
-            self._query_running = False
+            self._current_query_task = None
 
         final_thread_id = self._runner.current_thread_id or ""
         if final_thread_id and final_thread_id != thread_id:

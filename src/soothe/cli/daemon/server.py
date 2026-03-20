@@ -59,6 +59,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._runner: Any = None
         self._running = False
         self._query_running = False
+        self._current_query_task: asyncio.Task | None = None
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
@@ -215,6 +216,13 @@ class SootheDaemon(DaemonHandlersMixin):
         """Shut down the daemon gracefully."""
         self._running = False
         self._query_running = False
+
+        # Cancel any running query task
+        if self._current_query_task and not self._current_query_task.done():
+            self._current_query_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._current_query_task
+
         with contextlib.suppress(Exception):
             await self._broadcast({"type": "status", "state": "stopped"})
 

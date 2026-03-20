@@ -93,8 +93,8 @@ Type these commands in the interactive prompt:
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all commands and available subagents |
-| `/auto <prompt>` | Run one prompt in autonomous mode |
-| `/auto <max_iterations> <prompt>` | Run in autonomous mode with custom iteration limit |
+| `/autopilot <prompt>` | Run one prompt in autonomous mode |
+| `/autopilot <max_iterations> <prompt>` | Run in autonomous mode with custom iteration limit |
 | `/plan` | Show the current task plan |
 | `/memory` | Show memory statistics |
 | `/context` | Show context statistics |
@@ -175,8 +175,8 @@ soothe run --autonomous "Optimize the simulation parameters"
 soothe run --autonomous --max-iterations 20 "Research quantum error correction advances"
 
 # In TUI
-/auto Optimize the simulation parameters
-/auto 15 Research and improve model performance
+/autopilot Optimize the simulation parameters
+/autopilot 15 Research and improve model performance
 ```
 
 ### What Happens
@@ -605,7 +605,7 @@ The router maps purpose-based roles to specific models:
 Soothe separates conversation view from activity view:
 
 - **ConversationPanel (TUI)**: User turns and final responses
-- **ActivityPanel (TUI)**: Protocol events, tool calls, subagent activity
+- **ActivityInfo (TUI)**: Last 5 lines of protocol events, tool calls, subagent activity
 - **Headless text mode**: Main response to stdout, progress to stderr
 - **Headless JSONL mode**: Raw stream chunks for machine processing
 

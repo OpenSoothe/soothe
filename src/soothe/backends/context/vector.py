@@ -6,8 +6,8 @@ import logging
 import uuid
 from typing import TYPE_CHECKING
 
-from soothe.core.classification import count_tokens
 from soothe.protocols.context import ContextEntry, ContextProjection
+from soothe.utils import count_tokens
 
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings

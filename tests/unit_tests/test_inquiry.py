@@ -317,27 +317,6 @@ class TestDocumentSourceHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Research subagent integration (no LLM call -- just structure check)
-# ---------------------------------------------------------------------------
-
-
-class TestResearchSubagentRefactor:
-    def test_description_updated(self) -> None:
-        from soothe.subagents._internal.research import RESEARCH_DESCRIPTION
-
-        assert "multi-source" in RESEARCH_DESCRIPTION.lower()
-
-    def test_build_inquiry_sources(self) -> None:
-        from soothe.subagents._internal.research import _build_inquiry_sources
-
-        sources = _build_inquiry_sources()
-        assert len(sources) == 2
-        types = {s.source_type for s in sources}
-        assert "web" in types
-        assert "academic" in types
-
-
-# ---------------------------------------------------------------------------
 # Research tool structure tests
 # ---------------------------------------------------------------------------
 

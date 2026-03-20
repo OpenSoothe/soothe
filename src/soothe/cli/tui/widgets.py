@@ -14,12 +14,12 @@ class ConversationPanel(RichLog):
     """Scrollable chat history with markdown rendering."""
 
 
-class PlanPanel(RichLog):
-    """Plan tree display."""
+class PlanTree(Static):
+    """Borderless plan tree display, toggleable."""
 
 
-class ActivityPanel(RichLog):
-    """Scrollable activity log with configurable max lines."""
+class ActivityInfo(Static):
+    """Compact activity display showing last 5 lines, borderless."""
 
 
 class InfoBar(Static):
@@ -75,3 +75,9 @@ class ChatInput(Input):
                 self._history_index = -1
                 self.value = self._saved_input
             self.cursor_position = len(self.value)
+        elif event.key == "ctrl+d":
+            # Let the app-level binding handle detach by not preventing default
+            await super()._on_key(event)
+        else:
+            # Let parent Input handle all other keys normally
+            await super()._on_key(event)

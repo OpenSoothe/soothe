@@ -81,39 +81,44 @@ Async client for TUI and headless connections to the daemon.
 
 ### SootheApp (App)
 
-Textual application with CSS grid layout.
+Textual application with a vertical three-row layout.
 
 **Widget hierarchy:**
-- `Header` — App title
-- `ConversationPanel` (id=conversation) — RichLog, user turns plus final main-assistant response text
-- `PlanPanel` (id=plan-panel) — RichLog, plan tree
-- `ActivityPanel` (id=activity-panel) — RichLog, protocol/tool/subagent activity lines
-- `InfoBar` (id=info-bar) — Static, thread/events/state + compact subagent status
-- `ChatInput` (id=chat-input) — Input, placeholder "soothe> Type a message or /help"
-- `Footer` — Key bindings
+- `Header` — App title with keyboard shortcuts subtitle
+- `ConversationPanel` (id=conversation) — RichLog with border, user turns plus final main-assistant response text (4fr height)
+- `ActivityInfo` (id=activity-info) — Static, compact borderless display showing last 5 activity lines
+- `PlanTree` (id=plan-tree) — Static, borderless plan tree display, toggleable with Ctrl+T (max 15 lines)
+- `InfoBar` (id=info-bar) — Static, thread/events/state + compact subagent status (docked at bottom)
+- `ChatInput` (id=chat-input) — Input, placeholder "soothe> Type a message or /help" (height: 6)
 
 **CSS layout:**
-- `#main-layout`: grid 2x1, columns 3fr 2fr
-- `#conversation`: left column
-- `#right-col`: Plan + Activity stacked
+- `#main-layout`: vertical layout
+- `#conversation-row`: conversation panel (4fr height, with border)
+- `#info-row`: vertical container for activity info and plan tree (auto height)
+- `#activity-info`: last 5 activity lines, borderless (max 5 lines)
+- `#plan-tree`: plan tree display, borderless, collapsible (max 15 lines)
 - `#info-bar`, `#chat-input`: dock bottom
 
 ### Event Handling: Daemon Event → Widget Update
 
 | Daemon message | Handler | Widget update |
 |----------------|---------|---------------|
-| `type: status` | `_process_daemon_event` | InfoBar (state, thread_id); end-of-turn conversation flush when state returns to idle/stopped |
-| `type: event`, mode=messages | `_handle_messages_event` | ConversationPanel (final main-assistant response text), ActivityPanel (tool calls + subagent text summaries) |
-| `type: event`, mode=custom, soothe.* | `_handle_protocol_event` | ActivityPanel, PlanPanel (if plan.*) |
-| `type: event`, mode=custom, subagent | `_handle_subagent_custom` | ActivityPanel |
+| `type: status` | `process_daemon_event` | InfoBar (state, thread_id); end-of-turn conversation flush when state returns to idle/stopped |
+| `type: event`, mode=messages | `handle_messages_event` | ConversationPanel (final main-assistant response text), ActivityInfo (tool calls + subagent text summaries) |
+| `type: event`, mode=custom, soothe.* | `_handle_protocol_event` | ActivityInfo, PlanTree (if plan.*) |
+| `type: event`, mode=custom, subagent | `_handle_subagent_custom` | ActivityInfo |
 
-**Shared state:** `TuiState` from `tui_shared.py` holds `full_response`, `activity_lines`, `current_plan`, `subagent_tracker`, `thread_id`, etc. The Textual app reuses `_handle_protocol_event`, `_handle_subagent_custom`, `_add_activity`, `render_plan_tree` from the shared helper module.
+**Shared state:** `TuiState` from `tui_shared.py` holds `full_response`, `activity_lines`, `current_plan`, `subagent_tracker`, `thread_id`, `plan_visible`, etc. The Textual app reuses `_handle_protocol_event`, `_handle_subagent_custom`, `_add_activity`, `render_plan_tree` from the shared helper module.
 
 **Message surfacing rules:**
 - ConversationPanel is low-noise by design: it shows user turns and final main-assistant response text only.
-- ActivityPanel receives protocol events, tool activity, subagent custom events, and non-main/subagent text summaries.
+- ActivityInfo shows the last 5 lines of activity (protocol events, tool activity, subagent custom events, and non-main/subagent text summaries).
 - Policy activity lines include `profile` context when present (e.g., `allow (profile=standard)`).
 - Browser progress is surfaced through structured `browser_step` events; raw browser-use stdout/stderr is suppressed.
+
+**Activity display:**
+- ActivityInfo is updated by `_flush_new_activity()` which renders the last 5 lines from `state.activity_lines` as a Static widget.
+- PlanTree is updated by `_refresh_plan()` which renders the plan tree to a string using Rich Console.
 
 ### Connection Management
 
@@ -179,10 +184,12 @@ Textual application with CSS grid layout.
 - [ ] `soothe attach` connects to running daemon
 - [ ] `soothe server start|stop|status` work correctly
 - [ ] `soothe init` creates ~/.soothe structure
-- [ ] Textual TUI displays conversation, plan, and activity panels
+- [ ] Textual TUI displays conversation panel, activity info, and plan tree in vertical layout
+- [ ] Conversation panel has border and shows final main-assistant responses (plus user turns)
+- [ ] Activity info shows last 5 activity lines without border
+- [ ] Plan tree shows hierarchical plan without border and can be toggled with Ctrl+T
+- [ ] Chat input has height of 6 for better usability
 - [ ] Events from daemon update correct widgets
-- [ ] Conversation panel only shows final main-assistant responses (plus user turns)
-- [ ] Activity panel shows protocol/tool/subagent activity and subagent text summaries
 - [ ] Policy progress lines include profile context in TUI/headless text rendering
 - [ ] Raw browser-use stdout/stderr is suppressed while browser progress remains visible via structured activity events
 - [ ] Slash commands (e.g. /help, /detach) work

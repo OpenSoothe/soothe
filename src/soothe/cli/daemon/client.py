@@ -48,13 +48,23 @@ class DaemonClient:
         *,
         autonomous: bool = False,
         max_iterations: int | None = None,
+        subagent: str | None = None,
     ) -> None:
-        """Send user input to the daemon."""
+        """Send user input to the daemon.
+
+        Args:
+            text: The user input text.
+            autonomous: Whether to run in autonomous mode.
+            max_iterations: Maximum iterations for autonomous mode.
+            subagent: Optional subagent name to route the query to.
+        """
         payload: dict[str, Any] = {"type": "input", "text": text}
         if autonomous:
             payload["autonomous"] = True
             if max_iterations is not None:
                 payload["max_iterations"] = max_iterations
+        if subagent is not None:
+            payload["subagent"] = subagent
         await self._send(payload)
 
     async def send_command(self, cmd: str) -> None:

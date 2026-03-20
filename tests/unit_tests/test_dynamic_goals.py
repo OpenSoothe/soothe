@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.core.goal_engine import Goal, GoalEngine
+from soothe.cognition import Goal, GoalEngine
 from soothe.protocols.planner import GoalContext, GoalDirective
 
 

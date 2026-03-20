@@ -12,7 +12,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.core.goal_engine import GoalEngine
+from soothe.cognition import GoalEngine
 
 
 class ManageGoalsTool(BaseTool):

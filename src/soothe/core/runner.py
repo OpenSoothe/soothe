@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-    from soothe.core.goal_engine import GoalEngine
+    from soothe.cognition import GoalEngine
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -115,10 +115,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         """Initialize the runner with optional config."""
         import time
 
+        from soothe.cognition import UnifiedClassifier
         from soothe.core.agent import create_soothe_agent
         from soothe.core.concurrency import ConcurrencyController
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
-        from soothe.core.unified_classifier import UnifiedClassifier
 
         init_start = time.perf_counter()
 
@@ -361,6 +361,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         thread_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
+        subagent: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -377,6 +378,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
             thread_id: Thread ID for persistence. Generated if not provided.
             autonomous: Enable autonomous iteration loop.
             max_iterations: Override ``autonomous_max_iterations`` from config.
+            subagent: Optional subagent name to route the query to directly.
         """
         if autonomous and self._goal_engine:
             async for chunk in self._run_autonomous(
@@ -387,7 +389,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 yield chunk
             return
 
-        async for chunk in self._run_single_pass(user_input, thread_id=thread_id):
+        async for chunk in self._run_single_pass(user_input, thread_id=thread_id, subagent=subagent):
             yield chunk
 
     async def _run_single_pass(
@@ -395,43 +397,83 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         user_input: str,
         *,
         thread_id: str | None = None,
+        subagent: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Single-pass execution with complexity-based routing.
+        """Single-pass execution with two-tier classification.
 
-        Routes based on unified classification:
-        - chitchat: Fast path with direct LLM call, no planning, no state
-        - medium: Normal flow with memory/context/planning
-        - complex: Normal flow with memory/context/planning
+        Tier-1 (fast routing) decides chitchat vs. non-chitchat immediately.
+        For non-chitchat, tier-2 enrichment runs concurrently with the
+        independent pre-stream work (thread/policy/memory/context).
+
+        Args:
+            user_input: The user's query text.
+            thread_id: Thread ID for persistence. Generated if not provided.
+            subagent: Optional subagent name to route the query to directly.
         """
+        import asyncio
+
+        from soothe.cognition import UnifiedClassification
+
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
-        # Early classification for chitchat routing
+        # If subagent is explicitly specified, bypass classification and route directly
+        if subagent:
+            async for chunk in self._run_direct_subagent(user_input, subagent, state):
+                yield chunk
+            return
+
+        # -- Tier 1: fast routing (~2-4s) -----------------------------------
         if self._unified_classifier:
-            state.unified_classification = await self._unified_classifier.classify(user_input)
-            complexity = state.unified_classification.task_complexity
+            routing = await self._unified_classifier.classify_routing(user_input)
+            complexity = routing.task_complexity
+            logger.info("Tier-1 routing: task_complexity=%s - %s", complexity, user_input[:50])
+        else:
+            routing = None
+            complexity = "medium"
+
+        # Fast path for chitchat (no planning, no state)
+        if complexity == "chitchat":
+            async for chunk in self._run_chitchat(user_input, classification=routing):
+                yield chunk
+            return
+
+        # -- Non-chitchat: tier-2 enrichment + pre-stream independent -------
+        enrichment_task: asyncio.Task | None = None
+        if self._unified_classifier:
+            enrichment_task = asyncio.create_task(
+                self._unified_classifier.classify_enrichment(user_input, complexity),
+            )
+
+        # Run independent pre-stream (thread, policy, memory, context)
+        # concurrently with the tier-2 enrichment LLM call.
+        collected_chunks = [
+            chunk async for chunk in self._pre_stream_independent(user_input, state, complexity=complexity)
+        ]
+
+        # Await tier-2 enrichment and merge into UnifiedClassification
+        if enrichment_task is not None:
+            enrichment = await enrichment_task
+            state.unified_classification = UnifiedClassification.from_tiers(routing, enrichment)
             logger.info(
-                "Unified classification: task_complexity=%s, plan_only=%s - %s",
-                state.unified_classification.task_complexity,
+                "Tier-2 enrichment: template_intent=%s, plan_only=%s - %s",
+                state.unified_classification.template_intent,
                 state.unified_classification.is_plan_only,
                 user_input[:50],
             )
         else:
-            complexity = "medium"
             state.unified_classification = None
 
-        # Fast path for chitchat
-        if complexity == "chitchat":
-            async for chunk in self._run_chitchat(user_input, classification=state.unified_classification):
-                yield chunk
-            return
-
-        # Normal path for medium/complex
-        async for chunk in self._pre_stream(user_input, state):
+        # Yield all collected independent pre-stream events
+        for chunk in collected_chunks:
             yield chunk
 
-        # Use unified classification for plan-only detection (RFC-0012)
+        # -- Planning phase (needs template_intent from enrichment) ---------
+        async for chunk in self._pre_stream_planning(user_input, state):
+            yield chunk
+
+        # -- Execute ---------------------------------------------------------
         is_plan_only = state.unified_classification and state.unified_classification.is_plan_only
 
         if state.plan and is_plan_only:

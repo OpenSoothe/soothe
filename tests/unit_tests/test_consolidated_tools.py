@@ -277,13 +277,13 @@ class TestUnifiedClassificationDomains:
     """Tests for the capability_domains extension."""
 
     def test_default_domains_empty(self) -> None:
-        from soothe.core.unified_classifier import UnifiedClassification
+        from soothe.cognition import UnifiedClassification
 
         c = UnifiedClassification(task_complexity="chitchat", is_plan_only=False)
         assert c.capability_domains == []
 
     def test_domains_can_be_set(self) -> None:
-        from soothe.core.unified_classifier import UnifiedClassification
+        from soothe.cognition import UnifiedClassification
 
         c = UnifiedClassification(
             task_complexity="medium",
@@ -294,10 +294,12 @@ class TestUnifiedClassificationDomains:
         assert "workspace" in c.capability_domains
 
     async def test_default_classification_has_domains(self) -> None:
-        from soothe.core.unified_classifier import UnifiedClassifier
+        from soothe.cognition import UnifiedClassification, UnifiedClassifier
 
         classifier = UnifiedClassifier(fast_model=None, classification_mode="disabled")
-        result = await classifier.classify("test")
+        routing = await classifier.classify_routing("test")
+        enrichment = await classifier.classify_enrichment("test", routing.task_complexity)
+        result = UnifiedClassification.from_tiers(routing, enrichment)
         assert len(result.capability_domains) > 0
 
 

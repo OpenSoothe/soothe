@@ -18,7 +18,7 @@ def get_subagent_runtime_dir(subagent_name: str) -> Path:
     """Get runtime directory for a subagent under SOOTHE_HOME/agents/<name>/.
 
     Args:
-        subagent_name: Lowercase subagent name (e.g., "browser", "scout", "planner").
+        subagent_name: Lowercase subagent name (e.g., "browser", "planner").
 
     Returns:
         Path to subagent runtime directory.

@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.core.classification import count_tokens
+from soothe.utils import count_tokens
 
 
 class TestTokenCounting:

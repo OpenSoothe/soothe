@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +22,7 @@ from soothe.cli.tui.state import TuiState
 from soothe.cli.tui_shared import _resolve_namespace_label, _update_name_map_from_ai_message
 
 if TYPE_CHECKING:
-    from soothe.cli.tui.widgets import ActivityPanel
+    from soothe.cli.tui.widgets import ActivityInfo
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ _MSG_PAIR_LEN = 2
 def process_daemon_event(
     msg: dict[str, Any],
     state: TuiState,
-    activity_panel: ActivityPanel,
+    activity_panel: ActivityInfo | None = None,  # noqa: ARG001
     *,
     verbosity: str = "normal",
     on_status_update: callable | None = None,
@@ -46,7 +45,7 @@ def process_daemon_event(
     Args:
         msg: Daemon event message.
         state: TUI state to update.
-        activity_panel: Activity panel widget.
+        activity_panel: Activity info widget (optional, for backward compatibility).
         verbosity: Progress verbosity level.
         on_status_update: Callback for status updates.
         on_conversation_append: Callback for conversation append.
@@ -83,7 +82,7 @@ def process_daemon_event(
         is_main = not namespace
 
         if mode == "messages":
-            handle_messages_event(data, state, namespace=namespace, activity_panel=activity_panel, verbosity=verbosity)
+            handle_messages_event(data, state, namespace=namespace, verbosity=verbosity)
         elif mode == "custom" and isinstance(data, dict):
             category = classify_custom_event(namespace, data)
             etype = data.get("type", "")
@@ -91,23 +90,18 @@ def process_daemon_event(
             # Plan state must always be updated regardless of verbosity
             if category == "protocol" and "plan" in etype:
                 _handle_protocol_event(data, state, verbosity="normal")
-                if should_show(category, verbosity):
-                    _flush_new_activity(state, activity_panel)
                 if on_plan_refresh:
                     on_plan_refresh()
             elif category == "protocol" and should_show(category, verbosity):
                 _handle_protocol_event(data, state, verbosity=verbosity)
-                _flush_new_activity(state, activity_panel)
                 if "plan" in etype and on_plan_refresh:
                     on_plan_refresh()
             elif category == "subagent_progress" and should_show(category, verbosity):
                 _handle_subagent_progress(namespace, data, state, verbosity=verbosity)
-                _flush_new_activity(state, activity_panel)
                 if on_status_update:
                     on_status_update("Running")
             elif category == "subagent_custom" and not is_main:
                 _handle_subagent_custom(namespace, data, state, verbosity=verbosity)
-                _flush_new_activity(state, activity_panel)
                 if on_status_update:
                     on_status_update("Running")
             elif category == "assistant_text":
@@ -116,10 +110,8 @@ def process_daemon_event(
                     on_conversation_append()
             elif category == "error" and should_show("error", verbosity):
                 _handle_protocol_event(data, state, verbosity="normal")
-                _flush_new_activity(state, activity_panel)
             elif should_show(category, verbosity):
                 _handle_generic_custom_activity(namespace, data, state, verbosity=verbosity)
-                _flush_new_activity(state, activity_panel)
 
 
 def handle_messages_event(
@@ -127,7 +119,6 @@ def handle_messages_event(
     state: TuiState,
     *,
     namespace: tuple[str, ...],
-    activity_panel: ActivityPanel,
     verbosity: str = "normal",
 ) -> None:
     """Handle messages event and update state.
@@ -136,7 +127,6 @@ def handle_messages_event(
         data: Event data (message and metadata).
         state: TUI state to update.
         namespace: Event namespace tuple.
-        activity_panel: Activity panel widget.
         verbosity: Progress verbosity level.
     """
     if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
@@ -177,11 +167,9 @@ def handle_messages_event(
                                 state.full_response.append(cleaned)
                         else:
                             _handle_subagent_text_activity(namespace, text, state, verbosity=verbosity)
-                            _flush_new_activity(state, activity_panel)
                 elif btype in ("tool_call_chunk", "tool_call"):
                     name = block.get("name", "")
                     _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
-                    _flush_new_activity(state, activity_panel)
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
             cleaned = strip_internal_tags(msg.content)
             if cleaned:
@@ -226,32 +214,18 @@ def handle_messages_event(
                             state.full_response.append(cleaned)
                     else:
                         _handle_subagent_text_activity(namespace, text, state, verbosity=verbosity)
-                        _flush_new_activity(state, activity_panel)
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
                 _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
-                _flush_new_activity(state, activity_panel)
 
         if has_tool_chunks:
             for tc in tool_call_chunks:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
                     _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
-                    _flush_new_activity(state, activity_panel)
 
     # Handle ToolMessage objects
     if isinstance(msg, ToolMessage):
         tool_name = getattr(msg, "name", "tool")
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         _handle_tool_result_activity(state, tool_name, content, prefix=prefix, verbosity=verbosity)
-        _flush_new_activity(state, activity_panel)
-
-
-def _flush_new_activity(state: TuiState, activity_panel: ActivityPanel) -> None:
-    """Append only new activity lines (append-only, no clear)."""
-    with contextlib.suppress(Exception):
-        last_activity_count = getattr(activity_panel, "_last_activity_count", 0)
-        new_lines = state.activity_lines[last_activity_count:]
-        for line in new_lines:
-            activity_panel.write(line)
-        activity_panel._last_activity_count = len(state.activity_lines)

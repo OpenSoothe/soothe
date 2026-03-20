@@ -72,22 +72,31 @@ class AutonomousMixin(GoalDirectivesMixin):
         state.thread_id = thread_id or self._current_thread_id or ""
         self._current_thread_id = state.thread_id or None
 
-        # Perform unified classification for proper routing
+        # Two-tier classification for proper routing
         if self._unified_classifier:
-            state.unified_classification = await self._unified_classifier.classify(user_input)
+            from soothe.cognition import UnifiedClassification
+
+            routing = await self._unified_classifier.classify_routing(user_input)
             logger.info(
-                "Autonomous mode: unified classification task_complexity=%s - %s",
-                state.unified_classification.task_complexity,
+                "Autonomous mode: tier-1 routing task_complexity=%s - %s",
+                routing.task_complexity,
                 user_input[:50],
             )
 
-        # Fast path for chitchat - skip goal engine and planning
-        if state.unified_classification and state.unified_classification.task_complexity == "chitchat":
-            async for chunk in self._run_chitchat(user_input):
-                yield chunk
-            return
+            # Fast path for chitchat - skip goal engine and planning
+            if routing.task_complexity == "chitchat":
+                async for chunk in self._run_chitchat(user_input, classification=routing):
+                    yield chunk
+                return
 
-        async for chunk in self._pre_stream(user_input, state):
+            enrichment = await self._unified_classifier.classify_enrichment(user_input, routing.task_complexity)
+            state.unified_classification = UnifiedClassification.from_tiers(routing, enrichment)
+        else:
+            state.unified_classification = None
+
+        async for chunk in self._pre_stream_independent(user_input, state):
+            yield chunk
+        async for chunk in self._pre_stream_planning(user_input, state):
             yield chunk
 
         goal = await self._goal_engine.create_goal(user_input, priority=80)

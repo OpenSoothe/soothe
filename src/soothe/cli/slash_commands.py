@@ -25,9 +25,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/exit": "Stop daemon and exit",
     "/quit": "Stop daemon and exit",
     "/detach": "Detach TUI; daemon keeps running (reconnect with 'soothe attach')",
-    "/auto <prompt>": "Run prompt in autonomous mode",
-    "/auto <max_iterations> <prompt>": "Run prompt in autonomous mode with iteration limit",
-    "/autopilot": "Alias for /auto",
+    "/autopilot <prompt>": "Run prompt in autonomous mode",
+    "/cancel": "Cancel the current running job",
     "/plan": "Show current task plan",
     "/memory": "Show memory stats",
     "/context": "Show context stats",
@@ -39,7 +38,20 @@ SLASH_COMMANDS: dict[str, str] = {
     "/thread archive <id>": "Archive a thread",
     "/clear": "Clear the screen",
     "/config": "Show active configuration summary",
+    "/keymaps": "Show keyboard shortcuts",
     "/help": "Show available commands",
+    "/browser <query>": "Route query to Browser subagent",
+    "/claude <query>": "Route query to Claude subagent",
+    "/skillify <query>": "Route query to Skillify subagent",
+    "/weaver <query>": "Route query to Weaver subagent",
+}
+
+KEYBOARD_SHORTCUTS: dict[str, str] = {
+    "Ctrl+Q": "Quit Soothe (stops daemon)",
+    "Ctrl+D": "Detach TUI (daemon keeps running)",
+    "Ctrl+C": "Cancel running job",
+    "Ctrl+E": "Focus chat input",
+    "Ctrl+Y": "Copy last message to clipboard",
 }
 
 
@@ -49,21 +61,17 @@ _AUTO_TWO_PARTS = 2
 
 
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
-    """Parse `/auto` or `/autopilot` command payload.
+    """Parse `/autopilot` command payload.
 
     Args:
-        cmd: Raw slash command, e.g. ``/auto 20 Crawl all skills`` or ``/autopilot 20 Crawl all skills``.
+        cmd: Raw slash command, e.g. ``/autopilot 20 Crawl all skills``.
 
     Returns:
         ``(max_iterations, prompt)`` for valid input, otherwise ``None``.
     """
     stripped = cmd.strip()
-    if not stripped.startswith(("/auto", "/autopilot")):
+    if not stripped.startswith("/autopilot"):
         return None
-
-    # Normalize /autopilot to /auto for parsing
-    if stripped.startswith("/autopilot"):
-        stripped = stripped.replace("/autopilot", "/auto", 1)
 
     parts = stripped.split(maxsplit=_AUTO_MAX_SPLIT)
     if len(parts) == _AUTO_MIN_PARTS:
@@ -83,7 +91,7 @@ def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
         max_iterations = int(maybe_num)
         return (max_iterations if max_iterations > 0 else None, prompt)
 
-    # `/auto <prompt...>` with first token non-numeric.
+    # `/autopilot <prompt...>` with first token non-numeric.
     prompt = f"{parts[1]} {parts[2]}".strip()
     return (None, prompt) if prompt else None
 
@@ -123,6 +131,10 @@ async def handle_slash_command(
         _show_help(console)
         return False
 
+    if command == "/keymaps":
+        _show_keymaps(console)
+        return False
+
     if command == "/plan":
         _show_plan(console, current_plan)
         return False
@@ -156,7 +168,12 @@ async def handle_slash_command(
         return False
 
     if command == "/clear":
-        console.clear()
+        # Return a special signal for clear - daemon will broadcast a clear event
+        # This is handled specially by the TUI
+        return False
+
+    if command == "/cancel":
+        # Handled specially by the daemon - no output needed here
         return False
 
     console.print(f"[yellow]Unknown command: {command}. Type /help for help.[/yellow]")
@@ -173,6 +190,15 @@ def _show_help(console: Console) -> None:
     table.add_column("Command", style="bold cyan")
     table.add_column("Description")
     for k, v in SLASH_COMMANDS.items():
+        table.add_row(k, v)
+    console.print(table)
+
+
+def _show_keymaps(console: Console) -> None:
+    table = Table(title="Keyboard Shortcuts", show_lines=False)
+    table.add_column("Shortcut", style="bold cyan")
+    table.add_column("Action")
+    for k, v in KEYBOARD_SHORTCUTS.items():
         table.add_row(k, v)
     console.print(table)
 
@@ -229,6 +255,8 @@ async def _show_context(console: Console, runner: SootheRunner) -> None:
 def _show_policy(console: Console, runner: SootheRunner) -> None:
     console.print(f"[dim]Policy profile: {runner.config.protocols.policy.profile}[/dim]")
     console.print(f"[dim]Planner routing: {runner.config.protocols.planner.routing}[/dim]")
+    console.print(f"[dim]Context backend: {runner.config.protocols.context.backend}[/dim]")
+    console.print(f"[dim]Memory backend: {runner.config.protocols.memory.backend}[/dim]")
 
 
 def _show_input_history(console: Console, history: InputHistory | None) -> None:
@@ -352,10 +380,10 @@ def _show_config(console: Console, runner: SootheRunner) -> None:
     cfg = runner.config
     lines = [
         f"Model (default): {cfg.resolve_model('default')}",
-        f"Planner routing: {cfg.planner_routing}",
-        f"Context backend: {cfg.context_backend}",
-        f"Memory backend: {cfg.memory_backend}",
-        f"Policy profile: {cfg.policy_profile}",
+        f"Planner routing: {cfg.protocols.planner.routing}",
+        f"Context backend: {cfg.protocols.context.backend}",
+        f"Memory provider: {cfg.protocols.memory.database_provider}",
+        f"Policy profile: {cfg.protocols.policy.profile}",
     ]
     enabled = [n for n, s in cfg.subagents.items() if s.enabled]
     lines.append(f"Subagents: {', '.join(enabled) if enabled else '(none)'}")

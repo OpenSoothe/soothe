@@ -2,37 +2,6 @@
 
 import os
 
-from soothe.subagents._internal.scout import create_scout_subagent
-
-
-class TestScoutSubagent:
-    def test_creates_subagent_dict(self) -> None:
-        spec = create_scout_subagent()
-        assert spec["name"] == "scout"
-        assert "description" in spec
-        assert "system_prompt" in spec
-
-    def test_model_override(self) -> None:
-        spec = create_scout_subagent(model="gpt-4o")
-        assert spec["model"] == "gpt-4o"
-
-    def test_system_prompt_content(self) -> None:
-        spec = create_scout_subagent()
-        prompt = spec["system_prompt"]
-        assert "exploration" in prompt.lower()
-        assert "reflection" in prompt.lower()
-        assert "synthesis" in prompt.lower() or "synthesise" in prompt.lower()
-
-    def test_cwd_creates_filesystem_tools(self) -> None:
-        spec = create_scout_subagent(cwd=os.getcwd())
-        assert "tools" in spec
-        assert len(spec["tools"]) == 4
-
-    def test_default_creates_filesystem_tools(self) -> None:
-        spec = create_scout_subagent()
-        assert "tools" in spec
-        assert len(spec["tools"]) == 4
-
 
 class TestBrowserSubagent:
     def test_creates_compiled_subagent_dict(self) -> None:
@@ -113,22 +82,3 @@ class TestClaudeSubagent:
         spec = create_claude_subagent(cwd=os.getcwd())
         assert spec["name"] == "claude"
         assert "runnable" in spec
-
-
-class TestResearchSubagent:
-    def test_requires_model(self) -> None:
-        import pytest
-
-        from soothe.subagents._internal.research import create_research_subagent
-
-        with pytest.raises(ValueError, match="requires a model"):
-            create_research_subagent(model=None)
-
-    def test_uses_inquiry_engine_sources(self) -> None:
-        from soothe.subagents._internal.research import _build_inquiry_sources
-
-        sources = _build_inquiry_sources()
-        assert len(sources) == 2
-        types = {s.source_type for s in sources}
-        assert "web" in types
-        assert "academic" in types

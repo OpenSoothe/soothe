@@ -106,7 +106,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | `backends/remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
 | `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore`, `PostgreSQLPersistStore` | PersistStore implementations for context/memory/durability |
 | `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
-| `subagents/` | `planner`, `scout`, `research`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
+| `subagents/` | `planner`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
 | `tools/` | `jina`, `serper`, `wizsearch`, `image`, `audio`, `video`, `tabular`, `bash`, `file_edit`, `document`, `python_executor`, `goals`, `datetime` | langchain BaseTool groups |
 | `mcp/` | `loader` | MCP server session management |
 | `cli/` | `main`, `tui_shared`, `tui_app`, `daemon`, `commands`, `session` | Typer CLI + Textual TUI + Daemon |

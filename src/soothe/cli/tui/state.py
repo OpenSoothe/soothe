@@ -65,3 +65,4 @@ class TuiState:
     errors: list[str] = field(default_factory=list)
     thread_id: str = ""
     last_user_input: str = ""
+    plan_visible: bool = True  # Track plan tree visibility

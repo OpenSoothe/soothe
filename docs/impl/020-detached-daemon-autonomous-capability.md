@@ -8,7 +8,7 @@ Enable reliable autonomous background execution when users detach from the TUI, 
 
 1. Externalize TUI daemon bootstrap so detached sessions keep running.
 2. Expose autonomous runtime controls in configuration and propagate through daemon/TUI.
-3. Add an explicit TUI autonomous command surface (`/auto ...`).
+3. Add an explicit TUI autonomous command surface (`/autopilot ...`).
 4. Add tests and docs for detach persistence and autonomous option propagation.
 
 ## Non-Goals
@@ -29,7 +29,7 @@ Enable reliable autonomous background execution when users detach from the TUI, 
 
 - New config flag: `autonomous_enabled_by_default: false`.
 - TUI normal input inherits this default.
-- `/auto <prompt>` and `/auto <max_iterations> <prompt>` override to autonomous mode for a specific request.
+- `/autopilot <prompt>` and `/autopilot <max_iterations> <prompt>` override to autonomous mode for a specific request.
 - Daemon IPC input messages carry:
   - `autonomous: bool`
   - `max_iterations: int | None`
@@ -65,6 +65,6 @@ Use existing capabilities only:
   - autonomous slash command parsing.
 - Manual verification:
   1. Start TUI (`soothe run`)
-  2. Run `/auto 20 <task>`
+  2. Run `/autopilot 20 <task>`
   3. Detach (`/detach`)
   4. Reattach (`soothe attach`) and confirm progress continues.

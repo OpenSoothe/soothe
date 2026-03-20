@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.classification import count_tokens
+from soothe.utils import count_tokens
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import (

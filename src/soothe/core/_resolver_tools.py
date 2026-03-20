@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
 
-    from soothe.core.goal_engine import GoalEngine
+    from soothe.cognition import GoalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
     Returns:
         A configured GoalEngine.
     """
-    from soothe.core.goal_engine import GoalEngine
+    from soothe.cognition import GoalEngine
 
     return GoalEngine(max_retries=config.autonomous.max_retries)
 
