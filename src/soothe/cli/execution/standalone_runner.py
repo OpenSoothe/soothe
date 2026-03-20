@@ -5,11 +5,77 @@ import logging
 import sys
 from typing import Any
 
-from soothe.cli.rendering.tool_brief import extract_tool_brief as _headless_tool_brief
+from soothe.cli.message_processing import (
+    MessageProcessor,
+    OutputFormatter,
+    SharedState,
+    is_multi_step_plan,
+    strip_internal_tags,
+)
 from soothe.config import SootheConfig
-from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
+from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
 
 logger = logging.getLogger(__name__)
+
+
+class _CliOutputFormatter(OutputFormatter):
+    """CLI output formatter for headless mode."""
+
+    def __init__(self) -> None:
+        """Initialize CLI output formatter."""
+        self.needs_stdout_newline = False
+
+    def emit_assistant_text(self, text: str, *, is_main: bool) -> None:  # noqa: ARG002
+        """Emit assistant text to stdout.
+
+        Args:
+            text: The assistant text to emit.
+            is_main: Whether this is from the main agent (unused in CLI).
+        """
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self.needs_stdout_newline = True
+
+    def emit_tool_call(self, name: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
+        """Emit a tool call notification to stderr.
+
+        Args:
+            name: The tool name being called.
+            prefix: Optional namespace prefix for subagents.
+            is_main: Whether this is from the main agent (unused in CLI).
+        """
+        # Add newline before stderr output if needed
+        if self.needs_stdout_newline:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self.needs_stdout_newline = False
+
+        if prefix:
+            sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
+        else:
+            sys.stderr.write(f"[tool] Calling: {name}\n")
+        sys.stderr.flush()
+
+    def emit_tool_result(self, tool_name: str, brief: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
+        """Emit a tool result notification to stderr.
+
+        Args:
+            tool_name: The tool name that produced the result.
+            brief: Brief summary of the result.
+            prefix: Optional namespace prefix for subagents.
+            is_main: Whether this is from the main agent (unused in CLI).
+        """
+        # Add newline before stderr output if needed
+        if self.needs_stdout_newline:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self.needs_stdout_newline = False
+
+        if prefix:
+            sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
+        else:
+            sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
+        sys.stderr.flush()
 
 
 async def run_headless_standalone(
@@ -22,12 +88,12 @@ async def run_headless_standalone(
     max_iterations: int | None = None,
 ) -> int:
     """Run a single prompt in standalone mode (no daemon)."""
-    from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+    from langchain_core.messages import AIMessage, ToolMessage
 
     from soothe.cli.progress_verbosity import classify_custom_event, should_show
     from soothe.cli.rendering import render_progress_event
     from soothe.cli.thread_logger import ThreadLogger
-    from soothe.cli.tui_shared import resolve_namespace_label, update_name_map_from_tool_calls
+    from soothe.cli.tui_shared import resolve_namespace_label
     from soothe.core.runner import SootheRunner
 
     runner = SootheRunner(cfg)
@@ -42,13 +108,12 @@ async def run_headless_standalone(
     _msg_pair_len = 2
     exit_code = 0
 
-    full_response: list[str] = []
-    seen_message_ids: set[str] = set()
-    name_map: dict[str, str] = {}
-    has_error = False
+    # Use shared state and message processor
+    state = SharedState()
+    formatter = _CliOutputFormatter()
+    processor = MessageProcessor(state, formatter)
+
     verbosity = cfg.logging.progress_verbosity
-    needs_stdout_newline = False  # Track if we need a newline before stderr output
-    multi_step_active = False  # Suppress step AI text from stdout; final report only
 
     thread_logger.log_user_input(prompt)
 
@@ -83,28 +148,34 @@ async def run_headless_standalone(
                         sys.stdout.write(report_text)
                         sys.stdout.write("\n")
                         sys.stdout.flush()
-                        full_response.append(report_text)
+                        state.full_response.append(report_text)
+                    # Reset multi-step flag after final report
+                    state.multi_step_active = False
                 elif etype == CHITCHAT_RESPONSE:
                     chitchat_content = data.get("content", "")
                     if chitchat_content:
-                        sys.stdout.write(chitchat_content)
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        full_response.append(chitchat_content)
+                        # Strip internal tags for clean display
+                        cleaned = strip_internal_tags(chitchat_content)
+                        if cleaned:
+                            sys.stdout.write(cleaned)
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            state.full_response.append(cleaned)
                 else:
-                    if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
-                        multi_step_active = True
+                    # Check for multi-step plan creation
+                    if is_multi_step_plan(data):
+                        state.multi_step_active = True
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
                         # Add newline before stderr output if needed
-                        if needs_stdout_newline:
+                        if formatter.needs_stdout_newline:
                             sys.stdout.write("\n")
                             sys.stdout.flush()
-                            needs_stdout_newline = False
-                        prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                            formatter.needs_stdout_newline = False
+                        prefix = resolve_namespace_label(namespace, state.name_map) if namespace else None
                         render_progress_event(data, prefix=prefix, verbosity=verbosity)
                     if category == "error":
-                        has_error = True
+                        state.has_error = True
 
             if mode == "messages":
                 if not isinstance(data, tuple) or len(data) != _msg_pair_len:
@@ -113,62 +184,20 @@ async def run_headless_standalone(
                 is_main = not namespace
                 if metadata and metadata.get("lc_source") == "summarization":
                     continue
-                if isinstance(msg, AIMessage) and hasattr(msg, "content_blocks"):
-                    update_name_map_from_tool_calls(msg, name_map)
-                    msg_id = msg.id or ""
-                    if not isinstance(msg, AIMessageChunk):
-                        if msg_id in seen_message_ids:
-                            continue
-                        seen_message_ids.add(msg_id)
-                    elif msg_id:
-                        seen_message_ids.add(msg_id)
-                    for block in msg.content_blocks:
-                        if not isinstance(block, dict):
-                            continue
-                        btype = block.get("type")
-                        if btype == "text":
-                            text = block.get("text", "")
-                            if is_main and text and should_show("assistant_text", verbosity):
-                                full_response.append(text)
-                                if not multi_step_active:
-                                    sys.stdout.write(text)
-                                    sys.stdout.flush()
-                                    needs_stdout_newline = True
-                        elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
-                            name = block.get("name", "")
-                            if name:
-                                # Add newline before stderr output if needed
-                                if needs_stdout_newline:
-                                    sys.stdout.write("\n")
-                                    sys.stdout.flush()
-                                    needs_stdout_newline = False
-                                prefix = resolve_namespace_label(namespace, name_map) if namespace else None
-                                if prefix:
-                                    sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
-                                else:
-                                    sys.stderr.write(f"[tool] Calling: {name}\n")
-                                sys.stderr.flush()
-                elif isinstance(msg, ToolMessage) and should_show("tool_activity", verbosity):
-                    tool_name = getattr(msg, "name", "tool")
-                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                    brief = _headless_tool_brief(tool_name, content)
-                    # Add newline before stderr output if needed
-                    if needs_stdout_newline:
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                        needs_stdout_newline = False
-                    prefix = resolve_namespace_label(namespace, name_map) if namespace else None
-                    if prefix:
-                        sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
-                    else:
-                        sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
-                    sys.stderr.flush()
-        if full_response:
-            if needs_stdout_newline:
+
+                # Use shared message processor
+                if isinstance(msg, AIMessage):
+                    processor.process_ai_message(msg, is_main=is_main, verbosity=verbosity)
+                elif isinstance(msg, ToolMessage):
+                    prefix = resolve_namespace_label(namespace, state.name_map) if namespace else None
+                    processor.process_tool_message(msg, prefix=prefix, verbosity=verbosity)
+
+        if state.full_response:
+            if formatter.needs_stdout_newline:
                 sys.stdout.write("\n")
                 sys.stdout.flush()
-            thread_logger.log_assistant_response("".join(full_response))
-        return 1 if has_error else 0
+            thread_logger.log_assistant_response("".join(state.full_response))
+        return 1 if state.has_error else 0
     finally:
         await runner.cleanup()
 

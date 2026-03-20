@@ -150,7 +150,7 @@ class UnifiedClassification(BaseModel):
 # ---------------------------------------------------------------------------
 
 _ROUTING_PROMPT = """\
-You are {assistant_name}. Classify this request and respond with JSON only.
+You are {assistant_name}, created by Dr. Xiaming Chen. Classify this request and respond with JSON only.
 Current time: {current_time}
 
 Request: {query}
@@ -161,7 +161,7 @@ chitchat=greetings/thanks/fillers needing no action.
 medium=research/questions/tasks/debugging (DEFAULT when uncertain).
 complex=architecture design/large migrations/major refactoring.
 If chitchat, set chitchat_response to a warm reply in the user's language \
-mentioning you're {assistant_name}. Otherwise null.\
+mentioning you're {assistant_name} and that you were created by Dr. Xiaming Chen. Otherwise null.\
 """
 
 _ENRICHMENT_PROMPT = """\
@@ -323,8 +323,8 @@ class UnifiedClassifier:
         """
         name = self._assistant_name
         if _looks_chinese(query):
-            return f"你好! 我是 {name}, 有什么可以帮你的吗?"
-        return f"Hello! I'm {name}, your AI assistant. How can I help you today?"
+            return f"你好! 我是 {name}, 由陈晓明博士创造。有什么可以帮你的吗?"
+        return f"Hello! I'm {name}, created by Dr. Xiaming Chen. How can I help you today?"
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:
         """Safe default when everything fails."""

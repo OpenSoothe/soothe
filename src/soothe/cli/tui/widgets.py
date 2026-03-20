@@ -15,11 +15,7 @@ class ConversationPanel(RichLog):
 
 
 class PlanTree(Static):
-    """Borderless plan tree display, toggleable."""
-
-
-class ActivityInfo(Static):
-    """Compact activity display showing last 5 lines, borderless."""
+    """Plan tree display with merged activity info, toggleable."""
 
 
 class InfoBar(Static):

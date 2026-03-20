@@ -31,8 +31,7 @@ class WebSearchTool(BaseTool):
         "Returns search results with titles, URLs, and snippets. "
         "Use the `research` tool instead when a topic requires thorough "
         "investigation across multiple sources. "
-        "Inputs: `query` (required), `engines` (optional), "
-        "`max_results_per_engine` (default 10)."
+        "Inputs: `query` (required), `max_results_per_engine` (default 10)."
     )
 
     config: dict[str, Any] = Field(default_factory=dict)
@@ -61,7 +60,6 @@ class WebSearchTool(BaseTool):
     def _run(
         self,
         query: str,
-        engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -69,7 +67,6 @@ class WebSearchTool(BaseTool):
 
         Args:
             query: Search query.
-            engines: Optional engine list override (wizsearch only).
             max_results_per_engine: Max results per engine.
             timeout_seconds: Request timeout.
 
@@ -84,7 +81,6 @@ class WebSearchTool(BaseTool):
 
         return backend._run(
             query=query,
-            engines=engines,
             max_results_per_engine=max_results_per_engine,
             timeout_seconds=timeout_seconds,
         )
@@ -92,7 +88,6 @@ class WebSearchTool(BaseTool):
     async def _arun(
         self,
         query: str,
-        engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -105,7 +100,6 @@ class WebSearchTool(BaseTool):
 
         return await backend._arun(
             query=query,
-            engines=engines,
             max_results_per_engine=max_results_per_engine,
             timeout_seconds=timeout_seconds,
         )

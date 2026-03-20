@@ -7,12 +7,12 @@ O(n) if-elif chains with O(1) handler lookup for TUI rendering.
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 
+from soothe.cli.message_processing import strip_internal_tags
 from soothe.cli.progress_verbosity import ProgressVerbosity, should_show
 from soothe.core.event_catalog import REGISTRY
 from soothe.core.events import (
@@ -60,33 +60,12 @@ logger = logging.getLogger(__name__)
 _MAX_INLINE_QUERIES = 3
 _ACTIVITY_MAX = 300
 
-# Patterns for stripping internal tags
-_INTERNAL_TAG_PATTERN = re.compile(
-    r"<search_data>.*?</search_data>\s*"
-    r"(?:Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*)?",
-    re.DOTALL,
-)
-_LEFTOVER_TAG_PATTERN = re.compile(r"</?search_data>")
-_SYNTHESIS_INSTRUCTION_PATTERN = re.compile(
-    r"Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*"
-)
-
 
 def _truncate(text: str, limit: int = 80) -> str:
     """Truncate text with ellipsis if needed."""
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
-
-
-def strip_internal_tags(text: str) -> str:
-    """Strip internal tool tags from assistant text for clean display."""
-    result = _INTERNAL_TAG_PATTERN.sub("", text)
-    result = _LEFTOVER_TAG_PATTERN.sub("", result)
-    result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
-    return result.strip()
 
 
 class TuiEventRenderer:
@@ -570,6 +549,8 @@ class TuiEventRenderer:
         summary = event.get("summary", "")
         if summary:
             state.full_response.append(f"\n{summary}")
+        # Reset multi-step flag after final report
+        state.multi_step_active = False
 
 
 # Singleton instance for TUI rendering

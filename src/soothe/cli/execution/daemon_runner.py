@@ -7,7 +7,7 @@ import sys
 
 import typer
 
-from soothe.cli.rendering.tool_brief import extract_tool_brief
+from soothe.cli.message_processing import extract_tool_brief
 from soothe.config import SootheConfig
 from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
 

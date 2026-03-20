@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from rich.text import Text
 
+from soothe.cli.message_processing import extract_tool_brief as _extract_tool_brief
 from soothe.cli.progress_verbosity import ProgressVerbosity, should_show
-from soothe.cli.rendering.tool_brief import extract_tool_brief as _extract_tool_brief
 from soothe.cli.tui.state import TuiState
 from soothe.core.events import (
     SUBAGENT_BROWSER_CDP,
@@ -34,32 +33,6 @@ from soothe.core.events import (
 logger = logging.getLogger(__name__)
 
 _ACTIVITY_MAX = 300
-
-_INTERNAL_TAG_PATTERN = re.compile(
-    r"<search_data>.*?</search_data>\s*"
-    r"(?:Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*)?",
-    re.DOTALL,
-)
-_LEFTOVER_TAG_PATTERN = re.compile(r"</?search_data>")
-_SYNTHESIS_INSTRUCTION_PATTERN = re.compile(
-    r"Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*"
-)
-
-
-def strip_internal_tags(text: str) -> str:
-    """Strip internal tool tags from assistant text for clean display.
-
-    Removes `<search_data>...</search_data>` blocks and associated
-    synthesis instructions that should not be shown to users.
-    """
-    result = _INTERNAL_TAG_PATTERN.sub("", text)
-    result = _LEFTOVER_TAG_PATTERN.sub("", result)
-    result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
-    return result.strip()
-
-
 _MAX_INLINE_QUERIES = 3
 _STATUS_MARKERS: dict[str, tuple[str, str]] = {
     "pending": ("[ ]", "dim"),

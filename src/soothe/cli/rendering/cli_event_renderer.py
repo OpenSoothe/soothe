@@ -6,6 +6,7 @@ O(n) if-elif chains with O(1) handler lookup.
 
 from __future__ import annotations
 
+import logging
 import sys
 from collections.abc import Callable
 from typing import Any
@@ -51,6 +52,8 @@ from soothe.core.events import (
     TOOL_WEBSEARCH_SEARCH_FAILED,
     TOOL_WEBSEARCH_SEARCH_STARTED,
 )
+
+logger = logging.getLogger(__name__)
 
 _MAX_INLINE_QUERIES = 3
 _EVENT_TYPE_MIN_SEGMENTS = 4
@@ -343,11 +346,18 @@ class CliEventRenderer:
 
         In debug mode, show all policy events.
         In normal mode, suppress "allow" messages but show "deny" messages.
+        Log all policy events to file for audit trail.
         """
         verdict = event.get("verdict", "?")
         profile = event.get("profile")
 
-        # In normal mode, suppress "allow" events
+        # Always log to file for audit trail
+        detail = f"Policy: {verdict}"
+        if profile:
+            detail += f" (profile={profile})"
+        logger.info("Policy event: %s", detail)
+
+        # In normal mode, suppress "allow" events from display
         if verdict == "allow" and verbosity != "debug":
             return []
 

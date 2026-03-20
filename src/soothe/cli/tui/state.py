@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.text import Text
 
+from soothe.cli.message_processing import SharedState
 from soothe.protocols.planner import Plan
 
 
@@ -55,14 +56,66 @@ class SubagentTracker:
 class TuiState:
     """Mutable display state shared by TUI frontends."""
 
-    full_response: list[str] = field(default_factory=list)
+    # Compose shared state for common fields
+    shared: SharedState = field(default_factory=SharedState)
+
+    # TUI-specific state
     tool_call_buffers: dict[str | int, dict[str, Any]] = field(default_factory=dict)
-    name_map: dict[str, str] = field(default_factory=dict)
     activity_lines: list[Text] = field(default_factory=list)
     current_plan: Plan | None = None
     subagent_tracker: SubagentTracker = field(default_factory=SubagentTracker)
-    seen_message_ids: set[str] = field(default_factory=set)
     errors: list[str] = field(default_factory=list)
     thread_id: str = ""
     last_user_input: str = ""
     plan_visible: bool = True  # Track plan tree visibility
+
+    # Convenience properties to access shared state
+    @property
+    def full_response(self) -> list[str]:
+        """Get full_response from shared state."""
+        return self.shared.full_response
+
+    @full_response.setter
+    def full_response(self, value: list[str]) -> None:
+        """Set full_response in shared state."""
+        self.shared.full_response = value
+
+    @property
+    def seen_message_ids(self) -> set[str]:
+        """Get seen_message_ids from shared state."""
+        return self.shared.seen_message_ids
+
+    @seen_message_ids.setter
+    def seen_message_ids(self, value: set[str]) -> None:
+        """Set seen_message_ids in shared state."""
+        self.shared.seen_message_ids = value
+
+    @property
+    def name_map(self) -> dict[str, str]:
+        """Get name_map from shared state."""
+        return self.shared.name_map
+
+    @name_map.setter
+    def name_map(self, value: dict[str, str]) -> None:
+        """Set name_map in shared state."""
+        self.shared.name_map = value
+
+    @property
+    def multi_step_active(self) -> bool:
+        """Get multi_step_active from shared state."""
+        return self.shared.multi_step_active
+
+    @multi_step_active.setter
+    def multi_step_active(self, value: bool) -> None:
+        """Set multi_step_active in shared state."""
+        self.shared.multi_step_active = value
+
+    @property
+    def has_error(self) -> bool:
+        """Get has_error from shared state."""
+        return self.shared.has_error
+
+    @has_error.setter
+    def has_error(self, value: bool) -> None:
+        """Set has_error in shared state."""
+        self.shared.has_error = value

@@ -34,7 +34,7 @@ from soothe.cli.slash_commands import parse_autonomous_command
 from soothe.cli.thread_logger import ThreadLogger
 from soothe.cli.tui.event_processors import process_daemon_event
 from soothe.cli.tui.state import TuiState
-from soothe.cli.tui.widgets import ActivityInfo, ChatInput, ConversationPanel, InfoBar, PlanTree
+from soothe.cli.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTree
 from soothe.cli.tui_shared import render_plan_tree
 from soothe.config import SootheConfig
 
@@ -64,14 +64,9 @@ class SootheApp(App):
         height: auto;
         margin-bottom: 1;
     }
-    #activity-info {
-        height: auto;
-        max-height: 5;
-        padding: 0 1;
-    }
     #plan-tree {
         height: auto;
-        max-height: 15;
+        max-height: 20;
         padding: 0 1;
     }
     #plan-tree.hidden {
@@ -140,9 +135,8 @@ class SootheApp(App):
                     markup=True,
                     wrap=True,
                 )
-            # Row 2: Activity info and Plan tree (vertical layout)
+            # Row 2: Plan tree (merged with activity info)
             with Container(id="info-row"):
-                yield ActivityInfo(id="activity-info")
                 yield PlanTree(id="plan-tree", classes="" if self._state.plan_visible else "hidden")
             # Row 3: Chat input
             yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
@@ -401,22 +395,24 @@ class SootheApp(App):
                 panel.write(assistant_panel, scroll_end=True)
 
     def _flush_new_activity(self) -> None:
-        """Update activity info with last 5 lines."""
-        with contextlib.suppress(Exception):
-            activity_info = self.query_one("#activity-info", ActivityInfo)
-            # Get last 5 lines
-            last_5 = self._state.activity_lines[-5:] if self._state.activity_lines else []
-            if last_5:
-                # Join lines with newlines for Static display
-                content = "\n".join(str(line) for line in last_5)
-                activity_info.update(content)
-            else:
-                activity_info.update("[dim]No recent activity.[/dim]")
+        """Update plan tree with activity info (merged display)."""
+        self._refresh_plan()
 
     def _refresh_plan(self) -> None:
-        """Update plan tree display."""
+        """Update plan tree display with activity info."""
         try:
             plan_tree = self.query_one("#plan-tree", PlanTree)
+
+            # Build content with activity and plan
+            content_parts = []
+
+            # Add activity info (last 5 lines)
+            last_5 = self._state.activity_lines[-5:] if self._state.activity_lines else []
+            if last_5:
+                activity_content = "\n".join(str(line) for line in last_5)
+                content_parts.append(f"[dim]Recent Activity:[/dim]\n{activity_content}")
+
+            # Add plan tree
             if self._state.current_plan:
                 tree = render_plan_tree(self._state.current_plan)
                 # Render Tree to string using Console
@@ -426,9 +422,16 @@ class SootheApp(App):
 
                 console = Console(file=StringIO(), force_terminal=True)
                 console.print(tree)
-                plan_tree.update(console.file.getvalue())
+                plan_content = console.file.getvalue()
+                if content_parts:
+                    content_parts.append("")  # Add separator
+                content_parts.append(f"[dim]Plan:[/dim]\n{plan_content}")
+
+            # Update the widget
+            if content_parts:
+                plan_tree.update("\n".join(content_parts))
             else:
-                plan_tree.update("[dim]No active plan.[/dim]")
+                plan_tree.update("[dim]No recent activity or active plan.[/dim]")
         except Exception:
             logger.debug("Failed to refresh plan tree", exc_info=True)
 
@@ -439,13 +442,9 @@ class SootheApp(App):
             conv_panel = self.query_one("#conversation", ConversationPanel)
             conv_panel.clear()
 
-            # Clear activity info
-            activity_info = self.query_one("#activity-info", ActivityInfo)
-            activity_info.update("[dim]No recent activity.[/dim]")
-
-            # Clear plan tree
+            # Clear plan tree (includes activity info)
             plan_tree = self.query_one("#plan-tree", PlanTree)
-            plan_tree.update("[dim]No active plan.[/dim]")
+            plan_tree.update("[dim]No recent activity or active plan.[/dim]")
 
             # Clear internal state
             self._conversation_history.clear()
@@ -496,7 +495,7 @@ class SootheApp(App):
             while self._is_running:
                 frame = frames[self._typing_frame % len(frames)]
                 message = messages[msg_idx % len(messages)]
-                indicator = f"{frame} {message}..."
+                indicator = f"[bold cyan]{frame} {message}...[/bold cyan]"
 
                 # Update info bar with indicator
                 self._update_status_bar(indicator)

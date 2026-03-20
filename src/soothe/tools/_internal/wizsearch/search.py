@@ -17,7 +17,6 @@ from soothe.core.events import (
 from soothe.tools._internal.wizsearch._helpers import (
     _extract_domain,
     _maybe_apply_tavily_key,
-    _normalize_engines,
     _require_wizsearch,
     _run_coro,
     _save_raw_results,
@@ -32,12 +31,12 @@ class WizsearchSearchTool(BaseTool):
 
     name: str = "wizsearch_search"
     description: str = (
-        "Search the web with multiple engines using wizsearch. "
+        "Search the web using multiple engines. "
         "For time-sensitive queries (e.g., 'latest news', 'recent events'), "
         "first use the current_datetime tool to know today's date, then include appropriate "
         "time qualifiers (year, month) in your search query to get the most recent results. "
-        "Inputs: `query` (required), `engines` (optional, omit to use configured defaults), "
-        "`max_results_per_engine` (default: 10), and `timeout` seconds (default: 30). "
+        "Inputs: `query` (required), `max_results_per_engine` (default: 10), "
+        "`timeout` seconds (default: 30). "
         "Returns a text summary of search results with titles, URLs, and content snippets. "
         "Use these results to compose your answer; do NOT echo the raw results to the user."
     )
@@ -148,7 +147,6 @@ class WizsearchSearchTool(BaseTool):
     async def _perform_search(
         self,
         query: str,
-        engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -164,15 +162,14 @@ class WizsearchSearchTool(BaseTool):
             "max_results_per_engine": max_results_per_engine or self.default_max_results_per_engine,
             "timeout": timeout_seconds or self.default_timeout,
             "fail_silently": not self._debug_mode,
+            "enabled_engines": self.default_engines,
         }
-        normalized = _normalize_engines(engines) or self.default_engines
-        config_kwargs["enabled_engines"] = normalized
 
         if self._debug_mode:
             logger.info("Wizsearch debug mode enabled: fail_silently=False, output_suppression=False")
 
-        self._log_engine_diagnostics(normalized)
-        validation_warnings = self._validate_engine_config(normalized)
+        self._log_engine_diagnostics(self.default_engines)
+        validation_warnings = self._validate_engine_config(self.default_engines)
         for warning in validation_warnings:
             logger.warning("Engine %s: %s - %s", warning["engine"], warning["issue"], warning["message"])
 
@@ -180,7 +177,7 @@ class WizsearchSearchTool(BaseTool):
             {
                 "type": TOOL_WEBSEARCH_SEARCH_STARTED,
                 "query": query,
-                "engines": normalized,
+                "engines": self.default_engines,
                 "tool": "wizsearch_search",
                 "tool_group": "websearch",
             },
@@ -211,43 +208,15 @@ class WizsearchSearchTool(BaseTool):
                 )
                 _save_raw_results(query, result)
                 return self._build_result_payload(result)
-        except Exception:
-            logger.warning("Search failed with engines %s, retrying with defaults", normalized, exc_info=True)
-
-        try:
-            config_kwargs["enabled_engines"] = self.default_engines
-            with capture_subagent_output("wizsearch", suppress=not self._debug_mode):
-                searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
-                result = await searcher.search(query=query)
-
-                if hasattr(result, "metadata") and result.metadata:
-                    engine_status = result.metadata.get("engine_status", {})
-                    for engine_name, status in engine_status.items():
-                        logger.debug("Engine %s: %s", engine_name, status)
-
-                sources = _to_serializable_sources(result)
-                emit_progress(
-                    {
-                        "type": TOOL_WEBSEARCH_SEARCH_COMPLETED,
-                        "query": query,
-                        "result_count": len(sources),
-                        "response_time": getattr(result, "response_time", None),
-                        "tool": "wizsearch_search",
-                        "tool_group": "websearch",
-                    },
-                    logger,
-                )
-                _save_raw_results(query, result)
-                return self._build_result_payload(result)
         except Exception as exc:
-            logger.exception("Search failed even with default engines")
+            logger.exception("Search failed with engines %s", self.default_engines)
 
             emit_progress(
                 {
                     "type": TOOL_WEBSEARCH_SEARCH_FAILED,
                     "query": query,
                     "error": str(exc),
-                    "engines": normalized,
+                    "engines": self.default_engines,
                     "engine_status": getattr(exc, "engine_status", {}),
                     "debug_mode": self._debug_mode,
                     "tool": "wizsearch_search",
@@ -260,14 +229,12 @@ class WizsearchSearchTool(BaseTool):
     def _run(
         self,
         query: str,
-        engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
         return _run_coro(
             self._perform_search(
                 query=query,
-                engines=engines,
                 max_results_per_engine=max_results_per_engine,
                 timeout_seconds=timeout_seconds,
             )
@@ -276,13 +243,11 @@ class WizsearchSearchTool(BaseTool):
     async def _arun(
         self,
         query: str,
-        engines: list[str] | str | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
         return await self._perform_search(
             query=query,
-            engines=engines,
             max_results_per_engine=max_results_per_engine,
             timeout_seconds=timeout_seconds,
         )
