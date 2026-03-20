@@ -9,5 +9,5 @@ External code should import from the public tool modules instead:
 - ``soothe.tools.execute``
 - ``soothe.tools.data``
 - ``soothe.tools.websearch``
-- ``soothe.tools.inquiry``
+- ``soothe.tools.research``
 """

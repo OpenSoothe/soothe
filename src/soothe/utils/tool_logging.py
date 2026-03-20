@@ -5,6 +5,7 @@ Provides a reusable wrapper that emits progress events when tools are invoked.
 
 from __future__ import annotations
 
+import functools
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -46,6 +47,7 @@ def wrap_tool_with_logging(
         if hasattr(tool, "func") and tool.func is not None:
             original_func = tool.func
 
+            @functools.wraps(original_func)
             def logged_func(*args: Any, **kwargs: Any) -> Any:
                 emit_progress(
                     make_subagent_tool_started(
@@ -187,6 +189,7 @@ def wrap_main_agent_tool_with_logging(
         if hasattr(tool, "_run"):
             original_run = tool._run
 
+            @functools.wraps(original_run)
             def logged_run(*args: Any, **kwargs: Any) -> Any:
                 emit_progress(
                     _started(args=str(args)[:200] if args else "", kwargs=str(kwargs)[:200] if kwargs else ""),
@@ -207,6 +210,7 @@ def wrap_main_agent_tool_with_logging(
             if hasattr(tool, "_arun"):
                 original_arun = tool._arun
 
+                @functools.wraps(original_arun)
                 async def logged_arun(*args: Any, **kwargs: Any) -> Any:
                     emit_progress(
                         _started(args=str(args)[:200] if args else "", kwargs=str(kwargs)[:200] if kwargs else ""),

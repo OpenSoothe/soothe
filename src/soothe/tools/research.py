@@ -7,12 +7,11 @@ LLM hint at which information sources are most relevant, while the
 InquiryEngine handles source routing internally.
 
 The tool name is ``research`` (user-facing), backed by the InquiryEngine
-internally.  The old ``inquiry`` tool group name is kept as an alias.
+internally.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from typing import Any, ClassVar
@@ -23,7 +22,7 @@ from pydantic import Field
 logger = logging.getLogger(__name__)
 
 
-class InquiryTool(BaseTool):
+class ResearchTool(BaseTool):
     """Deep research tool backed by the tool-agnostic InquiryEngine.
 
     Iteratively searches, analyses, and synthesises information from
@@ -62,15 +61,15 @@ class InquiryTool(BaseTool):
 
         if self.soothe_config:
             model_str = self.soothe_config.resolve_model("default")
-        else:
-            model_str = os.environ.get("SOOTHE_DEFAULT_MODEL", "openai:gpt-4o-mini")
+            # Use SootheConfig's create_chat_model which properly handles provider:model resolution
+            return self.soothe_config.create_chat_model("default")
 
+        model_str = os.environ.get("SOOTHE_DEFAULT_MODEL", "openai:gpt-4o-mini")
         model_kwargs: dict[str, Any] = {}
         base_url = os.environ.get("OPENAI_BASE_URL")
         if base_url:
             model_kwargs["base_url"] = base_url
             model_kwargs["use_responses_api"] = False
-
         return init_chat_model(model_str, **model_kwargs)
 
     def _build_sources(self, domain: str) -> list:
@@ -159,29 +158,26 @@ class InquiryTool(BaseTool):
         """Async deep research execution."""
         engine = self._build_engine(domain)
         try:
-            result = await asyncio.to_thread(
-                engine.invoke,
-                {"research_topic": topic, "domain": domain, "messages": []},
-            )
+            result = await engine.ainvoke({"research_topic": topic, "domain": domain, "messages": []})
             return result.get("answer", "Research completed but no answer was generated.")
         except Exception:
             logger.exception("Inquiry engine failed for topic: %s", topic)
             return f"Research failed for topic: {topic}. Please try a more specific query."
 
 
-def create_inquiry_tools(
+def create_research_tools(
     config: Any | None = None,
     work_dir: str = "",
 ) -> list[BaseTool]:
-    """Create inquiry tool instances.
+    """Create research tool instances.
 
     Args:
         config: Optional Soothe config.
         work_dir: Working directory for filesystem/CLI sources.
 
     Returns:
-        List containing the InquiryTool.
+        List containing the ResearchTool.
     """
     return [
-        InquiryTool(soothe_config=config, work_dir=work_dir),
+        ResearchTool(soothe_config=config, work_dir=work_dir),
     ]

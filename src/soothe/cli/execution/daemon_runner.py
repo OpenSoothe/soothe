@@ -132,6 +132,11 @@ async def run_headless_via_daemon(
                 else:
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
+                        # Add newline before stderr output if needed
+                        if needs_stdout_newline:
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            needs_stdout_newline = False
                         prefix = resolve_namespace_label(namespace, name_map) if namespace else None
                         render_progress_event(data, prefix=prefix, verbosity=verbosity)
                     if category == "error":

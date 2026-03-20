@@ -122,7 +122,7 @@ tools:
   - workspace         # File ops: read, write, delete, search, list, info
   - execute           # Run shell commands, Python code, background processes
   - data              # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
-  - websearch         # Quick single-call web search
+  - websearch         # Quick web search and content extraction (auto-selects serper/jina if API keys available)
   - research          # Deep multi-source iterative research (InquiryEngine)
 
   # Optional tools (require API keys or external services):
@@ -130,8 +130,6 @@ tools:
   # - audio           # Audio transcription (OpenAI Whisper)
   # - video           # Video analysis (Google Gemini)
   # - github          # GitHub API (GITHUB_TOKEN)
-  # - serper          # Google search via Serper (SERPER_API_KEY)
-  # - jina            # Web page reader via Jina (JINA_API_KEY)
 
 # =============================================================================
 # Tools Settings

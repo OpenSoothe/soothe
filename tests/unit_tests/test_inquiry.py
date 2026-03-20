@@ -338,23 +338,23 @@ class TestResearchSubagentRefactor:
 
 
 # ---------------------------------------------------------------------------
-# Inquiry tool structure tests
+# Research tool structure tests
 # ---------------------------------------------------------------------------
 
 
-class TestInquiryTool:
+class TestResearchTool:
     def test_tool_metadata(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         assert tool.name == "research"
         assert "domain" in tool.description.lower()
         assert "deep" in tool.description.lower()
 
     def test_build_sources_web(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         sources = tool._build_sources("web")
         types = {s.source_type for s in sources}
         assert "web" in types
@@ -362,9 +362,9 @@ class TestInquiryTool:
         assert "filesystem" not in types
 
     def test_build_sources_code(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         sources = tool._build_sources("code")
         types = {s.source_type for s in sources}
         assert "filesystem" in types
@@ -372,17 +372,17 @@ class TestInquiryTool:
         assert "web" not in types
 
     def test_build_sources_deep(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         sources = tool._build_sources("deep")
         types = {s.source_type for s in sources}
         assert len(types) >= 4
 
     def test_build_sources_auto(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         sources = tool._build_sources("auto")
         assert len(sources) >= 3
 

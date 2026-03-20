@@ -157,14 +157,6 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         name: Tool group name.
         config: Optional Soothe config for tool configuration.
     """
-    if name == "jina":
-        from soothe.tools.jina import create_jina_tools
-
-        return list(create_jina_tools())
-    if name == "serper":
-        from soothe.tools.serper import create_serper_tools
-
-        return list(create_serper_tools())
     if name == "datetime":
         from soothe.tools.datetime import create_datetime_tools
 
@@ -192,10 +184,10 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             return []
 
     if name == "research":
-        from soothe.tools.inquiry import create_inquiry_tools
+        from soothe.tools.research import create_research_tools
 
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
-        return list(create_inquiry_tools(config=config, work_dir=resolved_cwd))
+        return list(create_research_tools(config=config, work_dir=resolved_cwd))
 
     if name == "websearch":
         from soothe.tools.websearch import create_websearch_tools

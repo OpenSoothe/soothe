@@ -90,12 +90,40 @@ def create_research_subagent(
         raise ValueError(msg)
 
     if isinstance(model, str):
-        model_kwargs: dict[str, Any] = {}
-        base_url = os.environ.get("OPENAI_BASE_URL")
-        if base_url:
-            model_kwargs["base_url"] = base_url
-            model_kwargs["use_responses_api"] = False
-        resolved_model = init_chat_model(model, **model_kwargs)
+        # If we have a SootheConfig and the model string contains a custom provider name,
+        # use create_chat_model to properly resolve it
+        if config and hasattr(config, "providers") and ":" in model:
+            provider_name = model.split(":", 1)[0]
+            # Check if this provider is defined in the config
+            provider_names = [p.name for p in config.providers] if config.providers else []
+            if provider_name in provider_names:
+                # Use SootheConfig's create_chat_model which handles provider:model resolution
+                cache_key = model
+                if cache_key in config._model_cache:
+                    resolved_model = config._model_cache[cache_key]
+                else:
+                    # Parse provider:model and resolve using SootheConfig logic
+                    _, _, model_name = model.partition(":")
+                    provider_type, kwargs = config._provider_kwargs(provider_name)
+                    init_str = f"{provider_type}:{model_name}" if provider_name else model
+                    resolved_model = init_chat_model(init_str, **kwargs)
+                    config._model_cache[cache_key] = resolved_model
+            else:
+                # Standard langchain provider, use init_chat_model directly
+                model_kwargs: dict[str, Any] = {}
+                base_url = os.environ.get("OPENAI_BASE_URL")
+                if base_url:
+                    model_kwargs["base_url"] = base_url
+                    model_kwargs["use_responses_api"] = False
+                resolved_model = init_chat_model(model, **model_kwargs)
+        else:
+            # Standard provider:model format or plain model name
+            model_kwargs: dict[str, Any] = {}
+            base_url = os.environ.get("OPENAI_BASE_URL")
+            if base_url:
+                model_kwargs["base_url"] = base_url
+                model_kwargs["use_responses_api"] = False
+            resolved_model = init_chat_model(model, **model_kwargs)
     else:
         resolved_model = model
 
@@ -110,7 +138,7 @@ def create_research_subagent(
         resolved_model,
         sources,
         inquiry_config,
-        domain="web",
+        _domain="web",
     )
 
     return {

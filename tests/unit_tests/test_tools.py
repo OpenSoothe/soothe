@@ -2,6 +2,8 @@
 
 import pytest
 
+from soothe.tools._internal.jina import JinaReaderTool
+from soothe.tools._internal.serper import SerperSearchTool
 from soothe.tools._internal.tabular import (
     TabularColumnsTool,
     TabularQualityTool,
@@ -15,9 +17,8 @@ from soothe.tools._internal.wizsearch import (
     create_wizsearch_tools,
 )
 from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
-from soothe.tools.jina import JinaReaderTool, create_jina_tools
-from soothe.tools.serper import SerperSearchTool, create_serper_tools
 from soothe.tools.video import VideoInfoTool, create_video_tools
+from soothe.tools.websearch import WebCrawlTool, WebSearchTool, create_websearch_tools
 
 
 class TestDatetimeTools:
@@ -50,10 +51,7 @@ class TestDatetimeTools:
 
 
 class TestJinaTools:
-    def test_create_returns_list(self) -> None:
-        tools = create_jina_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], JinaReaderTool)
+    """Tests for internal Jina reader tool."""
 
     def test_tool_metadata(self) -> None:
         tool = JinaReaderTool()
@@ -62,10 +60,7 @@ class TestJinaTools:
 
 
 class TestSerperTools:
-    def test_create_returns_list(self) -> None:
-        tools = create_serper_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], SerperSearchTool)
+    """Tests for internal Serper search tool."""
 
     def test_tool_metadata(self) -> None:
         tool = SerperSearchTool()
@@ -73,6 +68,26 @@ class TestSerperTools:
         assert "search" in tool.description.lower()
         assert "images" in tool.description.lower()
         assert "scholar" in tool.description.lower()
+
+
+class TestWebsearchTools:
+    """Tests for unified websearch tool with dynamic backend selection."""
+
+    def test_create_returns_list(self) -> None:
+        tools = create_websearch_tools()
+        assert len(tools) == 2
+        assert isinstance(tools[0], WebSearchTool)
+        assert isinstance(tools[1], WebCrawlTool)
+
+    def test_search_tool_metadata(self) -> None:
+        tool = WebSearchTool()
+        assert tool.name == "websearch"
+        assert "search" in tool.description.lower()
+
+    def test_crawl_tool_metadata(self) -> None:
+        tool = WebCrawlTool()
+        assert tool.name == "websearch_crawl"
+        assert "extract" in tool.description.lower() or "content" in tool.description.lower()
 
 
 class TestWizsearchTools:

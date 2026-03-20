@@ -60,11 +60,9 @@ class WebSource:
 
         if self._enable_serper:
             try:
-                from soothe.tools.serper import create_serper_tools
+                from soothe.tools._internal.serper import SerperSearchTool
 
-                tools = create_serper_tools()
-                if tools:
-                    self._serper_tool = tools[0]
+                self._serper_tool = SerperSearchTool()
             except Exception:
                 logger.debug("Serper not available, using wizsearch only", exc_info=True)
 

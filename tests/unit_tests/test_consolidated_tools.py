@@ -11,7 +11,7 @@ import pytest
 
 from soothe.tools.data import DataTool, create_data_tools
 from soothe.tools.execute import ExecuteTool, create_execute_tools
-from soothe.tools.websearch import WebSearchTool, create_websearch_tools
+from soothe.tools.websearch import WebCrawlTool, WebSearchTool, create_websearch_tools
 from soothe.tools.workspace import WorkspaceTool, create_workspace_tools
 
 
@@ -28,14 +28,19 @@ def _has_pandas() -> bool:
 class TestWebSearchTool:
     """Tests for the websearch capability tool."""
 
-    def test_create_returns_single_tool(self) -> None:
+    def test_create_returns_two_tools(self) -> None:
         tools = create_websearch_tools()
-        assert len(tools) == 1
+        assert len(tools) == 2
         assert isinstance(tools[0], WebSearchTool)
+        assert isinstance(tools[1], WebCrawlTool)
 
     def test_tool_name(self) -> None:
         tool = WebSearchTool()
         assert tool.name == "websearch"
+
+    def test_crawl_tool_name(self) -> None:
+        tool = WebCrawlTool()
+        assert tool.name == "websearch_crawl"
 
     def test_description_mentions_search(self) -> None:
         tool = WebSearchTool()
@@ -238,18 +243,18 @@ class TestDataTool:
 
 
 class TestResearchToolRename:
-    """Tests for the inquiry-to-research rename."""
+    """Tests for the research tool."""
 
     def test_tool_name_is_research(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         assert tool.name == "research"
 
     def test_description_mentions_research(self) -> None:
-        from soothe.tools.inquiry import InquiryTool
+        from soothe.tools.research import ResearchTool
 
-        tool = InquiryTool()
+        tool = ResearchTool()
         assert "research" in tool.description.lower()
 
 
@@ -305,8 +310,9 @@ class TestResolverConsolidatedNames:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("websearch")
-        assert len(tools) == 1
+        assert len(tools) == 2  # WebSearchTool + WebCrawlTool
         assert tools[0].name == "websearch"
+        assert tools[1].name == "websearch_crawl"
 
     def test_workspace_resolves(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
@@ -397,11 +403,11 @@ class TestConsolidatedToolLogging:
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
 
-            # Mock the internal search to avoid actual API calls
-            with patch.object(tool, "_get_delegate") as mock_delegate:
+            # Mock the internal search backend to avoid actual API calls
+            with patch.object(tool, "_get_search_backend") as mock_backend:
                 mock_search_tool = MagicMock()
                 mock_search_tool._run.return_value = "Search results here"
-                mock_delegate.return_value = mock_search_tool
+                mock_backend.return_value = mock_search_tool
 
                 result = wrapped._run(query="test query")
 
@@ -479,11 +485,11 @@ class TestConsolidatedToolLogging:
             assert "soothe.tool.workspace.completed" in event_types
 
     def test_research_emits_events(self) -> None:
-        """InquiryTool (research) should emit started/completed events."""
-        from soothe.tools.inquiry import InquiryTool
+        """ResearchTool should emit started/completed events."""
+        from soothe.tools.research import ResearchTool
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = InquiryTool()
+        tool = ResearchTool()
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))

@@ -309,14 +309,23 @@ def build_inquiry_engine(
         all_results = []
         for src in selected:
             try:
-                loop = asyncio.get_event_loop()
+                # Python 3.10+ compatible event loop handling
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop in this thread, create one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
                 if loop.is_running():
+                    # If loop is running, we need to run in a separate thread
                     import concurrent.futures
 
                     with concurrent.futures.ThreadPoolExecutor() as pool:
                         results = pool.submit(asyncio.run, src.query(query, context)).result()
                 else:
-                    results = asyncio.run(src.query(query, context))
+                    # Loop exists but not running, use it
+                    results = loop.run_until_complete(src.query(query, context))
                 all_results.extend(results)
             except Exception:
                 logger.debug("Source %s failed for query: %s", src.name, query, exc_info=True)
