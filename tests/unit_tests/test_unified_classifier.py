@@ -29,6 +29,17 @@ class TestUnifiedClassification:
 
         assert classification.reasoning is None
         assert classification.template_intent is None
+        assert classification.chitchat_response is None
+
+    def test_chitchat_response_field(self) -> None:
+        """Test chitchat_response is populated for chitchat queries."""
+        classification = UnifiedClassification(
+            task_complexity="chitchat",
+            is_plan_only=False,
+            chitchat_response="Hello! How can I help you today?",
+        )
+
+        assert classification.chitchat_response == "Hello! How can I help you today?"
 
 
 class TestUnifiedClassifier:
@@ -155,8 +166,8 @@ class TestLLMClassification:
         assert result.task_complexity == "medium"
 
     @pytest.mark.asyncio
-    async def test_simple_greeting_is_chitchat(self) -> None:
-        """Test simple greetings are still classified as chitchat."""
+    async def test_simple_greeting_is_chitchat_with_response(self) -> None:
+        """Test simple greetings are classified as chitchat with piggybacked response."""
         mock_model = MagicMock()
         mock_structured = AsyncMock()
         mock_structured.ainvoke = AsyncMock(
@@ -164,6 +175,7 @@ class TestLLMClassification:
                 task_complexity="chitchat",
                 is_plan_only=False,
                 template_intent=None,
+                chitchat_response="Hello! How can I help you today?",
                 reasoning="Simple greeting",
             )
         )
@@ -174,6 +186,7 @@ class TestLLMClassification:
         for greeting in ["hello", "hi", "good morning", "你好", "您好"]:
             result = await classifier.classify(greeting)
             assert result.task_complexity == "chitchat"
+            assert result.chitchat_response is not None
 
     @pytest.mark.asyncio
     async def test_complex_architecture_query(self) -> None:
@@ -387,6 +400,7 @@ class TestTemplateIntent:
                 task_complexity="chitchat",
                 is_plan_only=False,
                 template_intent=None,
+                chitchat_response="Hi there!",
                 reasoning="Simple greeting",
             )
         )
@@ -397,3 +411,4 @@ class TestTemplateIntent:
         result = await classifier.classify("hello")
         assert result.task_complexity == "chitchat"
         assert result.template_intent is None
+        assert result.chitchat_response == "Hi there!"

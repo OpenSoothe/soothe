@@ -55,13 +55,19 @@ class UnifiedClassification(BaseModel):
             "compose (agent/skill generation). Empty for chitchat."
         ),
     )
+    chitchat_response: str | None = Field(
+        default=None,
+        description="Direct response for chitchat queries. Only set when task_complexity is 'chitchat'.",
+    )
     reasoning: str | None = Field(default=None, description="Brief explanation of classification")
 
 
 _UNIFIED_CLASSIFICATION_PROMPT = """\
 Current time: {current_time}
+Assistant name: {assistant_name}
 
-Classify this user request for routing decisions.
+Classify this user request for routing decisions. If the request is chitchat,
+also provide a friendly response directly.
 
 User request: {query}
 
@@ -71,6 +77,7 @@ Response format (JSON only, no additional text):
   "is_plan_only": true | false,
   "template_intent": "question" | "search" | "analysis" | "implementation" | null,
   "capability_domains": ["research", "workspace", "execute", "data", "browse", "reason", "compose"],
+  "chitchat_response": "friendly response (ONLY when task_complexity is chitchat, null otherwise)",
   "reasoning": "brief explanation"
 }}
 
@@ -99,7 +106,8 @@ Rules:
 - Use semantic complexity, NOT query length
 - Current events/research/debugging → medium (even if short)
 - "plan only" → is_plan_only=true
-- chitchat queries → template_intent=null, capability_domains=[]
+- chitchat queries → template_intent=null, capability_domains=[], provide chitchat_response
+- chitchat_response: Match the user's language, be warm and helpful, mention you're {assistant_name}
 - When uncertain → medium complexity, appropriate template_intent or null
 """
 
@@ -108,26 +116,32 @@ class UnifiedClassifier:
     """Unified LLM-based classification system.
 
     Uses fast LLM for all classifications with no fallback to heuristics.
-    Returns safe default if LLM unavailable.
+    Returns safe default if LLM unavailable. For chitchat queries, the
+    classification response piggybacks a direct reply to avoid a second
+    LLM call.
 
     Args:
         fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
         classification_mode: "llm" or "disabled".
+        assistant_name: Name used in chitchat responses.
     """
 
     def __init__(
         self,
         fast_model: BaseChatModel | None = None,
         classification_mode: Literal["llm", "disabled"] = "llm",
+        assistant_name: str = "Soothe",
     ) -> None:
         """Initialize the unified classifier.
 
         Args:
             fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
             classification_mode: "llm" or "disabled".
+            assistant_name: Name used in chitchat responses.
         """
         self._fast_model = fast_model
         self._mode = classification_mode
+        self._assistant_name = assistant_name
 
         # Use structured output if model available
         if fast_model:
@@ -178,7 +192,11 @@ class UnifiedClassifier:
         from datetime import UTC, datetime
 
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        prompt = _UNIFIED_CLASSIFICATION_PROMPT.format(query=query, current_time=current_time)
+        prompt = _UNIFIED_CLASSIFICATION_PROMPT.format(
+            query=query,
+            current_time=current_time,
+            assistant_name=self._assistant_name,
+        )
         return await self._structured_model.ainvoke(prompt)
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:

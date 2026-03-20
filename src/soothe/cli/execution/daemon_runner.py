@@ -9,7 +9,7 @@ import typer
 
 from soothe.cli.rendering.tool_brief import extract_tool_brief
 from soothe.config import SootheConfig
-from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
+from soothe.core.events import CHITCHAT_RESPONSE, CHITCHAT_STARTED, FINAL_REPORT, PLAN_CREATED
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ async def run_headless_via_daemon(
         verbosity = cfg.logging.progress_verbosity
         query_started = False  # Track if we've seen the query start running
         needs_stdout_newline = False
+        multi_step_active = False  # Suppress step AI text from stdout; final report only
 
         while True:
             timeout_s = daemon_inactivity_timeout_s if query_started else daemon_start_timeout_s
@@ -130,6 +131,8 @@ async def run_headless_via_daemon(
                         sys.stdout.flush()
                         full_response.append(chitchat_content)
                 else:
+                    if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
+                        multi_step_active = True
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
                         # Add newline before stderr output if needed
@@ -178,10 +181,11 @@ async def run_headless_via_daemon(
                             if btype == "text":
                                 text = block.get("text", "")
                                 if is_main and text and should_show("assistant_text", verbosity):
-                                    sys.stdout.write(text)
-                                    sys.stdout.flush()
                                     full_response.append(text)
-                                    needs_stdout_newline = True
+                                    if not multi_step_active:
+                                        sys.stdout.write(text)
+                                        sys.stdout.flush()
+                                        needs_stdout_newline = True
                             elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
                                 name = block.get("name", "")
                                 if name:
@@ -200,10 +204,11 @@ async def run_headless_via_daemon(
                     elif content and isinstance(content, str):
                         # Format 2: simple content string (from daemon serialization)
                         if is_main and should_show("assistant_text", verbosity):
-                            sys.stdout.write(content)
-                            sys.stdout.flush()
                             full_response.append(content)
-                            needs_stdout_newline = True
+                            if not multi_step_active:
+                                sys.stdout.write(content)
+                                sys.stdout.flush()
+                                needs_stdout_newline = True
 
                 elif msg_type in ("tool", "ToolMessage") and should_show("tool_activity", verbosity):
                     tool_name = msg_data.get("name", "tool")

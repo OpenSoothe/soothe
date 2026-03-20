@@ -41,30 +41,36 @@ class ExecuteTool(BaseTool):
 
     workspace_root: str = Field(default="")
 
-    def _run(self, code: str, mode: str = "shell", **_kwargs: Any) -> str:
+    def _run(self, code: str = "", mode: str = "shell", command: str = "", **_kwargs: Any) -> str:
         """Execute code in the specified mode.
 
         Args:
             code: Command or code to run.
             mode: One of 'shell', 'python', 'background'.
+            command: Alias for 'code' (for backward compatibility).
 
         Returns:
             Execution output or error message.
         """
+        # Support both 'code' and 'command' parameter names
+        actual_code = code or command
+        if not actual_code:
+            return "Error: No code or command provided."
+
         mode = mode.strip().lower()
 
         if mode == "python":
-            return self._do_python(code)
+            return self._do_python(actual_code)
         if mode == "background":
-            return self._do_background(code)
+            return self._do_background(actual_code)
         if mode == "shell":
-            return self._do_shell(code)
+            return self._do_shell(actual_code)
 
         return f"Error: Unknown mode '{mode}'. Use: shell, python, background."
 
-    async def _arun(self, code: str, mode: str = "shell", **kwargs: Any) -> str:
+    async def _arun(self, code: str = "", mode: str = "shell", command: str = "", **kwargs: Any) -> str:
         """Async execution (delegates to sync)."""
-        return self._run(code, mode, **kwargs)
+        return self._run(code, mode, command, **kwargs)
 
     # ------------------------------------------------------------------
     # Internal dispatch

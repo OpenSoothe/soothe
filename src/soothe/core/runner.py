@@ -35,7 +35,7 @@ from soothe.core._runner_checkpoint import CheckpointMixin
 from soothe.core._runner_phases import PhasesMixin
 from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.core._runner_steps import StepLoopMixin
-from soothe.core.event_catalog import PlanOnlyEvent
+from soothe.core.event_catalog import FinalReportEvent, PlanOnlyEvent
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -139,6 +139,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 self._unified_classifier = UnifiedClassifier(
                     fast_model=fast_model,
                     classification_mode=self._config.performance.classification_mode,
+                    assistant_name=self._config.assistant_name,
                 )
                 logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
             else:
@@ -422,7 +423,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
         # Fast path for chitchat
         if complexity == "chitchat":
-            async for chunk in self._run_chitchat(user_input):
+            async for chunk in self._run_chitchat(user_input, classification=state.unified_classification):
                 yield chunk
             return
 
@@ -447,6 +448,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 sp_goal_id = state.plan.goal[:32].replace(" ", "_").replace("/", "_")
             async for chunk in self._run_step_loop(user_input, state, state.plan, goal_id=sp_goal_id):
                 yield chunk
+
+            async for chunk in self._synthesize_single_pass_report(state):
+                yield chunk
         else:
             async with self._concurrency.acquire_llm_call():
                 async for chunk in self._stream_phase(user_input, state):
@@ -454,3 +458,60 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
         async for chunk in self._post_stream(user_input, state):
             yield chunk
+
+    async def _synthesize_single_pass_report(
+        self,
+        state: RunnerState,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Synthesize a final report after a multi-step single-pass run.
+
+        Mirrors the autonomous path's report synthesis so the headless CLI
+        can display a consolidated report to the user.
+
+        Args:
+            state: Current runner state with completed plan.
+        """
+        from types import SimpleNamespace
+
+        from soothe.protocols.planner import StepReport as StepReportModel
+
+        plan = state.plan
+        if not plan or len(plan.steps) <= 1:
+            return
+
+        sr_list = [
+            StepReportModel(
+                step_id=s.id,
+                description=s.description,
+                status=s.status if s.status in ("completed", "failed") else "skipped",
+                result=s.result or "",
+                depends_on=s.depends_on,
+            )
+            for s in plan.steps
+            if s.status in ("completed", "failed", "pending")
+        ]
+
+        n_completed = sum(1 for r in sr_list if r.status == "completed")
+        if n_completed == 0:
+            return
+
+        goal_obj = SimpleNamespace(
+            id=state.thread_id or "default",
+            description=plan.goal or "User request",
+        )
+
+        try:
+            summary = await self._synthesize_root_goal_report(goal_obj, sr_list, [])
+        except Exception:
+            logger.debug("Single-pass report synthesis failed", exc_info=True)
+            return
+
+        if summary:
+            yield _custom(
+                FinalReportEvent(
+                    goal_id=goal_obj.id,
+                    description=goal_obj.description,
+                    status="completed" if all(r.status == "completed" for r in sr_list) else "partial",
+                    summary=summary,
+                ).to_dict()
+            )

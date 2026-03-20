@@ -110,6 +110,10 @@ def process_daemon_event(
                 _flush_new_activity(state, activity_panel)
                 if on_status_update:
                     on_status_update("Running")
+            elif category == "assistant_text":
+                _handle_protocol_event(data, state, verbosity=verbosity)
+                if on_conversation_append:
+                    on_conversation_append()
             elif category == "error" and should_show("error", verbosity):
                 _handle_protocol_event(data, state, verbosity="normal")
                 _flush_new_activity(state, activity_panel)

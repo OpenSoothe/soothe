@@ -59,24 +59,33 @@ class PhasesMixin:
     async def _run_chitchat(
         self,
         user_input: str,
+        classification: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Direct LLM call for chitchat - no planning, no context, no memory, no thread.
+        """Fast path for chitchat -- uses piggybacked response when available.
 
-        Maximum speed path for greetings and simple questions.
+        If the unified classifier already produced a ``chitchat_response``
+        during classification, we reuse it directly (zero extra LLM calls).
+        Otherwise falls back to a single direct LLM call.
         """
+        yield _custom(ChitchatStartedEvent(query=user_input[:100]).to_dict())
+
+        # Try piggybacked response from classification first
+        piggybacked = getattr(classification, "chitchat_response", None)
+        if piggybacked:
+            yield _custom(ChitchatResponseEvent(content=piggybacked).to_dict())
+            logger.info("Chitchat completed (piggybacked) for query: %s", user_input[:50])
+            return
+
+        # Fallback: direct LLM call
         import datetime as dt
 
         from langchain_core.messages import HumanMessage, SystemMessage
 
         from soothe.config import _SIMPLE_SYSTEM_PROMPT
 
-        yield _custom(ChitchatStartedEvent(query=user_input[:100]).to_dict())
-
         try:
-            # Get default model
             model = self._config.create_chat_model("default")
 
-            # Use simple system prompt for chitchat (consistent with SystemPromptOptimizationMiddleware)
             now = dt.datetime.now(dt.UTC).astimezone()
             current_date = now.strftime("%Y-%m-%d")
             system_prompt = (
@@ -84,13 +93,10 @@ class PhasesMixin:
                 f"Today's date is {current_date}."
             )
 
-            # Direct LLM call with system prompt and user input
             response = await model.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
 
-            # Yield response as stream chunk
             yield _custom(ChitchatResponseEvent(content=response.content).to_dict())
-
-            logger.info("Chitchat completed for query: %s", user_input[:50])
+            logger.info("Chitchat completed (fallback LLM) for query: %s", user_input[:50])
 
         except Exception as exc:
             logger.exception("Chitchat LLM call failed")

@@ -49,9 +49,9 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "coding-plan:glm-5"
+  default: "dashscope:qwen3.5-flash"
   think: "coding-plan:glm-5"
-  fast: "coding-plan:glm-5"
+  fast: "dashscope:qwen3.5-flash"
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:text-embedding-v4"
 
@@ -330,7 +330,7 @@ execution:
 logging:
   # Backend file logging (Python logging module)
   file:
-    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
     max_bytes: 10485760      # 10 MB before rotation
     backup_count: 3          # Number of rotating backups

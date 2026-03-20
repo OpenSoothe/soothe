@@ -157,6 +157,16 @@ class TestExecuteTool:
         assert "python" in desc
         assert "background" in desc
 
+    def test_accepts_command_parameter(self) -> None:
+        """Test that tool accepts both 'code' and 'command' parameter names."""
+        tool = ExecuteTool()
+        # Test with 'code' parameter
+        result1 = tool._run(code="echo hello", mode="shell")
+        # Test with 'command' parameter (what the LLM sends)
+        result2 = tool._run(command="echo hello", mode="shell")
+        # Both should work the same way
+        assert result1 == result2
+
 
 # ---------------------------------------------------------------------------
 # DataTool

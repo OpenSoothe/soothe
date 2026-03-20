@@ -7,7 +7,7 @@ from typing import Any
 
 from soothe.cli.rendering.tool_brief import extract_tool_brief as _headless_tool_brief
 from soothe.config import SootheConfig
-from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
+from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ async def run_headless_standalone(
     has_error = False
     verbosity = cfg.logging.progress_verbosity
     needs_stdout_newline = False  # Track if we need a newline before stderr output
+    multi_step_active = False  # Suppress step AI text from stdout; final report only
 
     thread_logger.log_user_input(prompt)
 
@@ -91,6 +92,8 @@ async def run_headless_standalone(
                         sys.stdout.flush()
                         full_response.append(chitchat_content)
                 else:
+                    if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
+                        multi_step_active = True
                     category = classify_custom_event(namespace, data)
                     if should_show(category, verbosity):
                         # Add newline before stderr output if needed
@@ -126,10 +129,11 @@ async def run_headless_standalone(
                         if btype == "text":
                             text = block.get("text", "")
                             if is_main and text and should_show("assistant_text", verbosity):
-                                sys.stdout.write(text)
-                                sys.stdout.flush()
                                 full_response.append(text)
-                                needs_stdout_newline = True
+                                if not multi_step_active:
+                                    sys.stdout.write(text)
+                                    sys.stdout.flush()
+                                    needs_stdout_newline = True
                         elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
                             name = block.get("name", "")
                             if name:
