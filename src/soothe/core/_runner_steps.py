@@ -20,6 +20,7 @@ from soothe.core.event_catalog import (
 )
 from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import Plan, PlanStep
+from soothe.utils.progress import reset_step_context, set_step_context
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -183,130 +184,136 @@ class StepLoopMixin:
 
         step_start = perf_counter()
 
-        parts = [f"Goal: {goal_description}", f"Current step: {step.description}"]
-        if dependency_results:
-            dep_text = "\n".join(f"- [{desc}]: {result[:300]}" for desc, result in dependency_results)
-            parts.append(f"Results from prior steps:\n{dep_text}")
+        # Set step context so all events emitted during this step get step_id
+        token = set_step_context(step.id)
+        try:
+            parts = [f"Goal: {goal_description}", f"Current step: {step.description}"]
+            if dependency_results:
+                dep_text = "\n".join(f"- [{desc}]: {result[:300]}" for desc, result in dependency_results)
+                parts.append(f"Results from prior steps:\n{dep_text}")
 
-        classification = getattr(state, "unified_classification", None)
-        preferred = getattr(classification, "preferred_subagent", None) if classification else None
+            classification = getattr(state, "unified_classification", None)
+            preferred = getattr(classification, "preferred_subagent", None) if classification else None
 
-        hint = getattr(step, "execution_hint", None) or ""
-        if hint.startswith("tool:"):
-            preferred_tool = hint.split(":", 1)[1]
-            parts.append(
-                f"Instruction: Use the {preferred_tool} tool directly for this step. Do NOT delegate to a subagent."
-            )
-        elif hint == "llm_only":
-            parts.append(
-                "Instruction: Answer using only the information already available "
-                "from prior steps. Do NOT call any tools or subagents."
-            )
-        elif hint == "subagent" and preferred:
-            parts.append(
-                f"Instruction: Delegate this step to the **{preferred}** subagent using the `task` tool. "
-                f"The user explicitly requested using the {preferred} subagent."
-            )
-        elif hint == "subagent":
-            parts.append(
-                "Instruction: Delegate this step to the appropriate subagent using the `task` tool. "
-                "Choose the subagent best suited for this task (e.g., weaver for generating "
-                "new agents, browser for web interaction, claude for complex reasoning)."
-            )
-        elif hint == "tool":
-            parts.append(
-                "Instruction: Use the appropriate direct tool for this step. "
-                "Prefer direct tools (wizsearch, file_edit, cli, python_executor) "
-                "over delegating to a subagent."
-            )
-
-        step_input = "\n\n".join(parts)
-
-        yield _custom(
-            PlanStepStartedEvent(
-                step_id=step.id,
-                description=step.description,
-                depends_on=step.depends_on,
-                batch_index=batch_index,
-            ).to_dict()
-        )
-
-        step_state = RunnerState()
-        step_state.thread_id = thread_id
-
-        if self._memory:
-            try:
-                items = await self._memory.recall(step.description, limit=3)
-                step_state.recalled_memories = items
-            except Exception:
-                logger.debug("Memory recall failed for step %s", step.id, exc_info=True)
-
-        if self._context:
-            try:
-                projection = await self._context.project(step.description, token_budget=3000)
-                step_state.context_projection = projection
-            except Exception:
-                logger.debug("Context projection failed for step %s", step.id, exc_info=True)
-
-        async with self._concurrency.acquire_llm_call():
-            async for chunk in self._stream_phase(step_input, step_state):
-                yield chunk
-
-        response_text = "".join(step_state.full_response)
-        duration_ms = int((perf_counter() - step_start) * 1000)
-
-        if step_state.stream_error:
-            step.status = "failed"
-            step.result = f"Stream error: {step_state.stream_error}"
-            blocked = [
-                s.id
-                for s in (self._current_plan.steps if self._current_plan else [])
-                if step.id in s.depends_on and s.status == "pending"
-            ]
-            yield _custom(
-                PlanStepFailedEvent(
-                    step_id=step.id,
-                    error=step.result,
-                    blocked_steps=blocked,
-                    duration_ms=duration_ms,
-                ).to_dict()
-            )
-        elif response_text.strip():
-            step.status = "completed"
-            step.result = response_text[:2000]
-            yield _custom(
-                PlanStepCompletedEvent(
-                    step_id=step.id,
-                    success=True,
-                    result_preview=response_text[:200],
-                    duration_ms=duration_ms,
-                ).to_dict()
-            )
-        else:
-            step.status = "failed"
-            step.result = "No response from agent"
-            blocked = [
-                s.id
-                for s in (self._current_plan.steps if self._current_plan else [])
-                if step.id in s.depends_on and s.status == "pending"
-            ]
-            yield _custom(
-                PlanStepFailedEvent(
-                    step_id=step.id,
-                    error="No response from agent",
-                    blocked_steps=blocked,
-                ).to_dict()
-            )
-
-        if self._context and step.result:
-            try:
-                await self._context.ingest(
-                    ContextEntry(
-                        source="step_result",
-                        content=f"[Step {step.id}: {step.description}]\n{step.result[:1500]}",
-                        tags=["step_result", f"step:{step.id}"],
-                        importance=0.85,
-                    )
+            hint = getattr(step, "execution_hint", None) or ""
+            if hint.startswith("tool:"):
+                preferred_tool = hint.split(":", 1)[1]
+                parts.append(
+                    f"Instruction: Use the {preferred_tool} tool directly for this step. Do NOT delegate to a subagent."
                 )
-            except Exception:
-                logger.debug("Step result ingestion failed", exc_info=True)
+            elif hint == "llm_only":
+                parts.append(
+                    "Instruction: Answer using only the information already available "
+                    "from prior steps. Do NOT call any tools or subagents."
+                )
+            elif hint == "subagent" and preferred:
+                parts.append(
+                    f"Instruction: Delegate this step to the **{preferred}** subagent using the `task` tool. "
+                    f"The user explicitly requested using the {preferred} subagent."
+                )
+            elif hint == "subagent":
+                parts.append(
+                    "Instruction: Delegate this step to the appropriate subagent using the `task` tool. "
+                    "Choose the subagent best suited for this task (e.g., weaver for generating "
+                    "new agents, browser for web interaction, claude for complex reasoning)."
+                )
+            elif hint == "tool":
+                parts.append(
+                    "Instruction: Use the appropriate direct tool for this step. "
+                    "Prefer direct tools (wizsearch, file_edit, cli, python_executor) "
+                    "over delegating to a subagent."
+                )
+
+            step_input = "\n\n".join(parts)
+
+            yield _custom(
+                PlanStepStartedEvent(
+                    step_id=step.id,
+                    description=step.description,
+                    depends_on=step.depends_on,
+                    batch_index=batch_index,
+                ).to_dict()
+            )
+
+            step_state = RunnerState()
+            step_state.thread_id = thread_id
+
+            if self._memory:
+                try:
+                    items = await self._memory.recall(step.description, limit=3)
+                    step_state.recalled_memories = items
+                except Exception:
+                    logger.debug("Memory recall failed for step %s", step.id, exc_info=True)
+
+            if self._context:
+                try:
+                    projection = await self._context.project(step.description, token_budget=3000)
+                    step_state.context_projection = projection
+                except Exception:
+                    logger.debug("Context projection failed for step %s", step.id, exc_info=True)
+
+            async with self._concurrency.acquire_llm_call():
+                async for chunk in self._stream_phase(step_input, step_state):
+                    yield chunk
+
+            response_text = "".join(step_state.full_response)
+            duration_ms = int((perf_counter() - step_start) * 1000)
+
+            if step_state.stream_error:
+                step.status = "failed"
+                step.result = f"Stream error: {step_state.stream_error}"
+                blocked = [
+                    s.id
+                    for s in (self._current_plan.steps if self._current_plan else [])
+                    if step.id in s.depends_on and s.status == "pending"
+                ]
+                yield _custom(
+                    PlanStepFailedEvent(
+                        step_id=step.id,
+                        error=step.result,
+                        blocked_steps=blocked,
+                        duration_ms=duration_ms,
+                    ).to_dict()
+                )
+            elif response_text.strip():
+                step.status = "completed"
+                step.result = response_text[:2000]
+                yield _custom(
+                    PlanStepCompletedEvent(
+                        step_id=step.id,
+                        success=True,
+                        result_preview=response_text[:200],
+                        duration_ms=duration_ms,
+                    ).to_dict()
+                )
+            else:
+                step.status = "failed"
+                step.result = "No response from agent"
+                blocked = [
+                    s.id
+                    for s in (self._current_plan.steps if self._current_plan else [])
+                    if step.id in s.depends_on and s.status == "pending"
+                ]
+                yield _custom(
+                    PlanStepFailedEvent(
+                        step_id=step.id,
+                        error="No response from agent",
+                        blocked_steps=blocked,
+                    ).to_dict()
+                )
+
+            if self._context and step.result:
+                try:
+                    await self._context.ingest(
+                        ContextEntry(
+                            source="step_result",
+                            content=f"[Step {step.id}: {step.description}]\n{step.result[:1500]}",
+                            tags=["step_result", f"step:{step.id}"],
+                            importance=0.85,
+                        )
+                    )
+                except Exception:
+                    logger.debug("Step result ingestion failed", exc_info=True)
+        finally:
+            # Reset step context when step completes
+            reset_step_context(token)

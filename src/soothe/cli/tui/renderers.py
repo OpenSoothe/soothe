@@ -82,6 +82,36 @@ def _add_activity(state: TuiState, line: Text) -> None:
         state.activity_lines = state.activity_lines[-_ACTIVITY_MAX:]
 
 
+def _add_activity_from_event(state: TuiState, line: Text, event_data: dict[str, Any]) -> None:
+    """Add activity line and associate with step if event has step_id.
+
+    Args:
+        state: TUI state
+        line: Activity line (Rich Text)
+        event_data: Event dict that may contain 'step_id' field
+    """
+    # Store in activity_lines for logging purposes
+    state.activity_lines.append(line)
+    logger.info("Activity: %s", line.plain)
+    if len(state.activity_lines) > _ACTIVITY_MAX:
+        state.activity_lines = state.activity_lines[-_ACTIVITY_MAX:]
+
+    # Extract step_id from event if present
+    step_id = event_data.get("step_id")
+
+    # If this activity belongs to a step, update that step's current_activity
+    if step_id and state.current_plan:
+        for step in state.current_plan.steps:
+            if step.id == step_id:
+                # Store plain text for tree rendering
+                step.current_activity = line.plain
+                return
+
+    # No step_id - this is a general activity
+    if state.current_plan:
+        state.current_plan.general_activity = line.plain
+
+
 def _set_plan_step_status(state: TuiState, index: int, status: str) -> None:
     """Update a plan step status by index if the current plan exists."""
     if not state.current_plan:
@@ -139,7 +169,7 @@ def _handle_tool_activity_event(
         summary = f"Searching: {_truncate(str(query), 40)}"
         if engines:
             summary += f" ({', '.join(engines[:3])})"
-        _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
+        _add_activity_from_event(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")), data)
 
     elif etype == TOOL_WEBSEARCH_SEARCH_COMPLETED:
         count = data.get("result_count", 0)
@@ -147,27 +177,27 @@ def _handle_tool_activity_event(
         summary = f"Search complete: {count} results"
         if response_time:
             summary += f" ({response_time:.1f}s)"
-        _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
+        _add_activity_from_event(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")), data)
 
     elif etype == TOOL_WEBSEARCH_SEARCH_FAILED:
         error = data.get("error", "unknown error")
         summary = f"Search failed: {_truncate(str(error), 40)}"
-        _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
+        _add_activity_from_event(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")), data)
 
     elif etype == TOOL_WEBSEARCH_CRAWL_STARTED:
         url = data.get("url", "")
         summary = f"Crawling: {_truncate(str(url), 50)}"
-        _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
+        _add_activity_from_event(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")), data)
 
     elif etype == TOOL_WEBSEARCH_CRAWL_COMPLETED:
         content_length = data.get("content_length", 0)
         summary = f"Crawl complete: {content_length} bytes"
-        _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
+        _add_activity_from_event(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")), data)
 
     elif etype == TOOL_WEBSEARCH_CRAWL_FAILED:
         error = data.get("error", "unknown error")
         summary = f"Crawl failed: {_truncate(str(error), 40)}"
-        _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
+        _add_activity_from_event(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")), data)
 
 
 def _handle_subagent_progress(
@@ -231,7 +261,7 @@ def _handle_subagent_progress(
         summary = etype.replace("soothe.", "").replace("_", " ").title()
 
     logger.info("Subagent progress [%s]: %s", tag, summary)
-    _add_activity(state, Text.assemble(("  ", ""), (f"[{tag}] ", "cyan"), (summary, "yellow")))
+    _add_activity_from_event(state, Text.assemble(("  ", ""), (f"[{tag}] ", "cyan"), (summary, "yellow")), data)
 
 
 def _handle_subagent_custom(
@@ -289,7 +319,7 @@ def _handle_subagent_custom(
 
     logger.info("Subagent event [%s]: %s", tag, summary)
     logger.debug("Subagent event raw [%s]: %s  data=%s", tag, etype, data)
-    _add_activity(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (summary, "dim")))
+    _add_activity_from_event(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (summary, "dim")), data)
 
 
 def _handle_subagent_text_activity(
@@ -306,7 +336,7 @@ def _handle_subagent_text_activity(
 
     tag = _resolve_namespace_label(namespace, state) if namespace else "subagent"
     brief = _truncate(text.replace("\n", " "), 80)
-    _add_activity(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (f"Text: {brief}", "dim")))
+    _add_activity_from_event(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (f"Text: {brief}", "dim")), {})
 
 
 def _handle_tool_call_activity(
@@ -320,9 +350,11 @@ def _handle_tool_call_activity(
     if not name or not should_show("tool_activity", verbosity):
         return
     if prefix:
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"[{prefix}] [tool] Calling: {name}", "blue")))
+        _add_activity_from_event(
+            state, Text.assemble(("  . ", "dim"), (f"[{prefix}] [tool] Calling: {name}", "blue")), {}
+        )
     else:
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")))
+        _add_activity_from_event(state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")), {})
 
 
 def _handle_tool_result_activity(
@@ -338,12 +370,15 @@ def _handle_tool_result_activity(
         return
     brief = _extract_tool_brief(tool_name, content)
     if prefix:
-        _add_activity(
+        _add_activity_from_event(
             state,
             Text.assemble(("  > ", "dim green"), (f"[{prefix}] {tool_name}", "green"), ("  ", ""), (brief, "dim")),
+            {},
         )
     else:
-        _add_activity(state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim")))
+        _add_activity_from_event(
+            state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim")), {}
+        )
 
 
 def _handle_generic_custom_activity(
@@ -362,4 +397,4 @@ def _handle_generic_custom_activity(
     tag = _resolve_namespace_label(namespace, state) if namespace else "custom"
     etype = str(data.get("type", "custom"))
     summary = str(data.get("message", "")) or str(data.get("topic", "")) or str(data.get("query", "")) or etype
-    _add_activity(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (summary[:80], "dim")))
+    _add_activity_from_event(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (summary[:80], "dim")), data)

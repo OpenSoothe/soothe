@@ -19,6 +19,7 @@ class PlanStep(BaseModel):
         status: Current step status.
         result: Output from execution (set after completion).
         depends_on: IDs of steps that must complete before this one.
+        current_activity: Latest activity text for this step (for TUI rendering).
     """
 
     id: str
@@ -27,6 +28,7 @@ class PlanStep(BaseModel):
     status: Literal["pending", "in_progress", "completed", "failed"] = "pending"
     result: str | None = None
     depends_on: list[str] = Field(default_factory=list)
+    current_activity: str | None = None
 
 
 class Plan(BaseModel):
@@ -38,6 +40,7 @@ class Plan(BaseModel):
         current_index: Index of the current/next step to execute.
         status: Overall plan status.
         concurrency: Parallel execution configuration.
+        general_activity: Latest non-step activity (for TUI rendering).
     """
 
     goal: str
@@ -45,6 +48,7 @@ class Plan(BaseModel):
     current_index: int = 0
     status: Literal["active", "completed", "failed", "revised"] = "active"
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
+    general_activity: str | None = None
 
 
 class StepResult(BaseModel):

@@ -70,9 +70,16 @@ def extract_text_from_ai_message(msg: Any) -> list[str]:
 
 
 def render_plan_tree(plan: Plan, title: str | None = None) -> Tree:
-    """Render a plan as a Rich Tree with status markers and DAG dependencies."""
+    """Render a plan as a Rich Tree with status markers, dependencies, and activities."""
     label = title or f"Plan: {plan.goal}"
     tree = Tree(Text(label, style="bold cyan"))
+
+    # Add general activity under root if present
+    if plan.general_activity:
+        activity_node = tree.add(Text("General", style="dim italic"))
+        activity_node.add(Text(plan.general_activity, style="dim"))
+
+    # Add steps
     for step in plan.steps:
         marker, style = _STATUS_MARKERS.get(step.status, ("[ ]", "dim"))
         step_style = {"in_progress": "yellow", "completed": "green"}.get(step.status, "dim")
@@ -80,7 +87,16 @@ def render_plan_tree(plan: Plan, title: str | None = None) -> Tree:
         if step.depends_on:
             dep_str = ", ".join(step.depends_on)
             parts.append(Text(f"  (< {dep_str})", style="dim italic"))
-        tree.add(Text.assemble(*parts))
+
+        # Add step as tree node
+        step_node = tree.add(Text.assemble(*parts))
+
+        # If step is in_progress and has activity, add it as a child node
+        if step.status == "in_progress" and step.current_activity:
+            # Indent and style the activity
+            activity_text = Text(step.current_activity, style="dim")
+            step_node.add(activity_text)
+
     return tree
 
 
