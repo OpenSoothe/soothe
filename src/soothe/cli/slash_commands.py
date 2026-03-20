@@ -58,7 +58,7 @@ def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
         ``(max_iterations, prompt)`` for valid input, otherwise ``None``.
     """
     stripped = cmd.strip()
-    if not (stripped.startswith("/auto") or stripped.startswith("/autopilot")):
+    if not stripped.startswith(("/auto", "/autopilot")):
         return None
 
     # Normalize /autopilot to /auto for parsing

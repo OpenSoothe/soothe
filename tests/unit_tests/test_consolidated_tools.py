@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib
+import logging
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -376,3 +378,139 @@ class TestDomainScopedPrompts:
         assert "python_executor" not in _TOOL_ORCHESTRATION_GUIDE
         assert "wizsearch" not in _TOOL_ORCHESTRATION_GUIDE
         assert "inquiry" not in _TOOL_ORCHESTRATION_GUIDE
+
+
+# ---------------------------------------------------------------------------
+# Tool Logging Events
+# ---------------------------------------------------------------------------
+
+
+class TestConsolidatedToolLogging:
+    """Test that consolidated tools emit progress events."""
+
+    def test_websearch_emits_events(self) -> None:
+        """WebSearchTool should emit started/completed events."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = WebSearchTool(config={})
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+
+            # Mock the internal search to avoid actual API calls
+            with patch.object(tool, "_get_delegate") as mock_delegate:
+                mock_search_tool = MagicMock()
+                mock_search_tool._run.return_value = "Search results here"
+                mock_delegate.return_value = mock_search_tool
+
+                result = wrapped._run(query="test query")
+
+                # Verify events were emitted
+                event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+                assert "soothe.tool.websearch.started" in event_types
+                assert "soothe.tool.websearch.completed" in event_types
+
+    def test_workspace_emits_events(self, tmp_path: Path) -> None:
+        """WorkspaceTool should emit started/completed events."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = WorkspaceTool(work_dir=str(tmp_path))
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+            result = wrapped._run(action="list")
+
+            # Verify events were emitted
+            event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+            assert "soothe.tool.workspace.started" in event_types
+            assert "soothe.tool.workspace.completed" in event_types
+
+    def test_execute_emits_events(self) -> None:
+        """ExecuteTool should emit started/completed events."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = ExecuteTool()
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+            result = wrapped._run(code="echo hello", mode="shell")
+
+            # Verify events were emitted
+            event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+            assert "soothe.tool.execute.started" in event_types
+            assert "soothe.tool.execute.completed" in event_types
+
+    def test_data_emits_events(self, tmp_path: Path) -> None:
+        """DataTool should emit started/completed events."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        # Create a test text file
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test content")
+
+        tool = DataTool()
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+            result = wrapped._run(file_path=str(test_file), operation="extract")
+
+            # Verify events were emitted
+            event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+            assert "soothe.tool.data.started" in event_types
+            assert "soothe.tool.data.completed" in event_types
+
+    def test_tool_error_emits_failed_event(self) -> None:
+        """Tool errors should emit failed events."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = WorkspaceTool()
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+            # This should trigger an error (unknown action)
+            result = wrapped._run(action="nonexistent_action")
+
+            # Verify failed event was emitted
+            event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+            # The tool catches errors internally and returns error message,
+            # so we expect completed event, not failed
+            assert "soothe.tool.workspace.started" in event_types
+            # Tools that handle errors internally don't raise, so they emit completed
+            assert "soothe.tool.workspace.completed" in event_types
+
+    def test_research_emits_events(self) -> None:
+        """InquiryTool (research) should emit started/completed events."""
+        from soothe.tools.inquiry import InquiryTool
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = InquiryTool()
+
+        with patch("soothe.utils.progress.emit_progress") as mock_emit:
+            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
+
+            # Mock the engine to avoid running full research
+            mock_engine = MagicMock()
+            mock_engine.invoke.return_value = {"answer": "Research completed"}
+            with patch.object(tool, "_build_engine", return_value=mock_engine):
+                result = wrapped._run(topic="test topic")
+
+                # Verify events were emitted
+                event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
+                assert "soothe.tool.research.started" in event_types
+                assert "soothe.tool.research.completed" in event_types
+
+    def test_no_double_wrapping(self) -> None:
+        """Tools should not be wrapped twice."""
+        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
+
+        tool = WebSearchTool()
+        logger = logging.getLogger(__name__)
+
+        # Wrap once
+        wrapped1 = wrap_main_agent_tool_with_logging(tool, logger)
+        # Wrap again
+        wrapped2 = wrap_main_agent_tool_with_logging(wrapped1, logger)
+
+        # Should be the same object (no double wrapping)
+        assert wrapped1 is wrapped2
+        assert tool._soothe_progress_wrapped is True

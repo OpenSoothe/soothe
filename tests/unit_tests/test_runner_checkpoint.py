@@ -17,7 +17,7 @@ class TestCheckpointEventEmission:
 
     @pytest.mark.asyncio
     async def test_checkpoint_saved_event_emitted(self, tmp_path: Path) -> None:
-        """Verify soothe.checkpoint.saved event is emitted on successful save."""
+        """Verify soothe.lifecycle.checkpoint.saved event is emitted on successful save."""
         # Create a minimal runner with artifact store
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
@@ -44,7 +44,7 @@ class TestCheckpointEventEmission:
         event_data = events[0][2]  # Third element is the data dict
 
         # Verify event structure
-        assert event_data["type"] == "soothe.checkpoint.saved"
+        assert event_data["type"] == "soothe.lifecycle.checkpoint.saved"
         assert event_data["thread_id"] == "test-thread-123"
         assert "completed_steps" in event_data
         assert "completed_goals" in event_data

@@ -7,7 +7,9 @@ import sys
 
 import typer
 
+from soothe.cli.rendering.tool_brief import extract_tool_brief
 from soothe.config import SootheConfig
+from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +19,7 @@ _DAEMON_FALLBACK_EXIT_CODE = 42
 def _daemon_tool_brief(tool_name: str, content: object) -> str:
     """One-line summary of a tool result for daemon headless output."""
     text = content if isinstance(content, str) else str(content)
-    if tool_name.startswith("wizsearch"):
-        first_line = text.split("\n", 1)[0].strip()
-        if first_line:
-            return first_line[:120]
-    return text.replace("\n", " ")[:120]
+    return extract_tool_brief(tool_name, text)
 
 
 async def run_headless_via_daemon(
@@ -94,7 +92,11 @@ async def run_headless_via_daemon(
 
             # Detect errors before query started as a hard failure
             ev_data = event.get("data")
-            if not query_started and isinstance(ev_data, dict) and ev_data.get("type") == "soothe.error":
+            if (
+                not query_started
+                and isinstance(ev_data, dict)
+                and str(ev_data.get("type", "")).startswith("soothe.error")
+            ):
                 typer.echo(f"Daemon error: {ev_data.get('error', 'unknown')}", err=True)
                 return 1
 
@@ -112,8 +114,7 @@ async def run_headless_via_daemon(
             if mode == "custom" and isinstance(data, dict):
                 etype = str(data.get("type", ""))
 
-                # Final report -> stdout (IG-027)
-                if etype == "soothe.autonomous.final_report":
+                if etype == FINAL_REPORT:
                     report_text = data.get("summary", "")
                     if report_text:
                         sys.stdout.write("\n\n")
@@ -121,8 +122,7 @@ async def run_headless_via_daemon(
                         sys.stdout.write("\n")
                         sys.stdout.flush()
                         full_response.append(report_text)
-                # Chitchat response -> stdout
-                elif etype == "soothe.chitchat.response":
+                elif etype == CHITCHAT_RESPONSE:
                     chitchat_content = data.get("content", "")
                     if chitchat_content:
                         sys.stdout.write(chitchat_content)

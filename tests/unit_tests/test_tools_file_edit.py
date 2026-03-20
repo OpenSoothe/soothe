@@ -1,8 +1,12 @@
 """Tests for File Edit tools functionality."""
 
 import asyncio
+import platform
 import tempfile
+import warnings
 from pathlib import Path
+
+import pytest
 
 from soothe.tools._internal.file_edit import (
     CreateFileTool,
@@ -424,3 +428,111 @@ class TestCreateFileEditTools:
             expected = Path(temp_dir).resolve()
             for tool in tools:
                 assert Path(getattr(tool, "work_dir", "")).resolve() == expected
+
+
+class TestStrippedAbsolutePathDetection:
+    """Test detection and correction of stripped absolute paths."""
+
+    def test_detect_stripped_home_directory_path_macos(self) -> None:
+        """Test detection of stripped macOS home directory paths."""
+        if platform.system() != "Darwin":
+            pytest.skip("macOS only")
+
+        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            result = _detect_stripped_absolute_path("Users/john/report.md")
+            assert result == "/Users/john/report.md"
+            assert len(w) == 1
+            assert "stripped absolute path" in str(w[0].message).lower()
+
+    def test_detect_stripped_home_directory_path_linux(self) -> None:
+        """Test detection of stripped Linux home directory paths."""
+        if platform.system() != "Linux":
+            pytest.skip("Linux only")
+
+        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+
+            result = _detect_stripped_absolute_path("home/john/report.md")
+            assert result == "/home/john/report.md"
+            assert len(w) == 1
+            assert "stripped absolute path" in str(w[0].message).lower()
+
+    def test_normal_relative_path_not_detected(self) -> None:
+        """Normal relative paths should not trigger detection."""
+        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
+
+        result = _detect_stripped_absolute_path("output/report.md")
+        assert result is None
+
+        result = _detect_stripped_absolute_path("src/utils/helper.py")
+        assert result is None
+
+    def test_already_absolute_path_not_detected(self) -> None:
+        """Already absolute paths should not trigger detection."""
+        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
+
+        result = _detect_stripped_absolute_path("/Users/john/report.md")
+        assert result is None
+
+        result = _detect_stripped_absolute_path("/home/john/report.md")
+        assert result is None
+
+    def test_create_file_tool_handles_stripped_home_path(self, tmp_path: Path) -> None:
+        """CreateFileTool should correct stripped home directory paths."""
+        if platform.system() != "Darwin":
+            pytest.skip("macOS only")
+
+        import os
+
+        tool = CreateFileTool(work_dir=str(tmp_path), allow_outside_workdir=True)
+
+        # Simulate a stripped absolute path to user's home
+        user = os.environ.get("USER", "testuser")
+        stripped_path = f"Users/{user}/test_report.md"
+
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            result = tool._run(stripped_path, "Test content", overwrite=True)
+
+        # Should have created the file in the correct absolute location
+        assert "Created:" in result
+        assert f"/Users/{user}/test_report.md" in result
+
+        # Clean up
+        test_file = Path(f"/Users/{user}/test_report.md")
+        if test_file.exists():
+            test_file.unlink()
+
+    def test_create_file_tool_logs_correction(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        """CreateFileTool should log when it corrects a stripped path."""
+        if platform.system() != "Darwin":
+            pytest.skip("macOS only")
+
+        import logging
+        import os
+
+        # Set log level to capture INFO messages
+        caplog.set_level(logging.INFO, logger="soothe.tools._internal.file_edit.tools")
+
+        tool = CreateFileTool(work_dir=str(tmp_path), allow_outside_workdir=True)
+
+        user = os.environ.get("USER", "testuser")
+        stripped_path = f"Users/{user}/test_log_report.md"
+
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            result = tool._run(stripped_path, "Test content", overwrite=True)
+
+        # Check that a log message was generated
+        assert any("Path normalization" in record.message for record in caplog.records)
+
+        # Clean up
+        test_file = Path(f"/Users/{user}/test_log_report.md")
+        if test_file.exists():
+            test_file.unlink()

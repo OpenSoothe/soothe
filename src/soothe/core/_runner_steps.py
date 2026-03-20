@@ -11,6 +11,13 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
 from soothe.core._runner_shared import StreamChunk, _custom
+from soothe.core.event_catalog import (
+    PlanBatchStartedEvent,
+    PlanDagSnapshotEvent,
+    PlanStepCompletedEvent,
+    PlanStepFailedEvent,
+    PlanStepStartedEvent,
+)
 from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import Plan, PlanStep
 
@@ -57,10 +64,7 @@ class StepLoopMixin:
             dep_count = sum(1 for s in plan.steps if s.depends_on)
             logger.info("Plan DAG: %d steps, %d with dependencies", len(plan.steps), dep_count)
             yield _custom(
-                {
-                    "type": "soothe.plan.dag_snapshot",
-                    "steps": [{"id": s.id, "depends_on": s.depends_on} for s in plan.steps],
-                }
+                PlanDagSnapshotEvent(steps=[{"id": s.id, "depends_on": s.depends_on} for s in plan.steps]).to_dict()
             )
         max_steps = self._concurrency.max_parallel_steps
         batch_index = 0
@@ -78,12 +82,11 @@ class StepLoopMixin:
                 logger.info("Batch %d: %d steps ready %s", batch_index, len(ready), step_ids)
 
             yield _custom(
-                {
-                    "type": "soothe.plan.batch_started",
-                    "batch_index": batch_index,
-                    "step_ids": [s.id for s in ready],
-                    "parallel_count": len(ready),
-                }
+                PlanBatchStartedEvent(
+                    batch_index=batch_index,
+                    step_ids=[s.id for s in ready],
+                    parallel_count=len(ready),
+                ).to_dict()
             )
 
             for s in ready:
@@ -142,11 +145,10 @@ class StepLoopMixin:
                     if isinstance(result, Exception):
                         scheduler.mark_failed(s.id, str(result))
                         yield _custom(
-                            {
-                                "type": "soothe.plan.step_failed",
-                                "step_id": s.id,
-                                "error": str(result),
-                            }
+                            PlanStepFailedEvent(
+                                step_id=s.id,
+                                error=str(result),
+                            ).to_dict()
                         )
                     else:
                         for chunk in collected_chunks.get(s.id, []):
@@ -207,13 +209,12 @@ class StepLoopMixin:
         step_input = "\n\n".join(parts)
 
         yield _custom(
-            {
-                "type": "soothe.plan.step_started",
-                "step_id": step.id,
-                "description": step.description,
-                "depends_on": step.depends_on,
-                "batch_index": batch_index,
-            }
+            PlanStepStartedEvent(
+                step_id=step.id,
+                description=step.description,
+                depends_on=step.depends_on,
+                batch_index=batch_index,
+            ).to_dict()
         )
 
         step_state = RunnerState()
@@ -249,25 +250,23 @@ class StepLoopMixin:
                 if step.id in s.depends_on and s.status == "pending"
             ]
             yield _custom(
-                {
-                    "type": "soothe.plan.step_failed",
-                    "step_id": step.id,
-                    "error": step.result,
-                    "blocked_steps": blocked,
-                    "duration_ms": duration_ms,
-                }
+                PlanStepFailedEvent(
+                    step_id=step.id,
+                    error=step.result,
+                    blocked_steps=blocked,
+                    duration_ms=duration_ms,
+                ).to_dict()
             )
         elif response_text.strip():
             step.status = "completed"
             step.result = response_text[:2000]
             yield _custom(
-                {
-                    "type": "soothe.plan.step_completed",
-                    "step_id": step.id,
-                    "success": True,
-                    "result_preview": response_text[:200],
-                    "duration_ms": duration_ms,
-                }
+                PlanStepCompletedEvent(
+                    step_id=step.id,
+                    success=True,
+                    result_preview=response_text[:200],
+                    duration_ms=duration_ms,
+                ).to_dict()
             )
         else:
             step.status = "failed"
@@ -278,12 +277,11 @@ class StepLoopMixin:
                 if step.id in s.depends_on and s.status == "pending"
             ]
             yield _custom(
-                {
-                    "type": "soothe.plan.step_failed",
-                    "step_id": step.id,
-                    "error": "No response from agent",
-                    "blocked_steps": blocked,
-                }
+                PlanStepFailedEvent(
+                    step_id=step.id,
+                    error="No response from agent",
+                    blocked_steps=blocked,
+                ).to_dict()
             )
 
         if self._context and step.result:

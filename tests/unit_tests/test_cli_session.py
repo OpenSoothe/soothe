@@ -24,14 +24,14 @@ def test_thread_logger_round_trips_conversation_and_events(tmp_path) -> None:
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="thread-1")
 
     logger.log_user_input("hello soothe")
-    logger.log((), "custom", {"type": "soothe.thread.started", "thread_id": "thread-1"})
+    logger.log((), "custom", {"type": "soothe.lifecycle.thread.started", "thread_id": "thread-1"})
     logger.log_assistant_response("hi there")
 
     records = logger.read_recent_records()
 
     assert [record["kind"] for record in records] == ["conversation", "event", "conversation"]
     assert [record["role"] for record in logger.recent_conversation()] == ["user", "assistant"]
-    assert logger.recent_actions()[0]["data"]["type"] == "soothe.thread.started"
+    assert logger.recent_actions()[0]["data"]["type"] == "soothe.lifecycle.thread.started"
 
 
 @pytest.mark.asyncio
@@ -60,7 +60,7 @@ async def test_review_command_renders_conversation_and_actions(tmp_path) -> None
     """The review command should surface both recent conversation and actions."""
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="thread-2")
     logger.log_user_input("summarize the repo")
-    logger.log((), "custom", {"type": "soothe.thread.created", "thread_id": "thread-2"})
+    logger.log((), "custom", {"type": "soothe.lifecycle.thread.created", "thread_id": "thread-2"})
     logger.log_assistant_response("Here is a short summary.")
     console = Console(record=True, width=120)
 
@@ -76,4 +76,4 @@ async def test_review_command_renders_conversation_and_actions(tmp_path) -> None
     assert "Recent Conversation" in output
     assert "Recent Actions" in output
     assert "summarize the repo" in output
-    assert "soothe.thread.created" in output
+    assert "soothe.lifecycle.thread.created" in output

@@ -5,18 +5,11 @@ import logging
 import sys
 from typing import Any
 
+from soothe.cli.rendering.tool_brief import extract_tool_brief as _headless_tool_brief
 from soothe.config import SootheConfig
+from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
 
 logger = logging.getLogger(__name__)
-
-
-def _headless_tool_brief(tool_name: str, content: str) -> str:
-    """One-line summary of a tool result for headless stderr output."""
-    if tool_name.startswith("wizsearch"):
-        first_line = content.split("\n", 1)[0].strip()
-        if first_line:
-            return first_line[:120]
-    return content.replace("\n", " ")[:120]
 
 
 async def run_headless_standalone(
@@ -82,8 +75,7 @@ async def run_headless_standalone(
             if mode == "custom" and isinstance(data, dict):
                 etype = str(data.get("type", ""))
 
-                # Final report -> stdout (IG-027)
-                if etype == "soothe.autonomous.final_report":
+                if etype == FINAL_REPORT:
                     report_text = data.get("summary", "")
                     if report_text:
                         sys.stdout.write("\n\n")
@@ -91,8 +83,7 @@ async def run_headless_standalone(
                         sys.stdout.write("\n")
                         sys.stdout.flush()
                         full_response.append(report_text)
-                # Chitchat response -> stdout
-                elif etype == "soothe.chitchat.response":
+                elif etype == CHITCHAT_RESPONSE:
                     chitchat_content = data.get("content", "")
                     if chitchat_content:
                         sys.stdout.write(chitchat_content)

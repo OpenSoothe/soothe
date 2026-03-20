@@ -23,6 +23,19 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
+from soothe.core.event_catalog import (
+    ResearchAnalyzeEvent,
+    ResearchCompletedEvent,
+    ResearchGatherDoneEvent,
+    ResearchGatherEvent,
+    ResearchQueriesGeneratedEvent,
+    ResearchReflectEvent,
+    ResearchReflectionDoneEvent,
+    ResearchSubQuestionsEvent,
+    ResearchSummarizeEvent,
+    ResearchSynthesizeEvent,
+)
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -195,7 +208,7 @@ def build_inquiry_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
-        _emit_progress({"type": "soothe.inquiry.analyze", "topic": topic[:200]})
+        _emit_progress(ResearchAnalyzeEvent(topic=topic[:200]).to_dict())
 
         prompt = _ANALYZE_TOPIC.format(
             domains=available_domains,
@@ -212,10 +225,9 @@ def build_inquiry_engine(
             sub_questions = [{"question": topic, "suggested_domain": "auto"}]
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.sub_questions",
-                "count": len(sub_questions),
-            }
+            ResearchSubQuestionsEvent(
+                count=len(sub_questions),
+            ).to_dict()
         )
         return {
             "_sub_questions": sub_questions,
@@ -244,10 +256,9 @@ def build_inquiry_engine(
             queries = [{"query": _extract_topic(state), "domain_hint": "auto"}]
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.queries_generated",
-                "queries": [q.get("query", q) if isinstance(q, dict) else q for q in queries],
-            }
+            ResearchQueriesGeneratedEvent(
+                queries=[q.get("query", q) if isinstance(q, dict) else q for q in queries],
+            ).to_dict()
         )
         return {"_queries": queries}
 
@@ -274,11 +285,10 @@ def build_inquiry_engine(
         domain_hint = state.get("_gather_domain", "auto")
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.gather",
-                "query": query,
-                "domain": domain_hint,
-            }
+            ResearchGatherEvent(
+                query=query,
+                domain=domain_hint,
+            ).to_dict()
         )
 
         selected = router.select(query, domain=domain_hint)
@@ -324,12 +334,11 @@ def build_inquiry_engine(
             source_refs.append(f"{r.source_name}:{r.source_ref}")
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.gather_done",
-                "query": query,
-                "result_count": len(all_results),
-                "sources_used": list({r.source_name for r in all_results}),
-            }
+            ResearchGatherDoneEvent(
+                query=query,
+                result_count=len(all_results),
+                sources_used=list({r.source_name for r in all_results}),
+            ).to_dict()
         )
 
         return {
@@ -357,10 +366,9 @@ def build_inquiry_engine(
         integrated = str(resp.content)
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.summarize",
-                "total_summaries": len(summaries),
-            }
+            ResearchSummarizeEvent(
+                total_summaries=len(summaries),
+            ).to_dict()
         )
 
         return {"search_summaries": [integrated]}
@@ -371,10 +379,9 @@ def build_inquiry_engine(
         summaries = "\n\n".join(state.get("search_summaries", []))
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.reflect",
-                "loop": loop_count + 1,
-            }
+            ResearchReflectEvent(
+                loop=loop_count + 1,
+            ).to_dict()
         )
 
         prompt = _REFLECT.format(
@@ -395,12 +402,11 @@ def build_inquiry_engine(
         follow_ups = parsed.get("follow_up_queries", [])
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.reflection_done",
-                "loop": loop_count + 1,
-                "is_sufficient": is_sufficient,
-                "follow_up_count": len(follow_ups),
-            }
+            ResearchReflectionDoneEvent(
+                loop=loop_count + 1,
+                is_sufficient=is_sufficient,
+                follow_up_count=len(follow_ups),
+            ).to_dict()
         )
 
         return {
@@ -440,11 +446,10 @@ def build_inquiry_engine(
         num_sources = len(state.get("sources_gathered", []))
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.synthesize",
-                "topic": topic[:200],
-                "total_sources": num_sources,
-            }
+            ResearchSynthesizeEvent(
+                topic=topic[:200],
+                total_sources=num_sources,
+            ).to_dict()
         )
 
         prompt = _SYNTHESIZE.format(
@@ -456,10 +461,9 @@ def build_inquiry_engine(
         answer = str(resp.content)
 
         _emit_progress(
-            {
-                "type": "soothe.inquiry.complete",
-                "answer_length": len(answer),
-            }
+            ResearchCompletedEvent(
+                answer_length=len(answer),
+            ).to_dict()
         )
         return {"answer": answer}
 

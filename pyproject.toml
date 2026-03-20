@@ -188,6 +188,7 @@ ignore-var-parameters = true
 [tool.ruff.lint.per-file-ignores]
 # Tests can use assert, and have relaxed documentation/typing requirements
 "tests/**" = ["S101", "ANN", "ARG", "D1", "PLR2004", "PT", "BLE001", "F401", "F841", "PD", "PTH", "RUF", "SIM", "TRY", "S110", "S108"]
+"src/soothe/core/event_catalog.py" = ["D101", "PLR2004"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

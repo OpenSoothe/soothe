@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.core._runner_shared import StreamChunk, _custom
+from soothe.core.event_catalog import CheckpointSavedEvent, RecoveryResumedEvent
 from soothe.protocols.planner import Plan, PlanStep
 
 if TYPE_CHECKING:
@@ -78,12 +79,11 @@ class CheckpointMixin:
             store.save_checkpoint(envelope)
             logger.debug("Checkpoint saved: mode=%s status=%s completed=%d", mode, status, len(completed))
             yield _custom(
-                {
-                    "type": "soothe.checkpoint.saved",
-                    "thread_id": state.thread_id,
-                    "completed_steps": len(completed),
-                    "completed_goals": len(goals_data),
-                }
+                CheckpointSavedEvent(
+                    thread_id=state.thread_id,
+                    completed_steps=len(completed),
+                    completed_goals=len(goals_data),
+                ).to_dict()
             )
         except Exception:
             logger.debug("Checkpoint save failed", exc_info=True)
@@ -188,13 +188,12 @@ class CheckpointMixin:
 
         completed_goals = [g["id"] for g in goals_data if g.get("status") == "completed"]
         yield _custom(
-            {
-                "type": "soothe.recovery.resumed",
-                "thread_id": state.thread_id,
-                "completed_steps": list(completed_ids),
-                "completed_goals": completed_goals,
-                "mode": loaded.get("mode", "single_pass"),
-            }
+            RecoveryResumedEvent(
+                thread_id=state.thread_id,
+                completed_steps=list(completed_ids),
+                completed_goals=completed_goals,
+                mode=loaded.get("mode", "single_pass"),
+            ).to_dict()
         )
 
     # -- report synthesis ---------------------------------------------------

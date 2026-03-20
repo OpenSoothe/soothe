@@ -20,7 +20,7 @@ from soothe.protocols.planner import Plan, PlanStep
 def test_render_progress_event_policy_allow_suppressed(capsys) -> None:
     """Policy 'allow' events should be suppressed in headless stderr output."""
     render_progress_event(
-        {"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"}, verbosity="normal"
+        {"type": "soothe.protocol.policy.checked", "verdict": "allow", "profile": "strict"}, verbosity="normal"
     )
     captured = capsys.readouterr()
     # Allow messages should not appear in stderr
@@ -30,7 +30,8 @@ def test_render_progress_event_policy_allow_suppressed(capsys) -> None:
 
 def test_render_progress_event_policy_deny_shown(capsys) -> None:
     """Policy 'deny' events should be shown in headless stderr output."""
-    render_progress_event({"type": "soothe.policy.checked", "verdict": "deny", "profile": "strict"}, verbosity="normal")
+    data = {"type": "soothe.protocol.policy.checked", "verdict": "deny", "profile": "strict"}
+    render_progress_event(data, verbosity="normal")
     captured = capsys.readouterr()
     # Deny messages should appear in stderr
     assert "[policy] deny (profile=strict)" in captured.err
@@ -38,7 +39,8 @@ def test_render_progress_event_policy_deny_shown(capsys) -> None:
 
 def test_render_progress_event_policy_allow_shown_in_debug(capsys) -> None:
     """Policy 'allow' events should be shown in debug mode."""
-    render_progress_event({"type": "soothe.policy.checked", "verdict": "allow", "profile": "strict"}, verbosity="debug")
+    data = {"type": "soothe.protocol.policy.checked", "verdict": "allow", "profile": "strict"}
+    render_progress_event(data, verbosity="debug")
     captured = capsys.readouterr()
     # Allow messages should appear in stderr in debug mode
     assert "[policy] allow (profile=strict)" in captured.err
@@ -47,7 +49,8 @@ def test_render_progress_event_policy_allow_shown_in_debug(capsys) -> None:
 def test_render_progress_event_policy_denied_shown(capsys) -> None:
     """Policy 'denied' events should always be shown in headless stderr output."""
     render_progress_event(
-        {"type": "soothe.policy.denied", "reason": "unauthorized action", "profile": "strict"}, verbosity="normal"
+        {"type": "soothe.protocol.policy.denied", "reason": "unauthorized action", "profile": "strict"},
+        verbosity="normal",
     )
     captured = capsys.readouterr()
     # Denied messages should appear in stderr
@@ -58,7 +61,7 @@ def test_tui_policy_allow_suppressed() -> None:
     """Policy 'allow' events should be suppressed in TUI activity panel."""
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.policy.checked", "verdict": "allow", "profile": "standard"},
+        {"type": "soothe.protocol.policy.checked", "verdict": "allow", "profile": "standard"},
         state,
         verbosity="normal",
     )
@@ -70,7 +73,7 @@ def test_tui_policy_allow_shown_in_debug() -> None:
     """Policy 'allow' events should be shown in TUI activity panel in debug mode."""
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.policy.checked", "verdict": "allow", "profile": "standard"},
+        {"type": "soothe.protocol.policy.checked", "verdict": "allow", "profile": "standard"},
         state,
         verbosity="debug",
     )
@@ -83,7 +86,7 @@ def test_tui_policy_deny_shown() -> None:
     """Policy 'deny' events should be shown in TUI activity panel."""
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.policy.checked", "verdict": "deny", "profile": "strict"},
+        {"type": "soothe.protocol.policy.checked", "verdict": "deny", "profile": "strict"},
         state,
         verbosity="normal",
     )
@@ -96,7 +99,7 @@ def test_tui_policy_denied_shown() -> None:
     """Policy 'denied' events should always be shown in TUI activity panel."""
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.policy.denied", "reason": "unauthorized action", "profile": "strict"},
+        {"type": "soothe.protocol.policy.denied", "reason": "unauthorized action", "profile": "strict"},
         state,
         verbosity="normal",
     )
@@ -118,7 +121,7 @@ def test_subagent_text_activity_respects_verbosity() -> None:
 def test_plan_batch_started_renders() -> None:
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.plan.batch_started", "parallel_count": 2},
+        {"type": "soothe.protocol.plan.batch_started", "parallel_count": 2},
         state,
         verbosity="normal",
     )
@@ -129,7 +132,7 @@ def test_plan_batch_started_renders() -> None:
 def test_plan_step_started_by_id() -> None:
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.plan.step_started", "step_id": "s1", "description": "do something"},
+        {"type": "soothe.protocol.plan.step_started", "step_id": "s1", "description": "do something"},
         state,
         verbosity="normal",
     )
@@ -142,7 +145,7 @@ def test_plan_step_started_with_batch_index() -> None:
     state = TuiState()
     _handle_protocol_event(
         {
-            "type": "soothe.plan.step_started",
+            "type": "soothe.protocol.plan.step_started",
             "step_id": "s1",
             "description": "do something",
             "depends_on": [],
@@ -159,7 +162,7 @@ def test_plan_step_completed_by_id_with_duration() -> None:
     state = TuiState()
     _handle_protocol_event(
         {
-            "type": "soothe.plan.step_completed",
+            "type": "soothe.protocol.plan.step_completed",
             "step_id": "s1",
             "success": True,
             "duration_ms": 1234,
@@ -175,7 +178,7 @@ def test_plan_step_completed_by_id_with_duration() -> None:
 def test_plan_step_failed_renders() -> None:
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.plan.step_failed", "step_id": "s1", "error": "timeout"},
+        {"type": "soothe.protocol.plan.step_failed", "step_id": "s1", "error": "timeout"},
         state,
         verbosity="normal",
     )
@@ -189,7 +192,7 @@ def test_plan_step_failed_with_blocked_steps() -> None:
     state = TuiState()
     _handle_protocol_event(
         {
-            "type": "soothe.plan.step_failed",
+            "type": "soothe.protocol.plan.step_failed",
             "step_id": "s1",
             "error": "dependency failed",
             "blocked_steps": ["s2", "s3"],
@@ -206,7 +209,7 @@ def test_plan_step_failed_with_blocked_steps() -> None:
 def test_goal_batch_started_renders() -> None:
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.goal.batch_started", "parallel_count": 3},
+        {"type": "soothe.protocol.goal.batch_started", "parallel_count": 3},
         state,
         verbosity="normal",
     )
@@ -249,7 +252,7 @@ def test_render_plan_tree_with_depends_on() -> None:
 def test_plan_step_started_backward_compat() -> None:
     state = TuiState()
     _handle_protocol_event(
-        {"type": "soothe.plan.step_started", "index": 0, "description": "legacy step"},
+        {"type": "soothe.protocol.plan.step_started", "index": 0, "description": "legacy step"},
         state,
         verbosity="normal",
     )

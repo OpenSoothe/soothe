@@ -1,7 +1,6 @@
 """Tests for progress verbosity filtering helpers."""
 
 from soothe.cli.progress_verbosity import (
-    _SUBAGENT_PREFIXES,
     classify_custom_event,
     should_show,
 )
@@ -43,41 +42,48 @@ class TestProgressVerbosity:
         ):
             assert should_show(category, "debug")
 
-    def test_classify_custom_event_protocol(self) -> None:
-        assert classify_custom_event((), {"type": "soothe.plan.created"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.context.projected"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.policy.checked"}) == "protocol"
+    def test_classify_protocol_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.protocol.plan.created"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.protocol.context.projected"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.protocol.policy.checked"}) == "protocol"
 
-    def test_classify_custom_event_error(self) -> None:
-        assert classify_custom_event((), {"type": "soothe.error"}) == "error"
+    def test_classify_lifecycle_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.lifecycle.thread.created"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.lifecycle.iteration.started"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.lifecycle.checkpoint.saved"}) == "protocol"
 
-    def test_classify_custom_event_subagent_from_namespace(self) -> None:
+    def test_classify_error_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.error.general"}) == "error"
+
+    def test_classify_output_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.output.chitchat.response"}) == "assistant_text"
+        assert classify_custom_event((), {"type": "soothe.output.autonomous.final_report"}) == "assistant_text"
+        assert classify_custom_event((), {"type": "soothe.output.chitchat.started"}) == "assistant_text"
+
+    def test_classify_tool_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.tool.websearch.search_started"}) == "tool_activity"
+        assert classify_custom_event((), {"type": "soothe.tool.websearch.crawl_completed"}) == "tool_activity"
+        assert classify_custom_event((), {"type": "soothe.tool.workspace.read_file_started"}) == "tool_activity"
+
+    def test_classify_subagent_events(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.subagent.browser.step"}) == "subagent_progress"
+        assert classify_custom_event((), {"type": "soothe.subagent.browser.cdp"}) == "subagent_progress"
+
+        assert classify_custom_event((), {"type": "soothe.subagent.claude.text"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.subagent.claude.result"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.subagent.claude.tool_use"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.subagent.skillify.retrieve_started"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.subagent.weaver.generate_started"}) == "subagent_custom"
+
+    def test_classify_subagent_from_namespace(self) -> None:
         assert classify_custom_event(("tools:abc",), {"type": "some_event"}) == "subagent_custom"
 
-    def test_classify_custom_event_subagent_from_soothe_prefix(self) -> None:
-        # Key progress events are classified as subagent_progress
-        assert classify_custom_event((), {"type": "soothe.browser.step"}) == "subagent_progress"
-        assert classify_custom_event((), {"type": "soothe.browser.cdp"}) == "subagent_progress"
-
-        # Text output events are classified as protocol for visibility
-        assert classify_custom_event((), {"type": "soothe.claude.text"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.claude.tool_use"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.claude.result"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.skillify.search"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.weaver.generate"}) == "subagent_custom"
-        assert classify_custom_event((), {"type": "soothe.chitchat.response"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.autonomous.final_report"}) == "protocol"
-
-    def test_classify_custom_event_thinking(self) -> None:
+    def test_classify_thinking(self) -> None:
         assert classify_custom_event((), {"type": "soothe.thinking.heartbeat"}) == "thinking"
+        assert classify_custom_event(("ns",), {"type": "thinking.heartbeat"}) == "thinking"
 
-    def test_subagent_prefixes_complete(self) -> None:
-        expected = frozenset(
-            {
-                "soothe.browser.",
-                "soothe.skillify.",
-                "soothe.weaver.",
-                "soothe.claude.",
-            }
-        )
-        assert expected == _SUBAGENT_PREFIXES
+    def test_classify_unknown_soothe_prefix(self) -> None:
+        assert classify_custom_event((), {"type": "soothe.unknown.something"}) == "protocol"
+
+    def test_classify_non_soothe_events(self) -> None:
+        assert classify_custom_event((), {"type": "something_else"}) == "debug"

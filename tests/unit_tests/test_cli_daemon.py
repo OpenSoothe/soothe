@@ -21,7 +21,7 @@ class _FakeRunner:
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         self.calls.append({"text": text, **kwargs})
-        yield ((), "custom", {"type": "soothe.thread.started"})
+        yield ((), "custom", {"type": "soothe.lifecycle.thread.started"})
 
 
 class _FakeRunnerWithMessages:
@@ -37,7 +37,7 @@ class _FakeRunnerWithMessages:
         self.calls.append({"text": text, **kwargs})
 
         # Yield a custom event
-        yield ((), "custom", {"type": "soothe.thread.started"})
+        yield ((), "custom", {"type": "soothe.lifecycle.thread.started"})
 
         # Yield a user message marker (not logged)
         yield ((), "custom", {"type": "user.input", "text": text})

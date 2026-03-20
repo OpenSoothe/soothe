@@ -17,6 +17,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.config import BrowserSubagentConfig
+from soothe.core.event_catalog import BrowserCdpEvent, BrowserStepEvent
 
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
@@ -204,10 +205,16 @@ def _build_browser_graph(
                         cdp_url = await find_available_cdp()
                         if cdp_url:
                             logger.info("Connecting to existing browser at %s", cdp_url)
-                            _emit({"type": "soothe.browser.cdp", "status": "connected", "cdp_url": cdp_url}, logger)
+                            _emit(
+                                BrowserCdpEvent(status="connected", cdp_url=cdp_url).to_dict(),
+                                logger,
+                            )
                         else:
                             logger.info("No existing browser found, launching new instance")
-                            _emit({"type": "soothe.browser.cdp", "status": "not_found"}, logger)
+                            _emit(
+                                BrowserCdpEvent(status="not_found").to_dict(),
+                                logger,
+                            )
 
                 if not cdp_url:
                     from soothe.utils.browser_cdp import cleanup_stale_chrome
@@ -242,14 +249,13 @@ def _build_browser_graph(
                             url = getattr(last.state, "url", None)
                             page_title = getattr(last.state, "title", "")[:60]
                     _emit(
-                        {
-                            "type": "soothe.browser.step",
-                            "step": step_num,
-                            "url": url,
-                            "action": action_desc,
-                            "title": page_title,
-                            "is_done": agent.history.is_done(),
-                        },
+                        BrowserStepEvent(
+                            step=step_num,
+                            url=url or "",
+                            action=action_desc,
+                            title=page_title,
+                            is_done=agent.history.is_done(),
+                        ).to_dict(),
                         logger,
                     )
 

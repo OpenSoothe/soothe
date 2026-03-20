@@ -1,4 +1,8 @@
-"""Progress verbosity classification and filtering helpers."""
+"""Progress verbosity classification and filtering helpers.
+
+RFC-0015: Classification uses the structural domain tier
+(``event_type.split('.')[1]``) from the event catalog registry.
+"""
 
 from __future__ import annotations
 
@@ -17,59 +21,67 @@ ProgressCategory = Literal[
 ]
 
 
-_SUBAGENT_PREFIXES = frozenset(
-    {
-        "soothe.browser.",
-        "soothe.skillify.",
-        "soothe.weaver.",
-        "soothe.claude.",
-    }
-)
-
-_PROTOCOL_PREFIXES = frozenset(
-    {
-        "soothe.iteration.",
-        "soothe.goal.",
-    }
-)
-
-
-# Key subagent events that should be visible at normal verbosity
-_SUBAGENT_PROGRESS_EVENTS = frozenset(
-    {
-        "soothe.browser.step",
-        "soothe.browser.cdp",
-    }
-)
-
-
 def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> ProgressCategory:
-    """Classify a custom event into a verbosity category."""
+    """Classify a custom event into a verbosity category.
+
+    Uses the RFC-0015 domain tier (second segment) for structural
+    classification. Falls back to heuristics for non-soothe events.
+
+    For soothe.* events, queries the event registry for verbosity mapping.
+    """
     etype = str(data.get("type", ""))
-    if etype == "soothe.error":
-        return "error"
 
-    # Text output from subagents should be treated as protocol-level (visible at normal verbosity)
-    # and handled specially to populate the conversation panel
-    if etype.endswith((".text", ".response", ".result")) and etype.startswith("soothe."):
-        return "protocol"
-
-    if etype.startswith("soothe."):
-        if "thinking" in etype or "heartbeat" in etype:
-            return "thinking"
-        # Key user-facing events visible at normal verbosity
-        if etype in _SUBAGENT_PROGRESS_EVENTS:
-            return "subagent_progress"
-        if any(etype.startswith(prefix) for prefix in _SUBAGENT_PREFIXES):
+    if not etype.startswith("soothe."):
+        if namespace:
+            if "thinking" in etype or "heartbeat" in etype:
+                return "thinking"
             return "subagent_custom"
-        return "protocol"
-    if namespace:
         if "thinking" in etype or "heartbeat" in etype:
             return "thinking"
+        return "debug"
+
+    # Try registry first for soothe.* events (RFC-0015)
+    from soothe.core.event_catalog import REGISTRY
+
+    meta = REGISTRY.get_meta(etype)
+    if meta and meta.verbosity:
+        # Map registry verbosity to ProgressCategory
+        verbosity_map: dict[str, ProgressCategory] = {
+            "minimal": "protocol",
+            "normal": "protocol",
+            "detailed": "protocol",
+            "subagent_progress": "subagent_progress",
+            "subagent_custom": "subagent_custom",
+            "tool_activity": "tool_activity",
+            "error": "error",
+            "debug": "debug",
+            "protocol": "protocol",
+            "assistant_text": "assistant_text",
+        }
+        return verbosity_map.get(meta.verbosity, "protocol")
+
+    # Fallback to structural classification
+    segments = etype.split(".")
+    domain = segments[1] if len(segments) >= 2 else "unknown"  # noqa: PLR2004
+
+    if domain == "error":
+        return "error"
+    if domain == "output":
+        return "assistant_text"
+    if domain == "tool":
+        return "tool_activity"
+    if domain == "subagent":
+        if "thinking" in etype or "heartbeat" in etype:
+            return "thinking"
+        if etype.endswith((".text", ".response", ".result")):
+            return "protocol"
         return "subagent_custom"
+    if domain in ("lifecycle", "protocol"):
+        return "protocol"
+
     if "thinking" in etype or "heartbeat" in etype:
         return "thinking"
-    return "debug"
+    return "protocol"
 
 
 def should_show(category: ProgressCategory, verbosity: ProgressVerbosity) -> bool:

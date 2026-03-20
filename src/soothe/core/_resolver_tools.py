@@ -89,7 +89,7 @@ def _resolve_tools_sequential(
     for name in tool_names:
         try:
             resolved = _resolve_single_tool_group(name, config)
-            wrapped = [wrap_main_agent_tool_with_logging(tool, logger) for tool in resolved]
+            wrapped = [wrap_main_agent_tool_with_logging(tool, logger, tool_group=name) for tool in resolved]
             tools.extend(wrapped)
         except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
@@ -121,7 +121,7 @@ def _resolve_tools_parallel(
 
     tools: list[BaseTool] = []
     for name in tool_names:
-        tools.extend(wrap_main_agent_tool_with_logging(t, logger) for t in results.get(name, []))
+        tools.extend(wrap_main_agent_tool_with_logging(t, logger, tool_group=name) for t in results.get(name, []))
     return tools
 
 

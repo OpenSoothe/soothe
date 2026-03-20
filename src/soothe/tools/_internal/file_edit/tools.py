@@ -48,6 +48,11 @@ class CreateFileTool(BaseTool):
             ValueError: If path is outside work directory and not allowed.
         """
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+
+        # Log if normalization changed the path
+        if normalized_input != file_path:
+            logger.info("Path normalization: '%s' → '%s'", file_path, normalized_input)
+
         path = Path(normalized_input)
 
         if path.is_absolute():
@@ -162,6 +167,11 @@ class ReadFileTool(BaseTool):
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+
+        # Log if normalization changed the path
+        if normalized_input != file_path:
+            logger.info("Path normalization: '%s' → '%s'", file_path, normalized_input)
+
         path = Path(normalized_input)
 
         if path.is_absolute():
@@ -250,6 +260,11 @@ class DeleteFileTool(BaseTool):
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+
+        # Log if normalization changed the path
+        if normalized_input != file_path:
+            logger.info("Path normalization: '%s' → '%s'", file_path, normalized_input)
+
         path = Path(normalized_input)
 
         if path.is_absolute():
@@ -482,6 +497,11 @@ class GetFileInfoTool(BaseTool):
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+
+        # Log if normalization changed the path
+        if normalized_input != file_path:
+            logger.info("Path normalization: '%s' → '%s'", file_path, normalized_input)
+
         path = Path(normalized_input)
 
         if path.is_absolute():

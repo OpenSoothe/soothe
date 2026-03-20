@@ -7,6 +7,13 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.event_catalog import (
+    SkillifyIndexFailedEvent,
+    SkillifyIndexStartedEvent,
+    SkillifyIndexUnchangedEvent,
+    SkillifyIndexUpdatedEvent,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -160,7 +167,7 @@ class SkillIndexer:
             return
         await self._ensure_collection()
         await self._bootstrap_hash_cache()
-        self._emit({"type": "soothe.skillify.index.started", "collection": self._collection})
+        self._emit(SkillifyIndexStartedEvent(collection=self._collection).to_dict())
         self._task = asyncio.create_task(self._index_loop())
         logger.info("Skillify background indexer started (interval=%ds)", self._interval)
 
@@ -331,13 +338,12 @@ class SkillIndexer:
                 total_changes = stats["new"] + stats["changed"] + stats["deleted"]
                 if total_changes > 0:
                     self._emit(
-                        {
-                            "type": "soothe.skillify.index.updated",
-                            "new": stats["new"],
-                            "changed": stats["changed"],
-                            "deleted": stats["deleted"],
-                            "total": self._total_indexed,
-                        }
+                        SkillifyIndexUpdatedEvent(
+                            new=stats["new"],
+                            changed=stats["changed"],
+                            deleted=stats["deleted"],
+                            total=self._total_indexed,
+                        ).to_dict()
                     )
                     logger.info(
                         "Skillify index pass: new=%d changed=%d deleted=%d total=%d",
@@ -348,10 +354,9 @@ class SkillIndexer:
                     )
                 else:
                     self._emit(
-                        {
-                            "type": "soothe.skillify.index.unchanged",
-                            "total": self._total_indexed,
-                        }
+                        SkillifyIndexUnchangedEvent(
+                            total=self._total_indexed,
+                        ).to_dict()
                     )
                     logger.debug("Skillify index pass: no changes (total=%d)", self._total_indexed)
                 if first_pass:
@@ -362,7 +367,7 @@ class SkillIndexer:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                self._emit({"type": "soothe.skillify.index.error"})
+                self._emit(SkillifyIndexFailedEvent().to_dict())
                 logger.exception("Skillify index pass failed")
                 if first_pass:
                     if self._ready_event:

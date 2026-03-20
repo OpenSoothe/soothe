@@ -35,6 +35,7 @@ from soothe.core._runner_checkpoint import CheckpointMixin
 from soothe.core._runner_phases import PhasesMixin
 from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.core._runner_steps import StepLoopMixin
+from soothe.core.event_catalog import PlanOnlyEvent
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -434,12 +435,11 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
 
         if state.plan and is_plan_only:
             yield _custom(
-                {
-                    "type": "soothe.plan.plan_only",
-                    "thread_id": state.thread_id,
-                    "goal": state.plan.goal,
-                    "step_count": len(state.plan.steps),
-                }
+                PlanOnlyEvent(
+                    thread_id=state.thread_id,
+                    goal=state.plan.goal,
+                    step_count=len(state.plan.steps),
+                ).to_dict()
             )
         elif state.plan and len(state.plan.steps) > 1:
             sp_goal_id = "default"

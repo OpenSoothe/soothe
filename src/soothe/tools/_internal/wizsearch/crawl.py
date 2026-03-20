@@ -8,6 +8,11 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.core.events import (
+    TOOL_WEBSEARCH_CRAWL_COMPLETED,
+    TOOL_WEBSEARCH_CRAWL_FAILED,
+    TOOL_WEBSEARCH_CRAWL_STARTED,
+)
 from soothe.tools._internal.wizsearch._helpers import _require_wizsearch, _run_coro
 from soothe.utils.url_validation import validate_url
 
@@ -53,9 +58,11 @@ class WizsearchCrawlPageTool(BaseTool):
             logger.warning("Invalid URL: %s", error)
             emit_progress(
                 {
-                    "type": "soothe.tool.crawl.failed",
+                    "type": TOOL_WEBSEARCH_CRAWL_FAILED,
                     "url": url,
                     "error": error,
+                    "tool": "wizsearch_crawl_page",
+                    "tool_group": "websearch",
                 },
                 logger,
             )
@@ -71,9 +78,11 @@ class WizsearchCrawlPageTool(BaseTool):
 
         emit_progress(
             {
-                "type": "soothe.tool.crawl.started",
+                "type": TOOL_WEBSEARCH_CRAWL_STARTED,
                 "url": validated_url,
                 "content_format": selected_format,
+                "tool": "wizsearch_crawl_page",
+                "tool_group": "websearch",
             },
             logger,
         )
@@ -98,9 +107,11 @@ class WizsearchCrawlPageTool(BaseTool):
 
             emit_progress(
                 {
-                    "type": "soothe.tool.crawl.completed",
+                    "type": TOOL_WEBSEARCH_CRAWL_COMPLETED,
                     "url": validated_url,
                     "content_length": len(content or ""),
+                    "tool": "wizsearch_crawl_page",
+                    "tool_group": "websearch",
                 },
                 logger,
             )
@@ -117,10 +128,12 @@ class WizsearchCrawlPageTool(BaseTool):
 
             emit_progress(
                 {
-                    "type": "soothe.tool.crawl.failed",
+                    "type": TOOL_WEBSEARCH_CRAWL_FAILED,
                     "url": validated_url,
                     "error": str(exc),
                     "error_type": type(exc).__name__,
+                    "tool": "wizsearch_crawl_page",
+                    "tool_group": "websearch",
                 },
                 logger,
             )

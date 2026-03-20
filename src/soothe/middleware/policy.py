@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
 
+from soothe.core.event_catalog import PolicyCheckedEvent, PolicyDeniedEvent
 from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext, PolicyProtocol
 
 if TYPE_CHECKING:
@@ -64,25 +65,21 @@ class SoothePolicyMiddleware(AgentMiddleware):
         )
         self._emit_policy_event(
             request,
-            event_type="soothe.policy.checked",
-            payload={
-                "action": action_type,
-                "tool": action_name,
-                "verdict": decision.verdict,
-                "profile": self._profile_name,
-            },
+            PolicyCheckedEvent(
+                action=action_type,
+                verdict=decision.verdict,
+                profile=self._profile_name,
+            ).to_dict(),
         )
 
         if decision.verdict == "deny":
             self._emit_policy_event(
                 request,
-                event_type="soothe.policy.denied",
-                payload={
-                    "action": action_type,
-                    "tool": action_name,
-                    "reason": decision.reason,
-                    "profile": self._profile_name,
-                },
+                PolicyDeniedEvent(
+                    action=action_type,
+                    reason=decision.reason,
+                    profile=self._profile_name,
+                ).to_dict(),
             )
             return ToolMessage(
                 content=f"Policy denied action '{action_name}': {decision.reason}",
@@ -112,12 +109,13 @@ class SoothePolicyMiddleware(AgentMiddleware):
         return None
 
     @staticmethod
-    def _emit_policy_event(request: ToolCallRequest, event_type: str, payload: dict[str, Any]) -> None:
+    def _emit_policy_event(request: ToolCallRequest, event_dict: dict[str, Any]) -> None:
+        """Emit a policy event via the stream writer."""
         stream_writer = getattr(request.runtime, "stream_writer", None)
         if not callable(stream_writer):
             return
         try:
-            stream_writer({"type": event_type, **payload})
+            stream_writer(event_dict)
         except Exception:
             # Policy checks must not fail tool execution due to telemetry.
             return

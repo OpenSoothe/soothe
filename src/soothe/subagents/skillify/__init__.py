@@ -18,6 +18,12 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.core.event_catalog import (
+    SkillifyIndexingPendingEvent,
+    SkillifyRetrieveCompletedEvent,
+    SkillifyRetrieveNotReadyEvent,
+    SkillifyRetrieveStartedEvent,
+)
 from soothe.subagents.skillify.indexer import SkillIndexer
 from soothe.subagents.skillify.retriever import SkillRetriever
 from soothe.subagents.skillify.warehouse import SkillWarehouse
@@ -87,24 +93,23 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             query = last.content if hasattr(last, "content") else str(last)
 
         if not retriever.is_ready:
-            _emit_progress({"type": "soothe.skillify.indexing_pending", "query": query[:200]})
+            _emit_progress(SkillifyIndexingPendingEvent(query=query[:200]).to_dict())
 
-        _emit_progress({"type": "soothe.skillify.retrieve.started", "query": query[:200]})
+        _emit_progress(SkillifyRetrieveStartedEvent(query=query[:200]).to_dict())
 
         bundle: SkillBundle = await retriever.retrieve(query)
 
         if bundle.query.startswith("[Indexing in progress]"):
-            _emit_progress({"type": "soothe.skillify.retrieve.not_ready", "message": bundle.query})
+            _emit_progress(SkillifyRetrieveNotReadyEvent(message=bundle.query).to_dict())
             return {"messages": [AIMessage(content=bundle.query)]}
 
         top_score = bundle.results[0].score if bundle.results else 0.0
         _emit_progress(
-            {
-                "type": "soothe.skillify.retrieve.completed",
-                "query": query[:200],
-                "result_count": len(bundle.results),
-                "top_score": round(top_score, 3),
-            }
+            SkillifyRetrieveCompletedEvent(
+                query=query[:200],
+                result_count=len(bundle.results),
+                top_score=round(top_score, 3),
+            ).to_dict()
         )
 
         result_lines = [f"Found {len(bundle.results)} relevant skills (total indexed: {bundle.total_indexed}):\n"]

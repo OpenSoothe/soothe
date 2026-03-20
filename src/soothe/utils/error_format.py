@@ -148,18 +148,20 @@ def emit_error_event(
     *,
     context: str | None = None,
 ) -> dict[str, str]:
-    """Create a soothe.error event dict with simplified message.
+    """Create a soothe.error.general event dict with simplified message.
 
     Args:
         error: Exception or error message.
         context: Optional context about what failed.
 
     Returns:
-        Event dict with type='soothe.error' and simplified message.
+        Event dict with type='soothe.error.general' and simplified message.
 
     Example:
         >>> emit_error_event(TimeoutError("Browser timeout"), context="browser launch")
-        {'type': 'soothe.error', 'error': 'Browser launch failed: TimeoutError: Browser startup timeout'}
+        {'type': 'soothe.error.general', 'error': 'Browser launch failed: TimeoutError: Browser startup timeout'}
     """
+    from soothe.core.events import ERROR
+
     simplified = format_cli_error(error, context=context)
-    return {"type": "soothe.error", "error": simplified}
+    return {"type": ERROR, "error": simplified}

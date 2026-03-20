@@ -9,7 +9,27 @@ from typing import Any
 from rich.text import Text
 
 from soothe.cli.progress_verbosity import ProgressVerbosity, should_show
+from soothe.cli.rendering.tool_brief import extract_tool_brief as _extract_tool_brief
 from soothe.cli.tui.state import TuiState
+from soothe.core.events import (
+    SUBAGENT_BROWSER_CDP,
+    SUBAGENT_BROWSER_STEP,
+    SUBAGENT_CLAUDE_RESULT,
+    SUBAGENT_CLAUDE_TEXT,
+    SUBAGENT_CLAUDE_TOOL_USE,
+    TOOL_RESEARCH_ANALYZE,
+    TOOL_RESEARCH_COMPLETED,
+    TOOL_RESEARCH_GATHER,
+    TOOL_RESEARCH_GATHER_DONE,
+    TOOL_RESEARCH_QUERIES_GENERATED,
+    TOOL_RESEARCH_SYNTHESIZE,
+    TOOL_WEBSEARCH_CRAWL_COMPLETED,
+    TOOL_WEBSEARCH_CRAWL_FAILED,
+    TOOL_WEBSEARCH_CRAWL_STARTED,
+    TOOL_WEBSEARCH_SEARCH_COMPLETED,
+    TOOL_WEBSEARCH_SEARCH_FAILED,
+    TOOL_WEBSEARCH_SEARCH_STARTED,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,203 +106,19 @@ def _handle_protocol_event(
     *,
     verbosity: ProgressVerbosity = "normal",
 ) -> None:
-    """Render a soothe.* protocol custom event as an activity line."""
-    if not should_show("protocol", verbosity):
-        return
-    etype = data.get("type", "")
+    """Render a soothe.* protocol custom event as an activity line.
 
-    # Tool activity events
-    if etype.startswith("soothe.tool."):
-        _handle_tool_activity_event(data, state, verbosity=verbosity)
-        return
+    This function delegates to TuiEventRenderer which uses registry-based
+    O(1) dispatch instead of O(n) if-elif chains (RFC-0015).
 
-    if etype == "soothe.context.projected":
-        entries = data.get("entries", 0)
-        tokens = data.get("tokens", 0)
-        _add_activity(
-            state,
-            Text.assemble(("  . ", "dim"), (f"Context: {entries} entries, {tokens} tokens", "cyan")),
-        )
-    elif etype == "soothe.memory.recalled":
-        count = data.get("count", 0)
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Memory: {count} items recalled", "cyan")))
-    elif etype == "soothe.plan.created":
-        from soothe.protocols.planner import Plan, PlanStep
+    Args:
+        data: Event dict with 'type' key.
+        state: TUI state for tracking plan steps, etc.
+        verbosity: Verbosity level for filtering.
+    """
+    from soothe.cli.tui.tui_event_renderer import handle_protocol_event as _handle
 
-        steps_data = data.get("steps", [])
-        try:
-            steps = [
-                PlanStep(
-                    id=s.get("id", str(i)),
-                    description=s.get("description", ""),
-                    status=s.get("status", "pending"),
-                    depends_on=s.get("depends_on", []),
-                )
-                for i, s in enumerate(steps_data)
-            ]
-            state.current_plan = Plan(goal=data.get("goal", ""), steps=steps)
-        except Exception:
-            logger.debug("Plan reconstruction failed", exc_info=True)
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Plan: {len(steps_data)} steps", "cyan")))
-    elif etype == "soothe.plan.reflected":
-        assessment = data.get("assessment", "")[:60]
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Reflected: {assessment}", "dim italic")))
-    elif etype == "soothe.plan.batch_started":
-        parallel = data.get("parallel_count", 1)
-        if parallel > 1:
-            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Batch: {parallel} steps in parallel", "cyan bold")))
-    elif etype == "soothe.plan.step_started":
-        step_id = data.get("step_id", "")
-        index = int(data.get("index", -1))
-        description = data.get("description", "")
-        if step_id:
-            _set_plan_step_status_by_id(state, step_id, "in_progress")
-            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: {description}", "yellow")))
-        elif index >= 0:
-            _set_plan_step_status(state, index, "in_progress")
-            _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {index + 1}: {description}", "yellow")))
-    elif etype == "soothe.plan.step_completed":
-        step_id = data.get("step_id", "")
-        index = int(data.get("index", -1))
-        success = bool(data.get("success", False))
-        duration = data.get("duration_ms", 0)
-        status = "completed" if success else "failed"
-        if step_id:
-            _set_plan_step_status_by_id(state, step_id, status)
-            dur_str = f" ({duration}ms)" if duration else ""
-            label = f"Step {step_id}: {'done' if success else 'failed'}{dur_str}"
-        elif index >= 0:
-            _set_plan_step_status(state, index, status)
-            label = f"Step {index + 1}: {'done' if success else 'failed'}"
-        else:
-            label = f"Step: {'done' if success else 'failed'}"
-        _add_activity(
-            state,
-            Text.assemble(("  . ", "dim"), (label, "green" if success else "red")),
-        )
-    elif etype == "soothe.plan.step_failed":
-        step_id = data.get("step_id", "")
-        error = data.get("error", "")[:80]
-        if step_id:
-            _set_plan_step_status_by_id(state, step_id, "failed")
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: FAILED - {error}", "bold red")))
-    elif etype == "soothe.goal.batch_started":
-        parallel = data.get("parallel_count", 1)
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Goals: {parallel} running in parallel", "cyan bold")))
-    elif etype == "soothe.policy.checked":
-        verdict = data.get("verdict", "?")
-        profile = data.get("profile")
-        detail = f"Policy: {verdict}"
-        if profile:
-            detail += f" (profile={profile})"
-
-        # In debug mode, show all policy events in TUI
-        if verbosity == "debug":
-            _add_activity(
-                state,
-                Text.assemble(("  . ", "dim"), (detail, "cyan" if verdict == "allow" else "bold red")),
-            )
-        # In normal mode, suppress "allow" messages but show "deny" messages
-        elif verdict == "deny":
-            _add_activity(
-                state,
-                Text.assemble(("  . ", "dim"), (detail, "bold red")),
-            )
-        else:
-            # Log "allow" events to file without displaying in TUI
-            logger.info("Activity:   . %s", detail)
-    elif etype == "soothe.policy.denied":
-        reason = data.get("reason", "")
-        profile = data.get("profile")
-        detail = f"Denied: {reason}"
-        if profile:
-            detail += f" (profile={profile})"
-        _add_activity(state, Text.assemble(("  ! ", "bold red"), (detail, "red")))
-    elif etype == "soothe.context.ingested":
-        source = data.get("source", "")
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Ingested from {source}", "dim cyan")))
-    elif etype == "soothe.thread.created":
-        tid = data.get("thread_id", "?")
-        state.thread_id = tid
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Thread: {tid}", "dim")))
-    elif etype == "soothe.thread.resumed":
-        tid = data.get("thread_id", "?")
-        state.thread_id = tid
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Resumed thread: {tid}", "dim")))
-    elif etype == "soothe.thread.saved":
-        tid = data.get("thread_id", state.thread_id or "?")
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Saved thread: {tid}", "dim cyan")))
-    elif etype == "soothe.memory.stored":
-        memory_id = data.get("id", "?")
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Stored memory: {memory_id}", "cyan")))
-    elif etype == "soothe.iteration.started":
-        iteration = data.get("iteration", "?")
-        goal_desc = _truncate(str(data.get("goal_description", "")), 50)
-        _add_activity(
-            state,
-            Text.assemble(("  >> ", "bold yellow"), (f"Iteration {iteration}: {goal_desc}", "bold yellow")),
-        )
-    elif etype == "soothe.iteration.completed":
-        iteration = data.get("iteration", "?")
-        outcome = data.get("outcome", "?")
-        duration = data.get("duration_ms", 0)
-        style = "green" if outcome == "goal_complete" else "yellow"
-        _add_activity(
-            state,
-            Text.assemble(("  << ", f"bold {style}"), (f"Iteration {iteration}: {outcome} ({duration}ms)", style)),
-        )
-    elif etype == "soothe.goal.created":
-        desc = _truncate(str(data.get("description", "")), 50)
-        priority = data.get("priority", "?")
-        _add_activity(
-            state,
-            Text.assemble(("  + ", "bold cyan"), (f"Goal: {desc} (priority={priority})", "cyan")),
-        )
-    elif etype == "soothe.goal.completed":
-        goal_id = data.get("goal_id", "?")
-        _add_activity(state, Text.assemble(("  + ", "bold green"), (f"Goal {goal_id} completed", "green")))
-    elif etype == "soothe.goal.failed":
-        goal_id = data.get("goal_id", "?")
-        error = _truncate(str(data.get("error", "")), 50)
-        retry = data.get("retry_count", 0)
-        _add_activity(
-            state,
-            Text.assemble(("  ! ", "bold red"), (f"Goal {goal_id} failed (retry {retry}): {error}", "red")),
-        )
-    elif etype == "soothe.error":
-        error = data.get("error", "unknown")
-        _add_activity(state, Text.assemble(("  ! ", "bold red"), (error, "red")))
-        state.errors.append(error)
-    elif etype == "soothe.chitchat.started":
-        query = _truncate(str(data.get("query", "")), 50)
-        _add_activity(state, Text.assemble(("  . ", "dim"), (f"Chitchat: {query}", "dim")))
-    elif etype == "soothe.chitchat.response":
-        content = data.get("content", "")
-        if content and should_show("assistant_text", verbosity):
-            cleaned = strip_internal_tags(content)
-            if cleaned:
-                state.full_response.append(cleaned)
-    elif etype == "soothe.autonomous.final_report":
-        summary = data.get("summary", "")
-        if summary and should_show("assistant_text", verbosity):
-            cleaned = strip_internal_tags(summary)
-            if cleaned:
-                state.full_response.append(cleaned)
-    # Handle text output from subagents
-    elif etype.endswith(".text"):
-        # Text output from any subagent (claude, browser, etc.)
-        text = data.get("text", "")
-        if text and should_show("assistant_text", verbosity):
-            cleaned = strip_internal_tags(text)
-            if cleaned:
-                state.full_response.append(cleaned)
-    elif etype.endswith(".response"):
-        # Response content from any subagent
-        content = data.get("content", "")
-        if content and should_show("assistant_text", verbosity):
-            cleaned = strip_internal_tags(content)
-            if cleaned:
-                state.full_response.append(cleaned)
+    _handle(data, state, verbosity=verbosity)
 
 
 def _handle_tool_activity_event(
@@ -297,7 +133,7 @@ def _handle_tool_activity_event(
 
     etype = data.get("type", "")
 
-    if etype == "soothe.tool.search.started":
+    if etype == TOOL_WEBSEARCH_SEARCH_STARTED:
         query = data.get("query", "")
         engines = data.get("engines", [])
         summary = f"Searching: {_truncate(str(query), 40)}"
@@ -305,8 +141,7 @@ def _handle_tool_activity_event(
             summary += f" ({', '.join(engines[:3])})"
         _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
 
-    elif etype == "soothe.tool.search.completed":
-        query = data.get("query", "")
+    elif etype == TOOL_WEBSEARCH_SEARCH_COMPLETED:
         count = data.get("result_count", 0)
         response_time = data.get("response_time")
         summary = f"Search complete: {count} results"
@@ -314,25 +149,22 @@ def _handle_tool_activity_event(
             summary += f" ({response_time:.1f}s)"
         _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
 
-    elif etype == "soothe.tool.search.failed":
-        query = data.get("query", "")
+    elif etype == TOOL_WEBSEARCH_SEARCH_FAILED:
         error = data.get("error", "unknown error")
         summary = f"Search failed: {_truncate(str(error), 40)}"
         _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
 
-    elif etype == "soothe.tool.crawl.started":
+    elif etype == TOOL_WEBSEARCH_CRAWL_STARTED:
         url = data.get("url", "")
         summary = f"Crawling: {_truncate(str(url), 50)}"
         _add_activity(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")))
 
-    elif etype == "soothe.tool.crawl.completed":
-        url = data.get("url", "")
+    elif etype == TOOL_WEBSEARCH_CRAWL_COMPLETED:
         content_length = data.get("content_length", 0)
         summary = f"Crawl complete: {content_length} bytes"
         _add_activity(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")))
 
-    elif etype == "soothe.tool.crawl.failed":
-        url = data.get("url", "")
+    elif etype == TOOL_WEBSEARCH_CRAWL_FAILED:
         error = data.get("error", "unknown error")
         summary = f"Crawl failed: {_truncate(str(error), 40)}"
         _add_activity(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")))
@@ -356,7 +188,7 @@ def _handle_subagent_progress(
     etype = data.get("type", "")
 
     # Format progress events with user-friendly messages
-    if etype == "soothe.browser.step":
+    if etype == SUBAGENT_BROWSER_STEP:
         step = data.get("step", "?")
         action = _truncate(str(data.get("action", "")), 50)
         url = _truncate(str(data.get("url", "")), 35)
@@ -365,7 +197,7 @@ def _handle_subagent_progress(
             summary += f": {action}"
         if url:
             summary += f" @ {url}"
-    elif etype == "soothe.browser.cdp":
+    elif etype == SUBAGENT_BROWSER_CDP:
         status = data.get("status", "")
         if status == "connected":
             summary = "Connected to existing browser"
@@ -373,22 +205,26 @@ def _handle_subagent_progress(
             summary = "No existing browser found, launching new"
         else:
             summary = f"Browser CDP: {status}"
-    elif etype == "soothe.research.web_search":
-        query = data.get("query", "")
-        engines = data.get("engines", [])
-        summary = f"Searching: {_truncate(str(query), 40)}"
-        if engines:
-            summary += f" ({', '.join(engines)})"
-    elif etype == "soothe.research.search_done":
-        count = data.get("result_count", 0)
-        summary = f"Found {count} results"
-    elif etype == "soothe.research.queries_generated":
+    elif etype == TOOL_RESEARCH_ANALYZE:
+        topic = _truncate(str(data.get("topic", "")), 50)
+        summary = f"Analyzing: {topic}"
+    elif etype == TOOL_RESEARCH_QUERIES_GENERATED:
         count = data.get("count", 0)
         queries = data.get("queries", [])
-        summary = f"Generated {count} search queries"
+        summary = f"Generated {count} queries"
         if queries and len(queries) <= _MAX_INLINE_QUERIES:
             summary += f": {', '.join(_truncate(str(q), 30) for q in queries[:_MAX_INLINE_QUERIES])}"
-    elif etype == "soothe.research.complete":
+    elif etype == TOOL_RESEARCH_GATHER:
+        domain = data.get("domain", "unknown")
+        query = _truncate(str(data.get("query", "")), 40)
+        summary = f"Gathering from {domain}: {query}"
+    elif etype == TOOL_RESEARCH_GATHER_DONE:
+        count = data.get("result_count", 0)
+        sources = data.get("sources_used", [])
+        summary = f"Gathered {count} results from {len(sources)} sources"
+    elif etype == TOOL_RESEARCH_SYNTHESIZE:
+        summary = "Synthesizing findings"
+    elif etype == TOOL_RESEARCH_COMPLETED:
         summary = "Research completed"
     else:
         # Fallback for any other progress events
@@ -415,7 +251,7 @@ def _handle_subagent_custom(
     tag = label or "subagent"
     etype = data.get("type", "")
 
-    if etype == "soothe.browser.step":
+    if etype == SUBAGENT_BROWSER_STEP:
         step = data.get("step", "?")
         action = _truncate(str(data.get("action", "")), 50)
         url = _truncate(str(data.get("url", "")), 35)
@@ -424,27 +260,27 @@ def _handle_subagent_custom(
             summary += f": {action}"
         if url:
             summary += f" @ {url}"
-    elif etype.startswith("soothe.research."):
-        label = etype.replace("soothe.research.", "").replace("_", " ")
-        query = data.get("query", data.get("topic", ""))
+    elif etype.startswith("soothe.tool.research."):
+        label = etype.replace("soothe.tool.research.", "").replace("_", " ")
+        topic = data.get("topic", data.get("query", ""))
         summary = label
-        if query:
-            summary += f": {_truncate(str(query), 40)}"
-    elif etype == "soothe.claude.tool_use":
+        if topic:
+            summary += f": {_truncate(str(topic), 40)}"
+    elif etype == SUBAGENT_CLAUDE_TOOL_USE:
         summary = f"Tool: {data.get('tool', data.get('name', etype))}"
-    elif etype == "soothe.claude.text":
+    elif etype == SUBAGENT_CLAUDE_TEXT:
         summary = f"Text: {_truncate(str(data.get('text', '')), 50)}"
-    elif etype == "soothe.claude.result":
+    elif etype == SUBAGENT_CLAUDE_RESULT:
         cost = data.get("cost_usd", 0)
         duration = data.get("duration_ms", 0)
         summary = f"Done (${cost:.4f}, {duration}ms)" if cost else "Done"
-    elif etype.startswith("soothe.skillify."):
-        summary = etype.replace("soothe.skillify.", "").replace("_", " ")
+    elif etype.startswith("soothe.subagent.skillify."):
+        summary = etype.replace("soothe.subagent.skillify.", "").replace("_", " ")
         detail = data.get("skill", data.get("query", ""))
         if detail:
             summary += f": {_truncate(str(detail), 40)}"
-    elif etype.startswith("soothe.weaver."):
-        summary = etype.replace("soothe.weaver.", "").replace("_", " ")
+    elif etype.startswith("soothe.subagent.weaver."):
+        summary = etype.replace("soothe.subagent.weaver.", "").replace("_", " ")
         detail = data.get("agent_name", data.get("task", ""))
         if detail:
             summary += f": {_truncate(str(detail), 40)}"
@@ -508,20 +344,6 @@ def _handle_tool_result_activity(
         )
     else:
         _add_activity(state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim")))
-
-
-def _extract_tool_brief(tool_name: str, content: str) -> str:
-    """Extract a concise one-line summary from tool result content.
-
-    For search tools the first line is a human-readable header like
-    ``20 results in 15.0s for "query"`` — use that instead of the raw
-    content which may contain XML tags and source data.
-    """
-    if tool_name.startswith("wizsearch"):
-        first_line = content.split("\n", 1)[0].strip()
-        if first_line:
-            return first_line[:120]
-    return content.replace("\n", " ")[:80]
 
 
 def _handle_generic_custom_activity(

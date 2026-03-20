@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.core.event_catalog import ClaudeResultEvent, ClaudeTextEvent, ClaudeToolUseEvent
 from soothe.utils import expand_path
 
 if TYPE_CHECKING:
@@ -105,28 +106,21 @@ def _build_claude_graph(
                         if isinstance(block, TextBlock):
                             collected_text.append(block.text)
                             _emit(
-                                {
-                                    "type": "soothe.claude.text",
-                                    "text": block.text,  # Full text for conversation panel
-                                },
+                                ClaudeTextEvent(text=block.text).to_dict(),
                                 logger,
                             )
                         elif isinstance(block, ToolUseBlock):
                             _emit(
-                                {
-                                    "type": "soothe.claude.tool_use",
-                                    "tool": block.name,
-                                },
+                                ClaudeToolUseEvent(tool=block.name).to_dict(),
                                 logger,
                             )
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
                     _emit(
-                        {
-                            "type": "soothe.claude.result",
-                            "cost_usd": cost_usd,
-                            "duration_ms": message.duration_ms,
-                        },
+                        ClaudeResultEvent(
+                            cost_usd=cost_usd,
+                            duration_ms=message.duration_ms,
+                        ).to_dict(),
                         logger,
                     )
         except Exception:

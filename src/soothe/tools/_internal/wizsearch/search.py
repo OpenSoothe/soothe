@@ -9,6 +9,11 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.core.events import (
+    TOOL_WEBSEARCH_SEARCH_COMPLETED,
+    TOOL_WEBSEARCH_SEARCH_FAILED,
+    TOOL_WEBSEARCH_SEARCH_STARTED,
+)
 from soothe.tools._internal.wizsearch._helpers import (
     _extract_domain,
     _maybe_apply_tavily_key,
@@ -172,7 +177,13 @@ class WizsearchSearchTool(BaseTool):
             logger.warning("Engine %s: %s - %s", warning["engine"], warning["issue"], warning["message"])
 
         emit_progress(
-            {"type": "soothe.tool.search.started", "query": query, "engines": normalized},
+            {
+                "type": TOOL_WEBSEARCH_SEARCH_STARTED,
+                "query": query,
+                "engines": normalized,
+                "tool": "wizsearch_search",
+                "tool_group": "websearch",
+            },
             logger,
         )
 
@@ -189,10 +200,12 @@ class WizsearchSearchTool(BaseTool):
                 sources = _to_serializable_sources(result)
                 emit_progress(
                     {
-                        "type": "soothe.tool.search.completed",
+                        "type": TOOL_WEBSEARCH_SEARCH_COMPLETED,
                         "query": query,
                         "result_count": len(sources),
                         "response_time": getattr(result, "response_time", None),
+                        "tool": "wizsearch_search",
+                        "tool_group": "websearch",
                     },
                     logger,
                 )
@@ -215,10 +228,12 @@ class WizsearchSearchTool(BaseTool):
                 sources = _to_serializable_sources(result)
                 emit_progress(
                     {
-                        "type": "soothe.tool.search.completed",
+                        "type": TOOL_WEBSEARCH_SEARCH_COMPLETED,
                         "query": query,
                         "result_count": len(sources),
                         "response_time": getattr(result, "response_time", None),
+                        "tool": "wizsearch_search",
+                        "tool_group": "websearch",
                     },
                     logger,
                 )
@@ -229,12 +244,14 @@ class WizsearchSearchTool(BaseTool):
 
             emit_progress(
                 {
-                    "type": "soothe.tool.search.failed",
+                    "type": TOOL_WEBSEARCH_SEARCH_FAILED,
                     "query": query,
                     "error": str(exc),
                     "engines": normalized,
                     "engine_status": getattr(exc, "engine_status", {}),
                     "debug_mode": self._debug_mode,
+                    "tool": "wizsearch_search",
+                    "tool_group": "websearch",
                 },
                 logger,
             )

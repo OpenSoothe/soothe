@@ -12,6 +12,25 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 
 from soothe.core._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
+from soothe.core.event_catalog import (
+    ChitchatResponseEvent,
+    ChitchatStartedEvent,
+    ContextIngestedEvent,
+    ContextProjectedEvent,
+    MemoryRecalledEvent,
+    MemoryStoredEvent,
+    PlanCreatedEvent,
+    PlanReflectedEvent,
+    PlanStepCompletedEvent,
+    PlanStepStartedEvent,
+    PolicyCheckedEvent,
+    PolicyDeniedEvent,
+    ThreadCreatedEvent,
+    ThreadEndedEvent,
+    ThreadResumedEvent,
+    ThreadSavedEvent,
+    ThreadStartedEvent,
+)
 from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
@@ -51,7 +70,7 @@ class PhasesMixin:
 
         from soothe.config import _SIMPLE_SYSTEM_PROMPT
 
-        yield _custom({"type": "soothe.chitchat.started", "query": user_input[:100]})
+        yield _custom(ChitchatStartedEvent(query=user_input[:100]).to_dict())
 
         try:
             # Get default model
@@ -69,12 +88,7 @@ class PhasesMixin:
             response = await model.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
 
             # Yield response as stream chunk
-            yield _custom(
-                {
-                    "type": "soothe.chitchat.response",
-                    "content": response.content,
-                }
-            )
+            yield _custom(ChitchatResponseEvent(content=response.content).to_dict())
 
             logger.info("Chitchat completed for query: %s", user_input[:50])
 
@@ -198,12 +212,12 @@ class PhasesMixin:
             thread_info = None
             if requested_thread_id:
                 thread_info = await self._durability.resume_thread(requested_thread_id)
-                yield _custom({"type": "soothe.thread.resumed", "thread_id": thread_info.thread_id})
+                yield _custom(ThreadResumedEvent(thread_id=thread_info.thread_id).to_dict())
             else:
                 thread_info = await self._durability.create_thread(
                     ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
-                yield _custom({"type": "soothe.thread.created", "thread_id": thread_info.thread_id})
+                yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
             state.thread_id = thread_info.thread_id
             self._current_thread_id = thread_info.thread_id
         except KeyError:
@@ -212,7 +226,7 @@ class PhasesMixin:
                 thread_info = await self._durability.create_thread(
                     ThreadMetadata(policy_profile=self._config.protocols.policy.profile),
                 )
-                yield _custom({"type": "soothe.thread.created", "thread_id": thread_info.thread_id})
+                yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
                 state.thread_id = thread_info.thread_id
                 self._current_thread_id = thread_info.thread_id
             except Exception:
@@ -242,13 +256,7 @@ class PhasesMixin:
                 yield chunk
 
         protocols = self.protocol_summary()
-        yield _custom(
-            {
-                "type": "soothe.thread.started",
-                "thread_id": state.thread_id,
-                "protocols": protocols,
-            }
-        )
+        yield _custom(ThreadStartedEvent(thread_id=state.thread_id, protocols=protocols).to_dict())
 
         if self._policy:
             try:
@@ -262,21 +270,19 @@ class PhasesMixin:
                     ),
                 )
                 yield _custom(
-                    {
-                        "type": "soothe.policy.checked",
-                        "action": "user_request",
-                        "verdict": decision.verdict,
-                        "profile": self._config.protocols.policy.profile,
-                    }
+                    PolicyCheckedEvent(
+                        action="user_request",
+                        verdict=decision.verdict,
+                        profile=self._config.protocols.policy.profile,
+                    ).to_dict()
                 )
                 if decision.verdict == "deny":
                     yield _custom(
-                        {
-                            "type": "soothe.policy.denied",
-                            "action": "user_request",
-                            "reason": decision.reason,
-                            "profile": self._config.protocols.policy.profile,
-                        }
+                        PolicyDeniedEvent(
+                            action="user_request",
+                            reason=decision.reason,
+                            profile=self._config.protocols.policy.profile,
+                        ).to_dict()
                     )
                     return
             except Exception:
@@ -309,19 +315,17 @@ class PhasesMixin:
 
                 if memory_items:
                     yield _custom(
-                        {
-                            "type": "soothe.memory.recalled",
-                            "count": len(memory_items),
-                            "query": user_input[:100],
-                        }
+                        MemoryRecalledEvent(
+                            count=len(memory_items),
+                            query=user_input[:100],
+                        ).to_dict()
                     )
                 if context_projection:
                     yield _custom(
-                        {
-                            "type": "soothe.context.projected",
-                            "entries": context_projection.total_entries,
-                            "tokens": context_projection.token_count,
-                        }
+                        ContextProjectedEvent(
+                            entries=context_projection.total_entries,
+                            tokens=context_projection.token_count,
+                        ).to_dict()
                     )
             else:
                 if self._memory:
@@ -339,11 +343,10 @@ class PhasesMixin:
                                     )
                                 )
                         yield _custom(
-                            {
-                                "type": "soothe.memory.recalled",
-                                "count": len(items),
-                                "query": user_input[:100],
-                            }
+                            MemoryRecalledEvent(
+                                count=len(items),
+                                query=user_input[:100],
+                            ).to_dict()
                         )
                     except Exception:
                         logger.debug("Memory recall failed", exc_info=True)
@@ -353,11 +356,10 @@ class PhasesMixin:
                         projection = await self._context.project(user_input, token_budget=4000)
                         state.context_projection = projection
                         yield _custom(
-                            {
-                                "type": "soothe.context.projected",
-                                "entries": projection.total_entries,
-                                "tokens": projection.token_count,
-                            }
+                            ContextProjectedEvent(
+                                entries=projection.total_entries,
+                                tokens=projection.token_count,
+                            ).to_dict()
                         )
                     except Exception:
                         logger.debug("Context projection failed", exc_info=True)
@@ -377,10 +379,9 @@ class PhasesMixin:
                 state.plan = plan
                 self._current_plan = plan
                 yield _custom(
-                    {
-                        "type": "soothe.plan.created",
-                        "goal": plan.goal,
-                        "steps": [
+                    PlanCreatedEvent(
+                        goal=plan.goal,
+                        steps=[
                             {
                                 "id": s.id,
                                 "description": s.description,
@@ -389,15 +390,14 @@ class PhasesMixin:
                             }
                             for s in plan.steps
                         ],
-                    }
+                    ).to_dict()
                 )
                 if plan.steps:
                     yield _custom(
-                        {
-                            "type": "soothe.plan.step_started",
-                            "index": 0,
-                            "description": plan.steps[0].description,
-                        }
+                        PlanStepStartedEvent(
+                            index=0,
+                            description=plan.steps[0].description,
+                        ).to_dict()
                     )
             except Exception:
                 logger.debug("Plan creation failed", exc_info=True)
@@ -423,11 +423,10 @@ class PhasesMixin:
                     )
                 )
                 yield _custom(
-                    {
-                        "type": "soothe.context.ingested",
-                        "source": "agent",
-                        "content_preview": response_text[:80],
-                    }
+                    ContextIngestedEvent(
+                        source="agent",
+                        content_preview=response_text[:80],
+                    ).to_dict()
                 )
             except Exception:
                 logger.debug("Context ingestion failed", exc_info=True)
@@ -450,11 +449,10 @@ class PhasesMixin:
                     )
                 )
                 yield _custom(
-                    {
-                        "type": "soothe.memory.stored",
-                        "id": "auto",
-                        "source_thread": state.thread_id,
-                    }
+                    MemoryStoredEvent(
+                        id="auto",
+                        source_thread=state.thread_id,
+                    ).to_dict()
                 )
             except Exception:
                 logger.debug("Memory storage failed", exc_info=True)
@@ -466,12 +464,11 @@ class PhasesMixin:
                     state.plan.steps[0].status = "completed" if first_step_success else "failed"
                     state.plan.steps[0].result = response_text[:200] if first_step_success else None
                     yield _custom(
-                        {
-                            "type": "soothe.plan.step_completed",
-                            "step_id": state.plan.steps[0].id,
-                            "success": first_step_success,
-                            "duration_ms": 0,
-                        }
+                        PlanStepCompletedEvent(
+                            step_id=state.plan.steps[0].id,
+                            success=first_step_success,
+                            duration_ms=0,
+                        ).to_dict()
                     )
 
                 step_results = [
@@ -482,11 +479,10 @@ class PhasesMixin:
                 if step_results:
                     reflection = await self._planner.reflect(state.plan, step_results)
                     yield _custom(
-                        {
-                            "type": "soothe.plan.reflected",
-                            "should_revise": reflection.should_revise,
-                            "assessment": reflection.assessment[:200],
-                        }
+                        PlanReflectedEvent(
+                            should_revise=reflection.should_revise,
+                            assessment=reflection.assessment[:200],
+                        ).to_dict()
                     )
             except Exception:
                 logger.debug("Plan reflection failed", exc_info=True)
@@ -501,11 +497,11 @@ class PhasesMixin:
                 yield chunk
             if self._artifact_store:
                 self._artifact_store.update_status("completed")
-            yield _custom({"type": "soothe.thread.saved", "thread_id": state.thread_id})
+            yield _custom(ThreadSavedEvent(thread_id=state.thread_id).to_dict())
         except Exception:
             logger.debug("State persistence failed", exc_info=True)
 
-        yield _custom({"type": "soothe.thread.ended", "thread_id": state.thread_id})
+        yield _custom(ThreadEndedEvent(thread_id=state.thread_id).to_dict())
 
     # -- internal helpers ---------------------------------------------------
 

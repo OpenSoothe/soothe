@@ -16,6 +16,22 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.core.event_catalog import (
+    WeaverAnalysisCompletedEvent,
+    WeaverAnalysisStartedEvent,
+    WeaverExecuteCompletedEvent,
+    WeaverExecuteStartedEvent,
+    WeaverGenerateCompletedEvent,
+    WeaverGenerateStartedEvent,
+    WeaverHarmonizeCompletedEvent,
+    WeaverHarmonizeStartedEvent,
+    WeaverRegistryUpdatedEvent,
+    WeaverReuseHitEvent,
+    WeaverReuseMissEvent,
+    WeaverSkillifyPendingEvent,
+    WeaverValidateCompletedEvent,
+    WeaverValidateStartedEvent,
+)
 from soothe.subagents.weaver.analyzer import RequirementAnalyzer
 from soothe.subagents.weaver.composer import AgentComposer
 from soothe.subagents.weaver.generator import AgentGenerator
@@ -149,14 +165,13 @@ def _build_weaver_graph(
             task_text = last.content if hasattr(last, "content") else str(last)
 
         # Step 1: Analyse
-        _emit_progress({"type": "soothe.weaver.analysis.started", "task_preview": task_text[:200]})
+        _emit_progress(WeaverAnalysisStartedEvent(task_preview=task_text[:200]).to_dict())
         capability = await analyzer.analyze(task_text)
         _emit_progress(
-            {
-                "type": "soothe.weaver.analysis.completed",
-                "capabilities": capability.required_capabilities,
-                "constraints": capability.constraints,
-            }
+            WeaverAnalysisCompletedEvent(
+                capabilities=capability.required_capabilities,
+                constraints=capability.constraints,
+            ).to_dict()
         )
 
         # Step 2: Check reuse
@@ -164,16 +179,15 @@ def _build_weaver_graph(
 
         if reuse_candidate:
             _emit_progress(
-                {
-                    "type": "soothe.weaver.reuse.hit",
-                    "agent_name": reuse_candidate.manifest.name,
-                    "confidence": round(reuse_candidate.confidence, 3),
-                }
+                WeaverReuseHitEvent(
+                    agent_name=reuse_candidate.manifest.name,
+                    confidence=round(reuse_candidate.confidence, 3),
+                ).to_dict()
             )
             return await _execute_existing(reuse_candidate, task_text)
 
         best_conf = 0.0
-        _emit_progress({"type": "soothe.weaver.reuse.miss", "best_confidence": round(best_conf, 3)})
+        _emit_progress(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict())
 
         # Step 3: Fetch skills (with indexing-not-ready tolerance)
         from soothe.subagents.skillify.models import SkillBundle
@@ -181,7 +195,7 @@ def _build_weaver_graph(
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_retriever:
             if hasattr(skillify_retriever, "is_ready") and not skillify_retriever.is_ready:
-                _emit_progress({"type": "soothe.weaver.skillify_pending"})
+                _emit_progress(WeaverSkillifyPendingEvent().to_dict())
                 ready_event = getattr(skillify_retriever, "_ready_event", None)
                 if ready_event is not None:
                     try:
@@ -198,49 +212,45 @@ def _build_weaver_graph(
 
         # Step 4: Compose (with harmonization)
         _emit_progress(
-            {
-                "type": "soothe.weaver.harmonize.started",
-                "skill_count": len(skill_bundle.results),
-            }
+            WeaverHarmonizeStartedEvent(
+                skill_count=len(skill_bundle.results),
+            ).to_dict()
         )
         blueprint = await composer.compose(capability, skill_bundle)
         _emit_progress(
-            {
-                "type": "soothe.weaver.harmonize.completed",
-                "retained": len(blueprint.harmonized.skills),
-                "dropped": len(blueprint.harmonized.dropped_skills),
-                "bridge_length": len(blueprint.harmonized.bridge_instructions),
-            }
+            WeaverHarmonizeCompletedEvent(
+                retained=len(blueprint.harmonized.skills),
+                dropped=len(blueprint.harmonized.dropped_skills),
+                bridge_length=len(blueprint.harmonized.bridge_instructions),
+            ).to_dict()
         )
 
         # Step 5: Generate
         _check_policy(action="subagent_spawn", tool_name="weaver.generate", tool_args={"goal": capability.description})
-        _emit_progress({"type": "soothe.weaver.generate.started", "agent_name": blueprint.agent_name})
+        _emit_progress(WeaverGenerateStartedEvent(agent_name=blueprint.agent_name).to_dict())
         output_dir = registry.base_dir / blueprint.agent_name
         manifest = await generator.generate(blueprint, output_dir)
         _emit_progress(
-            {
-                "type": "soothe.weaver.generate.completed",
-                "agent_name": manifest.name,
-                "path": str(output_dir),
-            }
+            WeaverGenerateCompletedEvent(
+                agent_name=manifest.name,
+                path=str(output_dir),
+            ).to_dict()
         )
 
         # Step 5.5: Validate package (hard-fail on validation/policy errors)
-        _emit_progress({"type": "soothe.weaver.validate.started", "agent_name": manifest.name})
+        _emit_progress(WeaverValidateStartedEvent(agent_name=manifest.name).to_dict())
         await _validate_package(manifest, output_dir, capability)
-        _emit_progress({"type": "soothe.weaver.validate.completed", "agent_name": manifest.name})
+        _emit_progress(WeaverValidateCompletedEvent(agent_name=manifest.name).to_dict())
 
         # Step 6: Register and index
         _check_policy(action="subagent_spawn", tool_name="weaver.register", tool_args={"agent_name": manifest.name})
         registry.register(manifest, output_dir)
         await reuse_index.index_agent(manifest, str(output_dir))
         _emit_progress(
-            {
-                "type": "soothe.weaver.registry.updated",
-                "agent_name": manifest.name,
-                "version": manifest.version,
-            }
+            WeaverRegistryUpdatedEvent(
+                agent_name=manifest.name,
+                version=manifest.version,
+            ).to_dict()
         )
 
         # Step 7: Execute inline
@@ -259,11 +269,10 @@ def _build_weaver_graph(
     ) -> dict[str, Any]:
         """Instantiate and execute a generated SubAgent inline."""
         _emit_progress(
-            {
-                "type": "soothe.weaver.execute.started",
-                "agent_name": manifest.name,
-                "task_preview": task[:200],
-            }
+            WeaverExecuteStartedEvent(
+                agent_name=manifest.name,
+                task_preview=task[:200],
+            ).to_dict()
         )
 
         prompt_path = agent_dir / manifest.system_prompt_file
@@ -306,11 +315,10 @@ def _build_weaver_graph(
             result_text = f"Generated agent '{manifest.name}' encountered an error during execution."
 
         _emit_progress(
-            {
-                "type": "soothe.weaver.execute.completed",
-                "agent_name": manifest.name,
-                "result_length": len(result_text),
-            }
+            WeaverExecuteCompletedEvent(
+                agent_name=manifest.name,
+                result_length=len(result_text),
+            ).to_dict()
         )
 
         return {"messages": [AIMessage(content=result_text)]}

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.cli.daemon.protocol import decode, encode
 from soothe.cli.thread_logger import ThreadLogger
+from soothe.core.events import ERROR
 
 if TYPE_CHECKING:
     from soothe.cli.daemon.server import _ClientConn
@@ -143,7 +144,7 @@ class DaemonHandlersMixin:
                         "type": "event",
                         "namespace": [],
                         "mode": "custom",
-                        "data": {"type": "soothe.error", "error": "Daemon failed to process input"},
+                        "data": {"type": ERROR, "error": "Daemon failed to process input"},
                     }
                 )
                 await self._broadcast(

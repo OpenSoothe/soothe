@@ -42,6 +42,17 @@ This document defines the terminology and naming conventions used in this projec
 | `ConcurrencyPolicy` | Data model controlling parallel execution of steps, subagents, and tools. | RFC-0002 |
 | `StepResult` | Data model for a completed plan step's output and status. | RFC-0002 |
 
+### Progress Event Terms
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Progress Event | A `soothe.*` custom event dict emitted via the LangGraph stream for protocol observability. Follows the 4-segment naming convention `soothe.<domain>.<component>.<action>`. | RFC-0015 |
+| Event Domain | The second segment of a progress event type string. One of: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`. Enables structural classification without heuristics. | RFC-0015 |
+| `SootheEvent` | Pydantic `BaseModel` base class for all typed progress events. Subclassed by domain base classes (`LifecycleEvent`, `ProtocolEvent`, `ToolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`). | RFC-0015 |
+| `EventRegistry` | Central registry mapping event type strings to `EventMeta` (model, domain, verbosity, summary template) and handler callables. Provides O(1) dispatch. | RFC-0015 |
+| `EventRenderer` | Protocol for rendering progress events. Implementations: `CliEventRenderer` (stderr text), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough). | RFC-0015 |
+| `EventMeta` | Frozen dataclass holding metadata for a registered event type: type string, model class, domain, component, action, verbosity category, and summary template. | RFC-0015 |
+
 ## Naming Conventions
 
 ### General Principles

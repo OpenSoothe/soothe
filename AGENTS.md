@@ -167,6 +167,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 | [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
 | [RFC-0009](docs/specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
 | [RFC-0010](docs/specs/RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
+| [RFC-0015](docs/specs/RFC-0015.md) | Progress Event Protocol |
 
 ### Implementation Guides
 
