@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.core.unified_classifier import UnifiedClassification, UnifiedClassifier
+from soothe.core.unified_classifier import UnifiedClassification, UnifiedClassifier, _looks_chinese
 
 
 class TestUnifiedClassification:
@@ -30,6 +30,18 @@ class TestUnifiedClassification:
         assert classification.reasoning is None
         assert classification.template_intent is None
         assert classification.chitchat_response is None
+        assert classification.preferred_subagent is None
+
+    def test_preferred_subagent_field(self) -> None:
+        """Test preferred_subagent is stored when set."""
+        classification = UnifiedClassification(
+            task_complexity="medium",
+            is_plan_only=False,
+            template_intent="implementation",
+            preferred_subagent="claude",
+        )
+
+        assert classification.preferred_subagent == "claude"
 
     def test_chitchat_response_field(self) -> None:
         """Test chitchat_response is populated for chitchat queries."""
@@ -225,6 +237,7 @@ class TestEdgeCases:
                 task_complexity="chitchat",
                 is_plan_only=False,
                 template_intent=None,
+                chitchat_response="Hello! How can I help?",
                 reasoning="Empty query",
             )
         )
@@ -235,6 +248,23 @@ class TestEdgeCases:
         result = await classifier.classify("")
         assert result.task_complexity == "chitchat"
         assert result.is_plan_only is False
+
+    def test_assistant_name_passed_to_classifier(self) -> None:
+        """Test that assistant_name is stored on the classifier."""
+        mock_model = MagicMock()
+        mock_model.with_structured_output = MagicMock(return_value=mock_model)
+
+        classifier = UnifiedClassifier(
+            fast_model=mock_model,
+            classification_mode="llm",
+            assistant_name="TestBot",
+        )
+        assert classifier._assistant_name == "TestBot"
+
+    def test_default_assistant_name(self) -> None:
+        """Test default assistant_name is Soothe."""
+        classifier = UnifiedClassifier(fast_model=None, classification_mode="disabled")
+        assert classifier._assistant_name == "Soothe"
 
     @pytest.mark.asyncio
     async def test_multilingual_query(self) -> None:
@@ -279,6 +309,159 @@ class TestEdgeCases:
         result = await classifier.classify(long_query)
 
         assert result.task_complexity == "complex"
+
+
+class TestChitchatResponseGuarantee:
+    """Test that chitchat_response is always populated for chitchat queries."""
+
+    @pytest.mark.asyncio
+    async def test_missing_chitchat_response_is_patched(self) -> None:
+        """When LLM returns chitchat without chitchat_response, classifier patches it."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                chitchat_response=None,
+                reasoning="Simple greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("hello")
+        assert result.task_complexity == "chitchat"
+        assert result.chitchat_response is not None
+        assert len(result.chitchat_response) > 0
+        assert "Soothe" in result.chitchat_response
+
+    @pytest.mark.asyncio
+    async def test_empty_string_chitchat_response_is_patched(self) -> None:
+        """When LLM returns empty-string chitchat_response, classifier patches it."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                chitchat_response="",
+                reasoning="Greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("hi")
+        assert result.chitchat_response
+        assert "Soothe" in result.chitchat_response
+
+    @pytest.mark.asyncio
+    async def test_existing_chitchat_response_not_overwritten(self) -> None:
+        """When LLM provides chitchat_response, classifier preserves it."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                chitchat_response="Hey there! I'm Soothe.",
+                reasoning="Greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("hi")
+        assert result.chitchat_response == "Hey there! I'm Soothe."
+
+    @pytest.mark.asyncio
+    async def test_chinese_query_gets_chinese_fallback(self) -> None:
+        """Chinese chitchat query gets a Chinese fallback response."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                template_intent=None,
+                chitchat_response=None,
+                reasoning="Chinese greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("你好")
+        assert result.chitchat_response is not None
+        assert "你好" in result.chitchat_response or "Soothe" in result.chitchat_response
+
+    @pytest.mark.asyncio
+    async def test_custom_assistant_name_in_fallback(self) -> None:
+        """Fallback response uses the configured assistant name."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="chitchat",
+                is_plan_only=False,
+                chitchat_response=None,
+                reasoning="Greeting",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm", assistant_name="Atlas")
+
+        result = await classifier.classify("hello")
+        assert "Atlas" in result.chitchat_response
+
+    @pytest.mark.asyncio
+    async def test_non_chitchat_not_patched(self) -> None:
+        """Medium/complex queries are not affected by the chitchat guarantee."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="question",
+                chitchat_response=None,
+                reasoning="Research question",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("what is quantum computing")
+        assert result.task_complexity == "medium"
+        assert result.chitchat_response is None
+
+
+class TestLooksChinese:
+    """Test the _looks_chinese helper."""
+
+    def test_chinese_text(self) -> None:
+        assert _looks_chinese("你好") is True
+        assert _looks_chinese("谢谢你的帮助") is True
+
+    def test_english_text(self) -> None:
+        assert _looks_chinese("hello") is False
+        assert _looks_chinese("how are you") is False
+
+    def test_mixed_text(self) -> None:
+        assert _looks_chinese("hello 你好") is True
+
+    def test_empty_text(self) -> None:
+        assert _looks_chinese("") is False
 
 
 class TestDefaultClassification:
@@ -391,6 +574,29 @@ class TestTemplateIntent:
         assert result.template_intent == "implementation"
 
     @pytest.mark.asyncio
+    async def test_compose_intent_classification(self) -> None:
+        """Test agent/skill creation queries get compose template_intent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="compose",
+                capability_domains=["compose"],
+                reasoning="Create a new subagent",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("create a subagent that handles pdf and docx")
+        assert result.task_complexity == "medium"
+        assert result.template_intent == "compose"
+        assert "compose" in result.capability_domains
+
+    @pytest.mark.asyncio
     async def test_chitchat_has_null_intent(self) -> None:
         """Test chitchat queries have null template_intent."""
         mock_model = MagicMock()
@@ -412,3 +618,79 @@ class TestTemplateIntent:
         assert result.task_complexity == "chitchat"
         assert result.template_intent is None
         assert result.chitchat_response == "Hi there!"
+
+
+class TestPreferredSubagent:
+    """Test preferred_subagent detection and routing."""
+
+    @pytest.mark.asyncio
+    async def test_explicit_claude_request_sets_preferred_subagent(self) -> None:
+        """When user explicitly names claude, preferred_subagent is set."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="implementation",
+                preferred_subagent="claude",
+                reasoning="User explicitly requested claude subagent",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("使用claude编写脚本扫描这个项目的所有markdown文件数量")
+        assert result.task_complexity == "medium"
+        assert result.preferred_subagent == "claude"
+
+    @pytest.mark.asyncio
+    async def test_no_explicit_subagent_leaves_preferred_null(self) -> None:
+        """When user doesn't name a subagent, preferred_subagent stays null."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="implementation",
+                preferred_subagent=None,
+                reasoning="Standard implementation task",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("write a script to count markdown files")
+        assert result.preferred_subagent is None
+
+    @pytest.mark.asyncio
+    async def test_explicit_browser_request(self) -> None:
+        """When user explicitly names browser subagent."""
+        mock_model = MagicMock()
+        mock_structured = AsyncMock()
+        mock_structured.ainvoke = AsyncMock(
+            return_value=UnifiedClassification(
+                task_complexity="medium",
+                is_plan_only=False,
+                template_intent="implementation",
+                preferred_subagent="browser",
+                capability_domains=["browse"],
+                reasoning="User requested browser subagent",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+
+        result = await classifier.classify("用browser打开github.com")
+        assert result.preferred_subagent == "browser"
+
+    def test_default_classification_has_no_preferred_subagent(self) -> None:
+        """Default classification has preferred_subagent=None."""
+        classifier = UnifiedClassifier(fast_model=None, classification_mode="disabled")
+
+        result = classifier._default_classification("Test reason")
+        assert result.preferred_subagent is None

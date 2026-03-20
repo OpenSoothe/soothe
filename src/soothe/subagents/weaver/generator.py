@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-    import anyio
     from langchain_core.language_models import BaseChatModel
+
+import anyio
 
 from soothe.subagents.weaver.models import AgentBlueprint, AgentManifest
 
@@ -64,7 +65,7 @@ class AgentGenerator:
     async def generate(
         self,
         blueprint: AgentBlueprint,
-        output_dir: anyio.Path,
+        output_dir: Path,
     ) -> AgentManifest:
         """Generate an agent package from a blueprint.
 
@@ -78,16 +79,17 @@ class AgentGenerator:
         Returns:
             The generated ``AgentManifest``.
         """
-        await output_dir.mkdir(parents=True, exist_ok=True)
+        adir = anyio.Path(output_dir)
+        await adir.mkdir(parents=True, exist_ok=True)
 
         skills_dir = output_dir / "skills"
-        await skills_dir.mkdir(exist_ok=True)
+        await anyio.Path(skills_dir).mkdir(exist_ok=True)
         copied_skills = self._copy_skills(blueprint, skills_dir)
 
         system_prompt = await self._generate_system_prompt(blueprint)
 
         prompt_path = output_dir / "system_prompt.md"
-        await prompt_path.write_text(system_prompt, encoding="utf-8")
+        await anyio.Path(prompt_path).write_text(system_prompt, encoding="utf-8")
 
         manifest = AgentManifest(
             name=blueprint.agent_name,

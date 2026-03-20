@@ -171,7 +171,7 @@ class StepLoopMixin:
         goal_description: str,
         dependency_results: list[tuple[str, str]],
         thread_id: str,
-        state: Any,  # noqa: ARG002
+        state: Any,
         batch_index: int = 0,
     ) -> AsyncGenerator[StreamChunk]:
         """Execute a single plan step as a LangGraph invocation (RFC-0009).
@@ -188,6 +188,9 @@ class StepLoopMixin:
             dep_text = "\n".join(f"- [{desc}]: {result[:300]}" for desc, result in dependency_results)
             parts.append(f"Results from prior steps:\n{dep_text}")
 
+        classification = getattr(state, "unified_classification", None)
+        preferred = getattr(classification, "preferred_subagent", None) if classification else None
+
         hint = getattr(step, "execution_hint", None) or ""
         if hint.startswith("tool:"):
             preferred_tool = hint.split(":", 1)[1]
@@ -198,6 +201,17 @@ class StepLoopMixin:
             parts.append(
                 "Instruction: Answer using only the information already available "
                 "from prior steps. Do NOT call any tools or subagents."
+            )
+        elif hint == "subagent" and preferred:
+            parts.append(
+                f"Instruction: Delegate this step to the **{preferred}** subagent using the `task` tool. "
+                f"The user explicitly requested using the {preferred} subagent."
+            )
+        elif hint == "subagent":
+            parts.append(
+                "Instruction: Delegate this step to the appropriate subagent using the `task` tool. "
+                "Choose the subagent best suited for this task (e.g., weaver for generating "
+                "new agents, browser for web interaction, claude for complex reasoning)."
             )
         elif hint == "tool":
             parts.append(

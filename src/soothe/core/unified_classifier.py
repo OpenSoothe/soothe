@@ -32,6 +32,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _looks_chinese(text: str) -> bool:
+    """Return True if the text contains CJK Unified Ideographs."""
+    return any("\u4e00" <= ch <= "\u9fff" for ch in text)
+
+
 CapabilityDomain = Literal["research", "workspace", "execute", "data", "browse", "reason", "compose"]
 
 
@@ -42,8 +47,9 @@ class UnifiedClassification(BaseModel):
         description="Query complexity for routing: chitchat (direct LLM), medium (subagent), complex (Claude)"
     )
     is_plan_only: bool = Field(description="True if user only wants planning without execution")
-    template_intent: Literal["question", "search", "analysis", "implementation"] | None = Field(
-        default=None, description="Template intent for planning (question|search|analysis|implementation|null)"
+    template_intent: Literal["question", "search", "analysis", "implementation", "compose"] | None = Field(
+        default=None,
+        description="Template intent for planning (question|search|analysis|implementation|compose|null)",
     )
     capability_domains: list[CapabilityDomain] = Field(
         default_factory=list,
@@ -53,6 +59,13 @@ class UnifiedClassification(BaseModel):
             "execute (shell/python), data (tabular/document inspection), "
             "browse (interactive web), reason (complex thinking), "
             "compose (agent/skill generation). Empty for chitchat."
+        ),
+    )
+    preferred_subagent: str | None = Field(
+        default=None,
+        description=(
+            "Subagent the user explicitly requested (e.g., claude, browser, weaver). "
+            "Only set when the user names a specific subagent. null otherwise."
         ),
     )
     chitchat_response: str | None = Field(
@@ -75,8 +88,9 @@ Response format (JSON only, no additional text):
 {{
   "task_complexity": "chitchat" | "medium" | "complex",
   "is_plan_only": true | false,
-  "template_intent": "question" | "search" | "analysis" | "implementation" | null,
+  "template_intent": "question" | "search" | "analysis" | "implementation" | "compose" | null,
   "capability_domains": ["research", "workspace", "execute", "data", "browse", "reason", "compose"],
+  "preferred_subagent": "claude" | "browser" | "weaver" | null,
   "chitchat_response": "friendly response (ONLY when task_complexity is chitchat, null otherwise)",
   "reasoning": "brief explanation"
 }}
@@ -91,6 +105,7 @@ Template intent guide:
 - search: User wants to search/find information (search/find/look up)
 - analysis: User wants analysis (analyze/review/examine/investigate)
 - implementation: User wants to build/create something (implement/create/build/write)
+- compose: User wants to create/generate a new agent, subagent, or skill (create agent/subagent/skill)
 - null: Chitchat queries or queries that don't fit other categories
 
 Capability domains (select ALL that apply, empty for chitchat):
@@ -102,12 +117,23 @@ Capability domains (select ALL that apply, empty for chitchat):
 - reason: Needs complex reasoning beyond standard capabilities
 - compose: Needs to generate agents or discover skills
 
+Preferred subagent guide:
+- Set preferred_subagent when the user EXPLICITLY names a subagent to use.
+  Known subagents: claude, browser, weaver.
+- Examples: "use claude to ...", "使用claude...", "用claude...", "let claude handle",
+  "用browser打开...", "use the browser agent to ..."
+- If the user does NOT mention a specific subagent by name → null
+- Do NOT infer a subagent from the task type alone; only set when explicitly named.
+
 Rules:
 - Use semantic complexity, NOT query length
 - Current events/research/debugging → medium (even if short)
 - "plan only" → is_plan_only=true
-- chitchat queries → template_intent=null, capability_domains=[], provide chitchat_response
-- chitchat_response: Match the user's language, be warm and helpful, mention you're {assistant_name}
+- Creating/generating agents, subagents, or skills → template_intent="compose", include "compose" in domains
+- chitchat queries → template_intent=null, capability_domains=[], MUST provide chitchat_response
+- CRITICAL: When task_complexity is "chitchat", chitchat_response MUST be a non-empty string.
+  Match the user's language, be warm and helpful, mention you're {assistant_name}.
+  This is the ONLY response the user will see -- do NOT leave it null or empty.
 - When uncertain → medium complexity, appropriate template_intent or null
 """
 
@@ -154,6 +180,9 @@ class UnifiedClassifier:
         """Classify query for routing decisions.
 
         Uses fast LLM for all classifications. No fallback to heuristics.
+        Guarantees ``chitchat_response`` is always populated when the result
+        is chitchat, so the caller can use the piggybacked response without
+        a second LLM call.
 
         Args:
             query: User input text.
@@ -178,6 +207,12 @@ class UnifiedClassifier:
             # Return safe default instead of fallback
             return self._default_classification(f"Classification failed: {e}")
 
+        # Guarantee chitchat always carries a piggybacked response so the
+        # runner never needs a second LLM call for chitchat queries.
+        if result.task_complexity == "chitchat" and not result.chitchat_response:
+            result.chitchat_response = self._fallback_chitchat_response(query)
+            logger.debug("Patched missing chitchat_response for query: %s", query[:50])
+
         logger.debug(
             "LLM classification: task_complexity=%s, plan_only=%s, template_intent=%s, reasoning=%s",
             result.task_complexity,
@@ -186,6 +221,24 @@ class UnifiedClassifier:
             result.reasoning,
         )
         return result
+
+    def _fallback_chitchat_response(self, query: str) -> str:
+        """Generate a default chitchat response when the LLM omits one.
+
+        Uses the assistant name and a friendly tone. This is only reached
+        when the LLM correctly classifies as chitchat but fails to populate
+        the ``chitchat_response`` field.
+
+        Args:
+            query: Original user query (used for language detection heuristic).
+
+        Returns:
+            A friendly greeting string.
+        """
+        name = self._assistant_name
+        if _looks_chinese(query):
+            return f"你好! 我是 {name}, 有什么可以帮你的吗?"
+        return f"Hello! I'm {name}, your AI assistant. How can I help you today?"
 
     async def _llm_classify(self, query: str) -> UnifiedClassification:
         """Use fast LLM for unified classification."""

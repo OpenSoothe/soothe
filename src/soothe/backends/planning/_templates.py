@@ -68,11 +68,37 @@ class PlanTemplates:
                 ),
             ],
         ),
+        "compose": Plan(
+            goal="",
+            steps=[
+                PlanStep(id="step_1", description="Understand requirements for the new agent", execution_hint="auto"),
+                PlanStep(
+                    id="step_2",
+                    description="Use the weaver subagent to generate the new custom agent",
+                    execution_hint="subagent",
+                    depends_on=["step_1"],
+                ),
+                PlanStep(
+                    id="step_3",
+                    description="Summarize the generated agent and explain how to use it",
+                    execution_hint="auto",
+                    depends_on=["step_2"],
+                ),
+            ],
+        ),
     }
 
     _PATTERNS: ClassVar[list[tuple[str, re.Pattern]]] = [
         ("search", re.compile(r"^(search|find|look up|google)\s+", re.IGNORECASE)),
         ("analysis", re.compile(r"^(analyze|analyse|review|examine|investigate)\s+", re.IGNORECASE)),
+        (
+            "compose",
+            re.compile(
+                r"^(create|build|generate|make|develop)\s+(a\s+|an\s+|new\s+)*(custom\s+)?"
+                r"(sub\s*agent|agent|skill)",
+                re.IGNORECASE,
+            ),
+        ),
         ("implementation", re.compile(r"^(implement|create|build|write|develop)\s+", re.IGNORECASE)),
     ]
 
@@ -100,7 +126,7 @@ class PlanTemplates:
         """Get template by key name.
 
         Args:
-            template_key: Template identifier (question, search, analysis, implementation).
+            template_key: Template identifier (question, search, analysis, implementation, compose).
 
         Returns:
             Template plan, or None if key not found.

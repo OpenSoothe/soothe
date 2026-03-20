@@ -61,48 +61,31 @@ class PhasesMixin:
         user_input: str,
         classification: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for chitchat -- uses piggybacked response when available.
+        """Fast path for chitchat -- uses piggybacked response from classification.
 
-        If the unified classifier already produced a ``chitchat_response``
-        during classification, we reuse it directly (zero extra LLM calls).
-        Otherwise falls back to a single direct LLM call.
+        The unified classifier guarantees ``chitchat_response`` is always
+        populated for chitchat queries (via post-processing fallback), so
+        this method should never need a second LLM call.
         """
         yield _custom(ChitchatStartedEvent(query=user_input[:100]).to_dict())
 
-        # Try piggybacked response from classification first
         piggybacked = getattr(classification, "chitchat_response", None)
         if piggybacked:
             yield _custom(ChitchatResponseEvent(content=piggybacked).to_dict())
-            logger.info("Chitchat completed (piggybacked) for query: %s", user_input[:50])
+            logger.info("Chitchat completed for query: %s", user_input[:50])
             return
 
-        # Fallback: direct LLM call
-        import datetime as dt
+        # Safety net: should not be reached if classifier post-processing works.
+        logger.warning("Chitchat classification missing piggybacked response, using canned reply")
+        name = self._config.assistant_name
+        from soothe.core.unified_classifier import _looks_chinese
 
-        from langchain_core.messages import HumanMessage, SystemMessage
-
-        from soothe.config import _SIMPLE_SYSTEM_PROMPT
-
-        try:
-            model = self._config.create_chat_model("default")
-
-            now = dt.datetime.now(dt.UTC).astimezone()
-            current_date = now.strftime("%Y-%m-%d")
-            system_prompt = (
-                f"{_SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)}\n\n"
-                f"Today's date is {current_date}."
-            )
-
-            response = await model.ainvoke([SystemMessage(content=system_prompt), HumanMessage(content=user_input)])
-
-            yield _custom(ChitchatResponseEvent(content=response.content).to_dict())
-            logger.info("Chitchat completed (fallback LLM) for query: %s", user_input[:50])
-
-        except Exception as exc:
-            logger.exception("Chitchat LLM call failed")
-            from soothe.utils.error_format import emit_error_event
-
-            yield _custom(emit_error_event(exc))
+        if _looks_chinese(user_input):
+            fallback = f"你好! 我是 {name}, 有什么可以帮你的吗?"
+        else:
+            fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
+        yield _custom(ChitchatResponseEvent(content=fallback).to_dict())
+        logger.info("Chitchat completed (canned fallback) for query: %s", user_input[:50])
 
     # -- LangGraph stream with HITL loop ------------------------------------
 

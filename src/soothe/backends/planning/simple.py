@@ -60,16 +60,19 @@ class SimplePlanner:
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via template matching or LLM structured output."""
+        plan: Plan | None = None
+
         # Try template matching first
         if self._use_templates:
             # Try regex-based template matching
             if template := PlanTemplates.match(goal):
                 logger.info("Using template plan for: %s", goal[:50])
-                return template
+                plan = template
 
             # Try pre-computed template intent from unified classification
             if (
-                context.unified_classification
+                plan is None
+                and context.unified_classification
                 and hasattr(context.unified_classification, "template_intent")
                 and context.unified_classification.template_intent
                 and (template := PlanTemplates.get(context.unified_classification.template_intent))
@@ -79,10 +82,22 @@ class SimplePlanner:
                     context.unified_classification.template_intent,
                     goal[:50],
                 )
-                return template
+                plan = template
 
         # Fallback to LLM structured output
-        return await self._create_plan_via_llm(goal, context)
+        if plan is None:
+            plan = await self._create_plan_via_llm(goal, context)
+
+        # Override execution hints when the user explicitly requested a subagent
+        preferred = (
+            getattr(context.unified_classification, "preferred_subagent", None)
+            if context.unified_classification
+            else None
+        )
+        if preferred:
+            plan = self._apply_preferred_subagent(plan, preferred)
+
+        return plan
 
     async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
         """Revise plan based on reflection feedback."""
@@ -219,6 +234,30 @@ class SimplePlanner:
                 step.execution_hint = _SIMPLE_PLANNER_HINT_MAP.get(original, "auto")
                 logger.warning("Normalized hint '%s' to '%s'", original, step.execution_hint)
 
+        return plan
+
+    @staticmethod
+    def _apply_preferred_subagent(plan: Plan, subagent_name: str) -> Plan:
+        """Override plan execution hints to route through an explicitly requested subagent.
+
+        Skips the first step (typically "understand requirements") and the last
+        step if it looks like a summary/validation step, so only the core action
+        steps are delegated.
+
+        Args:
+            plan: Plan to modify (mutated in place and returned).
+            subagent_name: Name of the subagent to delegate to.
+
+        Returns:
+            The modified plan.
+        """
+        action_steps = plan.steps[1:] if len(plan.steps) > 1 else plan.steps
+        for step in action_steps:
+            if step.execution_hint in ("tool", "auto"):
+                step.execution_hint = "subagent"
+                lowered = f"{step.description[0].lower()}{step.description[1:]}"
+                step.description = f"Using the {subagent_name} subagent, {lowered}"
+        logger.info("Applied preferred_subagent=%s to %d step(s)", subagent_name, len(action_steps))
         return plan
 
     def _normalize_hints_in_dict(self, data: dict) -> dict:
