@@ -220,7 +220,7 @@ class StepLoopMixin:
             elif hint == "tool":
                 parts.append(
                     "Instruction: Use the appropriate direct tool for this step. "
-                    "Prefer direct tools (wizsearch, file_edit, cli, python_executor) "
+                    "Prefer direct tools (search_web, file_edit, run_command, run_python) "
                     "over delegating to a subagent."
                 )
 

@@ -1,4 +1,4 @@
-"""Web search InformationSource wrapping wizsearch and serper."""
+"""Web search InformationSource using wizsearch backend with serper fallback."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ _MIN_PLAIN_OUTPUT_LENGTH = 10
 class WebSource:
     """Information source backed by multi-engine web search.
 
-    Wraps ``WizsearchSearchTool`` (primary) with optional ``SerperSearchTool``
-    fallback.  Results are normalised into ``SourceResult`` instances.
+    Uses ``WizsearchSearchTool`` as the primary backend (supporting multiple search engines)
+    with optional ``SerperSearchTool`` fallback. Results are normalised into ``SourceResult`` instances.
 
     Args:
-        config: Optional Soothe config for wizsearch settings.
+        config: Optional Soothe config for web search backend settings.
         enable_serper: Also query Serper if available (default False).
     """
 
@@ -47,16 +47,16 @@ class WebSource:
             return
         from soothe.tools._internal.wizsearch import WizsearchSearchTool
 
-        wizsearch_config: dict[str, Any] = {}
-        if self._config and hasattr(self._config, "tools_settings"):
-            ws = getattr(self._config.tools_settings, "wizsearch", None)
+        web_search_config: dict[str, Any] = {}
+        if self._config and hasattr(self._config, "tools"):
+            ws = getattr(self._config.tools, "web_search", None)
             if ws:
-                wizsearch_config = {
+                web_search_config = {
                     "default_engines": ws.default_engines,
                     "max_results_per_engine": ws.max_results_per_engine,
                     "timeout": ws.timeout,
                 }
-        self._search_tool = WizsearchSearchTool(config=wizsearch_config)
+        self._search_tool = WizsearchSearchTool(config=web_search_config)
 
         if self._enable_serper:
             try:
@@ -93,7 +93,7 @@ class WebSource:
         results: list[SourceResult] = []
 
         raw = await self._search_tool._arun(query=query)
-        results.extend(self._parse_wizsearch_output(raw, query))
+        results.extend(self._parse_search_output(raw, query))
 
         if self._serper_tool and len(results) < _MIN_RESULTS_FOR_SERPER_FALLBACK:
             try:
@@ -130,8 +130,8 @@ class WebSource:
     # -- Parsing helpers -----------------------------------------------------
 
     @staticmethod
-    def _parse_wizsearch_output(raw: str, query: str) -> list[SourceResult]:
-        """Parse the structured wizsearch output into SourceResults."""
+    def _parse_search_output(raw: str, query: str) -> list[SourceResult]:
+        """Parse structured search output (from wizsearch backend) into SourceResults."""
         results: list[SourceResult] = []
         if not raw or "No results found" in raw or "Search failed" in raw:
             return results

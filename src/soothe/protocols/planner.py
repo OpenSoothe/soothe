@@ -50,6 +50,10 @@ class Plan(BaseModel):
     concurrency: ConcurrencyPolicy = Field(default_factory=ConcurrencyPolicy)
     general_activity: str | None = None
 
+    # Unified planning metadata
+    is_plan_only: bool = Field(default=False, description="User wants planning without execution")
+    reasoning: str | None = Field(default=None, description="Intent classification reasoning")
+
 
 class StepResult(BaseModel):
     """Result of executing a plan step.

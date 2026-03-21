@@ -43,15 +43,15 @@ SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 
 
 def resolve_tools(
-    tool_names: list[str],
+    tools_config,
     *,
     lazy: bool = False,
     config: SootheConfig | None = None,
 ) -> list[BaseTool]:
-    """Resolve tool group names to instantiated langchain BaseTool lists.
+    """Resolve tool groups from ToolsConfig to instantiated langchain BaseTool lists.
 
     Args:
-        tool_names: Enabled tool group names from config.
+        tools_config: ToolsConfig instance with enabled tool groups.
         lazy: If True, load tool groups in parallel using a thread pool
             for faster startup.  Historically this created lazy proxies,
             but those are incompatible with langgraph ToolNode's eager
@@ -63,15 +63,36 @@ def resolve_tools(
     """
     import time
 
+    # Get list of enabled tool group names
+    enabled_tools = [
+        name
+        for name in [
+            "execution",
+            "file_ops",
+            "code_edit",
+            "datetime",
+            "data",
+            "web_search",
+            "research",
+            "image",
+            "audio",
+            "video",
+            "github",
+        ]
+        if getattr(tools_config, name, None) and getattr(tools_config, name).enabled
+    ]
+
     total_start = time.perf_counter()
 
-    parallel = lazy and len(tool_names) > 1
-    tools = _resolve_tools_parallel(tool_names, config) if parallel else _resolve_tools_sequential(tool_names, config)
+    parallel = lazy and len(enabled_tools) > 1
+    tools = (
+        _resolve_tools_parallel(enabled_tools, config) if parallel else _resolve_tools_sequential(enabled_tools, config)
+    )
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(
         "Resolved %d tool groups (%d tools) in %.1fms (parallel=%s)",
-        len(tool_names),
+        len(enabled_tools),
         len(tools),
         total_elapsed_ms,
         parallel,
@@ -189,41 +210,162 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
         return list(create_research_tools(config=config, work_dir=resolved_cwd))
 
-    if name == "websearch":
-        from soothe.tools.websearch import create_websearch_tools
+    if name == "web_search":
+        from soothe.tools.web_search import create_websearch_tools
 
-        wizsearch_config: dict = {}
-        if config and hasattr(config, "tools_settings") and hasattr(config.tools_settings, "wizsearch"):
-            wizsearch_config = {
-                "default_engines": config.tools_settings.wizsearch.default_engines,
-                "max_results_per_engine": config.tools_settings.wizsearch.max_results_per_engine,
-                "timeout": config.tools_settings.wizsearch.timeout,
+        web_search_config: dict = {}
+        if config and hasattr(config, "tools") and hasattr(config.tools, "web_search"):
+            ws = config.tools.web_search
+            web_search_config = {
+                "default_engines": ws.default_engines,
+                "max_results_per_engine": ws.max_results_per_engine,
+                "timeout": ws.timeout,
             }
         if config and hasattr(config, "debug"):
-            wizsearch_config["debug"] = config.debug
-        return list(create_websearch_tools(wizsearch_config))
+            web_search_config["debug"] = config.debug
+        return list(create_websearch_tools(web_search_config))
 
-    if name == "workspace":
-        from soothe.tools.workspace import create_workspace_tools
+    # --- Consolidated execution tools (RFC-0016 refactoring) ---
+    if name == "execution":
+        from soothe.tools.execution import create_execution_tools
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        return list(create_execution_tools(workspace_root=resolved_cwd))
+
+    # Support individual tool names (map to consolidated group)
+    if name in ("run_command", "run_background", "kill_process", "run_python"):
+        from soothe.tools.execution import (
+            KillProcessTool,
+            RunBackgroundTool,
+            RunCommandTool,
+            RunPythonTool,
+        )
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        if name == "run_command":
+            return [RunCommandTool(workspace_root=resolved_cwd)]
+        if name == "run_python":
+            return [RunPythonTool(workdir=resolved_cwd)]
+        if name == "run_background":
+            return [RunBackgroundTool()]
+        if name == "kill_process":
+            return [KillProcessTool()]
+
+    # --- Consolidated file operation tools (RFC-0016 refactoring) ---
+    if name == "file_ops":
+        from soothe.tools.file_ops import create_file_ops_tools
 
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
         allow_outside = (
             config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
         )
-        return list(create_workspace_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
+        return list(create_file_ops_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
 
-    if name == "execute":
-        from soothe.tools.execute import create_execute_tools
+    # Support individual tool names (map to consolidated group)
+    if name in ("read_file", "write_file", "delete_file", "search_files", "list_files", "file_info"):
+        from soothe.tools.file_ops import (
+            DeleteFileTool,
+            FileInfoTool,
+            ListFilesTool,
+            ReadFileTool,
+            SearchFilesTool,
+            WriteFileTool,
+        )
 
         resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
-        return list(create_execute_tools(workspace_root=resolved_cwd))
+        allow_outside = (
+            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
+        )
+        if name == "read_file":
+            return [ReadFileTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "write_file":
+            return [WriteFileTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "delete_file":
+            return [DeleteFileTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "search_files":
+            return [SearchFilesTool(work_dir=resolved_cwd)]
+        if name == "list_files":
+            return [ListFilesTool(work_dir=resolved_cwd)]
+        if name == "file_info":
+            return [FileInfoTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
 
+    # --- Surgical editing tools (RFC-0016 Phase 2) ---
+    if name == "code_edit":
+        from soothe.tools.code_edit import create_code_edit_tools
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        allow_outside = (
+            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
+        )
+        return list(create_code_edit_tools(work_dir=resolved_cwd, allow_outside_workdir=allow_outside))
+
+    # Support individual tool names (map to consolidated group)
+    if name in ("edit_file_lines", "insert_lines", "delete_lines", "apply_diff"):
+        from soothe.tools.code_edit import (
+            ApplyDiffTool,
+            DeleteLinesTool,
+            EditFileLinesTool,
+            InsertLinesTool,
+        )
+
+        resolved_cwd = str(expand_path(config.workspace_dir)) if config and config.workspace_dir else str(Path.cwd())
+        allow_outside = (
+            config.security.allow_paths_outside_workspace if config and hasattr(config, "security") else False
+        )
+        if name == "edit_file_lines":
+            return [EditFileLinesTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "insert_lines":
+            return [InsertLinesTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "delete_lines":
+            return [DeleteLinesTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+        if name == "apply_diff":
+            return [ApplyDiffTool(work_dir=resolved_cwd, allow_outside_workdir=allow_outside)]
+
+    # --- Data inspection tools (RFC-0016 single-purpose) ---
     if name == "data":
         from soothe.tools.data import create_data_tools
 
         return list(create_data_tools())
 
+    # Support individual data tool names (map to consolidated group)
+    if name in (
+        "inspect_data",
+        "summarize_data",
+        "check_data_quality",
+        "extract_text",
+        "get_data_info",
+        "ask_about_file",
+    ):
+        from soothe.tools.data import (
+            AskAboutFileTool,
+            CheckDataQualityTool,
+            ExtractTextTool,
+            GetDataInfoTool,
+            InspectDataTool,
+            SummarizeDataTool,
+        )
+
+        if name == "inspect_data":
+            return [InspectDataTool()]
+        if name == "summarize_data":
+            return [SummarizeDataTool()]
+        if name == "check_data_quality":
+            return [CheckDataQualityTool()]
+        if name == "extract_text":
+            return [ExtractTextTool()]
+        if name == "get_data_info":
+            return [GetDataInfoTool()]
+        if name == "ask_about_file":
+            return [AskAboutFileTool()]
+
+    # --- Goal management tools (RFC-0016 single-purpose) ---
     if name == "goals":
+        return []  # Goals are handled separately via resolve_goal_tools
+
+    # Support individual goal tool names (map to consolidated group)
+    if name in ("create_goal", "list_goals", "complete_goal", "fail_goal"):
+        # These require goal_engine, return empty for now
+        # They will be handled via resolve_goal_tools
         return []
 
     logger.warning("Unknown tool group '%s', skipping.", name)
@@ -258,9 +400,9 @@ def resolve_goal_tools(goal_engine: GoalEngine) -> list[BaseTool]:
     Returns:
         List of goal management BaseTool instances.
     """
-    from soothe.tools.goals import create_goal_tools
+    from soothe.tools.goals import create_goals_tools
 
-    return create_goal_tools(goal_engine)
+    return create_goals_tools(goal_engine)
 
 
 # ---------------------------------------------------------------------------

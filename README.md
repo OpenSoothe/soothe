@@ -4,6 +4,7 @@
 [![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
 [![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
 
 Your intelligent, always-available AI assistant that works autonomously on complex tasks.
 

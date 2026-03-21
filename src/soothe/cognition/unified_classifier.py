@@ -1,18 +1,15 @@
-"""Unified two-tier LLM-based classification system.
+"""Unified LLM-based routing classification system.
 
-This module provides a two-tier classification system that uses fast LLM
-calls for intelligent query analysis:
+This module provides fast LLM-based routing classification:
 
-- **Tier 1 (routing):** A fast routing call (~2-4s) determines chitchat
-  vs. non-chitchat.  Chitchat queries are answered immediately.
-- **Tier 2 (enrichment):** For non-chitchat, a separate enrichment call
-  runs concurrently with pre-stream work.
+- **Routing:** A fast LLM call (~2-4s) determines chitchat
+  vs. non-chitchat. Chitchat queries are answered immediately.
+  Non-chitchat queries proceed to planning.
 
-Architecture Decision (RFC-0012, RFC-0014):
-- Tier 1 is a tiny prompt (~100 input tokens, 2 output fields) for
-  fast routing.  Chitchat queries are answered immediately.
-- Tier 2 enriches with template_intent, capability_domains, etc.
-  and is overlapped with memory/context work.
+Architecture Decision (RFC-0016):
+- Routing is a tiny prompt (~100 input tokens, 4 output fields) for
+  fast classification. Chitchat queries are answered immediately.
+- Planning handles intent classification and plan generation in a single call.
 - Returns safe default ("medium") if LLM fails or unavailable.
 
 Classification Tiers:
@@ -65,41 +62,11 @@ class RoutingResult(BaseModel):
     )
 
 
-class EnrichmentResult(BaseModel):
-    """Tier-2 enrichment result for non-chitchat queries."""
-
-    is_plan_only: bool = Field(default=False, description="True if user only wants planning")
-    template_intent: Literal["question", "search", "analysis", "implementation", "compose"] | None = Field(
-        default=None,
-        description="question|search|analysis|implementation|compose|null",
-    )
-    capability_domains: list[CapabilityDomain] = Field(
-        default_factory=list,
-        description="Needed capability domains.",
-    )
-    reasoning: str | None = Field(default=None, description="Brief explanation")
-
-
 class UnifiedClassification(BaseModel):
-    """Full classification result (merged from tier-1 + tier-2)."""
+    """Routing classification result."""
 
     task_complexity: Literal["chitchat", "medium", "complex"] = Field(
         description="Query complexity for routing: chitchat (direct LLM), medium (subagent), complex (Claude)"
-    )
-    is_plan_only: bool = Field(default=False, description="True if user only wants planning without execution")
-    template_intent: Literal["question", "search", "analysis", "implementation", "compose"] | None = Field(
-        default=None,
-        description="Template intent for planning (question|search|analysis|implementation|compose|null)",
-    )
-    capability_domains: list[CapabilityDomain] = Field(
-        default_factory=list,
-        description=(
-            "Capability domains the query likely needs. "
-            "Options: research (web/deep search), workspace (file ops), "
-            "execute (shell/python), data (tabular/document inspection), "
-            "browse (interactive web), reason (complex thinking), "
-            "compose (agent/skill generation). Empty for chitchat."
-        ),
     )
     chitchat_response: str | None = Field(
         default=None,
@@ -116,32 +83,20 @@ class UnifiedClassification(BaseModel):
     reasoning: str | None = Field(default=None, description="Brief explanation of classification")
 
     @staticmethod
-    def from_tiers(routing: RoutingResult, enrichment: EnrichmentResult | None = None) -> UnifiedClassification:
-        """Merge tier-1 routing and tier-2 enrichment into a full classification.
+    def from_routing(routing: RoutingResult) -> UnifiedClassification:
+        """Create UnifiedClassification from routing result.
 
         Args:
-            routing: Tier-1 routing result.
-            enrichment: Tier-2 enrichment result (None for chitchat).
+            routing: Routing result.
 
         Returns:
-            Merged UnifiedClassification.
+            UnifiedClassification instance.
         """
-        if enrichment is None:
-            return UnifiedClassification(
-                task_complexity=routing.task_complexity,
-                chitchat_response=routing.chitchat_response,
-                preferred_subagent=routing.preferred_subagent,
-                routing_hint=routing.routing_hint,
-            )
         return UnifiedClassification(
             task_complexity=routing.task_complexity,
-            is_plan_only=enrichment.is_plan_only,
-            template_intent=enrichment.template_intent,
-            capability_domains=enrichment.capability_domains,
             chitchat_response=routing.chitchat_response,
             preferred_subagent=routing.preferred_subagent,
             routing_hint=routing.routing_hint,
-            reasoning=enrichment.reasoning,
         )
 
 
@@ -164,32 +119,16 @@ If chitchat, set chitchat_response to a warm reply in the user's language \
 mentioning you're {assistant_name} and that you were created by Dr. Xiaming Chen. Otherwise null.\
 """
 
-_ENRICHMENT_PROMPT = """\
-Classify this {complexity} request for planning. JSON only.
-
-Request: {query}
-
-{{"is_plan_only":bool,"template_intent":"question"|"search"|"analysis"\
-|"implementation"|"compose"|null,"capability_domains":[...],"reasoning":"brief"}}
-
-Intents: question(who/what/how), search(find/lookup), analysis(analyze/review), \
-implementation(create/build), compose(create agent/skill), null(other).
-Domains: research, workspace, execute, data, browse, reason, compose.
-"plan only" -> is_plan_only=true. Agent/skill creation -> \
-template_intent="compose", include "compose" in domains.\
-"""
-
 # ---------------------------------------------------------------------------
 # Classifier
 # ---------------------------------------------------------------------------
 
 
 class UnifiedClassifier:
-    """Two-tier LLM-based classification system.
+    """LLM-based routing classification system.
 
-    Use ``classify_routing`` for fast tier-1 routing, then
-    ``classify_enrichment`` (concurrently with pre-stream I/O) for
-    tier-2 enrichment metadata.
+    Use ``classify_routing`` for fast routing classification.
+    Planning handles intent classification and plan generation.
 
     Args:
         fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
@@ -216,10 +155,8 @@ class UnifiedClassifier:
 
         if fast_model:
             self._routing_model = fast_model.with_structured_output(RoutingResult, method="json_mode")
-            self._enrichment_model = fast_model.with_structured_output(EnrichmentResult, method="json_mode")
         else:
             self._routing_model = None
-            self._enrichment_model = None
 
     # -- two-tier public API ------------------------------------------------
 
@@ -251,46 +188,6 @@ class UnifiedClassifier:
         logger.debug("Tier-1 routing: task_complexity=%s", result.task_complexity)
         return result
 
-    async def classify_enrichment(
-        self,
-        query: str,
-        complexity: str = "medium",
-    ) -> EnrichmentResult:
-        """Tier-2: enrichment classification for non-chitchat queries.
-
-        Provides template_intent, capability_domains, is_plan_only, reasoning.
-        Designed to run concurrently with pre-stream I/O.
-
-        Args:
-            query: User input text.
-            complexity: The task_complexity from tier-1 (for prompt context).
-
-        Returns:
-            EnrichmentResult with planning metadata.
-        """
-        if self._mode == "disabled" or not self._fast_model:
-            return EnrichmentResult(
-                capability_domains=["research", "workspace", "execute"],
-                reasoning="Classification disabled",
-            )
-
-        try:
-            result = await self._llm_enrichment(query, complexity)
-        except Exception:
-            logger.exception("Tier-2 enrichment classification failed")
-            return EnrichmentResult(
-                capability_domains=["research", "workspace", "execute"],
-                reasoning="Enrichment failed, using defaults",
-            )
-
-        logger.debug(
-            "Tier-2 enrichment: template_intent=%s, plan_only=%s, reasoning=%s",
-            result.template_intent,
-            result.is_plan_only,
-            result.reasoning,
-        )
-        return result
-
     # -- internal LLM calls -------------------------------------------------
 
     async def _llm_routing(self, query: str) -> RoutingResult:
@@ -304,11 +201,6 @@ class UnifiedClassifier:
             assistant_name=self._assistant_name,
         )
         return await self._routing_model.ainvoke(prompt)
-
-    async def _llm_enrichment(self, query: str, complexity: str) -> EnrichmentResult:
-        """Tier-2 LLM call with compact enrichment prompt."""
-        prompt = _ENRICHMENT_PROMPT.format(query=query, complexity=complexity)
-        return await self._enrichment_model.ainvoke(prompt)
 
     # -- helpers ------------------------------------------------------------
 
@@ -330,7 +222,5 @@ class UnifiedClassifier:
         """Safe default when everything fails."""
         return UnifiedClassification(
             task_complexity="medium",
-            is_plan_only=False,
-            capability_domains=["research", "workspace", "execute"],
             reasoning=reason,
         )

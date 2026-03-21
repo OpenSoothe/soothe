@@ -81,7 +81,7 @@ CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
 FINAL_REPORT = "soothe.output.autonomous.final_report"
 
 # ---------------------------------------------------------------------------
-# Tool events — websearch group (wizsearch internally)
+# Tool events — websearch group (internally uses wizsearch/serper backends)
 # ---------------------------------------------------------------------------
 TOOL_WEBSEARCH_SEARCH_STARTED = "soothe.tool.websearch.search_started"
 TOOL_WEBSEARCH_SEARCH_COMPLETED = "soothe.tool.websearch.search_completed"

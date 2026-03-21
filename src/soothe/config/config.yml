@@ -108,38 +108,50 @@ subagents:
     #   max_generated_agents: 100
 
 # =============================================================================
-# Tools (RFC-0014 Capability Abstraction)
+# Tools Configuration
 # =============================================================================
-# Six consolidated capability tools replace the previous 20+ individual tools.
-# The LLM picks *what* capability to use; each tool routes to the right backend.
+# Enable/disable tool groups and configure their settings.
+# Each tool group can be enabled/disabled via the 'enabled' flag.
 
 tools:
-  - datetime          # Current date/time for time-awareness
-  - workspace         # File ops: read, write, delete, search, list, info
-  - execute           # Run shell commands, Python code, background processes
-  - data              # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
-  - websearch         # Quick web search and content extraction (auto-selects serper/jina if API keys available)
-  - research          # Deep multi-source iterative research (InquiryEngine)
+  # Consolidated execution tools
+  execution:
+    enabled: true       # run_command, run_python, run_background, kill_process
 
-  # Optional tools (require API keys or external services):
-  # - image           # Image analysis (OpenAI GPT-4o)
-  # - audio           # Audio transcription (OpenAI Whisper)
-  # - video           # Video analysis (Google Gemini)
-  # - github          # GitHub API (GITHUB_TOKEN)
+  # Consolidated file operations
+  file_ops:
+    enabled: true       # read_file, write_file, delete_file, search_files, list_files, file_info
 
-# =============================================================================
-# Tools Settings
-# =============================================================================
-# Configure individual tool groups with specific settings.
+  # Consolidated surgical editing tools
+  code_edit:
+    enabled: true       # edit_file_lines, insert_lines, delete_lines, apply_diff
 
-tools_settings:
-  wizsearch:
+  # Data operations
+  datetime:
+    enabled: true       # Current date/time for time-awareness
+  data:
+    enabled: true       # Inspect tabular data (CSV, Excel) and documents (PDF, DOCX)
+
+  # Research
+  web_search:
     enabled: true
     default_engines:
       - tavily          # Requires TAVILY_API_KEY (set in environment)
       - duckduckgo      # No API key required
     max_results_per_engine: 10
     timeout: 30
+  research:
+    enabled: true       # Deep multi-source iterative research (InquiryEngine)
+
+  # Optional tools (require API keys or external services):
+  image:
+    enabled: false   # Image analysis (OpenAI GPT-4o)
+  audio:
+    enabled: false   # Audio transcription (OpenAI Whisper)
+  video:
+    enabled: false   # Video analysis (Google Gemini)
+  github:
+    enabled: false   # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
 # MCP Servers

@@ -1,10 +1,10 @@
 """Tests for CLI shell health state tracking."""
 
-from soothe.tools._internal.cli import (
-    CliTool,
+from soothe.tools._internal.shell import (
     ShellHealthState,
     _shell_health_states,
 )
+from soothe.tools.execution import RunCommandTool
 
 
 class TestShellHealthState:
@@ -49,7 +49,7 @@ class TestShouldTestResponsiveness:
 
     def test_first_command_triggers_test(self) -> None:
         """Test that first command always triggers test."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Clear health state to simulate first command
         _shell_health_states.clear()
@@ -62,7 +62,7 @@ class TestShouldTestResponsiveness:
         """Test that healthy shell skips responsiveness test."""
         from datetime import datetime
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Create health state indicating healthy shell
         health = ShellHealthState(
@@ -83,7 +83,7 @@ class TestShouldTestResponsiveness:
         """Test that failed command triggers retest."""
         from datetime import datetime
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Create health state indicating failed command
         health = ShellHealthState(
@@ -104,7 +104,7 @@ class TestShouldTestResponsiveness:
         """Test that recovered shell triggers validation test."""
         from datetime import datetime
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Create health state indicating shell was recovered
         health = ShellHealthState(
@@ -125,7 +125,7 @@ class TestShouldTestResponsiveness:
         """Test that consecutive failures trigger test."""
         from datetime import datetime
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Create health state with consecutive failures
         health = ShellHealthState(
@@ -146,7 +146,7 @@ class TestShouldTestResponsiveness:
         """Test that trouble signs trigger test."""
         from datetime import datetime
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Test each type of trouble sign
         trouble_signs = ["timeout", "eof", "error", "unexpected_output"]
@@ -171,7 +171,7 @@ class TestDetectTroubleSign:
 
     def test_no_error_returns_none(self) -> None:
         """Test that no error returns 'none'."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         sign = tool._detect_trouble_sign(error=None, _output="")
 
@@ -181,7 +181,7 @@ class TestDetectTroubleSign:
         """Test detection of timeout errors."""
         import pexpect
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         sign = tool._detect_trouble_sign(error=pexpect.TIMEOUT("timeout"), _output="")
 
@@ -191,7 +191,7 @@ class TestDetectTroubleSign:
         """Test detection of EOF errors."""
         import pexpect
 
-        tool = CliTool()
+        tool = RunCommandTool()
 
         sign = tool._detect_trouble_sign(error=pexpect.EOF("eof"), _output="")
 
@@ -199,7 +199,7 @@ class TestDetectTroubleSign:
 
     def test_generic_error_detection(self) -> None:
         """Test detection of generic errors."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         sign = tool._detect_trouble_sign(error=RuntimeError("test error"), _output="")
 
@@ -211,7 +211,7 @@ class TestHealthStateTracking:
 
     def test_successful_command_updates_health(self) -> None:
         """Test that successful command updates health state."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Clear health state
         _shell_health_states.clear()
@@ -229,7 +229,7 @@ class TestHealthStateTracking:
 
     def test_banned_command_skips_health_update(self) -> None:
         """Test that banned commands don't update health state."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Clear health state
         _shell_health_states.clear()
@@ -248,7 +248,7 @@ class TestCleanup:
 
     def test_cleanup_clears_health_state(self) -> None:
         """Test that cleanup clears health state."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Create health state
         from datetime import datetime
@@ -260,7 +260,7 @@ class TestCleanup:
         assert "default" in _shell_health_states
 
         # Cleanup
-        CliTool.cleanup()
+        RunCommandTool.cleanup()
 
         # Verify it's cleared
         assert "default" not in _shell_health_states

@@ -52,6 +52,7 @@ from soothe.core.events import (
     TOOL_WEBSEARCH_SEARCH_FAILED,
     TOOL_WEBSEARCH_SEARCH_STARTED,
 )
+from soothe.tools.display_names import get_tool_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,8 @@ class CliEventRenderer:
     def _render_search_started(self, event: dict[str, Any]) -> list[str]:
         query = event.get("query", "")
         engines = event.get("engines", [])
-        parts = ["Searching:", str(query)[:40]]
+        display_name = get_tool_display_name("search_web")
+        parts = [f"{display_name}:", str(query)[:40]]
         if engines:
             parts.append(f"({', '.join(engines[:_MAX_INLINE_QUERIES])})")
         return parts

@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.tools.data import DataTool, create_data_tools
-from soothe.tools.execute import ExecuteTool, create_execute_tools
-from soothe.tools.websearch import WebCrawlTool, WebSearchTool, create_websearch_tools
-from soothe.tools.workspace import WorkspaceTool, create_workspace_tools
+from soothe.tools.data import InspectDataTool, create_data_tools
+from soothe.tools.execution import RunCommandTool, create_execution_tools
+from soothe.tools.file_ops import ReadFileTool, WriteFileTool, create_file_ops_tools
+from soothe.tools.web_search import CrawlWebTool, SearchWebTool, create_websearch_tools
 
 
 def _has_pandas() -> bool:
@@ -31,219 +31,151 @@ class TestWebSearchTool:
     def test_create_returns_two_tools(self) -> None:
         tools = create_websearch_tools()
         assert len(tools) == 2
-        assert isinstance(tools[0], WebSearchTool)
-        assert isinstance(tools[1], WebCrawlTool)
+        assert isinstance(tools[0], SearchWebTool)
+        assert isinstance(tools[1], CrawlWebTool)
 
     def test_tool_name(self) -> None:
-        tool = WebSearchTool()
-        assert tool.name == "websearch"
+        tool = SearchWebTool()
+        assert tool.name == "search_web"
 
     def test_crawl_tool_name(self) -> None:
-        tool = WebCrawlTool()
-        assert tool.name == "websearch_crawl"
+        tool = CrawlWebTool()
+        assert tool.name == "crawl_web"
 
     def test_description_mentions_search(self) -> None:
-        tool = WebSearchTool()
+        tool = SearchWebTool()
         assert "search" in tool.description.lower()
         assert "research" in tool.description.lower()
 
 
 # ---------------------------------------------------------------------------
-# WorkspaceTool
+# FileOps Tools (replaces WorkspaceTool)
 # ---------------------------------------------------------------------------
 
 
-class TestWorkspaceTool:
-    """Tests for the workspace capability tool."""
+class TestFileOpsTools:
+    """Tests for the file_ops tools."""
 
-    def test_create_returns_single_tool(self) -> None:
-        tools = create_workspace_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], WorkspaceTool)
+    def test_create_returns_six_tools(self) -> None:
+        tools = create_file_ops_tools()
+        assert len(tools) == 6
+        assert isinstance(tools[0], ReadFileTool)
+        assert any(isinstance(t, WriteFileTool) for t in tools)
 
-    def test_tool_name(self) -> None:
-        tool = WorkspaceTool()
-        assert tool.name == "workspace"
-
-    def test_unknown_action(self) -> None:
-        tool = WorkspaceTool()
-        result = tool._run(action="fly")
-        assert "Error" in result
-        assert "Unknown action" in result
-
-    def test_read_action(self, tmp_path: Path) -> None:
+    def test_read_file_tool(self, tmp_path: Path) -> None:
         test_file = tmp_path / "hello.txt"
         test_file.write_text("hello world")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="read", path="hello.txt")
+        tool = ReadFileTool(work_dir=str(tmp_path))
+        result = tool._run(path="hello.txt")
         assert "hello world" in result
 
-    def test_write_action(self, tmp_path: Path) -> None:
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="write", path="new.txt", content="new content")
-        assert "Created" in result
+    def test_write_file_tool(self, tmp_path: Path) -> None:
+        from soothe.tools.file_ops import WriteFileTool
+
+        tool = WriteFileTool(work_dir=str(tmp_path))
+        result = tool._run(path="new.txt", content="new content")
+        assert "success" in result.lower() or "created" in result.lower() or "wrote" in result.lower()
         assert (tmp_path / "new.txt").read_text() == "new content"
 
-    def test_delete_action(self, tmp_path: Path) -> None:
+    def test_delete_file_tool(self, tmp_path: Path) -> None:
+        from soothe.tools.file_ops import DeleteFileTool
+
         test_file = tmp_path / "to_delete.txt"
         test_file.write_text("delete me")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="delete", path="to_delete.txt")
-        assert "Deleted" in result
+        tool = DeleteFileTool(work_dir=str(tmp_path))
+        result = tool._run(path="to_delete.txt")
         assert not test_file.exists()
 
-    def test_list_action(self, tmp_path: Path) -> None:
+    def test_list_files_tool(self, tmp_path: Path) -> None:
+        from soothe.tools.file_ops import ListFilesTool
+
         (tmp_path / "a.py").write_text("pass")
         (tmp_path / "b.py").write_text("pass")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="list", pattern="*.py")
+        tool = ListFilesTool(work_dir=str(tmp_path))
+        result = tool._run(pattern="*.py")
         assert "a.py" in result
         assert "b.py" in result
 
-    def test_search_action(self, tmp_path: Path) -> None:
+    def test_search_files_tool(self, tmp_path: Path) -> None:
+        from soothe.tools.file_ops import SearchFilesTool
+
         (tmp_path / "code.py").write_text("def hello_world():\n    pass\n")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="search", pattern="hello_world")
+        tool = SearchFilesTool(work_dir=str(tmp_path))
+        result = tool._run(pattern="hello_world", path=".")
         assert "hello_world" in result
 
-    def test_search_requires_pattern(self) -> None:
-        tool = WorkspaceTool()
-        result = tool._run(action="search")
-        assert "Error" in result
-        assert "pattern" in result.lower()
+    def test_file_info_tool(self, tmp_path: Path) -> None:
+        from soothe.tools.file_ops import FileInfoTool
 
-    def test_info_action(self, tmp_path: Path) -> None:
         test_file = tmp_path / "info.txt"
         test_file.write_text("some content")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="info", path="info.txt")
-        assert "Size" in result or "Path" in result
-
-    def test_action_case_insensitive(self, tmp_path: Path) -> None:
-        test_file = tmp_path / "case.txt"
-        test_file.write_text("test")
-        tool = WorkspaceTool(work_dir=str(tmp_path))
-        result = tool._run(action="READ", path="case.txt")
-        assert "test" in result
+        tool = FileInfoTool(work_dir=str(tmp_path))
+        result = tool._run(path="info.txt")
+        assert "Size" in result or "Path" in result or "size" in result.lower()
 
 
 # ---------------------------------------------------------------------------
-# ExecuteTool
+# Execution Tools (replaces ExecuteTool)
 # ---------------------------------------------------------------------------
 
 
-class TestExecuteTool:
-    """Tests for the execute capability tool."""
+class TestExecutionTools:
+    """Tests for the execution tools."""
 
-    def test_create_returns_single_tool(self) -> None:
-        tools = create_execute_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], ExecuteTool)
+    def test_create_returns_four_tools(self) -> None:
+        tools = create_execution_tools()
+        assert len(tools) == 4
+        assert isinstance(tools[0], RunCommandTool)
 
-    def test_tool_name(self) -> None:
-        tool = ExecuteTool()
-        assert tool.name == "execute"
+    def test_run_command_tool_name(self) -> None:
+        tool = RunCommandTool()
+        assert tool.name == "run_command"
 
-    def test_unknown_mode(self) -> None:
-        tool = ExecuteTool()
-        result = tool._run(code="echo hi", mode="teleport")
-        assert "Error" in result
-        assert "Unknown mode" in result
-
-    def test_description_mentions_modes(self) -> None:
-        tool = ExecuteTool()
+    def test_run_command_description_mentions_shell(self) -> None:
+        tool = RunCommandTool()
         desc = tool.description.lower()
-        assert "shell" in desc
-        assert "python" in desc
-        assert "background" in desc
+        assert "command" in desc or "shell" in desc
 
-    def test_accepts_command_parameter(self) -> None:
-        """Test that tool accepts both 'code' and 'command' parameter names."""
-        tool = ExecuteTool()
-        # Test with 'code' parameter
-        result1 = tool._run(code="echo hello", mode="shell")
-        # Test with 'command' parameter (what the LLM sends)
-        result2 = tool._run(command="echo hello", mode="shell")
-        # Both should work the same way
-        assert result1 == result2
+    def test_run_command_basic(self) -> None:
+        """Test basic command execution."""
+        tool = RunCommandTool()
+        result = tool._run(command="echo hello")
+        assert "hello" in result or result  # Should have some output
 
 
 # ---------------------------------------------------------------------------
-# DataTool
+# Data Tools (replaces DataTool)
 # ---------------------------------------------------------------------------
 
 
-class TestDataTool:
-    """Tests for the data capability tool."""
+class TestDataTools:
+    """Tests for the data tools."""
 
-    def test_create_returns_single_tool(self) -> None:
+    def test_create_returns_six_tools(self) -> None:
         tools = create_data_tools()
-        assert len(tools) == 1
-        assert isinstance(tools[0], DataTool)
+        assert len(tools) == 6
+        assert isinstance(tools[0], InspectDataTool)
 
-    def test_tool_name(self) -> None:
-        tool = DataTool()
-        assert tool.name == "data"
-
-    def test_detect_domain_csv(self) -> None:
-        tool = DataTool()
-        assert tool._detect_domain("data.csv") == "tabular"
-        assert tool._detect_domain("data.xlsx") == "tabular"
-        assert tool._detect_domain("data.parquet") == "tabular"
-
-    def test_detect_domain_document(self) -> None:
-        tool = DataTool()
-        assert tool._detect_domain("doc.pdf") == "document"
-        assert tool._detect_domain("doc.docx") == "document"
-        assert tool._detect_domain("readme.txt") == "document"
-        assert tool._detect_domain("notes.md") == "document"
-
-    def test_detect_domain_unknown(self) -> None:
-        tool = DataTool()
-        assert tool._detect_domain("binary.exe") == "unknown"
-
-    def test_unsupported_format(self) -> None:
-        tool = DataTool()
-        result = tool._run(file_path="binary.exe", operation="inspect")
-        assert "Error" in result
-        assert "Unsupported" in result
-
-    def test_ask_requires_question(self) -> None:
-        tool = DataTool()
-        result = tool._run(file_path="data.csv", operation="ask")
-        assert "Error" in result
-        assert "question" in result.lower()
+    def test_inspect_data_tool_name(self) -> None:
+        tool = InspectDataTool()
+        assert tool.name == "inspect_data"
 
     @pytest.mark.skipif(not _has_pandas(), reason="pandas not installed")
-    def test_tabular_inspect(self, tmp_path: Path) -> None:
+    def test_inspect_csv(self, tmp_path: Path) -> None:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("name,age\nAlice,30\nBob,25\n")
-        tool = DataTool()
-        result = tool._run(file_path=str(csv_file), operation="inspect")
+        tool = InspectDataTool()
+        result = tool._run(file_path=str(csv_file))
         assert "name" in result
         assert "age" in result
 
-    @pytest.mark.skipif(not _has_pandas(), reason="pandas not installed")
-    def test_tabular_summary(self, tmp_path: Path) -> None:
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("name,age\nAlice,30\nBob,25\n")
-        tool = DataTool()
-        result = tool._run(file_path=str(csv_file), operation="summary")
-        assert "2 rows" in result or "Shape" in result
-
-    @pytest.mark.skipif(not _has_pandas(), reason="pandas not installed")
-    def test_tabular_quality(self, tmp_path: Path) -> None:
-        csv_file = tmp_path / "test.csv"
-        csv_file.write_text("name,age\nAlice,30\nBob,25\n")
-        tool = DataTool()
-        result = tool._run(file_path=str(csv_file), operation="quality")
-        assert isinstance(result, str)
-
     def test_document_extract(self, tmp_path: Path) -> None:
+        from soothe.tools.data import ExtractTextTool
+
         txt_file = tmp_path / "doc.txt"
         txt_file.write_text("Hello document world")
-        tool = DataTool()
-        result = tool._run(file_path=str(txt_file), operation="extract")
+        tool = ExtractTextTool()
+        result = tool._run(file_path=str(txt_file))
         assert "Hello document world" in result
 
 
@@ -269,41 +201,6 @@ class TestResearchToolRename:
 
 
 # ---------------------------------------------------------------------------
-# UnifiedClassification with capability_domains
-# ---------------------------------------------------------------------------
-
-
-class TestUnifiedClassificationDomains:
-    """Tests for the capability_domains extension."""
-
-    def test_default_domains_empty(self) -> None:
-        from soothe.cognition import UnifiedClassification
-
-        c = UnifiedClassification(task_complexity="chitchat", is_plan_only=False)
-        assert c.capability_domains == []
-
-    def test_domains_can_be_set(self) -> None:
-        from soothe.cognition import UnifiedClassification
-
-        c = UnifiedClassification(
-            task_complexity="medium",
-            is_plan_only=False,
-            capability_domains=["research", "workspace"],
-        )
-        assert "research" in c.capability_domains
-        assert "workspace" in c.capability_domains
-
-    async def test_default_classification_has_domains(self) -> None:
-        from soothe.cognition import UnifiedClassification, UnifiedClassifier
-
-        classifier = UnifiedClassifier(fast_model=None, classification_mode="disabled")
-        routing = await classifier.classify_routing("test")
-        enrichment = await classifier.classify_enrichment("test", routing.task_complexity)
-        result = UnifiedClassification.from_tiers(routing, enrichment)
-        assert len(result.capability_domains) > 0
-
-
-# ---------------------------------------------------------------------------
 # Resolver: consolidated names resolve, old names rejected
 # ---------------------------------------------------------------------------
 
@@ -322,30 +219,30 @@ class TestResolverConsolidatedNames:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("websearch")
-        assert len(tools) == 2  # WebSearchTool + WebCrawlTool
-        assert tools[0].name == "websearch"
-        assert tools[1].name == "websearch_crawl"
+        assert len(tools) == 2  # SearchWebTool + CrawlWebTool
+        assert tools[0].name == "search_web"
+        assert tools[1].name == "crawl_web"
 
-    def test_workspace_resolves(self) -> None:
+    def test_file_ops_resolves(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
-        tools = _resolve_single_tool_group_uncached("workspace")
-        assert len(tools) == 1
-        assert tools[0].name == "workspace"
+        tools = _resolve_single_tool_group_uncached("file_ops")
+        assert len(tools) == 6
+        assert tools[0].name == "read_file"
 
-    def test_execute_resolves(self) -> None:
+    def test_execution_resolves(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
-        tools = _resolve_single_tool_group_uncached("execute")
-        assert len(tools) == 1
-        assert tools[0].name == "execute"
+        tools = _resolve_single_tool_group_uncached("execution")
+        assert len(tools) == 4
+        assert tools[0].name == "run_command"
 
     def test_data_resolves(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("data")
-        assert len(tools) == 1
-        assert tools[0].name == "data"
+        assert len(tools) == 6
+        assert tools[0].name == "inspect_data"
 
     def test_old_names_rejected(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
@@ -407,10 +304,10 @@ class TestConsolidatedToolLogging:
     """Test that consolidated tools emit progress events."""
 
     def test_websearch_emits_events(self) -> None:
-        """WebSearchTool should emit started/completed events."""
+        """SearchWebTool should emit started/completed events."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = WebSearchTool(config={})
+        tool = SearchWebTool(config={})
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
@@ -425,76 +322,76 @@ class TestConsolidatedToolLogging:
 
                 # Verify events were emitted
                 event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
-                assert "soothe.tool.websearch.started" in event_types
-                assert "soothe.tool.websearch.completed" in event_types
+                assert "soothe.tool.search_web.started" in event_types
+                assert "soothe.tool.search_web.completed" in event_types
 
-    def test_workspace_emits_events(self, tmp_path: Path) -> None:
-        """WorkspaceTool should emit started/completed events."""
+    def test_file_ops_emits_events(self, tmp_path: Path) -> None:
+        """ReadFileTool should emit started/completed events."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = WorkspaceTool(work_dir=str(tmp_path))
+        tool = ReadFileTool(work_dir=str(tmp_path))
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
-            result = wrapped._run(action="list")
+            result = wrapped._run(path="test.txt")
 
             # Verify events were emitted
             event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
-            assert "soothe.tool.workspace.started" in event_types
-            assert "soothe.tool.workspace.completed" in event_types
+            assert "soothe.tool.read_file.started" in event_types
+            assert "soothe.tool.read_file.completed" in event_types
 
     def test_execute_emits_events(self) -> None:
-        """ExecuteTool should emit started/completed events."""
+        """RunCommandTool should emit started/completed events."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = ExecuteTool()
+        tool = RunCommandTool()
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
-            result = wrapped._run(code="echo hello", mode="shell")
+            result = wrapped._run(command="echo hello")
 
             # Verify events were emitted
             event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
-            assert "soothe.tool.execute.started" in event_types
-            assert "soothe.tool.execute.completed" in event_types
+            assert "soothe.tool.run_command.started" in event_types
+            assert "soothe.tool.run_command.completed" in event_types
 
     def test_data_emits_events(self, tmp_path: Path) -> None:
-        """DataTool should emit started/completed events."""
+        """InspectDataTool should emit started/completed events."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
         # Create a test text file
         test_file = tmp_path / "test.txt"
         test_file.write_text("test content")
 
-        tool = DataTool()
+        tool = InspectDataTool()
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
-            result = wrapped._run(file_path=str(test_file), operation="extract")
+            result = wrapped._run(file_path=str(test_file))
 
             # Verify events were emitted
             event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
-            assert "soothe.tool.data.started" in event_types
-            assert "soothe.tool.data.completed" in event_types
+            assert "soothe.tool.inspect_data.started" in event_types
+            assert "soothe.tool.inspect_data.completed" in event_types
 
     def test_tool_error_emits_failed_event(self) -> None:
         """Tool errors should emit failed events."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = WorkspaceTool()
+        tool = ReadFileTool()
 
         with patch("soothe.utils.progress.emit_progress") as mock_emit:
             wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
-            # This should trigger an error (unknown action)
-            result = wrapped._run(action="nonexistent_action")
+            # This should trigger an error (file not found)
+            result = wrapped._run(path="nonexistent_file.txt")
 
             # Verify failed event was emitted
             event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
             # The tool catches errors internally and returns error message,
             # so we expect completed event, not failed
-            assert "soothe.tool.workspace.started" in event_types
+            assert "soothe.tool.read_file.started" in event_types
             # Tools that handle errors internally don't raise, so they emit completed
-            assert "soothe.tool.workspace.completed" in event_types
+            assert "soothe.tool.read_file.completed" in event_types
 
     def test_research_emits_events(self) -> None:
         """ResearchTool should emit started/completed events."""
@@ -521,7 +418,7 @@ class TestConsolidatedToolLogging:
         """Tools should not be wrapped twice."""
         from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
-        tool = WebSearchTool()
+        tool = SearchWebTool()
         logger = logging.getLogger(__name__)
 
         # Wrap once

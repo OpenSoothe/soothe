@@ -18,7 +18,7 @@ from soothe.tools._internal.wizsearch import (
 )
 from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
 from soothe.tools.video import VideoInfoTool, create_video_tools
-from soothe.tools.websearch import WebCrawlTool, WebSearchTool, create_websearch_tools
+from soothe.tools.web_search import CrawlWebTool, SearchWebTool, create_websearch_tools
 
 
 class TestDatetimeTools:
@@ -76,17 +76,17 @@ class TestWebsearchTools:
     def test_create_returns_list(self) -> None:
         tools = create_websearch_tools()
         assert len(tools) == 2
-        assert isinstance(tools[0], WebSearchTool)
-        assert isinstance(tools[1], WebCrawlTool)
+        assert isinstance(tools[0], SearchWebTool)
+        assert isinstance(tools[1], CrawlWebTool)
 
     def test_search_tool_metadata(self) -> None:
-        tool = WebSearchTool()
-        assert tool.name == "websearch"
+        tool = SearchWebTool()
+        assert tool.name == "search_web"
         assert "search" in tool.description.lower()
 
     def test_crawl_tool_metadata(self) -> None:
-        tool = WebCrawlTool()
-        assert tool.name == "websearch_crawl"
+        tool = CrawlWebTool()
+        assert tool.name == "crawl_web"
         assert "extract" in tool.description.lower() or "content" in tool.description.lower()
 
 

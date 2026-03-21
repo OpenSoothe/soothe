@@ -37,13 +37,21 @@ class OutputFormatter(Protocol):
         """
         ...
 
-    def emit_tool_call(self, name: str, *, prefix: str | None, is_main: bool) -> None:
+    def emit_tool_call(
+        self,
+        name: str,
+        *,
+        prefix: str | None,
+        is_main: bool,
+        tool_call: dict[str, Any] | None = None,
+    ) -> None:
         """Emit a tool call notification.
 
         Args:
             name: The tool name being called.
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent.
+            tool_call: Optional tool call dict with args for display.
         """
         ...
 
@@ -115,9 +123,10 @@ class MessageProcessor:
                         self._process_text_block(text, is_main=is_main)
                 elif btype in ("tool_call", "tool_call_chunk"):
                     name = block.get("name", "")
-                    if name and should_show("tool_activity", verbosity):
-                        # Note: prefix resolution happens in formatter
-                        self.formatter.emit_tool_call(name, prefix=None, is_main=is_main)
+                    if name and should_show("protocol", verbosity):
+                        # Extract args for display
+                        tool_call = {"args": block.get("args", {})}
+                        self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tool_call)
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
             # Handle simple string content
             self._process_text_block(msg.content, is_main=is_main)
@@ -161,7 +170,7 @@ class MessageProcessor:
         """
         from soothe.cli.progress_verbosity import should_show
 
-        if not should_show("tool_activity", verbosity):
+        if not should_show("protocol", verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -208,9 +217,9 @@ def strip_internal_tags(text: str) -> str:
 def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> str:
     r"""Extract a concise one-line summary from tool result content.
 
-    For search tools (wizsearch), the first line is typically a human-readable
-    header like "20 results in 15.0s for 'query'" — use that instead of the raw
-    content which may contain XML tags and source data.
+    For search tools (search_web, crawl_web), the first line
+    is typically a human-readable header like "20 results in 15.0s for 'query'" —
+    use that instead of the raw content which may contain XML tags and source data.
 
     Args:
         tool_name: Name of the tool that produced the content.
@@ -221,14 +230,84 @@ def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> s
         Truncated brief suitable for display.
 
     Example:
-        >>> extract_tool_brief("wizsearch", "10 results in 1.2s for 'python'\n...more data...")
+        >>> extract_tool_brief("search_web", "10 results in 1.2s for 'python'\n...more data...")
         "10 results in 1.2s for 'python'"
     """
-    if tool_name.startswith("wizsearch"):
+    # Web search/crawl tools return structured output with summary on first line
+    web_tools = {"search_web", "crawl_web"}
+    if tool_name in web_tools:
         first_line = content.split("\n", 1)[0].strip()
         if first_line:
             return first_line[:max_length]
     return content.replace("\n", " ")[:max_length]
+
+
+# Argument display mapping for tool calls
+_ARG_DISPLAY_MAP: dict[str, str] = {
+    # File operations - show path
+    "read_file": "path",
+    "write_file": "path",
+    "delete_file": "path",
+    "file_info": "path",
+    "edit_file_lines": "path",
+    "insert_lines": "path",
+    "delete_lines": "path",
+    "apply_diff": "path",
+    # Execution - show command/code
+    "run_command": "command",
+    "run_python": "code",
+    "run_background": "command",
+    "kill_process": "pid",
+    # Search - show pattern/query
+    "search_files": "pattern",
+    "list_files": "pattern",
+    "search_web": "query",
+    "crawl_web": "url",
+    # Media - show file path
+    "analyze_image": "image_path",
+    "analyze_video": "video_path",
+    "transcribe_audio": "audio_path",
+    # Goals - show description or ID
+    "create_goal": "description",
+    "complete_goal": "goal_id",
+    "fail_goal": "goal_id",
+}
+
+
+def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
+    """Format key tool arguments for display.
+
+    Extracts the most relevant argument(s) for each tool type to show
+    in activity events.
+
+    Args:
+        tool_name: Internal tool name (snake_case)
+        tool_call: Tool call dict with 'args' key containing arguments
+
+    Returns:
+        Formatted argument string like "(file_name.md)" or "(query)"
+        Empty string if no relevant argument found
+
+    Examples:
+        >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
+        '(config.yml)'
+        >>> format_tool_call_args("run_command", {"args": {"command": "ls -la"}})
+        '(ls -la)'
+    """
+    args = tool_call.get("args", {})
+    if not isinstance(args, dict):
+        return ""
+
+    key_arg = _ARG_DISPLAY_MAP.get(tool_name)
+    if not key_arg or key_arg not in args:
+        return ""
+
+    value = str(args[key_arg])
+    # Truncate long values to prevent activity line overflow
+    if len(value) > 50:
+        value = value[:47] + "..."
+
+    return f"({value})"
 
 
 def is_multi_step_plan(event: dict[str, Any]) -> bool:

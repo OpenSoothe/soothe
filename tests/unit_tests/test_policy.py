@@ -1,6 +1,6 @@
 """Tests for policy implementation (ConfigDrivenPolicy)."""
 
-from soothe.backends.policy.config_driven import (
+from soothe.safety.config_driven import (
     DEFAULT_PROFILES,
     PRIVILEGED_PROFILE,
     READONLY_PROFILE,

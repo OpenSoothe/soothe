@@ -6,7 +6,7 @@ Implements the research paradigm as a LangGraph:
   summarize -> reflect -> [continue | synthesize] -> END
 
 The engine is parameterised by a list of ``InformationSource``
-instances and a ``SourceRouter``.  It knows nothing about wizsearch,
+instances and a ``SourceRouter``. It knows nothing about web_search,
 file_edit, or any specific tool -- those details live in the sources.
 """
 

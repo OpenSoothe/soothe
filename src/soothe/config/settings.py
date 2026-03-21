@@ -23,7 +23,7 @@ from soothe.config.models import (
     SecurityConfig,
     SkillifyConfig,
     SubagentConfig,
-    ToolsSettings,
+    ToolsConfig,
     VectorStoreProviderConfig,
     VectorStoreRouter,
     WeaverConfig,
@@ -91,17 +91,8 @@ class SootheConfig(BaseSettings):
     )
     """Subagent name to config mapping. Set ``enabled: false`` to disable."""
 
-    tools: list[str] = Field(
-        default_factory=lambda: [
-            "datetime",
-            "workspace",
-            "execute",
-            "data",
-            "websearch",
-            "research",
-        ]
-    )
-    """Enabled tool group names (RFC-0014 consolidated tools)."""
+    tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    """Tool group configurations. Each tool can be enabled/disabled and configured."""
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     """MCP server configurations (Claude Desktop JSON format)."""
@@ -132,9 +123,6 @@ class SootheConfig(BaseSettings):
     """Weaver subagent configuration."""
 
     # --- Nested Configuration Objects ---
-
-    tools_settings: ToolsSettings = Field(default_factory=ToolsSettings)
-    """Configuration for individual tool groups."""
 
     persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)
     """Unified persistence settings for all backends."""

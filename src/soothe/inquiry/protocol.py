@@ -1,7 +1,7 @@
 """InformationSource protocol and supporting models for the Inquiry Engine.
 
 Defines the core abstraction for any queryable information source.
-Implementations wrap existing Soothe tools (wizsearch, file_edit, cli, etc.)
+Implementations wrap existing Soothe tools (web_search, file_edit, cli, etc.)
 behind a uniform interface so the InquiryEngine can orchestrate them
 without knowing implementation details.
 """
@@ -108,7 +108,7 @@ class InformationSource(Protocol):
 
     @property
     def name(self) -> str:
-        """Human-readable source name (e.g. 'wizsearch', 'filesystem')."""
+        """Human-readable source name (e.g. 'web_search', 'filesystem')."""
         ...
 
     @property

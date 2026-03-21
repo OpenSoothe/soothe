@@ -1,4 +1,13 @@
-"""CLI tool classes for persistent shell execution."""
+"""Execution tools (RFC-0016 consolidation).
+
+Consolidates single-purpose execution tools into one module:
+- run_command: Execute shell commands synchronously
+- run_python: Execute Python code with session persistence
+- run_background: Run commands in background
+- kill_process: Terminate background processes
+
+Follows the pattern from image.py and audio.py.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +20,8 @@ from typing import Any, Literal
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools._internal.cli.shell import (
+from soothe.tools._internal.python_session_manager import get_session_manager
+from soothe.tools._internal.shell import (
     ANSI_ESCAPE,
     ShellHealthState,
     _shell_health_states,
@@ -22,24 +32,26 @@ from soothe.utils import expand_path
 logger = logging.getLogger(__name__)
 
 
-class CliTool(BaseTool):
-    """Execute CLI commands in a persistent shell session.
+class RunCommandTool(BaseTool):
+    """Execute a shell command synchronously.
 
-    This tool provides a persistent shell where commands can maintain
-    state (environment variables, working directory, etc.) across invocations.
-    Includes security controls to prevent dangerous operations.
+    Use this tool for running CLI commands, system commands, and scripts.
+    The command will execute and return output within the timeout period.
+    For long-running commands (>60s), use run_background instead.
     """
 
-    name: str = "run_cli"
+    name: str = "run_command"
     description: str = (
-        "Execute a CLI command in a persistent shell session. "
-        "Provide `command` (the command to run). "
-        "The shell maintains state across commands (env vars, cwd, etc.). "
-        "Returns the command output or error message."
+        "Execute a shell command and return output. "
+        "Use for: CLI tools, system commands, scripts. "
+        "Parameters: command (required) - the shell command to run. "
+        "Optional: timeout (default: 60 seconds). "
+        "Returns: command output (stdout + stderr). "
+        "For long-running commands (>60s), use run_background instead."
     )
 
-    workspace_root: str = Field(default="")
-    timeout: int = Field(default=60)
+    workspace_root: str = Field(default="", description="Working directory for shell")
+    timeout: int = Field(default=60, description="Command timeout in seconds")
     max_output_length: int = Field(default=10000)
     custom_prompt: str = Field(default="")
 
@@ -71,6 +83,8 @@ class CliTool(BaseTool):
             r"sudo\s+rm\s+-rf",
         ]
     )
+
+    _shell_initialized: bool = False
 
     def __init__(self, **data: Any) -> None:
         """Initialize the CLI tool.
@@ -306,13 +320,17 @@ class CliTool(BaseTool):
                     raise RuntimeError(msg) from e
 
     def _run(self, command: str) -> str:
-        """Execute CLI command with recovery support.
+        """Execute shell command synchronously.
 
         Args:
-            command: Command to execute
+            command: Shell command to execute
 
         Returns:
-            Command output (stripped, ANSI-cleaned) or error message
+            Combined stdout and stderr output
+
+        Raises:
+            TimeoutError: If command exceeds timeout
+            FileNotFoundError: If command not found (handled internally)
         """
         self._ensure_shell_initialized()
 
@@ -357,7 +375,7 @@ class CliTool(BaseTool):
 
                 return (
                     f"Error: Command timed out after {self.timeout}s. "
-                    f"For long-running operations, use run_cli_background instead, "
+                    f"For long-running operations, use run_background instead, "
                     f"or increase the timeout configuration."
                 )
 
@@ -401,86 +419,101 @@ class CliTool(BaseTool):
             return f"Error executing command: {e}"
 
     async def _arun(self, command: str) -> str:
-        """Async wrapper for sync execution."""
+        """Async execution (delegates to sync)."""
         return self._run(command)
 
     @classmethod
     def cleanup(cls) -> None:
-        """Clean up shell resources and health states."""
-        from soothe.tools._internal.cli.shell import cleanup_shell
+        """Cleanup shell instances and health states."""
+        from soothe.tools._internal.shell import cleanup_shell
 
         cleanup_shell("default")
 
 
-class GetCurrentDirTool(BaseTool):
-    """Get the current working directory."""
+class RunPythonTool(BaseTool):
+    """Execute Python code with session persistence.
 
-    name: str = "get_current_directory"
-    description: str = "Get the current working directory of the persistent shell."
+    Use this tool for data analysis, calculations, and Python scripting.
+    Variables persist across calls within the same thread, enabling iterative
+    workflows like loading data and then analyzing it in subsequent calls.
 
-    def _run(self) -> str:
-        """Get current working directory."""
-        if "default" not in _shell_instances:
-            return "Error: Shell not initialized."
+    Example:
+        Call 1: run_python(code="import pandas as pd\\ndf = pd.read_csv('data.csv')")
+        Call 2: run_python(code="df.head()")  # Works! df persists
+        Call 3: run_python(code="df.groupby('category').sum()")  # Continue analysis
+    """
 
-        try:
-            child = _shell_instances["default"]
-            child.sendline("pwd")
-            child.expect("soothe-cli>> ")
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-            return output.strip()
-        except Exception as e:
-            return f"Error: {e}"
-
-    async def _arun(self) -> str:
-        return self._run()
-
-
-class ListDirTool(BaseTool):
-    """List directory contents."""
-
-    name: str = "list_directory"
-    description: str = "List contents of a directory. Provide `path` (optional, defaults to current directory)."
-
-    def _run(self, path: str = ".") -> str:
-        """List directory contents.
-
-        Args:
-            path: Directory path to list (defaults to current directory).
-        """
-        if "default" not in _shell_instances:
-            return "Error: Shell not initialized."
-
-        try:
-            child = _shell_instances["default"]
-            child.sendline(f"ls -la '{path}'")
-            child.expect("soothe-cli>> ")
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-            return output.strip()
-        except Exception as e:
-            return f"Error: {e}"
-
-    async def _arun(self, path: str = ".") -> str:
-        return self._run(path)
-
-
-class RunCliBackgroundTool(BaseTool):
-    """Execute CLI commands in background."""
-
-    name: str = "run_cli_background"
+    name: str = "run_python"
     description: str = (
-        "Execute a CLI command in the background. "
-        "Provide `command` (the command to run). "
-        "Returns process ID for later management. "
-        "Use for long-running commands."
+        "Execute Python code with session persistence. "
+        "Variables persist across calls within the same thread. "
+        "Use for: data analysis, calculations, Python scripting. "
+        "Parameters: code (required) - Python code to execute. "
+        "Returns: execution result, output, or error."
     )
 
-    def _run(self, command: str) -> str:
-        """Execute command in background."""
+    workdir: str = Field(default="", description="Working directory")
+    timeout: int = Field(default=30, description="Execution timeout in seconds")
+    session_id: str | None = Field(
+        default=None, description="Session ID for persistence (default: auto-detected from thread)"
+    )
+
+    def _run(self, code: str, session_id: str | None = None) -> dict[str, Any]:
+        """Execute Python code in persistent session.
+
+        Args:
+            code: Python code to execute
+            session_id: Session identifier (default: thread_id from context or self.session_id)
+
+        Returns:
+            Dict with 'success', 'output', 'result', 'error'
+        """
+        # Use provided session_id or try to get from instance
+        actual_session_id = session_id or self.session_id
+
+        if actual_session_id is None:
+            # Default session ID
+            actual_session_id = "default"
+
+        # Get session manager and execute
+        manager = get_session_manager()
+        result = manager.execute(session_id=actual_session_id, code=code)
+
+        return result
+
+    async def _arun(self, code: str, session_id: str | None = None) -> dict[str, Any]:
+        """Async execution (delegates to sync)."""
+        return self._run(code, session_id)
+
+
+class RunBackgroundTool(BaseTool):
+    """Run a long-running command in the background.
+
+    Use this tool for commands that take a long time or need to continue
+    running while you do other tasks. The command will execute in the
+    background and you'll receive a process ID for tracking.
+    """
+
+    name: str = "run_background"
+    description: str = (
+        "Run a long-running command in the background. "
+        "Use for: training scripts, servers, long computations. "
+        "Parameters: command (required) - the command to run. "
+        "Returns: process ID for tracking. "
+        "Use kill_process to stop background commands."
+    )
+
+    def _run(self, command: str) -> dict[str, Any]:
+        """Execute command in background process.
+
+        Args:
+            command: Command to run in background
+
+        Returns:
+            Dict with 'pid', 'status', and 'message'
+        """
         if "default" not in _shell_instances:
-            return "Error: Shell not initialized."
+            return {"pid": None, "status": "error", "message": "Error: Shell not initialized."}
 
         try:
             child = _shell_instances["default"]
@@ -491,23 +524,39 @@ class RunCliBackgroundTool(BaseTool):
             output = ANSI_ESCAPE.sub("", output)
             pid = output.strip()
 
-        except Exception as e:
-            return f"Error starting background process: {e}"
-        else:
-            return f"Background process started with PID: {pid}"
+            return {"pid": int(pid), "status": "running", "message": f"Background process started with PID: {pid}"}
 
-    async def _arun(self, command: str) -> str:
+        except Exception as e:
+            return {"pid": None, "status": "error", "message": f"Error starting background process: {e}"}
+
+    async def _arun(self, command: str) -> dict[str, Any]:
+        """Async execution (delegates to sync)."""
         return self._run(command)
 
 
 class KillProcessTool(BaseTool):
-    """Terminate a background process."""
+    """Terminate a background process.
+
+    Use this tool to stop a command that was started with run_background.
+    You need the process ID (PID) that was returned when you started the command.
+    """
 
     name: str = "kill_process"
-    description: str = "Terminate a background process. Provide `pid` (process ID from run_cli_background)."
+    description: str = (
+        "Terminate a background process. "
+        "Parameters: pid (required) - process ID from run_background. "
+        "Returns: termination status."
+    )
 
-    def _run(self, pid: str) -> str:
-        """Kill process by PID."""
+    def _run(self, pid: int) -> str:
+        """Terminate background process.
+
+        Args:
+            pid: Process ID to terminate
+
+        Returns:
+            Status message
+        """
         if "default" not in _shell_instances:
             return "Error: Shell not initialized."
 
@@ -519,66 +568,35 @@ class KillProcessTool(BaseTool):
             output = child.before or ""
             output = ANSI_ESCAPE.sub("", output)
 
-        except Exception as e:
-            return f"Error killing process: {e}"
-        else:
             if "Process not found" in output:
                 return f"Process {pid} not found or already terminated"
             return f"Process {pid} terminated"
 
-    async def _arun(self, pid: str) -> str:
+        except Exception as e:
+            return f"Error killing process: {e}"
+
+    async def _arun(self, pid: int) -> str:
+        """Async execution (delegates to sync)."""
         return self._run(pid)
 
 
-class CheckCommandExistsTool(BaseTool):
-    """Check if a command is available."""
+def create_execution_tools(
+    *,
+    workspace_root: str = "",
+    timeout: int = 60,
+) -> list[BaseTool]:
+    """Create all execution tools.
 
-    name: str = "check_command_exists"
-    description: str = (
-        "Check if a CLI command/tool is available on the system. Provide `command` (the command name to check)."
-    )
-
-    def _run(self, command: str) -> str:
-        """Check if command exists."""
-        if "default" not in _shell_instances:
-            return "Error: Shell not initialized."
-
-        try:
-            child = _shell_instances["default"]
-            child.sendline(f"which {command}")
-            child.expect("soothe-cli>> ")
-
-            output = child.before or ""
-            output = ANSI_ESCAPE.sub("", output)
-
-            if "not found" in output.lower() or not output.strip():
-                return f"Command '{command}' not found"
-            return f"Command '{command}' is available at: {output.strip()}"
-
-        except Exception as e:
-            return f"Error checking command: {e}"
-
-    async def _arun(self, command: str) -> str:
-        return self._run(command)
-
-
-def create_cli_tools() -> list[BaseTool]:
-    """Create CLI execution tools.
+    Args:
+        workspace_root: Working directory for shell sessions.
+        timeout: Default timeout for shell commands.
 
     Returns:
-        List containing CLI tools:
-        - run_cli: Execute CLI commands
-        - get_current_directory: Get current working directory
-        - list_directory: List directory contents
-        - run_cli_background: Execute commands in background
-        - kill_process: Terminate background processes
-        - check_command_exists: Verify command availability
+        List of execution BaseTool instances.
     """
     return [
-        CliTool(),
-        GetCurrentDirTool(),
-        ListDirTool(),
-        RunCliBackgroundTool(),
+        RunCommandTool(workspace_root=workspace_root, timeout=timeout),
+        RunPythonTool(workdir=workspace_root),
+        RunBackgroundTool(),
         KillProcessTool(),
-        CheckCommandExistsTool(),
     ]

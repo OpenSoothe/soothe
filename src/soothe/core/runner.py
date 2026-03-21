@@ -439,42 +439,68 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 yield chunk
             return
 
-        # -- Non-chitchat: tier-2 enrichment + pre-stream independent -------
-        enrichment_task: asyncio.Task | None = None
-        if self._unified_classifier:
-            enrichment_task = asyncio.create_task(
-                self._unified_classifier.classify_enrichment(user_input, complexity),
+        # -- Non-chitchat: planning + pre-stream independent -------
+        # Start planning concurrently with I/O
+        from soothe.protocols.planner import Plan, PlanContext, PlanStep
+
+        planning_task = asyncio.create_task(
+            self._planner.create_plan(
+                user_input,
+                PlanContext(
+                    recent_messages=[user_input],
+                    available_capabilities=[name for name, cfg in self._config.subagents.items() if cfg.enabled],
+                    completed_steps=[],
+                    unified_classification=routing,  # Pass routing directly
+                ),
             )
+        )
 
         # Run independent pre-stream (thread, policy, memory, context)
-        # concurrently with the tier-2 enrichment LLM call.
+        # concurrently with planning.
         collected_chunks = [
             chunk async for chunk in self._pre_stream_independent(user_input, state, complexity=complexity)
         ]
 
-        # Await tier-2 enrichment and merge into UnifiedClassification
-        if enrichment_task is not None:
-            enrichment = await enrichment_task
-            state.unified_classification = UnifiedClassification.from_tiers(routing, enrichment)
+        # Await planning
+        try:
+            plan = await planning_task
+            state.plan = plan
+            self._current_plan = plan
+            state.unified_classification = UnifiedClassification.from_routing(routing)
             logger.info(
-                "Tier-2 enrichment: template_intent=%s, plan_only=%s - %s",
-                state.unified_classification.template_intent,
-                state.unified_classification.is_plan_only,
+                "Unified planning completed: %d steps, plan_only=%s - %s",
+                len(plan.steps),
+                plan.is_plan_only,
                 user_input[:50],
             )
-        else:
-            state.unified_classification = None
+        except Exception:
+            logger.exception("Planning failed")
+            # Fallback to single-step plan
+            plan = Plan(
+                goal=user_input,
+                steps=[PlanStep(id="step_1", description=user_input)],
+                is_plan_only=False,
+            )
+            state.plan = plan
+            state.unified_classification = UnifiedClassification.from_routing(routing)
 
         # Yield all collected independent pre-stream events
         for chunk in collected_chunks:
             yield chunk
 
-        # -- Planning phase (needs template_intent from enrichment) ---------
-        async for chunk in self._pre_stream_planning(user_input, state):
-            yield chunk
+        # -- Planning phase (emit plan created event) -----------------------
+        if state.plan:
+            from soothe.cli.rendering.events import PlanCreatedEvent
+
+            yield _custom(
+                PlanCreatedEvent(
+                    goal=state.plan.goal,
+                    steps=[{"id": s.id, "description": s.description} for s in state.plan.steps],
+                ).to_dict()
+            )
 
         # -- Execute ---------------------------------------------------------
-        is_plan_only = state.unified_classification and state.unified_classification.is_plan_only
+        is_plan_only = state.plan and state.plan.is_plan_only
 
         if state.plan and is_plan_only:
             yield _custom(

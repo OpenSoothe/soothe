@@ -69,7 +69,7 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     if domain == "output":
         return "assistant_text"
     if domain == "tool":
-        return "tool_activity"
+        return "protocol"
     if domain == "subagent":
         if "thinking" in etype or "heartbeat" in etype:
             return "thinking"

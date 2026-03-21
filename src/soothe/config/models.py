@@ -298,33 +298,64 @@ class BrowserSubagentConfig(BaseModel):
     profile_mode: Literal["persistent", "ephemeral"] = "ephemeral"
 
 
-class WizsearchConfig(BaseModel):
-    """Configuration for wizsearch tools.
+class ToolConfig(BaseModel):
+    """Base configuration for tool groups.
 
     Args:
-        enabled: Whether wizsearch tools are enabled.
+        enabled: Whether this tool group is enabled.
+    """
+
+    enabled: bool = True
+
+
+class WebSearchConfig(ToolConfig):
+    """Configuration for web search tools.
+
+    Args:
+        enabled: Whether web search tools are enabled.
         default_engines: List of default search engines to use.
         max_results_per_engine: Maximum results per search engine.
         timeout: Request timeout in seconds.
 
-    Note: The crawler runs in headless mode by default (BrowserConfig default in wizsearch).
+    Note: The crawler runs in headless mode by default (BrowserConfig default in wizsearch backend).
     """
 
-    enabled: bool = True
     default_engines: list[str] = Field(default_factory=lambda: ["tavily", "duckduckgo"])
     max_results_per_engine: int = 10
     timeout: int = 30
 
 
-class ToolsSettings(BaseModel):
-    """Configuration for individual tool groups.
+class ToolsConfig(BaseModel):
+    """Configuration for all tool groups.
+
+    Each tool group can be enabled/disabled and have specific settings.
+    Tool groups not listed here use defaults.
 
     Args:
-        wizsearch: Wizsearch tool configuration.
+        execution: Execution tools config (run_command, run_python, etc.).
+        file_ops: File operation tools config.
+        code_edit: Code editing tools config.
+        datetime: DateTime tool config.
+        data: Data inspection tools config.
+        web_search: Web search tools config.
+        research: Research tools config.
+        image: Image analysis tools config.
+        audio: Audio transcription tools config.
+        video: Video analysis tools config.
+        github: GitHub API tools config.
     """
 
-    wizsearch: WizsearchConfig = Field(default_factory=WizsearchConfig)
-    """Wizsearch tools configuration."""
+    execution: ToolConfig = Field(default_factory=ToolConfig)
+    file_ops: ToolConfig = Field(default_factory=ToolConfig)
+    code_edit: ToolConfig = Field(default_factory=ToolConfig)
+    datetime: ToolConfig = Field(default_factory=ToolConfig)
+    data: ToolConfig = Field(default_factory=ToolConfig)
+    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
+    research: ToolConfig = Field(default_factory=ToolConfig)
+    image: ToolConfig = Field(default_factory=ToolConfig)
+    audio: ToolConfig = Field(default_factory=ToolConfig)
+    video: ToolConfig = Field(default_factory=ToolConfig)
+    github: ToolConfig = Field(default_factory=ToolConfig)
 
 
 class PersistenceConfig(BaseModel):

@@ -19,7 +19,12 @@ tests/
 │   └── test_vector_store.py
 └── integration_tests/    # Integration tests (require external services)
     ├── conftest.py
-    └── test_vector_store_integration.py
+    ├── test_tool_integration_real_llm.py
+    ├── test_vector_store_integration.py
+    ├── test_performance.py
+    ├── test_tools_integration.py
+    ├── test_system_prompt_optimization_integration.py
+    └── test_python_session_integration.py
 ```
 
 ## Running Tests
@@ -101,6 +106,24 @@ The test suite covers the following modules:
    - PGVectorStore: CRUD operations with real PostgreSQL database
    - WeaviateVectorStore: CRUD operations with real Weaviate instance
    - Search functionality, filtering, batch operations
+
+2. **Tool Integration with Real LLM** (`test_tool_integration_real_llm.py`)
+   - Tool execution with real language model API calls
+   - End-to-end tool usage workflows
+
+3. **Performance Tests** (`test_performance.py`)
+   - Query latency benchmarks with real LLM API calls
+   - Complexity classification performance
+   - Template planning and conditional execution
+
+4. **Tools Integration** (`test_tools_integration.py`)
+   - Real shell command execution (requires pexpect)
+   - Real Python execution with IPython
+   - Audio/video tool integration (requires API keys)
+
+5. **System Prompt Optimization Integration** (`test_system_prompt_optimization_integration.py`)
+   - End-to-end prompt optimization with real LLM instances
+   - Middleware registration and configuration
 
 ## Test Dependencies
 

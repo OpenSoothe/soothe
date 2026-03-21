@@ -80,3 +80,44 @@ def server_status() -> None:
         typer.echo(f"Soothe daemon is running (PID: {pid})")
     else:
         typer.echo("Soothe daemon is not running.")
+
+
+def server_attach(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    thread_id: Annotated[
+        str | None,
+        typer.Option("--thread-id", "-t", help="Thread ID to resume."),
+    ] = None,
+    progress_verbosity: Annotated[
+        str | None,
+        typer.Option("--progress-verbosity", help="Progress detail level."),
+    ] = None,
+) -> None:
+    """Attach TUI to running daemon.
+
+    Examples:
+        soothe server attach
+        soothe server attach --thread-id abc123
+    """
+    from soothe.cli.core import load_config
+    from soothe.cli.daemon import SootheDaemon
+
+    if not SootheDaemon.is_running():
+        typer.echo("Error: No daemon running. Use 'soothe server start'.", err=True)
+        sys.exit(1)
+
+    cfg = load_config(config)
+    if progress_verbosity is not None:
+        logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+        cfg = cfg.model_copy(update={"logging": logging_config})
+
+    try:
+        from soothe.cli.tui import run_textual_tui
+
+        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config)
+    except ImportError:
+        typer.echo("Error: Textual is required for TUI. Install: pip install 'textual>=0.40.0'", err=True)
+        sys.exit(1)

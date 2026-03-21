@@ -7,18 +7,31 @@ from typing import Annotated
 import typer
 
 from soothe.cli.core import load_config
-from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
 
-def list_subagents(
+def agent_list(
     config: Annotated[
         str | None,
-        typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
+        typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    enabled: Annotated[
+        bool,
+        typer.Option("--enabled", help="Show only enabled agents."),
+    ] = False,
+    disabled: Annotated[
+        bool,
+        typer.Option("--disabled", help="Show only disabled agents."),
+    ] = False,
 ) -> None:
-    """List available subagents and their enabled/disabled status."""
+    """List available agents and their status.
+
+    Examples:
+        soothe agent list
+        soothe agent list --enabled
+        soothe agent list --disabled
+    """
     try:
         cfg = load_config(config)
 
@@ -26,17 +39,24 @@ def list_subagents(
 
         from soothe.cli.commands.subagent_names import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
 
-        table = Table(title="Available Subagents")
+        table = Table(title="Available Agents")
         table.add_column("Name", style="cyan")
         table.add_column("Technical ID", style="yellow")
         table.add_column("Status", justify="center")
 
         for subagent_id in BUILTIN_SUBAGENT_NAMES:
-            display_name = SUBAGENT_DISPLAY_NAMES[subagent_id]
-            enabled = True
+            is_enabled = True
             if subagent_id in cfg.subagents:
-                enabled = cfg.subagents[subagent_id].enabled
-            status = "[green]✓ enabled[/green]" if enabled else "[red]✗ disabled[/red]"
+                is_enabled = cfg.subagents[subagent_id].enabled
+
+            # Filter by status
+            if enabled and not is_enabled:
+                continue
+            if disabled and is_enabled:
+                continue
+
+            display_name = SUBAGENT_DISPLAY_NAMES[subagent_id]
+            status = "[green]✓ enabled[/green]" if is_enabled else "[red]✗ disabled[/red]"
             table.add_row(display_name, subagent_id, status)
 
         typer.echo(table)
@@ -44,30 +64,39 @@ def list_subagents(
         # Also show custom subagents if any
         custom_subagents = set(cfg.subagents.keys()) - set(BUILTIN_SUBAGENT_NAMES)
         if custom_subagents:
-            typer.echo("\nCustom subagents:")
+            typer.echo("\nCustom agents:")
             for subagent_id in sorted(custom_subagents):
-                enabled = cfg.subagents[subagent_id].enabled
-                status = "enabled" if enabled else "disabled"
+                is_enabled = cfg.subagents[subagent_id].enabled
+                status = "enabled" if is_enabled else "disabled"
                 typer.echo(f"  - {subagent_id}: {status}")
 
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.")
         sys.exit(0)
     except Exception as e:
-        logger.exception("Config generation error")
+        logger.exception("Agent list error")
         from soothe.utils.error_format import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
 
 
-def list_subagents_status() -> None:
-    """List all available subagents and their status."""
+def agent_status(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Show detailed agent status.
+
+    Examples:
+        soothe agent status
+    """
     try:
-        cfg = SootheConfig()
+        cfg = load_config(config)
         from soothe.core.resolver import SUBAGENT_FACTORIES as _SUBAGENT_FACTORIES
 
-        typer.echo("\nAvailable Subagents:")
+        typer.echo("\nAgent Status:")
         typer.echo("-" * 50)
         for name, sub_cfg in cfg.subagents.items():
             status = "enabled" if sub_cfg.enabled else "disabled"
@@ -78,93 +107,7 @@ def list_subagents_status() -> None:
         typer.echo(f"\nTotal configured: {len([s for s in cfg.subagents.values() if s.enabled])} active")
         typer.echo(f"Total available: {len(_SUBAGENT_FACTORIES)}")
     except Exception as e:
-        logger.exception("Subagents list error")
-        from soothe.utils.error_format import format_cli_error
-
-        typer.echo(f"Error: {format_cli_error(e)}", err=True)
-        sys.exit(1)
-
-
-def show_config(
-    *,
-    show_sensitive: Annotated[
-        bool,
-        typer.Option("--show-sensitive", "-s", help="Show sensitive values like API keys."),
-    ] = False,
-) -> None:
-    """Display current configuration."""
-    try:
-        cfg = SootheConfig()
-
-        typer.echo("\nSoothe Configuration:")
-        typer.echo("=" * 50)
-
-        typer.echo("\n[Model Router]")
-        typer.echo(f"  default: {cfg.router.default}")
-        for role in ("think", "fast", "image", "embedding"):
-            value = getattr(cfg.router, role, None)
-            if value:
-                typer.echo(f"  {role}: {value}")
-
-        typer.echo("\n[Providers]")
-        if cfg.providers:
-            for p in cfg.providers:
-                key_display = "[REDACTED]" if p.api_key and not show_sensitive else (p.api_key or "(not set)")
-                typer.echo(
-                    f"  {p.name}: type={p.provider_type}, url={p.api_base_url or '(default)'}, key={key_display}"
-                )
-        else:
-            typer.echo("  (none)")
-
-        typer.echo(f"  debug: {cfg.debug}")
-
-        typer.echo("\n[Tools]")
-        if cfg.tools:
-            for tool in cfg.tools:
-                typer.echo(f"  - {tool}")
-        else:
-            typer.echo("  (none)")
-
-        typer.echo("\n[Subagents]")
-        for name, sub_cfg in cfg.subagents.items():
-            status = "enabled" if sub_cfg.enabled else "disabled"
-            typer.echo(f"  {name}: {status}")
-
-        typer.echo("\n[MCP Servers]")
-        if cfg.mcp_servers:
-            for i, server in enumerate(cfg.mcp_servers, 1):
-                if server.command:
-                    typer.echo(f"  {i}. {server.command} {' '.join(server.args)}")
-                elif server.url:
-                    typer.echo(f"  {i}. HTTP: {server.url}")
-        else:
-            typer.echo("  (none)")
-
-        typer.echo("\n[Protocols]")
-        typer.echo(f"  context_backend: {cfg.protocols.context.backend}")
-        typer.echo(f"  memory_backend: {cfg.protocols.memory.backend}")
-        typer.echo(f"  planner_routing: {cfg.protocols.planner.routing}")
-
-        typer.echo("\n[Vector Stores]")
-        if cfg.vector_stores:
-            for vs in cfg.vector_stores:
-                typer.echo(f"  - {vs.name} ({vs.provider_type})")
-        else:
-            typer.echo("  (none)")
-
-        if cfg.vector_store_router.default:
-            typer.echo(f"\n  Router default: {cfg.vector_store_router.default}")
-        if cfg.vector_store_router.context:
-            typer.echo(f"  Router context: {cfg.vector_store_router.context}")
-        if cfg.vector_store_router.skillify:
-            typer.echo(f"  Router skillify: {cfg.vector_store_router.skillify}")
-        if cfg.vector_store_router.weaver_reuse:
-            typer.echo(f"  Router weaver_reuse: {cfg.vector_store_router.weaver_reuse}")
-
-        typer.echo("\n" + "=" * 50)
-
-    except Exception as e:
-        logger.exception("Show config error")
+        logger.exception("Agent status error")
         from soothe.utils.error_format import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)

@@ -7,7 +7,10 @@ from typing import Any
 
 from rich.text import Text
 
-from soothe.cli.message_processing import extract_tool_brief as _extract_tool_brief
+from soothe.cli.message_processing import (
+    extract_tool_brief as _extract_tool_brief,
+    format_tool_call_args,
+)
 from soothe.cli.progress_verbosity import ProgressVerbosity, should_show
 from soothe.cli.tui.state import TuiState
 from soothe.core.events import (
@@ -29,6 +32,7 @@ from soothe.core.events import (
     TOOL_WEBSEARCH_SEARCH_FAILED,
     TOOL_WEBSEARCH_SEARCH_STARTED,
 )
+from soothe.tools.display_names import get_tool_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -318,16 +322,32 @@ def _handle_tool_call_activity(
     *,
     prefix: str | None = None,
     verbosity: ProgressVerbosity = "normal",
+    tool_call: dict[str, Any] | None = None,
 ) -> None:
-    """Render tool-call activity line based on verbosity."""
-    if not name or not should_show("tool_activity", verbosity):
+    """Render tool-call activity line with user-friendly name."""
+    if not name or not should_show("protocol", verbosity):
         return
+
+    # Convert snake_case to CamelCase
+    display_name = get_tool_display_name(name)
+
+    # Format arguments if available
+    args_str = ""
+    if tool_call:
+        args_str = format_tool_call_args(name, tool_call)
+
     if prefix:
         _add_activity_from_event(
-            state, Text.assemble(("  . ", "dim"), (f"[{prefix}] [tool] Calling: {name}", "blue")), {}
+            state,
+            Text.assemble(("  . ", "dim"), (f"[{prefix}] {display_name}{args_str}", "blue")),
+            {},
         )
     else:
-        _add_activity_from_event(state, Text.assemble(("  . ", "dim"), (f"Calling {name}", "blue")), {})
+        _add_activity_from_event(
+            state,
+            Text.assemble(("  . ", "dim"), (f"{display_name}{args_str}", "blue")),
+            {},
+        )
 
 
 def _handle_tool_result_activity(
@@ -338,19 +358,25 @@ def _handle_tool_result_activity(
     prefix: str | None = None,
     verbosity: ProgressVerbosity = "normal",
 ) -> None:
-    """Render tool-result activity line based on verbosity."""
-    if not should_show("tool_activity", verbosity):
+    """Render tool-result activity line with user-friendly name."""
+    if not should_show("protocol", verbosity):
         return
+
+    # Convert snake_case to CamelCase
+    display_name = get_tool_display_name(tool_name)
+
     brief = _extract_tool_brief(tool_name, content)
     if prefix:
         _add_activity_from_event(
             state,
-            Text.assemble(("  > ", "dim green"), (f"[{prefix}] {tool_name}", "green"), ("  ", ""), (brief, "dim")),
+            Text.assemble(("  > ", "dim green"), (f"[{prefix}] {display_name}", "green"), ("  ", ""), (brief, "dim")),
             {},
         )
     else:
         _add_activity_from_event(
-            state, Text.assemble(("  > ", "dim green"), (tool_name, "green"), ("  ", ""), (brief, "dim")), {}
+            state,
+            Text.assemble(("  > ", "dim green"), (display_name, "green"), ("  ", ""), (brief, "dim")),
+            {},
         )
 
 

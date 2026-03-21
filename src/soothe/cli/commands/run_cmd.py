@@ -3,7 +3,7 @@
 import logging
 import sys
 import time
-from typing import Annotated, Literal
+from typing import Literal
 
 import typer
 
@@ -13,53 +13,28 @@ from soothe.cli.execution import check_postgres_available, run_headless, run_tui
 logger = logging.getLogger(__name__)
 
 
-def run(
-    prompt: Annotated[
-        str | None,
-        typer.Argument(help="Prompt to send to the agent. Omit for interactive TUI."),
-    ] = None,
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
-    ] = None,
-    thread: Annotated[
-        str | None,
-        typer.Option("--thread", "-t", help="Thread ID to resume."),
-    ] = None,
-    *,
-    no_tui: Annotated[
-        bool,
-        typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
-    ] = False,
-    autonomous: Annotated[
-        bool,
-        typer.Option("--autonomous", "-a", help="Enable autonomous iteration mode."),
-    ] = False,
-    max_iterations: Annotated[
-        int | None,
-        typer.Option("--max-iterations", help="Max iterations for autonomous mode."),
-    ] = None,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
-    ] = "text",
-    progress_verbosity: Annotated[
-        Literal["minimal", "normal", "detailed", "debug"] | None,
-        typer.Option(
-            "--progress-verbosity",
-            help="Progress visibility: minimal, normal, detailed, debug.",
-        ),
-    ] = None,
-    continue_last: Annotated[
-        bool,
-        typer.Option("--continue", "-C", help="Continue the most recent thread."),
-    ] = False,
-    list_threads: Annotated[
-        bool,
-        typer.Option("--list-threads", help="List all threads and exit."),
-    ] = False,
+def run_impl(
+    prompt: str | None,
+    config: str | None,
+    thread_id: str | None,
+    no_tui: bool,
+    autonomous: bool,
+    max_iterations: int | None,
+    output_format: str,
+    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
 ) -> None:
-    """Run the Soothe agent with a prompt or in interactive TUI mode."""
+    """Core implementation for running Soothe agent.
+
+    Args:
+        prompt: Optional prompt for headless mode
+        config: Path to config file
+        thread_id: Thread ID to resume
+        no_tui: Force headless mode
+        autonomous: Enable autonomous iteration mode
+        max_iterations: Max iterations for autonomous mode
+        output_format: Output format (text or jsonl)
+        progress_verbosity: Progress detail level
+    """
     startup_start = time.perf_counter()
 
     try:
@@ -69,60 +44,6 @@ def run(
             cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
         migrate_rocksdb_to_data_subfolder()
-
-        # Handle --list-threads flag
-        if list_threads:
-            import asyncio
-
-            from soothe.core.runner import SootheRunner
-
-            runner = SootheRunner(cfg)
-
-            async def _list() -> None:
-                try:
-                    threads = await runner.list_threads()
-                    if not threads:
-                        typer.echo("No threads.")
-                        return
-                    typer.echo(f"{'ID':<10}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}")
-                    typer.echo("─" * 65)
-                    for t in threads:
-                        tid = t.get("thread_id", "?")
-                        t_status = t.get("status", "?")
-                        created = str(t.get("created_at", "?"))[:19]
-                        last_msg = str(t.get("updated_at", "?"))[:19]
-                        typer.echo(f"{tid:<10}  {t_status:<10}  {created:<19}  {last_msg:<19}")
-                finally:
-                    # Clean up runner resources to avoid hanging
-                    if hasattr(runner, "cleanup"):
-                        await runner.cleanup()
-
-            asyncio.run(_list())
-            return
-
-        # Resolve thread ID for --continue flag
-        thread_id = thread
-        if continue_last and not thread_id:
-            import asyncio
-
-            from soothe.core.runner import SootheRunner
-
-            runner = SootheRunner(cfg)
-
-            async def _get_last_thread() -> str | None:
-                threads = await runner.list_threads()
-                if not threads:
-                    return None
-                # Sort by updated_at descending and get the most recent active thread
-                active_threads = [t for t in threads if t.get("status") == "active"]
-                if not active_threads:
-                    return None
-                active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-                return active_threads[0].get("thread_id")
-
-            thread_id = asyncio.run(_get_last_thread())
-            if thread_id:
-                logger.info("Continuing thread %s", thread_id)
 
         # Check PostgreSQL availability if checkpointer is postgresql
         if cfg.protocols.durability.checkpointer == "postgresql" and not check_postgres_available():

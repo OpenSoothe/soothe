@@ -9,31 +9,36 @@ from pathlib import Path
 import pytest
 
 from soothe.tools._internal.file_edit import (
-    CreateFileTool,
+    _detect_stripped_absolute_path,
+    _display_path,
+    _normalize_workspace_relative_input,
+)
+from soothe.tools.file_ops import (
     DeleteFileTool,
-    GetFileInfoTool,
+    FileInfoTool,
     ListFilesTool,
     ReadFileTool,
-    SearchInFilesTool,
-    create_file_edit_tools,
+    SearchFilesTool,
+    WriteFileTool,
+    create_file_ops_tools,
 )
 
 
-class TestCreateFileTool:
-    """Test CreateFileTool functionality."""
+class TestWriteFileTool:
+    """Test WriteFileTool functionality."""
 
     def test_tool_metadata(self) -> None:
         """Test tool metadata."""
-        tool = CreateFileTool()
+        tool = WriteFileTool()
 
-        assert tool.name == "create_file"
-        assert "create" in tool.description.lower()
+        assert tool.name == "write_file"
+        assert "write" in tool.description.lower()
         assert "file" in tool.description.lower()
 
     def test_create_new_file(self) -> None:
         """Test creating a new file."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir)
 
             result = tool._run("test.txt", "Hello, World!")
 
@@ -48,7 +53,7 @@ class TestCreateFileTool:
     def test_create_file_in_subdirectory(self) -> None:
         """Test creating file in subdirectory."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir)
 
             result = tool._run("subdir/test.txt", "Hello, World!")
 
@@ -62,7 +67,7 @@ class TestCreateFileTool:
     def test_create_existing_file_without_overwrite(self) -> None:
         """Test creating file that already exists without overwrite."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir)
 
             # Create file first time
             tool._run("test.txt", "Original content")
@@ -74,15 +79,15 @@ class TestCreateFileTool:
             assert "already exists" in result.lower()
 
     def test_create_existing_file_with_overwrite(self) -> None:
-        """Test creating file that already exists with overwrite."""
+        """Test creating file that already exists with backup enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir, backup_enabled=False)
+            tool = WriteFileTool(work_dir=temp_dir, backup_enabled=True)
 
             # Create file first time
             tool._run("test.txt", "Original content")
 
-            # Overwrite
-            result = tool._run("test.txt", "New content", overwrite=True)
+            # Overwrite (works because backup_enabled=True)
+            result = tool._run("test.txt", "New content")
 
             assert "Created:" in result
 
@@ -93,20 +98,20 @@ class TestCreateFileTool:
     def test_create_file_with_backup(self) -> None:
         """Test creating file with backup enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir, backup_enabled=True)
+            tool = WriteFileTool(work_dir=temp_dir, backup_enabled=True)
 
             # Create file first time
             tool._run("test.txt", "Original content")
 
             # Overwrite
-            result = tool._run("test.txt", "New content", overwrite=True)
+            result = tool._run("test.txt", "New content")
 
             assert "backup:" in result.lower()
 
     def test_path_outside_workdir(self) -> None:
         """Test that paths outside work directory are rejected."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir)
 
             result = tool._run("/etc/passwd", "test")
 
@@ -116,7 +121,7 @@ class TestCreateFileTool:
     def test_path_outside_workdir_allowed(self) -> None:
         """Test that paths outside work directory are allowed when flag is set."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir, allow_outside_workdir=True)
+            tool = WriteFileTool(work_dir=temp_dir, allow_outside_workdir=True)
 
             # Create a file outside the work directory
             outside_dir = Path(tempfile.mkdtemp())
@@ -136,7 +141,7 @@ class TestCreateFileTool:
     def test_normalize_stripped_absolute_path_into_workdir(self) -> None:
         """Stripped absolute path should normalize to a workdir-relative path."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir)
 
             stripped_abs = str(Path(temp_dir).resolve()).lstrip("/") + "/nested/test.txt"
             result = tool._run(stripped_abs, "Hello")
@@ -146,12 +151,12 @@ class TestCreateFileTool:
             assert (Path(temp_dir) / "nested" / "test.txt").exists()
 
     def test_async_create_honors_overwrite_keyword(self) -> None:
-        """Async wrapper should pass overwrite as keyword-only."""
+        """Async wrapper should work with backup enabled."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = CreateFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir, backup_enabled=True)
             tool._run("async.txt", "old")
 
-            result = asyncio.run(tool._arun("async.txt", "new", overwrite=True))
+            result = asyncio.run(tool._arun("async.txt", "new"))
             assert "Created:" in result
             assert (Path(temp_dir) / "async.txt").read_text() == "new"
 
@@ -254,13 +259,13 @@ class TestDeleteFileTool:
             assert "backup:" in result.lower()
 
     def test_async_delete_honors_backup_keyword(self) -> None:
-        """Async wrapper should pass backup as keyword-only."""
+        """Async wrapper should work correctly."""
         with tempfile.TemporaryDirectory() as temp_dir:
             file_path = Path(temp_dir) / "test.txt"
             file_path.write_text("Hello, World!")
             tool = DeleteFileTool(work_dir=temp_dir, backup_enabled=False)
 
-            result = asyncio.run(tool._arun("test.txt", backup=False))
+            result = asyncio.run(tool._arun("test.txt"))
 
             assert "Deleted:" in result
             assert not file_path.exists()
@@ -285,7 +290,7 @@ class TestListFilesTool:
 
             tool = ListFilesTool(work_dir=temp_dir)
 
-            result = tool._run(".")
+            result = tool._run(pattern="*")
 
             assert "file1.txt" in result
             assert "file2.py" in result
@@ -299,7 +304,7 @@ class TestListFilesTool:
 
             tool = ListFilesTool(work_dir=temp_dir)
 
-            result = tool._run(".", pattern="*.txt")
+            result = tool._run(pattern="*.txt")
 
             assert "file1.txt" in result
             assert "file2.py" not in result
@@ -312,19 +317,19 @@ class TestListFilesTool:
             (nested / "deep.txt").write_text("content")
 
             tool = ListFilesTool(work_dir=temp_dir)
-            result = asyncio.run(tool._arun(".", pattern="*.txt", recursive=True))
+            result = asyncio.run(tool._arun(pattern="*.txt", recursive=True))
 
             assert "deep.txt" in result
 
 
-class TestSearchInFilesTool:
-    """Test SearchInFilesTool functionality."""
+class TestSearchFilesTool:
+    """Test SearchFilesTool functionality."""
 
     def test_tool_metadata(self) -> None:
         """Test tool metadata."""
-        tool = SearchInFilesTool()
+        tool = SearchFilesTool()
 
-        assert tool.name == "search_in_files"
+        assert tool.name == "search_files"
         assert "search" in tool.description.lower()
 
     def test_search_in_files(self) -> None:
@@ -334,7 +339,7 @@ class TestSearchInFilesTool:
             (Path(temp_dir) / "file1.txt").write_text("Hello, World!")
             (Path(temp_dir) / "file2.txt").write_text("Goodbye, World!")
 
-            tool = SearchInFilesTool(work_dir=temp_dir)
+            tool = SearchFilesTool(work_dir=temp_dir)
 
             result = tool._run("Hello")
 
@@ -348,7 +353,7 @@ class TestSearchInFilesTool:
             (Path(temp_dir) / "file1.txt").write_text("Hello, World!")
             (Path(temp_dir) / "file2.py").write_text("Hello, Python!")
 
-            tool = SearchInFilesTool(work_dir=temp_dir)
+            tool = SearchFilesTool(work_dir=temp_dir)
 
             result = tool._run("Hello", file_pattern="*.txt")
 
@@ -361,21 +366,21 @@ class TestSearchInFilesTool:
             # Create test file
             (Path(temp_dir) / "file.txt").write_text("Hello, World!")
 
-            tool = SearchInFilesTool(work_dir=temp_dir)
+            tool = SearchFilesTool(work_dir=temp_dir)
 
             result = tool._run("Nonexistent")
 
             assert "No matches found" in result
 
 
-class TestGetFileInfoTool:
-    """Test GetFileInfoTool functionality."""
+class TestFileInfoTool:
+    """Test FileInfoTool functionality."""
 
     def test_tool_metadata(self) -> None:
         """Test tool metadata."""
-        tool = GetFileInfoTool()
+        tool = FileInfoTool()
 
-        assert tool.name == "get_file_info"
+        assert tool.name == "file_info"
         assert "info" in tool.description.lower() or "metadata" in tool.description.lower()
 
     def test_get_file_info(self) -> None:
@@ -385,7 +390,7 @@ class TestGetFileInfoTool:
             file_path = Path(temp_dir) / "test.txt"
             file_path.write_text("Hello, World!")
 
-            tool = GetFileInfoTool(work_dir=temp_dir)
+            tool = FileInfoTool(work_dir=temp_dir)
 
             result = tool._run("test.txt")
 
@@ -396,7 +401,7 @@ class TestGetFileInfoTool:
     def test_get_nonexistent_file_info(self) -> None:
         """Test getting info for non-existent file."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = GetFileInfoTool(work_dir=temp_dir)
+            tool = FileInfoTool(work_dir=temp_dir)
 
             result = tool._run("nonexistent.txt")
 
@@ -407,24 +412,24 @@ class TestGetFileInfoTool:
 class TestCreateFileEditTools:
     """Test factory function."""
 
-    def test_create_file_edit_tools(self) -> None:
+    def test_create_file_ops_tools(self) -> None:
         """Test factory function creates all tools."""
-        tools = create_file_edit_tools()
+        tools = create_file_ops_tools()
 
         assert len(tools) == 6
 
         tool_names = {tool.name for tool in tools}
-        assert "create_file" in tool_names
+        assert "write_file" in tool_names
         assert "read_file" in tool_names
         assert "delete_file" in tool_names
         assert "list_files" in tool_names
-        assert "search_in_files" in tool_names
-        assert "get_file_info" in tool_names
+        assert "search_files" in tool_names
+        assert "file_info" in tool_names
 
-    def test_create_file_edit_tools_propagates_work_dir(self) -> None:
+    def test_create_file_ops_tools_propagates_work_dir(self) -> None:
         """Factory should propagate work_dir to all file tools."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tools = create_file_edit_tools(work_dir=temp_dir)
+            tools = create_file_ops_tools(work_dir=temp_dir)
             expected = Path(temp_dir).resolve()
             for tool in tools:
                 assert Path(getattr(tool, "work_dir", "")).resolve() == expected
@@ -437,8 +442,6 @@ class TestStrippedAbsolutePathDetection:
         """Test detection of stripped macOS home directory paths."""
         if platform.system() != "Darwin":
             pytest.skip("macOS only")
-
-        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -453,8 +456,6 @@ class TestStrippedAbsolutePathDetection:
         if platform.system() != "Linux":
             pytest.skip("Linux only")
 
-        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
-
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
@@ -465,8 +466,6 @@ class TestStrippedAbsolutePathDetection:
 
     def test_normal_relative_path_not_detected(self) -> None:
         """Normal relative paths should not trigger detection."""
-        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
-
         result = _detect_stripped_absolute_path("output/report.md")
         assert result is None
 
@@ -475,8 +474,6 @@ class TestStrippedAbsolutePathDetection:
 
     def test_already_absolute_path_not_detected(self) -> None:
         """Already absolute paths should not trigger detection."""
-        from soothe.tools._internal.file_edit.utils import _detect_stripped_absolute_path
-
         result = _detect_stripped_absolute_path("/Users/john/report.md")
         assert result is None
 
@@ -484,13 +481,13 @@ class TestStrippedAbsolutePathDetection:
         assert result is None
 
     def test_create_file_tool_handles_stripped_home_path(self, tmp_path: Path) -> None:
-        """CreateFileTool should correct stripped home directory paths."""
+        """WriteFileTool should correct stripped home directory paths."""
         if platform.system() != "Darwin":
             pytest.skip("macOS only")
 
         import os
 
-        tool = CreateFileTool(work_dir=str(tmp_path), allow_outside_workdir=True)
+        tool = WriteFileTool(work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True)
 
         # Simulate a stripped absolute path to user's home
         user = os.environ.get("USER", "testuser")
@@ -498,7 +495,7 @@ class TestStrippedAbsolutePathDetection:
 
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
-            result = tool._run(stripped_path, "Test content", overwrite=True)
+            result = tool._run(stripped_path, "Test content")
 
         # Should have created the file in the correct absolute location
         assert "Created:" in result
@@ -510,7 +507,7 @@ class TestStrippedAbsolutePathDetection:
             test_file.unlink()
 
     def test_create_file_tool_logs_correction(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-        """CreateFileTool should log when it corrects a stripped path."""
+        """WriteFileTool should log when it corrects a stripped path."""
         if platform.system() != "Darwin":
             pytest.skip("macOS only")
 
@@ -520,14 +517,14 @@ class TestStrippedAbsolutePathDetection:
         # Set log level to capture INFO messages
         caplog.set_level(logging.INFO, logger="soothe.tools._internal.file_edit.tools")
 
-        tool = CreateFileTool(work_dir=str(tmp_path), allow_outside_workdir=True)
+        tool = WriteFileTool(work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True)
 
         user = os.environ.get("USER", "testuser")
         stripped_path = f"Users/{user}/test_log_report.md"
 
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
-            result = tool._run(stripped_path, "Test content", overwrite=True)
+            result = tool._run(stripped_path, "Test content")
 
         # Check that a log message was generated
         assert any("Path normalization" in record.message for record in caplog.records)

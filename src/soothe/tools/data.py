@@ -1,14 +1,20 @@
-"""Unified data inspection tool for tabular and document files (RFC-0014).
+"""Data inspection tools for tabular and document files (RFC-0016).
 
-Routes to tabular or document tools based on file extension, providing
-a single entry point for all data/document inspection tasks.
+Provides single-purpose tools for data/document inspection following RFC-0016:
+- inspect_data: Inspect data file structure
+- summarize_data: Get statistical summary
+- check_data_quality: Validate data quality
+- extract_text: Extract text from documents
+- get_data_info: Get file metadata
+- ask_about_file: Answer questions about file content
+
+Routes to tabular or document backends based on file extension.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from langchain_core.tools import BaseTool
 
@@ -18,138 +24,244 @@ _TABULAR_EXTENSIONS = frozenset({".csv", ".tsv", ".xlsx", ".xls", ".json", ".par
 _DOCUMENT_EXTENSIONS = frozenset({".pdf", ".docx", ".txt", ".md", ".rst", ".log"})
 
 
-class DataTool(BaseTool):
-    """Inspect data files and documents.
+def _detect_domain(file_path: str) -> str:
+    """Determine whether the file is tabular or document.
 
-    Supports CSV, Excel, JSON, Parquet, PDF, DOCX, TXT, and more.
-    Routes to the appropriate backend based on file extension.
+    Returns:
+        'tabular', 'document', or 'unknown'.
+    """
+    suffix = Path(file_path).suffix.lower()
+    if suffix in _TABULAR_EXTENSIONS:
+        return "tabular"
+    if suffix in _DOCUMENT_EXTENSIONS:
+        return "document"
+    return "unknown"
+
+
+class InspectDataTool(BaseTool):
+    """Inspect data file structure - columns, types, samples.
+
+    For tabular files (CSV, Excel, JSON, Parquet), returns column listing
+    with types and sample values.
+    For documents (PDF, DOCX, TXT), returns document summary.
     """
 
-    name: str = "data"
+    name: str = "inspect_data"
     description: str = (
-        "Inspect data files and documents. "
-        "Provide `file_path` and optionally `operation` and `question`.\n"
-        "Operations:\n"
-        "- 'inspect': Column listing with types and samples (tabular) "
-        "or document summary.\n"
-        "- 'summary': Statistical summary (tabular) or document summary.\n"
-        "- 'quality': Data quality validation (tabular only).\n"
-        "- 'extract': Extract raw text content from document.\n"
-        "- 'info': File metadata (size, format, page count).\n"
-        "- 'ask': Answer a question about the file. Requires `question`.\n"
-        "Supported formats: CSV, TSV, Excel, JSON, Parquet, PDF, DOCX, TXT, MD."
+        "Inspect data file structure. "
+        "Use for: understanding CSV/Excel columns, types, samples. "
+        "Parameters: file_path (required). "
+        "Returns: column listing with types and sample values (tabular) or document summary."
     )
 
-    def _detect_domain(self, file_path: str) -> str:
-        """Determine whether the file is tabular or document.
-
-        Returns:
-            'tabular', 'document', or 'unknown'.
-        """
-        suffix = Path(file_path).suffix.lower()
-        if suffix in _TABULAR_EXTENSIONS:
-            return "tabular"
-        if suffix in _DOCUMENT_EXTENSIONS:
-            return "document"
-        return "unknown"
-
-    def _run(
-        self,
-        file_path: str,
-        operation: str = "inspect",
-        question: str = "",
-        **_kwargs: Any,
-    ) -> str:
-        """Inspect or query a data file.
+    def _run(self, file_path: str) -> str:
+        """Inspect data file structure.
 
         Args:
             file_path: Path to the data or document file.
-            operation: One of 'inspect', 'summary', 'quality', 'extract', 'info', 'ask'.
-            question: Question about the file (for 'ask' operation).
 
         Returns:
             Inspection result or error message.
         """
-        operation = operation.strip().lower()
-        domain = self._detect_domain(file_path)
-
-        if operation == "ask":
-            return self._do_ask(file_path, question, domain)
-        if operation == "info":
-            return self._do_info(file_path, domain)
-        if operation == "extract":
-            return self._do_extract(file_path)
+        domain = _detect_domain(file_path)
 
         if domain == "tabular":
-            return self._do_tabular(file_path, operation)
+            try:
+                from soothe.tools._internal.tabular import TabularColumnsTool
+
+                return TabularColumnsTool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Tabular inspection failed")
+                return f"Error inspecting tabular file: {exc}"
+
         if domain == "document":
-            return self._do_document(file_path, operation)
+            try:
+                from soothe.tools._internal.document import DocumentQATool
+
+                return DocumentQATool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Document inspection failed")
+                return f"Error inspecting document: {exc}"
 
         return (
             f"Error: Unsupported file format '{Path(file_path).suffix}'. "
             f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
         )
 
-    async def _arun(self, file_path: str, **kwargs: Any) -> str:
+    async def _arun(self, file_path: str) -> str:
         """Async dispatch (delegates to sync)."""
-        return self._run(file_path, **kwargs)
+        return self._run(file_path)
 
-    # ------------------------------------------------------------------
-    # Tabular operations
-    # ------------------------------------------------------------------
 
-    def _do_tabular(self, file_path: str, operation: str) -> str:
-        try:
-            if operation in ("inspect", "columns"):
-                from soothe.tools._internal.tabular import TabularColumnsTool
+class SummarizeDataTool(BaseTool):
+    """Get statistical summary of data file.
 
-                result = TabularColumnsTool()._run(file_path)
-            elif operation == "summary":
+    For tabular files, returns statistical summary (mean, median, std, etc.).
+    For documents, returns document summary.
+    """
+
+    name: str = "summarize_data"
+    description: str = (
+        "Get statistical summary of data. "
+        "Use for: understanding distributions, statistics. "
+        "Parameters: file_path (required). "
+        "Returns: statistical summary (tabular) or document summary."
+    )
+
+    def _run(self, file_path: str) -> str:
+        """Get statistical summary.
+
+        Args:
+            file_path: Path to the data or document file.
+
+        Returns:
+            Summary result or error message.
+        """
+        domain = _detect_domain(file_path)
+
+        if domain == "tabular":
+            try:
                 from soothe.tools._internal.tabular import TabularSummaryTool
 
-                result = TabularSummaryTool()._run(file_path)
-            elif operation == "quality":
-                from soothe.tools._internal.tabular import TabularQualityTool
+                return TabularSummaryTool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Tabular summary failed")
+                return f"Error summarizing tabular file: {exc}"
 
-                result = TabularQualityTool()._run(file_path)
-            else:
-                return f"Error: Unknown operation '{operation}' for tabular data. Use: inspect, summary, quality."
-        except Exception as exc:
-            logger.exception("Tabular inspection failed")
-            return f"Error inspecting tabular file: {exc}"
-        else:
-            return result
-
-    # ------------------------------------------------------------------
-    # Document operations
-    # ------------------------------------------------------------------
-
-    def _do_document(self, file_path: str, operation: str) -> str:
-        try:
-            if operation in ("inspect", "summary"):
+        if domain == "document":
+            try:
                 from soothe.tools._internal.document import DocumentQATool
 
-                result = DocumentQATool()._run(file_path)
-            else:
-                return (
-                    f"Error: Unknown operation '{operation}' for document. Use: inspect, summary, extract, info, ask."
-                )
-        except Exception as exc:
-            logger.exception("Document inspection failed")
-            return f"Error inspecting document: {exc}"
-        else:
-            return result
+                return DocumentQATool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Document summary failed")
+                return f"Error summarizing document: {exc}"
 
-    def _do_extract(self, file_path: str) -> str:
+        return (
+            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
+        )
+
+    async def _arun(self, file_path: str) -> str:
+        """Async dispatch (delegates to sync)."""
+        return self._run(file_path)
+
+
+class CheckDataQualityTool(BaseTool):
+    """Validate data quality and identify issues.
+
+    For tabular files only (CSV, Excel, JSON, Parquet).
+    Checks for missing values, duplicates, and data anomalies.
+    """
+
+    name: str = "check_data_quality"
+    description: str = (
+        "Check data quality. "
+        "Use for: finding missing values, duplicates, anomalies. "
+        "Parameters: file_path (required). "
+        "Returns: quality report. "
+        "Tabular files only (CSV, Excel, JSON, Parquet)."
+    )
+
+    def _run(self, file_path: str) -> str:
+        """Check data quality.
+
+        Args:
+            file_path: Path to the data file.
+
+        Returns:
+            Quality report or error message.
+        """
+        domain = _detect_domain(file_path)
+
+        if domain == "tabular":
+            try:
+                from soothe.tools._internal.tabular import TabularQualityTool
+
+                return TabularQualityTool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Data quality check failed")
+                return f"Error checking data quality: {exc}"
+
+        if domain == "document":
+            return (
+                "Error: Quality check is not supported for document files. Use inspect_data or summarize_data instead."
+            )
+
+        return (
+            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS))}"
+        )
+
+    async def _arun(self, file_path: str) -> str:
+        """Async dispatch (delegates to sync)."""
+        return self._run(file_path)
+
+
+class ExtractTextTool(BaseTool):
+    """Extract raw text from document files.
+
+    For documents (PDF, DOCX, TXT, MD).
+    Returns clean text content without metadata or formatting.
+    """
+
+    name: str = "extract_text"
+    description: str = (
+        "Extract text from documents. "
+        "Use for: PDF/DOCX text extraction. "
+        "Parameters: file_path (required). "
+        "Returns: raw text content. "
+        "Document files only (PDF, DOCX, TXT, MD)."
+    )
+
+    def _run(self, file_path: str) -> str:
+        """Extract text from document.
+
+        Args:
+            file_path: Path to the document file.
+
+        Returns:
+            Extracted text or error message.
+        """
         try:
-            from soothe.tools._internal.document import ExtractTextTool
+            from soothe.tools._internal.document import ExtractTextTool as InternalExtractTextTool
 
-            return ExtractTextTool()._run(file_path)
+            return InternalExtractTextTool()._run(file_path)
         except Exception as exc:
             logger.exception("Text extraction failed")
             return f"Error extracting text: {exc}"
 
-    def _do_info(self, file_path: str, domain: str) -> str:
+    async def _arun(self, file_path: str) -> str:
+        """Async dispatch (delegates to sync)."""
+        return self._run(file_path)
+
+
+class GetDataInfoTool(BaseTool):
+    """Get file metadata and format information.
+
+    Returns file size, format, modification time, and other metadata.
+    For documents, includes page count.
+    """
+
+    name: str = "get_data_info"
+    description: str = (
+        "Get file metadata. "
+        "Use for: file size, format, page count. "
+        "Parameters: file_path (required). "
+        "Returns: file metadata."
+    )
+
+    def _run(self, file_path: str) -> str:
+        """Get file metadata.
+
+        Args:
+            file_path: Path to the file.
+
+        Returns:
+            File metadata or error message.
+        """
+        domain = _detect_domain(file_path)
+
         try:
             if domain == "document":
                 from soothe.tools._internal.document import GetDocumentInfoTool
@@ -159,39 +271,95 @@ class DataTool(BaseTool):
                     return "\n".join(f"{k}: {v}" for k, v in result.items())
                 return str(result)
 
-            from soothe.tools._internal.file_edit.tools import GetFileInfoTool
+            # For tabular and unknown files, use generic file info
+            from soothe.tools.file_ops import FileInfoTool
 
-            return GetFileInfoTool()._run(file_path)
+            return FileInfoTool()._run(file_path)
+
         except Exception as exc:
             logger.exception("File info retrieval failed")
             return f"Error getting file info: {exc}"
 
-    def _do_ask(self, file_path: str, question: str, domain: str) -> str:
+    async def _arun(self, file_path: str) -> str:
+        """Async dispatch (delegates to sync)."""
+        return self._run(file_path)
+
+
+class AskAboutFileTool(BaseTool):
+    """Answer questions about a data or document file.
+
+    For tabular files, returns schema information and suggests using run_python
+    for detailed analysis.
+    For documents, uses AI to answer questions about the content.
+    """
+
+    name: str = "ask_about_file"
+    description: str = (
+        "Ask question about file. "
+        "Use for: querying data/document content. "
+        "Parameters: file_path (required), question (required). "
+        "Returns: answer based on file content."
+    )
+
+    def _run(self, file_path: str, question: str = "") -> str:
+        """Answer question about file.
+
+        Args:
+            file_path: Path to the file.
+            question: Question to answer.
+
+        Returns:
+            Answer or error message.
+        """
         if not question:
-            return "Error: 'question' is required for 'ask' operation."
-        try:
-            if domain == "tabular":
+            return "Error: 'question' parameter is required."
+
+        domain = _detect_domain(file_path)
+
+        if domain == "tabular":
+            try:
                 from soothe.tools._internal.tabular import TabularColumnsTool
 
                 columns_info = TabularColumnsTool()._run(file_path)
                 return (
                     f"Data schema:\n{columns_info}\n\n"
-                    f"For detailed analysis, use the `execute` tool "
-                    f"with mode='python' to run pandas code."
+                    f"For detailed analysis, use the `run_python` tool "
+                    f"to execute pandas code."
                 )
+            except Exception as exc:
+                logger.exception("Tabular question answering failed")
+                return f"Error answering question: {exc}"
 
-            from soothe.tools._internal.document import DocumentQATool
+        if domain == "document":
+            try:
+                from soothe.tools._internal.document import DocumentQATool
 
-            return DocumentQATool()._run(file_path, question=question)
-        except Exception as exc:
-            logger.exception("Question answering failed")
-            return f"Error answering question: {exc}"
+                return DocumentQATool()._run(file_path, question=question)
+            except Exception as exc:
+                logger.exception("Document question answering failed")
+                return f"Error answering question: {exc}"
+
+        return (
+            f"Error: Unsupported file format '{Path(file_path).suffix}'. "
+            f"Supported: {', '.join(sorted(_TABULAR_EXTENSIONS | _DOCUMENT_EXTENSIONS))}"
+        )
+
+    async def _arun(self, file_path: str, question: str = "") -> str:
+        """Async dispatch (delegates to sync)."""
+        return self._run(file_path, question)
 
 
 def create_data_tools() -> list[BaseTool]:
-    """Create the unified data inspection tool.
+    """Create all data inspection tools.
 
     Returns:
-        List containing a single DataTool.
+        List of 6 data inspection BaseTool instances.
     """
-    return [DataTool()]
+    return [
+        InspectDataTool(),
+        SummarizeDataTool(),
+        CheckDataQualityTool(),
+        ExtractTextTool(),
+        GetDataInfoTool(),
+        AskAboutFileTool(),
+    ]

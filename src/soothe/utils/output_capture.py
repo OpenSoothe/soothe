@@ -174,7 +174,7 @@ def capture_subagent_output(
         OutputCapture instance for accessing captured content.
 
     Example:
-        with capture_subagent_output("wizsearch") as capture:
+        with capture_subagent_output("browser") as capture:
             # Third-party library output is captured
             result = some_library_function()
         # Output is logged and optionally emitted as progress events

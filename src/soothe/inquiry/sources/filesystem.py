@@ -46,9 +46,9 @@ class FilesystemSource:
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
             return
-        from soothe.tools._internal.file_edit.tools import ListFilesTool, ReadFileTool, SearchInFilesTool
+        from soothe.tools.file_ops import ListFilesTool, ReadFileTool, SearchFilesTool
 
-        self._search_tool = SearchInFilesTool(work_dir=self._work_dir)
+        self._search_tool = SearchFilesTool(work_dir=self._work_dir)
         self._read_tool = ReadFileTool(
             work_dir=self._work_dir,
             allow_outside_workdir=self._allow_outside,

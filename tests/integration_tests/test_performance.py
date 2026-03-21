@@ -8,6 +8,9 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 
+# Mark all tests in this module as integration tests
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.asyncio
 async def test_trivial_query_latency():

@@ -381,7 +381,7 @@ def create_weaver_subagent(
     from soothe.config import SOOTHE_HOME, SootheConfig
 
     cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
-    from soothe.backends.policy.config_driven import ConfigDrivenPolicy
+    from soothe.safety.config_driven import ConfigDrivenPolicy
 
     if model is None:
         msg = (

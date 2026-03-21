@@ -7,7 +7,6 @@ This module provides the cognitive capabilities for Soothe:
 
 from soothe.cognition.goal_engine import Goal, GoalEngine
 from soothe.cognition.unified_classifier import (
-    EnrichmentResult,
     RoutingResult,
     UnifiedClassification,
     UnifiedClassifier,
@@ -15,7 +14,6 @@ from soothe.cognition.unified_classifier import (
 )
 
 __all__ = [
-    "EnrichmentResult",
     "Goal",
     "GoalEngine",
     "RoutingResult",

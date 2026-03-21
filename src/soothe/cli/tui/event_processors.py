@@ -70,15 +70,23 @@ class _TuiOutputFormatter(OutputFormatter):
                 {},
             )
 
-    def emit_tool_call(self, name: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
+    def emit_tool_call(
+        self,
+        name: str,
+        *,
+        prefix: str | None,
+        is_main: bool,
+        tool_call: dict[str, Any] | None = None,
+    ) -> None:
         """Emit a tool call notification.
 
         Args:
             name: The tool name being called.
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent (unused in TUI).
+            tool_call: Optional tool call dict with args for display.
         """
-        _handle_tool_call_activity(self.state, name, prefix=prefix, verbosity="normal")
+        _handle_tool_call_activity(self.state, name, prefix=prefix, verbosity="normal", tool_call=tool_call)
 
     def emit_tool_result(self, tool_name: str, brief: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
         """Emit a tool result notification.
@@ -269,10 +277,14 @@ def handle_messages_event(
                         _handle_subagent_text_activity(namespace, text, state, verbosity=verbosity)
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
-                _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
+                # Extract tool call with args for display
+                tool_call = {"args": block.get("args", {})}
+                _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity, tool_call=tool_call)
 
         if has_tool_chunks:
             for tc in tool_call_chunks:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
-                    _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity)
+                    # Extract tool call with args for display
+                    tool_call = {"args": tc.get("args", {})}
+                    _handle_tool_call_activity(state, name, prefix=prefix, verbosity=verbosity, tool_call=tool_call)

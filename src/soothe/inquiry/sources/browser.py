@@ -17,7 +17,7 @@ class BrowserSource:
     """Information source backed by browser automation.
 
     Used for content that requires JavaScript rendering, form interaction,
-    or login-protected pages.  Falls back to wizsearch crawl for simple
+    or login-protected pages. Falls back to HTTP crawling for simple
     URL extraction when a full browser session is overkill.
 
     Args:

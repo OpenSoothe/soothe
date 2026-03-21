@@ -100,15 +100,50 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
     asyncio.run(_list())
 
 
-def thread_resume(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to resume.")],
+def thread_continue(
+    thread_id: Annotated[
+        str | None,
+        typer.Argument(help="Thread ID to continue. Omit to continue last active thread."),
+    ] = None,
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Resume a thread in the next soothe run."""
+    """Continue a conversation thread in the TUI.
+
+    If no thread ID is provided, continues the most recently active thread.
+
+    Examples:
+        soothe thread continue abc123
+        soothe thread continue  # Continue last active thread
+    """
     cfg = load_config(config)
+
+    # If no thread_id provided, find last active thread
+    if not thread_id:
+        import asyncio
+
+        from soothe.core.runner import SootheRunner
+
+        runner = SootheRunner(cfg)
+
+        async def get_last_thread() -> str | None:
+            threads = await runner.list_threads()
+            active_threads = [t for t in threads if t.get("status") == "active"]
+            if not active_threads:
+                typer.echo("No active threads found.", err=True)
+                sys.exit(1)
+            active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+            return active_threads[0].get("thread_id")
+
+        thread_id = asyncio.run(get_last_thread())
+        if thread_id:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info("Continuing thread %s", thread_id)
+
     run_tui(cfg, thread_id=thread_id, config_path=config)
 
 
@@ -132,14 +167,14 @@ def thread_archive(
     asyncio.run(_archive())
 
 
-def thread_inspect(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to inspect.")],
+def thread_show(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to show.")],
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Inspect thread details."""
+    """Show thread details."""
     from soothe.cli.thread_logger import ThreadLogger
     from soothe.core.runner import SootheRunner
 

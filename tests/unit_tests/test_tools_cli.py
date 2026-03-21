@@ -2,25 +2,22 @@
 
 from unittest.mock import patch
 
-from soothe.tools._internal.cli import (
-    CheckCommandExistsTool,
-    CliTool,
-    GetCurrentDirTool,
+from soothe.tools.execution import (
     KillProcessTool,
-    ListDirTool,
-    RunCliBackgroundTool,
-    create_cli_tools,
+    RunBackgroundTool,
+    RunCommandTool,
+    create_execution_tools,
 )
 
 
-class TestCliToolInitialization:
-    """Test CliTool initialization and configuration."""
+class TestRunCommandToolInitialization:
+    """Test RunCommandTool initialization and configuration."""
 
     def test_default_initialization(self) -> None:
         """Test initialization with default configuration."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
-        assert tool.name == "run_cli"
+        assert tool.name == "run_command"
         assert tool.timeout == 60
         assert tool.max_output_length == 10000
         assert tool.workspace_root == ""
@@ -28,7 +25,7 @@ class TestCliToolInitialization:
 
     def test_custom_configuration(self) -> None:
         """Test initialization with custom configuration."""
-        tool = CliTool(
+        tool = RunCommandTool(
             workspace_root="/tmp/test",
             timeout=120,
             max_output_length=5000,
@@ -40,7 +37,7 @@ class TestCliToolInitialization:
 
     def test_security_configuration(self) -> None:
         """Test default security configuration."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Check default banned commands
         expected_banned = [
@@ -62,7 +59,7 @@ class TestCliToolInitialization:
 
     def test_regex_banned_patterns(self) -> None:
         """Test default regex banned patterns."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         expected_patterns = [
             r"git\s+init",
@@ -75,25 +72,25 @@ class TestCliToolInitialization:
         for pattern in expected_patterns:
             assert pattern in tool.banned_command_patterns
 
-    def test_create_cli_tools(self) -> None:
+    def test_create_execution_tools(self) -> None:
         """Test factory function creates all tools."""
-        tools = create_cli_tools()
+        from soothe.tools.execution import RunPythonTool
 
-        assert len(tools) == 6
-        assert isinstance(tools[0], CliTool)
-        assert isinstance(tools[1], GetCurrentDirTool)
-        assert isinstance(tools[2], ListDirTool)
-        assert isinstance(tools[3], RunCliBackgroundTool)
-        assert isinstance(tools[4], KillProcessTool)
-        assert isinstance(tools[5], CheckCommandExistsTool)
+        tools = create_execution_tools()
+
+        assert len(tools) == 4
+        assert isinstance(tools[0], RunCommandTool)
+        assert isinstance(tools[1], RunPythonTool)
+        assert isinstance(tools[2], RunBackgroundTool)
+        assert isinstance(tools[3], KillProcessTool)
 
 
-class TestCliToolCommandValidation:
+class TestRunCommandToolCommandValidation:
     """Test command validation and security features."""
 
     def test_is_banned_detects_banned_commands(self) -> None:
         """Test detection of banned commands."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         banned_commands = [
             "rm -rf /",
@@ -115,7 +112,7 @@ class TestCliToolCommandValidation:
 
     def test_is_banned_allows_safe_commands(self) -> None:
         """Test that safe commands are allowed."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         safe_commands = [
             "ls -la",
@@ -135,7 +132,7 @@ class TestRegexBannedPatterns:
 
     def test_git_commands_blocked(self) -> None:
         """Test that git init, commit, add are blocked."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         git_commands = [
             "git init",
@@ -150,7 +147,7 @@ class TestRegexBannedPatterns:
 
     def test_sudo_rm_blocked(self) -> None:
         """Test that sudo rm commands are blocked."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         sudo_commands = [
             "sudo rm -rf /",
@@ -163,7 +160,7 @@ class TestRegexBannedPatterns:
 
     def test_regex_pattern_case_insensitive(self) -> None:
         """Test that regex patterns are case insensitive."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Mix of cases
         commands = [
@@ -181,17 +178,17 @@ class TestShellRecovery:
 
     def test_recover_shell(self) -> None:
         """Test shell recovery method."""
-        tool = CliTool()
+        tool = RunCommandTool()
         tool._recover_shell()
 
         # Shell should be initialized after recovery
-        from soothe.tools._internal.cli import _shell_instances
+        from soothe.tools._internal.shell import _shell_instances
 
         assert "default" in _shell_instances
 
     def test_test_shell_responsive(self) -> None:
         """Test shell responsiveness testing."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         # Should be responsive after initialization
         is_responsive = tool._test_shell_responsive()
@@ -203,7 +200,7 @@ class TestCliToolExecution:
 
     def test_run_with_banned_command(self) -> None:
         """Test execution with banned command."""
-        tool = CliTool()
+        tool = RunCommandTool()
 
         result = tool._run("rm -rf /")
 
@@ -213,9 +210,9 @@ class TestCliToolExecution:
     def test_run_without_pexpect(self) -> None:
         """Test execution when pexpect is not available."""
         # Clear any existing shell instances from previous tests
-        import soothe.tools._internal.cli
+        import soothe.tools._internal.shell
 
-        soothe.tools._internal.cli._shell_instances.clear()
+        soothe.tools._internal.shell._shell_instances.clear()
 
         # Remove pexpect from sys.modules if it was already imported
         import sys
@@ -225,7 +222,7 @@ class TestCliToolExecution:
         try:
             # Patch pexpect to None to simulate it not being installed
             with patch.dict("sys.modules", {"pexpect": None}):
-                tool = CliTool()
+                tool = RunCommandTool()
 
                 result = tool._run("echo test")
 
@@ -237,36 +234,14 @@ class TestCliToolExecution:
                 sys.modules["pexpect"] = pexpect_module
 
 
-class TestGetCurrentDirTool:
-    """Test get current directory tool."""
-
-    def test_tool_metadata(self) -> None:
-        """Test tool metadata."""
-        tool = GetCurrentDirTool()
-
-        assert tool.name == "get_current_directory"
-        assert "current working directory" in tool.description.lower()
-
-
-class TestListDirTool:
-    """Test list directory tool."""
-
-    def test_tool_metadata(self) -> None:
-        """Test tool metadata."""
-        tool = ListDirTool()
-
-        assert tool.name == "list_directory"
-        assert "list contents" in tool.description.lower()
-
-
 class TestBackgroundTools:
     """Test background execution tools."""
 
-    def test_run_cli_background_metadata(self) -> None:
+    def test_run_background_metadata(self) -> None:
         """Test background execution tool metadata."""
-        tool = RunCliBackgroundTool()
+        tool = RunBackgroundTool()
 
-        assert tool.name == "run_cli_background"
+        assert tool.name == "run_background"
         assert "background" in tool.description.lower()
 
     def test_kill_process_metadata(self) -> None:
@@ -275,20 +250,3 @@ class TestBackgroundTools:
 
         assert tool.name == "kill_process"
         assert "terminate" in tool.description.lower()
-
-    def test_check_command_exists_metadata(self) -> None:
-        """Test command existence check metadata."""
-        tool = CheckCommandExistsTool()
-
-        assert tool.name == "check_command_exists"
-        assert "available" in tool.description.lower()
-
-    def test_check_command_exists_execution(self) -> None:
-        """Test command existence check execution."""
-        tool = CheckCommandExistsTool()
-
-        # Test with a command that should exist
-        result = tool._run("ls")
-
-        # Should either find it or report error (if shell not initialized)
-        assert isinstance(result, str)

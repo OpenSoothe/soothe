@@ -18,14 +18,14 @@ from pydantic import Field
 from soothe.utils.tool_error_handler import tool_error_handler
 
 
-class WebSearchTool(BaseTool):
+class SearchWebTool(BaseTool):
     """Unified web search with dynamic backend selection.
 
     Automatically uses serper when SERPER_API_KEY is available, otherwise wizsearch.
     Use ``research`` for deep multi-source investigation.
     """
 
-    name: str = "websearch"
+    name: str = "search_web"
     description: str = (
         "Quick web search for factual queries, news, and current events. "
         "Returns search results with titles, URLs, and snippets. "
@@ -105,13 +105,13 @@ class WebSearchTool(BaseTool):
         )
 
 
-class WebCrawlTool(BaseTool):
+class CrawlWebTool(BaseTool):
     """Web content extraction with dynamic backend selection.
 
     Automatically uses Jina when JINA_API_KEY is available, otherwise wizsearch crawler.
     """
 
-    name: str = "websearch_crawl"
+    name: str = "crawl_web"
     description: str = (
         "Extract clean, readable content from a web page URL. "
         "Returns the main text content stripped of navigation, ads, and boilerplate. "
@@ -142,7 +142,7 @@ class WebCrawlTool(BaseTool):
 
         return WizsearchCrawlPageTool()
 
-    @tool_error_handler("websearch_crawl", return_type="str")
+    @tool_error_handler("crawl_web", return_type="str")
     def _run(self, url: str) -> str:
         """Extract content from a web page.
 
@@ -154,7 +154,7 @@ class WebCrawlTool(BaseTool):
         """
         return self._get_crawl_backend()._run(url=url)
 
-    @tool_error_handler("websearch_crawl", return_type="str")
+    @tool_error_handler("crawl_web", return_type="str")
     async def _arun(self, url: str) -> str:
         """Async web crawl."""
         return await self._get_crawl_backend()._arun(url=url)
@@ -167,9 +167,9 @@ def create_websearch_tools(config: dict[str, Any] | None = None) -> list[BaseToo
         config: Optional wizsearch config dict (used when wizsearch is the backend).
 
     Returns:
-        List containing WebSearchTool and WebCrawlTool.
+        List containing SearchWebTool and CrawlWebTool.
     """
     return [
-        WebSearchTool(config=config or {}),
-        WebCrawlTool(config=config or {}),
+        SearchWebTool(config=config or {}),
+        CrawlWebTool(config=config or {}),
     ]

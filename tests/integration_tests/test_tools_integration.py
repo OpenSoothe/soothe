@@ -5,16 +5,19 @@ from pathlib import Path
 
 import pytest
 
+# Mark all tests in this module as integration tests
+pytestmark = pytest.mark.integration
 
-class TestCliToolIntegration:
-    """Integration tests for CliTool with real shell (requires pexpect)."""
+
+class TestRunCommandToolIntegration:
+    """Integration tests for RunCommandTool with real shell (requires pexpect)."""
 
     @pytest.fixture
     def cli_tool(self):
-        """Create a CliTool instance for testing."""
-        from soothe.tools._internal.cli import CliTool
+        """Create a RunCommandTool instance for testing."""
+        from soothe.tools.execution import RunCommandTool
 
-        return CliTool(
+        return RunCommandTool(
             workspace_root=tempfile.mkdtemp(),
             timeout=30,
         )

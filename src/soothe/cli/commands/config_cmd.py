@@ -12,17 +12,27 @@ from soothe.cli.core import load_config
 logger = logging.getLogger(__name__)
 
 
-def config(
+def config_show(
     config: Annotated[
         str | None,
-        typer.Option("--config", "-c", help="Path to configuration file (YAML or JSON)."),
+        typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
     format_output: Annotated[
         str,
         typer.Option("--format", "-f", help="Output format: json or summary."),
     ] = "summary",
+    show_sensitive: Annotated[
+        bool,
+        typer.Option("--show-sensitive", "-s", help="Show sensitive values like API keys."),
+    ] = False,
 ) -> None:
-    """Display current configuration."""
+    """Display current configuration.
+
+    Examples:
+        soothe config show
+        soothe config show --show-sensitive
+        soothe config show --format json
+    """
     try:
         cfg = load_config(config)
 
@@ -55,7 +65,7 @@ def config(
             # Subagents summary
             from soothe.cli.commands.subagent_names import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
 
-            subagents_table = Table(title="Subagents")
+            subagents_table = Table(title="Agents")
             subagents_table.add_column("Name", style="cyan")
             subagents_table.add_column("Status", justify="center")
 
@@ -92,4 +102,82 @@ def config(
         from soothe.utils.error_format import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
+        sys.exit(1)
+
+
+def config_init(
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Overwrite existing configuration."),
+    ] = False,
+) -> None:
+    """Initialize ~/.soothe with a default configuration.
+
+    Examples:
+        soothe config init
+        soothe config init --force  # Overwrite existing
+    """
+    import shutil
+    from importlib.resources import as_file, files
+    from pathlib import Path
+
+    from soothe.config import SOOTHE_HOME
+
+    home = Path(SOOTHE_HOME).expanduser()
+    target = home / "config" / "config.yml"
+
+    if target.exists() and not force:
+        typer.echo(f"Config already exists at {target}. Use --force to overwrite.")
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    # Try loading from installed package resources first
+    template_found = False
+    try:
+        config_resource = files("soothe.config").joinpath("config.yml")
+        with as_file(config_resource) as template_path:
+            if template_path.exists():
+                shutil.copy2(template_path, target)
+                typer.echo(f"Created {target}")
+                template_found = True
+    except (FileNotFoundError, TypeError, AttributeError):
+        pass
+
+    # Fallback for development/editable installs
+    if not template_found:
+        template = Path(__file__).resolve().parent.parent.parent.parent / "config" / "config.yml"
+        if template.exists():
+            shutil.copy2(template, target)
+            typer.echo(f"Created {target}")
+            template_found = True
+
+    # Create minimal config if template not found
+    if not template_found:
+        target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
+        typer.echo(f"Created minimal {target}")
+
+    for subdir in ("runs", "generated_agents", "logs"):
+        (home / subdir).mkdir(parents=True, exist_ok=True)
+
+    typer.echo(f"Soothe home initialized at {home}")
+
+
+def config_validate(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Validate configuration file.
+
+    Examples:
+        soothe config validate
+        soothe config validate --config custom.yml
+    """
+    try:
+        load_config(config)
+        typer.echo("✓ Configuration is valid.")
+    except Exception as e:
+        typer.echo(f"✗ Configuration error: {e}", err=True)
         sys.exit(1)

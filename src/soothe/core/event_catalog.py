@@ -384,7 +384,7 @@ def make_tool_started(tool_name: str, *, tool_group: str | None = None, **extra:
     """Build a main-agent tool-started event dict.
 
     Args:
-        tool_name: Internal tool name (e.g. ``wizsearch_search``).
+        tool_name: Internal tool name (e.g. ``search_web``).
         tool_group: User-facing tool group (e.g. ``websearch``).
             When provided the type uses ``soothe.tool.<group>.<tool>_started``;
             otherwise falls back to ``soothe.tool.<tool>.started``.
@@ -875,7 +875,7 @@ _reg(
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
 
-# -- Tool: websearch group (wizsearch search + crawl) --------------------------
+# -- Tool: websearch group (search + crawl) --------------------------
 _reg(TOOL_WEBSEARCH_SEARCH_STARTED, ToolStartedEvent, summary_template="Searching: {query}")
 _reg(TOOL_WEBSEARCH_SEARCH_COMPLETED, ToolCompletedEvent, summary_template="Found {result_count} results")
 _reg(TOOL_WEBSEARCH_SEARCH_FAILED, ToolFailedEvent, summary_template="Search failed: {error}")
