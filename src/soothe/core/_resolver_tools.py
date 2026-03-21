@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.subagents.browser import create_browser_subagent
@@ -43,7 +43,7 @@ SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
 
 
 def resolve_tools(
-    tools_config,
+    tools_config: Any,
     *,
     lazy: bool = False,
     config: SootheConfig | None = None,

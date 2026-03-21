@@ -21,7 +21,7 @@ def config_show(
         str,
         typer.Option("--format", "-f", help="Output format: json or summary."),
     ] = "summary",
-    show_sensitive: Annotated[
+    show_sensitive: Annotated[  # noqa: ARG001
         bool,
         typer.Option("--show-sensitive", "-s", help="Show sensitive values like API keys."),
     ] = False,
@@ -39,6 +39,7 @@ def config_show(
         if format_output == "json":
             # Output full config as JSON
             config_dict = cfg.model_dump(mode="python", exclude_unset=True)
+            # Note: show_sensitive parameter reserved for future use
             typer.echo(json.dumps(config_dict, indent=2, default=str))
         else:
             # Summary output

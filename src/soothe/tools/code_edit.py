@@ -55,7 +55,8 @@ class EditFileLinesTool(BaseTool):
             try:
                 file_path.relative_to(expand_path(self.work_dir))
             except ValueError as err:
-                raise ValueError(f"Path {path} is outside work directory") from err
+                msg = f"Path {path} is outside work directory"
+                raise ValueError(msg) from err
 
         return file_path
 
@@ -79,26 +80,28 @@ class EditFileLinesTool(BaseTool):
             # Validate path
             file_path = self._resolve_path(path)
             if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {path}")
+                msg = f"File not found: {path}"
+                raise FileNotFoundError(msg)
 
             if not file_path.is_file():
-                raise ValueError(f"Path is not a file: {path}")
+                msg = f"Path is not a file: {path}"
+                raise ValueError(msg)
 
             # Read file
-            with open(file_path, encoding="utf-8") as f:
+            with file_path.open(encoding="utf-8") as f:
                 lines = f.readlines()
 
             # Validate line range
             total_lines = len(lines)
             if start_line < 1 or start_line > total_lines:
-                raise ValueError(
-                    f"Invalid start_line: {start_line}. File has {total_lines} lines. Line numbers are 1-indexed."
-                )
+                msg = f"Invalid start_line: {start_line}. File has {total_lines} lines. Line numbers are 1-indexed."
+                raise ValueError(msg)
             if end_line < start_line or end_line > total_lines:
-                raise ValueError(
+                msg = (
                     f"Invalid end_line: {end_line}. "
                     f"Must be >= start_line ({start_line}) and <= total lines ({total_lines})."
                 )
+                raise ValueError(msg)
 
             # Prepare new content (ensure it ends with newline if original lines did)
             new_lines = new_content.splitlines(keepends=True)
@@ -113,14 +116,15 @@ class EditFileLinesTool(BaseTool):
             lines[start_line - 1 : end_line] = new_lines
 
             # Write back
-            with open(file_path, "w", encoding="utf-8") as f:
+            with file_path.open("w", encoding="utf-8") as f:
                 f.writelines(lines)
 
-            return (
+            msg = (
                 f"Updated {_display_path(file_path, self.work_dir)}\n"
                 f"Lines {start_line}-{end_line} replaced "
                 f"({lines_removed} removed, {lines_added} added)"
             )
+            return msg
 
         except (FileNotFoundError, ValueError) as e:
             return f"Error: {e}"
@@ -162,7 +166,8 @@ class InsertLinesTool(BaseTool):
             try:
                 file_path.relative_to(expand_path(self.work_dir))
             except ValueError as err:
-                raise ValueError(f"Path {path} is outside work directory") from err
+                msg = f"Path {path} is outside work directory"
+                raise ValueError(msg) from err
 
         return file_path
 
@@ -254,7 +259,8 @@ class DeleteLinesTool(BaseTool):
             try:
                 file_path.relative_to(expand_path(self.work_dir))
             except ValueError as err:
-                raise ValueError(f"Path {path} is outside work directory") from err
+                msg = f"Path {path} is outside work directory"
+                raise ValueError(msg) from err
 
         return file_path
 
@@ -344,7 +350,8 @@ class ApplyDiffTool(BaseTool):
             try:
                 file_path.relative_to(expand_path(self.work_dir))
             except ValueError as err:
-                raise ValueError(f"Path {path} is outside work directory") from err
+                msg = f"Path {path} is outside work directory"
+                raise ValueError(msg) from err
 
         return file_path
 

@@ -75,7 +75,7 @@ class _TuiOutputFormatter(OutputFormatter):
         name: str,
         *,
         prefix: str | None,
-        is_main: bool,
+        is_main: bool,  # noqa: FBT001, ARG002
         tool_call: dict[str, Any] | None = None,
     ) -> None:
         """Emit a tool call notification.

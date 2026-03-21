@@ -18,7 +18,7 @@ from pydantic import Field
 from soothe.cognition import GoalEngine
 
 
-def _run_async(coro):
+def _run_async(coro: Any) -> Any:
     """Run async coroutine from sync context."""
     loop = asyncio.get_event_loop()
     if loop.is_running():
@@ -58,7 +58,7 @@ class CreateGoalTool(BaseTool):
         if not description:
             return {"error": "description is required"}
 
-        async def _create():
+        async def _create() -> dict[str, Any]:
             goal = await self.goal_engine.create_goal(description, priority=priority, parent_id=parent_id or None)
             return {"created": goal.model_dump(mode="json")}
 
@@ -98,7 +98,7 @@ class ListGoalsTool(BaseTool):
             Dict with list of goals.
         """
 
-        async def _list():
+        async def _list() -> dict[str, Any]:
             filter_status = status if status in ("pending", "active", "completed", "failed") else None
             goals = await self.goal_engine.list_goals(filter_status)
             return {"goals": [g.model_dump(mode="json") for g in goals]}
@@ -135,7 +135,7 @@ class CompleteGoalTool(BaseTool):
         if not goal_id:
             return {"error": "goal_id is required"}
 
-        async def _complete():
+        async def _complete() -> dict[str, Any]:
             try:
                 goal = await self.goal_engine.complete_goal(goal_id)
                 return {"completed": goal.model_dump(mode="json")}
@@ -186,7 +186,7 @@ class FailGoalTool(BaseTool):
         if not reason:
             return {"error": "reason is required"}
 
-        async def _fail():
+        async def _fail() -> dict[str, Any]:
             try:
                 goal = await self.goal_engine.fail_goal(goal_id, error=reason)
                 return {"failed": goal.model_dump(mode="json")}

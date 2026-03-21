@@ -304,7 +304,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
 
     value = str(args[key_arg])
     # Truncate long values to prevent activity line overflow
-    if len(value) > 50:
+    max_value_length = 50
+    if len(value) > max_value_length:
         value = value[:47] + "..."
 
     return f"({value})"
