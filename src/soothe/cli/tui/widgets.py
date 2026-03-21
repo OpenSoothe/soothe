@@ -13,9 +13,37 @@ if TYPE_CHECKING:
 class ConversationPanel(RichLog):
     """Scrollable chat history with markdown rendering."""
 
+    async def _on_key(self, event: Key) -> None:
+        """Handle key events, allowing Ctrl+D to trigger detach."""
+        if event.key == "ctrl+d":
+            event.prevent_default()
+            # Find the app and call its detach action
+            from soothe.cli.tui.app import SootheApp
+
+            app = self.app
+            if isinstance(app, SootheApp):
+                await app.action_detach()
+            return
+        # Let parent RichLog handle all other keys
+        await super()._on_key(event)
+
 
 class PlanTree(Static):
     """Plan tree display with merged activity info, toggleable."""
+
+    async def _on_key(self, event: Key) -> None:
+        """Handle key events, allowing Ctrl+D to trigger detach."""
+        if event.key == "ctrl+d":
+            event.prevent_default()
+            # Find the app and call its detach action
+            from soothe.cli.tui.app import SootheApp
+
+            app = self.app
+            if isinstance(app, SootheApp):
+                await app.action_detach()
+            return
+        # Let parent Static handle all other keys
+        await super()._on_key(event)
 
 
 class InfoBar(Static):
@@ -72,8 +100,14 @@ class ChatInput(Input):
                 self.value = self._saved_input
             self.cursor_position = len(self.value)
         elif event.key == "ctrl+d":
-            # Let the app-level binding handle detach by not preventing default
-            await super()._on_key(event)
+            event.prevent_default()
+            # Find the app and call its detach action
+            from soothe.cli.tui.app import SootheApp
+
+            app = self.app
+            if isinstance(app, SootheApp):
+                await app.action_detach()
+            return
         else:
             # Let parent Input handle all other keys normally
             await super()._on_key(event)

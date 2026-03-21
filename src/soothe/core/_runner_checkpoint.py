@@ -78,6 +78,23 @@ class CheckpointMixin:
         try:
             store.save_checkpoint(envelope)
             logger.debug("Checkpoint saved: mode=%s status=%s completed=%d", mode, status, len(completed))
+
+            # Update thread's updated_at timestamp to track activity
+            if hasattr(self, "_durability") and state.thread_id:
+                try:
+                    # Load current thread info
+                    thread_data = self._durability._store.load(f"thread:{state.thread_id}")
+                    if thread_data:
+                        from soothe.protocols.durability import ThreadInfo
+
+                        thread_info = ThreadInfo.model_validate(thread_data)
+                        # Update timestamp
+                        thread_info = thread_info.model_copy(update={"updated_at": datetime.now(UTC)})
+                        self._durability._store.save(f"thread:{state.thread_id}", thread_info.model_dump(mode="json"))
+                        logger.debug("Thread %s updated_at refreshed", state.thread_id)
+                except Exception:
+                    logger.debug("Failed to update thread timestamp", exc_info=True)
+
             yield _custom(
                 CheckpointSavedEvent(
                     thread_id=state.thread_id,

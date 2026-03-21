@@ -83,6 +83,10 @@ class DaemonClient:
         """
         await self._send({"type": "resume_thread", "thread_id": thread_id})
 
+    async def send_new_thread(self) -> None:
+        """Request the daemon to start a new thread."""
+        await self._send({"type": "new_thread"})
+
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
 

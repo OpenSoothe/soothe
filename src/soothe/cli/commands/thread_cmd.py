@@ -87,11 +87,15 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
         if not threads:
             typer.echo("No threads.")
             return
+        # Print header
+        typer.echo(f"{'ID':<10}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}")
+        typer.echo("─" * 65)
         for t in threads:
             tid = t.get("thread_id", "?")
             t_status = t.get("status", "?")
             created = str(t.get("created_at", "?"))[:19]
-            typer.echo(f"  {tid}  {t_status}  {created}")
+            last_msg = str(t.get("updated_at", "?"))[:19]
+            typer.echo(f"{tid:<10}  {t_status:<10}  {created:<19}  {last_msg:<19}")
 
     asyncio.run(_list())
 

@@ -231,6 +231,7 @@ protocols:
     backend: postgresql  # json | rocksdb | postgresql
     persist_dir: ""  # Empty = SOOTHE_HOME/durability/
     checkpointer: postgresql  # LangGraph checkpoint backend
+    thread_inactivity_timeout_hours: 72  # Hours before inactive threads are suspended
 
 # =============================================================================
 # Persistence Configuration
@@ -330,7 +331,7 @@ execution:
 logging:
   # Backend file logging (Python logging module)
   file:
-    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
     max_bytes: 10485760      # 10 MB before rotation
     backup_count: 3          # Number of rotating backups

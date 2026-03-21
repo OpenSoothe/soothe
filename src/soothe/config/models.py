@@ -419,11 +419,13 @@ class DurabilityProtocolConfig(BaseModel):
         backend: Durability backend for thread lifecycle and metadata.
         checkpointer: LangGraph checkpoint backend (consistent naming).
         persist_dir: Directory for durability persistence.
+        thread_inactivity_timeout_hours: Hours before an active thread with no updates is marked as suspended.
     """
 
     backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
     checkpointer: Literal["postgresql"] = "postgresql"
     persist_dir: str | None = None
+    thread_inactivity_timeout_hours: int = Field(default=72, ge=1, le=720)
 
 
 class ProtocolsConfig(BaseModel):

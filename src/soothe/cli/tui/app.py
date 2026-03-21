@@ -45,7 +45,6 @@ class SootheApp(App):
     """Textual application for the Soothe TUI."""
 
     TITLE = "Soothe"
-    SUB_TITLE = "^q: Quit | ^d: Detach | ^c: Cancel | ^e: Focus | ^y: Copy | ^t: Toggle Plan"
     CSS = """
     #main-layout {
         layout: vertical;
@@ -68,6 +67,8 @@ class SootheApp(App):
         height: auto;
         max-height: 20;
         padding: 0 1;
+        border: none;
+        overflow: hidden;
     }
     #plan-tree.hidden {
         display: none;
@@ -170,9 +171,11 @@ class SootheApp(App):
                     return
                 await asyncio.sleep(0.25)
 
-        # Request thread resumption if thread_id was provided
+        # Request thread resumption if thread_id was provided, otherwise request new thread
         if self._thread_id:
             await self._client.send_resume_thread(self._thread_id)
+        else:
+            await self._client.send_new_thread()
 
         while self._connected:
             event = await self._client.read_event()
@@ -196,6 +199,7 @@ class SootheApp(App):
             # Handle thread ID changes
             if event.get("type") == "status":
                 state_str = event.get("state", "")
+                thread_resumed = event.get("thread_resumed", False)
 
                 # Load input history
                 history = event.get("input_history", [])
@@ -205,9 +209,13 @@ class SootheApp(App):
 
                 tid = event.get("thread_id", self._state.thread_id)
                 previous_thread_id = self._thread_id
-                if tid and tid != previous_thread_id:
+
+                # Load history if thread changed or explicitly resumed
+                should_load_history = (tid and tid != previous_thread_id) or thread_resumed
+
+                if should_load_history and tid:
                     self._thread_id = tid
-                    if self._was_running:
+                    if self._was_running and not thread_resumed:
                         # Post-query thread change: the runner assigned a new
                         # thread_id during execution.  Preserve the in-memory
                         # conversation (already rendered) and just update the
@@ -399,20 +407,11 @@ class SootheApp(App):
         self._refresh_plan()
 
     def _refresh_plan(self) -> None:
-        """Update plan tree display with activity info."""
+        """Update plan tree display."""
         try:
             plan_tree = self.query_one("#plan-tree", PlanTree)
 
-            # Build content with activity and plan
-            content_parts = []
-
-            # Add activity info (last 5 lines)
-            last_5 = self._state.activity_lines[-5:] if self._state.activity_lines else []
-            if last_5:
-                activity_content = "\n".join(str(line) for line in last_5)
-                content_parts.append(f"[dim]Recent Activity:[/dim]\n{activity_content}")
-
-            # Add plan tree
+            # Only show plan tree, not recent activity
             if self._state.current_plan:
                 tree = render_plan_tree(self._state.current_plan)
                 # Render Tree to string using Console
@@ -423,15 +422,9 @@ class SootheApp(App):
                 console = Console(file=StringIO(), force_terminal=True)
                 console.print(tree)
                 plan_content = console.file.getvalue()
-                if content_parts:
-                    content_parts.append("")  # Add separator
-                content_parts.append(f"[dim]Plan:[/dim]\n{plan_content}")
-
-            # Update the widget
-            if content_parts:
-                plan_tree.update("\n".join(content_parts))
+                plan_tree.update(plan_content)
             else:
-                plan_tree.update("[dim]No recent activity or active plan.[/dim]")
+                plan_tree.update("[dim]No active plan.[/dim]")
         except Exception:
             logger.debug("Failed to refresh plan tree", exc_info=True)
 
@@ -442,9 +435,9 @@ class SootheApp(App):
             conv_panel = self.query_one("#conversation", ConversationPanel)
             conv_panel.clear()
 
-            # Clear plan tree (includes activity info)
+            # Clear plan tree
             plan_tree = self.query_one("#plan-tree", PlanTree)
-            plan_tree.update("[dim]No recent activity or active plan.[/dim]")
+            plan_tree.update("[dim]No active plan.[/dim]")
 
             # Clear internal state
             self._conversation_history.clear()

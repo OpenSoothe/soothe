@@ -64,6 +64,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._stop_event: asyncio.Event | None = None
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._cleanup_task: asyncio.Task[None] | None = None
+        self._inactivity_check_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
         self._input_history: InputHistory | None = None
         self._pid_lock_fd: int | None = None
@@ -107,6 +108,7 @@ class SootheDaemon(DaemonHandlersMixin):
         logger.info("Soothe daemon listening on %s", sock)
 
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+        self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
 
         # Detect incomplete threads from previous daemon run (RFC-0010)
         await self._detect_incomplete_threads()
@@ -212,10 +214,81 @@ class SootheDaemon(DaemonHandlersMixin):
                 except Exception:
                     logger.warning("Periodic cleanup failed", exc_info=True)
 
+    async def _periodic_inactivity_check(self) -> None:
+        """Check for inactive threads every hour and suspend them."""
+        while self._running:
+            await asyncio.sleep(3600)  # Check every hour
+            try:
+                await self._suspend_inactive_threads()
+            except Exception:
+                logger.warning("Periodic inactivity check failed", exc_info=True)
+
+    async def _suspend_inactive_threads(self) -> None:
+        """Suspend threads that have been inactive for longer than the configured timeout."""
+        if not self._runner or not hasattr(self._runner, "_durability"):
+            return
+
+        from datetime import datetime, timedelta
+
+        from soothe.protocols.durability import ThreadFilter
+
+        # Get timeout from config (in hours)
+        timeout_hours = self._config.protocols.durability.thread_inactivity_timeout_hours
+        timeout_threshold = datetime.now(tz=None) - timedelta(hours=timeout_hours)
+
+        # Get all active threads
+        active_threads = await self._runner._durability.list_threads(ThreadFilter(status="active"))
+
+        suspended_count = 0
+        for thread in active_threads:
+            # Skip the currently active thread if it exists
+            if self._runner.current_thread_id and thread.thread_id == self._runner.current_thread_id:
+                continue
+
+            # Check if thread has been inactive
+            # Use updated_at (make naive for comparison if needed)
+            updated_at = thread.updated_at
+            if updated_at.tzinfo is not None:
+                # Convert to naive datetime for comparison
+                updated_at = updated_at.replace(tzinfo=None)
+                threshold_with_tz = timeout_threshold.replace(tzinfo=None)
+            else:
+                threshold_with_tz = timeout_threshold
+
+            if updated_at < threshold_with_tz:
+                try:
+                    await self._runner._durability.suspend_thread(thread.thread_id)
+                    suspended_count += 1
+                    logger.info(
+                        "Suspended inactive thread %s (last updated: %s)",
+                        thread.thread_id,
+                        thread.updated_at,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to suspend inactive thread %s",
+                        thread.thread_id,
+                        exc_info=True,
+                    )
+
+        if suspended_count > 0:
+            logger.info("Suspended %d inactive threads (timeout: %d hours)", suspended_count, timeout_hours)
+
     async def stop(self) -> None:
         """Shut down the daemon gracefully."""
         self._running = False
         self._query_running = False
+
+        # Cancel background tasks
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._cleanup_task
+
+        if self._inactivity_check_task and not self._inactivity_check_task.done():
+            self._inactivity_check_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._inactivity_check_task
 
         # Cancel any running query task
         if self._current_query_task and not self._current_query_task.done():

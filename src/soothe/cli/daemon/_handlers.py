@@ -103,8 +103,17 @@ class DaemonHandlersMixin:
             if thread_id:
                 self._runner.set_current_thread_id(thread_id)
                 await self._broadcast(
-                    {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+                    {
+                        "type": "status",
+                        "state": "idle",
+                        "thread_id": self._runner.current_thread_id or "",
+                        "thread_resumed": True,
+                    }
                 )
+        elif msg_type == "new_thread":
+            # Clear the current thread ID to start a fresh thread
+            self._runner.set_current_thread_id(None)
+            await self._broadcast({"type": "status", "state": "idle", "thread_id": ""})
         elif msg_type == "detach":
             await self._send(client, {"type": "status", "state": "detached"})
         else:
@@ -182,8 +191,14 @@ class DaemonHandlersMixin:
             thread_id = parts[2].strip()
             if thread_id:
                 self._runner.set_current_thread_id(thread_id)
+                # Broadcast status with thread_resumed flag to trigger history load
                 await self._broadcast(
-                    {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+                    {
+                        "type": "status",
+                        "state": "idle",
+                        "thread_id": self._runner.current_thread_id or "",
+                        "thread_resumed": True,
+                    }
                 )
                 return
 
@@ -281,6 +296,9 @@ class DaemonHandlersMixin:
         if self._thread_logger:
             self._thread_logger.log_user_input(text)
 
+        # Update thread's updated_at timestamp
+        await self._update_thread_timestamp(thread_id)
+
         if self._input_history:
             self._input_history.add(text)
 
@@ -366,4 +384,29 @@ class DaemonHandlersMixin:
         if full_response:
             self._thread_logger.log_assistant_response("".join(full_response))
 
+        # Update thread's updated_at timestamp for final response
+        if final_thread_id:
+            await self._update_thread_timestamp(final_thread_id)
+
         await self._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
+
+    async def _update_thread_timestamp(self, thread_id: str) -> None:
+        """Update the thread's updated_at timestamp to track activity."""
+        if not thread_id or not hasattr(self._runner, "_durability"):
+            return
+
+        try:
+            from datetime import UTC, datetime
+
+            # Load current thread info
+            thread_data = self._runner._durability._store.load(f"thread:{thread_id}")
+            if thread_data:
+                from soothe.protocols.durability import ThreadInfo
+
+                thread_info = ThreadInfo.model_validate(thread_data)
+                # Update timestamp
+                thread_info = thread_info.model_copy(update={"updated_at": datetime.now(UTC)})
+                self._runner._durability._store.save(f"thread:{thread_id}", thread_info.model_dump(mode="json"))
+                logger.debug("Thread %s updated_at refreshed", thread_id)
+        except Exception:
+            logger.debug("Failed to update thread timestamp", exc_info=True)

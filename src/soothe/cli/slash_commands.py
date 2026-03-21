@@ -342,11 +342,13 @@ async def _handle_thread_command(
             table.add_column("ID", style="cyan")
             table.add_column("Status")
             table.add_column("Created")
+            table.add_column("Last Message")
             for t in threads:
                 table.add_row(
                     t.get("thread_id", "?"),
                     t.get("status", "?"),
                     str(t.get("created_at", "?"))[:19],
+                    str(t.get("updated_at", "?"))[:19],
                 )
             console.print(table)
         except Exception as exc:
