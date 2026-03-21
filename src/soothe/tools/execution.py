@@ -431,7 +431,7 @@ class RunCommandTool(BaseTool):
 
 
 class RunPythonTool(BaseTool):
-    """Execute Python code with session persistence.
+    r"""Execute Python code with session persistence.
 
     Use this tool for data analysis, calculations, and Python scripting.
     Variables persist across calls within the same thread, enabling iterative
@@ -477,9 +477,7 @@ class RunPythonTool(BaseTool):
 
         # Get session manager and execute
         manager = get_session_manager()
-        result = manager.execute(session_id=actual_session_id, code=code)
-
-        return result
+        return manager.execute(session_id=actual_session_id, code=code)
 
     async def _arun(self, code: str, session_id: str | None = None) -> dict[str, Any]:
         """Async execution (delegates to sync)."""
@@ -568,12 +566,12 @@ class KillProcessTool(BaseTool):
             output = child.before or ""
             output = ANSI_ESCAPE.sub("", output)
 
+        except Exception as e:
+            return f"Error killing process: {e}"
+        else:
             if "Process not found" in output:
                 return f"Process {pid} not found or already terminated"
             return f"Process {pid} terminated"
-
-        except Exception as e:
-            return f"Error killing process: {e}"
 
     async def _arun(self, pid: int) -> str:
         """Async execution (delegates to sync)."""

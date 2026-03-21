@@ -17,8 +17,8 @@ def run_impl(
     prompt: str | None,
     config: str | None,
     thread_id: str | None,
-    no_tui: bool,
-    autonomous: bool,
+    no_tui: bool,  # noqa: FBT001
+    autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     output_format: str,
     progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,

@@ -140,7 +140,8 @@ def assert_tool_error_contains(collector: StreamEventCollector, tool_name: str, 
         if isinstance(result, dict) and "error" in result:
             if error_substring in result["error"]:
                 return
-    raise AssertionError(f"No error containing '{error_substring}' in {tool_name} calls")
+    msg = f"No error containing '{error_substring}' in {tool_name} calls"
+    raise AssertionError(msg)
 
 
 def assert_policy_denied(collector: StreamEventCollector, action: str) -> None:
@@ -568,7 +569,8 @@ class TestComposedResearchWorkflow:
         collector = StreamEventCollector()
         await collector.collect(
             soothe_runner,
-            "Crawl the Python documentation page at https://docs.python.org/3/library/asyncio.html and extract the main concepts",
+            "Crawl the Python documentation page at "
+            "https://docs.python.org/3/library/asyncio.html and extract the main concepts",
         )
 
         # Should use crawl tool

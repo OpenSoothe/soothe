@@ -7,7 +7,6 @@ dramatically reducing the risk of errors and improving workflow efficiency.
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -119,12 +118,11 @@ class EditFileLinesTool(BaseTool):
             with file_path.open("w", encoding="utf-8") as f:
                 f.writelines(lines)
 
-            msg = (
+            return (
                 f"Updated {_display_path(file_path, self.work_dir)}\n"
                 f"Lines {start_line}-{end_line} replaced "
                 f"({lines_removed} removed, {lines_added} added)"
             )
-            return msg
 
         except (FileNotFoundError, ValueError) as e:
             return f"Error: {e}"
@@ -193,16 +191,17 @@ class InsertLinesTool(BaseTool):
             # Validate path
             file_path = self._resolve_path(path)
             if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {path}")
+                msg = f"File not found: {path}"
+                raise FileNotFoundError(msg)
 
             # Read file
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = Path(file_path).read_text(encoding="utf-8").splitlines(keepends=True)
 
             # Validate line number
             total_lines = len(lines)
             if line < 1 or line > total_lines + 1:
-                raise ValueError(f"Invalid line: {line}. Must be between 1 and {total_lines + 1}.")
+                msg = f"Invalid line: {line}. Must be between 1 and {total_lines + 1}."
+                raise ValueError(msg)
 
             # Prepare content
             new_lines = content.splitlines(keepends=True)
@@ -214,8 +213,7 @@ class InsertLinesTool(BaseTool):
             lines[line - 1 : line - 1] = new_lines
 
             # Write back
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
+            Path(file_path).write_text("".join(lines), encoding="utf-8")
 
             return f"Inserted {lines_inserted} lines at line {line} in {_display_path(file_path, self.work_dir)}"
 
@@ -283,38 +281,39 @@ class DeleteLinesTool(BaseTool):
             # Validate path
             file_path = self._resolve_path(path)
             if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {path}")
+                msg = f"File not found: {path}"
+                raise FileNotFoundError(msg)
 
             # Read file
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = Path(file_path).read_text(encoding="utf-8").splitlines(keepends=True)
 
             # Validate line range
             total_lines = len(lines)
             if start_line < 1 or start_line > total_lines:
-                raise ValueError(f"Invalid start_line: {start_line}. File has {total_lines} lines.")
+                msg = f"Invalid start_line: {start_line}. File has {total_lines} lines."
+                raise ValueError(msg)
             if end_line < start_line or end_line > total_lines:
-                raise ValueError(
+                msg = (
                     f"Invalid end_line: {end_line}. "
                     f"Must be >= start_line ({start_line}) and <= total lines ({total_lines})."
                 )
+                raise ValueError(msg)
 
             # Delete
             lines_deleted = end_line - start_line + 1
             del lines[start_line - 1 : end_line]
 
             # Write back
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
-
-            display_path = _display_path(file_path, self.work_dir)
-            return f"Deleted lines {start_line}-{end_line} ({lines_deleted} lines) from {display_path}"
+            Path(file_path).write_text("".join(lines), encoding="utf-8")
 
         except (FileNotFoundError, ValueError) as e:
             return f"Error: {e}"
         except Exception as e:
             logger.exception("Failed to delete lines")
             return f"Error deleting lines: {e}"
+        else:
+            display_path = _display_path(file_path, self.work_dir)
+            return f"Deleted lines {start_line}-{end_line} ({lines_deleted} lines) from {display_path}"
 
     async def _arun(self, path: str, start_line: int, end_line: int) -> str:
         """Async execution (delegates to sync)."""
@@ -373,7 +372,8 @@ class ApplyDiffTool(BaseTool):
             # Validate path
             file_path = self._resolve_path(path)
             if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {path}")
+                msg = f"File not found: {path}"
+                raise FileNotFoundError(msg)
 
             # Create temporary patch file
             with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as patch_file:
@@ -383,19 +383,24 @@ class ApplyDiffTool(BaseTool):
             try:
                 # Apply patch using patch command
                 result = subprocess.run(
-                    ["patch", "-p0", "-i", patch_path, str(file_path)], capture_output=True, text=True, timeout=10
+                    ["patch", "-p0", "-i", patch_path, str(file_path)],  # noqa: S607
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
                 )
 
                 if result.returncode != 0:
-                    raise ValueError(
+                    msg = (
                         f"Failed to apply diff:\n{result.stderr}\nEnsure diff is in unified format and applies cleanly."
                     )
+                    raise ValueError(msg)
 
                 return f"Applied diff to {_display_path(file_path, self.work_dir)}"
 
             finally:
                 # Clean up temporary file
-                os.unlink(patch_path)
+                Path(patch_path).unlink()
 
         except (FileNotFoundError, ValueError) as e:
             return f"Error: {e}"

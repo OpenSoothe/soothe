@@ -39,7 +39,7 @@ def main(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
-    no_tui: Annotated[
+    no_tui: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
     ] = False,

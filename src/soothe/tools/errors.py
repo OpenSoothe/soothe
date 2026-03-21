@@ -119,7 +119,7 @@ def command_timeout_error(command: str, timeout: int) -> ToolError:
     )
 
 
-def python_execution_error(code: str, error_msg: str) -> ToolError:
+def python_execution_error(code: str, error_msg: str) -> ToolError:  # noqa: ARG001
     """Generate Python execution error."""
     suggestions = ["Check the Python syntax"]
 

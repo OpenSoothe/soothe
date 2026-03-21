@@ -321,14 +321,15 @@ class AskAboutFileTool(BaseTool):
                 from soothe.tools._internal.tabular import TabularColumnsTool
 
                 columns_info = TabularColumnsTool()._run(file_path)
+            except Exception as exc:
+                logger.exception("Tabular question answering failed")
+                return f"Error answering question: {exc}"
+            else:
                 return (
                     f"Data schema:\n{columns_info}\n\n"
                     f"For detailed analysis, use the `run_python` tool "
                     f"to execute pandas code."
                 )
-            except Exception as exc:
-                logger.exception("Tabular question answering failed")
-                return f"Error answering question: {exc}"
 
         if domain == "document":
             try:

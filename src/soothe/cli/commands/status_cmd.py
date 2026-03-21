@@ -16,11 +16,11 @@ def agent_list(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
-    enabled: Annotated[
+    enabled: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--enabled", help="Show only enabled agents."),
     ] = False,
-    disabled: Annotated[
+    disabled: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--disabled", help="Show only disabled agents."),
     ] = False,

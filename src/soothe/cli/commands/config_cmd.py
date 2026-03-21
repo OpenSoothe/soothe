@@ -21,7 +21,7 @@ def config_show(
         str,
         typer.Option("--format", "-f", help="Output format: json or summary."),
     ] = "summary",
-    show_sensitive: Annotated[  # noqa: ARG001
+    show_sensitive: Annotated[  # noqa: ARG001, FBT002
         bool,
         typer.Option("--show-sensitive", "-s", help="Show sensitive values like API keys."),
     ] = False,
@@ -107,7 +107,7 @@ def config_show(
 
 
 def config_init(
-    force: Annotated[
+    force: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--force", "-f", help="Overwrite existing configuration."),
     ] = False,

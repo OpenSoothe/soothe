@@ -221,15 +221,13 @@ class WriteFileTool(BaseTool):
         try:
             resolved = self._resolve_path(path)
 
-            if mode == "append":
+            if mode == "append" and resolved.exists():
                 # Read existing content and append
-                if resolved.exists():
-                    existing = resolved.read_text(encoding="utf-8")
-                    content = existing + "\n" + content
+                existing = resolved.read_text(encoding="utf-8")
+                content = existing + "\n" + content
 
-            if resolved.exists() and mode == "overwrite":
-                if not self.backup_enabled:
-                    return f"Error: File already exists: {resolved}. Use mode='append' or enable backups."
+            if resolved.exists() and mode == "overwrite" and not self.backup_enabled:
+                return f"Error: File already exists: {resolved}. Use mode='append' or enable backups."
 
             content_size = len(content.encode("utf-8"))
             if content_size > self.max_file_size:
@@ -436,7 +434,7 @@ class ListFilesTool(BaseTool):
 
     work_dir: str = Field(default="", description="Working directory")
 
-    def _run(self, pattern: str = "*", path: str = ".", recursive: bool = False) -> str:
+    def _run(self, pattern: str = "*", path: str = ".", recursive: bool = False) -> str:  # noqa: FBT001, FBT002
         """List files matching glob pattern.
 
         Args:
@@ -476,7 +474,7 @@ class ListFilesTool(BaseTool):
             logger.exception("Failed to list files")
             return f"Error listing files: {e}"
 
-    async def _arun(self, pattern: str = "*", path: str = ".", recursive: bool = False) -> str:
+    async def _arun(self, pattern: str = "*", path: str = ".", recursive: bool = False) -> str:  # noqa: FBT001, FBT002
         """Async execution (delegates to sync)."""
         return self._run(pattern, path, recursive)
 

@@ -52,7 +52,6 @@ if __name__ == "__main__":
         "auto_retry_hint": "read_file(path='/path/to/file.py')",
     }
 
-    print(format_tool_error(error))
     # Output:
     # ❌ Error: File already exists
     #

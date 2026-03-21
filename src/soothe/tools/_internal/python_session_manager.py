@@ -6,9 +6,10 @@ to persist across multiple run_python calls within the same thread.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from threading import Lock, RLock
-from typing import Any
+from typing import Any, Self
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class PythonSessionManager:
     _instance: PythonSessionManager | None = None
     _lock: RLock = RLock()
 
-    def __new__(cls) -> PythonSessionManager:
+    def __new__(cls) -> Self:
         """Singleton pattern for global session management."""
         if cls._instance is None:
             with cls._lock:
@@ -57,13 +58,13 @@ class PythonSessionManager:
                         self._sessions[session_id] = shell
                         self._session_locks[session_id] = Lock()
 
-                        logger.info(f"Created new Python session: {session_id}")
+                        logger.info("Created new Python session: %s", session_id)
 
                     except ImportError:
                         logger.warning("IPython not available, sessions will not persist")
                         return None
-                    except Exception as e:
-                        logger.exception(f"Failed to create Python session: {e}")
+                    except Exception:
+                        logger.exception("Failed to create Python session")
                         return None
 
         return self._sessions[session_id]
@@ -95,10 +96,9 @@ class PythonSessionManager:
 
                 # Extract output
                 output = ""
-                if result.success:
+                if result.success and hasattr(result, "output") and result.output:
                     # Get stdout/stderr
-                    if hasattr(result, "output") and result.output:
-                        output = str(result.output)
+                    output = str(result.output)
 
                 # Get return value
                 result_value = None
@@ -113,7 +113,7 @@ class PythonSessionManager:
                 }
 
             except Exception as e:
-                logger.exception(f"Failed to execute code in session {session_id}")
+                logger.exception("Failed to execute code in session %s", session_id)
                 return {"success": False, "output": "", "result": None, "error": str(e)}
 
     def _execute_stateless(self, code: str) -> dict[str, Any]:
@@ -130,16 +130,14 @@ class PythonSessionManager:
             stderr_capture = io.StringIO()
 
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                exec(code, namespace)
+                exec(code, namespace)  # noqa: S102
 
             # Get result if there's a single expression
             result = None
             if code.strip() and "\n" not in code.strip():
                 # Try to evaluate as expression
-                try:
-                    result = eval(code.strip(), namespace)
-                except SyntaxError:
-                    pass
+                with contextlib.suppress(SyntaxError):
+                    result = eval(code.strip(), namespace)  # noqa: S307
 
             return {
                 "success": True,
@@ -162,9 +160,9 @@ class PythonSessionManager:
                 try:
                     shell = self._sessions.pop(session_id)
                     shell.reset()
-                    logger.info(f"Cleaned up Python session: {session_id}")
+                    logger.info("Cleaned up Python session: %s", session_id)
                 except Exception as e:
-                    logger.warning(f"Error cleaning up session {session_id}: {e}")
+                    logger.warning("Error cleaning up session %s: %s", session_id, e)
 
                 if session_id in self._session_locks:
                     del self._session_locks[session_id]
