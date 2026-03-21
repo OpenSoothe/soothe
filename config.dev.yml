@@ -141,7 +141,8 @@ tools:
     enabled: true
     default_engines:
       - tavily          # Requires TAVILY_API_KEY (set in environment)
-      - duckduckgo      # No API key required
+      - duckduckgo
+      - brave
     max_results_per_engine: 10
     timeout: 30
   research:
