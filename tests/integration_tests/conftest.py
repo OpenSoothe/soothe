@@ -43,8 +43,19 @@ def pytest_collection_modifyitems(config, items) -> None:
 
 @pytest.fixture
 def integration_config() -> SootheConfig:
-    """Default config for integration tests with reduced limits."""
-    config = SootheConfig()
+    """Default config for integration tests with reduced limits.
+
+    Loads from config.dev.yml if available, otherwise uses defaults.
+    """
+    from pathlib import Path
+
+    # Try to load from config.dev.yml in project root
+    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
+    if config_path.exists():
+        config = SootheConfig.from_yaml_file(str(config_path))
+    else:
+        config = SootheConfig()
+
     # Use smaller limits for faster testing
     config.execution.concurrency.max_parallel_goals = 1
     config.execution.concurrency.max_parallel_steps = 1
@@ -72,10 +83,21 @@ def temp_workspace():
 
 @pytest.fixture
 def web_enabled_config() -> SootheConfig:
-    """Config with web tools enabled."""
+    """Config with web tools enabled.
+
+    Loads from config.dev.yml if available, otherwise uses defaults.
+    """
+    from pathlib import Path
+
     from soothe.config.models import ToolsConfig
 
-    config = SootheConfig()
+    # Try to load from config.dev.yml in project root
+    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
+    if config_path.exists():
+        config = SootheConfig.from_yaml_file(str(config_path))
+    else:
+        config = SootheConfig()
+
     config.tools = ToolsConfig(
         execution={"enabled": True},
         file_ops={"enabled": True},

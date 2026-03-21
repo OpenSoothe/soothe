@@ -35,6 +35,43 @@ _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 
 
+def _handle_agentic_event(data: dict[str, Any], state: TuiState, event_type: str) -> None:
+    """Handle agentic loop events (RFC-0008).
+
+    Args:
+        data: Event data
+        state: TUI state
+        event_type: Event type string
+    """
+    from rich.text import Text
+
+    if event_type == "soothe.agentic.loop.started":
+        state.activity_lines.append(
+            Text.from_markup(f"[bold cyan]🔄 Agentic loop started[/] (max {data.get('max_iterations', 3)} iterations)")
+        )
+    elif event_type == "soothe.agentic.iteration.started":
+        iteration = data.get("iteration", 0)
+        strategy = data.get("planning_strategy", "unknown")
+        state.activity_lines.append(Text.from_markup(f"[dim]  Iteration {iteration + 1} ({strategy} planning)[/]"))
+    elif event_type == "soothe.agentic.observation.completed":
+        context = data.get("context_entries", 0)
+        memories = data.get("memories_recalled", 0)
+        strategy = data.get("planning_strategy", "unknown")
+        state.activity_lines.append(
+            Text.from_markup(f"[dim]    ↳ Observed: {context} context, {memories} memories → {strategy}[/]")
+        )
+    elif event_type == "soothe.agentic.verification.completed":
+        should_continue = data.get("should_continue", False)
+        outcome = "→ continuing" if should_continue else "✓ complete"
+        state.activity_lines.append(Text.from_markup(f"[dim]    ↳ Verified: {outcome}[/]"))
+    elif event_type == "soothe.agentic.loop.completed":
+        iterations = data.get("total_iterations", 0)
+        outcome = data.get("outcome", "unknown")
+        state.activity_lines.append(
+            Text.from_markup(f"[bold green]✓ Agentic loop completed[/] ({iterations} iterations, {outcome})")
+        )
+
+
 class _TuiOutputFormatter(OutputFormatter):
     """TUI output formatter for activity panel."""
 
@@ -163,8 +200,11 @@ def process_daemon_event(
             if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
                 state.multi_step_active = True
 
+            # Route agentic events (RFC-0008)
+            if etype.startswith("soothe.agentic."):
+                _handle_agentic_event(data, state, etype)
             # Plan state must always be updated regardless of verbosity
-            if category == "protocol" and "plan" in etype:
+            elif category == "protocol" and "plan" in etype:
                 _handle_protocol_event(data, state, verbosity="normal")
                 if on_plan_refresh:
                     on_plan_refresh()

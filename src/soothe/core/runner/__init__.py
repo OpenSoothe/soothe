@@ -1,4 +1,4 @@
-"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0009).
+"""SootheRunner -- protocol-orchestrated agent runner (RFC-0003, RFC-0007, RFC-0008, RFC-0009).
 
 Wraps `create_soothe_agent()` with protocol pre/post-processing and
 yields the deepagents-canonical ``(namespace, mode, data)`` stream
@@ -8,13 +8,17 @@ RFC-0007 adds autonomous iteration: when ``autonomous=True``, the runner
 loops reflect -> revise -> re-execute until the goal is complete or
 max_iterations is reached.
 
+RFC-0008 adds agentic loop: default execution mode with observe → act → verify
+iterative refinement loop replacing single-pass execution.
+
 RFC-0009 adds DAG-based step execution: plans with multiple steps are
 iterated via ``StepScheduler``, independent steps can run in parallel,
 and ``ConcurrencyController`` enforces hierarchical limits.
 
-Implementation is decomposed into four mixins:
+Implementation is decomposed into five mixins:
 
 - `PhasesMixin`     -- pre/post-stream, LangGraph streaming, HITL loop
+- `AgenticMixin`    -- agentic loop (RFC-0008)
 - `AutonomousMixin` -- autonomous iteration loop (RFC-0007)
 - `StepLoopMixin`   -- DAG-based step execution (RFC-0009)
 - `CheckpointMixin` -- progressive checkpoint, artifacts, reports (RFC-0010)
@@ -23,22 +27,21 @@ Implementation is decomposed into four mixins:
 from __future__ import annotations
 
 import logging
-import uuid
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
-
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.core._runner_autonomous import AutonomousMixin
-from soothe.core._runner_checkpoint import CheckpointMixin
-from soothe.core._runner_phases import PhasesMixin
-from soothe.core._runner_shared import StreamChunk, _custom
-from soothe.core._runner_steps import StepLoopMixin
 from soothe.core.event_catalog import FinalReportEvent, PlanOnlyEvent
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
+
+from ._runner_agentic import AgenticMixin
+from ._runner_autonomous import AutonomousMixin
+from ._runner_checkpoint import CheckpointMixin
+from ._runner_phases import PhasesMixin
+from ._runner_shared import StreamChunk, _custom
+from ._runner_steps import StepLoopMixin
+from ._types import IterationRecord, RunnerState, _generate_thread_id
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -51,56 +54,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _generate_thread_id() -> str:
-    """Generate an 8-char hex thread ID (matching deepagents convention)."""
-    return uuid.uuid4().hex[:8]
-
-
-# ---------------------------------------------------------------------------
-# Runner state
-# ---------------------------------------------------------------------------
-
-
-class IterationRecord(BaseModel):
-    """Structured record of a single autonomous iteration (RFC-0007).
-
-    Args:
-        iteration: Zero-based iteration index.
-        goal_id: Goal being worked on.
-        plan_summary: Brief description of the plan at this iteration.
-        actions_summary: Truncated agent response text.
-        reflection_assessment: Planner's reflection assessment.
-        outcome: Whether the iteration continues, completes, or fails.
-    """
-
-    iteration: int
-    goal_id: str
-    plan_summary: str
-    actions_summary: str
-    reflection_assessment: str
-    outcome: Literal["continue", "goal_complete", "failed"]
-
-
-@dataclass
-class RunnerState:
-    """Mutable state accumulated during a single query execution."""
-
-    thread_id: str = ""
-    full_response: list[str] = field(default_factory=list)
-    plan: Plan | None = None
-    context_projection: Any = None
-    recalled_memories: list[Any] = field(default_factory=list)
-    seen_message_ids: set[str] = field(default_factory=set)
-    stream_error: str | None = None
-    unified_classification: Any = None  # Type: UnifiedClassification
-
-
 # ---------------------------------------------------------------------------
 # SootheRunner
 # ---------------------------------------------------------------------------
 
 
-class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin):
+class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin, PhasesMixin):
     """Protocol-orchestrated agent runner.
 
     Wraps ``create_soothe_agent()`` with pre/post protocol steps and
@@ -369,17 +328,18 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
         format.  Protocol events are emitted as ``custom`` events with
         ``soothe.*`` type prefix.
 
-        When ``autonomous=True`` (RFC-0007), the runner loops: reflect ->
-        revise -> re-execute until the goal is complete or ``max_iterations``
-        is reached.
+        **Two execution modes**:
+        - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit goal management
+        - Default (RFC-0008): Agentic loop with observe → act → verify iteration
 
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
-            autonomous: Enable autonomous iteration loop.
-            max_iterations: Override ``autonomous_max_iterations`` from config.
+            autonomous: Enable autonomous iteration loop (explicit goals).
+            max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
         """
+        # Priority: autonomous > default (agentic)
         if autonomous and self._goal_engine:
             async for chunk in self._run_autonomous(
                 user_input,
@@ -389,197 +349,12 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, PhasesMixin)
                 yield chunk
             return
 
-        async for chunk in self._run_single_pass(user_input, thread_id=thread_id, subagent=subagent):
+        # Default: agentic loop (RFC-0008)
+        async for chunk in self._run_agentic_loop(
+            user_input,
+            thread_id=thread_id,
+            max_iterations=max_iterations or self._config.agentic.max_iterations,
+            observation_strategy=self._config.agentic.observation_strategy,
+            verification_strictness=self._config.agentic.verification_strictness,
+        ):
             yield chunk
-
-    async def _run_single_pass(
-        self,
-        user_input: str,
-        *,
-        thread_id: str | None = None,
-        subagent: str | None = None,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Single-pass execution with two-tier classification.
-
-        Tier-1 (fast routing) decides chitchat vs. non-chitchat immediately.
-        For non-chitchat, tier-2 enrichment runs concurrently with the
-        independent pre-stream work (thread/policy/memory/context).
-
-        Args:
-            user_input: The user's query text.
-            thread_id: Thread ID for persistence. Generated if not provided.
-            subagent: Optional subagent name to route the query to directly.
-        """
-        import asyncio
-
-        from soothe.cognition import UnifiedClassification
-
-        state = RunnerState()
-        state.thread_id = thread_id or self._current_thread_id or ""
-        self._current_thread_id = state.thread_id or None
-
-        # If subagent is explicitly specified, bypass classification and route directly
-        if subagent:
-            async for chunk in self._run_direct_subagent(user_input, subagent, state):
-                yield chunk
-            return
-
-        # -- Tier 1: fast routing (~2-4s) -----------------------------------
-        if self._unified_classifier:
-            routing = await self._unified_classifier.classify_routing(user_input)
-            complexity = routing.task_complexity
-            logger.info("Tier-1 routing: task_complexity=%s - %s", complexity, user_input[:50])
-        else:
-            routing = None
-            complexity = "medium"
-
-        # Fast path for chitchat (no planning, no state)
-        if complexity == "chitchat":
-            async for chunk in self._run_chitchat(user_input, classification=routing):
-                yield chunk
-            return
-
-        # -- Non-chitchat: planning + pre-stream independent -------
-        # Start planning concurrently with I/O
-        from soothe.protocols.planner import Plan, PlanContext, PlanStep
-
-        planning_task = asyncio.create_task(
-            self._planner.create_plan(
-                user_input,
-                PlanContext(
-                    recent_messages=[user_input],
-                    available_capabilities=[name for name, cfg in self._config.subagents.items() if cfg.enabled],
-                    completed_steps=[],
-                    unified_classification=routing,  # Pass routing directly
-                ),
-            )
-        )
-
-        # Run independent pre-stream (thread, policy, memory, context)
-        # concurrently with planning.
-        collected_chunks = [
-            chunk async for chunk in self._pre_stream_independent(user_input, state, complexity=complexity)
-        ]
-
-        # Await planning
-        try:
-            plan = await planning_task
-            state.plan = plan
-            self._current_plan = plan
-            state.unified_classification = UnifiedClassification.from_routing(routing)
-            logger.info(
-                "Unified planning completed: %d steps, plan_only=%s - %s",
-                len(plan.steps),
-                plan.is_plan_only,
-                user_input[:50],
-            )
-        except Exception:
-            logger.exception("Planning failed")
-            # Fallback to single-step plan
-            plan = Plan(
-                goal=user_input,
-                steps=[PlanStep(id="step_1", description=user_input)],
-                is_plan_only=False,
-            )
-            state.plan = plan
-            state.unified_classification = UnifiedClassification.from_routing(routing)
-
-        # Yield all collected independent pre-stream events
-        for chunk in collected_chunks:
-            yield chunk
-
-        # -- Planning phase (emit plan created event) -----------------------
-        if state.plan:
-            from soothe.cli.rendering.events import PlanCreatedEvent
-
-            yield _custom(
-                PlanCreatedEvent(
-                    goal=state.plan.goal,
-                    steps=[{"id": s.id, "description": s.description} for s in state.plan.steps],
-                ).to_dict()
-            )
-
-        # -- Execute ---------------------------------------------------------
-        is_plan_only = state.plan and state.plan.is_plan_only
-
-        if state.plan and is_plan_only:
-            yield _custom(
-                PlanOnlyEvent(
-                    thread_id=state.thread_id,
-                    goal=state.plan.goal,
-                    step_count=len(state.plan.steps),
-                ).to_dict()
-            )
-        elif state.plan and len(state.plan.steps) > 1:
-            sp_goal_id = "default"
-            if state.plan.goal:
-                sp_goal_id = state.plan.goal[:32].replace(" ", "_").replace("/", "_")
-            async for chunk in self._run_step_loop(user_input, state, state.plan, goal_id=sp_goal_id):
-                yield chunk
-
-            async for chunk in self._synthesize_single_pass_report(state):
-                yield chunk
-        else:
-            async with self._concurrency.acquire_llm_call():
-                async for chunk in self._stream_phase(user_input, state):
-                    yield chunk
-
-        async for chunk in self._post_stream(user_input, state):
-            yield chunk
-
-    async def _synthesize_single_pass_report(
-        self,
-        state: RunnerState,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Synthesize a final report after a multi-step single-pass run.
-
-        Mirrors the autonomous path's report synthesis so the headless CLI
-        can display a consolidated report to the user.
-
-        Args:
-            state: Current runner state with completed plan.
-        """
-        from types import SimpleNamespace
-
-        from soothe.protocols.planner import StepReport as StepReportModel
-
-        plan = state.plan
-        if not plan or len(plan.steps) <= 1:
-            return
-
-        sr_list = [
-            StepReportModel(
-                step_id=s.id,
-                description=s.description,
-                status=s.status if s.status in ("completed", "failed") else "skipped",
-                result=s.result or "",
-                depends_on=s.depends_on,
-            )
-            for s in plan.steps
-            if s.status in ("completed", "failed", "pending")
-        ]
-
-        n_completed = sum(1 for r in sr_list if r.status == "completed")
-        if n_completed == 0:
-            return
-
-        goal_obj = SimpleNamespace(
-            id=state.thread_id or "default",
-            description=plan.goal or "User request",
-        )
-
-        try:
-            summary = await self._synthesize_root_goal_report(goal_obj, sr_list, [])
-        except Exception:
-            logger.debug("Single-pass report synthesis failed", exc_info=True)
-            return
-
-        if summary:
-            yield _custom(
-                FinalReportEvent(
-                    goal_id=goal_obj.id,
-                    description=goal_obj.description,
-                    status="completed" if all(r.status == "completed" for r in sr_list) else "partial",
-                    summary=summary,
-                ).to_dict()
-            )

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command, Interrupt
 
-from soothe.core._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
 from soothe.core.event_catalog import (
     ChitchatResponseEvent,
     ChitchatStartedEvent,
@@ -34,6 +33,8 @@ from soothe.core.event_catalog import (
 from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
+
+from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -238,8 +239,9 @@ class PhasesMixin:
             complexity: Override complexity (when known from tier-1 routing).
                 Falls back to state.unified_classification or "medium".
         """
-        from soothe.core.runner import _generate_thread_id
         from soothe.protocols.durability import ThreadMetadata
+
+        from ._types import _generate_thread_id
 
         if complexity is None:
             complexity = state.unified_classification.task_complexity if state.unified_classification else "medium"

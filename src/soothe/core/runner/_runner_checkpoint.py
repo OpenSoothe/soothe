@@ -9,9 +9,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.core.event_catalog import CheckpointSavedEvent, RecoveryResumedEvent
 from soothe.protocols.planner import Plan, PlanStep
+
+from ._runner_shared import StreamChunk, _custom
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

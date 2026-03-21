@@ -1,16 +1,26 @@
 """Integration tests for System Prompt Optimization feature."""
 
+from pathlib import Path
+
 import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
 
 
+def _load_test_config() -> SootheConfig:
+    """Load config from config.dev.yml if available, otherwise use defaults."""
+    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
+    if config_path.exists():
+        return SootheConfig.from_yaml_file(str(config_path))
+    return SootheConfig()
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_end_to_end_prompt_optimization_enabled():
     """Test that simple queries get optimized prompts when feature is enabled."""
-    config = SootheConfig()
+    config = _load_test_config()
     config.performance.optimize_system_prompts = True
     config.performance.unified_classification = True
 
@@ -30,7 +40,7 @@ async def test_end_to_end_prompt_optimization_enabled():
 @pytest.mark.asyncio
 async def test_end_to_end_prompt_optimization_disabled():
     """Test that optimization can be disabled."""
-    config = SootheConfig()
+    config = _load_test_config()
     config.performance.optimize_system_prompts = False
     config.performance.unified_classification = True
 

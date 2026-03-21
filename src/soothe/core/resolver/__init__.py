@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.config import SOOTHE_HOME, SootheConfig, _resolve_env
-from soothe.core._resolver_infra import resolve_checkpointer, resolve_durability
-from soothe.core._resolver_tools import (
+from ._resolver_infra import resolve_checkpointer, resolve_durability
+from ._resolver_tools import (
     SUBAGENT_FACTORIES,
     resolve_goal_engine,
     resolve_goal_tools,

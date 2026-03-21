@@ -11,8 +11,6 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from soothe.core._runner_goal_directives import GoalDirectivesMixin
-from soothe.core._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
 from soothe.core.event_catalog import (
     FinalReportEvent,
     GoalBatchStartedEvent,
@@ -31,6 +29,9 @@ from soothe.core.event_catalog import (
 )
 from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import PlanContext, StepResult
+
+from ._runner_goal_directives import GoalDirectivesMixin
+from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -63,7 +64,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         """
         import asyncio
 
-        from soothe.core.runner import RunnerState
+        from ._types import RunnerState
 
         if self._goal_engine is None:
             raise RuntimeError("Goal engine not initialized")
@@ -108,7 +109,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             ).to_dict()
         )
 
-        from soothe.core.runner import IterationRecord
+        from ._types import IterationRecord
 
         iteration_records: list[IterationRecord] = []
         total_iterations = 0
@@ -236,7 +237,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         """
         import asyncio
 
-        from soothe.core.runner import IterationRecord, RunnerState
+        from ._types import IterationRecord, RunnerState
 
         yield _custom(
             IterationStartedEvent(

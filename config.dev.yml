@@ -11,15 +11,6 @@
 # Set at least one provider with its API key.
 
 providers:
-  - name: coding-plan
-    provider_type: openai
-    api_key: "${DASHSCOPE_CP_API_KEY}"
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    models:
-      - glm-5
-      - qwen3.5-plus
-      - MiniMax-M2.5
-
   - name: dashscope
     provider_type: openai
     api_key: "${DASHSCOPE_API_KEY}"
@@ -50,9 +41,9 @@ providers:
 
 router:
   default: "dashscope:qwen3.5-flash"
-  think: "coding-plan:glm-5"
+  think: "dashscope:glm-5"
   fast: "dashscope:qwen3.5-flash"
-  image: "coding-plan:qwen3.5-plus"
+  image: "dashscope:qwen3.5-plus"
   embedding: "dashscope:text-embedding-v4"
 
 # =============================================================================

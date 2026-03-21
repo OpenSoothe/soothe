@@ -274,21 +274,20 @@ class TestResolveEnv:
             == "https://example.test/v1"
         )
 
-    def test_resolve_provider_env_missing_raises(self, monkeypatch) -> None:
+    def test_resolve_provider_env_missing_returns_none(self, monkeypatch, caplog) -> None:
+        import logging
+
         monkeypatch.delenv("MISSING_PROVIDER_KEY", raising=False)
-        try:
-            _resolve_provider_env(
+        with caplog.at_level(logging.WARNING):
+            result = _resolve_provider_env(
                 "${MISSING_PROVIDER_KEY}",
                 provider_name="dashscope",
                 field_name="api_key",
             )
-            msg = "Expected unresolved env var to raise ValueError"
-            raise AssertionError(msg)
-        except ValueError as exc:
-            message = str(exc)
-            assert "dashscope" in message
-            assert "MISSING_PROVIDER_KEY" in message
-            assert "providers[].api_key" in message
+        assert result is None
+        assert "dashscope" in caplog.text
+        assert "MISSING_PROVIDER_KEY" in caplog.text
+        assert "providers[].api_key" in caplog.text
 
 
 class TestPropagateEnv:
@@ -331,7 +330,9 @@ class TestPropagateEnv:
         assert os.environ["OPENAI_API_KEY"] == "test-key"
         assert os.environ["OPENAI_BASE_URL"] == "https://proxy.example.com/v1"
 
-    def test_propagate_openai_provider_missing_api_key_env_raises(self, monkeypatch) -> None:
+    def test_propagate_openai_provider_missing_api_key_warns(self, monkeypatch, caplog) -> None:
+        import logging
+
         monkeypatch.delenv("MISSING_OPENAI_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         cfg = SootheConfig(
@@ -343,15 +344,12 @@ class TestPropagateEnv:
                 ),
             ]
         )
-        try:
+        with caplog.at_level(logging.WARNING):
             cfg.propagate_env()
-            msg = "Expected unresolved API key env var to raise ValueError"
-            raise AssertionError(msg)
-        except ValueError as exc:
-            message = str(exc)
-            assert "myopenai" in message
-            assert "MISSING_OPENAI_KEY" in message
-            assert "providers[].api_key" in message
+        # Should emit a warning log
+        assert "myopenai" in caplog.text
+        assert "MISSING_OPENAI_KEY" in caplog.text
+        assert "providers[].api_key" in caplog.text
 
     def test_provider_kwargs_base_url_env_substitution(self, monkeypatch) -> None:
         monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://dashscope.example.com/v1")
@@ -368,7 +366,9 @@ class TestPropagateEnv:
         assert provider_type == "openai"
         assert kwargs["base_url"] == "https://dashscope.example.com/v1"
 
-    def test_provider_kwargs_missing_base_url_env_raises(self, monkeypatch) -> None:
+    def test_provider_kwargs_missing_base_url_env_warns(self, monkeypatch, caplog) -> None:
+        import logging
+
         monkeypatch.delenv("MISSING_BASE_URL", raising=False)
         cfg = SootheConfig(
             providers=[
@@ -379,15 +379,16 @@ class TestPropagateEnv:
                 ),
             ]
         )
-        try:
-            cfg._provider_kwargs("dashscope")
-            msg = "Expected unresolved base_url env var to raise ValueError"
-            raise AssertionError(msg)
-        except ValueError as exc:
-            message = str(exc)
-            assert "dashscope" in message
-            assert "MISSING_BASE_URL" in message
-            assert "providers[].api_base_url" in message
+        with caplog.at_level(logging.WARNING):
+            provider_type, kwargs = cfg._provider_kwargs("dashscope")
+        # Should return the provider type
+        assert provider_type == "openai"
+        # base_url should not be in kwargs since it couldn't be resolved
+        assert "base_url" not in kwargs
+        # Should emit a warning
+        assert "dashscope" in caplog.text
+        assert "MISSING_BASE_URL" in caplog.text
+        assert "providers[].api_base_url" in caplog.text
 
     def test_no_propagate_non_openai(self, monkeypatch) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)

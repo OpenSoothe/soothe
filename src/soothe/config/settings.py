@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings
 
 from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
+    AgenticLoopConfig,
     AutonomousConfig,
     ExecutionConfig,
     LoggingConfig,
@@ -133,6 +134,9 @@ class SootheConfig(BaseSettings):
     autonomous: AutonomousConfig = Field(default_factory=AutonomousConfig)
     """Autonomous operation configuration."""
 
+    agentic: AgenticLoopConfig = Field(default_factory=AgenticLoopConfig)
+    """Agentic loop configuration (RFC-0008)."""
+
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     """Logging and observability configuration."""
 
@@ -228,27 +232,33 @@ class SootheConfig(BaseSettings):
 
         if provider_type == "pgvector":
             if provider.dsn:
-                kwargs["dsn"] = _resolve_provider_env(
+                resolved = _resolve_provider_env(
                     provider.dsn,
                     provider_name=provider.name,
                     field_name="dsn",
                 )
+                if resolved:
+                    kwargs["dsn"] = resolved
             kwargs["pool_size"] = provider.pool_size
             kwargs["index_type"] = provider.index_type
 
         elif provider_type == "weaviate":
             if provider.url:
-                kwargs["url"] = _resolve_provider_env(
+                resolved = _resolve_provider_env(
                     provider.url,
                     provider_name=provider.name,
                     field_name="url",
                 )
+                if resolved:
+                    kwargs["url"] = resolved
             if provider.api_key:
-                kwargs["api_key"] = _resolve_provider_env(
+                resolved = _resolve_provider_env(
                     provider.api_key,
                     provider_name=provider.name,
                     field_name="api_key",
                 )
+                if resolved:
+                    kwargs["api_key"] = resolved
             kwargs["grpc_port"] = provider.grpc_port
 
         return provider_type, kwargs
@@ -350,19 +360,23 @@ class SootheConfig(BaseSettings):
         if provider:
             provider_type = provider.provider_type
             if provider.api_base_url:
-                kwargs["base_url"] = _resolve_provider_env(
+                resolved = _resolve_provider_env(
                     provider.api_base_url,
                     provider_name=provider.name,
                     field_name="api_base_url",
                 )
-                if provider_type == "openai":
-                    kwargs["use_responses_api"] = False
+                if resolved:
+                    kwargs["base_url"] = resolved
+                    if provider_type == "openai":
+                        kwargs["use_responses_api"] = False
             if provider.api_key:
-                kwargs["api_key"] = _resolve_provider_env(
+                resolved = _resolve_provider_env(
                     provider.api_key,
                     provider_name=provider.name,
                     field_name="api_key",
                 )
+                if resolved:
+                    kwargs["api_key"] = resolved
         return provider_type, kwargs
 
     def create_chat_model(self, role: str = "default") -> BaseChatModel:
@@ -479,18 +493,21 @@ class SootheConfig(BaseSettings):
                     provider_name=provider.name,
                     field_name="api_key",
                 )
-                os.environ.setdefault("OPENAI_API_KEY", resolved_key)
+                if resolved_key:
+                    os.environ.setdefault("OPENAI_API_KEY", resolved_key)
                 if provider.api_base_url:
                     resolved_base_url = _resolve_provider_env(
                         provider.api_base_url,
                         provider_name=provider.name,
                         field_name="api_base_url",
                     )
-                    os.environ.setdefault("OPENAI_BASE_URL", resolved_base_url)
+                    if resolved_base_url:
+                        os.environ.setdefault("OPENAI_BASE_URL", resolved_base_url)
             elif provider.provider_type == "ollama" and provider.api_base_url:
                 resolved_base_url = _resolve_provider_env(
                     provider.api_base_url,
                     provider_name=provider.name,
                     field_name="api_base_url",
                 )
-                os.environ.setdefault("OLLAMA_HOST", resolved_base_url)
+                if resolved_base_url:
+                    os.environ.setdefault("OLLAMA_HOST", resolved_base_url)

@@ -497,6 +497,109 @@ class AutonomousConfig(BaseModel):
     enable_dynamic_goals: bool = Field(default=True)
 
 
+class PlanningConfig(BaseModel):
+    """Adaptive planning configuration (RFC-0008).
+
+    Args:
+        simple_max_tokens: Skip planning for queries < N tokens.
+        medium_max_steps: Lightweight planning step limit.
+        complexity_threshold: Tokens threshold for complex planning.
+        force_keywords: Keywords that force comprehensive planning.
+        adaptive_escalation: Escalate planning if iteration shows complexity.
+    """
+
+    simple_max_tokens: int = Field(
+        default=50,
+        description="Skip planning for queries < N tokens",
+    )
+    medium_max_steps: int = Field(
+        default=3,
+        description="Lightweight planning step limit",
+    )
+    complexity_threshold: int = Field(
+        default=160,
+        description="Tokens threshold for complex planning",
+    )
+
+    force_keywords: list[str] = Field(
+        default=["plan for", "create a plan", "steps to"],
+        description="Keywords that force comprehensive planning",
+    )
+
+    adaptive_escalation: bool = Field(
+        default=True,
+        description="Escalate planning if iteration shows complexity",
+    )
+
+
+class EarlyTerminationConfig(BaseModel):
+    """Early termination configuration (RFC-0008).
+
+    Args:
+        enabled: Enable early termination based on completion signals.
+        completion_signals: Signals that indicate task completion.
+        error_threshold: Max errors before stopping iteration.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable early termination based on completion signals",
+    )
+    completion_signals: list[str] = Field(
+        default=["task complete", "done", "finished successfully"],
+        description="Signals that indicate task completion",
+    )
+    error_threshold: int = Field(
+        default=3,
+        description="Max errors before stopping iteration",
+    )
+
+
+class AgenticLoopConfig(BaseModel):
+    """Configuration for agentic loop execution mode (RFC-0008).
+
+    Args:
+        enabled: Enable agentic loop mode.
+        max_iterations: Maximum agentic loop iterations.
+        observation_strategy: Strategy for observation phase.
+        verification_strictness: Strictness level for verification phase.
+        planning: Planning configuration.
+        early_termination: Early termination configuration.
+    """
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable agentic loop mode",
+    )
+
+    max_iterations: int = Field(
+        default=3,
+        description="Maximum agentic loop iterations",
+        ge=1,
+        le=10,
+    )
+
+    observation_strategy: Literal["minimal", "comprehensive", "adaptive"] = Field(
+        default="adaptive",
+        description="Strategy for observation phase",
+    )
+
+    verification_strictness: Literal["lenient", "moderate", "strict"] = Field(
+        default="moderate",
+        description="Strictness level for verification phase",
+    )
+
+    planning: PlanningConfig = Field(
+        default_factory=PlanningConfig,
+        description="Planning configuration",
+    )
+
+    early_termination: EarlyTerminationConfig = Field(
+        default_factory=EarlyTerminationConfig,
+        description="Early termination configuration",
+    )
+
+
 class FileLoggingConfig(BaseModel):
     """File logging configuration.
 

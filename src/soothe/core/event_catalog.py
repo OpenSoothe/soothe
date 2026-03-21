@@ -212,6 +212,76 @@ class RecoveryResumedEvent(LifecycleEvent):
 
 
 # ---------------------------------------------------------------------------
+# Agentic loop events (RFC-0008)
+# ---------------------------------------------------------------------------
+
+
+class AgenticLoopStartedEvent(LifecycleEvent):
+    type: Literal["soothe.agentic.loop.started"] = "soothe.agentic.loop.started"
+    thread_id: str
+    query: str
+    max_iterations: int
+    observation_strategy: str
+    verification_strictness: str
+
+
+class AgenticLoopCompletedEvent(LifecycleEvent):
+    type: Literal["soothe.agentic.loop.completed"] = "soothe.agentic.loop.completed"
+    thread_id: str
+    total_iterations: int
+    outcome: str  # "completed" | "failed" | "escalated"
+
+
+class AgenticIterationStartedEvent(LifecycleEvent):
+    type: Literal["soothe.agentic.iteration.started"] = "soothe.agentic.iteration.started"
+    iteration: int
+    planning_strategy: str
+
+
+class AgenticIterationCompletedEvent(LifecycleEvent):
+    type: Literal["soothe.agentic.iteration.completed"] = "soothe.agentic.iteration.completed"
+    iteration: int
+    planning_strategy: str
+    outcome: str
+    duration_ms: int
+
+
+class AgenticObservationStartedEvent(ProtocolEvent):
+    type: Literal["soothe.agentic.observation.started"] = "soothe.agentic.observation.started"
+    iteration: int
+    strategy: str
+
+
+class AgenticObservationCompletedEvent(ProtocolEvent):
+    type: Literal["soothe.agentic.observation.completed"] = "soothe.agentic.observation.completed"
+    iteration: int
+    context_entries: int
+    memories_recalled: int
+    planning_strategy: str
+
+
+class AgenticVerificationStartedEvent(ProtocolEvent):
+    type: Literal["soothe.agentic.verification.started"] = "soothe.agentic.verification.started"
+    iteration: int
+    strictness: str
+
+
+class AgenticVerificationCompletedEvent(ProtocolEvent):
+    type: Literal["soothe.agentic.verification.completed"] = "soothe.agentic.verification.completed"
+    iteration: int
+    should_continue: bool
+    assessment: str
+
+
+class AgenticPlanningStrategyDeterminedEvent(ProtocolEvent):
+    type: Literal["soothe.agentic.planning.strategy_determined"] = "soothe.agentic.planning.strategy_determined"
+    iteration: int
+    complexity: str
+    strategy: str
+    reason: str
+
+
+# ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
 
@@ -838,6 +908,57 @@ _reg(
     RECOVERY_RESUMED,
     RecoveryResumedEvent,
     summary_template="Recovery resumed: mode={mode}",
+)
+
+# -- Agentic Loop (RFC-0008) -------------------------------------------------
+_reg(
+    "soothe.agentic.loop.started",
+    AgenticLoopStartedEvent,
+    summary_template="Agentic loop started (max {max_iterations} iterations)",
+)
+_reg(
+    "soothe.agentic.loop.completed",
+    AgenticLoopCompletedEvent,
+    summary_template="Agentic loop completed: {total_iterations} iterations, {outcome}",
+)
+_reg(
+    "soothe.agentic.iteration.started",
+    AgenticIterationStartedEvent,
+    summary_template="Iteration {iteration} ({planning_strategy} planning)",
+)
+_reg(
+    "soothe.agentic.iteration.completed",
+    AgenticIterationCompletedEvent,
+    summary_template="Iteration {iteration}: {outcome} ({duration_ms}ms)",
+)
+_reg(
+    "soothe.agentic.observation.started",
+    AgenticObservationStartedEvent,
+    verbosity="debug",
+    summary_template="Observation started (strategy={strategy})",
+)
+_reg(
+    "soothe.agentic.observation.completed",
+    AgenticObservationCompletedEvent,
+    verbosity="debug",
+    summary_template="Observed: {context_entries} context, {memories_recalled} memories → {planning_strategy}",
+)
+_reg(
+    "soothe.agentic.verification.started",
+    AgenticVerificationStartedEvent,
+    verbosity="debug",
+    summary_template="Verification started (strictness={strictness})",
+)
+_reg(
+    "soothe.agentic.verification.completed",
+    AgenticVerificationCompletedEvent,
+    verbosity="debug",
+    summary_template="Verified: {'continue' if should_continue else 'stop'}",
+)
+_reg(
+    "soothe.agentic.planning.strategy_determined",
+    AgenticPlanningStrategyDeterminedEvent,
+    summary_template="Planning strategy: {strategy} (complexity={complexity}, reason={reason})",
 )
 
 # -- Protocol: context -------------------------------------------------------

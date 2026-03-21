@@ -10,7 +10,6 @@ import logging
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
-from soothe.core._runner_shared import StreamChunk, _custom
 from soothe.core.event_catalog import (
     PlanBatchStartedEvent,
     PlanDagSnapshotEvent,
@@ -21,6 +20,8 @@ from soothe.core.event_catalog import (
 from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import Plan, PlanStep
 from soothe.utils.progress import reset_step_context, set_step_context
+
+from ._runner_shared import StreamChunk, _custom
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -180,7 +181,7 @@ class StepLoopMixin:
         Builds step-specific input enriched with dependency results, runs
         the LangGraph agent, records the result, and ingests into context.
         """
-        from soothe.core.runner import RunnerState
+        from ._types import RunnerState
 
         step_start = perf_counter()
 
