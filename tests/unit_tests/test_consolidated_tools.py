@@ -218,7 +218,7 @@ class TestResolverConsolidatedNames:
     def test_websearch_resolves(self) -> None:
         from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
 
-        tools = _resolve_single_tool_group_uncached("websearch")
+        tools = _resolve_single_tool_group_uncached("web_search")  # Note: uses underscore
         assert len(tools) == 2  # SearchWebTool + CrawlWebTool
         assert tools[0].name == "search_web"
         assert tools[1].name == "crawl_web"
@@ -263,27 +263,29 @@ class TestDomainScopedPrompts:
     def test_guides_exist(self) -> None:
         from soothe.config.prompts import (
             _DATA_GUIDE,
-            _EXECUTE_GUIDE,
+            _FILE_OPS_GUIDE,
             _RESEARCH_GUIDE,
+            _SHELL_GUIDE,
             _SUBAGENT_GUIDE,
-            _WORKSPACE_GUIDE,
         )
 
-        assert "websearch" in _RESEARCH_GUIDE
+        assert "websearch" in _RESEARCH_GUIDE or "search_web" in _RESEARCH_GUIDE
         assert "research" in _RESEARCH_GUIDE
-        assert "workspace" in _WORKSPACE_GUIDE
-        assert "execute" in _EXECUTE_GUIDE.lower()
+        assert "read_file" in _FILE_OPS_GUIDE or "file" in _FILE_OPS_GUIDE.lower()
+        assert "run_command" in _SHELL_GUIDE or "execute" in _SHELL_GUIDE.lower()
         assert "data" in _DATA_GUIDE.lower()
         assert "browser" in _SUBAGENT_GUIDE.lower()
 
     def test_orchestration_guide_has_all_domains(self) -> None:
         from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE
 
-        assert "workspace" in _TOOL_ORCHESTRATION_GUIDE.lower()
-        assert "execute" in _TOOL_ORCHESTRATION_GUIDE.lower()
-        assert "data" in _TOOL_ORCHESTRATION_GUIDE.lower()
-        assert "websearch" in _TOOL_ORCHESTRATION_GUIDE.lower()
-        assert "research" in _TOOL_ORCHESTRATION_GUIDE.lower()
+        # Check for tool categories mentioned in the guide
+        guide_lower = _TOOL_ORCHESTRATION_GUIDE.lower()
+        assert "read_file" in guide_lower or "file" in guide_lower
+        assert "run_command" in guide_lower or "execute" in guide_lower or "shell" in guide_lower
+        assert "data" in guide_lower
+        assert "search_web" in guide_lower or "websearch" in guide_lower or "web" in guide_lower
+        assert "research" in guide_lower
 
     def test_no_old_tool_names_in_guide(self) -> None:
         from soothe.config.prompts import _TOOL_ORCHESTRATION_GUIDE

@@ -89,72 +89,24 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         return f"{base_prompt}\n\nToday's date is {current_date}."
 
     def _get_domain_scoped_prompt(self, classification: UnifiedClassification) -> str:
-        """Build a prompt with only the relevant domain tool guides.
+        """Build a prompt for the given classification.
 
-        Injects domain-specific guidance based on ``capability_domains``
-        instead of the monolithic tool orchestration guide (RFC-0014).
+        Falls back to complexity-only optimization since capability_domains
+        were removed in RFC-0016 (unified planning).
 
         Args:
-            classification: LLM classification with capability_domains.
+            classification: LLM classification with task_complexity.
 
         Returns:
-            Formatted prompt with domain-scoped tool guidance.
+            Formatted prompt based on complexity level.
         """
-        from soothe.config.prompts import (
-            _DATA_GUIDE,
-            _EXECUTE_GUIDE,
-            _RESEARCH_GUIDE,
-            _SUBAGENT_GUIDE,
-            _WORKSPACE_GUIDE,
-        )
-
-        complexity = classification.task_complexity
-        domains = classification.capability_domains
-
-        if complexity == "chitchat":
-            return self._get_prompt_for_complexity("chitchat")
-
-        from soothe.config import _MEDIUM_SYSTEM_PROMPT
-
-        if complexity == "medium":
-            base = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        elif self._config.system_prompt:
-            base = self._config.system_prompt.format(assistant_name=self._config.assistant_name)
-        else:
-            from soothe.config import _DEFAULT_SYSTEM_PROMPT
-
-            parts = _DEFAULT_SYSTEM_PROMPT.split("\n\nTool & subagent selection rules")
-            base = parts[0].format(assistant_name=self._config.assistant_name)
-
-        domain_map = {
-            "research": _RESEARCH_GUIDE,
-            "workspace": _WORKSPACE_GUIDE,
-            "execute": _EXECUTE_GUIDE,
-            "data": _DATA_GUIDE,
-        }
-        guide_parts: list[str] = [domain_map[d] for d in domains if d in domain_map]
-
-        need_subagent_guide = bool({"browse", "reason", "compose"} & set(domains))
-        if need_subagent_guide:
-            guide_parts.append(_SUBAGENT_GUIDE)
-
-        guide_parts.append("- datetime: Get current date and time.")
-        guide_parts.append("- Prefer the simplest tool that gets the job done.")
-
-        now = dt.datetime.now(dt.UTC).astimezone()
-        current_date = now.strftime("%Y-%m-%d")
-
-        if guide_parts:
-            tool_section = "\n\nTool guidance:\n" + "\n\n".join(guide_parts)
-            return f"{base}{tool_section}\n\nToday's date is {current_date}."
-
-        return f"{base}\n\nToday's date is {current_date}."
+        # Just use complexity-based prompts
+        return self._get_prompt_for_complexity(classification.task_complexity)
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         """Replace system prompt based on LLM classification.
 
-        Uses domain-scoped prompt guidance (RFC-0014) when capability_domains
-        are available, falling back to complexity-only optimization.
+        Uses complexity-based prompt optimization.
 
         Args:
             request: Model request to modify.
@@ -184,18 +136,13 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return request
 
         complexity = classification.task_complexity
-        domains = classification.capability_domains
         logger.info(
-            "Optimizing prompt: complexity=%s, domains=%s, plan_only=%s",
+            "Optimizing prompt: complexity=%s, plan_only=%s",
             complexity,
-            domains,
-            classification.is_plan_only,
+            classification.is_plan_only if hasattr(classification, "is_plan_only") else False,
         )
 
-        if domains:
-            optimized_prompt = self._get_domain_scoped_prompt(classification)
-        else:
-            optimized_prompt = self._get_prompt_for_complexity(complexity)
+        optimized_prompt = self._get_prompt_for_complexity(complexity)
 
         new_system_message = SystemMessage(content=optimized_prompt)
         return request.override(system_message=new_system_message)

@@ -67,13 +67,13 @@ class TestWriteFileTool:
     def test_create_existing_file_without_overwrite(self) -> None:
         """Test creating file that already exists without overwrite."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            tool = WriteFileTool(work_dir=temp_dir)
+            tool = WriteFileTool(work_dir=temp_dir, backup_enabled=False)
 
             # Create file first time
             tool._run("test.txt", "Original content")
 
-            # Try to create again without overwrite
-            result = tool._run("test.txt", "New content", overwrite=False)
+            # Try to create again without overwrite (backup_enabled=False)
+            result = tool._run("test.txt", "New content")
 
             assert "Error" in result
             assert "already exists" in result.lower()

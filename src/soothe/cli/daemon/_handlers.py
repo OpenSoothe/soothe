@@ -44,8 +44,8 @@ class DaemonHandlersMixin:
             initial_msg = {
                 "type": "status",
                 "state": initial_state,
-                "thread_id": self._runner.current_thread_id or "",
-                "input_history": self._input_history.history[-100:],
+                "thread_id": "",  # Don't leak cached thread ID - client will request new/resume explicitly
+                "input_history": self._input_history.history[-100:] if self._input_history else [],
             }
 
             client.writer.write(encode(initial_msg))

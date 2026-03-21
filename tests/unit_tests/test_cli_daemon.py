@@ -195,3 +195,58 @@ async def test_daemon_command_exit_stops_daemon() -> None:
     # Should have sent stopping status
     status_msgs = [msg for msg in sent if msg.get("type") == "status"]
     assert any(msg.get("state") == "stopping" for msg in status_msgs)
+
+
+@pytest.mark.asyncio
+async def test_daemon_initial_status_no_thread_leak() -> None:
+    """Test that daemon initial status doesn't leak cached thread_id to new clients."""
+    from asyncio import StreamWriter
+
+    from soothe.cli.thread_logger import InputHistory
+
+    daemon = SootheDaemon(SootheConfig())
+    # Set up a runner with an existing thread_id (simulating previous session)
+    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
+    daemon._runner.current_thread_id = "old-thread-123"  # type: ignore[attr-defined]
+    daemon._running = True
+    daemon._input_history = InputHistory()  # Initialize input history
+
+    sent_messages: list[bytes] = []
+
+    # Mock reader
+    class MockReader:
+        async def readline(self) -> bytes:
+            return b""  # EOF immediately
+
+    # Create a mock StreamWriter that captures writes
+    reader = MockReader()
+
+    # Use asyncio.StreamWriter mock - we need to mock it properly
+    class MockStreamWriter:
+        def write(self, data: bytes) -> None:
+            sent_messages.append(data)
+
+        async def drain(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+        async def wait_closed(self) -> None:
+            pass
+
+    writer = MockStreamWriter()
+
+    # Handle client connection
+    await daemon._handle_client(reader, writer)  # type: ignore[arg-type]
+
+    # Decode the initial status message
+    from soothe.cli.daemon.protocol import decode
+
+    assert len(sent_messages) > 0, "Should have sent initial status message"
+    initial_msg = decode(sent_messages[0])
+    assert initial_msg is not None
+    assert initial_msg["type"] == "status"
+    # Critical: thread_id should be empty, not "old-thread-123"
+    assert initial_msg["thread_id"] == "", "Initial status should not leak cached thread_id"
+    assert initial_msg["state"] in ("running", "idle", "stopped")

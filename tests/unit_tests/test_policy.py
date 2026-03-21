@@ -1,5 +1,12 @@
 """Tests for policy implementation (ConfigDrivenPolicy)."""
 
+from soothe.protocols.policy import (
+    ActionRequest,
+    Permission,
+    PermissionSet,
+    PolicyContext,
+    PolicyProfile,
+)
 from soothe.safety.config_driven import (
     DEFAULT_PROFILES,
     PRIVILEGED_PROFILE,
@@ -7,13 +14,6 @@ from soothe.safety.config_driven import (
     STANDARD_PROFILE,
     ConfigDrivenPolicy,
     _extract_required_permission,
-)
-from soothe.protocols.policy import (
-    ActionRequest,
-    Permission,
-    PermissionSet,
-    PolicyContext,
-    PolicyProfile,
 )
 
 

@@ -176,9 +176,9 @@ def test_attach_command_accepts_thread_id() -> None:
 
     import typer
 
-    from soothe.cli.main import attach
+    from soothe.cli.commands.server_cmd import server_attach
 
-    sig = inspect.signature(attach)
+    sig = inspect.signature(server_attach)
     params = sig.parameters
 
     assert "thread_id" in params, "attach should have thread_id parameter"

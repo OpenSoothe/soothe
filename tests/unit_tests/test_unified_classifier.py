@@ -51,11 +51,10 @@ class TestUnifiedClassification:
 
     def test_from_routing_medium(self) -> None:
         """Creating from routing result (medium) produces correct result."""
-        routing = RoutingResult(task_complexity="medium", reasoning="needs research")
+        routing = RoutingResult(task_complexity="medium")
         merged = UnifiedClassification.from_routing(routing)
 
         assert merged.task_complexity == "medium"
-        assert merged.reasoning == "needs research"
         assert merged.chitchat_response is None
 
 

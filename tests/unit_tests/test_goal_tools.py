@@ -31,9 +31,9 @@ class TestGoalTools:
         engine = GoalEngine()
         tool = CreateGoalTool(goal_engine=engine)
         result = await tool._arun(description="New goal", priority=70)
-        assert result["id"]
-        assert result["description"] == "New goal"
-        assert result["priority"] == 70
+        assert result["created"]["id"]
+        assert result["created"]["description"] == "New goal"
+        assert result["created"]["priority"] == 70
 
     @pytest.mark.asyncio
     async def test_create_goal_without_description(self) -> None:
@@ -41,7 +41,7 @@ class TestGoalTools:
         engine = GoalEngine()
         tool = CreateGoalTool(goal_engine=engine)
         result = await tool._arun(description="")
-        assert "error" in result or not result.get("id")
+        assert "error" in result or not result.get("created", {}).get("id")
 
     @pytest.mark.asyncio
     async def test_list_goals(self) -> None:
@@ -65,7 +65,7 @@ class TestGoalTools:
         list_tool = ListGoalsTool(goal_engine=engine)
 
         create_result = await create_tool._arun(description="Goal A")
-        goal_id = create_result["id"]
+        goal_id = create_result["created"]["id"]
         await complete_tool._arun(goal_id=goal_id)
 
         pending = await list_tool._arun(status="pending")
@@ -82,9 +82,9 @@ class TestGoalTools:
         complete_tool = CompleteGoalTool(goal_engine=engine)
 
         create_result = await create_tool._arun(description="To complete")
-        goal_id = create_result["id"]
+        goal_id = create_result["created"]["id"]
         result = await complete_tool._arun(goal_id=goal_id)
-        assert result["status"] == "completed"
+        assert result["completed"]["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_complete_goal_not_found(self) -> None:
@@ -102,11 +102,11 @@ class TestGoalTools:
         fail_tool = FailGoalTool(goal_engine=engine)
 
         create_result = await create_tool._arun(description="To fail")
-        goal_id = create_result["id"]
-        result = await fail_tool._arun(goal_id=goal_id, error="test error")
+        goal_id = create_result["created"]["id"]
+        result = await fail_tool._arun(goal_id=goal_id, reason="test error")
         # With max_retries=2, first failure retries
-        assert result["status"] == "pending"
-        assert result["retry_count"] == 1
+        assert result["failed"]["status"] == "pending"
+        assert result["failed"]["retry_count"] == 1
 
     def test_tool_names(self) -> None:
         """Test tool names are correct."""

@@ -72,7 +72,6 @@ def test_simple_query_gets_minimal_prompt():
     # LLM classified this as "chitchat"
     classification = UnifiedClassification(
         task_complexity="chitchat",
-        is_plan_only=False,
         reasoning="Greeting/quick question",
     )
 
@@ -96,7 +95,6 @@ def test_medium_query_gets_medium_prompt():
     # LLM classified this as "medium"
     classification = UnifiedClassification(
         task_complexity="medium",
-        is_plan_only=False,
         reasoning="Multi-step task",
     )
 
@@ -120,7 +118,6 @@ def test_complex_query_gets_full_prompt():
     # LLM classified this as "complex"
     classification = UnifiedClassification(
         task_complexity="complex",
-        is_plan_only=False,
         reasoning="Architectural decision",
     )
 
@@ -160,7 +157,6 @@ def test_optimization_disabled_uses_default_prompt():
 
     classification = UnifiedClassification(
         task_complexity="chitchat",
-        is_plan_only=False,
         reasoning="Greeting",
     )
 
@@ -182,7 +178,6 @@ def test_performance_disabled_uses_default_prompt():
 
     classification = UnifiedClassification(
         task_complexity="chitchat",
-        is_plan_only=False,
         reasoning="Greeting",
     )
 
@@ -204,7 +199,6 @@ def test_custom_system_prompt_for_complex_queries():
 
     classification = UnifiedClassification(
         task_complexity="complex",
-        is_plan_only=False,
         reasoning="Complex task",
     )
 
@@ -233,7 +227,6 @@ def test_all_prompts_include_current_date():
     for complexity in ["chitchat", "medium", "complex"]:
         classification = UnifiedClassification(
             task_complexity=complexity,
-            is_plan_only=False,
             reasoning="Test",
         )
 
@@ -253,7 +246,6 @@ def test_chitchat_query_treated_as_chitchat():
     # Chitchat complexity maps to simple prompt
     classification = UnifiedClassification(
         task_complexity="chitchat",
-        is_plan_only=False,
         reasoning="Chitchat greeting",
     )
 

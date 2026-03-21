@@ -61,9 +61,11 @@ class TestProgressVerbosity:
         assert classify_custom_event((), {"type": "soothe.output.chitchat.started"}) == "assistant_text"
 
     def test_classify_tool_events(self) -> None:
+        # Registered tool events get tool_activity from registry
         assert classify_custom_event((), {"type": "soothe.tool.websearch.search_started"}) == "tool_activity"
         assert classify_custom_event((), {"type": "soothe.tool.websearch.crawl_completed"}) == "tool_activity"
-        assert classify_custom_event((), {"type": "soothe.tool.workspace.read_file_started"}) == "tool_activity"
+        # Unregistered tool events fall back to protocol (structural classification)
+        assert classify_custom_event((), {"type": "soothe.tool.workspace.read_started"}) == "protocol"
 
     def test_classify_subagent_events(self) -> None:
         assert classify_custom_event((), {"type": "soothe.subagent.browser.step"}) == "subagent_progress"

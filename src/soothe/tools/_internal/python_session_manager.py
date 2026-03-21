@@ -7,7 +7,7 @@ to persist across multiple run_python calls within the same thread.
 from __future__ import annotations
 
 import logging
-from threading import RLock
+from threading import Lock, RLock
 from typing import Any
 
 logger = logging.getLogger(__name__)

@@ -175,8 +175,10 @@ class TestLoggingConfig:
         assert cfg.url == "https://example.com/sse"
 
     def test_tools_list(self) -> None:
-        cfg = SootheConfig(tools=["jina", "serper", "image"])
-        assert cfg.tools == ["jina", "serper", "image"]
+        # Tools config is now a ToolsConfig object, not a list
+        cfg = SootheConfig()
+        assert isinstance(cfg.tools, ToolsConfig)
+        assert cfg.tools.image.enabled is True
 
     def test_skills_and_memory(self) -> None:
         cfg = SootheConfig(
