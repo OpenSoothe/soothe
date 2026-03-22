@@ -87,6 +87,96 @@ class DaemonClient:
         """Request the daemon to start a new thread."""
         await self._send({"type": "new_thread"})
 
+    # Thread management methods (RFC-0017)
+
+    async def send_thread_list(
+        self,
+        filter: dict[str, Any] | None = None,
+        include_stats: bool = False,
+    ) -> None:
+        """Request list of threads with optional filtering.
+
+        Args:
+            filter: Optional filter criteria (status, tags, labels, etc.)
+            include_stats: Whether to include execution statistics
+        """
+        msg: dict[str, Any] = {"type": "thread_list", "include_stats": include_stats}
+        if filter:
+            msg["filter"] = filter
+        await self._send(msg)
+
+    async def send_thread_create(
+        self,
+        initial_message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Create a new thread.
+
+        Args:
+            initial_message: Optional initial message for the thread
+            metadata: Optional thread metadata (tags, labels, priority, etc.)
+        """
+        msg: dict[str, Any] = {"type": "thread_create"}
+        if initial_message:
+            msg["initial_message"] = initial_message
+        if metadata:
+            msg["metadata"] = metadata
+        await self._send(msg)
+
+    async def send_thread_get(self, thread_id: str) -> None:
+        """Get details for a specific thread.
+
+        Args:
+            thread_id: Thread ID to retrieve
+        """
+        await self._send({"type": "thread_get", "thread_id": thread_id})
+
+    async def send_thread_archive(self, thread_id: str) -> None:
+        """Archive a thread.
+
+        Args:
+            thread_id: Thread ID to archive
+        """
+        await self._send({"type": "thread_archive", "thread_id": thread_id})
+
+    async def send_thread_delete(self, thread_id: str) -> None:
+        """Permanently delete a thread.
+
+        Args:
+            thread_id: Thread ID to delete
+        """
+        await self._send({"type": "thread_delete", "thread_id": thread_id})
+
+    async def send_thread_messages(
+        self,
+        thread_id: str,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> None:
+        """Get conversation messages for a thread.
+
+        Args:
+            thread_id: Thread ID
+            limit: Maximum number of messages to return
+            offset: Pagination offset
+        """
+        await self._send(
+            {
+                "type": "thread_messages",
+                "thread_id": thread_id,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+
+    async def send_thread_artifacts(self, thread_id: str) -> None:
+        """Get artifacts for a thread.
+
+        Args:
+            thread_id: Thread ID
+        """
+        await self._send({"type": "thread_artifacts", "thread_id": thread_id})
+
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
 

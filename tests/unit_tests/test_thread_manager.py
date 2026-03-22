@@ -2,6 +2,7 @@
 
 import pytest
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from soothe.core.thread import (
     ThreadContextManager,

@@ -14,7 +14,7 @@ async def test_thread_lifecycle_via_unix_socket(running_daemon):
 
     try:
         # Create thread
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_create",
                 "metadata": {"tags": ["test"]},
@@ -27,7 +27,7 @@ async def test_thread_lifecycle_via_unix_socket(running_daemon):
             thread_id = response["thread_id"]
 
             # Get thread
-            await client.send_message(
+            await client._send(
                 {
                     "type": "thread_get",
                     "thread_id": thread_id,
@@ -41,7 +41,7 @@ async def test_thread_lifecycle_via_unix_socket(running_daemon):
                 assert thread["thread_id"] == thread_id
 
             # Archive thread
-            await client.send_message(
+            await client._send(
                 {
                     "type": "thread_archive",
                     "thread_id": thread_id,
@@ -64,7 +64,7 @@ async def test_thread_list_with_filtering(running_daemon):
 
     try:
         # Create multiple threads with different tags
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_create",
                 "metadata": {"tags": ["research"], "priority": "high"},
@@ -72,7 +72,7 @@ async def test_thread_list_with_filtering(running_daemon):
         )
         await client.read_event()
 
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_create",
                 "metadata": {"tags": ["analysis"], "priority": "low"},
@@ -81,7 +81,7 @@ async def test_thread_list_with_filtering(running_daemon):
         await client.read_event()
 
         # List threads with filter
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_list",
                 "filter": {"tags": ["research"]},
@@ -107,7 +107,7 @@ async def test_thread_stats_calculation(running_daemon):
 
     try:
         # Create thread
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_create",
             }
@@ -123,7 +123,7 @@ async def test_thread_stats_calculation(running_daemon):
             # In a real test, we would send messages to the thread first
 
             # For now, just verify the thread exists
-            await client.send_message(
+            await client._send(
                 {
                     "type": "thread_get",
                     "thread_id": thread_id,
@@ -147,7 +147,7 @@ async def test_thread_messages_retrieval(running_daemon):
 
     try:
         # Create thread
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_create",
             }
@@ -159,7 +159,7 @@ async def test_thread_messages_retrieval(running_daemon):
             thread_id = response["thread_id"]
 
             # Get messages (should be empty for new thread)
-            await client.send_message(
+            await client._send(
                 {
                     "type": "thread_messages",
                     "thread_id": thread_id,
@@ -184,7 +184,7 @@ async def test_thread_not_found_error(running_daemon):
 
     try:
         # Try to get non-existent thread
-        await client.send_message(
+        await client._send(
             {
                 "type": "thread_get",
                 "thread_id": "nonexistent123",
