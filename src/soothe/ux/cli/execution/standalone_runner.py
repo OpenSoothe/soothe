@@ -92,7 +92,7 @@ async def run_headless_standalone(
 
     from soothe.core.runner import SootheRunner
     from soothe.daemon.thread_logger import ThreadLogger
-    from soothe.ux.rendering import render_progress_event
+    from soothe.ux.cli.rendering import render_progress_event
     from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
     from soothe.ux.shared.rendering import resolve_namespace_label
 

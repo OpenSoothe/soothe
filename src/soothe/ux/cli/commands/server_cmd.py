@@ -82,6 +82,34 @@ def server_status() -> None:
         typer.echo("Soothe daemon is not running.")
 
 
+def server_restart(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Restart the Soothe daemon.
+
+    Stops the running daemon (if any) and starts a new one.
+
+    Examples:
+        soothe server restart
+        soothe server restart --config my_config.yml
+    """
+    from soothe.daemon import SootheDaemon
+
+    # Stop the daemon if running
+    if SootheDaemon.is_running():
+        typer.echo("Stopping Soothe daemon...")
+        SootheDaemon.stop_running()
+        # Wait briefly for the daemon to fully stop
+        time.sleep(0.5)
+
+    # Start a new daemon
+    typer.echo("Starting Soothe daemon...")
+    server_start(config=config, foreground=False)
+
+
 def server_attach(
     config: Annotated[
         str | None,

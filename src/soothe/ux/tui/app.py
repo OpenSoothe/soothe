@@ -22,11 +22,10 @@ from typing import Any, ClassVar
 import pyperclip
 from rich.markdown import Markdown
 from rich.panel import Panel
-from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
-from textual.widgets import Header, Input
+from textual.widgets import Header
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon, socket_path
@@ -35,6 +34,7 @@ from soothe.ux.shared.progress_verbosity import should_show
 from soothe.ux.shared.rendering import render_plan_tree
 from soothe.ux.shared.slash_commands import parse_autonomous_command
 from soothe.ux.tui.event_processors import process_daemon_event
+from soothe.ux.tui.modals import ThreadSelectionModal
 from soothe.ux.tui.state import TuiState
 from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTree
 
@@ -81,7 +81,8 @@ class SootheApp(App):
         padding: 0 1;
     }
     #chat-input {
-        height: 6;
+        height: 2;
+        max-height: 6;
         padding: 0 1;
     }
     """
@@ -139,8 +140,8 @@ class SootheApp(App):
             # Row 2: Plan tree (merged with activity info)
             with Container(id="info-row"):
                 yield PlanTree(id="plan-tree", classes="" if self._state.plan_visible else "hidden")
-            # Row 3: Chat input
-            yield ChatInput(placeholder="soothe> Type a message or /help", id="chat-input")
+            # Row 3: Chat input (TextArea for multi-line support)
+            yield ChatInput(id="chat-input", language=None, theme="css")
         yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
 
     async def on_mount(self) -> None:
@@ -213,10 +214,19 @@ class SootheApp(App):
                     tid = str(tid)
                 previous_thread_id = self._thread_id
 
-                # Load history if thread changed or explicitly resumed
-                should_load_history = (tid and tid != previous_thread_id) or thread_resumed
-
-                if should_load_history and tid:
+                # Handle new thread (empty thread_id) - clear conversation
+                if tid == "" and previous_thread_id is not None:
+                    # Starting a fresh thread, clear previous conversation
+                    self._thread_id = None
+                    self._conversation_history.clear()
+                    self._message_history.clear()
+                    self._state.full_response.clear()
+                    self._state.activity_lines.clear()
+                    with contextlib.suppress(Exception):
+                        panel = self.query_one("#conversation", ConversationPanel)
+                        panel.clear()
+                elif tid and (tid != previous_thread_id or thread_resumed):
+                    # Thread switch or explicit resume - load history from disk
                     self._thread_id = tid
                     if self._was_running and not thread_resumed:
                         # Post-query thread change: the runner assigned a new
@@ -519,16 +529,15 @@ class SootheApp(App):
 
     # -- input handling -----------------------------------------------------
 
-    @on(Input.Submitted, "#chat-input")
-    async def on_chat_submit(self, event: Input.Submitted) -> None:
+    async def submit_chat_input(self) -> None:
         """Handle chat input submission."""
-        text = event.value.strip()
+        chat_input = self.query_one("#chat-input", ChatInput)
+        text = chat_input.text.strip()
         if not text:
             return
-        event.input.clear()
+        chat_input.clear()
 
         with contextlib.suppress(Exception):
-            chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.add_to_history(text)
 
         if self._state.full_response:
@@ -565,6 +574,9 @@ class SootheApp(App):
             if text.strip() == "/detach":
                 await self.action_detach()
                 return
+            if text.strip() == "/resume":
+                await self._show_thread_selection()
+                return
             parsed_auto = parse_autonomous_command(text.strip())
             if parsed_auto is not None:
                 max_iterations, prompt = parsed_auto
@@ -591,6 +603,25 @@ class SootheApp(App):
             )
 
     # -- actions ------------------------------------------------------------
+
+    async def _show_thread_selection(self) -> None:
+        """Show thread selection modal and resume selected thread."""
+        if not self._client or not self._connected:
+            self._log_conversation("[red]Not connected to daemon.[/red]")
+            return
+
+        # Create a runner instance for the modal
+        from soothe.core.runner import SootheRunner
+
+        runner = SootheRunner(self._config)
+
+        # Show the modal
+        selected_thread_id = await self.app.push_screen_wait(ThreadSelectionModal(runner))
+
+        if selected_thread_id:
+            # Resume the selected thread
+            self._log_conversation(f"[dim]Resuming thread {selected_thread_id}...[/dim]")
+            await self._client.send_resume_thread(selected_thread_id)
 
     async def action_detach(self) -> None:
         """Detach from daemon, keep it running."""

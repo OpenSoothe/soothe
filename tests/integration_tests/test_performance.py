@@ -1,7 +1,5 @@
 """Integration tests for performance optimizations (RFC-0008)."""
 
-from pathlib import Path
-
 import pytest
 
 from soothe.config import SootheConfig
@@ -11,23 +9,14 @@ from soothe.core.runner import SootheRunner
 pytestmark = pytest.mark.integration
 
 
-def _load_test_config() -> SootheConfig:
-    """Load config from config.dev.yml if available, otherwise use defaults."""
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        return SootheConfig.from_yaml_file(str(config_path))
-    return SootheConfig()
-
-
 @pytest.mark.asyncio
-async def test_query_complexity_classification():
+async def test_query_complexity_classification(test_config: SootheConfig):
     """Test that query complexity is classified correctly."""
-    config = _load_test_config()
-    runner = SootheRunner(config)
+    runner = SootheRunner(test_config)
 
     try:
         # Test that unified classifier is initialized if performance is enabled
-        if config.performance.enabled and config.performance.unified_classification:
+        if test_config.performance.enabled and test_config.performance.unified_classification:
             assert runner._unified_classifier is not None, "Unified classifier should be initialized"
 
     finally:
@@ -35,10 +24,9 @@ async def test_query_complexity_classification():
 
 
 @pytest.mark.asyncio
-async def test_template_planning():
+async def test_template_planning(test_config: SootheConfig):
     """Test that template plans are used for trivial/simple queries."""
-    config = _load_test_config()
-    runner = SootheRunner(config)
+    runner = SootheRunner(test_config)
 
     try:
         # Template planning is now handled by the planner directly
@@ -51,15 +39,14 @@ async def test_template_planning():
 
 
 @pytest.mark.asyncio
-async def test_conditional_memory_recall():
+async def test_conditional_memory_recall(test_config: SootheConfig):
     """Test that memory recall is conditionally applied based on query complexity."""
-    config = _load_test_config()
-    runner = SootheRunner(config)
+    runner = SootheRunner(test_config)
 
     try:
         # Memory recall is handled based on query complexity classification
         # This test verifies the runner has the necessary protocols configured
-        if config.protocols.memory.enabled:
+        if test_config.protocols.memory.enabled:
             assert runner._memory is not None or runner._memory is None
 
     finally:
@@ -67,15 +54,14 @@ async def test_conditional_memory_recall():
 
 
 @pytest.mark.asyncio
-async def test_conditional_context_projection():
+async def test_conditional_context_projection(test_config: SootheConfig):
     """Test that context projection is conditionally applied based on query complexity."""
-    config = _load_test_config()
-    runner = SootheRunner(config)
+    runner = SootheRunner(test_config)
 
     try:
         # Context projection is handled based on query complexity classification
         # This test verifies the runner has the necessary protocols configured
-        if config.protocols.context.enabled:
+        if test_config.protocols.context.enabled:
             assert runner._context is not None or runner._context is None
 
     finally:
@@ -83,15 +69,14 @@ async def test_conditional_context_projection():
 
 
 @pytest.mark.asyncio
-async def test_parallel_execution():
+async def test_parallel_execution(test_config: SootheConfig):
     """Test that parallel execution works for medium/complex queries."""
-    config = _load_test_config()
-    config.performance.enabled = True
-    runner = SootheRunner(config)
+    test_config.performance.enabled = True
+    runner = SootheRunner(test_config)
 
     try:
         # Verify configuration
-        assert config.performance.enabled is True
+        assert test_config.performance.enabled is True
 
         # Parallel execution is handled internally in the runner
         # This test verifies the configuration is correct
@@ -129,10 +114,9 @@ async def test_feature_flags():
 
 
 @pytest.mark.asyncio
-async def test_performance_regression_complex_queries():
+async def test_performance_regression_complex_queries(test_config: SootheConfig):
     """Test that complex queries still work correctly (no quality regression)."""
-    config = _load_test_config()
-    runner = SootheRunner(config)
+    runner = SootheRunner(test_config)
 
     try:
         complex_queries = [
@@ -148,27 +132,3 @@ async def test_performance_regression_complex_queries():
 
     finally:
         await runner.cleanup()
-
-
-def test_rocksdb_data_subfolder_structure():
-    """Test that RocksDB files are stored in data/ subfolders."""
-    import os
-    import tempfile
-    from pathlib import Path
-
-    # Use temp directory
-    with tempfile.TemporaryDirectory() as tmpdir:
-        os.environ["SOOTHE_HOME"] = tmpdir
-
-        # Create expected structure
-        durability_dir = Path(tmpdir) / "durability"
-        durability_dir.mkdir()
-        data_dir = durability_dir / "data"
-        data_dir.mkdir()
-        (data_dir / "LOG").touch()
-        (data_dir / "test.db").touch()
-
-        # Verify structure exists
-        assert data_dir.exists()
-        assert (data_dir / "LOG").exists()
-        assert (data_dir / "test.db").exists()

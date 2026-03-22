@@ -10,7 +10,6 @@ import pytest
 
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.ux.shared.slash_commands import (
-    _handle_thread_command,
     _show_context,
     _show_memory,
     handle_slash_command,
@@ -29,11 +28,6 @@ def test_show_memory_is_async() -> None:
 def test_show_context_is_async() -> None:
     """Verify _show_context is an async function."""
     assert inspect.iscoroutinefunction(_show_context), "_show_context should be async"
-
-
-def test_handle_thread_command_is_async() -> None:
-    """Verify _handle_thread_command is an async function."""
-    assert inspect.iscoroutinefunction(_handle_thread_command), "_handle_thread_command should be async"
 
 
 def test_handle_slash_command_is_async() -> None:
@@ -85,39 +79,6 @@ async def test_show_context_calls_await() -> None:
     result = output.getvalue()
     assert "Context Stats" in result
     assert "context" in result
-
-
-@pytest.mark.asyncio
-async def test_handle_thread_archive_uses_await() -> None:
-    """Test that /thread archive properly awaits the durability operation."""
-    from io import StringIO
-
-    from rich.console import Console
-
-    class FakeDurability:
-        def __init__(self) -> None:
-            self.archived_threads: list[str] = []
-
-        async def archive_thread(self, thread_id: str) -> None:
-            self.archived_threads.append(thread_id)
-
-    class FakeRunner:
-        def __init__(self) -> None:
-            self._durability = FakeDurability()
-
-    output = StringIO()
-    console = Console(file=output, force_terminal=True, width=100)
-    runner = FakeRunner()
-
-    # This should work without raising RuntimeError about nested event loops
-    await _handle_thread_command("archive", "thread-123", console, runner)
-
-    assert "thread-123" in runner._durability.archived_threads
-    # Check output contains the expected message (strip ANSI codes for comparison)
-    import re
-
-    output_text = re.sub(r"\x1b\[[0-9;]*m", "", output.getvalue())
-    assert "Archived thread thread-123" in output_text
 
 
 # ---------------------------------------------------------------------------

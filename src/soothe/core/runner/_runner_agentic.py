@@ -59,7 +59,9 @@ class AgenticMixin:
         from ._types import AgenticIterationRecord, RunnerState
 
         state = RunnerState()
-        state.thread_id = thread_id or self._current_thread_id or ""
+        # Ensure thread_id is always a string (may be integer from external sources)
+        tid = thread_id or self._current_thread_id or ""
+        state.thread_id = str(tid) if tid else ""
         self._current_thread_id = state.thread_id or None
 
         # Two-tier classification for proper routing

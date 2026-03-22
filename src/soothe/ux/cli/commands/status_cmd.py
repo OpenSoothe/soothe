@@ -35,6 +35,7 @@ def agent_list(
     try:
         cfg = load_config(config)
 
+        from rich.console import Console
         from rich.table import Table
 
         from soothe.ux.cli.commands.subagent_names import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
@@ -59,7 +60,8 @@ def agent_list(
             status = "[green]✓ enabled[/green]" if is_enabled else "[red]✗ disabled[/red]"
             table.add_row(display_name, subagent_id, status)
 
-        typer.echo(table)
+        console = Console()
+        console.print(table)
 
         # Also show custom subagents if any
         custom_subagents = set(cfg.subagents.keys()) - set(BUILTIN_SUBAGENT_NAMES)
@@ -96,7 +98,6 @@ def agent_status(
 
     try:
         cfg = load_config(config)
-        from soothe.core.resolver import SUBAGENT_FACTORIES as _SUBAGENT_FACTORIES
 
         typer.echo("\nAgent Status:")
         typer.echo("-" * 50)
@@ -106,8 +107,9 @@ def agent_status(
             typer.echo(f"  {name}: {status}")
             typer.echo(f"    Model: {model}")
         typer.echo("-" * 50)
-        typer.echo(f"\nTotal configured: {len([s for s in cfg.subagents.values() if s.enabled])} active")
-        typer.echo(f"Total available: {len(_SUBAGENT_FACTORIES)}")
+        enabled_count = len([s for s in cfg.subagents.values() if s.enabled])
+        total_count = len(cfg.subagents)
+        typer.echo(f"\nTotal: {enabled_count}/{total_count} agents enabled")
     except Exception as e:
         logger.exception("Agent status error")
         from soothe.utils.error_format import format_cli_error

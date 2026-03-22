@@ -7,6 +7,7 @@ backward-compatible IPC for local clients.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -102,9 +103,10 @@ class UnixSocketTransport(TransportServer):
             except Exception:
                 dead_clients.append(client)
 
-        # Remove dead clients
+        # Remove dead clients (safe removal in case already removed)
         for dead in dead_clients:
-            self._clients.remove(dead)
+            with contextlib.suppress(ValueError):
+                self._clients.remove(dead)
 
     async def stop(self) -> None:
         """Stop the Unix socket server and close all connections."""
@@ -179,7 +181,9 @@ class UnixSocketTransport(TransportServer):
         except (asyncio.CancelledError, ConnectionError):
             pass
         finally:
-            self._clients.remove(client)
+            # Safe removal in case client was already removed during broadcast
+            with contextlib.suppress(ValueError):
+                self._clients.remove(client)
             try:
                 writer.close()
                 await writer.wait_closed()

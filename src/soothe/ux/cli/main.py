@@ -290,6 +290,19 @@ def _server_status() -> None:
     server_status()
 
 
+@server_app.command("restart")
+def _server_restart(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Restart the Soothe daemon."""
+    from soothe.ux.cli.commands.server_cmd import server_restart
+
+    server_restart(config=config)
+
+
 @server_app.command("attach")
 def _server_attach(
     config: Annotated[
@@ -344,9 +357,10 @@ def _agent_status(
 
 @app.command()
 def autopilot(
+    ctx: typer.Context,
     prompt: Annotated[
         str | None,
-        typer.Argument(help="Task prompt for autonomous execution."),
+        typer.Argument(help="Task for autonomous execution."),
     ] = None,
     config: Annotated[
         str | None,
@@ -354,13 +368,64 @@ def autopilot(
     ] = None,
     max_iterations: Annotated[
         int | None,
-        typer.Option("--max-iterations", "-i", help="Maximum autonomous iterations."),
+        typer.Option("--max-iterations", help="Maximum autonomous iterations."),
     ] = None,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: text or jsonl."),
+    ] = "text",
+    show_help: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
+    ] = False,
 ) -> None:
-    """Run autonomous agent loop for complex tasks."""
+    """Run autonomous agent loop for complex tasks.
+
+    Autopilot mode executes tasks autonomously without requiring user interaction.
+    The agent will plan, execute, and iterate on the task until completion or
+    reaching the maximum iteration limit.
+
+    This mode is ideal for:
+    - Long-running tasks that don't need user input
+    - Background execution of complex workflows
+    - Batch processing or research tasks
+    - Automated testing and validation
+
+    The agent operates in headless mode (no TUI) and outputs progress to stdout.
+    Use --format jsonl for machine-readable output suitable for logging or piping.
+
+    Examples:
+        # Basic autonomous execution
+        soothe autopilot "Research AI safety and summarize findings"
+
+        # Limit iterations for complex tasks
+        soothe autopilot "Build a web scraper" --max-iterations 10
+
+        # Use custom config with JSON output
+        soothe autopilot "Analyze codebase" -c config.yml --format jsonl
+
+        # Long-running research task
+        soothe autopilot "Investigate performance bottlenecks" --max-iterations 20
+    """
+    # Handle -h/--help flag
+    if show_help:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+    # Validate prompt is provided when not showing help
+    if prompt is None:
+        typer.echo("Error: Missing argument 'PROMPT'.", err=True)
+        typer.echo(f"Try '{ctx.info_name} --help' for help.")
+        raise typer.Exit(1)
+
     from soothe.ux.cli.commands.autopilot_cmd import autopilot as _autopilot
 
-    _autopilot(prompt=prompt, config=config, max_iterations=max_iterations)
+    _autopilot(
+        prompt=prompt,
+        config=config,
+        max_iterations=max_iterations,
+        output_format=output_format,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -23,10 +23,9 @@ View all your threads:
 ```bash
 # CLI
 soothe thread list
-
-# In TUI
-/thread list
 ```
+
+**Output**:
 
 **Output**:
 ```
@@ -41,15 +40,20 @@ ghi789       archived   2026-03-15 11:00    2026-03-15 18:45    62
 Continue a previous conversation:
 
 ```bash
-# CLI
-soothe run --thread abc123
-
-# Or use thread continue
+# CLI - Resume a specific thread
 soothe thread continue abc123
 
-# In TUI
-/thread resume abc123
+# Or run with thread ID
+soothe run --thread abc123
+
+# CLI - Resume last active thread
+soothe thread continue
+
+# In TUI - Interactive thread selection
+/resume
 ```
+
+The TUI `/resume` command shows an interactive list of recent threads to select from.
 
 When you resume a thread:
 - Full conversation history is restored
@@ -93,9 +97,6 @@ Clean up old threads without deleting them:
 ```bash
 # CLI
 soothe thread archive abc123
-
-# In TUI
-/thread archive abc123
 ```
 
 Archived threads:

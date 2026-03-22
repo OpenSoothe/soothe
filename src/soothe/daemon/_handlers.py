@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 _STREAM_CHUNK_LENGTH = 3
 _MSG_PAIR_LENGTH = 2
-_THREAD_COMMAND_MIN_PARTS = 3
 
 
 class DaemonHandlersMixin:
@@ -193,23 +192,6 @@ class DaemonHandlersMixin:
         if cmd.strip().lower() == "/clear":
             await self._broadcast({"type": "clear"})
             return
-
-        # Handle /thread resume specially to broadcast thread change
-        parts = cmd.strip().split(maxsplit=2)
-        if len(parts) >= _THREAD_COMMAND_MIN_PARTS and parts[0].lower() == "/thread" and parts[1].lower() == "resume":
-            thread_id = parts[2].strip()
-            if thread_id:
-                self._runner.set_current_thread_id(thread_id)
-                # Broadcast status with thread_resumed flag to trigger history load
-                await self._broadcast(
-                    {
-                        "type": "status",
-                        "state": "idle",
-                        "thread_id": self._runner.current_thread_id or "",
-                        "thread_resumed": True,
-                    }
-                )
-                return
 
         output = StringIO()
         console = Console(file=output, force_terminal=False, width=100)

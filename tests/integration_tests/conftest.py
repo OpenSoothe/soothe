@@ -41,32 +41,63 @@ def pytest_collection_modifyitems(config, items) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _has_valid_api_key() -> bool:
+    """Check if a valid API key is available for integration tests."""
+    import os
+
+    return bool(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"))
+
+
 @pytest.fixture
-def integration_config() -> SootheConfig:
-    """Default config for integration tests with reduced limits.
+def test_config() -> SootheConfig:
+    """Load config from config.dev.yml if available, otherwise use defaults.
 
-    Loads from config.dev.yml if available, otherwise uses defaults.
+    Returns:
+        SootheConfig instance without test-specific overrides
     """
-    from pathlib import Path
-
-    # Try to load from config.dev.yml in project root
     config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
     if config_path.exists():
-        config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        config = SootheConfig()
+        return SootheConfig.from_yaml_file(str(config_path))
+    return SootheConfig()
 
+
+@pytest.fixture
+def integration_config(test_config: SootheConfig) -> SootheConfig:
+    """Default config for integration tests with reduced limits.
+
+    Args:
+        test_config: Base config loaded from config.dev.yml
+
+    Returns:
+        SootheConfig with test-specific overrides
+    """
     # Use smaller limits for faster testing
-    config.execution.concurrency.max_parallel_goals = 1
-    config.execution.concurrency.max_parallel_steps = 1
-    config.execution.concurrency.global_max_llm_calls = 3
-    config.autonomous.max_iterations = 5
-    return config
+    test_config.execution.concurrency.max_parallel_goals = 1
+    test_config.execution.concurrency.max_parallel_steps = 1
+    test_config.execution.concurrency.global_max_llm_calls = 3
+    test_config.autonomous.max_iterations = 5
+
+    # Disable unified classification for tests to avoid model compatibility issues
+    test_config.performance.unified_classification = False
+
+    return test_config
 
 
 @pytest.fixture
 async def soothe_runner(integration_config: SootheConfig):
-    """Create SootheRunner with real LLM for integration tests."""
+    """Create SootheRunner with real LLM for integration tests.
+
+    Requires OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable.
+
+    Args:
+        integration_config: Config with test-specific settings
+
+    Yields:
+        SootheRunner instance
+    """
+    if not _has_valid_api_key():
+        pytest.skip("Integration tests require OPENAI_API_KEY or ANTHROPIC_API_KEY")
+
     runner = SootheRunner(integration_config)
     yield runner
     # Cleanup
@@ -76,32 +107,31 @@ async def soothe_runner(integration_config: SootheConfig):
 
 @pytest.fixture
 def temp_workspace():
-    """Create temporary workspace for file operations."""
+    """Create temporary workspace for file operations.
+
+    Yields:
+        Path to temporary directory
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         yield Path(tmpdir)
 
 
 @pytest.fixture
-def web_enabled_config() -> SootheConfig:
+def web_enabled_config(test_config: SootheConfig) -> SootheConfig:
     """Config with web tools enabled.
 
-    Loads from config.dev.yml if available, otherwise uses defaults.
-    """
-    from pathlib import Path
+    Args:
+        test_config: Base config loaded from config.dev.yml
 
+    Returns:
+        SootheConfig with web tools enabled
+    """
     from soothe.config.models import ToolsConfig
 
-    # Try to load from config.dev.yml in project root
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        config = SootheConfig()
-
-    config.tools = ToolsConfig(
+    test_config.tools = ToolsConfig(
         execution={"enabled": True},
         file_ops={"enabled": True},
         code_edit={"enabled": True},
         web_search={"enabled": True},
     )
-    return config
+    return test_config

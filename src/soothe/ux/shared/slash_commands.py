@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 # Slash commands
 # ---------------------------------------------------------------------------
 
-_FIRST_SUBAGENT_INDEX = 2
-
 SLASH_COMMANDS: dict[str, str] = {
     "/exit": "Stop daemon and exit",
     "/quit": "Stop daemon and exit",
@@ -33,9 +31,8 @@ SLASH_COMMANDS: dict[str, str] = {
     "/policy": "Show active policy profile",
     "/history": "Show recent prompt history",
     "/review": "Review recent conversation and action history",
-    "/thread list": "List active threads",
-    "/thread resume <id>": "Resume a thread",
-    "/thread archive <id>": "Archive a thread",
+    "/resume": "Resume a recent thread (interactive selection)",
+    "/thread": "Thread operations (archive <id>)",
     "/clear": "Clear the screen",
     "/config": "Show active configuration summary",
     "/keymaps": "Show keyboard shortcuts",
@@ -58,6 +55,7 @@ KEYBOARD_SHORTCUTS: dict[str, str] = {
 _AUTO_MAX_SPLIT = 2
 _AUTO_MIN_PARTS = 1
 _AUTO_TWO_PARTS = 2
+_THREAD_ARCHIVE_MIN_PARTS = 3
 
 
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
@@ -121,7 +119,6 @@ async def handle_slash_command(
     parts = cmd.strip().split(maxsplit=2)
     command = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
-    arg2 = parts[2].strip() if len(parts) > _FIRST_SUBAGENT_INDEX else ""
 
     if command in ("/exit", "/quit"):
         console.print("[dim]Goodbye.[/dim]")
@@ -159,8 +156,8 @@ async def handle_slash_command(
         _show_review(console, thread_logger, arg)
         return False
 
-    if command == "/thread":
-        await _handle_thread_command(arg, arg2, console, runner)
+    if command == "/resume":
+        # This is handled specially by the TUI to show interactive selection
         return False
 
     if command == "/config":
@@ -174,6 +171,10 @@ async def handle_slash_command(
 
     if command == "/cancel":
         # Handled specially by the daemon - no output needed here
+        return False
+
+    if command == "/thread":
+        await _handle_thread_command(console, runner, arg, parts)
         return False
 
     console.print(f"[yellow]Unknown command: {command}. Type /help for help.[/yellow]")
@@ -326,58 +327,6 @@ def _show_review(console: Console, thread_logger: ThreadLogger | None, scope: st
             console.print("[dim]No action records in this thread yet.[/dim]")
 
 
-async def _handle_thread_command(
-    sub_cmd: str,
-    arg: str,
-    console: Console,
-    runner: SootheRunner,
-) -> None:
-    if sub_cmd == "list":
-        try:
-            threads = await runner.list_threads()
-            if not threads:
-                console.print("[dim]No threads.[/dim]")
-                return
-            table = Table(title="Threads", show_lines=False)
-            table.add_column("ID", style="cyan")
-            table.add_column("Status")
-            table.add_column("Created")
-            table.add_column("Last Message")
-            for t in threads:
-                table.add_row(
-                    t.get("thread_id", "?"),
-                    t.get("status", "?"),
-                    str(t.get("created_at", "?"))[:19],
-                    str(t.get("updated_at", "?"))[:19],
-                )
-            console.print(table)
-        except Exception as exc:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.exception("Thread list error")
-            from soothe.utils.error_format import format_cli_error
-
-            console.print(f"[red]{format_cli_error(exc, context='Thread list')}[/red]")
-    elif sub_cmd == "resume" and arg:
-        console.print(f"[dim]Resuming thread {arg}...[/dim]")
-        runner.set_current_thread_id(arg)
-    elif sub_cmd == "archive" and arg:
-        try:
-            await runner._durability.archive_thread(arg)
-            console.print(f"[dim]Archived thread {arg}.[/dim]")
-        except Exception as exc:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.exception("Archive error")
-            from soothe.utils.error_format import format_cli_error
-
-            console.print(f"[red]{format_cli_error(exc, context='Archive thread')}[/red]")
-    else:
-        console.print("[yellow]Usage: /thread list | /thread resume <id> | /thread archive <id>[/yellow]")
-
-
 def _show_config(console: Console, runner: SootheRunner) -> None:
     cfg = runner.config
     lines = [
@@ -392,3 +341,43 @@ def _show_config(console: Console, runner: SootheRunner) -> None:
     if cfg.tools:
         lines.append(f"Tools: {', '.join(cfg.tools)}")
     console.print(Panel("\n".join(lines), title="Soothe Config", border_style="cyan"))
+
+
+async def _handle_thread_command(console: Console, runner: SootheRunner, subcommand: str, parts: list[str]) -> None:
+    """Handle /thread slash command operations.
+
+    Args:
+        console: Rich console for output.
+        runner: The SootheRunner instance.
+        subcommand: The thread subcommand (e.g., 'archive').
+        parts: The split command parts.
+    """
+    if not subcommand:
+        console.print("[yellow]Usage: /thread <command> [args][/yellow]")
+        console.print("[dim]Commands: archive <thread_id>[/dim]")
+        return
+
+    if subcommand == "archive":
+        if len(parts) < _THREAD_ARCHIVE_MIN_PARTS:
+            console.print("[yellow]Usage: /thread archive <thread_id>[/yellow]")
+            return
+
+        thread_id = parts[2].strip()
+        if not thread_id:
+            console.print("[yellow]Usage: /thread archive <thread_id>[/yellow]")
+            return
+
+        try:
+            await runner._durability.archive_thread(thread_id)
+            console.print(f"[green]Archived thread {thread_id}[/green]")
+        except Exception as exc:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception("Thread archive error")
+            from soothe.utils.error_format import format_cli_error
+
+            console.print(f"[red]{format_cli_error(exc, context='Thread archive')}[/red]")
+    else:
+        console.print(f"[yellow]Unknown /thread subcommand: {subcommand}[/yellow]")
+        console.print("[dim]Commands: archive <thread_id>[/dim]")

@@ -11,21 +11,15 @@
 # Set at least one provider with its API key.
 
 providers:
-  - name: openai
+  - name: dashscope
     provider_type: openai
-    api_key: "${OPENAI_API_KEY}"
-    # api_base_url: https://api.openai.com/v1
+    api_base_url: "${DASHSCOPE_BASE_URL}"
+    api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o3-mini
-
-  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
-  # - name: dashscope
-  #   provider_type: openai
-  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  #   api_key: "${DASHSCOPE_API_KEY}"
-  #   models: [qwen-max]
+      - qwen-max
+      - qwen3.5-flash
+      - qwen3.5-plus
+      - text-embedding-v4
 
   # Ollama (local models):
   # - name: ollama
@@ -45,11 +39,11 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "openai:gpt-4o-mini"
-  think: "openai:o3-mini"
-  fast: "openai:gpt-4o-mini"
-  image: "openai:gpt-4o"
-  embedding: "openai:text-embedding-3-small"
+  default: "dashscope:qwen3.5-flash"
+  think: "dashscope:qwen-max"
+  fast: "dashscope:qwen3.5-flash"
+  image: "dashscope:qwen3.5-plus"
+  embedding: "dashscope:text-embedding-v4"
 
 # =============================================================================
 # Agent Behavior

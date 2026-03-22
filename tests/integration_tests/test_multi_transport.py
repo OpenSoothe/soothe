@@ -51,7 +51,8 @@ async def test_websocket_client_connect() -> None:
 
     transport = WebSocketTransport(config)
 
-    async def message_handler(msg: dict[str, Any]) -> None:
+    # Use synchronous message handler
+    def message_handler(msg: dict[str, Any]) -> None:
         pass
 
     await transport.start(message_handler)

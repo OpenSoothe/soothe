@@ -113,7 +113,7 @@ class PhasesMixin:
             preferred_subagent=subagent_name,
             routing_hint="subagent",
         )
-        state.unified_classification = UnifiedClassification.from_tiers(routing, None)
+        state.unified_classification = UnifiedClassification.from_routing(routing)
 
         # Run pre-stream work then stream directly
         collected_chunks = [

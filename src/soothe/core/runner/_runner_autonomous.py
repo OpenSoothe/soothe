@@ -90,8 +90,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     yield chunk
                 return
 
-            enrichment = await self._unified_classifier.classify_enrichment(user_input, routing.task_complexity)
-            state.unified_classification = UnifiedClassification.from_tiers(routing, enrichment)
+            state.unified_classification = UnifiedClassification.from_routing(routing)
         else:
             state.unified_classification = None
 

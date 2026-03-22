@@ -25,9 +25,31 @@ def autopilot(
 ) -> None:
     """Run task in autonomous mode with iterative execution.
 
+    Autopilot mode executes tasks autonomously without requiring user interaction.
+    The agent will plan, execute, and iterate on the task until completion or
+    reaching the maximum iteration limit.
+
+    This mode is ideal for:
+    - Long-running tasks that don't need user input
+    - Background execution of complex workflows
+    - Batch processing or research tasks
+    - Automated testing and validation
+
+    The agent operates in headless mode (no TUI) and outputs progress to stdout.
+    Use --format jsonl for machine-readable output suitable for logging or piping.
+
     Examples:
-        soothe autopilot "Research AI safety"
-        soothe autopilot "Build a tool" --max-iterations 10
+        # Basic autonomous execution
+        soothe autopilot "Research AI safety and summarize findings"
+
+        # Limit iterations for complex tasks
+        soothe autopilot "Build a web scraper" --max-iterations 10
+
+        # Use custom config with JSON output
+        soothe autopilot "Analyze codebase" -c config.yml --format jsonl
+
+        # Long-running research task
+        soothe autopilot "Investage performance bottlenecks and propose solutions" --max-iterations 20
     """
     from soothe.ux.cli.commands.run_cmd import run_impl
 

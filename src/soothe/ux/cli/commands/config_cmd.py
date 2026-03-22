@@ -43,6 +43,7 @@ def config_show(
             typer.echo(json.dumps(config_dict, indent=2, default=str))
         else:
             # Summary output
+            from rich.console import Console
             from rich.panel import Panel
             from rich.table import Table
 
@@ -84,16 +85,17 @@ def config_show(
             general_table.add_column("Value", style="yellow")
             general_table.add_row("Debug Mode", "[green]Yes[/green]" if cfg.debug else "[red]No[/red]")
             general_table.add_row("Context Backend", cfg.protocols.context.backend.title())
-            general_table.add_row("Memory Backend", cfg.protocols.memory.backend.title())
+            general_table.add_row("Memory Backend", cfg.protocols.memory.database_provider.title())
             general_table.add_row("Policy Profile", cfg.protocols.policy.profile)
             general_table.add_row("Progress Verbosity", cfg.logging.progress_verbosity)
             # Show vector store providers count
             vs_count = len(cfg.vector_stores)
             general_table.add_row("Vector Store Providers", f"{vs_count} configured")
 
-            typer.echo(Panel(providers_table, border_style="blue"))
-            typer.echo(Panel(subagents_table, border_style="blue"))
-            typer.echo(Panel(general_table, border_style="blue"))
+            console = Console()
+            console.print(Panel(providers_table, border_style="blue"))
+            console.print(Panel(subagents_table, border_style="blue"))
+            console.print(Panel(general_table, border_style="blue"))
 
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.")

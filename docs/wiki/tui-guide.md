@@ -27,9 +27,7 @@ Type these commands in the interactive prompt:
 | `/policy` | Show active policy profile |
 | `/history` | Show recent prompt history |
 | `/review [conversation\|actions]` | Review recent conversation and actions |
-| `/thread list` | List all conversation threads |
-| `/thread resume <id>` | Resume a specific thread |
-| `/thread archive <id>` | Archive a thread |
+| `/resume` | Resume a recent thread (interactive selection) |
 | `/config` | Show active configuration |
 | `/clear` | Clear the screen |
 | `/detach` | Detach TUI; daemon keeps running |
@@ -55,6 +53,9 @@ Route queries to specialized subagents:
 | `Ctrl+C` | Cancel running job |
 | `Ctrl+E` | Focus chat input |
 | `Ctrl+Y` | Copy last message to clipboard |
+| `Shift+Enter` | Insert newline in chat input |
+| `Enter` | Submit message |
+| `Up/Down` | Navigate input history |
 
 ## Routing to Specialized Subagents
 
@@ -78,13 +79,15 @@ Prefix your message with a number to route to a specific subagent:
 
 ## Multi-Line Input
 
-Continue your input on multiple lines by ending with `\`:
+Type multi-line messages using **Shift+Enter** to insert a newline:
 
 ```
-soothe> Write a function that \
-...  takes a list of numbers \
+soothe> Write a function that
+...  takes a list of numbers
 ...  and returns the median
 ```
+
+Press **Enter** to submit the message when ready.
 
 ## Canceling Operations
 

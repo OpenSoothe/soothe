@@ -33,7 +33,7 @@ async def run_headless_via_daemon(
 ) -> int:
     """Run a single prompt by connecting to a running daemon."""
     from soothe.daemon import DaemonClient
-    from soothe.ux.rendering import render_progress_event
+    from soothe.ux.cli.rendering import render_progress_event
     from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
     from soothe.ux.shared.rendering import resolve_namespace_label, update_name_map_from_tool_calls
 
