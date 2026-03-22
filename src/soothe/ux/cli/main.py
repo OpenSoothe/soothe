@@ -303,18 +303,8 @@ def _server_restart(
     server_restart(config=config)
 
 
-@server_app.command("attach")
-def _server_attach(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Attach TUI to running daemon."""
-    from soothe.ux.cli.commands.server_cmd import server_attach
-
-    server_attach(config=config)
-
+# NOTE: server "attach" command removed in RFC-0017
+# Use 'soothe thread continue --daemon' instead
 
 agent_app = typer.Typer(name="agent", help="List and manage agents")
 add_help_alias(agent_app)
@@ -443,3 +433,36 @@ def help_command(ctx: typer.Context) -> None:
 
 if __name__ == "__main__":
     app()
+
+
+@thread_app.command("stats")
+def _thread_stats(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Show thread execution statistics."""
+    from soothe.ux.cli.commands.thread_cmd import thread_stats
+
+    thread_stats(thread_id=thread_id, config=config)
+
+
+@thread_app.command("tag")
+def _thread_tag(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
+    tags: Annotated[list[str], typer.Argument(help="Tags to add/remove.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    remove: Annotated[
+        bool,
+        typer.Option("--remove", help="Remove tags instead of adding."),
+    ] = False,
+) -> None:
+    """Add or remove tags from a thread."""
+    from soothe.ux.cli.commands.thread_cmd import thread_tag
+
+    thread_tag(thread_id=thread_id, tags=tags, config=config, remove=remove)

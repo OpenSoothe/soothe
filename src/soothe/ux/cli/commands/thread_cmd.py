@@ -108,31 +108,46 @@ def thread_continue(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    *,
+    daemon: Annotated[
+        bool,
+        typer.Option("--daemon", help="Attach to running daemon instead of standalone."),
+    ] = False,
+    new: Annotated[
+        bool,
+        typer.Option("--new", help="Create a new thread instead of continuing."),
+    ] = False,
 ) -> None:
     """Continue a conversation thread in the TUI.
 
-    If no thread ID is provided, continues the most recently active thread.
+    Works in two modes:
+    1. Standalone (default): Runs agent directly
+    2. Daemon mode (--daemon): Connects to running daemon
 
     Examples:
-        soothe thread continue abc123
-        soothe thread continue  # Continue last active thread
+        soothe thread continue abc123          # Continue thread standalone
+        soothe thread continue --daemon abc123 # Continue via daemon
+        soothe thread continue --new           # Start new thread
+        soothe thread continue                 # Continue last active thread
     """
     from soothe.ux.cli.execution import run_tui
     from soothe.ux.core import load_config
+    from soothe.daemon import SootheDaemon
 
     cfg = load_config(config)
 
-    # If no thread_id provided, find last active thread
-    if not thread_id:
-        import asyncio
-
+    # Handle --new flag
+    if new:
+        thread_id = None
+    elif not thread_id:
+        # Find last active thread
         from soothe.core.runner import SootheRunner
 
         runner = SootheRunner(cfg)
 
         async def get_last_thread() -> str | None:
             threads = await runner.list_threads()
-            active_threads = [t for t in threads if t.get("status") == "active"]
+            active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
             if not active_threads:
                 typer.echo("No active threads found.", err=True)
                 sys.exit(1)
@@ -140,13 +155,19 @@ def thread_continue(
             return active_threads[0].get("thread_id")
 
         thread_id = asyncio.run(get_last_thread())
-        if thread_id:
-            import logging
 
-            logger = logging.getLogger(__name__)
-            logger.info("Continuing thread %s", thread_id)
+    # Handle --daemon flag
+    if daemon:
+        if not SootheDaemon.is_running():
+            typer.echo("Error: No daemon running. Start with 'soothe server start'.", err=True)
+            sys.exit(1)
 
-    run_tui(cfg, thread_id=thread_id, config_path=config)
+        # Connect to daemon and resume thread
+        # This will trigger TUI to connect to daemon
+        run_tui(cfg, thread_id=thread_id, config_path=config, daemon_mode=True)
+    else:
+        # Standalone mode (existing behavior)
+        run_tui(cfg, thread_id=thread_id, config_path=config, daemon_mode=False)
 
 
 def thread_archive(
@@ -288,3 +309,89 @@ def thread_export(
         sys.exit(1)
 
     typer.echo(f"Exported to {out_path}")
+
+
+def thread_stats(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """Show thread execution statistics.
+
+    Example:
+        soothe thread stats abc123
+    """
+    from soothe.core.runner import SootheRunner
+    from soothe.core.thread import ThreadContextManager
+    from soothe.ux.core import load_config
+
+    cfg = load_config(config)
+    runner = SootheRunner(cfg)
+
+    async def _show_stats() -> None:
+        manager = ThreadContextManager(runner._durability, cfg)
+        stats = await manager.get_thread_stats(thread_id)
+
+        typer.echo(f"Thread: {thread_id}")
+        typer.echo(f"Messages: {stats.message_count}")
+        typer.echo(f"Events: {stats.event_count}")
+        typer.echo(f"Artifacts: {stats.artifact_count}")
+        typer.echo(f"Errors: {stats.error_count}")
+        if stats.last_error:
+            typer.echo(f"Last Error: {stats.last_error}")
+
+    asyncio.run(_show_stats())
+
+
+def thread_tag(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
+    tags: Annotated[
+        list[str],
+        typer.Argument(help="Tags to add/remove."),
+    ],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    *,
+    remove: Annotated[
+        bool,
+        typer.Option("--remove", help="Remove tags instead of adding."),
+    ] = False,
+) -> None:
+    """Add or remove tags from a thread.
+
+    Examples:
+        soothe thread tag abc123 research analysis
+        soothe thread tag abc123 research --remove
+    """
+    from soothe.core.runner import SootheRunner
+    from soothe.core.thread import ThreadContextManager
+    from soothe.ux.core import load_config
+
+    cfg = load_config(config)
+    runner = SootheRunner(cfg)
+
+    async def _tag() -> None:
+        manager = ThreadContextManager(runner._durability, cfg)
+        thread = await manager.get_thread(thread_id)
+
+        # Get current metadata
+        metadata = thread.metadata.copy()
+        current_tags = set(metadata.get("tags", []))
+
+        if remove:
+            current_tags -= set(tags)
+        else:
+            current_tags |= set(tags)
+
+        metadata["tags"] = list(current_tags)
+
+        # Update metadata via durability protocol
+        await runner._durability.update_thread_metadata(thread_id, metadata)
+
+        typer.echo(f"Tags: {', '.join(metadata['tags'])}")
+
+    asyncio.run(_tag())

@@ -106,7 +106,17 @@ class SootheDaemon(DaemonHandlersMixin):
         self._running = True
 
         # Initialize transport manager (RFC-0013)
-        self._transport_manager = TransportManager(self._config.daemon)
+        # Create ThreadContextManager for HTTP REST transport (RFC-0017)
+        from soothe.core.thread import ThreadContextManager
+
+        thread_manager = ThreadContextManager(self._runner._durability, self._config)
+
+        self._transport_manager = TransportManager(
+            self._config.daemon,
+            thread_manager=thread_manager,
+            runner=self._runner,
+            soothe_config=self._config,
+        )
         self._transport_manager.set_message_handler(self._handle_transport_message)
         await self._transport_manager.start_all()
 

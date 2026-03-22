@@ -28,15 +28,30 @@ class TransportManager:
 
     Args:
         config: Daemon configuration.
+        thread_manager: Optional ThreadContextManager for HTTP REST transport.
+        runner: Optional SootheRunner for HTTP REST transport.
+        soothe_config: Optional SootheConfig for HTTP REST transport.
     """
 
-    def __init__(self, config: DaemonConfig) -> None:
+    def __init__(
+        self,
+        config: DaemonConfig,
+        thread_manager: Any | None = None,
+        runner: Any | None = None,
+        soothe_config: Any | None = None,
+    ) -> None:
         """Initialize transport manager.
 
         Args:
             config: Daemon configuration.
+            thread_manager: Optional ThreadContextManager for HTTP REST transport.
+            runner: Optional SootheRunner for HTTP REST transport.
+            soothe_config: Optional SootheConfig for HTTP REST transport.
         """
         self._config = config
+        self._thread_manager = thread_manager
+        self._runner = runner
+        self._soothe_config = soothe_config
         self._transports: list[TransportServer] = []
         self._message_handler: Callable[[dict[str, Any]], None] | None = None
         self._started = False
@@ -69,7 +84,12 @@ class TransportManager:
         if self._config.transports.http_rest.enabled:
             from soothe.daemon.transports.http_rest import HttpRestTransport
 
-            http_transport = HttpRestTransport(self._config.transports.http_rest)
+            http_transport = HttpRestTransport(
+                self._config.transports.http_rest,
+                thread_manager=self._thread_manager,
+                runner=self._runner,
+                soothe_config=self._soothe_config,
+            )
             self._transports.append(http_transport)
             logger.debug("Configured HTTP REST transport")
 

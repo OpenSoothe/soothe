@@ -120,6 +120,21 @@ class DaemonHandlersMixin:
             # Clear the current thread ID to start a fresh thread
             self._runner.set_current_thread_id(None)
             await self._broadcast({"type": "status", "state": "idle", "thread_id": ""})
+        # Thread management handlers (RFC-0017)
+        elif msg_type == "thread_list":
+            await self._handle_thread_list(msg)
+        elif msg_type == "thread_create":
+            await self._handle_thread_create(msg)
+        elif msg_type == "thread_get":
+            await self._handle_thread_get(msg)
+        elif msg_type == "thread_archive":
+            await self._handle_thread_archive(msg)
+        elif msg_type == "thread_delete":
+            await self._handle_thread_delete(msg)
+        elif msg_type == "thread_messages":
+            await self._handle_thread_messages(msg)
+        elif msg_type == "thread_artifacts":
+            await self._handle_thread_artifacts(msg)
         elif msg_type == "detach":
             if client:
                 await self._send(client, {"type": "status", "state": "detached"})
@@ -176,6 +191,224 @@ class DaemonHandlersMixin:
                 await self._broadcast(
                     {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
                 )
+
+    async def _handle_thread_list(self, msg: dict[str, Any]) -> None:
+        """Handle thread_list message.
+
+        Args:
+            msg: Message dict with optional filter and include_stats.
+        """
+        from soothe.core.thread import ThreadContextManager, ThreadFilter
+
+        filter_data = msg.get("filter")
+        thread_filter = None
+        if filter_data:
+            thread_filter = ThreadFilter(**filter_data)
+
+        include_stats = msg.get("include_stats", False)
+
+        # Create ThreadContextManager
+        manager = ThreadContextManager(self._runner._durability, self._config)
+
+        threads = await manager.list_threads(
+            filter=thread_filter,
+            include_stats=include_stats,
+        )
+
+        await self._broadcast(
+            {
+                "type": "thread_list_response",
+                "threads": [t.model_dump(mode="json") for t in threads],
+                "total": len(threads),
+            }
+        )
+
+    async def _handle_thread_create(self, msg: dict[str, Any]) -> None:
+        """Handle thread_create message.
+
+        Args:
+            msg: Message dict with optional initial_message and metadata.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        initial_message = msg.get("initial_message")
+        metadata = msg.get("metadata")
+
+        # Create ThreadContextManager
+        manager = ThreadContextManager(self._runner._durability, self._config)
+
+        thread_info = await manager.create_thread(
+            initial_message=initial_message,
+            metadata=metadata,
+        )
+
+        await self._broadcast(
+            {
+                "type": "thread_created",
+                "thread_id": thread_info.thread_id,
+                "status": thread_info.status,
+            }
+        )
+
+    async def _handle_thread_get(self, msg: dict[str, Any]) -> None:
+        """Handle thread_get message.
+
+        Args:
+            msg: Message dict with thread_id.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        thread_id = msg["thread_id"]
+
+        try:
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            thread = await manager.get_thread(thread_id)
+            await self._broadcast(
+                {
+                    "type": "thread_get_response",
+                    "thread": thread.model_dump(mode="json"),
+                }
+            )
+        except KeyError:
+            await self._broadcast(
+                {
+                    "type": "error",
+                    "code": "THREAD_NOT_FOUND",
+                    "message": f"Thread {thread_id} not found",
+                }
+            )
+
+    async def _handle_thread_archive(self, msg: dict[str, Any]) -> None:
+        """Handle thread_archive message.
+
+        Args:
+            msg: Message dict with thread_id.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        thread_id = msg["thread_id"]
+
+        try:
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            await manager.archive_thread(thread_id)
+            await self._broadcast(
+                {
+                    "type": "thread_operation_ack",
+                    "operation": "archive",
+                    "thread_id": thread_id,
+                    "success": True,
+                    "message": "Thread archived successfully",
+                }
+            )
+        except Exception as e:
+            await self._broadcast(
+                {
+                    "type": "thread_operation_ack",
+                    "operation": "archive",
+                    "thread_id": thread_id,
+                    "success": False,
+                    "message": str(e),
+                }
+            )
+
+    async def _handle_thread_delete(self, msg: dict[str, Any]) -> None:
+        """Handle thread_delete message.
+
+        Args:
+            msg: Message dict with thread_id.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        thread_id = msg["thread_id"]
+
+        try:
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            await manager.delete_thread(thread_id)
+            await self._broadcast(
+                {
+                    "type": "thread_operation_ack",
+                    "operation": "delete",
+                    "thread_id": thread_id,
+                    "success": True,
+                    "message": "Thread deleted successfully",
+                }
+            )
+        except Exception as e:
+            await self._broadcast(
+                {
+                    "type": "thread_operation_ack",
+                    "operation": "delete",
+                    "thread_id": thread_id,
+                    "success": False,
+                    "message": str(e),
+                }
+            )
+
+    async def _handle_thread_messages(self, msg: dict[str, Any]) -> None:
+        """Handle thread_messages message.
+
+        Args:
+            msg: Message dict with thread_id, optional limit and offset.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        thread_id = msg["thread_id"]
+        limit = msg.get("limit", 100)
+        offset = msg.get("offset", 0)
+
+        try:
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            messages = await manager.get_thread_messages(
+                thread_id,
+                limit=limit,
+                offset=offset,
+            )
+            await self._broadcast(
+                {
+                    "type": "thread_messages_response",
+                    "thread_id": thread_id,
+                    "messages": [m.model_dump(mode="json") for m in messages],
+                    "limit": limit,
+                    "offset": offset,
+                }
+            )
+        except KeyError:
+            await self._broadcast(
+                {
+                    "type": "error",
+                    "code": "THREAD_NOT_FOUND",
+                    "message": f"Thread {thread_id} not found",
+                }
+            )
+
+    async def _handle_thread_artifacts(self, msg: dict[str, Any]) -> None:
+        """Handle thread_artifacts message.
+
+        Args:
+            msg: Message dict with thread_id.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        thread_id = msg["thread_id"]
+
+        try:
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            artifacts = await manager.get_thread_artifacts(thread_id)
+            await self._broadcast(
+                {
+                    "type": "thread_artifacts_response",
+                    "thread_id": thread_id,
+                    "artifacts": [a.model_dump(mode="json") for a in artifacts],
+                }
+            )
+        except KeyError:
+            await self._broadcast(
+                {
+                    "type": "error",
+                    "code": "THREAD_NOT_FOUND",
+                    "message": f"Thread {thread_id} not found",
+                }
+            )
 
     async def _handle_command(self, cmd: str) -> None:
         """Execute a slash command and broadcast the response.
