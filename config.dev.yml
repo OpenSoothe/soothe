@@ -21,6 +21,17 @@ providers:
       - qwen3.5-plus
       - text-embedding-v4
 
+  - name: coding-plan
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
+    models:
+      - glm-5
+      - qwen3.5-plus
+      - kimi-k2.5
+      - MiniMax-M2.5
+      - deepseek-v3.2
+
   # Ollama (local models):
   # - name: ollama
   #   provider_type: ollama
@@ -39,10 +50,10 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "dashscope:qwen3.5-flash"
-  think: "dashscope:qwen-max"
-  fast: "dashscope:qwen3.5-flash"
-  image: "dashscope:qwen3.5-plus"
+  default: "coding-plan:kimi-k2.5"
+  think: "coding-plan:qwen3.5-plus"
+  fast: "coding-plan:kimi-k2.5"
+  image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:text-embedding-v4"
 
 # =============================================================================
@@ -333,7 +344,7 @@ execution:
 logging:
   # Backend file logging (Python logging module)
   file:
-    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
     max_bytes: 10485760      # 10 MB before rotation
     backup_count: 3          # Number of rotating backups

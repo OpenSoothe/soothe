@@ -73,17 +73,54 @@ class SootheApp(App):
     #plan-tree.hidden {
         display: none;
     }
-    #info-bar {
+    #chat-input-container {
         dock: bottom;
-        height: 2;
+        layout: vertical;
+        height: auto;
         background: $surface;
-        color: $text-muted;
-        padding: 0 1;
+        padding: 1 2 0 2;
+        border-top: solid $primary;
+    }
+    #chat-input-row {
+        layout: horizontal;
+        height: auto;
+        min-height: 3;
+        max-height: 8;
+        margin-bottom: 0;
+    }
+    #chat-prompt {
+        color: $accent;
+        text-style: bold;
+        width: auto;
+        content-align: left middle;
+        padding-right: 1;
     }
     #chat-input {
-        height: 2;
+        height: auto;
+        min-height: 1;
         max-height: 6;
-        padding: 0 1;
+        padding: 0;
+        color: $foreground;
+        background: transparent;
+        border: none;
+        width: 1fr;
+    }
+    #chat-input:focus {
+        border: none;
+    }
+    #chat-input .text-area--cursor-line {
+        background: transparent;
+    }
+    #info-bar-wrapper {
+        height: auto;
+        margin-top: 0;
+        padding: 0 0 1 0;
+    }
+    #info-bar {
+        height: 1;
+        background: transparent;
+        color: $text-muted;
+        padding: 0;
     }
     """
 
@@ -140,9 +177,17 @@ class SootheApp(App):
             # Row 2: Plan tree (merged with activity info)
             with Container(id="info-row"):
                 yield PlanTree(id="plan-tree", classes="" if self._state.plan_visible else "hidden")
-            # Row 3: Chat input (TextArea for multi-line support)
-            yield ChatInput(id="chat-input", language=None, theme="css")
-        yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
+        # Chat input with prompt character (outside main-layout, docked at bottom)
+        with Container(id="chat-input-container"):
+            # Input row
+            with Container(id="chat-input-row"):
+                from textual.widgets import Static
+
+                yield Static(">", id="chat-prompt")
+                yield ChatInput(id="chat-input")
+            # Info bar under input (thread, events, subagent status)
+            with Container(id="info-bar-wrapper"):
+                yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
@@ -202,12 +247,6 @@ class SootheApp(App):
                 state_str = event.get("state", "")
                 thread_resumed = event.get("thread_resumed", False)
 
-                # Load input history
-                history = event.get("input_history", [])
-                if history:
-                    chat_input = self.query_one("#chat-input", ChatInput)
-                    chat_input.set_history(history)
-
                 tid = event.get("thread_id", self._state.thread_id)
                 # Ensure thread_id is always a string (JSON deserialization may preserve integers)
                 if tid is not None:
@@ -222,10 +261,16 @@ class SootheApp(App):
                     self._message_history.clear()
                     self._state.full_response.clear()
                     self._state.activity_lines.clear()
+                    # Don't load old input history for new threads
                     with contextlib.suppress(Exception):
                         panel = self.query_one("#conversation", ConversationPanel)
                         panel.clear()
                 elif tid and (tid != previous_thread_id or thread_resumed):
+                    # Thread switch or resume - load input history
+                    history = event.get("input_history", [])
+                    if history:
+                        chat_input = self.query_one("#chat-input", ChatInput)
+                        chat_input.set_history(history)
                     # Thread switch or explicit resume - load history from disk
                     self._thread_id = tid
                     if self._was_running and not thread_resumed:
@@ -630,7 +675,7 @@ class SootheApp(App):
             await self._client.send_detach()
             await self._client.close()
         self._connected = False
-        self.exit(message="Detached from Soothe daemon. Use 'soothe attach' to reconnect.")
+        self.exit(message="Detached from Soothe daemon. Use 'soothe server attach' to reconnect.")
 
     async def action_quit_app(self) -> None:
         """Stop daemon and quit."""
@@ -691,7 +736,7 @@ def _start_daemon_in_background(_config: SootheConfig, *, config_path: str | Non
     if SootheDaemon.is_running():
         return
 
-    cmd = [sys.executable, "-m", "soothe.ux.daemon"]
+    cmd = [sys.executable, "-m", "soothe.daemon"]
     if config_path:
         cmd.extend(["--config", config_path])
     subprocess.Popen(

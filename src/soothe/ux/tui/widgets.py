@@ -67,6 +67,10 @@ class ChatInput(TextArea):
         Args:
             **kwargs: Additional keyword arguments passed to TextArea.
         """
+        # Override theme to ensure text visibility
+        # Use 'vscode_dark' for dark mode compatibility, or no theme for plain text
+        if "theme" not in kwargs:
+            kwargs["theme"] = "vscode_dark"
         super().__init__(**kwargs)
         self._history: list[str] = []
         self._history_index: int = -1
@@ -128,6 +132,7 @@ class ChatInput(TextArea):
         """Handle key events for history navigation and submission."""
         # Ctrl+D for detach
         if event.key == "ctrl+d":
+            event.stop()
             event.prevent_default()
             from soothe.ux.tui.app import SootheApp
 
@@ -136,21 +141,36 @@ class ChatInput(TextArea):
                 await app.action_detach()
             return
 
-        # Enter key handling
+        # Ctrl+Enter handling - insert newline (works in most terminals)
+        if event.key == "ctrl+enter":
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+
+        # Shift+Enter handling - also insert newline (for terminals that support it)
+        if event.key == "shift+enter":
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+
+        # Ctrl+J handling - iTerm2 sends this for Shift+Enter (line feed character)
+        if event.key == "ctrl+j":
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+
+        # Enter key handling (plain Enter only)
         if event.key == "enter":
-            # Plain Enter: Submit message
+            event.stop()
             event.prevent_default()
             from soothe.ux.tui.app import SootheApp
 
             app = self.app
             if isinstance(app, SootheApp):
                 await app.submit_chat_input()
-            return
-
-        # Shift+Enter handling - let TextArea handle newline insertion
-        if event.key == "shift+enter":
-            # Let TextArea handle the newline
-            await super()._on_key(event)
             return
 
         # Up arrow for history navigation

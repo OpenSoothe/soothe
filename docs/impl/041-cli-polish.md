@@ -655,7 +655,7 @@ def server_attach(
         soothe server attach
         soothe server attach --thread-id abc123
     """
-    from soothe.ux.daemon import SootheDaemon
+    from soothe.daemon import SootheDaemon
 
     if not SootheDaemon.is_running():
         typer.echo("Error: No daemon running. Use 'soothe server start'.", err=True)

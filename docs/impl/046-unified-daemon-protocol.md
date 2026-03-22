@@ -448,7 +448,7 @@ def revoke_key(key_id: str):
 - [ ] Write unit tests for config validation
 
 **Task 0.3: Update Imports** (3h)
-- [ ] Update all imports from `soothe.ux.daemon` → `soothe.daemon`
+- [ ] Update all imports from `soothe.daemon` → `soothe.daemon`
 - [ ] Files to update:
   - `src/soothe/cli/execution/daemon_runner.py`
   - `src/soothe/cli/tui/app.py`
@@ -456,7 +456,7 @@ def revoke_key(key_id: str):
   - `src/soothe/cli/commands/thread_cmd.py`
   - `tests/unit_tests/test_cli_daemon.py`
   - `.agents/skills/checkhealth/scripts/check_daemon.py`
-  - All other references (grep for `soothe.ux.daemon`)
+  - All other references (grep for `soothe.daemon`)
 
 **Task 0.4: Verification** (1h)
 - [ ] Run all tests to verify no regressions
@@ -799,7 +799,7 @@ ws.onmessage = (event) => {
 
 **Using Transport Abstraction**:
 ```python
-from soothe.ux.daemon.transports import UnixSocketTransport, WebSocketTransport
+from soothe.daemon.transports import UnixSocketTransport, WebSocketTransport
 
 # Create transports
 unix = UnixSocketTransport(config.unix_socket)

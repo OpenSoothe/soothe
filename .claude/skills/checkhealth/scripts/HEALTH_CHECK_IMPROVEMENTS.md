@@ -148,7 +148,7 @@ $ uv run python .agents/skills/checkhealth/scripts/check_daemon.py
 }
 
 # Verify cleanup
-$ ps aux | grep "soothe.ux.daemon" | grep -v grep
+$ ps aux | grep "soothe.daemon" | grep -v grep
 (no output - daemon properly cleaned up)
 ```
 

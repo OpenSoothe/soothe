@@ -283,7 +283,7 @@ AI:
    Diagnostic code:
    ```python
    import socket
-   from soothe.ux.daemon import socket_path
+   from soothe.daemon import socket_path
 
    sock_path = socket_path()
    if sock_path.exists():

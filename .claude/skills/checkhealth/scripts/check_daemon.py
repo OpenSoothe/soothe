@@ -280,7 +280,7 @@ def start_test_daemon() -> dict[str, Any]:
     try:
         # Use subprocess to start daemon
         proc = subprocess.Popen(
-            [sys.executable, "-m", "soothe.ux.daemon"],
+            [sys.executable, "-m", "soothe.daemon"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,  # Detach from parent

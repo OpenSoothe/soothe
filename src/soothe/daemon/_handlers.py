@@ -44,7 +44,7 @@ class DaemonHandlersMixin:
                 "type": "status",
                 "state": initial_state,
                 "thread_id": "",  # Don't leak cached thread ID - client will request new/resume explicitly
-                "input_history": self._input_history.history[-100:] if self._input_history else [],
+                "input_history": [],  # Don't send history on initial connect - only when resuming
             }
 
             client.writer.write(encode(initial_msg))
@@ -113,6 +113,7 @@ class DaemonHandlersMixin:
                         "state": "idle",
                         "thread_id": self._runner.current_thread_id or "",
                         "thread_resumed": True,
+                        "input_history": self._input_history.history[-100:] if self._input_history else [],
                     }
                 )
         elif msg_type == "new_thread":

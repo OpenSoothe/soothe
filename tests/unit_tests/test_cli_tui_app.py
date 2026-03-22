@@ -20,7 +20,7 @@ def test_start_daemon_uses_external_process(monkeypatch, tmp_path: Path) -> None
     tui_app._start_daemon_in_background(SootheConfig(), config_path="/tmp/custom.yml")
 
     assert spawned
-    assert spawned[0][:3] == [spawned[0][0], "-m", "soothe.ux.daemon"]
+    assert spawned[0][:3] == [spawned[0][0], "-m", "soothe.daemon"]
     assert "--config" in spawned[0]
     assert "/tmp/custom.yml" in spawned[0]
 

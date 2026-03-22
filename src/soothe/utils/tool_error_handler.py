@@ -1,11 +1,16 @@
 """Tool error handling decorator."""
 
+import inspect
 import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# HTTP status codes for warning-level errors
+HTTP_FORBIDDEN = 403
+HTTP_TOO_MANY_REQUESTS = 429
 
 
 def tool_error_handler(tool_name: str, return_type: str = "dict") -> Callable[[Callable], Callable]:
@@ -26,7 +31,10 @@ def tool_error_handler(tool_name: str, return_type: str = "dict") -> Callable[[C
                 return func(*args, **kwargs)
             except Exception as exc:
                 error_msg = _simplify_error(exc)
-                logger.exception("%s failed: %s", tool_name, error_msg)
+                if _is_warning_level_error(exc):
+                    logger.warning("%s failed: %s", tool_name, error_msg)
+                else:
+                    logger.exception("%s failed: %s", tool_name, error_msg)
                 if return_type == "dict":
                     return {"error": error_msg}
                 return f"Error: {error_msg}"
@@ -37,18 +45,49 @@ def tool_error_handler(tool_name: str, return_type: str = "dict") -> Callable[[C
                 return await func(*args, **kwargs)
             except Exception as exc:
                 error_msg = _simplify_error(exc)
-                logger.exception("%s failed: %s", tool_name, error_msg)
+                if _is_warning_level_error(exc):
+                    logger.warning("%s failed: %s", tool_name, error_msg)
+                else:
+                    logger.exception("%s failed: %s", tool_name, error_msg)
                 if return_type == "dict":
                     return {"error": error_msg}
                 return f"Error: {error_msg}"
 
-        import asyncio
-
-        if asyncio.iscoroutinefunction(func):
+        if inspect.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
 
     return decorator
+
+
+def _is_warning_level_error(exc: Exception) -> bool:
+    """Check if error should be logged as warning instead of error.
+
+    Args:
+        exc: Exception to check
+
+    Returns:
+        True if this should be logged as warning (non-critical/recoverable),
+        False if it should be logged as error (unexpected/critical)
+    """
+    # Check for HTTP 403 Forbidden (API key issues, access denied)
+    status = getattr(exc, "status", None)
+    if status == HTTP_FORBIDDEN:
+        return True
+
+    # Check for HTTP 429 Too Many Requests (rate limiting)
+    if status == HTTP_TOO_MANY_REQUESTS:
+        return True
+
+    # Check response object for status
+    response = getattr(exc, "response", None)
+    if response is not None:
+        resp_status = getattr(response, "status_code", getattr(response, "status", None))
+        if resp_status in (HTTP_FORBIDDEN, HTTP_TOO_MANY_REQUESTS):
+            return True
+
+    # Default: log as error
+    return False
 
 
 def _simplify_error(exc: Exception) -> str:
@@ -66,9 +105,10 @@ def _simplify_error(exc: Exception) -> str:
     if "Timeout" in error_type or "timeout" in error_msg.lower():
         return "Request timed out"
 
-    # HTTP errors
-    if hasattr(exc, "response"):  # HTTPStatusError
-        status = getattr(exc.response, "status_code", "unknown")
+    # HTTP errors - check response object
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status = getattr(response, "status_code", "unknown")
         return f"HTTP error {status}"
 
     # Default: show type and message

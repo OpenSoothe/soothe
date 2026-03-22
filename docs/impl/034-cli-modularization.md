@@ -117,7 +117,7 @@ def run_tui(cfg: SootheConfig, *, thread_id: str | None = None, config_path: str
     """Launch the TUI application."""
 ```
 
-**Dependencies**: `soothe.ux.tui_app`, `soothe.ux.daemon`
+**Dependencies**: `soothe.ux.tui_app`, `soothe.daemon`
 
 #### execution/headless.py
 **Purpose**: Orchestrate headless execution (daemon vs standalone)
@@ -136,7 +136,7 @@ def run_headless(
     """Run a single prompt with streaming output."""
 ```
 
-**Dependencies**: `execution.daemon_runner`, `execution.standalone_runner`, `soothe.ux.daemon`
+**Dependencies**: `execution.daemon_runner`, `execution.standalone_runner`, `soothe.daemon`
 
 #### execution/daemon_runner.py
 **Purpose**: Execute via daemon client
@@ -155,7 +155,7 @@ async def run_headless_via_daemon(
     """Run a single prompt by connecting to a running daemon."""
 ```
 
-**Dependencies**: `soothe.ux.daemon`, `rendering.progress_renderer`, `soothe.ux.shared.progress_verbosity`
+**Dependencies**: `soothe.daemon`, `rendering.progress_renderer`, `soothe.ux.shared.progress_verbosity`
 
 #### execution/standalone_runner.py
 **Purpose**: Execute in standalone mode
