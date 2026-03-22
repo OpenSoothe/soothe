@@ -86,7 +86,7 @@ class SootheApp(App):
         height: auto;
         min-height: 3;
         max-height: 8;
-        margin-bottom: 0;
+        margin-bottom: 1;
     }
     #chat-prompt {
         color: $accent;
@@ -114,7 +114,8 @@ class SootheApp(App):
     #info-bar-wrapper {
         height: auto;
         margin-top: 0;
-        padding: 0 0 1 0;
+        padding: 1 0;
+        border-top: solid $primary;
     }
     #info-bar {
         height: 1;
