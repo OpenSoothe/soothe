@@ -1,9 +1,11 @@
 """Textual-based TUI for Soothe (RFC-0003 revised).
 
-Three-row layout:
-  Row 1 -- Conversation (left) | Plan + Activity (right)
-  Row 2 -- Info bar (thread, events, subagent status)
-  Row 3 -- Chat input with UP/DOWN history navigation
+Full-viewport layout with footer stack:
+  - Conversation panel (full height, borderless, native scrolling)
+  - Footer stack (docked bottom):
+    - Plan/Activity panel (compact, collapsible)
+    - Info bar (thread, events, status)
+    - Chat input with UP/DOWN history navigation
 
 Connects to the Soothe daemon over a Unix domain socket for event
 streaming and user input. When the daemon is not already running,
@@ -25,7 +27,6 @@ from rich.panel import Panel
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
-from textual.widgets import Header
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon, socket_path
@@ -46,48 +47,47 @@ class SootheApp(App):
 
     TITLE = "Soothe"
     CSS = """
-    #main-layout {
-        layout: vertical;
-        height: 1fr;
-    }
-    #conversation-row {
-        height: 4fr;
-        margin-bottom: 1;
-    }
     #conversation {
-        border: solid $primary;
-        height: 100%;
-    }
-    #info-row {
-        layout: vertical;
-        height: auto;
-        margin-bottom: 1;
-    }
-    #plan-tree {
-        height: auto;
-        max-height: 20;
-        padding: 0 1;
+        height: 1fr;
         border: none;
-        overflow: hidden;
+        padding: 0 1;
+        background: transparent;
     }
-    #plan-tree.hidden {
-        display: none;
-    }
-    #chat-input-container {
+
+    #footer-stack {
         dock: bottom;
         layout: vertical;
         height: auto;
         background: $surface;
-        padding: 1 2 0 2;
         border-top: solid $primary;
     }
+
+    #plan-tree {
+        height: auto;
+        max-height: 15;
+        padding: 0 1;
+        border: none;
+        display: none;
+    }
+    #plan-tree.visible {
+        display: block;
+    }
+
+    #info-bar {
+        height: 1;
+        padding: 0 1;
+        background: $surface-darken-1;
+        color: $text-muted;
+    }
+
     #chat-input-row {
         layout: horizontal;
         height: auto;
-        min-height: 3;
-        max-height: 8;
-        margin-bottom: 1;
+        min-height: 1;
+        max-height: 10;
+        padding: 0 1;
     }
+
     #chat-prompt {
         color: $accent;
         text-style: bold;
@@ -95,6 +95,7 @@ class SootheApp(App):
         content-align: left middle;
         padding-right: 1;
     }
+
     #chat-input {
         height: auto;
         min-height: 1;
@@ -110,18 +111,6 @@ class SootheApp(App):
     }
     #chat-input .text-area--cursor-line {
         background: transparent;
-    }
-    #info-bar-wrapper {
-        height: auto;
-        margin-top: 0;
-        padding: 1 0;
-        border-top: solid $primary;
-    }
-    #info-bar {
-        height: 1;
-        background: transparent;
-        color: $text-muted;
-        padding: 0;
     }
     """
 
@@ -164,31 +153,22 @@ class SootheApp(App):
         self._is_running = False
 
     def compose(self) -> ComposeResult:
-        """Build the widget tree: 3-row layout."""
-        yield Header()
-        with Container(id="main-layout"):
-            # Row 1: Conversation panel (largest height)
-            with Container(id="conversation-row"):
-                yield ConversationPanel(
-                    id="conversation",
-                    highlight=True,
-                    markup=True,
-                    wrap=True,
-                )
-            # Row 2: Plan tree (merged with activity info)
-            with Container(id="info-row"):
-                yield PlanTree(id="plan-tree", classes="" if self._state.plan_visible else "hidden")
-        # Chat input with prompt character (outside main-layout, docked at bottom)
-        with Container(id="chat-input-container"):
-            # Input row
+        """Build the widget tree: simplified layout with footer stack."""
+        yield ConversationPanel(
+            id="conversation",
+            highlight=True,
+            markup=True,
+            wrap=True,
+        )
+
+        with Container(id="footer-stack"):
+            yield PlanTree(id="plan-tree", classes="visible" if self._state.plan_visible else "")
+            yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
             with Container(id="chat-input-row"):
                 from textual.widgets import Static
 
                 yield Static(">", id="chat-prompt")
                 yield ChatInput(id="chat-input")
-            # Info bar under input (thread, events, subagent status)
-            with Container(id="info-bar-wrapper"):
-                yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
@@ -721,7 +701,7 @@ class SootheApp(App):
         """Toggle plan tree visibility."""
         try:
             plan_tree = self.query_one("#plan-tree", PlanTree)
-            plan_tree.toggle_class("hidden")
+            plan_tree.toggle_class("visible")
             self._state.plan_visible = not self._state.plan_visible
         except Exception:
             logger.debug("Failed to toggle plan tree", exc_info=True)
