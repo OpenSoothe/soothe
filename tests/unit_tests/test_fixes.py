@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from soothe.cli.daemon import DaemonClient, SootheDaemon
-from soothe.cli.slash_commands import (
+from soothe.daemon import DaemonClient, SootheDaemon
+from soothe.ux.shared.slash_commands import (
     _handle_thread_command,
     _show_context,
     _show_memory,
@@ -130,7 +130,7 @@ async def test_thread_list_breaks_on_empty_response() -> None:
     """Test that thread list doesn't hang on empty command response."""
     import asyncio
 
-    from soothe.cli.commands.thread_cmd import _thread_list_via_daemon
+    from soothe.ux.cli.commands.thread_cmd import _thread_list_via_daemon
 
     # Track if we complete in reasonable time
     completed = False
@@ -176,7 +176,7 @@ def test_attach_command_accepts_thread_id() -> None:
 
     import typer
 
-    from soothe.cli.commands.server_cmd import server_attach
+    from soothe.ux.cli.commands.server_cmd import server_attach
 
     sig = inspect.signature(server_attach)
     params = sig.parameters
@@ -249,7 +249,7 @@ async def test_tui_sends_thread_id_on_connection() -> None:
     import ast
     import textwrap
 
-    from soothe.cli.tui import SootheApp
+    from soothe.ux.tui import SootheApp
 
     source = inspect.getsource(SootheApp._connect_and_listen)
     # Dedent the source since inspect.getsource returns indented method

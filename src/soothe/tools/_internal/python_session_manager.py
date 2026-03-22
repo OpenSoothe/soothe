@@ -53,8 +53,8 @@ class PythonSessionManager:
                     try:
                         from IPython.core.interactiveshell import InteractiveShell
 
-                        # Create new IPython shell
-                        shell = InteractiveShell.instance()
+                        # Create new IPython shell (NOT using .instance() to avoid singleton)
+                        shell = InteractiveShell()
                         self._sessions[session_id] = shell
                         self._session_locks[session_id] = Lock()
 
@@ -109,7 +109,9 @@ class PythonSessionManager:
                     "success": result.success,
                     "output": output,
                     "result": result_value,
-                    "error": str(result.error_in_exec) if result.error_in_exec else None,
+                    "error": f"{type(result.error_in_exec).__name__}: {result.error_in_exec}"
+                    if result.error_in_exec
+                    else None,
                 }
 
             except Exception as e:

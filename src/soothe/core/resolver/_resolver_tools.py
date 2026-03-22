@@ -11,10 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
-from soothe.subagents.browser import create_browser_subagent
-from soothe.subagents.claude import create_claude_subagent
-from soothe.subagents.skillify import create_skillify_subagent
-from soothe.subagents.weaver import create_weaver_subagent
 from soothe.utils import expand_path
 from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
@@ -29,12 +25,59 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-SUBAGENT_FACTORIES: dict[str, Callable[..., SubAgent | CompiledSubAgent]] = {
-    "browser": create_browser_subagent,
-    "claude": create_claude_subagent,
-    "skillify": create_skillify_subagent,
-    "weaver": create_weaver_subagent,
-}
+
+def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubAgent]]:
+    """Lazily load subagent factories on first access.
+
+    This avoids importing heavy subagent modules (browser, skillify, weaver)
+    at module load time, which was causing 24+ second startup delays.
+    """
+    from soothe.subagents.browser import create_browser_subagent
+    from soothe.subagents.claude import create_claude_subagent
+    from soothe.subagents.skillify import create_skillify_subagent
+    from soothe.subagents.weaver import create_weaver_subagent
+
+    return {
+        "browser": create_browser_subagent,
+        "claude": create_claude_subagent,
+        "skillify": create_skillify_subagent,
+        "weaver": create_weaver_subagent,
+    }
+
+
+# Lazy accessor for SUBAGENT_FACTORIES
+class _SubagentFactoriesAccessor:
+    """Lazy accessor for subagent factories."""
+
+    _factories: dict[str, Callable[..., SubAgent | CompiledSubAgent]] | None = None
+
+    def __getitem__(self, key: str) -> Callable[..., SubAgent | CompiledSubAgent]:
+        if self._factories is None:
+            self._factories = _get_subagent_factories()
+        return self._factories[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if self._factories is None:
+            self._factories = _get_subagent_factories()
+        return self._factories.get(key, default)
+
+    def keys(self) -> Any:  # type: ignore[override]
+        if self._factories is None:
+            self._factories = _get_subagent_factories()
+        return self._factories.keys()
+
+    def items(self) -> Any:  # type: ignore[override]
+        if self._factories is None:
+            self._factories = _get_subagent_factories()
+        return self._factories.items()
+
+    def __len__(self) -> int:
+        if self._factories is None:
+            self._factories = _get_subagent_factories()
+        return len(self._factories)
+
+
+SUBAGENT_FACTORIES = _SubagentFactoriesAccessor()
 
 
 # ---------------------------------------------------------------------------

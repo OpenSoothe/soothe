@@ -53,11 +53,11 @@ from typing import Annotated, Literal
 
 import typer
 
-from soothe.cli.commands.config_cmd import config_init, config_show, config_validate
-from soothe.cli.commands.run_cmd import run_impl
-from soothe.cli.commands.server_cmd import server_attach, server_start, server_status, server_stop
-from soothe.cli.commands.status_cmd import agent_list, agent_status
-from soothe.cli.commands.thread_cmd import (
+from soothe.ux.cli.commands.config_cmd import config_init, config_show, config_validate
+from soothe.ux.cli.commands.run_cmd import run_impl
+from soothe.ux.cli.commands.server_cmd import server_attach, server_start, server_status, server_stop
+from soothe.ux.cli.commands.status_cmd import agent_list, agent_status
+from soothe.ux.cli.commands.thread_cmd import (
     thread_archive,
     thread_continue,
     thread_delete,
@@ -173,7 +173,7 @@ agent_app.command("status")(agent_status)
 # Autopilot Command
 # ---------------------------------------------------------------------------
 
-from soothe.cli.commands.autopilot_cmd import autopilot
+from soothe.ux.cli.commands.autopilot_cmd import autopilot
 
 app.command()(autopilot)
 
@@ -200,8 +200,8 @@ from typing import Annotated, Literal
 
 import typer
 
-from soothe.cli.core import load_config, migrate_rocksdb_to_data_subfolder, setup_logging
-from soothe.cli.execution import check_postgres_available, run_headless, run_tui
+from soothe.ux.core import load_config, migrate_rocksdb_to_data_subfolder, setup_logging
+from soothe.ux.execution import check_postgres_available, run_headless, run_tui
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +307,7 @@ def autopilot(
         soothe autopilot "Research AI safety"
         soothe autopilot "Build a tool" --max-iterations 10
     """
-    from soothe.cli.commands.run_cmd import run_impl
+    from soothe.ux.cli.commands.run_cmd import run_impl
 
     run_impl(
         prompt=prompt,
@@ -544,7 +544,7 @@ def agent_list(
         cfg = load_config(config)
 
         from rich.table import Table
-        from soothe.cli.commands.subagent_names import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
+        from soothe.ux.cli.commands.subagent_names import BUILTIN_SUBAGENT_NAMES, SUBAGENT_DISPLAY_NAMES
 
         table = Table(title="Available Agents")
         table.add_column("Name", style="cyan")
@@ -655,7 +655,7 @@ def server_attach(
         soothe server attach
         soothe server attach --thread-id abc123
     """
-    from soothe.cli.daemon import SootheDaemon
+    from soothe.ux.daemon import SootheDaemon
 
     if not SootheDaemon.is_running():
         typer.echo("Error: No daemon running. Use 'soothe server start'.", err=True)
@@ -667,7 +667,7 @@ def server_attach(
         cfg = cfg.model_copy(update={"logging": logging_config})
 
     try:
-        from soothe.cli.tui import run_textual_tui
+        from soothe.ux.tui import run_textual_tui
 
         run_textual_tui(config=cfg, thread_id=thread_id, config_path=config)
     except ImportError:
@@ -693,11 +693,11 @@ Update exports:
 ```python
 """CLI command groups for Soothe."""
 
-from soothe.cli.commands.autopilot_cmd import autopilot
-from soothe.cli.commands.config_cmd import config_init, config_show, config_validate
-from soothe.cli.commands.server_cmd import server_attach, server_start, server_status, server_stop
-from soothe.cli.commands.status_cmd import agent_list, agent_status
-from soothe.cli.commands.thread_cmd import (
+from soothe.ux.cli.commands.autopilot_cmd import autopilot
+from soothe.ux.cli.commands.config_cmd import config_init, config_show, config_validate
+from soothe.ux.cli.commands.server_cmd import server_attach, server_start, server_status, server_stop
+from soothe.ux.cli.commands.status_cmd import agent_list, agent_status
+from soothe.ux.cli.commands.thread_cmd import (
     thread_archive,
     thread_continue,
     thread_delete,

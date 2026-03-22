@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.config import SOOTHE_HOME, SootheConfig, _resolve_env
+from soothe.utils import expand_path
+
 from ._resolver_infra import resolve_checkpointer, resolve_durability
 from ._resolver_tools import (
     SUBAGENT_FACTORIES,
@@ -22,7 +24,6 @@ from ._resolver_tools import (
     resolve_subagents,
     resolve_tools,
 )
-from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel

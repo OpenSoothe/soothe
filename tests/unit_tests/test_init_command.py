@@ -13,7 +13,7 @@ def test_init_command_creates_config():
         home = Path(tmpdir) / ".soothe"
 
         with patch("soothe.config.SOOTHE_HOME", str(home)):
-            from soothe.cli.commands.config_cmd import config_init
+            from soothe.ux.cli.commands.config_cmd import config_init
 
             config_init()
 
@@ -36,9 +36,11 @@ def test_init_command_idempotent():
         config_path.write_text("existing config")
 
         with patch("soothe.config.SOOTHE_HOME", str(home)):
-            from soothe.cli.commands.config_cmd import config_init
+            from soothe.ux.cli.commands.config_cmd import config_init
 
-            config_init()
+            # Mock the confirmation prompt to return False (don't overwrite)
+            with patch("typer.confirm", return_value=False):
+                config_init()
 
             # Verify config wasn't overwritten
             assert config_path.read_text() == "existing config"
@@ -50,7 +52,7 @@ def test_init_creates_directories():
         home = Path(tmpdir) / ".soothe"
 
         with patch("soothe.config.SOOTHE_HOME", str(home)):
-            from soothe.cli.commands.config_cmd import config_init
+            from soothe.ux.cli.commands.config_cmd import config_init
 
             config_init()
 

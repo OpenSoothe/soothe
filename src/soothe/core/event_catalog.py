@@ -96,7 +96,7 @@ from soothe.core.events import (
 )
 
 if TYPE_CHECKING:
-    from soothe.cli.progress_verbosity import ProgressCategory
+    from soothe.ux.shared.progress_verbosity import ProgressCategory
 
 # ---------------------------------------------------------------------------
 # Base models

@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.cli.core.logging_setup import setup_logging
 from soothe.config import SootheConfig
+from soothe.ux.core.logging_setup import setup_logging
 
 
 class TestLoggingSetup:

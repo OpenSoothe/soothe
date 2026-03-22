@@ -117,7 +117,7 @@ def run_tui(cfg: SootheConfig, *, thread_id: str | None = None, config_path: str
     """Launch the TUI application."""
 ```
 
-**Dependencies**: `soothe.cli.tui_app`, `soothe.cli.daemon`
+**Dependencies**: `soothe.ux.tui_app`, `soothe.ux.daemon`
 
 #### execution/headless.py
 **Purpose**: Orchestrate headless execution (daemon vs standalone)
@@ -136,7 +136,7 @@ def run_headless(
     """Run a single prompt with streaming output."""
 ```
 
-**Dependencies**: `execution.daemon_runner`, `execution.standalone_runner`, `soothe.cli.daemon`
+**Dependencies**: `execution.daemon_runner`, `execution.standalone_runner`, `soothe.ux.daemon`
 
 #### execution/daemon_runner.py
 **Purpose**: Execute via daemon client
@@ -155,7 +155,7 @@ async def run_headless_via_daemon(
     """Run a single prompt by connecting to a running daemon."""
 ```
 
-**Dependencies**: `soothe.cli.daemon`, `rendering.progress_renderer`, `soothe.cli.progress_verbosity`
+**Dependencies**: `soothe.ux.daemon`, `rendering.progress_renderer`, `soothe.ux.shared.progress_verbosity`
 
 #### execution/standalone_runner.py
 **Purpose**: Execute in standalone mode
@@ -174,7 +174,7 @@ async def run_headless_standalone(
     """Run a single prompt in standalone mode."""
 ```
 
-**Dependencies**: `soothe.core.runner`, `rendering.progress_renderer`, `soothe.cli.progress_verbosity`
+**Dependencies**: `soothe.core.runner`, `rendering.progress_renderer`, `soothe.ux.shared.progress_verbosity`
 
 #### execution/postgres_check.py
 **Purpose**: Check PostgreSQL availability
@@ -335,8 +335,8 @@ This is a **cut change** with no backwards compatibility:
    - `_check_postgres_available` → `check_postgres_available`
 
 2. **Module moves**: Functions moved to new locations
-   - Old: `from soothe.cli.main import _load_config`
-   - New: `from soothe.cli.core.config_loader import load_config`
+   - Old: `from soothe.ux.main import _load_config`
+   - New: `from soothe.ux.core.config_loader import load_config`
 
 3. **Internal state moved**:
    - `_config_cache` moved to `core/config_loader.py`

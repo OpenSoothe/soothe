@@ -751,7 +751,7 @@ def test_all_tool_names_covered():
 ```python
 def test_format_tool_call_args_file_path():
     """Test argument formatting for file tools."""
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     tool_call = {"args": {"path": "/workspace/README.md"}}
     result = format_tool_call_args("read_file", tool_call)
@@ -760,7 +760,7 @@ def test_format_tool_call_args_file_path():
 
 def test_format_tool_call_args_command():
     """Test argument formatting for execution tools."""
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     tool_call = {"args": {"command": "ls -la"}}
     result = format_tool_call_args("run_command", tool_call)
@@ -769,7 +769,7 @@ def test_format_tool_call_args_command():
 
 def test_format_tool_call_args_truncation():
     """Test long argument truncation."""
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     long_path = "/very/long/path/that/exceeds/fifty/characters/and/should/be/truncated.md"
     tool_call = {"args": {"path": long_path}}
@@ -780,7 +780,7 @@ def test_format_tool_call_args_truncation():
 
 def test_format_tool_call_args_missing():
     """Test missing argument handling."""
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     tool_call = {"args": {}}
     result = format_tool_call_args("read_file", tool_call)
@@ -789,7 +789,7 @@ def test_format_tool_call_args_missing():
 
 def test_format_tool_call_args_invalid():
     """Test invalid tool call structure."""
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     result = format_tool_call_args("read_file", {})
     assert result == ""
@@ -803,7 +803,7 @@ def test_format_tool_call_args_invalid():
 ```python
 def test_tool_events_visible_at_normal():
     """Test that tool events are visible at normal verbosity."""
-    from soothe.cli.progress_verbosity import classify_custom_event, should_show
+    from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
 
     # Tool event classification
     tool_event = {"type": "soothe.tool.websearch.search_started"}
@@ -824,8 +824,8 @@ import pytest
 from io import StringIO
 from rich.text import Text
 
-from soothe.cli.tui.renderers import _handle_tool_call_activity, _handle_tool_result_activity
-from soothe.cli.tui.state import TuiState
+from soothe.ux.tui.renderers import _handle_tool_call_activity, _handle_tool_result_activity
+from soothe.ux.tui.state import TuiState
 
 
 def test_tool_call_display_with_args():
@@ -873,7 +873,7 @@ def test_tool_result_display():
 
 def test_cli_headless_tool_event():
     """Test tool event rendering in headless CLI mode."""
-    from soothe.cli.rendering.cli_event_renderer import CliEventRenderer
+    from soothe.ux.cli.rendering.cli_event_renderer import CliEventRenderer
 
     renderer = CliEventRenderer()
     event = {
@@ -945,7 +945,7 @@ def emit_tool_call(
     tool_call: dict[str, Any] | None = None,
 ) -> None:
     from soothe.tools.display_names import get_tool_display_name
-    from soothe.cli.message_processing import format_tool_call_args
+    from soothe.ux.shared.message_processing import format_tool_call_args
 
     display_name = get_tool_display_name(name)
     args_str = format_tool_call_args(name, tool_call) if tool_call else ""

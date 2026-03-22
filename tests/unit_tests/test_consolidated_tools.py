@@ -209,14 +209,14 @@ class TestResolverConsolidatedNames:
     """Consolidated tool names resolve; legacy names are rejected."""
 
     def test_research_resolves(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("research")
         assert len(tools) == 1
         assert tools[0].name == "research"
 
     def test_websearch_resolves(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("web_search")  # Note: uses underscore
         assert len(tools) == 2  # SearchWebTool + CrawlWebTool
@@ -224,28 +224,28 @@ class TestResolverConsolidatedNames:
         assert tools[1].name == "crawl_web"
 
     def test_file_ops_resolves(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("file_ops")
         assert len(tools) == 6
         assert tools[0].name == "read_file"
 
     def test_execution_resolves(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("execution")
         assert len(tools) == 4
         assert tools[0].name == "run_command"
 
     def test_data_resolves(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("data")
         assert len(tools) == 6
         assert tools[0].name == "inspect_data"
 
     def test_old_names_rejected(self) -> None:
-        from soothe.core._resolver_tools import _resolve_single_tool_group_uncached
+        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         for old_name in ("inquiry", "file_edit", "cli", "wizsearch", "tabular", "document", "python_executor"):
             tools = _resolve_single_tool_group_uncached(old_name)

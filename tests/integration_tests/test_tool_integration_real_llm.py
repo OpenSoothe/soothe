@@ -52,9 +52,22 @@ class StreamEventCollector:
             }
             self.events.append(event)
 
-            # Track tool calls
-            if mode == "tool_call":
-                self.tool_calls.append(data)
+            # Track tool calls - they come in 'messages' mode with content_blocks
+            if mode == "messages":
+                # data is a tuple (message_obj, metadata)
+                if isinstance(data, tuple) and len(data) >= 1:
+                    msg_obj = data[0]
+                    # Extract tool calls from content_blocks if present
+                    if hasattr(msg_obj, "content_blocks") and msg_obj.content_blocks:
+                        for block in msg_obj.content_blocks:
+                            if isinstance(block, dict) and block.get("type") in ("tool_call", "tool_call_chunk"):
+                                # Extract tool call info
+                                tool_call = {
+                                    "name": block.get("name"),
+                                    "args": block.get("args", {}),
+                                    "id": block.get("id"),
+                                }
+                                self.tool_calls.append(tool_call)
 
             # Track errors
             if isinstance(data, dict) and "error" in data:

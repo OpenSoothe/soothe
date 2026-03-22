@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from soothe.cli.daemon import DaemonClient, SootheDaemon
-from soothe.cli.daemon.server import _ClientConn
 from soothe.config import SootheConfig
+from soothe.daemon import DaemonClient, SootheDaemon
+from soothe.daemon.server import _ClientConn
 
 
 class _FakeRunner:
@@ -110,7 +110,7 @@ async def test_daemon_client_send_input_includes_options() -> None:
 @pytest.mark.asyncio
 async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     """Test that daemon logs user input and assistant responses to thread file."""
-    from soothe.cli.thread_logger import ThreadLogger
+    from soothe.daemon.thread_logger import ThreadLogger
 
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunnerWithMessages()  # type: ignore[attr-defined]
@@ -202,7 +202,7 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     from asyncio import StreamWriter
 
-    from soothe.cli.thread_logger import InputHistory
+    from soothe.daemon.thread_logger import InputHistory
 
     daemon = SootheDaemon(SootheConfig())
     # Set up a runner with an existing thread_id (simulating previous session)
@@ -241,7 +241,7 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     await daemon._handle_client(reader, writer)  # type: ignore[arg-type]
 
     # Decode the initial status message
-    from soothe.cli.daemon.protocol import decode
+    from soothe.daemon.protocol import decode
 
     assert len(sent_messages) > 0, "Should have sent initial status message"
     initial_msg = decode(sent_messages[0])

@@ -11,28 +11,33 @@
 # Set at least one provider with its API key.
 
 providers:
-  - name: dashscope
+  - name: openai
     provider_type: openai
-    api_key: "${DASHSCOPE_API_KEY}"
-    api_base_url: "${DASHSCOPE_BASE_URL}"
+    api_key: "${OPENAI_API_KEY}"
+    # api_base_url: https://api.openai.com/v1
     models:
-      - glm-5
-      - qwen3.5-plus
-      - qwen3.5-flash
-      - MiniMax-M2.5
-      - text-embedding-v4
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
 
-  - name: idealab
-    provider_type: openai
-    api_key: "${IDEALAB_API_KEY}"
-    api_base_url: "${IDEALAB_BASE_URL}"
-    models:
-      - pai/glm-5
+  # OpenAI-compatible (DashScope, OpenRouter, vLLM):
+  # - name: dashscope
+  #   provider_type: openai
+  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key: "${DASHSCOPE_API_KEY}"
+  #   models: [qwen-max]
 
-  - name: ollama
-    provider_type: ollama
-    api_base_url: http://localhost:11434
-    models: [qwen3.5:0.8b, nomic-embed-text:latest]
+  # Ollama (local models):
+  # - name: ollama
+  #   provider_type: ollama
+  #   api_base_url: http://localhost:11434
+  #   models: [llama3.2, qwen3:8b, deepseek-r1:14b, nomic-embed-text:latest]
+
+  # Anthropic:
+  # - name: anthropic
+  #   provider_type: anthropic
+  #   api_key: "${ANTHROPIC_API_KEY}"
+  #   models: [claude-sonnet-4-20250514]
 
 # =============================================================================
 # Model Router
@@ -40,11 +45,11 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "dashscope:qwen3.5-flash"
-  think: "dashscope:glm-5"
-  fast: "dashscope:qwen3.5-flash"
-  image: "dashscope:qwen3.5-plus"
-  embedding: "dashscope:text-embedding-v4"
+  default: "openai:gpt-4o-mini"
+  think: "openai:o3-mini"
+  fast: "openai:gpt-4o-mini"
+  image: "openai:gpt-4o"
+  embedding: "openai:text-embedding-3-small"
 
 # =============================================================================
 # Agent Behavior
@@ -132,21 +137,21 @@ tools:
     enabled: true
     default_engines:
       - tavily          # Requires TAVILY_API_KEY (set in environment)
-      - duckduckgo
-      - brave
+      - duckduckgo      # No API key required
     max_results_per_engine: 10
     timeout: 30
   research:
     enabled: true       # Deep multi-source iterative research (InquiryEngine)
 
+  # Optional tools (require API keys or external services):
   image:
-    enabled: true   # Image analysis (OpenAI GPT-4o)
+    enabled: false   # Image analysis (OpenAI GPT-4o)
   audio:
-    enabled: true   # Audio transcription (OpenAI Whisper)
+    enabled: false   # Audio transcription (OpenAI Whisper)
   video:
-    enabled: true   # Video analysis (Google Gemini)
+    enabled: false   # Video analysis (Google Gemini)
   github:
-    enabled: true   # GitHub API (GITHUB_TOKEN)
+    enabled: false   # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
 # MCP Servers
@@ -334,7 +339,7 @@ execution:
 logging:
   # Backend file logging (Python logging module)
   file:
-    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
     max_bytes: 10485760      # 10 MB before rotation
     backup_count: 3          # Number of rotating backups
@@ -355,3 +360,44 @@ logging:
     dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
     retention_days: 30       # Auto-delete threads older than N days
     max_size_mb: 100         # Max total size (not enforced yet)
+
+# =============================================================================
+# Daemon Multi-Transport Configuration (RFC-0013)
+# =============================================================================
+# Configure daemon communication protocols for local CLI, web UIs, and remote access.
+# The daemon supports three transport types simultaneously:
+# - Unix socket: Local CLI/TUI clients (default, no auth required)
+# - WebSocket: Web UIs and remote clients (opt-in, auth optional/required)
+# - HTTP REST: CRUD operations and file uploads (opt-in, auth optional/required)
+
+daemon:
+  # Transport Layer Configuration
+  transports:
+    # Unix Domain Socket - Default transport for local CLI/TUI
+    unix_socket:
+      enabled: true          # Enable Unix socket server (recommended: true)
+      path: "~/.soothe/soothe.sock"  # Socket file path
+
+    # WebSocket - For web UIs and remote clients
+    websocket:
+      enabled: true         # Enable WebSocket server (default: false)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8765            # WebSocket port
+      tls_enabled: false    # Enable TLS (wss://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"
+
+    # HTTP REST API - For CRUD operations and file management
+    http_rest:
+      enabled: false        # Enable HTTP REST server (default: false)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8766            # HTTP REST port
+      tls_enabled: false    # Enable TLS (https://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"

@@ -241,7 +241,7 @@ Add test:
 ```python
 def test_thread_deletion_removes_runs_directory(tmp_path):
     """Verify /delete removes runs/{thread_id}/ directory."""
-    from soothe.cli.commands import handle_delete
+    from soothe.ux.commands import handle_delete
     from soothe.core.runner import SootheRunner
 
     # Create a thread with artifacts

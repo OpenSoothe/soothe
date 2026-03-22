@@ -30,7 +30,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.core.event_catalog import FinalReportEvent, PlanOnlyEvent
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -39,9 +38,18 @@ from ._runner_agentic import AgenticMixin
 from ._runner_autonomous import AutonomousMixin
 from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
-from ._runner_shared import StreamChunk, _custom
+from ._runner_shared import StreamChunk
 from ._runner_steps import StepLoopMixin
 from ._types import IterationRecord, RunnerState, _generate_thread_id
+
+# Re-export types for backward compatibility
+__all__ = [
+    "IterationRecord",
+    "RunnerState",
+    "SootheRunner",
+    "StreamChunk",
+    "_generate_thread_id",
+]
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -320,7 +328,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         thread_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,
+        subagent: str | None = None,  # noqa: ARG002
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -339,7 +347,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
         """
-        # Priority: autonomous > default (agentic)
         if autonomous and self._goal_engine:
             async for chunk in self._run_autonomous(
                 user_input,

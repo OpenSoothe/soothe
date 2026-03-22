@@ -66,18 +66,32 @@ def weaviate_store(weaviate_config):
             grpc_port=weaviate_config["grpc_port"],
         )
 
+        # Test connection before yielding
+        import asyncio
+
+        async def test_connection():
+            try:
+                # Try to access the weaviate client to verify connection
+                _ = store._client
+                return True
+            except Exception:
+                return False
+
+        if not asyncio.run(test_connection()):
+            pytest.skip("Weaviate server not available")
+
         yield store
 
         # Cleanup
         try:
-            import asyncio
-
             asyncio.run(store.delete_collection())
         except Exception:
             pass
 
     except ImportError:
         pytest.skip("weaviate dependencies not installed")
+    except Exception as e:
+        pytest.skip(f"Weaviate not available: {e}")
 
 
 @pytest.mark.integration

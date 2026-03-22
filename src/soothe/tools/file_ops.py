@@ -98,8 +98,9 @@ class ReadFileTool(BaseTool):
             lines = resolved.read_text(encoding="utf-8").splitlines(keepends=True)
 
             if start_line is not None or end_line is not None:
-                start = (start_line or 1) - 1
-                end = end_line or len(lines)
+                # Convert to int if needed (LLM might pass strings)
+                start = (int(start_line) if start_line is not None else 1) - 1
+                end = int(end_line) if end_line is not None else len(lines)
                 lines = lines[start:end]
 
             return "".join(lines)

@@ -6,15 +6,15 @@ from io import StringIO
 
 from rich.console import Console
 
-from soothe.cli.rendering.progress_renderer import render_progress_event
-from soothe.cli.tui.renderers import (
+from soothe.protocols.planner import Plan, PlanStep
+from soothe.ux.cli.rendering.progress_renderer import render_progress_event
+from soothe.ux.shared.rendering import render_plan_tree
+from soothe.ux.tui.renderers import (
     _handle_protocol_event,
     _handle_subagent_text_activity,
     _set_plan_step_status_by_id,
 )
-from soothe.cli.tui.state import TuiState
-from soothe.cli.tui_shared import render_plan_tree
-from soothe.protocols.planner import Plan, PlanStep
+from soothe.ux.tui.state import TuiState
 
 
 def test_render_progress_event_policy_allow_suppressed(capsys) -> None:

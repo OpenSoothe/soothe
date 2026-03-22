@@ -360,3 +360,44 @@ logging:
     dir: ""                  # Empty = SOOTHE_HOME/runs/{thread_id}/
     retention_days: 30       # Auto-delete threads older than N days
     max_size_mb: 100         # Max total size (not enforced yet)
+
+# =============================================================================
+# Daemon Multi-Transport Configuration (RFC-0013)
+# =============================================================================
+# Configure daemon communication protocols for local CLI, web UIs, and remote access.
+# The daemon supports three transport types simultaneously:
+# - Unix socket: Local CLI/TUI clients (default, no auth required)
+# - WebSocket: Web UIs and remote clients (opt-in, auth optional/required)
+# - HTTP REST: CRUD operations and file uploads (opt-in, auth optional/required)
+
+daemon:
+  # Transport Layer Configuration
+  transports:
+    # Unix Domain Socket - Default transport for local CLI/TUI
+    unix_socket:
+      enabled: true          # Enable Unix socket server (recommended: true)
+      path: "~/.soothe/soothe.sock"  # Socket file path
+
+    # WebSocket - For web UIs and remote clients
+    websocket:
+      enabled: true         # Enable WebSocket server (default: false)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8765            # WebSocket port
+      tls_enabled: false    # Enable TLS (wss://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"
+
+    # HTTP REST API - For CRUD operations and file management
+    http_rest:
+      enabled: false        # Enable HTTP REST server (default: false)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8766            # HTTP REST port
+      tls_enabled: false    # Enable TLS (https://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"

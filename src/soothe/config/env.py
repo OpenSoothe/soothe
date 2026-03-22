@@ -39,9 +39,13 @@ def _resolve_provider_env(value: str, *, provider_name: str, field_name: str) ->
     if m:
         env_name = m.group(1)
         _logger.warning(
-            f"Provider '{provider_name}' has unresolved env var '{env_name}' in "
-            f"providers[].{field_name}. Set {env_name} or replace it with a literal value. "
-            f"Skipping provider configuration."
+            "Provider '%s' has unresolved env var '%s' in "
+            "providers[].%s. Set %s or replace it with a literal value. "
+            "Skipping provider configuration.",
+            provider_name,
+            env_name,
+            field_name,
+            env_name,
         )
         return None
     return resolved

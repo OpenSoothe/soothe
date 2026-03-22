@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Minimum response length threshold for verification (characters)
+_MIN_RESPONSE_LENGTH_CHARS = 500
+
 
 class AgenticMixin:
     """Agentic loop implementation (observe → act → verify).
@@ -75,8 +78,7 @@ class AgenticMixin:
                     yield chunk
                 return
 
-            enrichment = await self._unified_classifier.classify_enrichment(user_input, complexity)
-            state.unified_classification = UnifiedClassification.from_tiers(routing, enrichment)
+            state.unified_classification = UnifiedClassification.from_routing(routing)
             # Cache routing for reuse in observe phase
             state.cached_routing = routing
         else:
@@ -198,7 +200,7 @@ class AgenticMixin:
         self,
         complexity: str,
         user_input: str,
-        state: Any,
+        state: Any,  # noqa: ARG002
     ) -> Literal["none", "lightweight", "comprehensive"]:
         """Determine planning strategy based on complexity and user intent.
 
@@ -229,7 +231,7 @@ class AgenticMixin:
     def _adapt_planning_strategy(
         self,
         current_strategy: str,
-        state: Any,
+        state: Any,  # noqa: ARG002
         verification_result: dict,
     ) -> str:
         """Adapt planning strategy based on iteration results.
@@ -258,6 +260,7 @@ class AgenticMixin:
         cumulative_context: list,
         observation_strategy: str,
         iteration: int,
+        *,
         skip_io: bool = False,
     ) -> AsyncGenerator[StreamChunk]:
         """Observe phase: gather context and classify.
@@ -430,7 +433,7 @@ class AgenticMixin:
 
     async def _agentic_verify(
         self,
-        user_input: str,
+        user_input: str,  # noqa: ARG002
         state: Any,
         verification_strictness: str,
         iteration: int,
@@ -555,7 +558,8 @@ class AgenticMixin:
         if verification_strictness == "moderate":
             # Continue with clear need + quality check
             return reflection.should_revise and (
-                any(sig in response_lower for sig in continuation_indicators) or len(response_text) < 500
+                any(sig in response_lower for sig in continuation_indicators)
+                or len(response_text) < _MIN_RESPONSE_LENGTH_CHARS
             )
 
         # strict: Continue only with strong evidence of incompleteness

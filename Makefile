@@ -11,9 +11,9 @@ help:
 	@echo "  make format-check - Check code formatting (for CI)"
 	@echo "  make lint       - Lint code with ruff"
 	@echo "  make lint-fix   - Auto-fix linting issues with ruff"
-	@echo "  make test       - Run all tests with pytest"
+	@echo "  make test       - Run unit tests (default, fast)"
 	@echo "  make test-unit  - Run unit tests only"
-	@echo "  make test-integration - Run integration tests (requires --run-integration)"
+	@echo "  make test-integration - Run integration tests (requires external services)"
 	@echo "  make test-coverage - Run tests with coverage report"
 	@echo "  make build      - Build the package"
 	@echo "  make publish    - Publish package to PyPI"
@@ -56,11 +56,9 @@ lint-fix: sync-dev
 	uv run ruff check --fix src/ tests/
 	@echo "✓ Linting issues fixed"
 
-# Run all tests
-test: sync-dev
-	@echo "Running all tests..."
-	uv run pytest tests/ -v
-	@echo "✓ Tests complete"
+# Run all tests (unit tests only by default)
+test: test-unit test-integration
+	@echo "✓ All tests complete"
 
 # Run unit tests only
 test-unit: sync-dev
@@ -68,10 +66,10 @@ test-unit: sync-dev
 	uv run pytest tests/unit_tests/ -v
 	@echo "✓ Unit tests complete"
 
-# Run integration tests (requires external services)
+# Run integration tests (requires external services and real LLM calls)
 test-integration: sync-dev
 	@echo "Running integration tests..."
-	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate)"
+	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate) and real LLM API calls"
 	@echo "Use: pytest tests/integration_tests/ --run-integration"
 	uv run pytest tests/integration_tests/ --run-integration -v
 	@echo "✓ Integration tests complete"

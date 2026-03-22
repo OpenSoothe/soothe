@@ -375,6 +375,7 @@ class ContextProtocolConfig(BaseModel):
     """Context Protocol configuration.
 
     Args:
+        enabled: Whether Context Protocol is enabled.
         backend: Combined behavior and storage backend.
                  Format: {behavior}-{storage} or 'none'
                  Behaviors: keyword, vector
@@ -383,6 +384,7 @@ class ContextProtocolConfig(BaseModel):
         persist_dir: Directory for context persistence.
     """
 
+    enabled: bool = True
     backend: Literal["keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"] = (
         "keyword-postgresql"
     )

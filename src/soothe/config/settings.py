@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+from soothe.config.daemon_config import DaemonConfig
 from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgenticLoopConfig,
@@ -150,6 +151,11 @@ class SootheConfig(BaseSettings):
 
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
     """Performance optimization configuration."""
+
+    # --- Daemon configuration (RFC-0013) ---
+
+    daemon: DaemonConfig = Field(default_factory=DaemonConfig)
+    """Daemon multi-transport configuration."""
 
     # --- Vector store config ---
 

@@ -693,7 +693,7 @@ When adding tools that may take time:
 The new event categories are accessible:
 
 ```python
-from soothe.cli.progress_verbosity import classify_custom_event, should_show
+from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
 
 # Classify an event
 category = classify_custom_event(namespace, event_data)
