@@ -136,14 +136,21 @@ class ThreadContextManager:
         stats = await self.get_thread_stats(thread_id)
 
         # Build enhanced info
-        from datetime import datetime
+        from datetime import UTC, datetime
+
+        def parse_datetime(dt_str: str) -> datetime:
+            """Parse ISO format string to timezone-aware datetime."""
+            dt = datetime.fromisoformat(dt_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt
 
         return EnhancedThreadInfo(
             thread_id=thread_id,
             status=thread_data.get("status", "idle"),
-            created_at=datetime.fromisoformat(thread_data["created_at"]),
-            updated_at=datetime.fromisoformat(thread_data["updated_at"]),
-            last_activity_at=datetime.fromisoformat(thread_data["updated_at"]),
+            created_at=parse_datetime(thread_data["created_at"]),
+            updated_at=parse_datetime(thread_data["updated_at"]),
+            last_activity_at=parse_datetime(thread_data["updated_at"]),
             metadata=thread_data.get("metadata", {}),
             stats=stats,
         )
@@ -163,7 +170,14 @@ class ThreadContextManager:
         Returns:
             List of EnhancedThreadInfo
         """
-        from datetime import datetime
+        from datetime import UTC, datetime
+
+        def parse_datetime(dt_str: str) -> datetime:
+            """Parse ISO format string to timezone-aware datetime."""
+            dt = datetime.fromisoformat(dt_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt
 
         # Get all threads from durability protocol
         threads = await self._durability.list_threads()
@@ -188,13 +202,13 @@ class ThreadContextManager:
                     continue
                 # Date filtering
                 if thread_filter.created_after or thread_filter.created_before:
-                    created = datetime.fromisoformat(t["created_at"])
+                    created = parse_datetime(t["created_at"])
                     if thread_filter.created_after and created < thread_filter.created_after:
                         continue
                     if thread_filter.created_before and created > thread_filter.created_before:
                         continue
                 if thread_filter.updated_after or thread_filter.updated_before:
-                    updated = datetime.fromisoformat(t["updated_at"])
+                    updated = parse_datetime(t["updated_at"])
                     if thread_filter.updated_after and updated < thread_filter.updated_after:
                         continue
                     if thread_filter.updated_before and updated > thread_filter.updated_before:
@@ -213,9 +227,9 @@ class ThreadContextManager:
                 EnhancedThreadInfo(
                     thread_id=t["thread_id"],
                     status=t.get("status", "idle"),
-                    created_at=datetime.fromisoformat(t["created_at"]),
-                    updated_at=datetime.fromisoformat(t["updated_at"]),
-                    last_activity_at=datetime.fromisoformat(t["updated_at"]),
+                    created_at=parse_datetime(t["created_at"]),
+                    updated_at=parse_datetime(t["updated_at"]),
+                    last_activity_at=parse_datetime(t["updated_at"]),
                     metadata=t.get("metadata", {}),
                     stats=stats,
                 )

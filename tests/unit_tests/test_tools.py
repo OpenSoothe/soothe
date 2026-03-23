@@ -3,7 +3,6 @@
 import pytest
 
 from soothe.tools._internal.jina import JinaReaderTool
-from soothe.tools._internal.serper import SerperSearchTool
 from soothe.tools._internal.tabular import (
     TabularColumnsTool,
     TabularQualityTool,
@@ -57,17 +56,6 @@ class TestJinaTools:
         tool = JinaReaderTool()
         assert tool.name == "jina_get_web_content"
         assert "web" in tool.description.lower()
-
-
-class TestSerperTools:
-    """Tests for internal Serper search tool."""
-
-    def test_tool_metadata(self) -> None:
-        tool = SerperSearchTool()
-        assert tool.name == "serper_search"
-        assert "search" in tool.description.lower()
-        assert "images" in tool.description.lower()
-        assert "scholar" in tool.description.lower()
 
 
 class TestWebsearchTools:

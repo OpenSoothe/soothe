@@ -139,13 +139,13 @@ tools:
       - tavily          # Requires TAVILY_API_KEY
       - googleai        # Requires GEMINI_API_KEY
       # - serper          # Requires SERPER_API_KEY
-      # - duckduckgo      # NO API Key required, via wizsearch
-      # - baidu           # Chinese search engine, via wizsearch
-      # - wechat          # WeChat article search, via wizsearch
-      # - brave           # NO API Key required, via wizsearch
-      # - bing            # NO API Key required, via wizsearch
-      # - google          # NO API Key required, via wizsearch
-      # - searxng         # Self-hosted metasearch engine, via wizsearch
+      # - duckduckgo      # NO API Key required
+      # - baidu           # Chinese search engine
+      # - wechat          # WeChat article search
+      # - brave           # NO API Key required
+      # - bing            # NO API Key required
+      # - google          # NO API Key required
+      # - searxng         # Self-hosted metasearch engine
     crawler: wizsearch    # Or jina, requires JINA_API_KEY
     max_results_per_engine: 10
     timeout: 30

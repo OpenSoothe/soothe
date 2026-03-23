@@ -1,4 +1,4 @@
-"""Web search InformationSource using wizsearch backend with serper fallback."""
+"""Web search InformationSource using wizsearch backend."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ _LOW_RELEVANCE_SCORE = 0.15
 _CODE_PENALTY_SCORE = 0.25
 _ACADEMIC_HINT_SCORE = 0.5
 _DEFAULT_WEB_SCORE = 0.6
-_MIN_RESULTS_FOR_SERPER_FALLBACK = 3
 _MIN_RAW_LENGTH_FOR_FALLBACK = 50
 _MIN_PLAIN_OUTPUT_LENGTH = 10
 
@@ -22,25 +21,21 @@ _MIN_PLAIN_OUTPUT_LENGTH = 10
 class WebSource:
     """Information source backed by multi-engine web search.
 
-    Uses ``WizsearchSearchTool`` as the primary backend (supporting multiple search engines)
-    with optional ``SerperSearchTool`` fallback. Results are normalised into ``SourceResult`` instances.
+    Uses ``WizsearchSearchTool`` as the backend with engines configured via
+    web_search.default_engines in config.yml. Results are normalised into
+    ``SourceResult`` instances.
 
     Args:
         config: Optional Soothe config for web search backend settings.
-        enable_serper: Also query Serper if available (default False).
     """
 
     def __init__(
         self,
         config: Any | None = None,
-        *,
-        enable_serper: bool = False,
     ) -> None:
-        """Initialize the web source with optional config and serper fallback."""
+        """Initialize the web source with optional config."""
         self._config = config
-        self._enable_serper = enable_serper
         self._search_tool: Any | None = None
-        self._serper_tool: Any | None = None
 
     def _ensure_tools(self) -> None:
         if self._search_tool is not None:
@@ -56,15 +51,8 @@ class WebSource:
                     "max_results_per_engine": ws.max_results_per_engine,
                     "timeout": ws.timeout,
                 }
+
         self._search_tool = WizsearchSearchTool(config=web_search_config)
-
-        if self._enable_serper:
-            try:
-                from soothe.tools._internal.serper import SerperSearchTool
-
-                self._serper_tool = SerperSearchTool()
-            except Exception:
-                logger.debug("Serper not available, using wizsearch only", exc_info=True)
 
     # -- InformationSource protocol ------------------------------------------
 
@@ -94,13 +82,6 @@ class WebSource:
 
         raw = await self._search_tool._arun(query=query)
         results.extend(self._parse_search_output(raw, query))
-
-        if self._serper_tool and len(results) < _MIN_RESULTS_FOR_SERPER_FALLBACK:
-            try:
-                serper_raw = await self._serper_tool._arun(query=query)
-                results.extend(self._parse_plain_output(serper_raw, "serper"))
-            except Exception:
-                logger.debug("Serper fallback failed", exc_info=True)
 
         return results
 

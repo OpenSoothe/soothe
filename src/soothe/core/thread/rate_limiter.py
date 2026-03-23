@@ -12,8 +12,8 @@ class APIRateLimiter:
 
     def __init__(
         self,
-        requests_per_minute: int = 60,
-        tokens_per_minute: int = 90000,
+        requests_per_minute: int = 120,
+        tokens_per_minute: int = 10000000,
     ) -> None:
         """Initialize rate limiter.
 

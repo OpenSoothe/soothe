@@ -65,7 +65,7 @@ soothe/
     tools/
       __init__.py                 # Tool registry and exports
       jina.py                     # Jina Reader web content extraction
-      serper.py                   # Multi-type Serper search
+      web_search.py               # Unified web search (wizsearch with serper support)
       image.py                    # Vision-model image analysis
       audio.py                    # Audio transcription
       video.py                    # Video analysis
@@ -103,7 +103,7 @@ Optional extras:
 |-------|----------|-----|
 | research | tavily-python | Research subagent (Tavily search) |
 | browser | cdp-use | Browser subagent (CDP automation) |
-| serper | requests | Extended Serper search |
+| web | wizsearch | Unified web search (includes serper engine support) |
 | jina | aiohttp | Jina Reader |
 | media | pillow, openai | Image/audio/video analysis |
 | all | (all of the above) | Everything |
@@ -178,7 +178,7 @@ All implemented as langchain `BaseTool` subclasses with `_run()` and `_arun()`.
 | Tool | Module | Noesium Source | Description |
 |---|---|---|---|
 | `JinaReaderTool` | `tools/jina.py` | `toolkits/jina_research/` | Web content extraction via Jina Reader API |
-| `SerperSearchTool` | `tools/serper.py` | `toolkits/serper/` | Multi-type search (image, news, scholar, maps, video, places, lens) |
+| `SearchWebTool` | `tools/web_search.py` | - | Unified web search using wizsearch (auto-detects serper when SERPER_API_KEY available) |
 | `ImageAnalysisTool` | `tools/image.py` | `toolkits/image/` | Vision-model image analysis, OCR, comparison |
 | `AudioTranscriptionTool` | `tools/audio.py` | `toolkits/audio/` | Audio transcription + Q&A (OpenAI Whisper) |
 | `VideoAnalysisTool` | `tools/video.py` | `toolkits/video/` | Video analysis via multimodal models |
@@ -281,7 +281,7 @@ agent = create_soothe_agent(
 2. **Config** -- `SootheConfig` with Pydantic Settings
 3. **Agent factory** -- `create_soothe_agent()` wrapping `create_deep_agent()`
 4. **MCP loader** -- config-driven MCP tool loading
-5. **Tools** -- jina, serper, image, audio, video, tabular (as `BaseTool` subclasses)
+5. **Tools** -- jina, web_search (wizsearch with serper support), image, audio, video, tabular (as `BaseTool` subclasses)
 6. **Subagents** -- research, planner, scout, browser
 7. **Examples and tests** -- basic usage, unit tests for config and tool wiring
 
