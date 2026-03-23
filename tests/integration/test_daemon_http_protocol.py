@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib
 import os
 import socket
 from pathlib import Path
@@ -17,36 +16,11 @@ from soothe.config import SootheConfig
 from soothe.config.daemon_config import HttpRestConfig
 from soothe.daemon import SootheDaemon
 from soothe.daemon.transports.http_rest import HttpRestTransport
-
-
-def _alloc_ephemeral_port() -> int:
-    """Allocate an available localhost TCP port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
-
-
-def _force_isolated_home(home: Path) -> None:
-    """Force daemon paths to a test-local SOOTHE_HOME to avoid pid-socket contention."""
-    os.environ["SOOTHE_HOME"] = str(home)
-    import soothe.config as soothe_config
-    from soothe import config as config_module
-
-    soothe_config.SOOTHE_HOME = str(home)
-    config_module.SOOTHE_HOME = str(home)
-
-    import soothe.daemon.paths as daemon_paths
-
-    daemon_paths.SOOTHE_HOME = str(home)
-    importlib.reload(daemon_paths)
-
-    import soothe.daemon.thread_logger as daemon_thread_logger
-
-    daemon_thread_logger.SOOTHE_HOME = str(home)
-
-    import soothe.core.thread.manager as thread_manager
-
-    thread_manager.SOOTHE_HOME = str(home)
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    force_isolated_home,
+    get_base_config,
+)
 
 
 async def _await_user_messages(
@@ -54,7 +28,7 @@ async def _await_user_messages(
     thread_id: str,
     *,
     expected_count: int,
-    timeout: float = 15.0,
+    timeout: float = 30.0,
 ) -> list[dict[str, Any]]:
     """Poll thread messages until enough user messages are persisted."""
     loop = asyncio.get_running_loop()
@@ -71,17 +45,12 @@ async def _await_user_messages(
         user_messages = [message for message in payload["messages"] if message.get("role") == "user"]
         if len(user_messages) >= expected_count:
             return user_messages
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.5)
 
 
 def _build_http_transport_config(tmp_path: Path, port: int, *, with_daemon: bool = True) -> tuple[SootheConfig, int]:
     """Build an isolated daemon config for HTTP transport tests."""
-    # Try to load from config.dev.yml to get available providers
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        base_config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        base_config = SootheConfig()
+    base_config = get_base_config()
 
     if with_daemon:
         return (

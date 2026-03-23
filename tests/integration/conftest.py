@@ -70,11 +70,7 @@ def get_base_config() -> SootheConfig:
     global _CACHED_BASE_CONFIG
     if _CACHED_BASE_CONFIG is None:
         config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-        _CACHED_BASE_CONFIG = (
-            SootheConfig.from_yaml_file(str(config_path))
-            if config_path.exists()
-            else SootheConfig()
-        )
+        _CACHED_BASE_CONFIG = SootheConfig.from_yaml_file(str(config_path)) if config_path.exists() else SootheConfig()
     return _CACHED_BASE_CONFIG
 
 

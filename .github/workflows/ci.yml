@@ -35,6 +35,9 @@ jobs:
     - name: Run tests
       run: make test-unit
 
+    - name: Run integration tests
+      run: make test-integration
+
     - name: Build package
       run: make build
 
