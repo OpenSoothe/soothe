@@ -28,6 +28,7 @@ Type these commands in the interactive prompt:
 | `/history` | Show recent prompt history |
 | `/review [conversation\|actions]` | Review recent conversation and actions |
 | `/resume` | Resume a recent thread (interactive selection) |
+| `/thread archive <id>` | Archive a thread |
 | `/config` | Show active configuration |
 | `/clear` | Clear the screen |
 | `/detach` | Detach TUI; daemon keeps running |
@@ -53,6 +54,7 @@ Route queries to specialized subagents:
 | `Ctrl+C` | Cancel running job |
 | `Ctrl+E` | Focus chat input |
 | `Ctrl+Y` | Copy last message to clipboard |
+| `Ctrl+T` | Toggle plan panel visibility |
 | `Shift+Enter` | Insert newline in chat input |
 | `Enter` | Submit message |
 | `Up/Down` | Navigate input history |
@@ -109,7 +111,8 @@ Ctrl+D
 Reattach later:
 
 ```bash
-soothe server attach
+# Resume via running daemon
+soothe thread continue --daemon
 ```
 
 ## Viewing Progress

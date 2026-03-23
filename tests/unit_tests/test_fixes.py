@@ -5,9 +5,11 @@ from __future__ import annotations
 import inspect
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from soothe.core.events import CHITCHAT_RESPONSE
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.ux.shared.slash_commands import (
     _show_context,
@@ -166,6 +168,7 @@ async def test_daemon_handles_resume_thread_message() -> None:
         def __init__(self) -> None:
             self.current_thread_id = ""
             self.set_thread_id_calls: list[str] = []
+            self._durability = MagicMock()
 
         def set_current_thread_id(self, thread_id: str) -> None:
             self.set_thread_id_calls.append(thread_id)
@@ -181,7 +184,13 @@ async def test_daemon_handles_resume_thread_message() -> None:
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
     client = SimpleNamespace()
-    await daemon._handle_client_message(client, {"type": "resume_thread", "thread_id": "thread-456"})
+    with patch("soothe.core.thread.ThreadContextManager") as manager_cls:
+        manager = MagicMock()
+        manager.resume_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-456"))
+        manager_cls.return_value = manager
+        await daemon._handle_client_message(client, {"type": "resume_thread", "thread_id": "thread-456"})
+
+    manager.resume_thread.assert_awaited_once_with("thread-456")
 
     # Verify runner's thread_id was set
     assert "thread-456" in daemon._runner.set_thread_id_calls  # type: ignore[attr-defined]
@@ -190,6 +199,50 @@ async def test_daemon_handles_resume_thread_message() -> None:
     status_msgs = [msg for msg in sent if msg.get("type") == "status"]
     assert len(status_msgs) >= 1
     assert status_msgs[0].get("thread_id") == "thread-456"
+
+
+@pytest.mark.asyncio
+async def test_daemon_run_query_persists_assistant_from_custom_output() -> None:
+    """Ensure daemon persists assistant text emitted via custom output events."""
+    from soothe.config import SootheConfig
+
+    daemon = SootheDaemon(SootheConfig())
+
+    class _Store:
+        def load(self, _key: str) -> None:
+            return None
+
+        def save(self, _key: str, _value: dict) -> None:
+            return None
+
+    class FakeRunner:
+        def __init__(self) -> None:
+            self.current_thread_id = "thread-456"
+            self._durability = SimpleNamespace(_store=_Store())
+
+        async def astream(self, _text: str, **_kwargs: Any):
+            yield ((), "custom", {"type": CHITCHAT_RESPONSE, "content": "hello from custom output"})
+
+    daemon._runner = FakeRunner()  # type: ignore[assignment]
+
+    logger_mock = MagicMock()
+    logger_mock._thread_id = "thread-456"
+    logger_mock.log = MagicMock()
+    logger_mock.log_user_input = MagicMock()
+    logger_mock.log_assistant_response = MagicMock()
+    daemon._thread_logger = logger_mock
+    daemon._input_history = None
+
+    async def _fake_broadcast(_msg: dict[str, Any]) -> None:
+        return None
+
+    daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
+
+    await daemon._run_query("hi")
+
+    logger_mock.log_assistant_response.assert_called_once()
+    persisted_text = logger_mock.log_assistant_response.call_args.args[0]
+    assert "hello from custom output" in persisted_text
 
 
 @pytest.mark.asyncio
@@ -205,6 +258,46 @@ async def test_daemon_client_send_resume_thread() -> None:
     await client.send_resume_thread("thread-789")
 
     assert captured == [{"type": "resume_thread", "thread_id": "thread-789"}]
+
+
+@pytest.mark.asyncio
+async def test_daemon_handles_new_thread_message_creates_thread() -> None:
+    """new_thread should allocate a concrete thread ID immediately."""
+    from soothe.config import SootheConfig
+
+    daemon = SootheDaemon(SootheConfig())
+
+    class FakeRunner:
+        def __init__(self) -> None:
+            self.current_thread_id = ""
+            self.set_thread_id_calls: list[str] = []
+            self._durability = MagicMock()
+
+        def set_current_thread_id(self, thread_id: str) -> None:
+            self.set_thread_id_calls.append(thread_id)
+            self.current_thread_id = thread_id
+
+    daemon._runner = FakeRunner()  # type: ignore[attr-defined]
+
+    sent: list[dict] = []
+
+    async def _fake_broadcast(msg: dict) -> None:
+        sent.append(msg)
+
+    daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
+
+    with patch("soothe.core.thread.ThreadContextManager") as manager_cls:
+        manager = MagicMock()
+        manager.create_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-new-1"))
+        manager_cls.return_value = manager
+        await daemon._handle_client_message(SimpleNamespace(), {"type": "new_thread"})
+
+    manager.create_thread.assert_awaited_once()
+    assert daemon._runner.current_thread_id == "thread-new-1"  # type: ignore[attr-defined]
+    status_msgs = [msg for msg in sent if msg.get("type") == "status"]
+    assert status_msgs
+    assert status_msgs[0].get("thread_id") == "thread-new-1"
+    assert status_msgs[0].get("new_thread") is True
 
 
 @pytest.mark.asyncio

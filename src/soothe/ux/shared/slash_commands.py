@@ -57,6 +57,11 @@ _AUTO_MIN_PARTS = 1
 _AUTO_TWO_PARTS = 2
 _THREAD_ARCHIVE_MIN_PARTS = 3
 
+# Maximum characters to show for last human message in thread list
+_TOPIC_DISPLAY_LIMIT = 30
+# Characters to keep when truncating (leave room for "...")
+_TOPIC_TRUNCATE_KEEP = 27
+
 
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
     """Parse `/autopilot` command payload.
@@ -349,15 +354,55 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
     Args:
         console: Rich console for output.
         runner: The SootheRunner instance.
-        subcommand: The thread subcommand (e.g., 'archive').
+        subcommand: The thread subcommand (e.g., 'archive', 'list').
         parts: The split command parts.
     """
     if not subcommand:
         console.print("[yellow]Usage: /thread <command> [args][/yellow]")
-        console.print("[dim]Commands: archive <thread_id>[/dim]")
+        console.print("[dim]Commands: list, archive <thread_id>[/dim]")
         return
 
-    if subcommand == "archive":
+    if subcommand == "list":
+        from soothe.core.thread import ThreadContextManager
+
+        try:
+            manager = ThreadContextManager(runner._durability, runner._config)
+            threads = await manager.list_threads(include_last_message=True)
+            if not threads:
+                console.print("[dim]No threads.[/dim]")
+                return
+
+            # Sort by updated_at in descending order (most recent first)
+            threads.sort(key=lambda x: x.updated_at, reverse=True)
+
+            table = Table(title="Threads", show_lines=False)
+            table.add_column("ID", style="dim")
+            table.add_column("Status")
+            table.add_column("Created")
+            table.add_column("Last Message")
+            table.add_column("Topic")
+
+            for t in threads:
+                created = str(t.created_at)[:19]
+                last_msg = str(t.updated_at)[:19]
+                # Truncate last human message to fit display limit
+                topic = (
+                    (t.last_human_message or "")[:_TOPIC_TRUNCATE_KEEP] + "..."
+                    if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT
+                    else (t.last_human_message or "")
+                )
+                table.add_row(t.thread_id, t.status, created, last_msg, topic)
+
+            console.print(table)
+        except Exception as exc:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception("Thread list error")
+            from soothe.utils.error_format import format_cli_error
+
+            console.print(f"[red]{format_cli_error(exc, context='Thread list')}[/red]")
+    elif subcommand == "archive":
         if len(parts) < _THREAD_ARCHIVE_MIN_PARTS:
             console.print("[yellow]Usage: /thread archive <thread_id>[/yellow]")
             return
@@ -380,4 +425,4 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
             console.print(f"[red]{format_cli_error(exc, context='Thread archive')}[/red]")
     else:
         console.print(f"[yellow]Unknown /thread subcommand: {subcommand}[/yellow]")
-        console.print("[dim]Commands: archive <thread_id>[/dim]")
+        console.print("[dim]Commands: list, archive <thread_id>[/dim]")

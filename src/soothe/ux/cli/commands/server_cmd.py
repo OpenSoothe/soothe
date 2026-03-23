@@ -36,7 +36,7 @@ def server_start(
     if foreground:
         run_daemon(cfg)
     else:
-        cmd = [sys.executable, "-m", "soothe.daemon"]
+        cmd = [sys.executable, "-m", "soothe.daemon", "--detached"]
         if config:
             cmd.extend(["--config", config])
         log_file = Path(SOOTHE_HOME) / "logs" / "daemon.stderr"
@@ -44,6 +44,7 @@ def server_start(
         with log_file.open("a") as stderr_file:
             subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=stderr_file,
                 start_new_session=True,

@@ -87,6 +87,12 @@ soothe thread show <thread-id>
 # Continue a previous thread
 soothe thread continue <thread-id>
 
+# Continue via running daemon
+soothe thread continue --daemon <thread-id>
+
+# Start a new thread
+soothe thread continue --new
+
 # Archive a thread
 soothe thread archive <thread-id>
 
@@ -95,6 +101,15 @@ soothe thread delete <thread-id>
 
 # Export thread to file
 soothe thread export <thread-id> --output thread.json
+
+# Show thread statistics
+soothe thread stats <thread-id>
+
+# Add tags to a thread
+soothe thread tag <thread-id> research analysis
+
+# Remove tags from a thread
+soothe thread tag <thread-id> research --remove
 ```
 
 ## Server Management
@@ -111,8 +126,13 @@ soothe server status
 # Stop daemon gracefully
 soothe server stop
 
-# Attach to running daemon
-soothe server attach
+# Restart daemon
+soothe server restart
+```
+
+**Note**: The `server attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
+```bash
+soothe thread continue --daemon
 ```
 
 **Server Status Output**:
@@ -129,24 +149,7 @@ Active Threads: 3
 
 ## Authentication Management
 
-Manage API keys for WebSocket and HTTP REST.
-
-```bash
-# Create API key
-soothe auth create-key --description "Web UI" --permissions read,write
-
-# List all API keys
-soothe auth list-keys
-
-# Revoke an API key
-soothe auth revoke-key <key-id>
-```
-
-**API Key Format**: `sk_live_<random-string>`
-
-**Permissions**:
-- `read` - Read threads, messages, configuration
-- `write` - Create threads, send input, modify configuration
+**Note**: Soothe does not include built-in authentication commands. Authentication is handled by external services (reverse proxies, API gateways). See [Authentication Guide](authentication.md) for deployment patterns with nginx, Caddy, or Traefik.
 
 ## Configuration Management
 

@@ -48,13 +48,21 @@ class SootheDaemon(DaemonHandlersMixin):
         config: Soothe configuration.
     """
 
-    def __init__(self, config: SootheConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: SootheConfig | None = None,
+        *,
+        handle_sigint_shutdown: bool = True,
+    ) -> None:
         """Initialize the Soothe daemon.
 
         Args:
             config: Soothe configuration.
+            handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
+                Disable for detached/background mode to avoid accidental Ctrl+C shutdown.
         """
         self._config = config or SootheConfig()
+        self._handle_sigint_shutdown = handle_sigint_shutdown
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
@@ -211,7 +219,10 @@ class SootheDaemon(DaemonHandlersMixin):
         loop = asyncio.get_running_loop()
 
         try:
-            for sig in (signal.SIGTERM, signal.SIGINT):
+            signals = [signal.SIGTERM]
+            if self._handle_sigint_shutdown:
+                signals.append(signal.SIGINT)
+            for sig in signals:
                 loop.add_signal_handler(sig, self.request_stop)
         except RuntimeError:
             logger.debug("Cannot set signal handlers (not main thread)")

@@ -1,228 +1,167 @@
 # Authentication
 
-Manage API keys and JWT authentication for WebSocket and HTTP REST transports.
+**Important**: Soothe does not include built-in authentication. All authentication and authorization is handled by external services (reverse proxies, API gateways, etc.).
 
-## Authentication Overview
+## Authentication Architecture
 
-The Soothe daemon supports two authentication modes for WebSocket and HTTP REST:
-- **API Key Authentication**: Simple token-based authentication
-- **JWT Authentication**: Token-based authentication with expiration
+As of RFC-0013 and RFC-0017, Soothe follows a "security by delegation" model:
 
-**Unix Socket**: No authentication required (filesystem permissions provide security)
+- **No built-in authentication**: Soothe daemon does not validate API keys, JWT tokens, or user credentials
+- **No authorization layer**: All clients that can reach the daemon are trusted
+- **External security**: Authentication, TLS, rate limiting handled by reverse proxy
 
-## API Key Authentication
+## Transport Security
 
-### Create API Key
+### Unix Socket (Local)
 
-Create a new API key:
-
-```bash
-soothe auth create-key --description "Web UI" --permissions read,write
-```
-
-**Output**:
-```
-API Key: sk_live_abc123def456ghi789
-Key ID: key_001
-Description: Web UI
-Permissions: read, write
-Created: 2026-03-22 10:00:00
-
-Save this key securely - it will not be shown again.
-```
-
-**Options**:
-- `--description` - Human-readable description
-- `--permissions` - Comma-separated permissions: `read`, `write`
-
-### Permissions
-
-| Permission | Access |
-|------------|--------|
-| `read` | Read threads, messages, configuration |
-| `write` | Create threads, send input, modify configuration |
-
-### List API Keys
-
-View all API keys:
+**Security Model**: OS-level filesystem permissions
 
 ```bash
-soothe auth list-keys
+# Socket location
+~/.soothe/soothe.sock
+
+# Permissions: user-only by default (mode 0600)
+# Only the user running Soothe can connect
 ```
 
-**Output**:
-```
-Key ID    Description    Permissions    Created              Last Used
-key_001   Web UI         read, write    2026-03-22 10:00    2026-03-22 14:30
-key_002   Mobile App     read           2026-03-21 09:15    2026-03-21 18:45
-```
+**Best for**:
+- Local CLI/TUI clients
+- Single-user development environments
+- Maximum performance (~0.1ms latency)
 
-### Revoke API Key
+**No additional security needed**: Filesystem permissions provide isolation.
 
-Revoke an API key:
+### WebSocket and HTTP REST (Remote)
 
-```bash
-soothe auth revoke-key key_001
+**Security Model**: Reverse proxy handles all security
+
 ```
-
-**Output**:
-```
-API key 'key_001' revoked successfully
+Client → Reverse Proxy (Auth + TLS) → Soothe Daemon
 ```
 
-### API Key Storage
+**Reverse proxy responsibilities**:
+- **TLS termination**: HTTPS/WSS encryption
+- **Authentication**: API keys, JWT, OAuth, etc.
+- **Authorization**: Role-based access control
+- **Rate limiting**: Prevent abuse
+- **Request filtering**: Block malicious requests
 
-API keys are stored in `~/.soothe/api_keys.json`:
-- Keys are hashed for security
-- Original keys are not stored (only shown once)
-- Keys can be revoked immediately
+**Soothe daemon**: Trusts all connections from reverse proxy
 
-## Using API Keys
+## Deployment Patterns
 
-### WebSocket Authentication
+### Pattern 1: Local Development (No Auth)
 
-```javascript
-const ws = new WebSocket("ws://localhost:8765");
-
-ws.onopen = () => {
-  // Authenticate
-  ws.send(JSON.stringify({
-    type: "auth",
-    token: "sk_live_abc123..."
-  }));
-};
+```
+┌─────────────┐
+│ CLI/TUI     │
+│ (Unix Socket)│
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  Soothe     │
+│  Daemon     │
+└─────────────┘
 ```
 
-### HTTP REST Authentication
-
-```bash
-# Using Authorization header
-curl -H "Authorization: Bearer sk_live_abc123..." \
-  http://localhost:8766/api/v1/threads
-
-# Using X-API-Key header (alternative)
-curl -H "X-API-Key: sk_live_abc123..." \
-  http://localhost:8766/api/v1/threads
-```
-
-## JWT Authentication
-
-### Configuration
-
-Enable JWT authentication:
-
-```yaml
-daemon:
-  auth:
-    enabled: true
-    mode: "jwt"
-    jwt_secret: "${JWT_SECRET}"
-    jwt_algorithm: "HS256"
-    jwt_expiry_hours: 24
-```
-
-**Environment Variable**:
-```bash
-export JWT_SECRET=your-secret-key-here
-```
-
-### Generate JWT Token
-
-JWT tokens are generated externally (e.g., by your authentication service):
-
-```python
-import jwt
-import datetime
-
-token = jwt.encode({
-    'sub': 'user_123',
-    'permissions': ['read', 'write'],
-    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-}, 'your-secret-key-here', algorithm='HS256')
-```
-
-### Use JWT Token
-
-**WebSocket**:
-```javascript
-ws.send(JSON.stringify({
-  type: "auth",
-  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}));
-```
-
-**HTTP REST**:
-```bash
-curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  http://localhost:8766/api/v1/threads
-```
-
-## Security Model
-
-### Localhost Connections
-
-**Unix Socket**:
-- No authentication required
-- Security via filesystem permissions (`~/.soothe/soothe.sock`)
-- Only accessible by the user running Soothe
-
-**WebSocket/HTTP localhost**:
-- Optional authentication (configurable)
-- Set `require_auth_for_localhost: true` to enforce
-
-```yaml
-daemon:
-  auth:
-    require_for_localhost: true
-```
-
-### Remote Connections
-
-For remote access, authentication is **mandatory**:
-
-**WebSocket**:
-- Authentication required
-- TLS mandatory (`tls_enabled: true`)
-- CORS validation enforced
-
-**HTTP REST**:
-- Authentication required
-- HTTPS recommended (configure reverse proxy)
-
-### CORS Configuration
-
-Configure allowed origins for WebSocket:
-
+**Configuration**:
 ```yaml
 daemon:
   transports:
-    websocket:
-      cors_origins:
-        - "http://localhost:3000"
-        - "http://127.0.0.1:3000"
-        - "https://myapp.example.com"
-```
-
-## Rate Limiting
-
-Prevent abuse with rate limiting:
-
-```yaml
-daemon:
-  auth:
-    rate_limit:
+    unix_socket:
       enabled: true
-      requests_per_second: 10
-      burst_size: 20
+      path: "~/.soothe/soothe.sock"
 ```
 
-**Default**: 10 messages/second with burst of 20
+**Security**: Filesystem permissions (user-only access)
 
-## Example: Web Application Integration
+### Pattern 2: Production Deployment (Auth via Reverse Proxy)
 
-### Backend Configuration
+```
+┌──────────────┐
+│ Web/Mobile   │
+│   Client     │
+└──────┬───────┘
+       │ HTTPS/WSS
+       ▼
+┌──────────────┐
+│  Reverse     │  ← Authentication, TLS, Rate Limiting
+│  Proxy       │
+└──────┬───────┘
+       │ HTTP/WS (trusted)
+       ▼
+┌──────────────┐
+│  Soothe      │  ← No auth (trusts reverse proxy)
+│  Daemon      │
+└──────────────┘
+```
 
-**`~/.soothe/config.yml`**:
+**Recommended reverse proxies**:
+- **nginx**: Industry standard, highly configurable
+- **Caddy**: Automatic HTTPS, simple config
+- **Traefik**: Cloud-native, auto-discovery
+- **Cloudflare Tunnel**: Zero-trust access, no open ports
+
+## Example: nginx Configuration
+
+### WebSocket + HTTP REST with API Key Auth
+
+**nginx.conf**:
+```nginx
+# WebSocket endpoint
+upstream soothe_ws {
+    server 127.0.0.1:8765;
+}
+
+# HTTP REST endpoint
+upstream soothe_http {
+    server 127.0.0.1:8766;
+}
+
+# WebSocket server
+server {
+    listen 8765 ssl;
+    server_name soothe.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        # Validate API key
+        if ($http_x_api_key = "") {
+            return 401 "API key required";
+        }
+
+        proxy_pass http://soothe_ws;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+
+# HTTP REST server
+server {
+    listen 8766 ssl;
+    server_name soothe.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        # Validate API key
+        if ($http_x_api_key = "") {
+            return 401 "API key required";
+        }
+
+        proxy_pass http://soothe_http;
+        proxy_set_header Host $host;
+    }
+}
+```
+
+**Soothe config**:
 ```yaml
 daemon:
   transports:
@@ -230,77 +169,115 @@ daemon:
       enabled: true
     websocket:
       enabled: true
+      host: "127.0.0.1"  # Only accessible to nginx
+      port: 8765
+    http_rest:
+      enabled: true
+      host: "127.0.0.1"  # Only accessible to nginx
+      port: 8766
+```
+
+**Client usage**:
+```bash
+# WebSocket
+wss://soothe.example.com:8765
+Headers: X-API-Key: your-api-key
+
+# HTTP REST
+curl -H "X-API-Key: your-api-key" \
+  https://soothe.example.com:8766/api/v1/threads
+```
+
+## Example: Caddy Configuration
+
+### Automatic HTTPS with JWT Auth
+
+**Caddyfile**:
+```
+soothe.example.com {
+    # Automatic HTTPS via Let's Encrypt
+    encode gzip
+
+    # JWT authentication (using caddy-auth-jwt plugin)
+    jwt {
+        secret YOUR_JWT_SECRET
+        signalg HS256
+    }
+
+    # WebSocket proxy
+    handle /ws {
+        reverse_proxy localhost:8765
+    }
+
+    # HTTP REST proxy
+    handle /api/* {
+        reverse_proxy localhost:8766
+    }
+}
+```
+
+**Soothe config**:
+```yaml
+daemon:
+  transports:
+    websocket:
+      enabled: true
       host: "127.0.0.1"
       port: 8765
-      cors_origins: ["http://localhost:3000"]
     http_rest:
       enabled: true
       host: "127.0.0.1"
       port: 8766
-  auth:
-    enabled: true
-    mode: "api_key"
 ```
 
-### Frontend Integration
+## CORS Configuration
 
-**React Example**:
-```javascript
-import { useState, useEffect } from 'react';
+Configure allowed origins for WebSocket (still needed even with reverse proxy):
 
-function App() {
-  const [ws, setWs] = useState(null);
-  const [messages, setMessages] = useState([]);
-
-  useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8765');
-
-    socket.onopen = () => {
-      // Authenticate
-      socket.send(JSON.stringify({
-        type: 'auth',
-        token: 'sk_live_abc123...'
-      }));
-    };
-
-    socket.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'event') {
-        setMessages(prev => [...prev, msg.data]);
-      }
-    };
-
-    setWs(socket);
-
-    return () => socket.close();
-  }, []);
-
-  const sendMessage = (text) => {
-    ws.send(JSON.stringify({
-      type: 'input',
-      text
-    }));
-  };
-
-  return (
-    <div>
-      {/* Your UI */}
-    </div>
-  );
-}
+```yaml
+daemon:
+  transports:
+    websocket:
+      cors_origins:
+        - "https://app.example.com"
+        - "https://soothe.example.com"
 ```
 
-## Best Practices
+## Security Best Practices
 
-1. **Rotate Keys Regularly**: Create new keys and revoke old ones periodically
-2. **Use Minimal Permissions**: Only grant `write` permission when needed
-3. **Store Keys Securely**: Never commit API keys to version control
-4. **Use Environment Variables**: Store secrets in `.env` files or secret managers
-5. **Enable TLS**: Always use TLS for remote connections
-6. **Monitor Usage**: Check `last_used` timestamps for anomalies
+1. **Never expose daemon directly**: Always use reverse proxy for remote access
+2. **Enable TLS**: All remote connections should use HTTPS/WSS
+3. **Strong authentication**: Use proven auth solutions (OAuth, OIDC, API keys)
+4. **Rate limiting**: Prevent abuse at the reverse proxy level
+5. **Network isolation**: Daemon should only listen on localhost
+6. **Monitor access**: Log all requests at reverse proxy level
+7. **Regular updates**: Keep reverse proxy and auth libraries updated
+
+## Migration from Built-in Auth
+
+If you were using the removed `soothe auth` commands:
+
+1. **Remove auth config** from Soothe:
+   ```yaml
+   # Remove this section
+   daemon:
+     auth:
+       enabled: true
+       mode: "api_key"
+   ```
+
+2. **Choose a reverse proxy** (nginx, Caddy, Traefik)
+
+3. **Configure authentication** at reverse proxy level
+
+4. **Update client code** to send auth headers to reverse proxy
+
+5. **Verify**: Test that unauthenticated requests are rejected
 
 ## Related Guides
 
 - [Multi-Transport Setup](multi-transport.md) - Enable WebSocket and HTTP REST
-- [Configuration Guide](configuration.md) - Authentication configuration
-- [Troubleshooting](troubleshooting.md) - Authentication errors
+- [Configuration Guide](configuration.md) - Daemon configuration
+- [Troubleshooting](troubleshooting.md) - Connection issues
+- [RFC-0013](../specs/RFC-0013.md) - Daemon communication protocol
+- [RFC-0017](../specs/RFC-0017.md) - Unified thread management

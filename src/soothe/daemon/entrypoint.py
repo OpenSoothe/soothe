@@ -11,13 +11,19 @@ from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon.server import SootheDaemon
 
 
-def run_daemon(config: SootheConfig | None = None) -> None:
+def run_daemon(
+    config: SootheConfig | None = None,
+    *,
+    detached: bool = False,
+) -> None:
     """Start the daemon in the current process (blocking).
 
     Args:
         config: Soothe configuration.
+        detached: Whether daemon is running as a detached background process.
+            In detached mode, SIGINT shutdown handling is disabled.
     """
-    daemon = SootheDaemon(config)
+    daemon = SootheDaemon(config, handle_sigint_shutdown=not detached)
 
     async def _main() -> None:
         await daemon.start()
@@ -33,6 +39,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument("--config", type=str, default=None, help="Config file path")
+    parser.add_argument(
+        "--detached",
+        action="store_true",
+        help="Run in detached/background mode (disables SIGINT-triggered shutdown).",
+    )
     args = parser.parse_args()
 
     cfg: SootheConfig | None = None
@@ -44,7 +55,7 @@ def main() -> None:
             cfg = SootheConfig.from_yaml_file(str(default_config))
 
     setup_logging(cfg)
-    run_daemon(cfg)
+    run_daemon(cfg, detached=args.detached)
 
 
 if __name__ == "__main__":

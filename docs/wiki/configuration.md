@@ -161,12 +161,9 @@ daemon:
       enabled: false
       host: "127.0.0.1"
       port: 8766
-
-  auth:
-    enabled: false
-    mode: "api_key"
-    require_for_localhost: false
 ```
+
+**Note**: Authentication is handled by external reverse proxies, not by Soothe. See [Authentication Guide](authentication.md) for details.
 
 ## Autonomous Mode
 

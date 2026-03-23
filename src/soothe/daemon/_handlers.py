@@ -7,7 +7,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.events import ERROR
+from soothe.core.events import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
 from soothe.daemon.protocol import decode, encode
 from soothe.daemon.thread_logger import ThreadLogger
 
@@ -106,20 +106,45 @@ class DaemonHandlersMixin:
         elif msg_type == "resume_thread":
             thread_id = msg.get("thread_id", "")
             if thread_id:
-                self._runner.set_current_thread_id(thread_id)
-                await self._broadcast(
-                    {
-                        "type": "status",
-                        "state": "idle",
-                        "thread_id": self._runner.current_thread_id or "",
-                        "thread_resumed": True,
-                        "input_history": self._input_history.history[-100:] if self._input_history else [],
-                    }
-                )
+                from soothe.core.thread import ThreadContextManager
+
+                try:
+                    manager = ThreadContextManager(self._runner._durability, self._config)
+                    thread_info = await manager.resume_thread(str(thread_id))
+                    self._runner.set_current_thread_id(thread_info.thread_id)
+                    await self._broadcast(
+                        {
+                            "type": "status",
+                            "state": "idle",
+                            "thread_id": self._runner.current_thread_id or "",
+                            "thread_resumed": True,
+                            "input_history": self._input_history.history[-100:] if self._input_history else [],
+                        }
+                    )
+                except KeyError:
+                    await self._broadcast(
+                        {
+                            "type": "error",
+                            "code": "THREAD_NOT_FOUND",
+                            "message": f"Thread {thread_id} not found",
+                        }
+                    )
         elif msg_type == "new_thread":
-            # Clear the current thread ID to start a fresh thread
-            self._runner.set_current_thread_id(None)
-            await self._broadcast({"type": "status", "state": "idle", "thread_id": ""})
+            # Start a fresh thread and return its real ID immediately.
+            from soothe.core.thread import ThreadContextManager
+
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            thread_info = await manager.create_thread()
+            self._runner.set_current_thread_id(thread_info.thread_id)
+            await self._broadcast(
+                {
+                    "type": "status",
+                    "state": "idle",
+                    "thread_id": self._runner.current_thread_id or "",
+                    "new_thread": True,
+                    "input_history": [],
+                }
+            )
         # Thread management handlers (RFC-0017)
         elif msg_type == "thread_list":
             await self._handle_thread_list(msg)
@@ -206,6 +231,7 @@ class DaemonHandlersMixin:
             thread_filter = ThreadFilter(**filter_data)
 
         include_stats = msg.get("include_stats", False)
+        include_last_message = msg.get("include_last_message", True)  # Default to True
 
         # Create ThreadContextManager
         manager = ThreadContextManager(self._runner._durability, self._config)
@@ -213,6 +239,7 @@ class DaemonHandlersMixin:
         threads = await manager.list_threads(
             filter=thread_filter,
             include_stats=include_stats,
+            include_last_message=include_last_message,
         )
 
         await self._broadcast(
@@ -525,7 +552,7 @@ class DaemonHandlersMixin:
             return
 
         # Legacy single-threaded execution (backward compatible)
-        thread_id = self._runner.current_thread_id or ""
+        thread_id = await self._ensure_active_thread_id()
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
             self._thread_logger = ThreadLogger(
@@ -564,6 +591,14 @@ class DaemonHandlersMixin:
                     namespace, mode, data = chunk
 
                     self._thread_logger.log(tuple(namespace), mode, data)
+
+                    if (
+                        not namespace
+                        and mode == "custom"
+                        and isinstance(data, dict)
+                        and (output_text := self._extract_custom_output_text(data))
+                    ):
+                        full_response.append(output_text)
 
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                     if not namespace and mode == "messages" and is_msg_pair:
@@ -647,7 +682,7 @@ class DaemonHandlersMixin:
             max_iterations: Maximum iterations for autonomous mode.
             subagent: Optional subagent name to route the query to.
         """
-        thread_id = self._runner.current_thread_id or ""
+        thread_id = await self._ensure_active_thread_id()
 
         # Initialize thread logger
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
@@ -694,6 +729,14 @@ class DaemonHandlersMixin:
 
                 # Log to thread-specific logger
                 self._thread_logger.log(tuple(namespace), mode, data)
+
+                if (
+                    not namespace
+                    and mode == "custom"
+                    and isinstance(data, dict)
+                    and (output_text := self._extract_custom_output_text(data))
+                ):
+                    full_response.append(output_text)
 
                 # Extract response text
                 is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
@@ -790,6 +833,22 @@ class DaemonHandlersMixin:
             return list(self._active_threads.keys())
         return []
 
+    @staticmethod
+    def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
+        """Extract assistant-visible output text from custom protocol events."""
+        from soothe.ux.shared.message_processing import strip_internal_tags
+
+        event_type = str(data.get("type", ""))
+        if event_type == CHITCHAT_RESPONSE:
+            content = data.get("content", "")
+            cleaned = strip_internal_tags(str(content))
+            return cleaned or None
+        if event_type == FINAL_REPORT:
+            content = data.get("summary", "")
+            cleaned = strip_internal_tags(str(content))
+            return cleaned or None
+        return None
+
     async def _update_thread_timestamp(self, thread_id: str) -> None:
         """Update the thread's updated_at timestamp to track activity."""
         if not thread_id or not hasattr(self._runner, "_durability"):
@@ -810,3 +869,16 @@ class DaemonHandlersMixin:
                 logger.debug("Thread %s updated_at refreshed", thread_id)
         except Exception:
             logger.debug("Failed to update thread timestamp", exc_info=True)
+
+    async def _ensure_active_thread_id(self) -> str:
+        """Ensure current query runs with a concrete thread ID."""
+        current = str(self._runner.current_thread_id or "").strip()
+        if current:
+            return current
+
+        from soothe.core.thread import ThreadContextManager
+
+        manager = ThreadContextManager(self._runner._durability, self._config)
+        thread_info = await manager.create_thread()
+        self._runner.set_current_thread_id(thread_info.thread_id)
+        return thread_info.thread_id

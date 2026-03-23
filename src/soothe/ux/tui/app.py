@@ -19,6 +19,7 @@ import contextlib
 import logging
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, ClassVar
 
 import pyperclip
@@ -28,7 +29,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
 
-from soothe.config import SootheConfig
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.daemon.thread_logger import ThreadLogger
 from soothe.ux.shared.progress_verbosity import should_show
@@ -234,10 +235,10 @@ class SootheApp(App):
                     tid = str(tid)
                 previous_thread_id = self._thread_id
 
-                # Handle new thread (empty thread_id) - clear conversation
-                if tid == "" and previous_thread_id is not None:
+                # Clear local history only on explicit new-thread signal.
+                if event.get("new_thread", False):
                     # Starting a fresh thread, clear previous conversation
-                    self._thread_id = None
+                    self._thread_id = tid or None
                     self._conversation_history.clear()
                     self._message_history.clear()
                     self._state.full_response.clear()
@@ -252,8 +253,12 @@ class SootheApp(App):
                     if history:
                         chat_input = self.query_one("#chat-input", ChatInput)
                         chat_input.set_history(history)
+
                     # Thread switch or explicit resume - load history from disk
                     self._thread_id = tid
+
+                    # Load history from disk when we have a thread_id (either resume or first assignment)
+                    # Skip loading if this is a post-query thread change (was_running and not resumed)
                     if self._was_running and not thread_resumed:
                         # Post-query thread change: the runner assigned a new
                         # thread_id during execution.  Preserve the in-memory
@@ -264,7 +269,6 @@ class SootheApp(App):
                             retention_days=self._config.logging.thread_logging.retention_days,
                             max_size_mb=self._config.logging.thread_logging.max_size_mb,
                         )
-                        logger.info("Thread logger initialized for thread %s", tid)
                     else:
                         # Explicit thread switch (initial connect, resume):
                         # reload history from disk.
@@ -297,6 +301,7 @@ class SootheApp(App):
         """Load conversation and activity history for a thread.
 
         Searches both 'sessions' and 'threads' directories for backward compatibility.
+        Falls back to extracting conversation from LangGraph checkpoint if conversation.jsonl doesn't exist.
 
         Args:
             thread_id: Thread ID to load history for.
@@ -314,11 +319,40 @@ class SootheApp(App):
             retention_days=self._config.logging.thread_logging.retention_days,
             max_size_mb=self._config.logging.thread_logging.max_size_mb,
         )
-        logger.info("Thread logger initialized for thread %s", thread_id)
 
         try:
             # Load recent conversation history
             conversations = self._thread_logger.recent_conversation(limit=50)
+
+            # Fallback: Load from LangGraph checkpoint if conversation.jsonl is empty or missing
+            if not conversations:
+                conversations = self._load_conversation_from_checkpoint(thread_id)
+            else:
+                # Partial fallback: some legacy logs include user turns but miss assistant turns.
+                has_assistant = any(
+                    c.get("role") == "assistant" and str(c.get("text", "")).strip() for c in conversations
+                )
+                if not has_assistant:
+                    checkpoint_conversations = self._load_conversation_from_checkpoint(thread_id)
+                    conversations.extend([c for c in checkpoint_conversations if c.get("role") == "assistant"])
+
+                    from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
+                    from soothe.ux.shared.message_processing import strip_internal_tags
+
+                    # Recover assistant output from custom output events if needed.
+                    for record in self._thread_logger.recent_actions(limit=300):
+                        data = record.get("data", {})
+                        if not isinstance(data, dict):
+                            continue
+                        event_type = str(data.get("type", ""))
+                        recovered_text = ""
+                        if event_type == CHITCHAT_RESPONSE:
+                            recovered_text = strip_internal_tags(str(data.get("content", ""))).strip()
+                        elif event_type == FINAL_REPORT:
+                            recovered_text = strip_internal_tags(str(data.get("summary", ""))).strip()
+                        if recovered_text:
+                            conversations.append({"role": "assistant", "text": recovered_text})
+
             for record in conversations:
                 role = record.get("role", "unknown")
                 text = record.get("text", "")
@@ -366,6 +400,71 @@ class SootheApp(App):
         except Exception:
             logger.debug("Failed to load thread history", exc_info=True)
 
+    def _load_conversation_from_checkpoint(self, thread_id: str) -> list[dict[str, Any]]:
+        """Load conversation history from LangGraph checkpoint as fallback.
+
+        This method extracts user and assistant messages from the checkpoint.json file
+        when conversation.jsonl is missing or empty.
+
+        Args:
+            thread_id: Thread ID to load checkpoint for.
+
+        Returns:
+            List of conversation records with 'role' and 'text' fields.
+        """
+        from pathlib import Path
+
+        from soothe.config import SOOTHE_HOME
+
+        checkpoint_path = Path(SOOTHE_HOME) / "runs" / thread_id / "checkpoint.json"
+        if not checkpoint_path.exists():
+            logger.debug("No checkpoint found at %s", checkpoint_path)
+            return []
+
+        try:
+            import json
+
+            with checkpoint_path.open(encoding="utf-8") as f:
+                checkpoint_data = json.load(f)
+
+            # Extract conversation from checkpoint structure
+            conversations = []
+
+            # Try to extract from 'last_query' and plan steps
+            last_query = checkpoint_data.get("last_query", "")
+            if last_query:
+                conversations.append(
+                    {
+                        "role": "user",
+                        "text": last_query,
+                    }
+                )
+
+            # Extract assistant responses from completed plan steps
+            plan = checkpoint_data.get("plan", {})
+            steps = plan.get("steps", [])
+            for step in steps:
+                if step.get("status") == "completed" and step.get("result"):
+                    result_text = step["result"]
+                    if result_text.strip():
+                        conversations.append(
+                            {
+                                "role": "assistant",
+                                "text": result_text,
+                            }
+                        )
+
+            logger.info(
+                "Loaded %d conversations from checkpoint for thread %s",
+                len(conversations),
+                thread_id,
+            )
+        except Exception:
+            logger.debug("Failed to load checkpoint for thread %s", thread_id, exc_info=True)
+            return []
+        else:
+            return conversations
+
     def _log_conversation(self, text: str) -> None:
         # Check if this is a user message
         if "👤 User:" in text:
@@ -395,7 +494,6 @@ class SootheApp(App):
         else:
             # Non-user messages (system messages, etc.) - keep as plain text
             self._conversation_history.append(text)
-            logger.info("Conversation: %s", text.replace("\n", " ")[:200])
             with contextlib.suppress(Exception):
                 conv_panel = self.query_one("#conversation", ConversationPanel)
                 conv_panel.write(text)
@@ -717,15 +815,20 @@ def _start_daemon_in_background(_config: SootheConfig, *, config_path: str | Non
     if SootheDaemon.is_running():
         return
 
-    cmd = [sys.executable, "-m", "soothe.daemon"]
+    cmd = [sys.executable, "-m", "soothe.daemon", "--detached"]
     if config_path:
         cmd.extend(["--config", config_path])
+    log_file = Path(SOOTHE_HOME).expanduser() / "logs" / "daemon.stderr"
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    stderr_file = log_file.open("a", encoding="utf-8")
     subprocess.Popen(
         cmd,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=stderr_file,
         start_new_session=True,
     )
+    stderr_file.close()
 
     import time
 

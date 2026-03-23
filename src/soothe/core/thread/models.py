@@ -42,6 +42,7 @@ class EnhancedThreadInfo(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     stats: ThreadStats = Field(default_factory=ThreadStats)
     execution_context: ExecutionContext | None = None
+    last_human_message: str | None = None
 
 
 class ThreadFilter(BaseModel):

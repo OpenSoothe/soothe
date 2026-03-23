@@ -49,6 +49,12 @@ soothe run --thread abc123
 # CLI - Resume last active thread
 soothe thread continue
 
+# Resume via running daemon
+soothe thread continue --daemon abc123
+
+# Start a new thread
+soothe thread continue --new
+
 # In TUI - Interactive thread selection
 /resume
 ```
@@ -104,6 +110,38 @@ Archived threads:
 - Can still be resumed if needed
 - Free up context resources
 - Preserve conversation history
+
+## Thread Statistics
+
+View execution statistics for a thread:
+
+```bash
+soothe thread stats abc123
+```
+
+**Output**:
+```
+Thread: abc123
+Messages: 45
+Events: 128
+Artifacts: 12
+Errors: 2
+Last Error: Connection timeout during step 3
+```
+
+## Thread Tags
+
+Add or remove tags to organize threads:
+
+```bash
+# Add tags
+soothe thread tag abc123 research analysis
+
+# Remove tags
+soothe thread tag abc123 research --remove
+```
+
+Tags help you categorize and find threads later.
 
 ## Deleting Threads
 

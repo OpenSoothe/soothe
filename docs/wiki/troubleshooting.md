@@ -145,48 +145,74 @@ soothe server start
 
 ### Error: Authentication failed
 
-**Error**: `Authentication failed` or `Invalid API key`
+**Error**: `401 Unauthorized` or `Authentication required`
 
 **Solution**:
 
-1. Create a valid API key:
+Soothe does not include built-in authentication. If you're seeing auth errors, they're coming from your reverse proxy.
+
+1. **Check reverse proxy configuration**: Ensure API key/JWT validation is configured correctly
+2. **Verify credentials**: Check that you're sending the correct auth header
+3. **Check reverse proxy logs**: Auth errors are logged by nginx/Caddy/Traefik, not Soothe
+
+**Example with nginx**:
+```nginx
+# Check nginx error logs
+tail -f /var/log/nginx/error.log
+
+# Verify API key in request
+curl -H "X-API-Key: your-api-key" \
+  https://soothe.example.com/api/v1/threads
+```
+
+**Example with Caddy**:
 ```bash
-soothe auth create-key --description "My app" --permissions read,write
+# Check Caddy logs
+journalctl -u caddy -f
+
+# Verify JWT token
+curl -H "Authorization: Bearer your-jwt-token" \
+  https://soothe.example.com/api/v1/threads
 ```
 
-2. Verify the key exists:
-```bash
-soothe auth list-keys
+### Error: CORS policy blocked
+
+**Error**: `CORS policy blocked` in browser console
+
+**Solution**: This is handled by the reverse proxy, not Soothe directly.
+
+**nginx configuration**:
+```nginx
+location / {
+    add_header Access-Control-Allow-Origin "https://your-app.example.com";
+    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS";
+    add_header Access-Control-Allow-Headers "X-API-Key, Content-Type";
+
+    if ($request_method = OPTIONS) {
+        return 204;
+    }
+
+    proxy_pass http://localhost:8766;
+}
 ```
 
-3. Use the correct key in your request:
-
-**WebSocket**:
-```javascript
-ws.send(JSON.stringify({
-  type: "auth",
-  token: "sk_live_abc123..."
-}));
+**Caddy configuration**:
 ```
+soothe.example.com {
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
 
-**HTTP REST**:
-```bash
-curl -H "Authorization: Bearer sk_live_abc123..." \
-  http://localhost:8766/api/v1/threads
+    handle @websocket {
+        reverse_proxy localhost:8765
+    }
+
+    handle /api/* {
+        reverse_proxy localhost:8766
+    }
+}
 ```
-
-### Error: Key not found
-
-**Error**: `API key not found`
-
-**Solution**:
-1. List keys to verify it exists:
-```bash
-soothe auth list-keys
-```
-
-2. If missing, create a new key
-3. Check for typos in the key string
 
 ## CORS Errors
 

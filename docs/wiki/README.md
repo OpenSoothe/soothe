@@ -14,7 +14,7 @@ Welcome to the Soothe end-user wiki. This directory contains comprehensive guide
 
 - **[CLI Reference](cli-reference.md)** - Complete command-line interface documentation
   - All CLI commands and options
-  - Run, autopilot, thread, server, auth, config, agent commands
+  - Run, autopilot, thread, server, config, agent commands
   - Examples and use cases
 
 - **[TUI Guide](tui-guide.md)** - Terminal UI usage, slash commands, and keyboard shortcuts
@@ -62,11 +62,11 @@ Welcome to the Soothe end-user wiki. This directory contains comprehensive guide
   - Configuration examples
   - Use cases
 
-- **[Authentication](authentication.md)** - API keys, JWT, and security model
-  - Creating and managing API keys
-  - JWT authentication
-  - Security model
-  - Integration examples
+- **[Authentication](authentication.md)** - External authentication with reverse proxies
+  - Authentication architecture (no built-in auth)
+  - Deployment patterns
+  - nginx/Caddy/Traefik examples
+  - Security best practices
 
 ### 🛠️ Troubleshooting & Advanced
 

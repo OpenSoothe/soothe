@@ -73,7 +73,7 @@ class PhasesMixin:
         piggybacked = getattr(classification, "chitchat_response", None)
         if piggybacked:
             yield _custom(ChitchatResponseEvent(content=piggybacked).to_dict())
-            logger.info("Chitchat completed for query: %s", user_input[:50])
+            logger.debug("Chitchat completed for query: %s", user_input[:50])
             return
 
         # Safety net: should not be reached if classifier post-processing works.
@@ -86,7 +86,7 @@ class PhasesMixin:
         else:
             fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
         yield _custom(ChitchatResponseEvent(content=fallback).to_dict())
-        logger.info("Chitchat completed (canned fallback) for query: %s", user_input[:50])
+        logger.debug("Chitchat completed (canned fallback) for query: %s", user_input[:50])
 
     # -- direct subagent routing --------------------------------------------
 
@@ -105,7 +105,7 @@ class PhasesMixin:
         """
         from soothe.cognition import RoutingResult, UnifiedClassification
 
-        logger.info("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
+        logger.debug("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
 
         # Create minimal classification that routes to the specified subagent
         routing = RoutingResult(

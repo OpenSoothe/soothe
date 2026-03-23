@@ -67,10 +67,14 @@ Daemon stopped successfully
 
 ### Attach to Daemon
 
-Attach the TUI to a running daemon:
+**Note**: The `soothe server attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
 
 ```bash
-soothe server attach
+# Resume last active thread via daemon
+soothe thread continue --daemon
+
+# Resume specific thread via daemon
+soothe thread continue --daemon <thread-id>
 ```
 
 This opens the TUI and connects to the already-running daemon.
@@ -96,7 +100,8 @@ The daemon continues running in the background.
 Reconnect to the daemon:
 
 ```bash
-soothe server attach
+# Resume via running daemon
+soothe thread continue --daemon
 ```
 
 ## When to Use Daemon Mode
@@ -246,14 +251,14 @@ soothe server stop
 soothe server start
 ```
 
-### Can't Attach to Daemon
+### Can't Connect to Daemon
 
 **Error**: `No daemon running`
 
-**Solution**: Start daemon first
+**Solution**: Start daemon first, then use thread continue
 ```bash
 soothe server start
-soothe server attach
+soothe thread continue --daemon
 ```
 
 ## Related Guides

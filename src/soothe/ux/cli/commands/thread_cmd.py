@@ -12,6 +12,11 @@ import typer
 
 from soothe.config import SootheConfig
 
+# Maximum characters to show for last human message in thread list
+_TOPIC_DISPLAY_LIMIT = 30
+# Characters to keep when truncating (leave room for "...")
+_TOPIC_TRUNCATE_KEEP = 27
+
 
 def thread_list(
     config: Annotated[
@@ -76,26 +81,36 @@ def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = N
 def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = None) -> None:
     """List threads in standalone mode (no daemon)."""
     from soothe.core.runner import SootheRunner
+    from soothe.core.thread import ThreadContextManager
 
     runner = SootheRunner(cfg)
 
     async def _list() -> None:
         try:
-            threads = await runner.list_threads()
+            manager = ThreadContextManager(runner._durability, cfg)
+            threads = await manager.list_threads(include_last_message=True)
             if status_filter:
-                threads = [t for t in threads if t.get("status") == status_filter]
+                threads = [t for t in threads if t.status == status_filter]
             if not threads:
                 typer.echo("No threads.")
                 return
+            # Sort by updated_at in descending order (most recent first)
+            threads.sort(key=lambda x: x.updated_at, reverse=True)
             # Print header
-            typer.echo(f"{'ID':<10}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}")
-            typer.echo("─" * 65)
+            typer.echo(f"{'ID':<36}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
+            typer.echo("─" * 120)
             for t in threads:
-                tid = t.get("thread_id", "?")
-                t_status = t.get("status", "?")
-                created = str(t.get("created_at", "?"))[:19]
-                last_msg = str(t.get("updated_at", "?"))[:19]
-                typer.echo(f"{tid:<10}  {t_status:<10}  {created:<19}  {last_msg:<19}")
+                tid = t.thread_id
+                t_status = t.status
+                created = str(t.created_at)[:19]
+                last_msg = str(t.updated_at)[:19]
+                # Truncate last human message to fit display limit
+                topic = (
+                    (t.last_human_message or "")[:_TOPIC_TRUNCATE_KEEP] + "..."
+                    if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT
+                    else (t.last_human_message or "")
+                )
+                typer.echo(f"{tid:<36}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
         finally:
             await runner.cleanup()
 

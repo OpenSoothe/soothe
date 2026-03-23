@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -98,8 +99,12 @@ class ThreadContextManager:
         Raises:
             KeyError: If thread not found
         """
-        # Resume thread in durability protocol
-        thread_info = await self._durability.resume_thread(thread_id)
+        try:
+            # Resume thread in durability protocol
+            thread_info = await self._durability.resume_thread(thread_id)
+        except KeyError:
+            # Graceful degradation: recover missing metadata when run artifacts exist.
+            thread_info = await self._recover_missing_thread_metadata(thread_id)
 
         logger.info("Resumed thread %s", thread_id)
 
@@ -107,6 +112,48 @@ class ThreadContextManager:
         # ThreadLogger will continue appending to existing log
 
         return thread_info
+
+    async def _recover_missing_thread_metadata(self, thread_id: str) -> ThreadInfo:
+        """Recover thread metadata when durability entry is missing but run data exists.
+
+        Args:
+            thread_id: Requested thread ID.
+
+        Returns:
+            Recovered ThreadInfo.
+
+        Raises:
+            KeyError: If no durable metadata and no run artifacts exist.
+        """
+        from soothe.protocols.durability import ThreadInfo, ThreadMetadata
+
+        def _get_run_dir() -> Path:
+            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+
+        run_dir = await asyncio.to_thread(_get_run_dir)
+        exists = await asyncio.to_thread(run_dir.exists)
+        if not exists:
+            msg = f"Thread '{thread_id}' not found"
+            raise KeyError(msg)
+
+        recovered = ThreadInfo(
+            thread_id=thread_id,
+            status="active",
+            created_at=datetime.now(tz=UTC),
+            updated_at=datetime.now(tz=UTC),
+            metadata=ThreadMetadata(),
+        )
+
+        # Persist recovered metadata when durability implementation exposes internal store/index helpers.
+        store = getattr(self._durability, "_store", None)
+        update_index = getattr(self._durability, "_update_thread_index", None)
+        if store and callable(getattr(store, "save", None)):
+            store.save(f"thread:{thread_id}", recovered.model_dump(mode="json"))
+            if callable(update_index):
+                update_index(thread_id, action="add")
+
+        logger.info("Recovered missing durability metadata for thread %s from run artifacts", thread_id)
+        return recovered
 
     async def get_thread(self, thread_id: str) -> EnhancedThreadInfo:
         """Get enhanced thread information with statistics.
@@ -124,7 +171,7 @@ class ThreadContextManager:
         threads = await self._durability.list_threads()
         thread_data = None
         for t in threads:
-            if t.get("thread_id") == thread_id:
+            if t.thread_id == thread_id:
                 thread_data = t
                 break
 
@@ -135,23 +182,21 @@ class ThreadContextManager:
         # Calculate stats
         stats = await self.get_thread_stats(thread_id)
 
-        # Build enhanced info
-        from datetime import UTC, datetime
-
-        def parse_datetime(dt_str: str) -> datetime:
-            """Parse ISO format string to timezone-aware datetime."""
-            dt = datetime.fromisoformat(dt_str)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=UTC)
-            return dt
+        # Map status from ThreadInfo to EnhancedThreadInfo
+        status_mapping = {
+            "active": "idle",
+            "suspended": "suspended",
+            "archived": "archived",
+        }
+        mapped_status = status_mapping.get(thread_data.status, "idle")
 
         return EnhancedThreadInfo(
             thread_id=thread_id,
-            status=thread_data.get("status", "idle"),
-            created_at=parse_datetime(thread_data["created_at"]),
-            updated_at=parse_datetime(thread_data["updated_at"]),
-            last_activity_at=parse_datetime(thread_data["updated_at"]),
-            metadata=thread_data.get("metadata", {}),
+            status=mapped_status,
+            created_at=thread_data.created_at,
+            updated_at=thread_data.updated_at,
+            last_activity_at=thread_data.updated_at,
+            metadata=thread_data.metadata.model_dump() if thread_data.metadata else {},
             stats=stats,
         )
 
@@ -160,58 +205,65 @@ class ThreadContextManager:
         thread_filter: ThreadFilter | None = None,
         *,
         include_stats: bool = False,
+        include_last_message: bool = False,
     ) -> list[EnhancedThreadInfo]:
         """List threads with optional filtering and statistics.
 
         Args:
             thread_filter: Optional filter criteria
             include_stats: Whether to calculate stats for each thread
+            include_last_message: Whether to include the last human message
 
         Returns:
             List of EnhancedThreadInfo
         """
-        from datetime import UTC, datetime
-
-        def parse_datetime(dt_str: str) -> datetime:
-            """Parse ISO format string to timezone-aware datetime."""
-            dt = datetime.fromisoformat(dt_str)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=UTC)
-            return dt
-
         # Get all threads from durability protocol
         threads = await self._durability.list_threads()
 
         # Apply filter
         if thread_filter:
+            # Map EnhancedThreadInfo status to ThreadInfo status for filtering
+            # EnhancedThreadInfo: idle, running, suspended, archived, error
+            # ThreadInfo: active, suspended, archived
+            status_reverse_mapping = {
+                "idle": "active",
+                "running": "active",
+                "suspended": "suspended",
+                "archived": "archived",
+                "error": "active",  # error state is tracked in metadata, not status
+            }
+            filter_status = status_reverse_mapping.get(thread_filter.status) if thread_filter.status else None
+
             filtered = []
             for t in threads:
-                if thread_filter.status and t.get("status") != thread_filter.status:
+                if filter_status and t.status != filter_status:
                     continue
                 if thread_filter.tags:
-                    thread_tags = t.get("metadata", {}).get("tags", [])
+                    thread_tags = t.metadata.tags if t.metadata else []
                     if not any(tag in thread_tags for tag in thread_filter.tags):
                         continue
                 if thread_filter.labels:
-                    thread_labels = t.get("metadata", {}).get("labels", [])
+                    thread_labels = t.metadata.labels if t.metadata else []
                     if not any(label in thread_labels for label in thread_filter.labels):
                         continue
-                if thread_filter.priority and t.get("metadata", {}).get("priority") != thread_filter.priority:
-                    continue
-                if thread_filter.category and t.get("metadata", {}).get("category") != thread_filter.category:
-                    continue
+                if thread_filter.priority:
+                    thread_priority = t.metadata.priority if t.metadata else "normal"
+                    if thread_priority != thread_filter.priority:
+                        continue
+                if thread_filter.category:
+                    thread_category = t.metadata.category if t.metadata else None
+                    if thread_category != thread_filter.category:
+                        continue
                 # Date filtering
                 if thread_filter.created_after or thread_filter.created_before:
-                    created = parse_datetime(t["created_at"])
-                    if thread_filter.created_after and created < thread_filter.created_after:
+                    if thread_filter.created_after and t.created_at < thread_filter.created_after:
                         continue
-                    if thread_filter.created_before and created > thread_filter.created_before:
+                    if thread_filter.created_before and t.created_at > thread_filter.created_before:
                         continue
                 if thread_filter.updated_after or thread_filter.updated_before:
-                    updated = parse_datetime(t["updated_at"])
-                    if thread_filter.updated_after and updated < thread_filter.updated_after:
+                    if thread_filter.updated_after and t.updated_at < thread_filter.updated_after:
                         continue
-                    if thread_filter.updated_before and updated > thread_filter.updated_before:
+                    if thread_filter.updated_before and t.updated_at > thread_filter.updated_before:
                         continue
                 filtered.append(t)
             threads = filtered
@@ -221,17 +273,33 @@ class ThreadContextManager:
         for t in threads:
             stats = ThreadStats()
             if include_stats:
-                stats = await self.get_thread_stats(t["thread_id"])
+                stats = await self.get_thread_stats(t.thread_id)
+
+            # Get last human message if requested
+            last_human_message = None
+            if include_last_message:
+                last_human_message = await self._get_last_human_message(t.thread_id)
+
+            # Map status from ThreadInfo to EnhancedThreadInfo
+            # ThreadInfo has: active, suspended, archived
+            # EnhancedThreadInfo has: idle, running, suspended, archived, error
+            status_mapping = {
+                "active": "idle",
+                "suspended": "suspended",
+                "archived": "archived",
+            }
+            mapped_status = status_mapping.get(t.status, "idle")
 
             enhanced_threads.append(
                 EnhancedThreadInfo(
-                    thread_id=t["thread_id"],
-                    status=t.get("status", "idle"),
-                    created_at=parse_datetime(t["created_at"]),
-                    updated_at=parse_datetime(t["updated_at"]),
-                    last_activity_at=parse_datetime(t["updated_at"]),
-                    metadata=t.get("metadata", {}),
+                    thread_id=t.thread_id,
+                    status=mapped_status,
+                    created_at=t.created_at,
+                    updated_at=t.updated_at,
+                    last_activity_at=t.updated_at,
+                    metadata=t.metadata.model_dump() if t.metadata else {},
                     stats=stats,
+                    last_human_message=last_human_message,
                 )
             )
 
@@ -381,3 +449,22 @@ class ThreadContextManager:
             error_count=error_count,
             last_error=last_error,
         )
+
+    async def _get_last_human_message(self, thread_id: str) -> str | None:
+        """Get the last human message from thread conversation history.
+
+        Args:
+            thread_id: Thread ID
+
+        Returns:
+            Last human message text or None if not found
+        """
+        logger_instance = ThreadLogger(thread_id=thread_id)
+        records = logger_instance.read_recent_records(limit=100)
+
+        # Find last human message in reverse order
+        for record in reversed(records):
+            if record.get("kind") == "conversation" and record.get("role") == "user":
+                return record.get("text", "")
+
+        return None

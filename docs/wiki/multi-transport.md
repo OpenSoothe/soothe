@@ -61,10 +61,10 @@ daemon:
 
 **Features**:
 - Real-time streaming for web applications
-- Optional authentication (API key or JWT)
 - CORS validation
 - TLS support for remote connections
-- Rate limiting to prevent abuse
+
+**Note**: Authentication is handled by reverse proxy (see [Authentication Guide](authentication.md))
 
 **Use When**:
 - Building web-based UIs (React, Vue, etc.)
@@ -269,15 +269,18 @@ Active Threads: 3
 ### Localhost Connections
 
 - **Unix Socket**: No authentication (filesystem permissions)
-- **WebSocket localhost**: Optional authentication (configurable)
-- **HTTP REST localhost**: Optional authentication (configurable)
+- **WebSocket localhost**: No built-in authentication
+- **HTTP REST localhost**: No built-in authentication
 
 ### Remote Connections
 
-- **WebSocket**: Authentication required, TLS mandatory
-- **HTTP REST**: Authentication required
-- **CORS**: Strict origin validation
-- **Rate Limiting**: Prevents abuse (10 messages/second default)
+**Important**: Soothe does not include built-in authentication. For remote access, always use a reverse proxy to handle:
+- **Authentication**: API keys, JWT, OAuth, etc.
+- **TLS/SSL**: HTTPS/WSS encryption
+- **Rate limiting**: Prevent abuse
+- **Request filtering**: Block malicious requests
+
+See [Authentication Guide](authentication.md) for deployment patterns with nginx, Caddy, or Traefik.
 
 ## Performance Characteristics
 

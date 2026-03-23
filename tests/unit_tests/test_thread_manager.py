@@ -11,7 +11,7 @@ from soothe.core.thread import (
     ThreadFilter,
     ThreadStats,
 )
-from soothe.protocols.durability import ThreadMetadata
+from soothe.protocols.durability import ThreadInfo, ThreadMetadata
 
 
 @pytest.fixture
@@ -88,24 +88,51 @@ async def test_resume_thread(mock_durability, mock_config):
 
 
 @pytest.mark.asyncio
+async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_config, tmp_path):
+    """If durability misses metadata but run artifacts exist, recover thread metadata."""
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    mock_durability.resume_thread = AsyncMock(side_effect=KeyError("missing"))
+    mock_store = SimpleNamespace(save=MagicMock())
+    mock_durability._store = mock_store  # noqa: SLF001
+    mock_durability._update_thread_index = MagicMock()  # noqa: SLF001
+
+    run_dir = tmp_path / "runs" / "recover-123"
+    run_dir.mkdir(parents=True)
+    (run_dir / "checkpoint.json").write_text("{}", encoding="utf-8")
+
+    manager = ThreadContextManager(mock_durability, mock_config)
+    with patch("soothe.core.thread.manager.SOOTHE_HOME", str(tmp_path)):
+        recovered = await manager.resume_thread("recover-123")
+
+    assert recovered.thread_id == "recover-123"
+    assert recovered.status == "active"
+    mock_store.save.assert_called_once()
+    mock_durability._update_thread_index.assert_called_once_with("recover-123", action="add")
+
+
+@pytest.mark.asyncio
 async def test_list_threads_with_filter(mock_durability, mock_config):
     """Test thread filtering."""
+    from soothe.protocols.durability import ThreadMetadata
+
     mock_durability.list_threads = AsyncMock(
         return_value=[
-            {
-                "thread_id": "thread1",
-                "status": "idle",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T12:00:00",
-                "metadata": {"tags": ["research"]},
-            },
-            {
-                "thread_id": "thread2",
-                "status": "idle",
-                "created_at": "2026-03-22T11:00:00",
-                "updated_at": "2026-03-22T13:00:00",
-                "metadata": {"tags": ["analysis"]},
-            },
+            ThreadInfo(
+                thread_id="thread1",
+                status="active",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 12, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(tags=["research"]),
+            ),
+            ThreadInfo(
+                thread_id="thread2",
+                status="active",
+                created_at=datetime(2026, 3, 22, 11, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 13, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(tags=["analysis"]),
+            ),
         ]
     )
 
@@ -121,15 +148,17 @@ async def test_list_threads_with_filter(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_get_thread_stats(mock_durability, mock_config):
     """Test statistics calculation."""
+    from soothe.protocols.durability import ThreadMetadata
+
     mock_durability.list_threads = AsyncMock(
         return_value=[
-            {
-                "thread_id": "test123",
-                "status": "idle",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T12:00:00",
-                "metadata": {},
-            },
+            ThreadInfo(
+                thread_id="test123",
+                status="active",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 12, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
         ]
     )
 
@@ -182,34 +211,37 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
 @pytest.mark.asyncio
 async def test_thread_filter_by_status(mock_durability, mock_config):
     """Test filtering threads by status."""
+    from soothe.protocols.durability import ThreadMetadata
+
     mock_durability.list_threads = AsyncMock(
         return_value=[
-            {
-                "thread_id": "t1",
-                "status": "idle",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T11:00:00",
-                "metadata": {},
-            },
-            {
-                "thread_id": "t2",
-                "status": "running",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T11:00:00",
-                "metadata": {},
-            },
-            {
-                "thread_id": "t3",
-                "status": "idle",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T11:00:00",
-                "metadata": {},
-            },
+            ThreadInfo(
+                thread_id="t1",
+                status="active",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
+            ThreadInfo(
+                thread_id="t2",
+                status="suspended",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
+            ThreadInfo(
+                thread_id="t3",
+                status="active",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
         ]
     )
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
+    # Note: ThreadInfo has "active" status, but EnhancedThreadInfo maps it to "idle"
     thread_filter = ThreadFilter(status="idle")
     threads = await manager.list_threads(thread_filter=thread_filter)
 
@@ -220,29 +252,31 @@ async def test_thread_filter_by_status(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_thread_filter_by_date_range(mock_durability, mock_config):
     """Test filtering threads by date range."""
+    from soothe.protocols.durability import ThreadMetadata
+
     mock_durability.list_threads = AsyncMock(
         return_value=[
-            {
-                "thread_id": "t1",
-                "status": "idle",
-                "created_at": "2026-03-20T10:00:00",
-                "updated_at": "2026-03-20T11:00:00",
-                "metadata": {},
-            },
-            {
-                "thread_id": "t2",
-                "status": "idle",
-                "created_at": "2026-03-22T10:00:00",
-                "updated_at": "2026-03-22T11:00:00",
-                "metadata": {},
-            },
-            {
-                "thread_id": "t3",
-                "status": "idle",
-                "created_at": "2026-03-24T10:00:00",
-                "updated_at": "2026-03-24T11:00:00",
-                "metadata": {},
-            },
+            ThreadInfo(
+                thread_id="t1",
+                status="active",
+                created_at=datetime(2026, 3, 20, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 20, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
+            ThreadInfo(
+                thread_id="t2",
+                status="active",
+                created_at=datetime(2026, 3, 22, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 22, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
+            ThreadInfo(
+                thread_id="t3",
+                status="active",
+                created_at=datetime(2026, 3, 24, 10, 0, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 3, 24, 11, 0, 0, tzinfo=UTC),
+                metadata=ThreadMetadata(),
+            ),
         ]
     )
 
