@@ -91,8 +91,8 @@ def _build_http_transport_config(tmp_path: Path, port: int, *, with_daemon: bool
 @pytest.fixture
 async def http_daemon(tmp_path: Path):
     """Start a daemon exposing only HTTP REST transport."""
-    _force_isolated_home(tmp_path / "soothe-home")
-    port = _alloc_ephemeral_port()
+    force_isolated_home(tmp_path / "soothe-home")
+    port = alloc_ephemeral_port()
     config, _ = _build_http_transport_config(tmp_path, port, with_daemon=True)
     daemon = SootheDaemon(config)
     await daemon.start()
@@ -108,7 +108,7 @@ async def http_daemon(tmp_path: Path):
 @pytest.mark.integration
 async def test_http_transport_system_lifecycle(tmp_path: Path) -> None:
     """Layer A: basic HTTP transport lifecycle and transport-level endpoints."""
-    port = _alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
     await transport.start(lambda msg: None)
@@ -282,7 +282,7 @@ async def test_http_transport_thread_history_continuation(http_daemon: tuple[Soo
 @pytest.mark.xfail(reason="Contract expectation: config APIs should be mutable and schema-aware.")
 async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -> None:
     """Layer B: config APIs are intentionally expected to become real runtime-backed contracts."""
-    port = _alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
     await transport.start(lambda msg: None)
@@ -309,7 +309,7 @@ async def test_http_transport_config_endpoints_are_contractual(tmp_path: Path) -
 @pytest.mark.xfail(reason="Contract expectation: file upload/download/delete should be persistent.")
 async def test_http_transport_file_endpoints_contract(tmp_path: Path) -> None:
     """Layer B: file endpoints should persist artifacts for upload/download/delete."""
-    port = _alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
     await transport.start(lambda msg: None)
@@ -340,7 +340,7 @@ async def test_http_transport_file_endpoints_contract(tmp_path: Path) -> None:
 @pytest.mark.integration
 async def test_http_transport_shutdown_endpoint(tmp_path: Path) -> None:
     """Layer A: shutdown endpoint returns expected protocol response."""
-    port = _alloc_ephemeral_port()
+    port = alloc_ephemeral_port()
     config = HttpRestConfig(enabled=True, host="127.0.0.1", port=port, tls_enabled=False)
     transport = HttpRestTransport(config)
     await transport.start(lambda msg: None)

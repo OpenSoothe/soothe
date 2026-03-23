@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib
 import os
 import uuid
 from pathlib import Path
@@ -18,15 +17,17 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
+from tests.integration.conftest import (
+    await_event_type,
+    await_status_state,
+    force_isolated_home,
+    get_base_config,
+)
 
 
 def _build_daemon_config(tmp_path: Path, socket_path: str, max_concurrent_threads: int = 3) -> SootheConfig:
     """Build an isolated daemon config for thread recovery tests."""
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        base_config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        base_config = SootheConfig()
+    base_config = get_base_config()
 
     return SootheConfig(
         providers=base_config.providers,
@@ -50,34 +51,7 @@ def _build_daemon_config(tmp_path: Path, socket_path: str, max_concurrent_thread
     )
 
 
-def _force_isolated_home(home: Path) -> None:
-    """Force daemon paths to a test-local SOOTHE_HOME."""
-    os.environ["SOOTHE_HOME"] = str(home)
-    import soothe.config as soothe_config
-    from soothe import config as config_module
-
-    soothe_config.SOOTHE_HOME = str(home)
-    config_module.SOOTHE_HOME = str(home)
-
-    import soothe.daemon.paths as daemon_paths
-
-    daemon_paths.SOOTHE_HOME = str(home)
-    importlib.reload(daemon_paths)
-
-    import soothe.daemon.thread_logger as daemon_thread_logger
-
-    daemon_thread_logger.SOOTHE_HOME = str(home)
-
-    import soothe.core.thread.manager as thread_manager
-
-    thread_manager.SOOTHE_HOME = str(home)
-
-
-async def _await_event_type(readable, expected_type: str, timeout: float = 5.0) -> dict:
-    """Read protocol events until a specific type is observed."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while True:
+@pytest.fixture
         remaining = deadline - loop.time()
         if remaining <= 0:
             msg = f"Timed out waiting for event type: {expected_type}"
@@ -87,7 +61,7 @@ async def _await_event_type(readable, expected_type: str, timeout: float = 5.0) 
             return event
 
 
-async def _await_status_state(
+async def await_status_state(
     readable,
     expected_states: str | set[str] | tuple[str, ...],
     timeout: float = 10.0,
@@ -110,7 +84,7 @@ async def _await_status_state(
 @pytest.fixture
 async def daemon_fixture(tmp_path: Path):
     """Start a daemon for thread recovery tests."""
-    _force_isolated_home(tmp_path / "soothe-home")
+    force_isolated_home(tmp_path / "soothe-home")
     socket_path = f"/tmp/soothe-recovery-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     config = _build_daemon_config(tmp_path, socket_path)
     daemon = SootheDaemon(config)
@@ -127,7 +101,7 @@ async def daemon_fixture(tmp_path: Path):
 @pytest.mark.integration
 async def test_thread_resume_from_disk(tmp_path: Path) -> None:
     """Test resuming thread after daemon restart (RFC-0017)."""
-    _force_isolated_home(tmp_path / "soothe-home")
+    force_isolated_home(tmp_path / "soothe-home")
     socket_path = f"/tmp/soothe-restart-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     config = _build_daemon_config(tmp_path, socket_path)
 
@@ -145,13 +119,13 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
 
         try:
             await client1.send_thread_create(initial_message="First conversation turn")
-            created = await _await_event_type(client1.read_event, "thread_created", timeout=5.0)
+            created = await await_event_type(client1.read_event, "thread_created", timeout=5.0)
             thread_id = created["thread_id"]
 
             await client1.send_input("Remember this: the answer is 42")
-            status = await _await_status_state(client1.read_event, {"running", "idle"}, timeout=10.0)
+            status = await await_status_state(client1.read_event, {"running", "idle"}, timeout=10.0)
             if status.get("state") == "running":
-                await _await_status_state(client1.read_event, "idle", timeout=10.0)
+                await await_status_state(client1.read_event, "idle", timeout=10.0)
 
         finally:
             await client1.close()
@@ -175,28 +149,28 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
         try:
             # List threads to verify thread persisted
             await client2.send_thread_list()
-            list_response = await _await_event_type(client2.read_event, "thread_list_response", timeout=3.0)
+            list_response = await await_event_type(client2.read_event, "thread_list_response", timeout=3.0)
 
             thread_ids = {t["thread_id"] for t in list_response["threads"]}
             assert thread_id in thread_ids, f"Thread {thread_id} should persist after restart"
 
             # Resume the thread
             await client2.send_resume_thread(thread_id)
-            resume_status = await _await_event_type(client2.read_event, "status", timeout=3.0)
+            resume_status = await await_event_type(client2.read_event, "status", timeout=3.0)
             assert resume_status.get("thread_resumed") is True
 
             # Verify conversation history
             await client2.send_thread_messages(thread_id)
-            messages_response = await _await_event_type(client2.read_event, "thread_messages_response", timeout=5.0)
+            messages_response = await await_event_type(client2.read_event, "thread_messages_response", timeout=5.0)
 
             messages = messages_response.get("messages", [])
             user_messages = [m for m in messages if m.get("role") == "user"]
 
             # Continue conversation
             await client2.send_input("What did I ask you to remember?")
-            status2 = await _await_status_state(client2.read_event, {"running", "idle"}, timeout=15.0)
+            status2 = await await_status_state(client2.read_event, {"running", "idle"}, timeout=15.0)
             if status2.get("state") == "running":
-                await _await_status_state(client2.read_event, "idle", timeout=15.0)
+                await await_status_state(client2.read_event, "idle", timeout=15.0)
 
         finally:
             await client2.close()
@@ -218,14 +192,14 @@ async def test_thread_recovery_missing_metadata(daemon_fixture: tuple[SootheDaem
     try:
         # Create thread
         await client.send_thread_create(initial_message="test recovery")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Execute query
         await client.send_input("Test query for recovery")
-        status = await _await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
+        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
         if status.get("state") == "running":
-            await _await_status_state(client.read_event, "idle", timeout=10.0)
+            await await_status_state(client.read_event, "idle", timeout=10.0)
 
         # Note: Corrupting durability files would require:
         # 1. Accessing config.durability persist_dir
@@ -238,7 +212,7 @@ async def test_thread_recovery_missing_metadata(daemon_fixture: tuple[SootheDaem
 
         # Verify thread is accessible
         await client.send_thread_get(thread_id)
-        get_response = await _await_event_type(client.read_event, "thread_get_response", timeout=3.0)
+        get_response = await await_event_type(client.read_event, "thread_get_response", timeout=3.0)
         assert get_response["thread"]["thread_id"] == thread_id
 
     finally:
@@ -260,7 +234,7 @@ async def test_concurrent_thread_execution(daemon_fixture: tuple[SootheDaemon, s
         thread_ids = []
         for i in range(3):
             await client.send_thread_create(initial_message=f"Thread {i}")
-            created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+            created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
             thread_ids.append(created["thread_id"])
 
         # Note: Full concurrent execution testing would require:
@@ -274,7 +248,7 @@ async def test_concurrent_thread_execution(daemon_fixture: tuple[SootheDaemon, s
 
         # Verify all threads exist
         await client.send_thread_list()
-        list_response = await _await_event_type(client.read_event, "thread_list_response", timeout=3.0)
+        list_response = await await_event_type(client.read_event, "thread_list_response", timeout=3.0)
 
         listed_ids = {t["thread_id"] for t in list_response["threads"]}
         for tid in thread_ids:
@@ -282,12 +256,12 @@ async def test_concurrent_thread_execution(daemon_fixture: tuple[SootheDaemon, s
 
         # Execute on first thread
         await client.send_resume_thread(thread_ids[0])
-        await _await_event_type(client.read_event, "status", timeout=3.0)
+        await await_event_type(client.read_event, "status", timeout=3.0)
 
         await client.send_input("Query on thread 0")
-        status = await _await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
+        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
         if status.get("state") == "running":
-            await _await_status_state(client.read_event, "idle", timeout=10.0)
+            await await_status_state(client.read_event, "idle", timeout=10.0)
 
     finally:
         await client.close()
@@ -306,7 +280,7 @@ async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, Soot
     try:
         # Create thread
         await client.send_thread_create(initial_message="test cancellation")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Start query
@@ -314,13 +288,13 @@ async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, Soot
 
         # Wait for running state or proceed directly
         try:
-            status = await _await_status_state(client.read_event, "running", timeout=5.0)
+            status = await await_status_state(client.read_event, "running", timeout=5.0)
 
             # Send cancel command
             await client.send_command("/cancel")
 
             # Wait for idle state (cancellation should stop execution)
-            cancel_status = await _await_status_state(client.read_event, "idle", timeout=10.0)
+            cancel_status = await await_status_state(client.read_event, "idle", timeout=10.0)
             assert cancel_status.get("state") == "idle"
         except TimeoutError:
             # Query may have completed quickly, verify thread still exists
@@ -328,14 +302,14 @@ async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, Soot
 
         # Verify thread still exists
         await client.send_thread_get(thread_id)
-        get_response = await _await_event_type(client.read_event, "thread_get_response", timeout=3.0)
+        get_response = await await_event_type(client.read_event, "thread_get_response", timeout=3.0)
         assert get_response["thread"]["thread_id"] == thread_id
 
         # Verify we can continue the thread
         await client.send_input("Continue after cancellation")
-        status2 = await _await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
+        status2 = await await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
         if status2.get("state") == "running":
-            await _await_status_state(client.read_event, "idle", timeout=10.0)
+            await await_status_state(client.read_event, "idle", timeout=10.0)
 
     finally:
         await client.close()
@@ -354,40 +328,40 @@ async def test_thread_isolation(daemon_fixture: tuple[SootheDaemon, str, SootheC
     try:
         # Create two threads
         await client.send_thread_create(initial_message="Thread A context", metadata={"thread": "A"})
-        created_a = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created_a = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_a = created_a["thread_id"]
 
         await client.send_thread_create(initial_message="Thread B context", metadata={"thread": "B"})
-        created_b = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created_b = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_b = created_b["thread_id"]
 
         # Execute queries on both threads
         await client.send_resume_thread(thread_a)
-        await _await_event_type(client.read_event, "status", timeout=3.0)
+        await await_event_type(client.read_event, "status", timeout=3.0)
 
         await client.send_input("Remember: A is for Alpha")
-        status_a = await _await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
+        status_a = await await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
         if status_a.get("state") == "running":
-            await _await_status_state(client.read_event, "idle", timeout=10.0)
+            await await_status_state(client.read_event, "idle", timeout=10.0)
 
         # Switch to thread B
         await client.send_resume_thread(thread_b)
-        await _await_event_type(client.read_event, "status", timeout=3.0)
+        await await_event_type(client.read_event, "status", timeout=3.0)
 
         await client.send_input("Remember: B is for Beta")
-        status_b = await _await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
+        status_b = await await_status_state(client.read_event, {"running", "idle"}, timeout=10.0)
         if status_b.get("state") == "running":
-            await _await_status_state(client.read_event, "idle", timeout=10.0)
+            await await_status_state(client.read_event, "idle", timeout=10.0)
 
         # Verify messages are isolated
         await client.send_thread_messages(thread_a)
-        messages_a = await _await_event_type(client.read_event, "thread_messages_response", timeout=5.0)
+        messages_a = await await_event_type(client.read_event, "thread_messages_response", timeout=5.0)
         user_msgs_a = [m["content"] for m in messages_a["messages"] if m.get("role") == "user"]
         assert "Remember: A is for Alpha" in user_msgs_a
         assert "Remember: B is for Beta" not in user_msgs_a
 
         await client.send_thread_messages(thread_b)
-        messages_b = await _await_event_type(client.read_event, "thread_messages_response", timeout=5.0)
+        messages_b = await await_event_type(client.read_event, "thread_messages_response", timeout=5.0)
         user_msgs_b = [m["content"] for m in messages_b["messages"] if m.get("role") == "user"]
         assert "Remember: B is for Beta" in user_msgs_b
         assert "Remember: A is for Alpha" not in user_msgs_b

@@ -49,7 +49,7 @@ def _build_daemon_config(tmp_path: Path, socket_path: str) -> SootheConfig:
     )
 
 
-def _force_isolated_home(home: Path) -> None:
+def force_isolated_home(home: Path) -> None:
     """Force daemon paths to a test-local SOOTHE_HOME."""
     os.environ["SOOTHE_HOME"] = str(home)
     import soothe.config as soothe_config
@@ -72,7 +72,7 @@ def _force_isolated_home(home: Path) -> None:
     thread_manager.SOOTHE_HOME = str(home)
 
 
-async def _await_event_type(readable, expected_type: str, timeout: float = 5.0) -> dict:
+async def await_event_type(readable, expected_type: str, timeout: float = 5.0) -> dict:
     """Read protocol events until a specific type is observed."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
@@ -86,7 +86,7 @@ async def _await_event_type(readable, expected_type: str, timeout: float = 5.0) 
             return event
 
 
-async def _await_status_state(
+async def await_status_state(
     readable,
     expected_states: str | set[str] | tuple[str, ...],
     timeout: float = 10.0,
@@ -150,7 +150,7 @@ async def _collect_events_during_query(
 @pytest.fixture
 async def daemon_fixture(tmp_path: Path):
     """Start a daemon for event protocol tests."""
-    _force_isolated_home(tmp_path / "soothe-home")
+    force_isolated_home(tmp_path / "soothe-home")
     socket_path = f"/tmp/soothe-events-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     config = _build_daemon_config(tmp_path, socket_path)
     daemon = SootheDaemon(config)
@@ -179,7 +179,7 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, str]) -> Non
             initial_message="test lifecycle events",
             metadata={"tags": ["lifecycle"]},
         )
-        created_event = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created_event = await await_event_type(client.read_event, "thread_created", timeout=5.0)
 
         # Validate event structure
         assert created_event["type"] == "thread_created"
@@ -189,7 +189,7 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, str]) -> Non
 
         # Resume thread → should emit status event with thread_resumed
         await client.send_resume_thread(thread_id)
-        status_event = await _await_event_type(client.read_event, "status", timeout=3.0)
+        status_event = await await_event_type(client.read_event, "status", timeout=3.0)
         assert status_event["type"] == "status"
         assert status_event.get("thread_resumed") is True
 
@@ -199,7 +199,7 @@ async def test_lifecycle_events(daemon_fixture: tuple[SootheDaemon, str]) -> Non
 
         # Archive thread → should emit operation_ack
         await client.send_thread_archive(thread_id)
-        archive_event = await _await_event_type(client.read_event, "thread_operation_ack", timeout=3.0)
+        archive_event = await await_event_type(client.read_event, "thread_operation_ack", timeout=3.0)
         assert archive_event["type"] == "thread_operation_ack"
         assert archive_event["operation"] == "archive"
         assert archive_event["thread_id"] == thread_id
@@ -221,7 +221,7 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
     try:
         # Create thread
         await client.send_thread_create(initial_message="test protocol events")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Execute query that should trigger protocol events
@@ -262,7 +262,7 @@ async def test_tool_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
     try:
         # Create thread
         await client.send_thread_create(initial_message="test tool events")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         _ = created["thread_id"]
 
         # Execute query that should trigger tool usage
@@ -300,7 +300,7 @@ async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
     try:
         # Create thread
         await client.send_thread_create(initial_message="test subagent events")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         _ = created["thread_id"]
 
         # Execute query that might trigger subagent usage
@@ -338,7 +338,7 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
     try:
         # Create thread
         await client.send_thread_create(initial_message="test error events")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Trigger an error condition
@@ -356,7 +356,7 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
 
         # Verify daemon remains operational
         await client.send_thread_list()
-        list_response = await _await_event_type(client.read_event, "thread_list_response", timeout=3.0)
+        list_response = await await_event_type(client.read_event, "thread_list_response", timeout=3.0)
         assert list_response["type"] == "thread_list_response"
 
     finally:
@@ -376,7 +376,7 @@ async def test_event_registry_dispatch(daemon_fixture: tuple[SootheDaemon, str])
     try:
         # Create thread and execute query
         await client.send_thread_create(initial_message="test registry")
-        created = await _await_event_type(client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         _ = created["thread_id"]
 
         events = await _collect_events_during_query(client, "Hello, how are you?", timeout=20.0)
