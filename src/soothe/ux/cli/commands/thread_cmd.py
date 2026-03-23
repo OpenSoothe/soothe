@@ -80,21 +80,24 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
     runner = SootheRunner(cfg)
 
     async def _list() -> None:
-        threads = await runner.list_threads()
-        if status_filter:
-            threads = [t for t in threads if t.get("status") == status_filter]
-        if not threads:
-            typer.echo("No threads.")
-            return
-        # Print header
-        typer.echo(f"{'ID':<10}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}")
-        typer.echo("─" * 65)
-        for t in threads:
-            tid = t.get("thread_id", "?")
-            t_status = t.get("status", "?")
-            created = str(t.get("created_at", "?"))[:19]
-            last_msg = str(t.get("updated_at", "?"))[:19]
-            typer.echo(f"{tid:<10}  {t_status:<10}  {created:<19}  {last_msg:<19}")
+        try:
+            threads = await runner.list_threads()
+            if status_filter:
+                threads = [t for t in threads if t.get("status") == status_filter]
+            if not threads:
+                typer.echo("No threads.")
+                return
+            # Print header
+            typer.echo(f"{'ID':<10}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}")
+            typer.echo("─" * 65)
+            for t in threads:
+                tid = t.get("thread_id", "?")
+                t_status = t.get("status", "?")
+                created = str(t.get("created_at", "?"))[:19]
+                last_msg = str(t.get("updated_at", "?"))[:19]
+                typer.echo(f"{tid:<10}  {t_status:<10}  {created:<19}  {last_msg:<19}")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_list())
 
@@ -146,13 +149,16 @@ def thread_continue(
         runner = SootheRunner(cfg)
 
         async def get_last_thread() -> str | None:
-            threads = await runner.list_threads()
-            active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
-            if not active_threads:
-                typer.echo("No active threads found.", err=True)
-                sys.exit(1)
-            active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-            return active_threads[0].get("thread_id")
+            try:
+                threads = await runner.list_threads()
+                active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
+                if not active_threads:
+                    typer.echo("No active threads found.", err=True)
+                    sys.exit(1)
+                active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+                return active_threads[0].get("thread_id")
+            finally:
+                await runner.cleanup()
 
         thread_id = asyncio.run(get_last_thread())
 
@@ -164,10 +170,10 @@ def thread_continue(
 
         # Connect to daemon and resume thread
         # This will trigger TUI to connect to daemon
-        run_tui(cfg, thread_id=thread_id, config_path=config, daemon_mode=True)
+        run_tui(cfg, thread_id=thread_id, config_path=config)
     else:
         # Standalone mode (existing behavior)
-        run_tui(cfg, thread_id=thread_id, config_path=config, daemon_mode=False)
+        run_tui(cfg, thread_id=thread_id, config_path=config)
 
 
 def thread_archive(
@@ -185,8 +191,11 @@ def thread_archive(
     runner = SootheRunner(cfg)
 
     async def _archive() -> None:
-        await runner._durability.archive_thread(thread_id)
-        typer.echo(f"Archived thread {thread_id}.")
+        try:
+            await runner._durability.archive_thread(thread_id)
+            typer.echo(f"Archived thread {thread_id}.")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_archive())
 
@@ -207,27 +216,30 @@ def thread_show(
     runner = SootheRunner(cfg)
 
     async def _inspect() -> None:
-        threads = await runner.list_threads()
-        match = [t for t in threads if t.get("thread_id") == thread_id]
-        if not match:
-            typer.echo(f"Thread {thread_id} not found.")
-            return
-        t = match[0]
-        typer.echo(f"Thread ID:    {t.get('thread_id')}")
-        typer.echo(f"Status:       {t.get('status')}")
-        typer.echo(f"Created:      {t.get('created_at')}")
+        try:
+            threads = await runner.list_threads()
+            match = [t for t in threads if t.get("thread_id") == thread_id]
+            if not match:
+                typer.echo(f"Thread {thread_id} not found.")
+                return
+            t = match[0]
+            typer.echo(f"Thread ID:    {t.get('thread_id')}")
+            typer.echo(f"Status:       {t.get('status')}")
+            typer.echo(f"Created:      {t.get('created_at')}")
 
-        logger = ThreadLogger(thread_id=thread_id)
-        records = logger.read_recent_records(limit=200)
-        conversations = [r for r in records if r.get("kind") == "conversation"]
-        events = [r for r in records if r.get("kind") == "event"]
-        typer.echo(f"Messages:     {len(conversations)}")
-        typer.echo(f"Events:       {len(events)}")
-        if conversations:
-            last = conversations[-1]
-            role = last.get("role", "?")
-            text = str(last.get("text", ""))[:120]
-            typer.echo(f"Last message: [{role}] {text}")
+            logger = ThreadLogger(thread_id=thread_id)
+            records = logger.read_recent_records(limit=200)
+            conversations = [r for r in records if r.get("kind") == "conversation"]
+            events = [r for r in records if r.get("kind") == "event"]
+            typer.echo(f"Messages:     {len(conversations)}")
+            typer.echo(f"Events:       {len(events)}")
+            if conversations:
+                last = conversations[-1]
+                role = last.get("role", "?")
+                text = str(last.get("text", ""))[:120]
+                typer.echo(f"Last message: [{role}] {text}")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_inspect())
 
@@ -259,13 +271,16 @@ def thread_delete(
     runner = SootheRunner(cfg)
 
     async def _delete() -> None:
-        with contextlib.suppress(Exception):
-            await runner._durability.archive_thread(thread_id)
-        run_dir = await asyncio.to_thread(lambda: Path(SOOTHE_HOME).expanduser() / "runs" / thread_id)
-        exists = await asyncio.to_thread(run_dir.exists)
-        if exists:
-            await asyncio.to_thread(shutil.rmtree, run_dir)
-        typer.echo(f"Deleted thread {thread_id}.")
+        try:
+            with contextlib.suppress(Exception):
+                await runner._durability.archive_thread(thread_id)
+            run_dir = await asyncio.to_thread(lambda: Path(SOOTHE_HOME).expanduser() / "runs" / thread_id)
+            exists = await asyncio.to_thread(run_dir.exists)
+            if exists:
+                await asyncio.to_thread(shutil.rmtree, run_dir)
+            typer.echo(f"Deleted thread {thread_id}.")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_delete())
 
@@ -331,16 +346,19 @@ def thread_stats(
     runner = SootheRunner(cfg)
 
     async def _show_stats() -> None:
-        manager = ThreadContextManager(runner._durability, cfg)
-        stats = await manager.get_thread_stats(thread_id)
+        try:
+            manager = ThreadContextManager(runner._durability, cfg)
+            stats = await manager.get_thread_stats(thread_id)
 
-        typer.echo(f"Thread: {thread_id}")
-        typer.echo(f"Messages: {stats.message_count}")
-        typer.echo(f"Events: {stats.event_count}")
-        typer.echo(f"Artifacts: {stats.artifact_count}")
-        typer.echo(f"Errors: {stats.error_count}")
-        if stats.last_error:
-            typer.echo(f"Last Error: {stats.last_error}")
+            typer.echo(f"Thread: {thread_id}")
+            typer.echo(f"Messages: {stats.message_count}")
+            typer.echo(f"Events: {stats.event_count}")
+            typer.echo(f"Artifacts: {stats.artifact_count}")
+            typer.echo(f"Errors: {stats.error_count}")
+            if stats.last_error:
+                typer.echo(f"Last Error: {stats.last_error}")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_show_stats())
 
@@ -375,23 +393,26 @@ def thread_tag(
     runner = SootheRunner(cfg)
 
     async def _tag() -> None:
-        manager = ThreadContextManager(runner._durability, cfg)
-        thread = await manager.get_thread(thread_id)
+        try:
+            manager = ThreadContextManager(runner._durability, cfg)
+            thread = await manager.get_thread(thread_id)
 
-        # Get current metadata
-        metadata = thread.metadata.copy()
-        current_tags = set(metadata.get("tags", []))
+            # Get current metadata
+            metadata = thread.metadata.copy()
+            current_tags = set(metadata.get("tags", []))
 
-        if remove:
-            current_tags -= set(tags)
-        else:
-            current_tags |= set(tags)
+            if remove:
+                current_tags -= set(tags)
+            else:
+                current_tags |= set(tags)
 
-        metadata["tags"] = list(current_tags)
+            metadata["tags"] = list(current_tags)
 
-        # Update metadata via durability protocol
-        await runner._durability.update_thread_metadata(thread_id, metadata)
+            # Update metadata via durability protocol
+            await runner._durability.update_thread_metadata(thread_id, metadata)
 
-        typer.echo(f"Tags: {', '.join(metadata['tags'])}")
+            typer.echo(f"Tags: {', '.join(metadata['tags'])}")
+        finally:
+            await runner.cleanup()
 
     asyncio.run(_tag())
