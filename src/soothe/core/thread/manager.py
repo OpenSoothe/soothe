@@ -328,9 +328,24 @@ class ThreadContextManager:
         """
         import shutil
 
-        # Archive first (soft delete in durability)
+        thread_key = f"thread:{thread_id}"
+        store = getattr(self._durability, "_store", None)
+        if store is None:
+            msg = f"Thread {thread_id} not found"
+            raise KeyError(msg)
+
+        thread_data = await asyncio.to_thread(store.load, thread_key)
+        if thread_data is None:
+            msg = f"Thread {thread_id} not found"
+            raise KeyError(msg)
+
+        # Remove durability metadata/state and index entries
+        await asyncio.to_thread(store.delete, thread_key)
         with contextlib.suppress(Exception):
-            await self._durability.archive_thread(thread_id)
+            await asyncio.to_thread(store.delete, f"state:{thread_id}")
+        update_index = getattr(self._durability, "_update_thread_index", None)
+        if callable(update_index):
+            update_index(thread_id, action="remove")
 
         # Delete run directory
         def get_run_dir() -> Path:

@@ -34,10 +34,10 @@ Create a YAML configuration file for complete control:
 
 ```bash
 # Use default config location
-soothe run --config config/config.yml
+soothe --config config/config.yml
 
 # Use custom config
-soothe run --config my-config.yml
+soothe --config my-config.yml
 ```
 
 ## Essential Settings

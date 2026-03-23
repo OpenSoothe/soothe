@@ -193,11 +193,20 @@ def _thread_continue(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    *,
+    daemon: Annotated[
+        bool,
+        typer.Option("--daemon", help="Attach to running daemon instead of standalone."),
+    ] = False,
+    new: Annotated[
+        bool,
+        typer.Option("--new", help="Create a new thread instead of continuing."),
+    ] = False,
 ) -> None:
     """Continue a conversation thread in the TUI."""
     from soothe.ux.cli.commands.thread_cmd import thread_continue
 
-    thread_continue(thread_id=thread_id, config=config)
+    thread_continue(thread_id=thread_id, config=config, daemon=daemon, new=new)
 
 
 @thread_app.command("archive")

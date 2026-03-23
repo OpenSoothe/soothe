@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -228,6 +230,9 @@ class ThreadLogger:
             self._ensure_dir()
             with self.log_path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record, default=str) + "\n")
+                fh.flush()
+                with contextlib.suppress(OSError):
+                    os.fsync(fh.fileno())
         except OSError:
             logger.debug("ThreadLogger write failed", exc_info=True)
 

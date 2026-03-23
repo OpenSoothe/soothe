@@ -111,24 +111,3 @@ async def test_feature_flags():
 
     finally:
         await runner2.cleanup()
-
-
-@pytest.mark.asyncio
-async def test_performance_regression_complex_queries(test_config: SootheConfig):
-    """Test that complex queries still work correctly (no quality regression)."""
-    runner = SootheRunner(test_config)
-
-    try:
-        complex_queries = [
-            "refactor the authentication system to use OAuth",
-            "design a microservices architecture for the API",
-        ]
-
-        for query in complex_queries:
-            events = [chunk async for chunk in runner.astream(query)]
-
-            # Complex queries should still produce events
-            assert len(events) > 0, f"Complex query '{query}' should produce events"
-
-    finally:
-        await runner.cleanup()

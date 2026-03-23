@@ -174,8 +174,9 @@ class HttpRestTransport(TransportServer):
                 )
 
             threads = await self._thread_manager.list_threads(
-                filter=thread_filter,
+                thread_filter,
                 include_stats=include_stats,
+                include_last_message=True,
             )
 
             # Apply pagination

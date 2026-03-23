@@ -40,11 +40,7 @@ class TestWebSearchTools:
             assert "results" in result or "error" in result
 
     def test_search_backend_selection(self, search_tool) -> None:
-        """Test that tool selects appropriate backend (serper vs wizsearch)."""
-        import os
-
-        has_serper = search_tool._check_serper_available()
-
+        """Test that tool selects appropriate backend (wizsearch)."""
         # Get the backend
         backend = search_tool._get_search_backend()
 
@@ -52,9 +48,8 @@ class TestWebSearchTools:
         assert backend is not None
         assert hasattr(backend, "name")
 
-        # If Serper key available, should use serper
-        if has_serper:
-            assert "serper" in backend.name.lower() or "search" in backend.name.lower()
+        # Should use wizsearch backend
+        assert "search" in backend.name.lower() or "wizsearch" in backend.name.lower()
 
     def test_search_with_max_results(self, search_tool) -> None:
         """Test search with custom max_results parameter."""
@@ -115,11 +110,7 @@ class TestWebCrawlTools:
             assert "content" in result or "error" in result
 
     def test_crawl_backend_selection(self, crawl_tool) -> None:
-        """Test that tool selects appropriate backend (jina vs wizsearch_crawl)."""
-        import os
-
-        has_jina = crawl_tool._check_jina_available()
-
+        """Test that tool selects appropriate backend (wizsearch or jina)."""
         # Get the backend
         backend = crawl_tool._get_crawl_backend()
 
@@ -127,8 +118,9 @@ class TestWebCrawlTools:
         assert backend is not None
         assert hasattr(backend, "name")
 
-        if has_jina:
-            assert "jina" in backend.name.lower() or "crawl" in backend.name.lower()
+        # Should be either jina or wizsearch crawl backend
+        backend_name = backend.name.lower()
+        assert "jina" in backend_name or "crawl" in backend_name or "wizsearch" in backend_name
 
     def test_crawl_invalid_url(self, crawl_tool) -> None:
         """Test crawling with invalid URL."""

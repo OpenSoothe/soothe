@@ -116,7 +116,7 @@ class WebSocketTransport(TransportServer):
             return
 
         # Close all client connections
-        for client in self._clients:
+        for client in list(self._clients):
             with contextlib.suppress(Exception):
                 await client.close()
 

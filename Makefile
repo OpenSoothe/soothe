@@ -70,8 +70,8 @@ test-unit: sync-dev
 test-integration: sync-dev
 	@echo "Running integration tests..."
 	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate) and real LLM API calls"
-	@echo "Use: pytest tests/integration_tests/ --run-integration"
-	uv run pytest tests/integration_tests/ --run-integration -v
+	@echo "Use: pytest tests/integration/ --run-integration"
+	uv run pytest tests/integration/ --run-integration -v
 	@echo "✓ Integration tests complete"
 
 # Run tests with coverage

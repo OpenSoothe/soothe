@@ -43,9 +43,6 @@ Continue a previous conversation:
 # CLI - Resume a specific thread
 soothe thread continue abc123
 
-# Or run with thread ID
-soothe run --thread abc123
-
 # CLI - Resume last active thread
 soothe thread continue
 

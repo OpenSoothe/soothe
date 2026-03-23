@@ -21,35 +21,6 @@ soothe "Analyze data" --format jsonl
 soothe "Complex task" --progress-verbosity detailed
 ```
 
-## Run Command
-
-The main command for interacting with Soothe.
-
-```bash
-# Interactive TUI mode
-soothe run
-
-# Headless mode with prompt
-soothe run "Your prompt here"
-
-# Resume a thread
-soothe run --thread <thread-id>
-
-# Autonomous mode
-soothe run --autonomous "Optimize the simulation parameters"
-
-# With custom config
-soothe run --config custom.yml "Your prompt"
-```
-
-**Options**:
-- `--thread <id>` - Resume a specific thread
-- `--autonomous` - Enable autonomous iteration mode
-- `--max-iterations <n>` - Set iteration limit for autonomous mode
-- `--config <file>` - Use custom configuration file
-- `--format <format>` - Output format (text, jsonl)
-- `--progress-verbosity <level>` - Verbosity level (minimal, normal, detailed, debug)
-
 ## Autopilot Command
 
 Run tasks in autonomous mode:
@@ -187,7 +158,7 @@ These options apply to all commands:
 ### Quick Analysis
 
 ```bash
-soothe run "Analyze the performance bottlenecks in this codebase"
+soothe "Analyze the performance bottlenecks in this codebase"
 ```
 
 ### Autonomous Optimization
@@ -203,7 +174,7 @@ soothe autopilot "Optimize the database queries for better performance" --max-it
 soothe thread list
 
 # Continue specific thread
-soothe run --thread abc123 "Continue with the analysis"
+soothe thread continue abc123
 ```
 
 ### Background Processing
@@ -213,7 +184,7 @@ soothe run --thread abc123 "Continue with the analysis"
 soothe server start
 
 # Run in detached mode
-soothe run "Long running task" &
+soothe "Long running task" &
 
 # Check status later
 soothe server status

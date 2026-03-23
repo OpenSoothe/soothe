@@ -429,7 +429,7 @@ Enable verbose logging to diagnose issues:
 
 ```bash
 export SOOTHE_DEBUG=true
-soothe run
+soothe
 ```
 
 For daemon-specific logging:

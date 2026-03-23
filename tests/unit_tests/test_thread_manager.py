@@ -194,17 +194,29 @@ async def test_archive_thread(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_delete_thread(mock_durability, mock_config, tmp_path):
     """Test thread deletion cleans up all data."""
+    from types import SimpleNamespace
+
     # Create a mock run directory
     run_dir = tmp_path / "runs" / "test123"
     run_dir.mkdir(parents=True)
     (run_dir / "test.txt").write_text("test")
+
+    # Mock the internal store and its methods
+    mock_store = SimpleNamespace(
+        load=MagicMock(return_value={"thread_id": "test123", "status": "active"}),
+        delete=MagicMock(),
+    )
+    mock_durability._store = mock_store  # noqa: SLF001
+    mock_durability._update_thread_index = MagicMock()  # noqa: SLF001
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
     with patch("soothe.core.thread.manager.SOOTHE_HOME", str(tmp_path)):
         await manager.delete_thread("test123")
 
-    mock_durability.archive_thread.assert_called_once_with("test123")
+    # Verify store.delete was called for thread and state
+    assert mock_store.delete.call_count == 2
+    mock_durability._update_thread_index.assert_called_once_with("test123", action="remove")
     assert not run_dir.exists()
 
 

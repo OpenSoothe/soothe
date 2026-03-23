@@ -74,6 +74,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._current_input_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._cleanup_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
+        self._input_loop_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
         self._input_history: InputHistory | None = None
         self._pid_lock_fd: int | None = None
@@ -143,6 +144,8 @@ class SootheDaemon(DaemonHandlersMixin):
         await self._detect_incomplete_threads()
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
+        if self._input_loop_task is None or self._input_loop_task.done():
+            self._input_loop_task = asyncio.create_task(self._input_loop())
 
     @staticmethod
     def _is_socket_live(sock: Path) -> bool:
@@ -227,13 +230,16 @@ class SootheDaemon(DaemonHandlersMixin):
         except RuntimeError:
             logger.debug("Cannot set signal handlers (not main thread)")
 
-        input_task = asyncio.create_task(self._input_loop())
+        if self._input_loop_task is None or self._input_loop_task.done():
+            self._input_loop_task = asyncio.create_task(self._input_loop())
         try:
             await self._stop_event.wait()
         finally:
-            input_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await input_task
+            if self._input_loop_task is not None:
+                self._input_loop_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._input_loop_task
+                self._input_loop_task = None
             await self.stop()
 
     async def _periodic_cleanup(self) -> None:
@@ -312,6 +318,12 @@ class SootheDaemon(DaemonHandlersMixin):
         """Shut down the daemon gracefully."""
         self._running = False
         self._query_running = False
+
+        if self._input_loop_task is not None and not self._input_loop_task.done():
+            self._input_loop_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._input_loop_task
+            self._input_loop_task = None
 
         # Cancel background tasks
         if self._cleanup_task and not self._cleanup_task.done():

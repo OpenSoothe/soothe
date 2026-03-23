@@ -17,7 +17,7 @@ soothe config init
 export OPENAI_API_KEY=sk-your-key-here
 
 # 4. Launch Soothe
-soothe run
+soothe
 ```
 
 That's it! Soothe is now ready to use with sensible defaults.
@@ -167,7 +167,7 @@ Launch the interactive terminal interface:
 
 ```bash
 # Uses ~/.soothe/config/config.yml automatically
-soothe run
+soothe
 ```
 
 The TUI provides:
@@ -183,7 +183,7 @@ Just type your request and press Enter.
 Run a single prompt and exit:
 
 ```bash
-soothe run "Analyze the codebase structure"
+soothe "Analyze the codebase structure"
 ```
 
 Perfect for:
@@ -201,7 +201,7 @@ Continue from where you left off:
 soothe thread list
 
 # Resume specific thread
-soothe run --thread abc123
+soothe thread continue abc123
 ```
 
 ## Optional Extras
@@ -237,7 +237,7 @@ soothe config validate
 soothe config show
 
 # Test with a simple query
-soothe run "What is 2 + 2?"
+soothe "What is 2 + 2?"
 ```
 
 ## Configuration Management

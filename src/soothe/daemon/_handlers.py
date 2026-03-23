@@ -237,7 +237,7 @@ class DaemonHandlersMixin:
         manager = ThreadContextManager(self._runner._durability, self._config)
 
         threads = await manager.list_threads(
-            filter=thread_filter,
+            thread_filter,
             include_stats=include_stats,
             include_last_message=include_last_message,
         )

@@ -27,16 +27,6 @@ Use autonomous mode for tasks that:
 
 ## How to Enable
 
-### CLI Flag
-
-```bash
-# Autonomous iteration with default settings
-soothe run --autonomous "Optimize the simulation parameters"
-
-# With custom iteration limit
-soothe run --autonomous --max-iterations 20 "Research and improve model performance"
-```
-
 ### TUI Command
 
 ```bash
@@ -113,7 +103,7 @@ Autonomous mode stops when:
 ### Optimization Task
 
 ```bash
-soothe run --autonomous "Optimize the database queries for better performance"
+soothe autopilot "Optimize the database queries for better performance"
 ```
 
 Soothe will:
@@ -139,7 +129,7 @@ Soothe will:
 ### Development Task
 
 ```bash
-soothe run --autonomous --max-iterations 25 "Build a comprehensive test suite for the authentication module"
+soothe autopilot --max-iterations 25 "Build a comprehensive test suite for the authentication module"
 ```
 
 Soothe will:
