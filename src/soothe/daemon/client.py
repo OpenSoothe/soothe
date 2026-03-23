@@ -91,18 +91,19 @@ class DaemonClient:
 
     async def send_thread_list(
         self,
-        filter: dict[str, Any] | None = None,
+        thread_filter: dict[str, Any] | None = None,
+        *,
         include_stats: bool = False,
     ) -> None:
         """Request list of threads with optional filtering.
 
         Args:
-            filter: Optional filter criteria (status, tags, labels, etc.)
+            thread_filter: Optional filter criteria (status, tags, labels, etc.)
             include_stats: Whether to include execution statistics
         """
         msg: dict[str, Any] = {"type": "thread_list", "include_stats": include_stats}
-        if filter:
-            msg["filter"] = filter
+        if thread_filter:
+            msg["filter"] = thread_filter
         await self._send(msg)
 
     async def send_thread_create(

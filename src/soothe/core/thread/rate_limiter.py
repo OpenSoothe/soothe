@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 
 class APIRateLimiter:
@@ -27,11 +27,11 @@ class APIRateLimiter:
         self._request_semaphore = asyncio.Semaphore(requests_per_minute // 60)
 
     @asynccontextmanager
-    async def acquire(self, estimated_tokens: int = 1000) -> AsyncGenerator[None, None]:
+    async def acquire(self, _estimated_tokens: int = 1000) -> AsyncGenerator[None]:
         """Acquire rate limit permit.
 
         Args:
-            estimated_tokens: Estimated tokens for this request (not used in simplified version)
+            _estimated_tokens: Estimated tokens for this request (not used in simplified version)
 
         Yields:
             None

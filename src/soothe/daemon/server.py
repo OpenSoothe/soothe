@@ -71,6 +71,9 @@ class SootheDaemon(DaemonHandlersMixin):
         self._pid_lock_fd: int | None = None
         # Transport manager for multi-transport support (RFC-0013)
         self._transport_manager: TransportManager | None = None
+        # Multi-threading support (RFC-0017)
+        self._thread_executor: Any = None  # ThreadExecutor instance
+        self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -107,9 +110,14 @@ class SootheDaemon(DaemonHandlersMixin):
 
         # Initialize transport manager (RFC-0013)
         # Create ThreadContextManager for HTTP REST transport (RFC-0017)
-        from soothe.core.thread import ThreadContextManager
+        from soothe.core.thread import ThreadContextManager, ThreadExecutor
 
         thread_manager = ThreadContextManager(self._runner._durability, self._config)
+
+        # Initialize ThreadExecutor for multi-threading support (RFC-0017)
+        max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
+        self._thread_executor = ThreadExecutor(self._runner, max_concurrent_threads=max_concurrent)
+        logger.info("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)
 
         self._transport_manager = TransportManager(
             self._config.daemon,

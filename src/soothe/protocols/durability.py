@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -109,6 +109,25 @@ class DurabilityProtocol(Protocol):
 
         Args:
             thread_id: The thread to archive.
+        """
+        ...
+
+    async def update_thread_metadata(
+        self,
+        thread_id: str,
+        metadata: dict[str, Any] | ThreadMetadata,
+    ) -> None:
+        """Update thread metadata (partial update).
+
+        Merges the provided metadata with existing metadata.
+        Only updates fields that are present in the new metadata.
+
+        Args:
+            thread_id: Thread ID to update.
+            metadata: New metadata to merge. Can be dict or ThreadMetadata.
+
+        Raises:
+            KeyError: If thread not found.
         """
         ...
 

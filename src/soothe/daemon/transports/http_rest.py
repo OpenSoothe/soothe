@@ -132,7 +132,7 @@ class HttpRestTransport(TransportServer):
             updated_before: str | None = None,
             limit: int = 50,
             offset: int = 0,
-            include_stats: bool = False,
+            include_stats: bool = False,  # noqa: FBT001, FBT002
         ) -> dict[str, Any]:
             """List threads with filtering.
 
@@ -198,7 +198,7 @@ class HttpRestTransport(TransportServer):
                 thread = await self._thread_manager.get_thread(thread_id)
                 return {"thread": thread.model_dump(mode="json")}
             except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found")
+                raise HTTPException(status_code=404, detail="Thread not found") from None
 
         @self._app.post("/api/v1/threads")
         async def create_thread(request: ThreadCreateRequest) -> dict[str, Any]:
@@ -231,7 +231,7 @@ class HttpRestTransport(TransportServer):
         @self._app.delete("/api/v1/threads/{thread_id}")
         async def archive_thread(
             thread_id: str,
-            archive: bool = True,
+            archive: bool = True,  # noqa: FBT001, FBT002
         ) -> dict[str, Any]:
             """Delete or archive thread.
 
@@ -248,10 +248,10 @@ class HttpRestTransport(TransportServer):
                 else:
                     await self._thread_manager.delete_thread(thread_id)
                     action = "deleted"
-
-                return {"thread_id": thread_id, "status": action}
             except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found")
+                raise HTTPException(status_code=404, detail="Thread not found") from None
+            else:
+                return {"thread_id": thread_id, "status": action}
 
         @self._app.post("/api/v1/threads/{thread_id}/resume")
         async def resume_thread(
@@ -315,7 +315,7 @@ class HttpRestTransport(TransportServer):
                     "offset": offset,
                 }
             except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found")
+                raise HTTPException(status_code=404, detail="Thread not found") from None
 
         @self._app.get("/api/v1/threads/{thread_id}/artifacts")
         async def get_thread_artifacts(thread_id: str) -> dict[str, Any]:
@@ -330,7 +330,7 @@ class HttpRestTransport(TransportServer):
                     "artifacts": [a.model_dump(mode="json") for a in artifacts],
                 }
             except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found")
+                raise HTTPException(status_code=404, detail="Thread not found") from None
 
         @self._app.get("/api/v1/threads/{thread_id}/stats")
         async def get_thread_stats(thread_id: str) -> dict[str, Any]:
@@ -345,7 +345,7 @@ class HttpRestTransport(TransportServer):
                     "stats": stats.model_dump(mode="json"),
                 }
             except KeyError:
-                raise HTTPException(status_code=404, detail="Thread not found")
+                raise HTTPException(status_code=404, detail="Thread not found") from None
 
         # Configuration
         @self._app.get("/api/v1/config")

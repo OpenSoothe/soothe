@@ -202,9 +202,10 @@ async def test_thread_not_found_error(running_daemon):
 @pytest.fixture
 async def running_daemon():
     """Start daemon for testing."""
-    from soothe.daemon import SootheDaemon
-    from soothe.config import SootheConfig
     import asyncio
+
+    from soothe.config import SootheConfig
+    from soothe.daemon import SootheDaemon
 
     # Create test configuration
     config = SootheConfig()

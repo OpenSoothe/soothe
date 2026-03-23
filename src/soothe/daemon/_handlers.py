@@ -503,12 +503,28 @@ class DaemonHandlersMixin:
     ) -> None:
         """Stream a query through SootheRunner and broadcast events.
 
+        Supports both single-threaded and multi-threaded execution based on configuration.
+
         Args:
             text: The user input text.
             autonomous: Whether to run in autonomous mode.
             max_iterations: Maximum iterations for autonomous mode.
             subagent: Optional subagent name to route the query to.
         """
+        # Check if multi-threading is enabled (RFC-0017)
+        multi_threading_enabled = getattr(self._config.daemon, "multi_threading_enabled", False)
+
+        if multi_threading_enabled and self._thread_executor:
+            # Use multi-threaded execution with ThreadExecutor
+            await self._run_query_multithreaded(
+                text,
+                autonomous=autonomous,
+                max_iterations=max_iterations,
+                subagent=subagent,
+            )
+            return
+
+        # Legacy single-threaded execution (backward compatible)
         thread_id = self._runner.current_thread_id or ""
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
@@ -614,6 +630,165 @@ class DaemonHandlersMixin:
             await self._update_thread_timestamp(final_thread_id)
 
         await self._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
+
+    async def _run_query_multithreaded(
+        self,
+        text: str,
+        *,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+        subagent: str | None = None,
+    ) -> None:
+        """Execute query using ThreadExecutor for concurrent thread execution.
+
+        Args:
+            text: The user input text.
+            autonomous: Whether to run in autonomous mode.
+            max_iterations: Maximum iterations for autonomous mode.
+            subagent: Optional subagent name to route the query to.
+        """
+        thread_id = self._runner.current_thread_id or ""
+
+        # Initialize thread logger
+        if not self._thread_logger or self._thread_logger._thread_id != thread_id:
+            self._thread_logger = ThreadLogger(
+                thread_id=thread_id,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
+
+        if self._thread_logger:
+            self._thread_logger.log_user_input(text)
+
+        # Update thread timestamp
+        await self._update_thread_timestamp(thread_id)
+
+        if self._input_history:
+            self._input_history.add(text)
+
+        # Mark thread as running
+        self._query_running = True
+        if hasattr(self, "_active_threads"):
+            self._active_threads[thread_id] = asyncio.current_task()
+        await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+
+        full_response: list[str] = []
+
+        try:
+            # Execute using ThreadExecutor with isolation
+            stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
+            if autonomous:
+                stream_kwargs["autonomous"] = True
+                if max_iterations is not None:
+                    stream_kwargs["max_iterations"] = max_iterations
+            if subagent is not None:
+                stream_kwargs["subagent"] = subagent
+
+            # Use ThreadExecutor for concurrent execution with rate limiting
+            stream_tuple_length = 3
+            msg_pair_length = 2
+            async for chunk in self._thread_executor.execute_thread(text, **stream_kwargs):
+                if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
+                    continue
+                namespace, mode, data = chunk
+
+                # Log to thread-specific logger
+                self._thread_logger.log(tuple(namespace), mode, data)
+
+                # Extract response text
+                is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
+                if not namespace and mode == "messages" and is_msg_pair:
+                    msg, _metadata = data
+                    from soothe.ux.shared.rendering import extract_text_from_ai_message
+
+                    full_response.extend(extract_text_from_ai_message(msg))
+
+                # Broadcast event to clients
+                event_msg = {
+                    "type": "event",
+                    "namespace": list(namespace),
+                    "mode": mode,
+                    "data": data,
+                }
+                await self._broadcast(event_msg)
+
+        except asyncio.CancelledError:
+            logger.info("Query cancelled by user in thread %s", thread_id)
+            await self._broadcast(
+                {
+                    "type": "event",
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": {"type": ERROR, "error": f"Query cancelled in thread {thread_id}"},
+                }
+            )
+            raise
+        except Exception as exc:
+            logger.exception("Multi-threaded query error in thread %s", thread_id)
+            from soothe.utils.error_format import emit_error_event
+
+            await self._broadcast(
+                {
+                    "type": "event",
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": emit_error_event(exc),
+                }
+            )
+        finally:
+            self._query_running = False
+            if hasattr(self, "_active_threads"):
+                self._active_threads.pop(thread_id, None)
+
+        # Log final response
+        final_thread_id = self._runner.current_thread_id or ""
+        if final_thread_id and final_thread_id != thread_id:
+            self._thread_logger = ThreadLogger(
+                thread_id=final_thread_id,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
+            self._thread_logger.log_user_input(text)
+
+        if full_response:
+            self._thread_logger.log_assistant_response("".join(full_response))
+
+        # Update final timestamp
+        if final_thread_id:
+            await self._update_thread_timestamp(final_thread_id)
+
+        await self._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
+
+    async def _cancel_thread(self, thread_id: str) -> None:
+        """Cancel a specific thread's execution.
+
+        Args:
+            thread_id: Thread ID to cancel.
+        """
+        if hasattr(self, "_active_threads") and thread_id in self._active_threads:
+            task = self._active_threads[thread_id]
+            task.cancel()
+            logger.info("Cancelled thread %s", thread_id)
+            await self._broadcast(
+                {
+                    "type": "status",
+                    "state": "idle",
+                    "thread_id": thread_id,
+                    "cancelled": True,
+                }
+            )
+        else:
+            logger.warning("Thread %s not found in active threads", thread_id)
+
+    def _get_active_threads(self) -> list[str]:
+        """Get list of currently active thread IDs.
+
+        Returns:
+            List of thread IDs currently executing.
+        """
+        if hasattr(self, "_active_threads"):
+            return list(self._active_threads.keys())
+        return []
 
     async def _update_thread_timestamp(self, thread_id: str) -> None:
         """Update the thread's updated_at timestamp to track activity."""

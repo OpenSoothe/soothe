@@ -40,7 +40,7 @@ class ThreadExecutor:
         thread_id: str,
         user_input: str,
         **kwargs: Any,
-    ) -> AsyncGenerator[Any, None]:
+    ) -> AsyncGenerator[Any]:
         """Execute query in isolated thread context.
 
         Args:
@@ -71,6 +71,6 @@ class ThreadExecutor:
                     # Log to thread-specific logger
                     # ThreadLogger will handle the actual logging
                     yield chunk
-            except Exception as e:
-                logger.error("Error in thread %s: %s", thread_id, e)
+            except Exception:
+                logger.exception("Error in thread %s", thread_id)
                 raise

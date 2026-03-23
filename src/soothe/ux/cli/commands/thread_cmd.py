@@ -130,9 +130,9 @@ def thread_continue(
         soothe thread continue --new           # Start new thread
         soothe thread continue                 # Continue last active thread
     """
+    from soothe.daemon import SootheDaemon
     from soothe.ux.cli.execution import run_tui
     from soothe.ux.core import load_config
-    from soothe.daemon import SootheDaemon
 
     cfg = load_config(config)
 

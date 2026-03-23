@@ -127,28 +127,32 @@ async def test_thread_list_breaks_on_empty_response() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fix 3: Attach Command Not Showing Chat History
+# Fix 3: Thread Continue Command with --daemon flag (RFC-0017)
 # ---------------------------------------------------------------------------
 
 
-def test_attach_command_accepts_thread_id() -> None:
-    """Test that attach command has thread_id parameter."""
+def test_thread_continue_accepts_daemon_flag() -> None:
+    """Test that thread continue command has --daemon flag."""
     from typing import get_type_hints
 
     import typer
 
-    from soothe.ux.cli.commands.server_cmd import server_attach
+    from soothe.ux.cli.commands.thread_cmd import thread_continue
 
-    sig = inspect.signature(server_attach)
+    sig = inspect.signature(thread_continue)
     params = sig.parameters
 
-    assert "thread_id" in params, "attach should have thread_id parameter"
+    # Check for daemon flag
+    assert "daemon" in params, "thread_continue should have daemon parameter"
 
     # Check it's optional
-    param = params["thread_id"]
-    assert param.default is not inspect.Parameter.empty or str(param).startswith("thread_id: Annotated["), (
-        "thread_id should be optional"
+    param = params["daemon"]
+    assert param.default is not inspect.Parameter.empty or str(param).startswith("daemon:"), (
+        "daemon flag should be optional"
     )
+
+    # Check for new flag
+    assert "new" in params, "thread_continue should have new parameter"
 
 
 @pytest.mark.asyncio

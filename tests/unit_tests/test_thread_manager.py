@@ -1,14 +1,15 @@
 """Tests for ThreadContextManager (RFC-0017)."""
 
-import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from soothe.core.thread import (
+    EnhancedThreadInfo,
     ThreadContextManager,
     ThreadFilter,
     ThreadStats,
-    EnhancedThreadInfo,
 )
 from soothe.protocols.durability import ThreadMetadata
 
@@ -16,7 +17,7 @@ from soothe.protocols.durability import ThreadMetadata
 @pytest.fixture
 def mock_durability():
     """Create mock DurabilityProtocol."""
-    from unittest.mock import AsyncMock, MagicMock
+    from unittest.mock import AsyncMock
 
     durability = MagicMock()
     durability.create_thread = AsyncMock(
@@ -45,8 +46,6 @@ def mock_durability():
 @pytest.fixture
 def mock_config():
     """Create mock SootheConfig."""
-    from unittest.mock import MagicMock
-
     config = MagicMock()
     config.persistence = MagicMock()
     config.persistence.persist_dir = "/tmp/test_soothe"
@@ -112,8 +111,8 @@ async def test_list_threads_with_filter(mock_durability, mock_config):
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    filter = ThreadFilter(tags=["research"])
-    threads = await manager.list_threads(filter=filter)
+    thread_filter = ThreadFilter(tags=["research"])
+    threads = await manager.list_threads(thread_filter=thread_filter)
 
     assert len(threads) == 1
     assert threads[0].thread_id == "thread1"
@@ -122,8 +121,6 @@ async def test_list_threads_with_filter(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_get_thread_stats(mock_durability, mock_config):
     """Test statistics calculation."""
-    from unittest.mock import MagicMock, patch
-
     mock_durability.list_threads = AsyncMock(
         return_value=[
             {
@@ -168,8 +165,6 @@ async def test_archive_thread(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_delete_thread(mock_durability, mock_config, tmp_path):
     """Test thread deletion cleans up all data."""
-    from unittest.mock import patch
-
     # Create a mock run directory
     run_dir = tmp_path / "runs" / "test123"
     run_dir.mkdir(parents=True)
@@ -215,8 +210,8 @@ async def test_thread_filter_by_status(mock_durability, mock_config):
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    filter = ThreadFilter(status="idle")
-    threads = await manager.list_threads(filter=filter)
+    thread_filter = ThreadFilter(status="idle")
+    threads = await manager.list_threads(thread_filter=thread_filter)
 
     assert len(threads) == 2
     assert all(t.status == "idle" for t in threads)
@@ -253,11 +248,11 @@ async def test_thread_filter_by_date_range(mock_durability, mock_config):
 
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    filter = ThreadFilter(
-        created_after=datetime(2026, 3, 21, 0, 0),
-        created_before=datetime(2026, 3, 23, 23, 59),
+    thread_filter = ThreadFilter(
+        created_after=datetime(2026, 3, 21, 0, 0, tzinfo=UTC),
+        created_before=datetime(2026, 3, 23, 23, 59, tzinfo=UTC),
     )
-    threads = await manager.list_threads(filter=filter)
+    threads = await manager.list_threads(thread_filter=thread_filter)
 
     assert len(threads) == 1
     assert threads[0].thread_id == "t2"

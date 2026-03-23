@@ -80,6 +80,10 @@ class DaemonConfig(BaseModel):
 
     Args:
         transports: Transport layer configuration.
+        max_concurrent_threads: Maximum concurrent threads for multi-threading (RFC-0017).
+        multi_threading_enabled: Enable multi-threaded execution (RFC-0017).
     """
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
+    max_concurrent_threads: int = Field(default=4, description="Maximum concurrent threads")
+    multi_threading_enabled: bool = Field(default=False, description="Enable multi-threaded execution")

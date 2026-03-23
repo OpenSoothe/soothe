@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -50,14 +51,14 @@ class ThreadContextManager:
 
     async def create_thread(
         self,
-        initial_message: str | None = None,
         metadata: dict[str, Any] | None = None,
+        **_kwargs: Any,
     ) -> ThreadInfo:
         """Create a new thread with optional initial message.
 
         Args:
-            initial_message: Optional initial message to send (not used in this implementation)
             metadata: Optional thread metadata
+            **_kwargs: Additional arguments (ignored, for compatibility)
 
         Returns:
             ThreadInfo for the created thread
@@ -82,13 +83,14 @@ class ThreadContextManager:
     async def resume_thread(
         self,
         thread_id: str,
-        load_history: bool = True,
+        *,
+        _load_history: bool = True,
     ) -> ThreadInfo:
         """Resume existing thread, loading history.
 
         Args:
             thread_id: Thread ID to resume
-            load_history: Whether to load full history (always True for now)
+            _load_history: Whether to load full history (always True for now)
 
         Returns:
             ThreadInfo for the resumed thread
@@ -127,7 +129,8 @@ class ThreadContextManager:
                 break
 
         if not thread_data:
-            raise KeyError(f"Thread {thread_id} not found")
+            error_msg = f"Thread {thread_id} not found"
+            raise KeyError(error_msg)
 
         # Calculate stats
         stats = await self.get_thread_stats(thread_id)
@@ -147,13 +150,14 @@ class ThreadContextManager:
 
     async def list_threads(
         self,
-        filter: ThreadFilter | None = None,
+        thread_filter: ThreadFilter | None = None,
+        *,
         include_stats: bool = False,
     ) -> list[EnhancedThreadInfo]:
         """List threads with optional filtering and statistics.
 
         Args:
-            filter: Optional filter criteria
+            thread_filter: Optional filter criteria
             include_stats: Whether to calculate stats for each thread
 
         Returns:
@@ -165,37 +169,35 @@ class ThreadContextManager:
         threads = await self._durability.list_threads()
 
         # Apply filter
-        if filter:
+        if thread_filter:
             filtered = []
             for t in threads:
-                if filter.status and t.get("status") != filter.status:
+                if thread_filter.status and t.get("status") != thread_filter.status:
                     continue
-                if filter.tags:
+                if thread_filter.tags:
                     thread_tags = t.get("metadata", {}).get("tags", [])
-                    if not any(tag in thread_tags for tag in filter.tags):
+                    if not any(tag in thread_tags for tag in thread_filter.tags):
                         continue
-                if filter.labels:
+                if thread_filter.labels:
                     thread_labels = t.get("metadata", {}).get("labels", [])
-                    if not any(label in thread_labels for label in filter.labels):
+                    if not any(label in thread_labels for label in thread_filter.labels):
                         continue
-                if filter.priority:
-                    if t.get("metadata", {}).get("priority") != filter.priority:
-                        continue
-                if filter.category:
-                    if t.get("metadata", {}).get("category") != filter.category:
-                        continue
+                if thread_filter.priority and t.get("metadata", {}).get("priority") != thread_filter.priority:
+                    continue
+                if thread_filter.category and t.get("metadata", {}).get("category") != thread_filter.category:
+                    continue
                 # Date filtering
-                if filter.created_after or filter.created_before:
+                if thread_filter.created_after or thread_filter.created_before:
                     created = datetime.fromisoformat(t["created_at"])
-                    if filter.created_after and created < filter.created_after:
+                    if thread_filter.created_after and created < thread_filter.created_after:
                         continue
-                    if filter.created_before and created > filter.created_before:
+                    if thread_filter.created_before and created > thread_filter.created_before:
                         continue
-                if filter.updated_after or filter.updated_before:
+                if thread_filter.updated_after or thread_filter.updated_before:
                     updated = datetime.fromisoformat(t["updated_at"])
-                    if filter.updated_after and updated < filter.updated_after:
+                    if thread_filter.updated_after and updated < thread_filter.updated_after:
                         continue
-                    if filter.updated_before and updated > filter.updated_before:
+                    if thread_filter.updated_before and updated > thread_filter.updated_before:
                         continue
                 filtered.append(t)
             threads = filtered
@@ -245,14 +247,16 @@ class ThreadContextManager:
         import shutil
 
         # Archive first (soft delete in durability)
-        try:
+        with contextlib.suppress(Exception):
             await self._durability.archive_thread(thread_id)
-        except Exception:
-            pass  # Thread may already be archived
 
         # Delete run directory
-        run_dir = Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
-        if run_dir.exists():
+        def get_run_dir() -> Path:
+            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+
+        run_dir = await asyncio.to_thread(get_run_dir)
+        run_dir_exists = await asyncio.to_thread(run_dir.exists)
+        if run_dir_exists:
             await asyncio.to_thread(shutil.rmtree, run_dir)
 
         logger.info("Deleted thread %s", thread_id)
@@ -277,20 +281,17 @@ class ThreadContextManager:
         records = logger_instance.read_recent_records(limit=limit + offset)
 
         # Convert to ThreadMessage format
-        messages = []
-        for record in records[offset : offset + limit]:
-            if record.get("kind") == "conversation":
-                messages.append(
-                    ThreadMessage(
-                        timestamp=record.get("timestamp"),
-                        kind="conversation",
-                        role=record.get("role"),
-                        content=record.get("text", ""),
-                        metadata=record,
-                    )
-                )
-
-        return messages
+        return [
+            ThreadMessage(
+                timestamp=record.get("timestamp"),
+                kind="conversation",
+                role=record.get("role"),
+                content=record.get("text", ""),
+                metadata=record,
+            )
+            for record in records[offset : offset + limit]
+            if record.get("kind") == "conversation"
+        ]
 
     async def get_thread_artifacts(self, thread_id: str) -> list[ArtifactEntry]:
         """Get list of artifacts produced by thread.
@@ -301,21 +302,26 @@ class ThreadContextManager:
         Returns:
             List of ArtifactEntry
         """
-        from datetime import datetime
+        from datetime import UTC, datetime
 
-        run_dir = Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
-        if not run_dir.exists():
+        def get_run_dir() -> Path:
+            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+
+        run_dir = await asyncio.to_thread(get_run_dir)
+        run_dir_exists = await asyncio.to_thread(run_dir.exists)
+        if not run_dir_exists:
             return []
 
         artifacts = []
-        for file_path in run_dir.iterdir():
-            if file_path.is_file() and not file_path.name.endswith(".jsonl"):
-                stat = file_path.stat()
+        for file_path in await asyncio.to_thread(list, run_dir.iterdir()):
+            is_file = await asyncio.to_thread(file_path.is_file)
+            if is_file and not file_path.name.endswith(".jsonl"):
+                stat = await asyncio.to_thread(file_path.stat)
                 artifacts.append(
                     ArtifactEntry(
                         filename=file_path.name,
                         size_bytes=stat.st_size,
-                        created_at=datetime.fromtimestamp(stat.st_ctime),
+                        created_at=datetime.fromtimestamp(stat.st_ctime, tz=UTC),
                         artifact_type="file",  # Could be enhanced to detect type
                         download_url=f"/api/v1/files/{file_path.name}",
                     )

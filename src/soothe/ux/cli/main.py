@@ -457,7 +457,7 @@ def _thread_tag(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
-    remove: Annotated[
+    remove: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--remove", help="Remove tags instead of adding."),
     ] = False,

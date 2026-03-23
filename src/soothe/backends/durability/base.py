@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from soothe.backends.persistence import PersistStore
@@ -70,6 +71,46 @@ class BasePersistStoreDurability:
 
         info = ThreadInfo.model_validate(data)
         info = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
+        self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+
+    async def update_thread_metadata(
+        self,
+        thread_id: str,
+        metadata: dict[str, Any] | ThreadMetadata,
+    ) -> None:
+        """Update thread metadata (partial update).
+
+        Merges the provided metadata with existing metadata.
+        Only updates fields that are present in the new metadata.
+
+        Args:
+            thread_id: Thread ID to update.
+            metadata: New metadata to merge. Can be dict or ThreadMetadata.
+
+        Raises:
+            KeyError: If thread not found.
+        """
+        data = self._store.load(f"thread:{thread_id}")
+        if data is None:
+            msg = f"Thread '{thread_id}' not found"
+            raise KeyError(msg)
+
+        info = ThreadInfo.model_validate(data)
+
+        # Convert to dict if ThreadMetadata
+        new_metadata = metadata.model_dump() if isinstance(metadata, ThreadMetadata) else metadata
+
+        # Merge with existing metadata
+        existing = info.metadata.model_dump()
+        existing.update(new_metadata)
+
+        # Update thread info
+        info = info.model_copy(
+            update={
+                "metadata": ThreadMetadata(**existing),
+                "updated_at": datetime.now(tz=UTC),
+            }
+        )
         self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
     async def list_threads(
