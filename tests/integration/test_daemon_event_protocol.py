@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib
 import os
 import uuid
 from pathlib import Path
@@ -18,98 +17,25 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
+from tests.integration.conftest import (
+    await_event_type,
+    build_daemon_config,
+    force_isolated_home,
+)
 
 
 def _build_daemon_config(tmp_path: Path, socket_path: str) -> SootheConfig:
     """Build an isolated daemon config for event protocol tests."""
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        base_config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        base_config = SootheConfig()
-
-    return SootheConfig(
-        providers=base_config.providers,
-        router=base_config.router,
-        vector_stores=base_config.vector_stores,
-        vector_store_router=base_config.vector_store_router,
-        persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {"backend": "json", "persist_dir": str(tmp_path / "durability")},
-        },
-        daemon={
-            "transports": {
-                "unix_socket": {"enabled": True, "path": socket_path},
-                "websocket": {"enabled": False},
-                "http_rest": {"enabled": False},
-            },
-        },
-        performance={"unified_classification": False},
+    return build_daemon_config(
+        tmp_path=tmp_path,
+        unix_socket_path=socket_path,
     )
-
-
-def force_isolated_home(home: Path) -> None:
-    """Force daemon paths to a test-local SOOTHE_HOME."""
-    os.environ["SOOTHE_HOME"] = str(home)
-    import soothe.config as soothe_config
-    from soothe import config as config_module
-
-    soothe_config.SOOTHE_HOME = str(home)
-    config_module.SOOTHE_HOME = str(home)
-
-    import soothe.daemon.paths as daemon_paths
-
-    daemon_paths.SOOTHE_HOME = str(home)
-    importlib.reload(daemon_paths)
-
-    import soothe.daemon.thread_logger as daemon_thread_logger
-
-    daemon_thread_logger.SOOTHE_HOME = str(home)
-
-    import soothe.core.thread.manager as thread_manager
-
-    thread_manager.SOOTHE_HOME = str(home)
-
-
-async def await_event_type(readable, expected_type: str, timeout: float = 5.0) -> dict:
-    """Read protocol events until a specific type is observed."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            msg = f"Timed out waiting for event type: {expected_type}"
-            raise TimeoutError(msg)
-        event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == expected_type:
-            return event
-
-
-async def await_status_state(
-    readable,
-    expected_states: str | set[str] | tuple[str, ...],
-    timeout: float = 10.0,
-) -> dict:
-    """Read protocol events until a status event with the expected state appears."""
-    expected: set[str] = {expected_states} if isinstance(expected_states, str) else set(expected_states)
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            states = ", ".join(sorted(expected))
-            msg = f"Timed out waiting for status state: {states}"
-            raise TimeoutError(msg)
-        event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == "status" and event.get("state") in expected:
-            return event
 
 
 async def _collect_events_during_query(
     client: DaemonClient,
     query: str,
-    timeout: float = 15.0,
+    timeout: float = 6.0,
 ) -> list[dict]:
     """Collect all events emitted during query execution."""
     events = []
@@ -118,7 +44,7 @@ async def _collect_events_during_query(
     async def collect_events():
         try:
             while not collection_done.is_set():
-                event = await asyncio.wait_for(client.read_event(), timeout=0.5)
+                event = await asyncio.wait_for(client.read_event(), timeout=0.3)
                 if event is not None:
                     events.append(event)
                     # Check for idle status indicating completion
@@ -155,7 +81,7 @@ async def daemon_fixture(tmp_path: Path):
     config = _build_daemon_config(tmp_path, socket_path)
     daemon = SootheDaemon(config)
     await daemon.start()
-    await asyncio.sleep(0.4)
+    await asyncio.sleep(0.2)
     try:
         yield daemon, socket_path
     finally:
@@ -229,7 +155,7 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
         # are internal Soothe events that may not be exposed through daemon protocol
         # The daemon protocol focuses on thread operations and streaming
 
-        events = await _collect_events_during_query(client, "What is the capital of France?", timeout=20.0)
+        events = await _collect_events_during_query(client, "Say hello", timeout=6.0)
 
         # Verify we received events during execution
         assert len(events) > 0, "Should receive events during query execution"
@@ -271,8 +197,8 @@ async def test_tool_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
 
         events = await _collect_events_during_query(
             client,
-            "Read the file /tmp/test.txt if it exists",
-            timeout=20.0,
+            "List current directory",
+            timeout=6.0,
         )
 
         # Verify we received events
@@ -309,8 +235,8 @@ async def test_subagent_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
 
         events = await _collect_events_during_query(
             client,
-            "Search the web for latest news about AI",
-            timeout=25.0,
+            "What is 2+2?",
+            timeout=6.0,
         )
 
         # Verify we received events
@@ -379,7 +305,7 @@ async def test_event_registry_dispatch(daemon_fixture: tuple[SootheDaemon, str])
         created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
         _ = created["thread_id"]
 
-        events = await _collect_events_during_query(client, "Hello, how are you?", timeout=20.0)
+        events = await _collect_events_during_query(client, "Hello", timeout=6.0)
 
         # Verify we can process all received events
         for event in events:

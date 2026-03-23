@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable
+from collections.abc import Awaitable
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 WIZSEARCH_AVAILABLE = None
 
@@ -123,7 +123,7 @@ def _save_raw_results(query: str, result: object) -> None:
         logger.debug("Failed to save raw search results", exc_info=True)
 
 
-def _run_coro[T](coro: Awaitable[T]) -> T:
+def _run_coro(coro: Awaitable[T]) -> T:
     """Run an async coroutine from sync tool entrypoint."""
     try:
         loop = asyncio.get_running_loop()

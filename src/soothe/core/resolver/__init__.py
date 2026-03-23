@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.config import SOOTHE_HOME, SootheConfig, _resolve_env
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.utils import expand_path
 
 from ._resolver_infra import resolve_checkpointer, resolve_durability
@@ -143,116 +143,18 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
         return None
 
     try:
-        from soothe.backends.memory.memu import MemUMemory
-
-        # Build MemU configuration from Soothe's model router
-        # Resolve model strings from router roles
-        chat_model_str = config.resolve_model(config.protocols.memory.llm_chat_role)
-        embed_model_str = config.resolve_model(config.protocols.memory.llm_embed_role)
-
-        # Parse provider:model strings
-        chat_provider_name, _, chat_model_name = chat_model_str.partition(":")
-        embed_provider_name, _, embed_model_name = embed_model_str.partition(":")
-
-        if not chat_model_name:
-            chat_model_name = chat_provider_name
-            chat_provider_name = ""
-        if not embed_model_name:
-            embed_model_name = embed_provider_name
-            embed_provider_name = ""
-
-        # Get provider configurations
-        def get_provider_config(provider_name: str) -> tuple[dict, str]:
-            """Extract provider credentials from Soothe config."""
-            if not provider_name:
-                return {}, ""
-            provider = config._find_provider(provider_name)
-            if not provider:
-                return {}, provider_name
-
-            kwargs = {}
-            provider_type = provider.provider_type
-            if provider.api_base_url:
-                kwargs["base_url"] = _resolve_env(provider.api_base_url)
-                if provider_type == "openai":
-                    kwargs["use_responses_api"] = False
-            if provider.api_key:
-                kwargs["api_key"] = _resolve_env(provider.api_key)
-            return kwargs, provider_type
-
-        chat_kwargs, _chat_provider_type = get_provider_config(chat_provider_name)
-        embed_kwargs, _embed_provider_type = get_provider_config(embed_provider_name)
-
-        # Resolve database DSN (default to Soothe's PostgreSQL DSN for postgres provider)
-        database_dsn = config.protocols.memory.database_dsn
-        if not database_dsn and config.protocols.memory.database_provider == "postgres":
-            database_dsn = config.resolve_persistence_postgres_dsn()
-
-        # Build MemU configs
-        from memu.app.settings import (
-            DatabaseConfig,
-            LLMConfig,
-            LLMProfilesConfig,
-            MemorizeConfig,
-            RetrieveConfig,
-            UserConfig,
-        )
-
-        # Build LLM configs using resolved provider information
-        chat_llm_config = LLMConfig(
-            chat_model=chat_model_name,
-            embed_model=embed_model_name,
-            **chat_kwargs,
-        )
-
-        # For embedding profile, prefer embedding provider if different
-        if embed_provider_name and embed_provider_name != chat_provider_name:
-            embed_llm_config = LLMConfig(
-                chat_model=chat_model_name,
-                embed_model=embed_model_name,
-                **embed_kwargs,
-            )
-        else:
-            embed_llm_config = chat_llm_config
-
-        llm_profiles = LLMProfilesConfig(
-            default=chat_llm_config,
-            embedding=embed_llm_config,
-        )
-
-        database_config = DatabaseConfig(
-            provider=config.protocols.memory.database_provider,
-            dsn=database_dsn,
-        )
-
-        memorize_config = MemorizeConfig(
-            enable_auto_categorization=config.protocols.memory.enable_auto_categorization,
-            enable_category_summaries=config.protocols.memory.enable_category_summaries,
-            categories=config.protocols.memory.memory_categories,
-        )
-
-        retrieve_config = RetrieveConfig(
-            method="rag",  # Use vector-based retrieval by default
-        )
-
-        user_config = UserConfig()
+        from soothe.backends.memory.memu_adapter import MemUMemory
 
         logger.info(
-            "Using MemU memory backend with %s storage (chat: %s, embed: %s)",
-            config.protocols.memory.database_provider,
-            chat_model_str,
-            embed_model_str,
-        )
-        return MemUMemory(
-            llm_profiles=llm_profiles,
-            database_config=database_config,
-            memorize_config=memorize_config,
-            retrieve_config=retrieve_config,
-            user_config=user_config,
+            "Using MemU memory backend (chat: %s, embed: %s)",
+            config.resolve_model(config.protocols.memory.llm_chat_role),
+            config.resolve_model(config.protocols.memory.llm_embed_role),
         )
 
+        return MemUMemory(config)
+
     except ImportError:
-        logger.exception("MemU memory backend requires 'memory' extra: pip install soothe[memory]")
+        logger.exception("MemU memory backend requires dependencies")
         raise
     except Exception:
         logger.exception("Failed to initialize MemU memory backend")

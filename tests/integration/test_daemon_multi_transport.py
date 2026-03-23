@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib
 import os
-import socket
 import uuid
 from pathlib import Path
 
@@ -19,14 +17,13 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
-
-
-def _alloc_ephemeral_port() -> int:
-    """Allocate an available TCP port for testing."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        s.listen(1)
-        return s.getsockname()[1]
+from tests.integration.conftest import (
+    alloc_ephemeral_port,
+    await_event_type,
+    await_status_state,
+    build_daemon_config,
+    force_isolated_home,
+)
 
 
 def _build_daemon_config(
@@ -36,116 +33,28 @@ def _build_daemon_config(
     http_port: int,
 ) -> SootheConfig:
     """Build an isolated daemon config with all transports enabled."""
-    # Try to load from config.dev.yml to get available providers
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
-    if config_path.exists():
-        base_config = SootheConfig.from_yaml_file(str(config_path))
-    else:
-        base_config = SootheConfig()
-
-    return SootheConfig(
-        providers=base_config.providers,
-        router=base_config.router,
-        vector_stores=base_config.vector_stores,
-        vector_store_router=base_config.vector_store_router,
-        persistence={"persist_dir": str(tmp_path / "persistence")},
-        protocols={
-            "memory": {"enabled": False},
-            "durability": {"backend": "json", "persist_dir": str(tmp_path / "durability")},
-        },
-        daemon={
-            "transports": {
-                "unix_socket": {"enabled": True, "path": unix_socket_path},
-                "websocket": {
-                    "enabled": True,
-                    "host": "127.0.0.1",
-                    "port": websocket_port,
-                    "cors_origins": ["http://localhost:*", "http://127.0.0.1:*"],
-                },
-                "http_rest": {
-                    "enabled": True,
-                    "host": "127.0.0.1",
-                    "port": http_port,
-                },
-            },
-        },
-        # Disable unified classification for integration tests to avoid model compatibility issues
-        performance={"unified_classification": False},
+    return build_daemon_config(
+        tmp_path=tmp_path,
+        unix_socket_path=unix_socket_path,
+        websocket_port=websocket_port,
+        http_port=http_port,
     )
-
-
-def _force_isolated_home(home: Path) -> None:
-    """Force daemon paths to a test-local SOOTHE_HOME to avoid pid-socket contention."""
-    os.environ["SOOTHE_HOME"] = str(home)
-    import soothe.config as soothe_config
-    from soothe import config as config_module
-
-    soothe_config.SOOTHE_HOME = str(home)
-    config_module.SOOTHE_HOME = str(home)
-
-    import soothe.daemon.paths as daemon_paths
-
-    # Update in-memory constants for already-imported modules
-    daemon_paths.SOOTHE_HOME = str(home)
-    importlib.reload(daemon_paths)
-
-    import soothe.daemon.thread_logger as daemon_thread_logger
-
-    daemon_thread_logger.SOOTHE_HOME = str(home)
-
-    import soothe.core.thread.manager as thread_manager
-
-    thread_manager.SOOTHE_HOME = str(home)
-
-
-async def _await_event_type(readable, expected_type: str, timeout: float = 5.0) -> dict:
-    """Read protocol events until a specific type is observed."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            msg = f"Timed out waiting for event type: {expected_type}"
-            raise TimeoutError(msg)
-        event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == expected_type:
-            return event
-
-
-async def _await_status_state(
-    readable,
-    expected_states: str | set[str] | tuple[str, ...],
-    timeout: float = 5.0,
-) -> dict:
-    """Read protocol events until a status event with the expected state appears."""
-    expected: set[str] = {expected_states} if isinstance(expected_states, str) else set(expected_states)
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            states = ", ".join(sorted(expected))
-            msg = f"Timed out waiting for status state: {states}"
-            raise TimeoutError(msg)
-        event = await asyncio.wait_for(readable(), timeout=remaining)
-        if event is not None and event.get("type") == "status" and event.get("state") in expected:
-            return event
 
 
 @pytest.fixture
 async def multi_transport_daemon(tmp_path: Path):
     """Start a daemon with all three transports enabled."""
-    _force_isolated_home(tmp_path / "soothe-home")
+    force_isolated_home(tmp_path / "soothe-home")
 
     unix_path = f"/tmp/soothe-multi-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
-    ws_port = _alloc_ephemeral_port()
-    http_port = _alloc_ephemeral_port()
+    ws_port = alloc_ephemeral_port()
+    http_port = alloc_ephemeral_port()
 
     config = _build_daemon_config(tmp_path, unix_path, ws_port, http_port)
     daemon = SootheDaemon(config)
     await daemon.start()
     # Allow transports to fully initialize
-    await asyncio.sleep(0.6)
+    await asyncio.sleep(0.3)
 
     try:
         yield {
@@ -183,7 +92,7 @@ async def test_all_transports_simultaneous_lifecycle(multi_transport_daemon: dic
 
     # Send ping and receive status
     await unix_client.send_thread_list()
-    response = await _await_event_type(unix_client.read_event, "thread_list_response", timeout=3.0)
+    response = await await_event_type(unix_client.read_event, "thread_list_response", timeout=3.0)
     assert response["type"] == "thread_list_response"
 
     await unix_client.close()
@@ -210,7 +119,7 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
             initial_message="test broadcast",
             metadata={"tags": ["multi-transport"]},
         )
-        created = await _await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Verify thread_created event received
@@ -222,7 +131,7 @@ async def test_multi_transport_broadcast(multi_transport_daemon: dict) -> None:
 
         # Archive thread
         await unix_client.send_thread_archive(thread_id)
-        archive_response = await _await_event_type(unix_client.read_event, "thread_operation_ack", timeout=3.0)
+        archive_response = await await_event_type(unix_client.read_event, "thread_operation_ack", timeout=3.0)
         assert archive_response["success"] is True
 
     finally:
@@ -248,35 +157,35 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
             initial_message="cross-transport thread",
             metadata={"source": "unix"},
         )
-        created = await _await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
+        created = await await_event_type(unix_client.read_event, "thread_created", timeout=5.0)
         thread_id = created["thread_id"]
 
         # Access thread via same transport (HTTP/WebSocket would need separate clients)
         await unix_client.send_thread_get(thread_id)
-        get_response = await _await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
+        get_response = await await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
         assert get_response["thread"]["thread_id"] == thread_id
 
         # Resume thread
         await unix_client.send_resume_thread(thread_id)
-        resume_response = await _await_event_type(unix_client.read_event, "status", timeout=3.0)
+        resume_response = await await_event_type(unix_client.read_event, "status", timeout=3.0)
         assert resume_response["thread_resumed"] is True
         assert resume_response["thread_id"] == thread_id
 
         # Send query and verify state consistency
-        await unix_client.send_input("Test cross-transport consistency")
-        status = await _await_status_state(unix_client.read_event, {"running", "idle"}, timeout=15.0)
+        await unix_client.send_input("Say test")
+        status = await await_status_state(unix_client.read_event, {"running", "idle"}, timeout=5.0)
 
         # If running, wait for idle
         if status.get("state") == "running":
             try:
-                await _await_status_state(unix_client.read_event, "idle", timeout=15.0)
+                await await_status_state(unix_client.read_event, "idle", timeout=5.0)
             except TimeoutError:
                 # Continue even if idle not reached - query may have completed quickly
                 pass
 
         # Verify thread state preserved
         await unix_client.send_thread_get(thread_id)
-        final_get = await _await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
+        final_get = await await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
         assert final_get["thread"]["thread_id"] == thread_id
 
     finally:
@@ -335,7 +244,7 @@ async def test_multi_transport_shutdown_order(multi_transport_daemon: dict) -> N
 
         # Send simple request
         await client.send_thread_list()
-        response = await _await_event_type(client.read_event, "thread_list_response", timeout=3.0)
+        response = await await_event_type(client.read_event, "thread_list_response", timeout=3.0)
         assert response["type"] == "thread_list_response"
 
     finally:

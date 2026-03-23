@@ -237,11 +237,13 @@ protocols:
   # Memory Protocol: Cross-thread long-term memory
   memory:
     enabled: true
-    backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
-    persist_dir: ""   # Empty = SOOTHE_HOME/memory/
+    persist_dir: ""   # Empty = ~/.soothe/memory/
     # Use Soothe's model router roles (configured in router section above)
-    # llm_chat_role: fast  # Use fast model for memory operations (default)
-    # llm_embed_role: embedding  # Use embedding model for vector operations (default)
+    llm_chat_role: fast  # Use fast model for memory operations (default)
+    llm_embed_role: embedding  # Use embedding model for vector operations (default)
+    enable_embeddings: true  # Enable embedding-based similarity search
+    enable_auto_categorization: true  # Enable automatic categorization using LLM
+    enable_category_summaries: true  # Enable category summary generation
 
   # Durability Protocol: Thread lifecycle and state persistence
   durability:

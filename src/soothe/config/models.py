@@ -396,22 +396,22 @@ class MemUConfig(BaseModel):
 
     Args:
         enabled: Whether MemU memory backend is enabled.
-        database_provider: Database provider (inmemory, sqlite, postgres).
-        database_dsn: Database DSN. Defaults to Soothe's PostgreSQL persistence DSN.
+        persist_dir: Directory for memory files. Defaults to ~/.soothe/memory.
         llm_chat_role: Router role for chat model (extraction/categorization).
         llm_embed_role: Router role for embedding model (vector search).
+        enable_embeddings: Enable embedding-based similarity search.
         enable_auto_categorization: Enable automatic categorization using LLM.
         enable_category_summaries: Enable category summary generation.
         memory_categories: Predefined memory categories.
     """
 
     enabled: bool = True
-    database_provider: Literal["inmemory", "sqlite", "postgres"] = "postgres"
-    database_dsn: str | None = None
+    persist_dir: str | None = None
 
     llm_chat_role: str = "fast"
     llm_embed_role: str = "embedding"
 
+    enable_embeddings: bool = True
     enable_auto_categorization: bool = True
     enable_category_summaries: bool = True
     memory_categories: list[dict[str, str]] = [
