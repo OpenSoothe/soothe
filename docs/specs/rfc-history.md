@@ -6,6 +6,8 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-24 | RFC-0018 | Draft | Updated: Renamed to "Plugin Extension Specification", simplified scope to tools + subagents with decorator-based API |
+| 2026-03-23 | RFC-0018 | Draft | Initial Plugin Extension Specification |
 | 2026-03-12 | RFC-0001 | Draft | Initial Conceptual Design (Platonic Init) |
 | 2026-03-12 | RFC-0003 | Draft | CLI TUI Architecture Design |
 | 2026-03-13 | RFC-0004 | Draft | Skillify Agent Architecture Design |
