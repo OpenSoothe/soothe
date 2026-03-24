@@ -1,3 +1,8 @@
+"""Run Theory of Mind Action.
+
+Analyzes conversation to extract subtle, obscure, and hidden information.
+"""
+
 import logging
 from datetime import datetime
 from typing import Any
@@ -8,20 +13,25 @@ logger = logging.getLogger(__name__)
 
 
 class RunTheoryOfMindAction(BaseAction):
-    """Run theory of mind on the conversation to infer subtle, obscure, and hidden information behind the conversation.
+    """Run theory of mind on the conversation to infer subtle, obscure, and hidden information.
+
     This is a very important step to understand the characters and the conversation.
     The output should follow the same format as memory items.
     """
 
     @property
     def action_name(self) -> str:
+        """Return the action name."""
         return "run_theory_of_mind"
 
     def get_schema(self) -> dict[str, Any]:
         """Return OpenAI-compatible function schema."""
         return {
             "name": self.action_name,
-            "description": "Analyze the conversation and memory items to extract subtle, obscure, and hidden information behind the conversation.",
+            "description": (
+                "Analyze the conversation and memory items to extract subtle, obscure, "
+                "and hidden information behind the conversation."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -66,9 +76,12 @@ class RunTheoryOfMindAction(BaseAction):
         conversation_text: str,
         activity_items: list[dict[str, str]],
         session_date: str | None = None,
-        embeddings_enabled: bool = True,
+        *,
+        embeddings_enabled: bool = True,  # noqa: ARG002
     ) -> dict[str, Any]:
-        """Analyze the conversation and memory items to extract subtle, obscure, and hidden information behind the conversation.
+        """Analyze the conversation to extract hidden information.
+
+        Extracts subtle, obscure, and hidden information behind the conversation.
 
         Args:
             character_name: Name of the character
@@ -116,7 +129,9 @@ class RunTheoryOfMindAction(BaseAction):
                     "theory_of_mind_items_added": len(theory_of_mind_items),
                     "theory_of_mind_items": theory_of_mind_items,
                     "reasoning_process": reasoning_process,
-                    "message": f"Successfully extracted {len(theory_of_mind_items)} theory of mind items from conversation",
+                    "message": (
+                        f"Successfully extracted {len(theory_of_mind_items)} theory of mind items from conversation"
+                    ),
                 }
             )
 
@@ -130,17 +145,13 @@ class RunTheoryOfMindAction(BaseAction):
         activity_items: list[dict[str, str]],
     ) -> str:
         """Extract theory of mind items from conversation and activity items with LLM."""
-        activity_items_text = "\n".join(
-            [
-                # f"Memory ID: {item['memory_id']}\nContent: {item['content']}"
-                f"- {item['content']}"
-                for item in activity_items
-            ]
-        )
+        activity_items_text = "\n".join([f"- {item['content']}" for item in activity_items])
 
         user_name = character_name
 
-        theory_of_mind_prompt = f"""You are analyzing the following conversation and activity items for {user_name} to try to infer information that is not explicitly mentioned by {user_name} in the conversation, but he or she might meant to express or the listener can reasonably deduce.
+        theory_of_mind_prompt = f"""You are analyzing the following conversation and activity items for {user_name}
+to try to infer information that is not explicitly mentioned by {user_name} in the conversation,
+but he or she might meant to express or the listener can reasonably deduce.
 
 Conversation:
 {conversation_text}
@@ -150,7 +161,8 @@ Activity Items:
 
 **CRITICAL REQUIREMENT: Inference results must be SELF-CONTAINED MEMORY ITEMS**
 
-Your task it to leverage your reasoning skills to infer the information that is not explicitly mentioned in the conversation, but the character might meant to express or the listener can reasonably deduce.
+Your task it to leverage your reasoning skills to infer the information that is not explicitly mentioned
+in the conversation, but the character might meant to express or the listener can reasonably deduce.
 
 **SELF-CONTAINED MEMORY REQUIREMENTS:**
 - Plain text only, no markdown grammar
@@ -159,7 +171,8 @@ Your task it to leverage your reasoning skills to infer the information that is 
 - NEVER use pronouns that depend on context (no "she", "he", "they", "it")
 - Include specific names, places, dates, and full context in each item
 - Each activity should be understandable without reading other items
-- You can use words like "perhaps" or "maybe" to indicate that the information is obtained through reasoning and is not 100% certain
+- You can use words like "perhaps" or "maybe" to indicate that the information is obtained
+  through reasoning and is not 100% certain
 - NO need to include evidences or reasoning processes in the items
 
 **INFERENCE GUIDELINES:**
@@ -175,23 +188,32 @@ BAD: "He may have experience working abroad" (pronouns as subject)
 GOOD: "{user_name} perhaps not enjoy his trip to Europe this summer"
 BAD: "{user_name} perhaps not enjoy his trip" (missing location and time)
 GOOD: "Harry Potter series are probably important to {user_name}'s childhood"
-BAD: "Harry Potter series are probably important to {user_name}'s childhood, because she mentioned it and recommended it to her friends many times" (no need to include evidences or reasoning processes)
+BAD: "Harry Potter series are probably important to {user_name}'s childhood, because she
+  mentioned it and recommended it to her friends many times" (no need to include evidences)
 
 **OUTPUT FORMAT:**
 
 **REASONING PROCESS:**
-[Your reasoning process for what kind of implicit information can be hidden behind the conversation, what are the evidences, how you get to your conclusion, and how confident you are.]
+[Your reasoning process for what kind of implicit information can be hidden behind the conversation,
+what are the evidences, how you get to your conclusion, and how confident you are.]
 
 **INFERENCE ITEMS:**
 [One piece of inference per line, no markdown headers, no structure, no numbering, no bullet points, ends with a period]
-[After carefully reasoning, if you determine that there is no implicit information that can be inferred from the conversation beyong the explicit information already mentioned in the activity items, you can leave this section empty. DO NOT output things like "No inference available".]
+[After carefully reasoning, if you determine that there is no implicit information that can be inferred from
+ the conversation beyong the explicit information already mentioned in the activity items, you can leave
+ this section empty. DO NOT output things like "No inference available".]
 
 """
 
         # Call LLM to run theory of mind
         return self.llm_client.simple_chat(theory_of_mind_prompt)
 
-    def _parse_theory_of_mind_from_text(self, character_name: str, response_text: str, session_date: str) -> tuple:
+    def _parse_theory_of_mind_from_text(
+        self,
+        character_name: str,  # noqa: ARG002
+        response_text: str,
+        session_date: str,
+    ) -> tuple:
         """Parse theory of mind items from text format response."""
         reasoning_process = ""
         theory_of_mind_items = []
@@ -203,8 +225,8 @@ BAD: "Harry Potter series are probably important to {user_name}'s childhood, bec
             reasoning_section = False
             inference_section = False
 
-            for line in lines:
-                line = line.strip()
+            for line_raw in lines:
+                line = line_raw.strip()
 
                 if line.upper().startswith("**REASONING PROCESS:") or (
                     line.startswith("**") and "REASONING PROCESS" in line.upper()
@@ -226,20 +248,18 @@ BAD: "Harry Potter series are probably important to {user_name}'s childhood, bec
                         reasoning_process += "\n" + line.strip()
 
                 # Parse memory items
-                elif inference_section:
-                    line = line.strip()
-                    if line:
-                        memory_id = self._generate_memory_id()
-                        theory_of_mind_items.append(
-                            {
-                                "memory_id": memory_id,
-                                "mentioned_at": session_date,
-                                "content": line,
-                                "links": "",
-                            }
-                        )
+                elif inference_section and line:
+                    memory_id = self._generate_memory_id()
+                    theory_of_mind_items.append(
+                        {
+                            "memory_id": memory_id,
+                            "mentioned_at": session_date,
+                            "content": line,
+                            "links": "",
+                        }
+                    )
 
-        except Exception as e:
-            logger.exception(f"Failed to parse theory of mind from text: {e!r}")
+        except Exception:
+            logger.exception("Failed to parse theory of mind from text")
 
         return reasoning_process, theory_of_mind_items

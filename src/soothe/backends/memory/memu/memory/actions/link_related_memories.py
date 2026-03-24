@@ -20,7 +20,8 @@ class LinkRelatedMemoriesAction(BaseAction):
     then creates links between them that can be written into documentation.
     """
 
-    def __init__(self, memory_core) -> None:
+    def __init__(self, memory_core: Any) -> None:
+        """Initialize the action with memory core."""
         super().__init__(memory_core)
         self.description = "Find and link related memories using embedding search"
         self.filter_with_llm = False
@@ -44,7 +45,9 @@ class LinkRelatedMemoriesAction(BaseAction):
                     },
                     "memory_id": {
                         "type": "string",
-                        "description": "ID of the memory item to find related memories for (optional if link_all_items is true)",
+                        "description": (
+                            "ID of the memory item to find related memories for (optional if link_all_items is true)"
+                        ),
                     },
                     "category": {
                         "type": "string",
@@ -67,7 +70,9 @@ class LinkRelatedMemoriesAction(BaseAction):
                     },
                     "link_all_items": {
                         "type": "boolean",
-                        "description": "Whether to link all memory items in the category (if true, memory_id can be omitted)",
+                        "description": (
+                            "Whether to link all memory items in the category (if true, memory_id can be omitted)"
+                        ),
                         "default": False,
                     },
                 },
@@ -83,6 +88,7 @@ class LinkRelatedMemoriesAction(BaseAction):
         top_k: int = 5,
         min_similarity: float = 0.3,
         search_categories: list[str] | None = None,
+        *,
         link_all_items: bool = False,
         write_to_memory: bool = True,
     ) -> dict[str, Any]:
@@ -95,7 +101,7 @@ class LinkRelatedMemoriesAction(BaseAction):
             top_k: Number of top related memories to find
             min_similarity: Minimum similarity threshold
             search_categories: Categories to search in
-            link_format: Format for generating links
+            link_all_items: Whether to link all items in category
             write_to_memory: Whether to append links to original memory
 
         Returns:
@@ -112,10 +118,13 @@ class LinkRelatedMemoriesAction(BaseAction):
                 )
 
             if category not in self.basic_memory_types:
+                available_cats = list(self.basic_memory_types.keys())
                 return self._add_metadata(
                     {
                         "success": False,
-                        "error": f"Skipping category '{category}' not in available categories. Available: {list(self.basic_memory_types.keys())}",
+                        "error": (
+                            f"Skipping category '{category}' not in available categories. Available: {available_cats}"
+                        ),
                     }
                 )
 
@@ -198,10 +207,10 @@ class LinkRelatedMemoriesAction(BaseAction):
             for item in memory_items:
                 if item["memory_id"] == memory_id:
                     return item
+        except Exception:
+            logger.exception("Error finding memory item %s", memory_id)
             return None
-
-        except Exception as e:
-            logger.exception(f"Error finding memory item {memory_id}: {e}")
+        else:
             return None
 
     def _find_related_memories(
@@ -229,7 +238,7 @@ class LinkRelatedMemoriesAction(BaseAction):
 
                 if embeddings_file.exists():
                     try:
-                        with open(embeddings_file, encoding="utf-8") as f:
+                        with embeddings_file.open(encoding="utf-8") as f:
                             embeddings_data = json.load(f)
 
                         for emb_data in embeddings_data.get("embeddings", []):
@@ -252,8 +261,8 @@ class LinkRelatedMemoriesAction(BaseAction):
                                 }
                             )
 
-                    except Exception as e:
-                        logger.warning(f"Failed to load embeddings for {category}: {e!r}")
+                    except Exception:
+                        logger.warning("Failed to load embeddings for %s", category, exc_info=True)
 
             # Sort ALL candidates by similarity globally
             all_candidates.sort(key=lambda x: x["similarity"], reverse=True)
@@ -274,10 +283,10 @@ class LinkRelatedMemoriesAction(BaseAction):
                 else:
                     relevant_memories = sorted(filtered_results, key=lambda x: x["similarity"], reverse=True)[:top_k]
                 return relevant_memories
+        except Exception:
+            logger.exception("Error finding related memories")
             return []
-
-        except Exception as e:
-            logger.exception(f"Error finding related memories: {e}")
+        else:
             return []
 
     def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
@@ -317,7 +326,11 @@ class LinkRelatedMemoriesAction(BaseAction):
 
             for item in memory_items:
                 if item["memory_id"] == memory_id:
-                    updated_line = f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] {item['content']} [{','.join(related_memories)}]"
+                    related_mem_str = ",".join(related_memories)
+                    updated_line = (
+                        f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] "
+                        f"{item['content']} [{related_mem_str}]"
+                    )
                     updated_lines.append(updated_line)
                 else:
                     updated_lines.append(item["full_line"])
@@ -329,10 +342,10 @@ class LinkRelatedMemoriesAction(BaseAction):
             if success:
                 return updated_content
             logger.error("Failed to save updated memory content")
+        except Exception:
+            logger.exception("Error appending links to memory")
             return None
-
-        except Exception as e:
-            logger.exception(f"Error appending links to memory: {e}")
+        else:
             return None
 
     def _link_all_items_in_category(
@@ -342,6 +355,7 @@ class LinkRelatedMemoriesAction(BaseAction):
         top_k: int,
         min_similarity: float,
         search_categories: list[str] | None,
+        *,
         write_to_memory: bool,
     ) -> dict[str, Any]:
         """Link all memory items in a category to related memories."""
@@ -431,10 +445,14 @@ class LinkRelatedMemoriesAction(BaseAction):
             # Prepare candidate memories for LLM evaluation
             candidates_text = ""
             for i, memory in enumerate(candidate_memories, 1):
-                candidates_text += f"{i}. [ID: {memory['memory_id']}] [{memory['category']}] {memory['content']} (similarity: {memory['similarity']:.3f})\n"
+                candidates_text += (
+                    f"{i}. [ID: {memory['memory_id']}] [{memory['category']}] "
+                    f"{memory['content']} (similarity: {memory['similarity']:.3f})\n"
+                )
 
             # Create LLM prompt for relevance filtering
-            relevance_prompt = f"""You are evaluating whether candidate memories are truly related to a target memory for {character_name}.
+            relevance_prompt = f"""You are evaluating whether candidate memories are truly related
+to a target memory for {character_name}.
 
 TARGET MEMORY:
 {target_content}
@@ -457,7 +475,8 @@ CANDIDATE MEMORIES:
 - ❌ NOT RELEVANT: Memories about completely different topics/people/events
 
 **OUTPUT FORMAT**:
-Return ONLY the numbers (1, 2, 3, etc.) of the truly relevant memories, separated by commas. If no memories are relevant, return "NONE".
+Return ONLY the numbers (1, 2, 3, etc.) of the truly relevant memories, separated by commas.
+If no memories are relevant, return "NONE".
 
 Examples:
 - If memories 1, 3, and 5 are relevant: "1, 3, 5"
@@ -473,16 +492,17 @@ RELEVANT MEMORY NUMBERS:"""
             relevant_indices = self._parse_relevance_response(llm_response.strip())
 
             # Filter memories based on LLM evaluation
-            relevant_memories = []
-            for idx in relevant_indices:
-                if 1 <= idx <= len(candidate_memories):
-                    relevant_memories.append(candidate_memories[idx - 1])  # Convert to 0-based index
+            relevant_memories = [
+                candidate_memories[idx - 1]  # Convert to 0-based index
+                for idx in relevant_indices
+                if 1 <= idx <= len(candidate_memories)
+            ]
 
             # Limit to max_links
             return relevant_memories[:max_links]
 
-        except Exception as e:
-            logger.exception(f"Error filtering memories with LLM: {e}")
+        except Exception:
+            logger.exception("Error filtering memories with LLM")
             # Fallback to original top candidates if LLM filtering fails
             return candidate_memories[:max_links]
 
@@ -507,6 +527,6 @@ RELEVANT MEMORY NUMBERS:"""
             numbers = re.findall(r"\b(\d+)\b", response)
             return [int(num) for num in numbers if num.isdigit()]
 
-        except Exception as e:
-            logger.warning(f"Failed to parse relevance response '{response}': {e!r}")
+        except Exception:
+            logger.warning("Failed to parse relevance response '%s'", response, exc_info=True)
             return []

@@ -9,19 +9,24 @@ from .base_action import BaseAction
 
 
 class GenerateMemorySuggestionsAction(BaseAction):
-    """Generate suggestions for what memory content should be added to different categories
-    based on new memory items from conversations.
+    """Generate suggestions for memory content based on new memory items from conversations.
+
+    Analyzes new memory items and suggests what should be added to different categories.
     """
 
     @property
     def action_name(self) -> str:
+        """Return the action name."""
         return "generate_memory_suggestions"
 
     def get_schema(self) -> dict[str, Any]:
         """Return OpenAI-compatible function schema."""
         return {
             "name": self.action_name,
-            "description": "Analyze new memory items and generate suggestions for what should be added to different memory categories",
+            "description": (
+                "Analyze new memory items and generate suggestions for what should "
+                "be added to different memory categories"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -73,16 +78,11 @@ class GenerateMemorySuggestionsAction(BaseAction):
                 return self._add_metadata({"success": False, "error": "No available categories found"})
 
             # Convert memory items to text for analysis
-            memory_items_text = "\n".join(
-                [
-                    # f"Memory ID: {item['memory_id']}\nContent: {item['content']}"
-                    f"- {item['content']}"
-                    for item in new_memory_items
-                ]
-            )
+            memory_items_text = "\n".join([f"- {item['content']}" for item in new_memory_items])
 
             # Create enhanced prompt for LLM to analyze and generate suggestions
-            suggestions_prompt = f"""You are an expert in analyzing the provided memory items for {character_name} and suggesting the memory items that should be added to each memory category.
+            suggestions_prompt = f"""You are an expert in analyzing the provided memory items
+for {character_name} and suggesting the memory items that should be added to each memory category.
 
 New Memory Items:
 {memory_items_text}
@@ -101,17 +101,23 @@ Available Categories: {", ".join(available_categories)}
 
 **CATEGORY-SPECIFIC REQUIREMENTS:**
 
-For each category, analyze the new memory items and suggest what specific information should be extracted and added to that category:
+For each category, analyze the new memory items and suggest what specific information
+should be extracted and added to that category:
 
-- **activity**: Detailed description of the conversation, including the time, place, and people involved
-- **profile**: ONLY basic personal information (age, location, occupation, education, family status, demographics) - EXCLUDE events, activities, things they did
-- **event**: Specific events, dates, milestones, appointments, meetings, activities with time references
+- **activity**: Detailed description of the conversation, including the time, place,
+  and people involved
+- **profile**: ONLY basic personal information (age, location, occupation, education,
+  family status, demographics) - EXCLUDE events, activities, things they did
+- **event**: Specific events, dates, milestones, appointments, meetings, activities
+  with time references
 - **Other categories**: Relevant information for each specific category
 
 **CRITICAL DISTINCTION - Profile vs Activity/Event:**
-- Profile (GOOD): "Alice lives in San Francisco", "Alice is 28 years old", "Alice works at TechFlow Solutions"
+- Profile (GOOD): "Alice lives in San Francisco", "Alice is 28 years old",
+  "Alice works at TechFlow Solutions"
 - Profile (BAD): "Alice went hiking" (this is activity), "Alice attended workshop" (this is event)
-- Activity/Event (GOOD): "Alice went hiking in Blue Ridge Mountains", "Alice attended photography workshop"
+- Activity/Event (GOOD): "Alice went hiking in Blue Ridge Mountains",
+  "Alice attended photography workshop"
 
 **SUGGESTION REQUIREMENTS:**
 - Specify that memory items should include "{character_name}" as the subject
@@ -119,8 +125,10 @@ For each category, analyze the new memory items and suggest what specific inform
 - Ensure suggestions lead to complete, self-contained memory items
 - Avoid suggesting content that would result in pronouns or incomplete sentences
 - For profile: Focus ONLY on stable, factual, demographic information
-- If one input memory item involves information belongs to multiple categories, you should reasonable seperete the information and provide suggestions to all involved categories
-- **IMPORTANT** If the input memory item use modal adverbs (perhaps, probably, likely, etc.) to indicate an uncertain inference, keep the modal adverbs as-is in your suggestions
+- If one input memory item involves information belongs to multiple categories, you should
+  reasonable separate the information and provide suggestions to all involved categories
+- **IMPORTANT** If the input memory item use modal adverbs (perhaps, probably, likely, etc.)
+  to indicate an uncertain inference, keep the modal adverbs as-is in your suggestions
 
 **OUTPUT INSTRUCTIONS:**
 - **IMPORTANT** NEVER suggest categories that are not in the Available Categories
@@ -129,11 +137,14 @@ For each category, analyze the new memory items and suggest what specific inform
 **OUTPUT FORMAT:**
 
 **Category: [category_name]**
-- Suggestion: [What specific self-contained content should be added to this category, ensuring full subjects and complete context]
-- Suggestion: [What specific self-contained content should be added to this category, ensuring full subjects and complete context]
+- Suggestion: [What specific self-contained content should be added to this category,
+  ensuring full subjects and complete context]
+- Suggestion: [What specific self-contained content should be added to this category,
+  ensuring full subjects and complete context]
 
 **Category: [category_name]**
-- Suggestion: [What specific self-contained content should be added to this category, ensuring full subjects and complete context]
+- Suggestion: [What specific self-contained content should be added to this category,
+  ensuring full subjects and complete context]
 
 ... other categories ...
 """
@@ -153,14 +164,17 @@ For each category, analyze the new memory items and suggest what specific inform
                     "character_name": character_name,
                     "suggestions": suggestions,
                     "categories_analyzed": available_categories,
-                    "message": f"Generated self-contained suggestions for {len(suggestions)} categories based on {len(new_memory_items)} memory items",
+                    "message": (
+                        f"Generated self-contained suggestions for {len(suggestions)} categories "
+                        f"based on {len(new_memory_items)} memory items"
+                    ),
                 }
             )
 
         except Exception as e:
             return self._handle_error(e)
 
-    def _get_available_categories(self, character_name: str) -> list[str]:
+    def _get_available_categories(self, character_name: str) -> list[str]:  # noqa: ARG002
         """Get available categories for a character."""
         return [category for category in self.basic_memory_types if category != "activity"]
 
@@ -168,28 +182,24 @@ For each category, analyze the new memory items and suggest what specific inform
         self,
         response_text: str,
         available_categories: list[str],
-        new_memory_items: list[dict[str, str]],
+        new_memory_items: list[dict[str, str]],  # noqa: ARG002
     ) -> dict[str, dict[str, Any]]:
         """Parse suggestions from text format response."""
         suggestions = {}
 
-        try:
-            lines = response_text.split("\n")
-            current_category = None
+        lines = response_text.split("\n")
+        current_category = None
 
-            for line in lines:
-                line = line.strip()
+        for line_raw in lines:
+            line = line_raw.strip()
 
-                if line.startswith("**Category:") and line.endswith("**"):
-                    category_name = line.replace("**Category:", "").replace("**", "").strip()
-                    if category_name in available_categories:
-                        current_category = category_name
-                        suggestions[current_category] = ""
-                elif current_category and line.startswith("- Suggestion:"):
-                    suggestion_text = line.replace("- Suggestion:", "").strip()
-                    suggestions[current_category] += f"{suggestion_text}\n"
+            if line.startswith("**Category:") and line.endswith("**"):
+                category_name = line.replace("**Category:", "").replace("**", "").strip()
+                if category_name in available_categories:
+                    current_category = category_name
+                    suggestions[current_category] = ""
+            elif current_category and line.startswith("- Suggestion:"):
+                suggestion_text = line.replace("- Suggestion:", "").strip()
+                suggestions[current_category] += f"{suggestion_text}\n"
 
-            suggestions = {k: v for k, v in suggestions.items() if v.strip()}
-        except Exception:
-            raise
-        return suggestions
+        return {k: v for k, v in suggestions.items() if v.strip()}

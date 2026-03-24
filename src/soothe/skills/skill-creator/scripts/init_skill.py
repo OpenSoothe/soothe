@@ -21,7 +21,8 @@ ALLOWED_RESOURCES = {"scripts", "references", "assets"}
 
 SKILL_TEMPLATE = """---
 name: {skill_name}
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: [TODO: Complete and informative explanation of what the skill does and when to use it.
+  Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
 ---
 
 # {skill_title}
@@ -54,7 +55,8 @@ description: [TODO: Complete and informative explanation of what the skill does 
 - Example: Product Management with "Core Capabilities" -> numbered capability list
 - Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+Patterns can be mixed and matched as needed. Most skills combine patterns
+(e.g., start with task-based, add workflow for complex operations).
 
 Delete this entire "Structuring This Skill" section when done - it's just guidance.]
 
@@ -77,9 +79,11 @@ Executable code (Python/Bash/etc.) that can be run directly to perform specific 
 - PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
 - DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
 
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
+**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation,
+data processing, or specific operations.
 
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
+**Note:** Scripts may be executed without loading into context, but can still be read by Codex
+for patching or environment adjustments.
 
 ### references/
 Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
@@ -89,7 +93,8 @@ Documentation and reference material intended to be loaded into context to infor
 - BigQuery: API reference documentation and query examples
 - Finance: Schema documentation, company policies
 
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
+**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides,
+or any detailed information that Codex should reference while working.
 
 ### assets/
 Files not intended to be loaded into context, but rather used within the output Codex produces.
@@ -99,7 +104,8 @@ Files not intended to be loaded into context, but rather used within the output 
 - Frontend builder: HTML/React boilerplate project directories
 - Typography: Font files (.ttf, .woff2)
 
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
+**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts,
+or any files meant to be copied or used in the final output.
 
 ---
 
@@ -190,7 +196,7 @@ Note: This is a text placeholder. Actual assets can be any file type.
 """
 
 
-def normalize_skill_name(skill_name):
+def normalize_skill_name(skill_name: str) -> str:
     """Normalize a skill name to lowercase hyphen-case."""
     normalized = skill_name.strip().lower()
     normalized = re.sub(r"[^a-z0-9]+", "-", normalized)
@@ -198,12 +204,20 @@ def normalize_skill_name(skill_name):
     return re.sub(r"-{2,}", "-", normalized)
 
 
-def title_case_skill_name(skill_name):
+def title_case_skill_name(skill_name: str) -> str:
     """Convert hyphenated skill name to Title Case for display."""
     return " ".join(word.capitalize() for word in skill_name.split("-"))
 
 
-def parse_resources(raw_resources):
+def parse_resources(raw_resources: str) -> list[str]:
+    """Parse comma-separated resources string and validate against allowed resources.
+
+    Args:
+        raw_resources: Comma-separated string of resource names
+
+    Returns:
+        List of valid, deduplicated resource names
+    """
     if not raw_resources:
         return []
     resources = [item.strip() for item in raw_resources.split(",") if item.strip()]
@@ -220,7 +234,23 @@ def parse_resources(raw_resources):
     return deduped
 
 
-def create_resource_dirs(skill_dir, skill_name, skill_title, resources, include_examples) -> None:
+def create_resource_dirs(
+    skill_dir: Path,
+    skill_name: str,
+    skill_title: str,
+    resources: list[str],
+    *,
+    include_examples: bool,
+) -> None:
+    """Create resource directories for a skill with optional example files.
+
+    Args:
+        skill_dir: Path to the skill directory
+        skill_name: Skill name (hyphen-case)
+        skill_title: Skill title (Title Case)
+        resources: List of resource directories to create
+        include_examples: Whether to create example files
+    """
     for resource in resources:
         resource_dir = skill_dir / resource
         resource_dir.mkdir(exist_ok=True)
@@ -245,7 +275,7 @@ def create_resource_dirs(skill_dir, skill_name, skill_title, resources, include_
                 pass
 
 
-def init_skill(skill_name, path, resources, include_examples):
+def init_skill(skill_name: str, path: str, resources: list[str], *, include_examples: bool) -> Path | None:
     """Initialize a new skill directory with template SKILL.md.
 
     Args:
@@ -300,6 +330,7 @@ def init_skill(skill_name, path, resources, include_examples):
 
 
 def main() -> None:
+    """Main entry point for skill initialization CLI."""
     parser = argparse.ArgumentParser(
         description="Create a new skill directory with a SKILL.md template.",
     )

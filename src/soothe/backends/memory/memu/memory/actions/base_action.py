@@ -22,7 +22,7 @@ class BaseAction(ABC):
     - validate_arguments(): Validate input arguments
     """
 
-    def __init__(self, memory_core) -> None:
+    def __init__(self, memory_core: Any) -> None:
         """Initialize action with memory core.
 
         Args:
@@ -37,7 +37,6 @@ class BaseAction(ABC):
         self.memory_types = memory_core.memory_types
         self.basic_memory_types = memory_core.memory_types["basic"]
         self.processing_order = memory_core.processing_order
-        # self.embeddings_dir = memory_core.embeddings_dir
 
     @property
     @abstractmethod
@@ -53,7 +52,7 @@ class BaseAction(ABC):
         """
 
     @abstractmethod
-    def execute(self, **kwargs) -> dict[str, Any]:
+    def execute(self, **kwargs: Any) -> dict[str, Any]:
         """Execute the action with provided arguments.
 
         Args:
@@ -86,13 +85,13 @@ class BaseAction(ABC):
                     "required_parameters": required_params,
                 }
 
+        except Exception as e:
+            return {"valid": False, "error": f"Validation error: {e!s}"}
+        else:
             return {
                 "valid": True,
                 "message": f"Validation passed for {self.action_name}",
             }
-
-        except Exception as e:
-            return {"valid": False, "error": f"Validation error: {e!s}"}
 
     def _add_metadata(self, result: dict[str, Any]) -> dict[str, Any]:
         """Add standard metadata to action result."""
@@ -109,7 +108,7 @@ class BaseAction(ABC):
             "action_name": self.action_name,
             "timestamp": datetime.now().isoformat(),
         }
-        logger.error(f"Action {self.action_name} failed: {error}")
+        logger.error("Action %s failed: %s", self.action_name, error)
         return error_result
 
     # ================================
@@ -135,8 +134,8 @@ class BaseAction(ABC):
         lines = content.split("\n")
         processed_lines = []
 
-        for line in lines:
-            line = line.strip()
+        for line_raw in lines:
+            line = line_raw.strip()
             if line:  # Only process non-empty lines
                 # Always remove existing memory ID and generate a new unique one
                 if self._has_memory_id(line):
@@ -200,9 +199,9 @@ class BaseAction(ABC):
         lines = content.split("\n")
         clean_lines = []
 
-        for line in lines:
-            if line.strip():
-                _, clean_content = self._extract_memory_id(line)
+        for line_raw in lines:
+            if line_raw.strip():
+                _, clean_content = self._extract_memory_id(line_raw)
                 if clean_content:
                     clean_lines.append(clean_content)
             else:
@@ -225,8 +224,8 @@ class BaseAction(ABC):
         lines = content.split("\n")
         items = []
 
-        for i, line in enumerate(lines):
-            line = line.strip()
+        for i, line_raw in enumerate(lines):
+            line = line_raw.strip()
             if line:  # Only process non-empty lines
                 memory_id, mentioned_at, clean_content, links = self._extract_timestamped_memory_item(line)
 
@@ -244,14 +243,15 @@ class BaseAction(ABC):
         return items
 
     def _extract_timestamped_memory_item(self, line: str) -> tuple[str, str, str, str]:
-        """Extract memory ID, content, timestamp, and links from timestamped format
+        """Extract memory ID, content, timestamp, and links from timestamped format.
+
         Format: [memory_id][mentioned at date] content [links].
 
         Args:
             line: Line with timestamped memory format
 
         Returns:
-            Tuple of (memory_id, content, mentioned_at, links)
+            Tuple of (memory_id, mentioned_at, content, links)
         """
         import re
 
@@ -281,8 +281,8 @@ class BaseAction(ABC):
             try:
                 content = self._read_memory_content(character_name, category)
                 existing_memory[category] = content if isinstance(content, str) else ""
-            except Exception as e:
-                logger.warning(f"Failed to load existing {category} for {character_name}: {e}")
+            except Exception:
+                logger.warning("Failed to load existing %s for %s", category, character_name, exc_info=True)
                 existing_memory[category] = ""
 
         return existing_memory
@@ -292,8 +292,8 @@ class BaseAction(ABC):
         try:
             # agent_id and user_id are managed inside storage_manager
             return self.storage_manager.read_memory_file(category)
-        except Exception as e:
-            logger.warning(f"Failed to read {category} for {character_name}: {e}")
+        except Exception:
+            logger.warning("Failed to read %s for %s", category, character_name, exc_info=True)
             return ""
 
     def _save_memory_content(self, character_name: str, category: str, content: str) -> bool:
@@ -301,8 +301,8 @@ class BaseAction(ABC):
         try:
             # agent_id and user_id are managed inside storage_manager
             return self.storage_manager.write_memory_file(category, content)
-        except Exception as e:
-            logger.exception(f"Failed to save {category} for {character_name}: {e}")
+        except Exception:
+            logger.exception("Failed to save %s for %s", category, character_name)
             return False
 
     def _append_memory_content(self, character_name: str, category: str, content: str) -> bool:
@@ -310,8 +310,8 @@ class BaseAction(ABC):
         try:
             # agent_id and user_id are managed inside storage_manager
             return self.storage_manager.append_memory_file(category, content)
-        except Exception as e:
-            logger.exception(f"Failed to append {category} for {character_name}: {e}")
+        except Exception:
+            logger.exception("Failed to append %s for %s", category, character_name)
             return False
 
     def _convert_conversation_to_text(self, conversation: list[dict]) -> str:

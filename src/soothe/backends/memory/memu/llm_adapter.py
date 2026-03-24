@@ -69,7 +69,7 @@ class MemoryLLMAdapter:
 
             # Create a mock response object that the memory agent expects
             class MockResponse:
-                def __init__(self, content: str, success: bool = True) -> None:
+                def __init__(self, content: str, *, success: bool = True) -> None:
                     self.success = success
                     self.content = content
                     self.tool_calls = []  # No function calling in this simplified version

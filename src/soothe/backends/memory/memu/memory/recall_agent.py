@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class RecallAgent:
     """Enhanced workflow for intelligent memory retrieval with three distinct methods.
+
     Automatically scans {agent_id}/{user_id}/{category}.md files in memory directory.
 
     Three core retrieval methods:
@@ -55,18 +56,19 @@ class RecallAgent:
             self.embedding_client = get_default_embedding_client()
             self.semantic_search_enabled = True
             logger.info("Semantic search enabled")
-        except Exception as e:
-            logger.warning(f"Failed to initialize embedding client: {e}. Semantic search disabled.")
+        except Exception:
+            logger.warning("Failed to initialize embedding client. Semantic search disabled.", exc_info=True)
             self.embedding_client = None
             self.semantic_search_enabled = False
 
         # Default categories for core retrieval
         self.default_categories = ["profile", "event"]
 
-        logger.info(f"Recall Agent initialized with memory directory: {self.memory_dir}")
+        logger.info("Recall Agent initialized with memory directory: %s", self.memory_dir)
 
     def retrieve_default_category(self, agent_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
-        """Method 1: Retrieve Default Category
+        """Method 1: Retrieve Default Category.
+
         Get complete content from ['profile', 'event'] categories.
 
         Args:
@@ -96,7 +98,7 @@ class RecallAgent:
                         }
                     )
                 else:
-                    logger.debug(f"No content found for {agent_id}:{user_id}:{category}")
+                    logger.debug("No content found for %s:%s:%s", agent_id, user_id, category)
 
             return {
                 "success": True,
@@ -106,19 +108,23 @@ class RecallAgent:
                 "all_categories_found": all_categories,
                 "results": results,
                 "total_items": len(results),
-                "message": f"Retrieved {len(results)} default categories for {agent_id}:{user_id} (found {len(existing_defaults)}/{len(self.default_categories)} requested files)",
+                "message": (
+                    f"Retrieved {len(results)} default categories for {agent_id}:{user_id} "
+                    f"(found {len(existing_defaults)}/{len(self.default_categories)} requested files)"
+                ),
             }
 
-        except Exception as e:
-            logger.exception(f"Error in retrieve_default_category for {agent_id}:{user_id}: {e}")
+        except Exception:
+            logger.exception("Error in retrieve_default_category for %s:%s", agent_id, user_id)
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Retrieval failed",
                 "method": "retrieve_default_category",
             }
 
     def retrieve_relevant_category(self, agent_id: str, user_id: str, query: str, top_k: int = 5) -> dict[str, Any]:
-        """Method 2: Retrieve Relevant Category
+        """Method 2: Retrieve Relevant Category.
+
         Retrieve relevant contents from top-k similar category names (excluding profile, event, and activity)
         Scans actual {agent_id}/{user_id}/{category}.md files in memory directory.
 
@@ -170,8 +176,8 @@ class RecallAgent:
                         # Calculate semantic similarity
                         semantic_similarity = self._cosine_similarity(query_embedding, content_embedding)
                         content_relevance = semantic_similarity
-                    except Exception as e:
-                        logger.warning(f"Semantic search failed for {category}: {e}")
+                    except Exception:
+                        logger.warning("Semantic search failed for %s", category, exc_info=True)
                         # Fallback to simple keyword matching
                         content_lower = content.lower()
                         content_relevance = (
@@ -207,20 +213,19 @@ class RecallAgent:
             top_categories = category_scores[:top_k]
 
             # Format results
-            results = []
-            for item in top_categories:
-                results.append(
-                    {
-                        "category": item["category"],
-                        "content": item["content"],
-                        "content_type": "relevant_category",
-                        "relevance_score": item["score"],
-                        "content_relevance": item["content_relevance"],
-                        "semantic_search_used": item["semantic_search_used"],
-                        "length": item["length"],
-                        "lines": item["lines"],
-                    }
-                )
+            results = [
+                {
+                    "category": item["category"],
+                    "content": item["content"],
+                    "content_type": "relevant_category",
+                    "relevance_score": item["score"],
+                    "content_relevance": item["content_relevance"],
+                    "semantic_search_used": item["semantic_search_used"],
+                    "length": item["length"],
+                    "lines": item["lines"],
+                }
+                for item in top_categories
+            ]
 
             return {
                 "success": True,
@@ -233,20 +238,24 @@ class RecallAgent:
                 "semantic_search_enabled": self.semantic_search_enabled,
                 "results": results,
                 "total_items": len(results),
-                "message": f"Retrieved top {len(results)} relevant categories for query '{query}' using semantic search from {len(all_categories)} total categories",
+                "message": (
+                    f"Retrieved top {len(results)} relevant categories for query '{query}' "
+                    f"using semantic search from {len(all_categories)} total categories"
+                ),
             }
 
-        except Exception as e:
-            logger.exception(f"Error in retrieve_relevant_category for {agent_id}:{user_id}: {e}")
+        except Exception:
+            logger.exception("Error in retrieve_relevant_category for %s:%s", agent_id, user_id)
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Retrieval failed",
                 "method": "retrieve_relevant_category",
                 "query": query,
             }
 
     def retrieve_relevant_memories(self, agent_id: str, user_id: str, query: str, top_k: int = 10) -> dict[str, Any]:
-        """Method 3: Retrieve Relevant Memories
+        """Method 3: Retrieve Relevant Memories.
+
         Retrieve top-k memories using embedding search across all categories.
 
         Args:
@@ -290,14 +299,14 @@ class RecallAgent:
                 category = embeddings_file.stem.replace("_embeddings", "")
 
                 try:
-                    with open(embeddings_file, encoding="utf-8") as f:
+                    with embeddings_file.open(encoding="utf-8") as f:
                         embeddings_data = json.load(f)
 
                     # Search through stored embeddings
                     for emb_data in embeddings_data.get("embeddings", []):
                         similarity = self._cosine_similarity(query_embedding, emb_data["embedding"])
 
-                        if similarity > 0.1:  # Minimum threshold for semantic similarity
+                        if similarity > 0.1:  # noqa: PLR2004 - Minimum threshold for semantic similarity
                             results.append(
                                 {
                                     "content": emb_data["text"],
@@ -312,8 +321,8 @@ class RecallAgent:
                                 }
                             )
 
-                except Exception as e:
-                    logger.warning(f"Failed to process embeddings for {category}: {e}")
+                except Exception:
+                    logger.warning("Failed to process embeddings for %s", category, exc_info=True)
 
             # Sort by semantic score and get top-k
             results.sort(key=lambda x: x["semantic_score"], reverse=True)
@@ -331,11 +340,11 @@ class RecallAgent:
                 "message": f"Retrieved top {len(top_memories)} memories from {len(results)} candidates",
             }
 
-        except Exception as e:
-            logger.exception(f"Error in retrieve_relevant_memories for {agent_id}:{user_id}: {e}")
+        except Exception:
+            logger.exception("Error in retrieve_relevant_memories for %s:%s", agent_id, user_id)
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Retrieval failed",
                 "method": "retrieve_relevant_memories",
                 "query": query,
             }
@@ -355,8 +364,8 @@ class RecallAgent:
 
             return dot_product / (magnitude1 * magnitude2)
 
-        except Exception as e:
-            logger.warning(f"Cosine similarity calculation failed: {e}")
+        except Exception:
+            logger.warning("Cosine similarity calculation failed", exc_info=True)
             return 0.0
 
     def get_status(self) -> dict[str, Any]:

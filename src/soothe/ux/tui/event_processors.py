@@ -162,10 +162,9 @@ def process_daemon_event(
 
     if msg_type == "status":
         state_str = msg.get("state", "unknown")
-        tid = msg.get("thread_id", state.thread_id)
-        # Ensure thread_id is always a string (JSON deserialization may preserve integers)
-        if tid is not None:
-            tid = str(tid)
+        tid_raw = msg.get("thread_id", state.thread_id)
+        # Keep existing thread_id when daemon sends empty handshake thread_id ("").
+        tid = state.thread_id if tid_raw in (None, "") else str(tid_raw)
         previous_thread_id = state.thread_id
         state.thread_id = tid
 

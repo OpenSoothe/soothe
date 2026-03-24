@@ -23,13 +23,17 @@ class AddActivityMemoryAction(BaseAction):
 
     @property
     def action_name(self) -> str:
+        """Return the action name."""
         return "add_activity_memory"
 
     def get_schema(self) -> dict[str, Any]:
         """Return OpenAI-compatible function schema."""
         return {
             "name": "add_activity_memory",
-            "description": "Add new activity memory content with strict no-pronouns formatting for complete, self-contained memory items",
+            "description": (
+                "Add new activity memory content with strict no-pronouns formatting "
+                "for complete, self-contained memory items"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -39,7 +43,10 @@ class AddActivityMemoryAction(BaseAction):
                     },
                     "content": {
                         "type": "string",
-                        "description": "Complete original conversation text exactly as provided - do NOT modify, extract, or summarize",
+                        "description": (
+                            "Complete original conversation text exactly as provided - "
+                            "do NOT modify, extract, or summarize"
+                        ),
                     },
                     "session_date": {
                         "type": "string",
@@ -61,6 +68,7 @@ class AddActivityMemoryAction(BaseAction):
         character_name: str,
         content: str,
         session_date: str | None = None,
+        *,
         generate_embeddings: bool = True,
     ) -> dict[str, Any]:
         """Execute add activity memory operation with strict formatting.
@@ -104,7 +112,10 @@ class AddActivityMemoryAction(BaseAction):
                         "session_date": session_date,
                         "memory_items_added": len(memory_items),
                         "memory_items": memory_items,
-                        "message": f"Successfully generated {len(memory_items)} self-contained activity memory items for {character_name}",
+                        "message": (
+                            f"Successfully generated {len(memory_items)} self-contained "
+                            f"activity memory items for {character_name}"
+                        ),
                     }
                 )
             return self._add_metadata({"success": False, "error": "Failed to save activity memory"})
@@ -150,9 +161,13 @@ Transform this raw content into properly formatted activity memory items followi
 6. Each line ends with a period
 
 **GOOD EXAMPLES (meaningful activities, one per line):**
-{character_name} attended a LGBTQ support group where {character_name} heard inspiring transgender stories and felt happy, thankful, accepted, and gained courage to embrace {character_name}'s true self.
-{character_name} discussed future career plans with Melanie, expressing keen interest in counseling and mental health work to support people with similar issues, and Melanie encouraged {character_name} saying {character_name} would be a great counselor due to {character_name}'s empathy and understanding.
-{character_name} admired Melanie's lake sunrise painting from last year, complimented the color blending, and discussed how painting serves as a great outlet for expressing feelings and relaxing after long days.
+{character_name} attended a LGBTQ support group where {character_name} heard inspiring transgender stories
+and felt happy, thankful, accepted, and gained courage to embrace {character_name}'s true self.
+{character_name} discussed future career plans with Melanie, expressing keen interest in counseling and
+mental health work to support people with similar issues, and Melanie encouraged {character_name} saying
+{character_name} would be a great counselor due to {character_name}'s empathy and understanding.
+{character_name} admired Melanie's lake sunrise painting from last year, complimented the color blending,
+and discussed how painting serves as a great outlet for expressing feelings and relaxing after long days.
 
 **BAD EXAMPLES (too fragmented):**
 {character_name} went to a LGBTQ support group.
@@ -182,7 +197,8 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
         return self.llm_client.simple_chat(format_prompt)
 
     def _add_memory_ids_with_timestamp(self, content: str, session_date: str) -> tuple[list[dict], str]:
-        """Add memory IDs with timestamp to content lines
+        """Add memory IDs with timestamp to content lines.
+
         Format: [memory_id][mentioned at {session_date}] {content}.
 
         Args:
@@ -199,8 +215,8 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
         processed_items = []
         plain_memory_lines = []
 
-        for line in lines:
-            line = line.strip()
+        for line_raw in lines:
+            line = line_raw.strip()
             if line:  # Only process non-empty lines
                 # Generate new unique memory ID for this line
                 memory_id = self._generate_memory_id()
@@ -231,7 +247,7 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
 
             existing_embeddings = []
             if embeddings_file.exists():
-                with open(embeddings_file, encoding="utf-8") as f:
+                with embeddings_file.open(encoding="utf-8") as f:
                     embeddings_data = json.load(f)
                     existing_embeddings = embeddings_data.get("embeddings", [])
 
@@ -249,7 +265,10 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
                         "item_id": new_item_id,
                         "memory_id": item["memory_id"],
                         "text": item["content"],
-                        "full_line": f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] {item['content']} [{item['links']}]",
+                        "full_line": (
+                            f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] "
+                            f"{item['content']} [{item['links']}]"
+                        ),
                         "embedding": embedding_vector,
                         "line_number": len(existing_embeddings) + 1,
                         "metadata": {
@@ -264,8 +283,12 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
                     # Add to existing embeddings
                     existing_embeddings.append(new_embedding)
 
-                except Exception as e:
-                    logger.warning(f"Failed to generate embedding for memory item {item.get('memory_id')}: {e!r}")
+                except Exception:
+                    logger.warning(
+                        "Failed to generate embedding for memory item %s",
+                        item.get("memory_id"),
+                        exc_info=True,
+                    )
                     continue
 
             # Save updated embeddings
@@ -276,7 +299,7 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
                 "total_embeddings": len(existing_embeddings),
             }
 
-            with open(embeddings_file, "w", encoding="utf-8") as f:
+            with embeddings_file.open("w", encoding="utf-8") as f:
                 json.dump(embeddings_data, f, indent=2, ensure_ascii=False)
 
             return {
@@ -286,6 +309,6 @@ Transform the raw content into properly formatted activity memory items (ONE MEA
                 "message": f"Added embeddings for {len(new_items)} new memory items in {category}",
             }
 
-        except Exception as e:
-            logger.exception(f"Failed to add memory item embedding: {e}")
-            return {"success": False, "error": str(e)}
+        except Exception:
+            logger.exception("Failed to add memory item embedding")
+            return {"success": False, "error": "Failed to add embedding"}

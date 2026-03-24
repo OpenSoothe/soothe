@@ -32,8 +32,8 @@ class MemuMemoryStore:
         agent_id: str = "default_agent",
         user_id: str = "default_user",
         llm_client: BaseLLMClient | None = None,
+        *,
         enable_embeddings: bool = True,
-        **kwargs,
     ) -> None:
         """Initialize the MemU memory store.
 
@@ -56,8 +56,8 @@ class MemuMemoryStore:
                 from .llm_adapter import _get_llm_client_memu_compatible
 
                 llm_client = _get_llm_client_memu_compatible()
-            except Exception as e:
-                logger.warning(f"Failed to initialize default LLM client: {e}")
+            except Exception:
+                logger.warning("Failed to initialize default LLM client", exc_info=True)
                 # Continue without LLM client for basic file operations
 
         self.llm_client = llm_client
@@ -71,13 +71,13 @@ class MemuMemoryStore:
             enable_embeddings=enable_embeddings,
         )
 
-        logger.info(f"MemuMemoryStore initialized: agent={agent_id}, user={user_id}, dir={memory_dir}")
+        logger.info("MemuMemoryStore initialized: agent=%s, user=%s, dir=%s", agent_id, user_id, memory_dir)
 
     # ==========================================
     # Core CRUD Operations
     # ==========================================
 
-    async def add(self, memory_item: MemoryItem, **kwargs) -> str:
+    async def add(self, memory_item: MemoryItem) -> str:
         """Add a new memory item to the store."""
         try:
             # Convert memory item to conversation format for MemU
@@ -104,15 +104,16 @@ class MemuMemoryStore:
                     self._store_memory_mapping(memory_id, memory_item, memory_items)
 
                     return memory_id
-                raise Exception("No memory items were created")
+                msg = "No memory items were created"
+                raise ValueError(msg)
             msg = f"Failed to add memory: {result.get('error', 'Unknown error')}"
-            raise Exception(msg)
+            raise ValueError(msg)
 
-        except Exception as e:
-            logger.exception(f"Error adding memory item: {e}")
+        except Exception:
+            logger.exception("Error adding memory item")
             raise
 
-    async def get(self, memory_id: str, **kwargs) -> MemoryItem | None:
+    async def get(self, memory_id: str) -> MemoryItem | None:
         """Retrieve a memory item by its unique identifier."""
         try:
             # Get memory mapping
@@ -123,11 +124,11 @@ class MemuMemoryStore:
             # Reconstruct memory item from stored data
             return self._reconstruct_memory_item(memory_id, mapping)
 
-        except Exception as e:
-            logger.exception(f"Error retrieving memory item {memory_id}: {e}")
+        except Exception:
+            logger.exception("Error retrieving memory item %s", memory_id)
             return None
 
-    async def update(self, memory_id: str, updates: dict[str, Any], **kwargs) -> bool:
+    async def update(self, memory_id: str, updates: dict[str, Any]) -> bool:
         """Update an existing memory item."""
         try:
             # Get existing memory item
@@ -140,7 +141,7 @@ class MemuMemoryStore:
                 if hasattr(existing_item, key):
                     setattr(existing_item, key, value)
 
-            existing_item.updated_at = datetime.utcnow()
+            existing_item.updated_at = datetime.now(datetime.UTC)
             existing_item.version += 1
 
             # Store updated mapping
@@ -157,49 +158,49 @@ class MemuMemoryStore:
                     }
                 )
                 self._store_memory_mapping(memory_id, existing_item, mapping.get("memory_items", []))
-
-            return True
-
-        except Exception as e:
-            logger.exception(f"Error updating memory item {memory_id}: {e}")
+                return True
+        except Exception:
+            logger.exception("Error updating memory item %s", memory_id)
+            return False
+        else:
             return False
 
-    async def delete(self, memory_id: str, **kwargs) -> bool:
+    async def delete(self, memory_id: str) -> bool:
         """Delete a memory item from the store."""
         try:
             # Remove memory mapping
             return self._remove_memory_mapping(memory_id)
 
-        except Exception as e:
-            logger.exception(f"Error deleting memory item {memory_id}: {e}")
+        except Exception:
+            logger.exception("Error deleting memory item %s", memory_id)
             return False
 
     # ==========================================
     # Batch Operations
     # ==========================================
 
-    async def add_many(self, memory_items: list[MemoryItem], **kwargs) -> list[str]:
+    async def add_many(self, memory_items: list[MemoryItem]) -> list[str]:
         """Add multiple memory items in a batch operation."""
         results = []
         for item in memory_items:
             try:
                 memory_id = await self.add(item)
                 results.append(memory_id)
-            except Exception as e:
-                logger.exception(f"Error adding memory item in batch: {e}")
+            except Exception:
+                logger.exception("Error adding memory item in batch")
                 # Continue with other items
                 results.append(str(uuid.uuid4()))  # Generate placeholder ID
         return results
 
-    async def delete_many(self, memory_ids: list[str], **kwargs) -> int:
+    async def delete_many(self, memory_ids: list[str]) -> int:
         """Delete multiple memory items in a batch operation."""
         deleted_count = 0
         for memory_id in memory_ids:
             try:
                 if await self.delete(memory_id):
                     deleted_count += 1
-            except Exception as e:
-                logger.exception(f"Error deleting memory item {memory_id} in batch: {e}")
+            except Exception:
+                logger.exception("Error deleting memory item %s in batch", memory_id)
                 # Continue with other items
         return deleted_count
 
@@ -214,7 +215,6 @@ class MemuMemoryStore:
         offset: int | None = None,
         sort_by: str | None = None,
         sort_order: str = "desc",
-        **kwargs,
     ) -> list[MemoryItem]:
         """Retrieve multiple memory items with optional filtering and pagination."""
         try:
@@ -242,20 +242,19 @@ class MemuMemoryStore:
                 items = items[offset:]
             if limit:
                 items = items[:limit]
-
+        except Exception:
+            logger.exception("Error retrieving memory items")
+            return []
+        else:
             return items
 
-        except Exception as e:
-            logger.exception(f"Error retrieving memory items: {e}")
-            return []
-
-    async def count(self, filters: MemoryFilter | None = None, **kwargs) -> int:
+    async def count(self, filters: MemoryFilter | None = None) -> int:
         """Count memory items matching the given filters."""
         try:
             items = await self.get_all(filters=filters)
             return len(items)
-        except Exception as e:
-            logger.exception(f"Error counting memory items: {e}")
+        except Exception:
+            logger.exception("Error counting memory items")
             return 0
 
     # ==========================================
@@ -269,7 +268,6 @@ class MemuMemoryStore:
         threshold: float = 0.7,
         memory_types: list[str] | None = None,
         filters: MemoryFilter | None = None,
-        **kwargs,
     ) -> list[SearchResult]:
         """Perform semantic search across memory items."""
         try:
@@ -314,8 +312,8 @@ class MemuMemoryStore:
 
             return results[:limit]
 
-        except Exception as e:
-            logger.exception(f"Error searching memory items: {e}")
+        except Exception:
+            logger.exception("Error searching memory items")
             return []
 
     async def similarity_search(
@@ -324,7 +322,6 @@ class MemuMemoryStore:
         limit: int = 10,
         threshold: float = 0.7,
         filters: MemoryFilter | None = None,
-        **kwargs,
     ) -> list[SearchResult]:
         """Find memory items similar to a list of reference items."""
         try:
@@ -340,18 +337,17 @@ class MemuMemoryStore:
                 limit=limit,
                 threshold=threshold,
                 filters=filters,
-                **kwargs,
             )
 
-        except Exception as e:
-            logger.exception(f"Error in similarity search: {e}")
+        except Exception:
+            logger.exception("Error in similarity search")
             return []
 
     # ==========================================
     # Memory Management Operations
     # ==========================================
 
-    async def get_stats(self, filters: MemoryFilter | None = None, **kwargs) -> MemoryStats:
+    async def get_stats(self, filters: MemoryFilter | None = None) -> MemoryStats:
         """Get statistics about the memory store."""
         try:
             items = await self.get_all(filters=filters)
@@ -401,8 +397,8 @@ class MemuMemoryStore:
                 storage_size_bytes=storage_size,
             )
 
-        except Exception as e:
-            logger.exception(f"Error getting memory stats: {e}")
+        except Exception:
+            logger.exception("Error getting memory stats")
             return MemoryStats(
                 total_items=0,
                 items_by_type={},
@@ -414,9 +410,9 @@ class MemuMemoryStore:
         self,
         older_than: datetime,
         memory_types: list[str] | None = None,
+        *,
         preserve_important: bool = True,
         dry_run: bool = True,
-        **kwargs,
     ) -> int:
         """Clean up old memory items based on age and criteria."""
         try:
@@ -435,7 +431,7 @@ class MemuMemoryStore:
                     continue
 
                 # Check importance preservation
-                if preserve_important and item.importance > 0.8:
+                if preserve_important and item.importance > 0.8:  # noqa: PLR2004
                     continue
 
                 items_to_delete.append(item)
@@ -447,11 +443,11 @@ class MemuMemoryStore:
             for item in items_to_delete:
                 if await self.delete(item.id):
                     deleted_count += 1
-            return deleted_count
-
-        except Exception as e:
-            logger.exception(f"Error cleaning up old memories: {e}")
+        except Exception:
+            logger.exception("Error cleaning up old memories")
             return 0
+        else:
+            return deleted_count
 
     # ==========================================
     # Helper Methods
@@ -460,7 +456,6 @@ class MemuMemoryStore:
     def _memory_item_to_content(self, memory_item: MemoryItem) -> str:
         """Convert a MemoryItem to content format suitable for MemU."""
         # Create a simple conversation format
-        memory_item.user_id or "User"
         content = memory_item.content
 
         # Format as conversation if not already formatted
@@ -477,10 +472,10 @@ class MemuMemoryStore:
         mappings = {}
         if mappings_file.exists():
             try:
-                with open(mappings_file) as f:
+                with mappings_file.open() as f:
                     mappings = json.load(f)
-            except Exception as e:
-                logger.warning(f"Error loading mappings: {e}")
+            except Exception:
+                logger.warning("Error loading mappings", exc_info=True)
 
         # Store new mapping
         mappings[memory_id] = {
@@ -502,10 +497,10 @@ class MemuMemoryStore:
         # Save mappings
         try:
             mappings_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(mappings_file, "w") as f:
+            with mappings_file.open("w") as f:
                 json.dump(mappings, f, indent=2)
-        except Exception as e:
-            logger.exception(f"Error saving mappings: {e}")
+        except Exception:
+            logger.exception("Error saving mappings")
 
     def _get_memory_mapping(self, memory_id: str) -> dict[str, Any] | None:
         """Get mapping data for a memory ID."""
@@ -515,11 +510,11 @@ class MemuMemoryStore:
             return None
 
         try:
-            with open(mappings_file) as f:
+            with mappings_file.open() as f:
                 mappings = json.load(f)
             return mappings.get(memory_id)
-        except Exception as e:
-            logger.exception(f"Error loading mapping for {memory_id}: {e}")
+        except Exception:
+            logger.exception("Error loading mapping for %s", memory_id)
             return None
 
     def _get_all_memory_mappings(self) -> dict[str, dict[str, Any]]:
@@ -530,10 +525,10 @@ class MemuMemoryStore:
             return {}
 
         try:
-            with open(mappings_file) as f:
+            with mappings_file.open() as f:
                 return json.load(f)
-        except Exception as e:
-            logger.exception(f"Error loading all mappings: {e}")
+        except Exception:
+            logger.exception("Error loading all mappings")
             return {}
 
     def _remove_memory_mapping(self, memory_id: str) -> bool:
@@ -544,19 +539,19 @@ class MemuMemoryStore:
             return False
 
         try:
-            with open(mappings_file) as f:
+            with mappings_file.open() as f:
                 mappings = json.load(f)
 
             if memory_id in mappings:
                 del mappings[memory_id]
 
-                with open(mappings_file, "w") as f:
+                with mappings_file.open("w") as f:
                     json.dump(mappings, f, indent=2)
                 return True
+        except Exception:
+            logger.exception("Error removing mapping for %s", memory_id)
             return False
-
-        except Exception as e:
-            logger.exception(f"Error removing mapping for {memory_id}: {e}")
+        else:
             return False
 
     def _reconstruct_memory_item(self, memory_id: str, mapping: dict[str, Any]) -> MemoryItem | None:
@@ -577,8 +572,8 @@ class MemuMemoryStore:
                 updated_at=(datetime.fromisoformat(mapping["updated_at"]) if mapping.get("updated_at") else None),
                 version=mapping.get("version", 1),
             )
-        except Exception as e:
-            logger.exception(f"Error reconstructing memory item {memory_id}: {e}")
+        except Exception:
+            logger.exception("Error reconstructing memory item %s", memory_id)
             return None
 
     def _apply_filters(self, items: list[MemoryItem], filters: MemoryFilter) -> list[MemoryItem]:

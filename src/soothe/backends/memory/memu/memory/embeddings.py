@@ -29,7 +29,7 @@ class EmbeddingClient:
             llm_client: The LLM client with embed/embed_batch capabilities
         """
         self.llm_client = llm_client
-        logger.info(f"EmbeddingClient initialized with LLM client: {type(llm_client).__name__}")
+        logger.info("EmbeddingClient initialized with LLM client: %s", type(llm_client).__name__)
 
     def embed(self, text: str) -> list[float]:
         """Generate embedding for text using the LLM client.
@@ -46,8 +46,8 @@ class EmbeddingClient:
 
         try:
             return self.llm_client.embed(text)
-        except Exception as e:
-            logger.exception(f"Failed to generate embedding: {e}")
+        except Exception:
+            logger.exception("Failed to generate embedding")
             raise
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -64,8 +64,8 @@ class EmbeddingClient:
 
         try:
             return self.llm_client.embed_batch(texts)
-        except Exception as e:
-            logger.exception(f"Failed to generate batch embeddings: {e}")
+        except Exception:
+            logger.exception("Failed to generate batch embeddings")
             # Fallback to individual embedding calls
             logger.info("Falling back to individual embed calls")
             embeddings = []
@@ -73,8 +73,8 @@ class EmbeddingClient:
                 try:
                     embedding = self.embed(text)
                     embeddings.append(embedding)
-                except Exception as individual_e:
-                    logger.exception(f"Failed to embed text individually: {individual_e}")
+                except Exception:
+                    logger.exception("Failed to embed text individually")
                     # Add zero vector as placeholder
                     embeddings.append([0.0] * self.get_embedding_dimension())
             return embeddings
@@ -83,8 +83,8 @@ class EmbeddingClient:
         """Get the dimension of embeddings produced by this client."""
         try:
             return self.llm_client.get_embedding_dimensions()
-        except Exception as e:
-            logger.warning(f"Failed to get embedding dimensions from LLM client: {e}")
+        except Exception:
+            logger.warning("Failed to get embedding dimensions from LLM client", exc_info=True)
             return 1536  # Default fallback
 
 
@@ -120,6 +120,6 @@ def get_default_embedding_client() -> EmbeddingClient | None:
 
         return create_embedding_client(llm_client)
 
-    except Exception as e:
-        logger.warning(f"Failed to create default embedding client: {e}")
+    except Exception:
+        logger.warning("Failed to create default embedding client", exc_info=True)
         return None

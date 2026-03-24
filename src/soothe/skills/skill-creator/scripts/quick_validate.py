@@ -113,12 +113,13 @@ def _validate_description(description: str) -> str | None:
         return "Description still contains TODO placeholder text"
     if "<" in trimmed or ">" in trimmed:
         return "Description cannot contain angle brackets (< or >)"
-    if len(trimmed) > 1024:
-        return f"Description is too long ({len(trimmed)} characters). Maximum is 1024 characters."
+    max_description_length = 1024
+    if len(trimmed) > max_description_length:
+        return f"Description is too long ({len(trimmed)} characters). Maximum is {max_description_length} characters."
     return None
 
 
-def validate_skill(skill_path):
+def validate_skill(skill_path: str) -> tuple[bool, str]:
     """Validate a skill folder structure and required frontmatter."""
     skill_path = Path(skill_path).resolve()
 
@@ -193,7 +194,8 @@ def validate_skill(skill_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    EXPECTED_ARG_COUNT = 2
+    if len(sys.argv) != EXPECTED_ARG_COUNT:
         sys.exit(1)
 
     valid, message = validate_skill(sys.argv[1])

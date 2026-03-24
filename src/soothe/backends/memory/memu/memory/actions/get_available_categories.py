@@ -16,6 +16,7 @@ class GetAvailableCategoriesAction(BaseAction):
 
     @property
     def action_name(self) -> str:
+        """Return the action name."""
         return "get_available_categories"
 
     def get_schema(self) -> dict[str, Any]:

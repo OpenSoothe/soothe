@@ -145,6 +145,7 @@ class SootheApp(App):
         self._connected = False
         self._conversation_history: list[str | Panel] = []
         self._message_history: list[dict[str, str]] = []
+        self._history_loaded_thread_id: str | None = None
         self._last_activity_count = 0
         self._progress_verbosity = self._config.logging.progress_verbosity
         self._thread_logger: ThreadLogger | None = None
@@ -176,6 +177,15 @@ class SootheApp(App):
         with contextlib.suppress(Exception):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
+
+        # Preload thread history immediately on mount to avoid waiting for
+        # daemon handshake/status sequencing before showing resumed context.
+        if self._thread_id:
+            self._state.thread_id = self._thread_id
+            self._load_thread_history(self._thread_id)
+            self._history_loaded_thread_id = self._thread_id
+            self._render_history_to_conversation_panel()
+            self._update_status_bar("Idle")
 
         self._refresh_plan()
         self.run_worker(self._connect_and_listen(), exclusive=True)
@@ -229,16 +239,15 @@ class SootheApp(App):
                 state_str = event.get("state", "")
                 thread_resumed = event.get("thread_resumed", False)
 
-                tid = event.get("thread_id", self._state.thread_id)
-                # Ensure thread_id is always a string (JSON deserialization may preserve integers)
-                if tid is not None:
-                    tid = str(tid)
+                tid_raw = event.get("thread_id", self._state.thread_id)
+                tid = self._state.thread_id if tid_raw in (None, "") else str(tid_raw)
                 previous_thread_id = self._thread_id
 
                 # Clear local history only on explicit new-thread signal.
                 if event.get("new_thread", False):
                     # Starting a fresh thread, clear previous conversation
                     self._thread_id = tid or None
+                    self._history_loaded_thread_id = tid or None
                     self._conversation_history.clear()
                     self._message_history.clear()
                     self._state.full_response.clear()
@@ -247,7 +256,7 @@ class SootheApp(App):
                     with contextlib.suppress(Exception):
                         panel = self.query_one("#conversation", ConversationPanel)
                         panel.clear()
-                elif tid and (tid != previous_thread_id or thread_resumed):
+                elif tid and (tid != previous_thread_id or thread_resumed or tid != self._history_loaded_thread_id):
                     # Thread switch or resume - load input history
                     history = event.get("input_history", [])
                     if history:
@@ -269,21 +278,13 @@ class SootheApp(App):
                             retention_days=self._config.logging.thread_logging.retention_days,
                             max_size_mb=self._config.logging.thread_logging.max_size_mb,
                         )
+                        self._history_loaded_thread_id = tid
                     else:
                         # Explicit thread switch (initial connect, resume):
                         # reload history from disk.
                         self._load_thread_history(tid)
-                        try:
-                            panel = self.query_one("#conversation", ConversationPanel)
-                            panel.clear()
-                            # Write all entries, then scroll to end
-                            for i, entry in enumerate(self._conversation_history):
-                                # Scroll to end on the last entry
-                                is_last = i == len(self._conversation_history) - 1
-                                panel.write(entry, scroll_end=is_last)
-                            self._flush_new_activity()
-                        except Exception:
-                            logger.exception("Failed to render thread history on resume")
+                        self._history_loaded_thread_id = tid
+                        self._render_history_to_conversation_panel()
 
                 if state_str == "running":
                     self._was_running = True
@@ -301,6 +302,20 @@ class SootheApp(App):
                 self._handle_clear()
 
             await asyncio.sleep(0)
+
+    def _render_history_to_conversation_panel(self) -> None:
+        """Render loaded conversation history into the conversation panel."""
+        try:
+            # Reuse the standard conversation repaint pipeline to keep
+            # resume rendering consistent with normal turn-end rendering.
+            self._state.full_response.clear()
+            self._append_conversation()
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.refresh(layout=True)
+            self.refresh(layout=True)
+            self._flush_new_activity()
+        except Exception:
+            logger.exception("Failed to render thread history")
 
     def _load_thread_history(self, thread_id: str) -> None:
         """Load conversation and activity history for a thread.

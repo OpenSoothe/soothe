@@ -324,6 +324,18 @@ async def test_tui_sends_thread_id_on_connection() -> None:
     assert found_call, "TUI should call send_resume_thread in _connect_and_listen"
 
 
+def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
+    """Empty handshake thread_id must not clear an already selected TUI thread."""
+    from soothe.ux.tui.event_processors import process_daemon_event
+    from soothe.ux.tui.state import TuiState
+
+    state = TuiState(thread_id="thread-keep")
+
+    process_daemon_event({"type": "status", "state": "idle", "thread_id": ""}, state)
+
+    assert state.thread_id == "thread-keep"
+
+
 @pytest.mark.asyncio
 async def test_slash_command_memory_in_daemon() -> None:
     """Test that /memory command works in daemon context (no nested event loops)."""

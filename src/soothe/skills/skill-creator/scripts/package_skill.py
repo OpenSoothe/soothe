@@ -19,9 +19,10 @@ from quick_validate import validate_skill
 def _is_within(path: Path, root: Path) -> bool:
     try:
         path.relative_to(root)
-        return True
     except ValueError:
         return False
+    else:
+        return True
 
 
 def _cleanup_partial_archive(skill_filename: Path) -> None:
@@ -32,7 +33,7 @@ def _cleanup_partial_archive(skill_filename: Path) -> None:
         pass
 
 
-def package_skill(skill_path, output_dir=None):
+def package_skill(skill_path: str, output_dir: str | None = None) -> Path | None:
     """Package a skill folder into a .skill file.
 
     Args:
@@ -71,7 +72,7 @@ def package_skill(skill_path, output_dir=None):
 
     skill_filename = output_path / f"{skill_name}.skill"
 
-    EXCLUDED_DIRS = {".git", ".svn", ".hg", "__pycache__", "node_modules"}
+    excluded_dirs = {".git", ".svn", ".hg", "__pycache__", "node_modules"}
 
     files_to_package = []
     resolved_archive = skill_filename.resolve()
@@ -83,7 +84,7 @@ def package_skill(skill_path, output_dir=None):
             return None
 
         rel_parts = file_path.relative_to(skill_path).parts
-        if any(part in EXCLUDED_DIRS for part in rel_parts):
+        if any(part in excluded_dirs for part in rel_parts):
             continue
 
         if file_path.is_file():
@@ -103,20 +104,21 @@ def package_skill(skill_path, output_dir=None):
                 # Calculate the relative path within the zip.
                 arcname = Path(skill_name) / file_path.relative_to(skill_path)
                 zipf.write(file_path, arcname)
-
-        return skill_filename
-
     except Exception:
         _cleanup_partial_archive(skill_filename)
         return None
+    else:
+        return skill_filename
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    """Main entry point for skill packaging CLI."""
+    min_args = 2
+    if len(sys.argv) < min_args:
         sys.exit(1)
 
     skill_path = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else None
+    output_dir = sys.argv[2] if len(sys.argv) > min_args else None
 
     if output_dir:
         pass

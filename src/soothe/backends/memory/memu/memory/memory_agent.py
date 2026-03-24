@@ -37,10 +37,20 @@ class MemoryCore:
         self,
         llm_client: BaseLLMClient = None,
         memory_dir: str = "memu/server/memory",
+        *,
         enable_embeddings: bool = True,
         agent_id: str = "",
         user_id: str = "",
     ) -> None:
+        """Initialize Memory Core with shared resources.
+
+        Args:
+            llm_client: LLM client for memory operations
+            memory_dir: Directory to store memory files
+            enable_embeddings: Whether to enable embeddings
+            agent_id: Agent identifier
+            user_id: User identifier
+        """
         self.llm_client = llm_client
         self.memory_dir = Path(memory_dir)
         self._stop_flag = threading.Event()
@@ -61,8 +71,10 @@ class MemoryCore:
                 self.embedding_client = create_embedding_client(llm_client)
                 self.embeddings_enabled = True
                 logger.info("Embeddings enabled for semantic retrieval using LLM client")
-            except Exception as e:
-                logger.warning(f"Failed to initialize embedding client with LLM client: {e}. Embeddings disabled.")
+            except Exception:
+                logger.warning(
+                    "Failed to initialize embedding client with LLM client. Embeddings disabled.", exc_info=True
+                )
                 self.embedding_client = None
                 self.embeddings_enabled = False
         else:
@@ -76,7 +88,9 @@ class MemoryCore:
         self.embeddings_dir.mkdir(exist_ok=True)
 
         logger.info(
-            f"Memory Core initialized: {len(self.memory_types)} memory types, embeddings: {self.embeddings_enabled}"
+            "Memory Core initialized: %d memory types, embeddings: %s",
+            len(self.memory_types),
+            self.embeddings_enabled,
         )
 
 
@@ -106,6 +120,9 @@ class MemoryAgent:
         """Initialize Memory Agent.
 
         Args:
+            llm_client: LLM client for memory operations
+            agent_id: Agent identifier
+            user_id: User identifier
             memory_dir: Directory to store memory files
             enable_embeddings: Whether to generate embeddings for semantic search
         """
@@ -115,8 +132,8 @@ class MemoryAgent:
                 from soothe.backends.memory.memu.llm_adapter import _get_llm_client_memu_compatible
 
                 llm_client = _get_llm_client_memu_compatible()
-            except Exception as e:
-                logger.warning(f"Failed to initialize default LLM client: {e}")
+            except Exception:
+                logger.warning("Failed to initialize default LLM client", exc_info=True)
 
         self.llm_client = llm_client
 
@@ -136,7 +153,7 @@ class MemoryAgent:
         # Build function registry for compatibility
         self.function_registry = self._build_function_registry()
 
-        logger.info(f"Memory Agent initialized: {len(self.actions)} actions available")
+        logger.info("Memory Agent initialized: %d actions available", len(self.actions))
 
     def _load_actions(self) -> None:
         """Load all available actions from the registry."""
@@ -144,9 +161,9 @@ class MemoryAgent:
             try:
                 action_instance = action_class(self.memory_core)
                 self.actions[action_name] = action_instance
-                logger.debug(f"Loaded action: {action_name}")
-            except Exception as e:
-                logger.exception(f"Failed to load action {action_name}: {e}")
+                logger.debug("Loaded action: %s", action_name)
+            except Exception:
+                logger.exception("Failed to load action %s", action_name)
 
     def _build_function_registry(self) -> dict[str, Callable]:
         """Build registry of callable functions from actions."""
@@ -175,6 +192,7 @@ class MemoryAgent:
             conversation: List of conversation messages
             character_name: Name of the character to store memories for
             max_iterations: Maximum number of function calling iterations (default: 20)
+            session_date: Session date for the memory items
 
         Returns:
             Dict containing processing results and file paths
@@ -195,7 +213,7 @@ class MemoryAgent:
                 logger.info("session date unavaiable, use system datetime")
                 session_date = datetime.now().strftime("%Y-%m-%d")
 
-            logger.info(f"🚀 Starting iterative conversation processing for {character_name}")
+            logger.info("🚀 Starting iterative conversation processing for %s", character_name)
 
             # Convert conversation to text for processing
             conversation_text = self._convert_conversation_to_text(conversation)
@@ -208,7 +226,6 @@ class MemoryAgent:
                 "conversation_length": len(conversation),
                 "iterations": 0,
                 "function_calls": [],
-                # "files_generated": [],
                 "processing_log": [],
             }
 
@@ -216,7 +233,8 @@ class MemoryAgent:
             function_schemas = self.get_functions_schema()
 
             # Build initial system message
-            system_message = f"""You are a memory processing agent. Follow this structured process to analyze and store conversation information for "{character_name}":
+            system_message = f"""You are a memory processing agent. Follow this structured process to analyze
+and store conversation information for "{character_name}":
 
 CONVERSATION TO PROCESS:
 {conversation_text}
@@ -225,37 +243,51 @@ CHARACTER: {character_name}
 SESSION DATE: {session_date}
 
 PROCESSING WORKFLOW:
-1. STORE TO ACTIVITY: Call add_activity_memory with the COMPLETE RAW CONVERSATION TEXT as the 'content' parameter. This will automatically append to existing activity memories. DO NOT extract, modify, or summarize the conversation - pass the entire original conversation text exactly as shown above.
+1. STORE TO ACTIVITY: Call add_activity_memory with the COMPLETE RAW CONVERSATION TEXT as the
+   'content' parameter. This will automatically append to existing activity memories. DO NOT extract,
+   modify, or summarize the conversation - pass the entire original conversation text exactly as shown.
 
-2. THEORY OF MIND: Call run_theory_of_mind to analyze the subtle information behind the conversation and extract the theory of mind of the characters.
+2. THEORY OF MIND: Call run_theory_of_mind to analyze the subtle information behind the conversation
+   and extract the theory of mind of the characters.
 
-3. GENERATE SUGGESTIONS: Call generate_memory_suggestions with the available memory items to get suggestions for what should be added to each category.
+3. GENERATE SUGGESTIONS: Call generate_memory_suggestions with the available memory items to get
+   suggestions for what should be added to each category.
 
-4. UPDATE CATEGORIES: For each category that should be updated (based on suggestions), call update_memory_with_suggestions to update that category with the new memory items and suggestions. This will return structured modifications.
+4. UPDATE CATEGORIES: For each category that should be updated (based on suggestions), call
+   update_memory_with_suggestions to update that category with the new memory items and suggestions.
+   This will return structured modifications.
 
-5. LINK MEMORIES: For each category that was modified, call link_related_memories with link_all_items=true and write_to_memory=true to add relevant links between ALL memories in that category.
+5. LINK MEMORIES: For each category that was modified, call link_related_memories with link_all_items=true
+   and write_to_memory=true to add relevant links between ALL memories in that category.
 
 6. CLUSTER MEMORIES: Call cluster_memories to cluster the memories into different categories.
 
 IMPORTANT GUIDELINES:
-- Step 1: CRITICAL: For add_activity_memory, the 'content' parameter MUST be the complete original conversation text exactly as shown above. Do NOT modify, extract, or summarize it.
-- Step 2: Use both the original conversation and the extracted activity memoryitems from step 1 for the theory of mind analysis
-- Step 3: Use BOTH the extracted memory items from step 1 and theory-of-mind items from step 2 for generating suggestions. You can simply concatenate the two lists of memory items and pass them to the subsequent function.
+- Step 1: CRITICAL: For add_activity_memory, the 'content' parameter MUST be the complete
+  original conversation text exactly as shown above. Do NOT modify, extract, or summarize it.
+- Step 2: Use both the original conversation and the extracted activity memoryitems from step 1
+  for the theory of mind analysis
+- Step 3: Use BOTH the extracted memory items from step 1 and theory-of-mind items from step 2
+  for generating suggestions. You can simply concatenate the two lists of memory items and pass
+  them to the subsequent function.
 - Step 4: Use the memory suggestions from step 3 to update EVERY memory categories in suggestions.
-- Step 5-6: Use the new memory items returned from step 4 for linking and clustering memories. DO NOT include the memory items returned from step 1 and 2.
+- Step 5-6: Use the new memory items returned from step 4 for linking and clustering memories.
+  DO NOT include the memory items returned from step 1 and 2.
 - Each memory item should have its own memory_id and focused content
 - Follow the suggestions when updating categories
 - The update_memory_with_suggestions function will return structured format with memory_id and content
-- Always link related memories after updating categories by setting link_all_items=true and write_to_memory=true
+- Always link related memories after updating categories by setting link_all_items=true and
+  write_to_memory=true
 
-Start with step 1 and work through the process systematically. When you complete all steps, respond with "PROCESSING_COMPLETE"."""
+Start with step 1 and work through the process systematically. When you complete all steps,
+respond with "PROCESSING_COMPLETE"."""
 
             # Start iterative function calling
             messages = [{"role": "system", "content": system_message}]
 
             for iteration in range(max_iterations):
                 results["iterations"] = iteration + 1
-                logger.info(f"🔄 Iteration {iteration + 1}/{max_iterations}")
+                logger.info("🔄 Iteration %d/%d", iteration + 1, max_iterations)
 
                 try:
                     # Call LLM with function calling enabled
@@ -267,7 +299,7 @@ Start with step 1 and work through the process systematically. When you complete
                     )
 
                     if not response.success:
-                        logger.error(f"LLM call failed: {response.error}")
+                        logger.error("LLM call failed: %s", response.error)
                         break
 
                     # Add assistant response to conversation
@@ -293,20 +325,20 @@ Start with step 1 and work through the process systematically. When you complete
 
                             try:
                                 arguments = json.loads(tool_call.function.arguments)
-                            except json.JSONDecodeError as e:
-                                logger.exception(f"Failed to parse function arguments: {e}")
-                                logger.exception(f"Function name: {function_name}")
-                                logger.exception(f"Arguments raw: {tool_call.function.arguments!r}")
+                            except json.JSONDecodeError:
+                                logger.exception("Failed to parse function arguments")
+                                logger.exception("Function name: %s", function_name)
+                                logger.exception("Arguments raw: %r", tool_call.function.arguments)
                                 continue
 
-                            logger.info(f"🔧 Calling function: {function_name}")
+                            logger.info("🔧 Calling function: %s", function_name)
 
                             # Execute the function call
                             time_start = time.time()
                             function_result = self.call_function(function_name, arguments)
                             time_end = time.time()
 
-                            logger.info(f"    Function time used: {time_end - time_start:.2f} seconds")
+                            logger.info("    Function time used: %.2f seconds", time_end - time_start)
 
                             # Track function call
                             call_record = {
@@ -339,30 +371,29 @@ Start with step 1 and work through the process systematically. When you complete
                         if response.content:
                             results["processing_log"].append(f"Iteration {iteration + 1}: {response.content[:100]}...")
 
-                except Exception as e:
-                    logger.exception(f"Error in iteration {iteration + 1}: {e}")
-                    results["processing_log"].append(f"Iteration {iteration + 1}: Error - {e!s}")
+                except Exception:
+                    logger.exception("Error in iteration %d", iteration + 1)
+                    results["processing_log"].append(f"Iteration {iteration + 1}: Error")
                     break
 
             # Finalize results
             if results["iterations"] >= max_iterations:
-                logger.warning(f"⚠️ Reached maximum iterations ({max_iterations})")
+                logger.warning("⚠️ Reached maximum iterations (%d)", max_iterations)
                 results["processing_log"].append(f"Reached maximum iterations ({max_iterations})")
 
-            logger.info(f"🎉 Conversation processing completed after {results['iterations']} iterations")
-            # logger.info(f"📁 Generated {len(results['files_generated'])} files")
-            logger.info(f"🔧 Made {len(results['function_calls'])} function calls")
+            logger.info("🎉 Conversation processing completed after %d iterations", results["iterations"])
+            logger.info("🔧 Made %d function calls", len(results["function_calls"]))
 
-            return results
-
-        except Exception as e:
-            logger.exception(f"Error in conversation processing: {e}")
+        except Exception:
+            logger.exception("Error in conversation processing")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Processing failed",
                 "character_name": character_name,
                 "timestamp": datetime.now().isoformat(),
             }
+        else:
+            return results
 
     def _convert_conversation_to_text(self, conversation: list[dict]) -> str:
         """Convert conversation list to text format for LLM processing."""
@@ -392,8 +423,8 @@ Start with step 1 and work through the process systematically. When you complete
             try:
                 schema = action.get_schema()
                 schemas.append(schema)
-            except Exception as e:
-                logger.exception(f"Failed to get schema for action {action.action_name}: {e}")
+            except Exception:
+                logger.exception("Failed to get schema for action %s", action.action_name)
         return schemas
 
     def call_function(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -420,21 +451,21 @@ Start with step 1 and work through the process systematically. When you complete
             # Execute the action with arguments
             result = action.execute(**arguments)
 
-            logger.debug(f"Function call successful: {function_name}")
-            return result
-
-        except Exception as e:
+            logger.debug("Function call successful: %s", function_name)
+        except Exception:
             error_result = {
                 "success": False,
-                "error": str(e),
+                "error": "Function call failed",
                 "function_name": function_name,
                 "timestamp": datetime.now().isoformat(),
             }
-            logger.exception(f"Function call failed: {function_name} - {e!r}")
+            logger.exception("Function call failed: %s", function_name)
             import traceback
 
             traceback.print_exc()
             return error_result
+        else:
+            return result
 
     def validate_function_call(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Validate a function call before execution.
@@ -477,6 +508,7 @@ Start with step 1 and work through the process systematically. When you complete
         top_k: int = 5,
         min_similarity: float = 0.3,
         search_categories: list[str] | None = None,
+        *,
         link_all_items: bool = False,
         write_to_memory: bool = False,
     ) -> dict[str, Any]:
@@ -510,7 +542,7 @@ Start with step 1 and work through the process systematically. When you complete
                 return "Description not available"
         return "Function not found"
 
-    def get_action_instance(self, action_name: str):
+    def get_action_instance(self, action_name: str) -> Any:
         """Get a specific action instance (for advanced usage)."""
         return self.actions.get(action_name)
 
@@ -530,9 +562,9 @@ Start with step 1 and work through the process systematically. When you complete
                 "timestamp": datetime.now().isoformat(),
             }
 
-        except Exception as e:
-            logger.exception(f"Error stopping operations: {e}")
-            return {"success": False, "error": str(e)}
+        except Exception:
+            logger.exception("Error stopping operations")
+            return {"success": False, "error": "Stop operation failed"}
 
     def reset_stop_flag(self) -> None:
         """Reset the stop flag to allow new operations."""

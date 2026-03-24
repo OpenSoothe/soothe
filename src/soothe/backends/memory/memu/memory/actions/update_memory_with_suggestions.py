@@ -18,12 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class UpdateMemoryWithSuggestionsAction(BaseAction):
-    """Update memory categories based on new memory items and suggestions,
-    supporting different operation types (ADD, UPDATE, DELETE, TOUCH).
+    """Update memory categories based on new memory items and suggestions.
+
+    Supports different operation types (ADD, UPDATE, DELETE, TOUCH).
     """
 
     @property
     def action_name(self) -> str:
+        """Return the action name."""
         return "update_memory_with_suggestions"
 
     def get_schema(self) -> dict[str, Any]:
@@ -67,6 +69,7 @@ class UpdateMemoryWithSuggestionsAction(BaseAction):
         category: str,
         suggestion: str,
         session_date: str | None = None,
+        *,
         generate_embeddings: bool = True,
     ) -> dict[str, Any]:
         """Update memory category with different operation types based on suggestions.
@@ -146,7 +149,8 @@ class UpdateMemoryWithSuggestionsAction(BaseAction):
         suggestion: str,
     ) -> str:
         """Analyze memory update scenario and determine the operations that should be performed."""
-        operation_prompt = f"""You are an expert in analyzing the following memory update scenario and determining the memory operations that should be performed.
+        operation_prompt = f"""You are an expert in analyzing the following memory update scenario
+and determining the memory operations that should be performed.
 
 Character: {character_name}
 Memory Category: {category}
@@ -176,27 +180,35 @@ Memory Update Suggestion:
 **ANALYSIS GUIDELINES:**
 - Read the Memory Update Suggestion carefully to determine what new memory items are offered
 - Read the Existing Memory Items to view all memory items that are already present
-- Determine the most appropriate operation type FOR EACH NEW MEMORY ITEM based on the new information and existing content
+- Determine the most appropriate operation type FOR EACH NEW MEMORY ITEM based on the new
+  information and existing content
 - **Use ADD for:** New memory items that are not covered in existing content
 - **Use UPDATE for:** New memory items that provide updated details for existing memory items
 - **Use DELETE for:** Existing memory items that are outdated/incorrect based on new memory items
 - **Use TOUCH for:** Existing memory items that already covers the new memory items adequately
 
 **OUTPUT INSTRUCTIONS:**
-- **IMPORTANT** Output ALL necessary memory operations. It is common that you should perform different operations for different specific memory items
-- For ADD and UPDATE operations, provide the content of the new memory items following the self-contained memory requirements
-- For UPDATE, DELETE, and TOUCH operations, provide the target memory IDs associated with the memory items
-- If there are multiple actions for an operation type (e.g, multiple ADDs), output them separately, do not put them in a single **OPERATION:** block
-- **IMPORTANT** If a memory item in suggestion uses modal adverbs (perhaps, probably, likely, etc.) to indicate an uncertain inference, keep the modal adverbs as-is in your output
+- **IMPORTANT** Output ALL necessary memory operations. It is common that you should perform
+  different operations for different specific memory items
+- For ADD and UPDATE operations, provide the content of the new memory items following
+  the self-contained memory requirements
+- For UPDATE, DELETE, and TOUCH operations, provide the target memory IDs associated with
+  the memory items
+- If there are multiple actions for an operation type (e.g, multiple ADDs), output them separately,
+  do not put them in a single **OPERATION:** block
+- **IMPORTANT** If a memory item in suggestion uses modal adverbs (perhaps, probably, likely, etc.)
+  to indicate an uncertain inference, keep the modal adverbs as-is in your output
 
 **OUTPUT FORMAT:**
 
 **OPERATION:** [ADD/UPDATE/DELETE/TOUCH]
-- Target Memory ID: [Only if operation is UPDATE, DELETE, or TOUCH][Memory ID of the memory item that is the target of the operation]
+- Target Memory ID: [Only if operation is UPDATE, DELETE, or TOUCH][Memory ID of the memory item
+  that is the target of the operation]
 - Memory Item Content: [Only if operation is ADD or UPDATE][Content of the new memory item]
 
 **OPERATION:** [ADD/UPDATE/DELETE/TOUCH]
-- Target Memory ID: [Only if operation is UPDATE, DELETE, or TOUCH][Memory ID of the memory item that is the target of the operation]
+- Target Memory ID: [Only if operation is UPDATE, DELETE, or TOUCH][Memory ID of the memory item
+  that is the target of the operation]
 - Memory Item Content: [Only if operation is ADD or UPDATE][Content of the new memory item]
 
 ... other operations ...
@@ -212,14 +224,15 @@ Memory Update Suggestion:
         operation_list = []
         current_operation = None
 
-        for line in lines:
-            line = line.strip()
+        for line_raw in lines:
+            line = line_raw.strip()
 
             if line.startswith("**OPERATION:**"):
                 operation = line.replace("**OPERATION:**", "").strip()
                 if operation in ["ADD", "UPDATE", "DELETE", "TOUCH"]:
                     if current_operation:
-                        """cleanup and completeness checks are not conducted here, they will be done in the execute function"""
+                        # Cleanup and completeness checks are not conducted here,
+                        # they will be done in the execute function
                         operation_list.append(current_operation)
                     current_operation = {
                         "operation": operation,
@@ -247,6 +260,7 @@ Memory Update Suggestion:
         operation_list: list[dict[str, Any]],
         session_date: str,
         existing_items: list[dict[str, str]],
+        *,
         generate_embeddings: bool,
     ) -> list[dict[str, Any]]:
         """Execute all operations in the list."""
@@ -320,8 +334,8 @@ Memory Update Suggestion:
         items = []
         lines = content.split("\n")
 
-        for line in lines:
-            line = line.strip()
+        for line_raw in lines:
+            line = line_raw.strip()
 
             pattern = r"^\[([^\]]+)\]\[mentioned at ([^\]]+)\]\s*(.*?)(?:\s*\[([^\]]*)\])?$"
             match = re.match(pattern, line)
@@ -355,7 +369,7 @@ Memory Update Suggestion:
 
             existing_embeddings = []
             if embeddings_file.exists():
-                with open(embeddings_file, encoding="utf-8") as f:
+                with embeddings_file.open(encoding="utf-8") as f:
                     embeddings_data = json.load(f)
                     existing_embeddings = embeddings_data.get("embeddings", [])
 
@@ -373,7 +387,10 @@ Memory Update Suggestion:
                         "item_id": new_item_id,
                         "memory_id": item["memory_id"],
                         "text": item["content"],
-                        "full_line": f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] {item['content']} [{item['links']}]",
+                        "full_line": (
+                            f"[{item['memory_id']}][mentioned at {item['mentioned_at']}] "
+                            f"{item['content']} [{item['links']}]"
+                        ),
                         "embedding": embedding_vector,
                         "line_number": len(existing_embeddings) + 1,
                         "metadata": {
@@ -388,20 +405,23 @@ Memory Update Suggestion:
                     # Add to existing embeddings
                     existing_embeddings.append(new_embedding)
 
-                except Exception as e:
-                    logger.warning(f"Failed to generate embedding for memory item {item.get('memory_id')}: {e!r}")
+                except Exception:
+                    logger.warning(
+                        "Failed to generate embedding for memory item %s",
+                        item.get("memory_id"),
+                        exc_info=True,
+                    )
                     continue
 
             # Save updated embeddings
             embeddings_data = {
                 "category": category,
                 "timestamp": datetime.now().isoformat(),
-                # "content_hash": hashlib.md5(new_content.encode()).hexdigest(),
                 "embeddings": existing_embeddings,
                 "total_embeddings": len(existing_embeddings),
             }
 
-            with open(embeddings_file, "w", encoding="utf-8") as f:
+            with embeddings_file.open("w", encoding="utf-8") as f:
                 json.dump(embeddings_data, f, indent=2, ensure_ascii=False)
 
             return {
@@ -411,9 +431,9 @@ Memory Update Suggestion:
                 "message": f"Added embeddings for {len(new_items)} new memory items in {category}",
             }
 
-        except Exception as e:
-            logger.exception(f"Failed to add memory item embedding: {e}")
-            return {"success": False, "error": str(e)}
+        except Exception:
+            logger.exception("Failed to add memory item embedding")
+            return {"success": False, "error": "Failed to add embedding"}
 
     def _format_memory_items(self, items: list[dict[str, str]]) -> str:
         """Format memory items into a string."""
@@ -455,11 +475,12 @@ Memory Update Suggestion:
             raise FileNotFoundError(msg)
 
         # Load and format the prompt template
-        with open(prompt_file, encoding="utf-8") as f:
+        with prompt_file.open(encoding="utf-8") as f:
             prompt_template = f.read()
 
         # Format the prompt with variables for extracting NEW content only
-        return f"""Based on the following category-specific requirements, extract ONLY NEW information for the {category} memory:
+        return f"""Based on the following category-specific requirements, extract ONLY NEW information
+for the {category} memory:
 
 {prompt_template}
 
@@ -501,6 +522,7 @@ Suggestion for this category: {suggestion}
 5. ONLY include lines with actual, factual NEW information
 6. If no new information is found, return empty content
 
-Extract ONLY NEW relevant information according to the category requirements above and write each piece as a complete, self-contained sentence:
+Extract ONLY NEW relevant information according to the category requirements above and write each piece
+as a complete, self-contained sentence:
 
 NEW {category} content to append:"""
