@@ -273,12 +273,17 @@ class SootheApp(App):
                         # Explicit thread switch (initial connect, resume):
                         # reload history from disk.
                         self._load_thread_history(tid)
-                        with contextlib.suppress(Exception):
+                        try:
                             panel = self.query_one("#conversation", ConversationPanel)
                             panel.clear()
-                            for entry in self._conversation_history:
-                                panel.write(entry)
+                            # Write all entries, then scroll to end
+                            for i, entry in enumerate(self._conversation_history):
+                                # Scroll to end on the last entry
+                                is_last = i == len(self._conversation_history) - 1
+                                panel.write(entry, scroll_end=is_last)
                             self._flush_new_activity()
+                        except Exception:
+                            logger.exception("Failed to render thread history on resume")
 
                 if state_str == "running":
                     self._was_running = True
