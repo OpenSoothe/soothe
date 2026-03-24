@@ -100,165 +100,189 @@ def main(
 
 
 # ---------------------------------------------------------------------------
-# Command Registration (Lazy Imports)
+# Thread Command (Flat)
 # ---------------------------------------------------------------------------
 
-config_app = typer.Typer(name="config", help="Manage configuration")
-add_help_alias(config_app)
-app.add_typer(config_app)
 
-
-@config_app.command("show")
-def _config_show(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Display the current configuration."""
-    from soothe.ux.cli.commands.config_cmd import config_show
-
-    config_show(config=config)
-
-
-@config_app.command("init")
-def _config_init(
-    force: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--force", "-f", help="Overwrite existing file."),
-    ] = False,
-) -> None:
-    """Initialize a new configuration file."""
-    from soothe.ux.cli.commands.config_cmd import config_init
-
-    config_init(force=force)
-
-
-@config_app.command("validate")
-def _config_validate(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Validate a configuration file."""
-    from soothe.ux.cli.commands.config_cmd import config_validate
-
-    config_validate(config=config)
-
-
-thread_app = typer.Typer(name="thread", help="Manage conversation threads")
-add_help_alias(thread_app)
-app.add_typer(thread_app)
-
-
-@thread_app.command("list")
-def _thread_list(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    status: Annotated[
-        str | None,
-        typer.Option("--status", "-s", help="Filter by status (active, archived)."),
-    ] = None,
-) -> None:
-    """List all agent threads."""
-    from soothe.ux.cli.commands.thread_cmd import thread_list
-
-    thread_list(config=config, status=status)
-
-
-@thread_app.command("show")
-def _thread_show(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to show.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Show thread details."""
-    from soothe.ux.cli.commands.thread_cmd import thread_show
-
-    thread_show(thread_id=thread_id, config=config)
-
-
-@thread_app.command("continue")
-def _thread_continue(
+@app.command()
+def thread(
+    ctx: typer.Context,
     thread_id: Annotated[
         str | None,
-        typer.Argument(help="Thread ID to continue. Omit to continue last active thread."),
+        typer.Argument(help="Thread ID to operate on."),
     ] = None,
     config: Annotated[
         str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
+        typer.Option("--config", help="Path to configuration file."),
     ] = None,
-    *,
-    daemon: Annotated[
+    # Action flags
+    list_threads: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--daemon", help="Attach to running daemon instead of standalone."),
+        typer.Option("--list", "-l", help="List all threads."),
     ] = False,
-    new: Annotated[
+    show_thread: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--new", help="Create a new thread instead of continuing."),
+        typer.Option("--show", "-s", help="Show thread details."),
     ] = False,
-) -> None:
-    """Continue a conversation thread in the TUI."""
-    from soothe.ux.cli.commands.thread_cmd import thread_continue
-
-    thread_continue(thread_id=thread_id, config=config, daemon=daemon, new=new)
-
-
-@thread_app.command("archive")
-def _thread_archive(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to archive.")],
-    config: Annotated[
+    continue_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--continue", "-c", help="Continue thread in TUI."),
+    ] = False,
+    archive_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--archive", "-a", help="Archive thread."),
+    ] = False,
+    delete_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--delete", "-d", help="Delete thread."),
+    ] = False,
+    export_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--export", "-e", help="Export thread."),
+    ] = False,
+    stats_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--stats", help="Show thread statistics."),
+    ] = False,
+    tag_thread: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--tag", help="Add/remove tags from thread."),
+    ] = False,
+    # Additional options for specific actions
+    status_filter: Annotated[
         str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
+        typer.Option("--status", help="Filter by status (active, archived)."),
     ] = None,
-) -> None:
-    """Archive a thread."""
-    from soothe.ux.cli.commands.thread_cmd import thread_archive
-
-    thread_archive(thread_id=thread_id, config=config)
-
-
-@thread_app.command("delete")
-def _thread_delete(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to delete.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    *,
-    yes: Annotated[
+    daemon: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--yes", "-y", help="Skip confirmation."),
+        typer.Option("--daemon", help="Attach to running daemon for continue."),
     ] = False,
-) -> None:
-    """Permanently delete a thread."""
-    from soothe.ux.cli.commands.thread_cmd import thread_delete
-
-    thread_delete(thread_id=thread_id, config=config, yes=yes)
-
-
-@thread_app.command("export")
-def _thread_export(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID to export.")],
+    new: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--new", help="Create new thread for continue."),
+    ] = False,
+    yes: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation for delete."),
+    ] = False,
     output: Annotated[
         str | None,
-        typer.Option("--output", "-o", help="Output file path."),
+        typer.Option("--output", "-o", help="Output file path for export."),
     ] = None,
     export_format: Annotated[
         str,
         typer.Option("--format", "-f", help="Export format: jsonl or md."),
     ] = "jsonl",
+    tags: Annotated[
+        list[str] | None,
+        typer.Argument(help="Tags to add/remove (use with --tag)."),
+    ] = None,
+    remove: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--remove", help="Remove tags instead of adding."),
+    ] = False,
+    show_help: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
+    ] = False,
 ) -> None:
-    """Export thread conversation to a file."""
-    from soothe.ux.cli.commands.thread_cmd import thread_export
+    """Manage conversation threads.
 
-    thread_export(thread_id=thread_id, output=output, export_format=export_format)
+    Default action (no flags): Show thread details if thread_id provided, else list threads.
 
+    Examples:
+        soothe thread                    # List all threads
+        soothe thread -l                 # List all threads (explicit)
+        soothe thread abc123             # Show thread details
+        soothe thread -c abc123          # Continue thread in TUI
+        soothe thread -c --daemon abc123 # Continue via daemon
+        soothe thread -a abc123          # Archive thread
+        soothe thread -d abc123          # Delete thread
+        soothe thread -e abc123 -o out.json  # Export thread
+        soothe thread --stats abc123     # Show thread stats
+        soothe thread --tag abc123 research analysis  # Add tags
+    """
+    # Handle -h/--help flag
+    if show_help:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+    from soothe.ux.cli.commands.thread_cmd import (
+        thread_archive,
+        thread_continue,
+        thread_delete,
+        thread_export,
+        thread_list,
+        thread_show,
+        thread_stats,
+        thread_tag,
+    )
+
+    # Handle --list flag
+    if list_threads:
+        thread_list(config=config, status=status_filter)
+        return
+
+    # Handle --tag flag
+    if tag_thread:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --tag", err=True)
+            raise typer.Exit(1)
+        thread_tag(thread_id=thread_id, tags=tags or [], config=config, remove=remove)
+        return
+
+    # Handle --stats flag
+    if stats_thread:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --stats", err=True)
+            raise typer.Exit(1)
+        thread_stats(thread_id=thread_id, config=config)
+        return
+
+    # Handle --export flag
+    if export_thread:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --export", err=True)
+            raise typer.Exit(1)
+        thread_export(thread_id=thread_id, output=output, export_format=export_format)
+        return
+
+    # Handle --delete flag
+    if delete_thread:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --delete", err=True)
+            raise typer.Exit(1)
+        thread_delete(thread_id=thread_id, config=config, yes=yes)
+        return
+
+    # Handle --archive flag
+    if archive_thread:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --archive", err=True)
+            raise typer.Exit(1)
+        thread_archive(thread_id=thread_id, config=config)
+        return
+
+    # Handle --continue flag
+    if continue_thread:
+        thread_continue(thread_id=thread_id, config=config, daemon=daemon, new=new)
+        return
+
+    # Handle --show flag or default with thread_id
+    if show_thread or thread_id:
+        if not thread_id:
+            typer.echo("Error: Thread ID required for --show", err=True)
+            raise typer.Exit(1)
+        thread_show(thread_id=thread_id, config=config)
+        return
+
+    # Default: list threads
+    thread_list(config=config, status=status_filter)
+
+
+# ---------------------------------------------------------------------------
+# Daemon Command (Nested Subcommands)
+# ---------------------------------------------------------------------------
 
 daemon_app = typer.Typer(name="daemon", help="Manage daemon process")
 add_help_alias(daemon_app)
@@ -312,46 +336,144 @@ def _daemon_restart(
     daemon_restart(config=config)
 
 
-# NOTE: daemon "attach" command removed in RFC-0017
-# Use 'soothe thread continue --daemon' instead
-
-agent_app = typer.Typer(name="agent", help="List and manage agents")
-add_help_alias(agent_app)
-app.add_typer(agent_app)
+# ---------------------------------------------------------------------------
+# Config Command (Flat)
+# ---------------------------------------------------------------------------
 
 
-@agent_app.command("list")
-def _agent_list(
+@app.command()
+def config(
+    ctx: typer.Context,
+    config_path: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    # Action flags
+    show: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--show", "-s", help="Show current configuration."),
+    ] = False,
+    init: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--init", "-i", help="Initialize default configuration."),
+    ] = False,
+    validate: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--validate", help="Validate configuration file."),
+    ] = False,
+    # Additional options
+    force: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--force", help="Force overwrite (with --init)."),
+    ] = False,
+    format_output: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: json or summary (with --show)."),
+    ] = "summary",
+    show_sensitive: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--show-sensitive", help="Show sensitive values (with --show)."),
+    ] = False,
+    show_help: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
+    ] = False,
+) -> None:
+    """Manage Soothe configuration.
+
+    Default action (no flags): Show current configuration.
+
+    Examples:
+        soothe config              # Show configuration summary
+        soothe config -i           # Initialize default config
+        soothe config --validate   # Validate config
+        soothe config -s --format json  # Show as JSON
+    """
+    # Handle -h/--help flag
+    if show_help:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+    from soothe.ux.cli.commands.config_cmd import config_init, config_show, config_validate
+
+    # Handle --init flag
+    if init:
+        config_init(force=force)
+        return
+
+    # Handle --validate flag
+    if validate:
+        config_validate(config=config_path)
+        return
+
+    # Handle --show flag or default
+    config_show(config=config_path, format_output=format_output, show_sensitive=show_sensitive)
+
+
+# ---------------------------------------------------------------------------
+# Agent Command (Flat)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def agent(
+    ctx: typer.Context,
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    # Action flags
+    list_agents: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--list", "-l", help="List available agents."),
+    ] = False,
+    status: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--status", help="Show detailed agent status."),
+    ] = False,
+    # Additional options
     enabled: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--enabled", help="Show only enabled agents."),
+        typer.Option("--enabled", help="Show only enabled agents (with --list)."),
     ] = False,
     disabled: Annotated[  # noqa: FBT002
         bool,
-        typer.Option("--disabled", help="Show only disabled agents."),
+        typer.Option("--disabled", help="Show only disabled agents (with --list)."),
+    ] = False,
+    show_help: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
     ] = False,
 ) -> None:
-    """List available agents and their status."""
-    from soothe.ux.cli.commands.status_cmd import agent_list
+    """List and manage agents.
 
+    Default action (no flags): List available agents.
+
+    Examples:
+        soothe agent           # List all agents
+        soothe agent -l        # List all agents (explicit)
+        soothe agent --status  # Show detailed status
+        soothe agent -l --enabled  # List only enabled agents
+    """
+    # Handle -h/--help flag
+    if show_help:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+    from soothe.ux.cli.commands.status_cmd import agent_list, agent_status
+
+    # Handle --status flag
+    if status:
+        agent_status(config=config)
+        return
+
+    # Handle --list flag or default
     agent_list(config=config, enabled=enabled, disabled=disabled)
 
 
-@agent_app.command("status")
-def _agent_status(
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Show detailed agent status."""
-    from soothe.ux.cli.commands.status_cmd import agent_status
-
-    agent_status(config=config)
+# ---------------------------------------------------------------------------
+# Autopilot Command
+# ---------------------------------------------------------------------------
 
 
 @app.command()
@@ -442,36 +564,3 @@ def help_command(ctx: typer.Context) -> None:
 
 if __name__ == "__main__":
     app()
-
-
-@thread_app.command("stats")
-def _thread_stats(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-) -> None:
-    """Show thread execution statistics."""
-    from soothe.ux.cli.commands.thread_cmd import thread_stats
-
-    thread_stats(thread_id=thread_id, config=config)
-
-
-@thread_app.command("tag")
-def _thread_tag(
-    thread_id: Annotated[str, typer.Argument(help="Thread ID.")],
-    tags: Annotated[list[str], typer.Argument(help="Tags to add/remove.")],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    remove: Annotated[  # noqa: FBT002
-        bool,
-        typer.Option("--remove", help="Remove tags instead of adding."),
-    ] = False,
-) -> None:
-    """Add or remove tags from a thread."""
-    from soothe.ux.cli.commands.thread_cmd import thread_tag
-
-    thread_tag(thread_id=thread_id, tags=tags, config=config, remove=remove)

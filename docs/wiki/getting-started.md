@@ -11,7 +11,8 @@ The fastest way to start using Soothe:
 pip install soothe
 
 # 2. Initialize default configuration
-soothe config init
+soothe config -i
+soothe config --init
 
 # 3. Set your API key
 export OPENAI_API_KEY=sk-your-key-here
@@ -22,7 +23,7 @@ soothe
 
 That's it! Soothe is now ready to use with sensible defaults.
 
-## What `soothe config init` Does
+## What `soothe config -i` Does
 
 The initialization command creates:
 
@@ -48,14 +49,16 @@ The default `config.yml` includes:
 Check your current configuration:
 
 ```bash
-# Summary view
-soothe config show
+# Summary view (default)
+soothe config
+soothe config -s
+soothe config --show
 
 # Detailed JSON view
-soothe config show --format json
+soothe config -s --format json
 
 # Include sensitive values (API keys)
-soothe config show --show-sensitive
+soothe config -s --show-sensitive
 ```
 
 ### Edit Configuration
@@ -124,7 +127,7 @@ subagents:
 Soothe looks for configuration files in this order:
 
 1. `--config <file>` (CLI argument)
-2. `~/.soothe/config/config.yml` (default location, created by `soothe config init`)
+2. `~/.soothe/config/config.yml` (default location, created by `soothe config -i`)
 3. `./soothe.yml` (current directory, if default doesn't exist)
 4. Built-in defaults (if no config file found)
 
@@ -198,10 +201,12 @@ Continue from where you left off:
 
 ```bash
 # List threads
-soothe thread list
+soothe thread -l
+soothe thread --list
 
 # Resume specific thread
-soothe thread continue abc123
+soothe thread -c abc123
+soothe thread --continue abc123
 ```
 
 ## Optional Extras
@@ -231,10 +236,10 @@ Check that everything is working:
 
 ```bash
 # Validate configuration
-soothe config validate
+soothe config --validate
 
 # Show configuration summary
-soothe config show
+soothe config
 
 # Test with a simple query
 soothe "What is 2 + 2?"
@@ -251,7 +256,7 @@ Reset to defaults (with backup):
 cp ~/.soothe/config/config.yml ~/.soothe/config/config.yml.backup
 
 # Reinitialize
-soothe config init --force
+soothe config -i --force
 ```
 
 ### Validate Configuration
@@ -260,10 +265,10 @@ Check for configuration errors:
 
 ```bash
 # Validate default config
-soothe config validate
+soothe config --validate
 
 # Validate custom config
-soothe config validate --config custom.yml
+soothe config --validate --config custom.yml
 ```
 
 ## Next Steps

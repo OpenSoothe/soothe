@@ -110,17 +110,33 @@ class DaemonHandlersMixin:
 
                 try:
                     manager = ThreadContextManager(self._runner._durability, self._config)
+                    # Capture thread_info to get the resolved full thread_id
+                    # (supports partial prefix matching in durability layer)
                     thread_info = await manager.resume_thread(str(thread_id))
-                    self._runner.set_current_thread_id(thread_info.thread_id)
+                    resumed_thread_id = thread_info.thread_id
+                    self._runner.set_current_thread_id(resumed_thread_id)
+
+                    # Initialize thread logger for the resumed thread
+                    self._thread_logger = ThreadLogger(
+                        thread_id=resumed_thread_id,
+                        retention_days=self._config.logging.thread_logging.retention_days,
+                        max_size_mb=self._config.logging.thread_logging.max_size_mb,
+                    )
+
+                    # Clear draft state if resuming an existing thread
+                    self._draft_thread_id = None
+
+                    # Broadcast the resumed thread status
                     await self._broadcast(
                         {
                             "type": "status",
                             "state": "idle",
-                            "thread_id": self._runner.current_thread_id or "",
+                            "thread_id": resumed_thread_id,
                             "thread_resumed": True,
                             "input_history": self._input_history.history[-100:] if self._input_history else [],
                         }
                     )
+                    logger.info("Resumed thread %s", resumed_thread_id)
                 except KeyError:
                     await self._broadcast(
                         {

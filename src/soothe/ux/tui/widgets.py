@@ -55,10 +55,11 @@ class ChatInput(TextArea):
     """Chat input with UP/DOWN arrow key history navigation and multi-line support.
 
     Enter submits the message. Shift+Enter inserts a newline.
-    Auto-expands from 1 to 6 lines based on content.
+    Auto-expands from 1 line up to 50% of viewport height based on content.
+    When content exceeds max height, scrollbar appears automatically.
     """
 
-    MAX_HEIGHT = 6  # Maximum height in lines
+    MAX_HEIGHT = 50  # Maximum height in lines (CSS max-height: 50vh handles actual limit)
     current_height: reactive[int] = reactive(1)
 
     def __init__(self, **kwargs: Any) -> None:
@@ -81,7 +82,7 @@ class ChatInput(TextArea):
         """Calculate the number of lines needed for current text.
 
         Returns:
-            Number of lines (1-3) needed to display the current text.
+            Number of lines (1 to MAX_HEIGHT) needed to display the current text.
         """
         if not self.text:
             return 1

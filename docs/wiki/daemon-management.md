@@ -18,7 +18,11 @@ The Soothe daemon is a background process that:
 Start the daemon in the background:
 
 ```bash
+# Start daemon in background
 soothe daemon start
+
+# Start in foreground (useful for debugging)
+soothe daemon start --foreground
 ```
 
 **Output**:
@@ -65,16 +69,24 @@ Saving thread state...
 Daemon stopped successfully
 ```
 
+### Restart Daemon
+
+Restart the daemon:
+
+```bash
+soothe daemon restart
+```
+
 ### Attach to Daemon
 
 **Note**: The `soothe daemon attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
 
 ```bash
 # Resume last active thread via daemon
-soothe thread continue --daemon
+soothe thread -c --daemon
 
 # Resume specific thread via daemon
-soothe thread continue --daemon <thread-id>
+soothe thread -c --daemon <thread-id>
 ```
 
 This opens the TUI and connects to the already-running daemon.
@@ -101,7 +113,7 @@ Reconnect to the daemon:
 
 ```bash
 # Resume via running daemon
-soothe thread continue --daemon
+soothe thread -c --daemon
 ```
 
 ## When to Use Daemon Mode
@@ -258,7 +270,7 @@ soothe daemon start
 **Solution**: Start daemon first, then use thread continue
 ```bash
 soothe daemon start
-soothe thread continue --daemon
+soothe thread -c --daemon
 ```
 
 ## Related Guides

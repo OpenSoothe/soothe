@@ -42,6 +42,8 @@ from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTre
 
 logger = logging.getLogger(__name__)
 
+_THREAD_ID_DISPLAY_LEN = 8
+
 
 class SootheApp(App):
     """Textual application for the Soothe TUI."""
@@ -85,7 +87,7 @@ class SootheApp(App):
         layout: horizontal;
         height: auto;
         min-height: 1;
-        max-height: 10;
+        max-height: 50vh;
         padding: 0 1;
     }
 
@@ -100,12 +102,13 @@ class SootheApp(App):
     #chat-input {
         height: auto;
         min-height: 1;
-        max-height: 6;
+        max-height: 50vh;
         padding: 0;
         color: $foreground;
         background: transparent;
         border: none;
         width: 1fr;
+        overflow-y: auto;
     }
     #chat-input:focus {
         border: none;
@@ -164,13 +167,15 @@ class SootheApp(App):
         )
 
         with Container(id="footer-stack"):
-            yield PlanTree(id="plan-tree", classes="visible" if self._state.plan_visible else "")
-            yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
+            # Plan tree shown only when there's an active plan (Bug #2)
+            yield PlanTree(id="plan-tree", classes="")
             with Container(id="chat-input-row"):
                 from textual.widgets import Static
 
                 yield Static(">", id="chat-prompt")
                 yield ChatInput(id="chat-input")
+            # InfoBar moved below chat-input-row (Bug #2)
+            yield InfoBar("Thread: -  Events: 0  Idle", id="info-bar")
 
     async def on_mount(self) -> None:
         """Connect to daemon on startup."""
@@ -178,13 +183,11 @@ class SootheApp(App):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
 
-        # Load history now but render it via call_later to ensure widget tree is ready
+        # Don't load history here with partial thread_id - wait for daemon to resolve full thread_id
+        # The daemon will send back a thread_resumed event with the resolved ID,
+        # and the event handler will load history with the correct full thread_id
         if self._thread_id:
             self._state.thread_id = self._thread_id
-            self._load_thread_history(self._thread_id)
-            self._history_loaded_thread_id = self._thread_id
-            # Use call_later to ensure widget is mounted before rendering
-            self._render_history_to_conversation_panel(use_call_later=True)
             self._update_status_bar("Idle")
 
         self._refresh_plan()
@@ -222,6 +225,10 @@ class SootheApp(App):
                 self._log_conversation("[dim]Daemon connection closed.[/dim]")
                 break
 
+            # Capture thread_id BEFORE process_daemon_event updates it
+            # This is critical for detecting thread changes correctly
+            pre_event_thread_id = self._state.thread_id
+
             process_daemon_event(
                 event,
                 self._state,
@@ -234,24 +241,21 @@ class SootheApp(App):
             # Update activity display after processing event
             self._flush_new_activity()
 
-            # Handle thread ID changes
+            # Handle TUI-specific actions for status events
+            # NOTE: process_daemon_event() already updated self._state.thread_id correctly
+            # (it preserves existing thread_id when daemon sends empty handshake)
             if event.get("type") == "status":
                 state_str = event.get("state", "")
                 thread_resumed = event.get("thread_resumed", False)
 
-                tid_raw = event.get("thread_id", self._state.thread_id)
-                tid = self._state.thread_id if tid_raw in (None, "") else str(tid_raw)
-                previous_thread_id = self._thread_id
-
-                # Update state thread_id for status bar display
-                if tid:
-                    self._state.thread_id = tid
+                # Use the thread_id from state (already correctly updated by process_daemon_event)
+                current_tid = self._state.thread_id
 
                 # Clear local history only on explicit new-thread signal.
                 if event.get("new_thread", False):
                     # Starting a fresh thread, clear previous conversation
-                    self._thread_id = tid or None
-                    self._history_loaded_thread_id = tid or None
+                    self._thread_id = current_tid or None
+                    self._history_loaded_thread_id = current_tid or None
                     self._conversation_history.clear()
                     self._message_history.clear()
                     self._state.full_response.clear()
@@ -260,7 +264,11 @@ class SootheApp(App):
                     with contextlib.suppress(Exception):
                         panel = self.query_one("#conversation", ConversationPanel)
                         panel.clear()
-                elif tid and (tid != previous_thread_id or thread_resumed or tid != self._history_loaded_thread_id):
+                elif current_tid and (
+                    current_tid != pre_event_thread_id
+                    or thread_resumed
+                    or current_tid != self._history_loaded_thread_id
+                ):
                     # Thread switch or resume - load input history
                     history = event.get("input_history", [])
                     if history:
@@ -268,7 +276,7 @@ class SootheApp(App):
                         chat_input.set_history(history)
 
                     # Thread switch or explicit resume - load history from disk
-                    self._thread_id = tid
+                    self._thread_id = current_tid
 
                     # Load history from disk when we have a thread_id (either resume or first assignment)
                     # Skip loading if this is a post-query thread change (was_running and not resumed)
@@ -278,18 +286,19 @@ class SootheApp(App):
                         # conversation (already rendered) and just update the
                         # thread logger so future persistence uses the right id.
                         self._thread_logger = ThreadLogger(
-                            thread_id=tid,
+                            thread_id=current_tid,
                             retention_days=self._config.logging.thread_logging.retention_days,
                             max_size_mb=self._config.logging.thread_logging.max_size_mb,
                         )
-                        self._history_loaded_thread_id = tid
+                        self._history_loaded_thread_id = current_tid
                     else:
                         # Explicit thread switch (initial connect, resume):
                         # reload history from disk.
-                        self._load_thread_history(tid)
-                        self._history_loaded_thread_id = tid
-                        # Don't use call_later here - we're already in event loop and widget is ready
-                        self._render_history_to_conversation_panel(use_call_later=False)
+                        self._load_thread_history(current_tid)
+                        self._history_loaded_thread_id = current_tid
+                        # Use call_after_refresh to ensure rendering happens on main thread
+                        # This is safer than direct call when running inside a worker callback
+                        self._render_history_to_conversation_panel(use_call_later=True)
 
                 if state_str == "running":
                     self._was_running = True
@@ -312,15 +321,16 @@ class SootheApp(App):
         """Render loaded conversation history into the conversation panel.
 
         Args:
-            use_call_later: If True, defer rendering via call_later to ensure widget is ready.
+            use_call_later: If True, defer rendering via call_after_refresh to ensure widget is ready.
         """
         if use_call_later:
-            self.call_later(self._do_render_history)
+            # Use call_after_refresh instead of call_later to ensure widget is fully rendered (Bug #3)
+            self.call_after_refresh(self._do_render_history)
         else:
             self._do_render_history()
 
     def _do_render_history(self) -> None:
-        """Actual rendering of conversation history (called via call_later or directly)."""
+        """Actual rendering of conversation history (called via call_after_refresh)."""
         try:
             # Reuse the standard conversation repaint pipeline to keep
             # resume rendering consistent with normal turn-end rendering.
@@ -328,10 +338,20 @@ class SootheApp(App):
             self._append_conversation()
             panel = self.query_one("#conversation", ConversationPanel)
             panel.refresh(layout=True)
+            # Scroll to bottom after rendering history
+            panel.scroll_end(animate=False)
             self.refresh(layout=True)
             self._flush_new_activity()
+            logger.debug(
+                "Rendered thread history: %d conversation items",
+                len(self._conversation_history),
+            )
         except Exception:
-            logger.exception("Failed to render thread history")
+            logger.exception(
+                "Failed to render thread history (conversation_items=%d, thread_id=%s)",
+                len(self._conversation_history),
+                self._state.thread_id,
+            )
 
     def _load_thread_history(self, thread_id: str) -> None:
         """Load conversation and activity history for a thread.
@@ -589,7 +609,7 @@ class SootheApp(App):
         try:
             plan_tree = self.query_one("#plan-tree", PlanTree)
 
-            # Only show plan tree, not recent activity
+            # Only show plan tree when there's an active plan AND user hasn't hidden it (Bug #2)
             if self._state.current_plan:
                 tree = render_plan_tree(self._state.current_plan)
                 # Render Tree to string using Console
@@ -601,8 +621,15 @@ class SootheApp(App):
                 console.print(tree)
                 plan_content = console.file.getvalue()
                 plan_tree.update(plan_content)
+                # Show plan tree if user hasn't manually hidden it
+                if self._state.plan_visible:
+                    plan_tree.add_class("visible")
+                else:
+                    plan_tree.remove_class("visible")
             else:
-                plan_tree.update("[dim]No active plan.[/dim]")
+                # Hide plan panel completely when no active plan (Bug #2)
+                plan_tree.update("")
+                plan_tree.remove_class("visible")
         except Exception:
             logger.debug("Failed to refresh plan tree", exc_info=True)
 
@@ -613,9 +640,11 @@ class SootheApp(App):
             conv_panel = self.query_one("#conversation", ConversationPanel)
             conv_panel.clear()
 
-            # Clear plan tree
+            # Clear plan tree and hide it (Bug #2 consistency)
             plan_tree = self.query_one("#plan-tree", PlanTree)
-            plan_tree.update("[dim]No active plan.[/dim]")
+            plan_tree.update("")
+            plan_tree.remove_class("visible")
+            self._state.current_plan = None
 
             # Clear internal state
             self._conversation_history.clear()
@@ -683,7 +712,14 @@ class SootheApp(App):
         """Update the info bar with current status."""
         with contextlib.suppress(Exception):
             bar = self.query_one("#info-bar", InfoBar)
-            tid = self._state.thread_id or "-"
+            # Ensure thread_id is a proper string and truncate for display (Bug #1)
+            raw_tid = self._state.thread_id
+            if raw_tid:
+                tid_str = str(raw_tid)
+                # Truncate long UUIDs for display (show first 8 chars)
+                tid = tid_str[:_THREAD_ID_DISPLAY_LEN] if len(tid_str) > _THREAD_ID_DISPLAY_LEN else tid_str
+            else:
+                tid = "-"
             events = len(self._state.activity_lines)
             subagent_lines = self._state.subagent_tracker.render()
             sub_summary = ""
@@ -846,6 +882,9 @@ class SootheApp(App):
         """Toggle plan tree visibility."""
         try:
             plan_tree = self.query_one("#plan-tree", PlanTree)
+            # Only allow toggling if there's an active plan (Bug #2)
+            if not self._state.current_plan:
+                return
             plan_tree.toggle_class("visible")
             self._state.plan_visible = not self._state.plan_visible
         except Exception:
