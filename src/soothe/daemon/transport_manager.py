@@ -153,7 +153,10 @@ class TransportManager:
             message: Message dict to broadcast.
         """
         if not self._started:
+            logger.warning("Broadcast called but transport manager not started")
             return
+
+        logger.debug("Broadcasting to %d transports", len(self._transports))
 
         # Broadcast to all transports concurrently
         broadcast_tasks = [transport.broadcast(message) for transport in self._transports]
@@ -162,13 +165,17 @@ class TransportManager:
         results = await asyncio.gather(*broadcast_tasks, return_exceptions=True)
 
         # Log any broadcast failures
+        failure_count = 0
         for i, result in enumerate(results):
             if isinstance(result, Exception):
+                failure_count += 1
                 logger.exception(
                     "Failed to broadcast to %s",
                     self._transports[i].transport_type,
                     exc_info=result,
                 )
+
+        logger.debug("Broadcast completed, %d failures", failure_count)
 
     @property
     def client_count(self) -> int:

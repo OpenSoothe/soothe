@@ -10,6 +10,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from rich.console import RenderableType
 from rich.text import Text
 
 from soothe.core.event_catalog import REGISTRY
@@ -57,6 +58,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Type alias for panel write callback
+PanelWriteCallback = Callable[[RenderableType], None] | None
+
 _MAX_INLINE_QUERIES = 3
 _ACTIVITY_MAX = 300
 
@@ -74,7 +78,7 @@ class TuiEventRenderer:
     def __init__(self) -> None:
         """Initialize the TUI event renderer with registered handlers."""
         self._registry = REGISTRY
-        self._handlers: dict[str, Callable[[dict, TuiState, ProgressVerbosity], None]] = {}
+        self._handlers: dict[str, Callable[[dict, TuiState, ProgressVerbosity, PanelWriteCallback], None]] = {}
         self._register_handlers()
 
     def render_protocol_event(
@@ -83,6 +87,7 @@ class TuiEventRenderer:
         state: TuiState,
         *,
         verbosity: ProgressVerbosity = "normal",
+        on_panel_write: PanelWriteCallback = None,
     ) -> None:
         """Render a protocol event to TUI activity panel.
 
@@ -90,6 +95,7 @@ class TuiEventRenderer:
             event: Event dict with 'type' key.
             state: TUI state for tracking plan steps, etc.
             verbosity: Verbosity level for filtering.
+            on_panel_write: Callback to append renderable to conversation panel.
         """
         etype = event.get("type", "")
         meta = self._registry.get_meta(etype)
@@ -106,13 +112,13 @@ class TuiEventRenderer:
             TOOL_WEBSEARCH_CRAWL_COMPLETED,
             TOOL_WEBSEARCH_CRAWL_FAILED,
         ):
-            self._render_tool_event(event, state, verbosity=verbosity)
+            self._render_tool_event(event, state, verbosity=verbosity, on_panel_write=on_panel_write)
             return
 
         # Dispatch to handler
         handler = self._handlers.get(etype)
         if handler:
-            handler(event, state, verbosity)
+            handler(event, state, verbosity, on_panel_write)
 
     def _register_handlers(self) -> None:
         """Register event-specific handlers for O(1) dispatch."""
@@ -214,10 +220,13 @@ class TuiEventRenderer:
         state: TuiState,
         *,
         verbosity: ProgressVerbosity = "normal",
+        on_panel_write: PanelWriteCallback = None,
     ) -> None:
         """Render tool activity progress events."""
         if not should_show("tool_activity", verbosity):
             return
+
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
 
         etype = event.get("type", "")
 
@@ -228,6 +237,8 @@ class TuiEventRenderer:
             if engines:
                 summary += f" ({', '.join(engines[:3])})"
             self._add_activity_from_event(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["progress"], summary))
 
         elif etype == TOOL_WEBSEARCH_SEARCH_COMPLETED:
             count = event.get("result_count", 0)
@@ -236,60 +247,107 @@ class TuiEventRenderer:
             if response_time:
                 summary += f" ({response_time:.1f}s)"
             self._add_activity_from_event(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["success"], summary))
 
         elif etype == TOOL_WEBSEARCH_SEARCH_FAILED:
             error = event.get("error", "unknown error")
             summary = f"Search failed: {_truncate(str(error), 40)}"
             self._add_activity_from_event(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["error"], summary))
 
         elif etype == TOOL_WEBSEARCH_CRAWL_STARTED:
             url = event.get("url", "")
             summary = f"Crawling: {_truncate(str(url), 50)}"
             self._add_activity_from_event(state, Text.assemble(("  ⚙ ", "dim"), (summary, "blue")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["progress"], summary))
 
         elif etype == TOOL_WEBSEARCH_CRAWL_COMPLETED:
             content_length = event.get("content_length", 0)
             summary = f"Crawl complete: {content_length} bytes"
             self._add_activity_from_event(state, Text.assemble(("  ✓ ", "dim green"), (summary, "green")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["success"], summary))
 
         elif etype == TOOL_WEBSEARCH_CRAWL_FAILED:
             error = event.get("error", "unknown error")
             summary = f"Crawl failed: {_truncate(str(error), 40)}"
             self._add_activity_from_event(state, Text.assemble(("  ✗ ", "bold red"), (summary, "red")), event)
+            if on_panel_write:
+                on_panel_write(make_dot_line(DOT_COLORS["error"], summary))
 
     # --- Protocol event handlers ---
 
-    def _render_context_projected(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_context_projected(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         entries = event.get("entries", 0)
         tokens = event.get("tokens", 0)
+        summary = f"Context: {entries} entries, {tokens} tokens"
         self._add_activity_from_event(
             state,
-            Text.assemble(("  . ", "dim"), (f"Context: {entries} entries, {tokens} tokens", "cyan")),
+            Text.assemble(("  . ", "dim"), (summary, "cyan")),
             event,
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["protocol"], summary))
 
-    def _render_context_ingested(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_context_ingested(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         source = event.get("source", "")
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Ingested from {source}", "dim cyan")), event
         )
 
-    def _render_memory_recalled(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_memory_recalled(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         count = event.get("count", 0)
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Memory: {count} items recalled", "cyan")), event
         )
 
-    def _render_memory_stored(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_memory_stored(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         memory_id = event.get("id", "?")
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Stored memory: {memory_id}", "cyan")), event
         )
 
-    def _render_plan_created(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_created(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
         from soothe.protocols.planner import Plan, PlanStep
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
 
         steps_data = event.get("steps", [])
+        goal = event.get("goal", "")
         try:
             steps = [
                 PlanStep(
@@ -300,34 +358,60 @@ class TuiEventRenderer:
                 )
                 for i, s in enumerate(steps_data)
             ]
-            state.current_plan = Plan(goal=event.get("goal", ""), steps=steps)
+            state.current_plan = Plan(goal=goal, steps=steps)
         except Exception:
             logger.debug("Plan reconstruction failed", exc_info=True)
+        summary = f"Plan: {goal[:50]}" if goal else f"Plan: {len(steps_data)} steps"
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Plan: {len(steps_data)} steps", "cyan")), event
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["progress"], summary))
 
-    def _render_plan_step_started(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_step_started(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         step_id = event.get("step_id", "")
         index = int(event.get("index", -1))
         description = event.get("description", "")
         if step_id:
             self._set_plan_step_status_by_id(state, step_id, "in_progress")
+            summary = f"Step: {description[:60]}"
             self._add_activity_from_event(
                 state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: {description}", "yellow")), event
             )
         elif index >= 0:
             self._set_plan_step_status(state, index, "in_progress")
+            summary = f"Step {index + 1}: {description[:60]}"
             self._add_activity_from_event(
                 state, Text.assemble(("  . ", "dim"), (f"Step {index + 1}: {description}", "yellow")), event
             )
+        else:
+            summary = f"Step: {description[:60]}"
+        if on_panel_write and description:
+            on_panel_write(make_dot_line(DOT_COLORS["progress"], summary))
 
-    def _render_plan_step_completed(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_step_completed(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         step_id = event.get("step_id", "")
         index = int(event.get("index", -1))
         success = bool(event.get("success", False))
         duration = event.get("duration_ms", 0)
         status = "completed" if success else "failed"
+        dur_str = f" ({duration}ms)" if duration else ""
 
         if step_id:
             self._set_plan_step_status_by_id(state, step_id, status)
@@ -337,7 +421,6 @@ class TuiEventRenderer:
                     if step.id == step_id:
                         step.current_activity = None
                         break
-            dur_str = f" ({duration}ms)" if duration else ""
             label = f"Step {step_id}: {'done' if success else 'failed'}{dur_str}"
         elif index >= 0:
             self._set_plan_step_status(state, index, status)
@@ -348,13 +431,25 @@ class TuiEventRenderer:
         else:
             label = f"Step: {'done' if success else 'failed'}"
 
+        color = DOT_COLORS["success"] if success else DOT_COLORS["error"]
         self._add_activity_from_event(
             state,
             Text.assemble(("  . ", "dim"), (label, "green" if success else "red")),
             event,
         )
+        if on_panel_write:
+            line = f"✓ {label}" if success else f"✗ {label}"
+            on_panel_write(make_dot_line(color, line, body=dur_str if duration else None))
 
-    def _render_plan_step_failed(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_step_failed(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         step_id = event.get("step_id", "")
         error = event.get("error", "")[:80]
         if step_id:
@@ -365,35 +460,58 @@ class TuiEventRenderer:
                     if step.id == step_id:
                         step.current_activity = None
                         break
-        self._add_activity_from_event(
-            state, Text.assemble(("  . ", "dim"), (f"Step {step_id}: FAILED - {error}", "bold red")), event
-        )
+        label = f"Step {step_id}: FAILED - {error}"
+        self._add_activity_from_event(state, Text.assemble(("  . ", "dim"), (label, "bold red")), event)
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["error"], f"✗ {label}"))
 
-    def _render_plan_reflected(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_reflected(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         assessment = event.get("assessment", "")[:60]
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Reflected: {assessment}", "dim italic")), event
         )
 
-    def _render_plan_batch_started(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_plan_batch_started(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         parallel = event.get("parallel_count", 1)
         if parallel > 1:
             self._add_activity_from_event(
                 state, Text.assemble(("  . ", "dim"), (f"Batch: {parallel} steps in parallel", "cyan bold")), event
             )
 
-    def _render_goal_batch_started(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_goal_batch_started(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         parallel = event.get("parallel_count", 1)
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Goals: {parallel} running in parallel", "cyan bold")), event
         )
 
-    def _render_policy_checked(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:
-        """Render policy.checked event with conditional display.
+    def _render_policy_checked(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        """Render policy.checked event with conditional display."""
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
 
-        In debug mode, show all policy events.
-        In normal mode, only show deny events.
-        """
         verdict = event.get("verdict", "?")
         profile = event.get("profile")
         detail = f"Policy: {verdict}"
@@ -407,61 +525,118 @@ class TuiEventRenderer:
                 Text.assemble(("  . ", "dim"), (detail, "bold red" if verdict == "deny" else "dim")),
                 event,
             )
+            if on_panel_write and verdict == "deny":
+                on_panel_write(make_dot_line(DOT_COLORS["error"], detail))
         else:
-            # Log allow events to file only in normal mode
             logger.info("Activity:   . %s", detail)
 
-    def _render_policy_denied(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_policy_denied(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         reason = event.get("reason", "")
         profile = event.get("profile")
         detail = f"Denied: {reason}"
         if profile:
             detail += f" (profile={profile})"
         self._add_activity_from_event(state, Text.assemble(("  ! ", "bold red"), (detail, "red")), event)
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["error"], detail))
 
     # --- Lifecycle event handlers ---
 
-    def _render_thread_created(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_thread_created(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         tid = event.get("thread_id", "?")
-        # Ensure thread_id is always a string (JSON deserialization may preserve integers)
         state.thread_id = str(tid) if tid is not None else "?"
         self._add_activity_from_event(state, Text.assemble(("  . ", "dim"), (f"Thread: {tid}", "dim")), event)
 
-    def _render_thread_resumed(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_thread_resumed(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         tid = event.get("thread_id", "?")
-        # Ensure thread_id is always a string (JSON deserialization may preserve integers)
         state.thread_id = str(tid) if tid is not None else "?"
         self._add_activity_from_event(state, Text.assemble(("  . ", "dim"), (f"Resumed thread: {tid}", "dim")), event)
 
-    def _render_thread_saved(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_thread_saved(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         tid = event.get("thread_id", state.thread_id or "?")
         self._add_activity_from_event(
             state, Text.assemble(("  . ", "dim"), (f"Saved thread: {tid}", "dim cyan")), event
         )
 
-    def _render_iteration_started(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_iteration_started(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         iteration = event.get("iteration", "?")
         goal_id = event.get("goal_id", "?")
         goal_desc = event.get("goal_description", "")[:60]
+        summary = f"Iteration {iteration}: {goal_desc}"
         self._add_activity_from_event(
             state,
             Text.assemble(("  . ", "dim"), (f"Iteration {iteration}: {goal_desc} (goal={goal_id})", "yellow")),
             event,
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["progress"], summary))
 
-    def _render_iteration_completed(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_iteration_completed(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         iteration = event.get("iteration", "?")
         outcome = event.get("outcome", "?")
         duration = event.get("duration_ms", 0)
+        summary = f"Iteration {iteration}: {outcome} ({duration}ms)"
         self._add_activity_from_event(
             state,
-            Text.assemble(("  . ", "dim"), (f"Iteration {iteration}: {outcome} ({duration}ms)", "green")),
+            Text.assemble(("  . ", "dim"), (summary, "green")),
             event,
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["success"], f"✓ {summary}"))
 
     # --- Subagent event handlers ---
 
-    def _render_browser_step(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_browser_step(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         step = event.get("step", "?")
         action = _truncate(str(event.get("action", "")), 50)
         url = _truncate(str(event.get("url", "")), 35)
@@ -473,8 +648,18 @@ class TuiEventRenderer:
         self._add_activity_from_event(
             state, Text.assemble(("  ", ""), ("[browser] ", "cyan"), (summary, "yellow")), event
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["subagent"], f"[browser] {summary}"))
 
-    def _render_browser_cdp(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_browser_cdp(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         status = event.get("status", "")
         if status == "connected":
             summary = "Connected to existing browser"
@@ -485,15 +670,33 @@ class TuiEventRenderer:
         self._add_activity_from_event(
             state, Text.assemble(("  ", ""), ("[browser] ", "cyan"), (summary, "yellow")), event
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["subagent"], f"[browser] {summary}"))
 
-    def _render_research_analyze(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_research_analyze(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         topic = _truncate(str(event.get("topic", "")), 50)
         summary = f"Analyzing: {topic}"
         self._add_activity_from_event(
             state, Text.assemble(("  ", ""), ("[research] ", "cyan"), (summary, "yellow")), event
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["progress"], f"[research] {summary}"))
 
-    def _render_research_queries(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_research_queries(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         count = event.get("count", 0)
         queries = event.get("queries", [])
         summary = f"Generated {count} queries"
@@ -503,7 +706,13 @@ class TuiEventRenderer:
             state, Text.assemble(("  ", ""), ("[research] ", "cyan"), (summary, "yellow")), event
         )
 
-    def _render_research_gather(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_research_gather(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         query = event.get("query", "")
         domain = event.get("domain", "unknown")
         summary = f"Gathering from {domain}: {_truncate(str(query), 40)}"
@@ -516,6 +725,7 @@ class TuiEventRenderer:
         event: dict[str, Any],
         state: TuiState,
         verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
     ) -> None:
         count = event.get("result_count", 0)
         sources = event.get("sources_used", [])
@@ -524,33 +734,67 @@ class TuiEventRenderer:
             state, Text.assemble(("  ", ""), ("[research] ", "cyan"), (summary, "yellow")), event
         )
 
-    def _render_research_synthesize(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_research_synthesize(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,  # noqa: ARG002
+    ) -> None:
         total = event.get("total_sources", 0)
         summary = f"Synthesizing {total} sources"
         self._add_activity_from_event(
             state, Text.assemble(("  ", ""), ("[research] ", "cyan"), (summary, "yellow")), event
         )
 
-    def _render_research_completed(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_research_completed(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         length = event.get("answer_length", 0)
         summary = f"Completed ({length} chars)"
         self._add_activity_from_event(
             state, Text.assemble(("  ", ""), ("[research] ", "cyan"), (summary, "green")), event
         )
+        if on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["success"], f"[research] {summary}"))
 
     # --- Output event handlers ---
 
-    def _render_chitchat_response(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_chitchat_response(
+        self,
+        event: dict[str, Any],
+        state: TuiState,  # noqa: ARG002
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        """Render chitchat response - stream to panel instead of full_response."""
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         content = event.get("content", "")
-        if content:
+        if content and on_panel_write:
             cleaned = strip_internal_tags(content)
             if cleaned:
-                state.full_response.append(cleaned)
+                on_panel_write(make_dot_line(DOT_COLORS["assistant"], cleaned))
 
-    def _render_final_report(self, event: dict[str, Any], state: TuiState, verbosity: ProgressVerbosity) -> None:  # noqa: ARG002
+    def _render_final_report(
+        self,
+        event: dict[str, Any],
+        state: TuiState,
+        verbosity: ProgressVerbosity,  # noqa: ARG002
+        on_panel_write: PanelWriteCallback,
+    ) -> None:
+        """Render final report - stream to panel instead of full_response."""
+        from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line
+
         summary = event.get("summary", "")
-        if summary:
-            state.full_response.append(f"\n{summary}")
+        if summary and on_panel_write:
+            on_panel_write(make_dot_line(DOT_COLORS["assistant"], summary))
         # Reset multi-step flag after final report
         state.multi_step_active = False
 
@@ -564,6 +808,7 @@ def handle_protocol_event(
     state: TuiState,
     *,
     verbosity: ProgressVerbosity = "normal",
+    on_panel_write: PanelWriteCallback = None,
 ) -> None:
     """Render a soothe.* protocol custom event as an activity line.
 
@@ -574,5 +819,6 @@ def handle_protocol_event(
         data: Event dict with 'type' key.
         state: TUI state for tracking plan steps, etc.
         verbosity: Verbosity level for filtering.
+        on_panel_write: Callback to append renderable to conversation panel.
     """
-    _TUI_RENDERER.render_protocol_event(data, state, verbosity=verbosity)
+    _TUI_RENDERER.render_protocol_event(data, state, verbosity=verbosity, on_panel_write=on_panel_write)

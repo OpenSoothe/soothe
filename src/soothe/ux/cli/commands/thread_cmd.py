@@ -150,9 +150,10 @@ def thread_continue(
     """
     from soothe.daemon import SootheDaemon
     from soothe.ux.cli.execution import run_tui
-    from soothe.ux.core import load_config
+    from soothe.ux.core import load_config, setup_logging
 
     cfg = load_config(config)
+    setup_logging(cfg)
 
     # Handle --new flag
     if new:

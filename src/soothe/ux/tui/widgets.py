@@ -4,15 +4,51 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import RichLog, Static, TextArea
 
 if TYPE_CHECKING:
+    from rich.console import RenderableType
     from textual.events import Key
 
 
 class ConversationPanel(RichLog):
-    """Scrollable chat history with markdown rendering."""
+    """Scrollable chat history with markdown rendering.
+
+    Supports Claude Code-style continuous event stream with colored dot prefixes.
+    """
+
+    def append_entry(self, renderable: RenderableType) -> None:
+        """Append a new entry to the conversation log.
+
+        Args:
+            renderable: Rich renderable content to append (Text, Markdown, etc.).
+        """
+        self.write(renderable)
+        self.scroll_end(animate=False)
+
+    def update_last_entry(self, renderable: RenderableType) -> None:
+        """Update the last entry in the conversation log (for streaming updates).
+
+        Removes the last line and writes the new renderable.
+        Useful for live-updating streaming assistant text.
+
+        Args:
+            renderable: Rich renderable content to replace the last entry with.
+        """
+        # Access internal _lines list to remove last entry
+        if self._lines:
+            self._lines.pop()
+            # Also need to trigger refresh after modifying _lines
+            self.refresh()
+        self.write(renderable)
+        self.scroll_end(animate=False)
+
+    def append_separator(self) -> None:
+        """Append a blank line separator between conversation turns."""
+        self.write(Text(""))
+        self.scroll_end(animate=False)
 
     async def _on_key(self, event: Key) -> None:
         """Handle key events, allowing Ctrl+D to trigger detach."""

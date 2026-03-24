@@ -91,16 +91,19 @@ class UnixSocketTransport(TransportServer):
             message: Message dict to broadcast.
         """
         if not self._server:
+            logger.warning("Unix socket server is None, cannot broadcast")
             return
 
         data = encode(message)
         dead_clients: list[_ClientConn] = []
 
+        logger.debug("Unix socket broadcasting to %d clients", len(self._clients))
         for client in self._clients:
             try:
                 client.writer.write(data)
                 await client.writer.drain()
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to write to Unix socket client: %s", e, exc_info=True)
                 dead_clients.append(client)
 
         # Remove dead clients (safe removal in case already removed)

@@ -36,6 +36,10 @@ def main(
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
+    prompt: Annotated[
+        str | None,
+        typer.Option("--prompt", "-p", help="Prompt to send as user message (headless single-shot mode)."),
+    ] = None,
     no_tui: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--no-tui", help="Disable TUI; run single prompt and exit."),
@@ -69,6 +73,7 @@ def main(
         soothe                           # Interactive TUI mode
         soothe "Research AI advances"    # Headless single-prompt mode
         soothe --config custom.yml       # Use custom config
+        soothe --no-tui -p "how are you" # Headless mode with prompt
     """
     # Handle -h/--help flag
     if show_help:
@@ -82,13 +87,13 @@ def main(
 
     # Only run default behavior if no subcommand is being invoked
     if ctx.invoked_subcommand is None:
-        # Get prompt from remaining args
-        prompt = " ".join(ctx.args) if ctx.args else None
+        # Get prompt from -p/--prompt option, or fall back to remaining args
+        effective_prompt = prompt if prompt is not None else (" ".join(ctx.args) if ctx.args else None)
 
         from soothe.ux.cli.commands.run_cmd import run_impl
 
         run_impl(
-            prompt=prompt,
+            prompt=effective_prompt,
             config=config,
             thread_id=None,
             no_tui=no_tui,
@@ -349,7 +354,7 @@ def config(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
     # Action flags
-    show: Annotated[  # noqa: FBT002
+    _show: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--show", "-s", help="Show current configuration."),
     ] = False,
@@ -423,7 +428,7 @@ def agent(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
     # Action flags
-    list_agents: Annotated[  # noqa: FBT002
+    _list_agents: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--list", "-l", help="List available agents."),
     ] = False,

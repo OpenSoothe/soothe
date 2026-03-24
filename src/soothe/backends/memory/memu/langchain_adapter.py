@@ -92,6 +92,19 @@ class LangChainLLMAdapter:
                 error="Chat completion failed",
             )
 
+    def simple_chat(self, message: str) -> str:
+        """Simple chat method for memory actions.
+
+        Args:
+            message: The message to send to the LLM.
+
+        Returns:
+            The LLM response as string.
+        """
+        messages = [{"role": "user", "content": message}]
+        response = self.completion(messages)
+        return str(response)
+
     def embed(self, text: str) -> list[float]:
         """Generate embedding using LangChain embedding model."""
         if not self.embedding_model:

@@ -69,6 +69,13 @@ class TuiState:
     last_user_input: str = ""
     plan_visible: bool = True  # Track plan tree visibility
 
+    # Streaming state for Claude Code-style continuous updates
+    streaming_text_buffer: str = ""  # Accumulates streaming assistant text for live updates
+    streaming_active: bool = False  # Whether we're currently streaming assistant text
+    last_assistant_output: str = ""  # Stores final assistant output for copy-last action
+    current_tool_calls: dict[str, dict[str, str]] = field(default_factory=dict)  # Tracks in-progress tool calls by ID
+    # Each entry: {"name": str, "args_summary": str}
+
     # Convenience properties to access shared state
     @property
     def full_response(self) -> list[str]:

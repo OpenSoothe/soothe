@@ -385,8 +385,16 @@ class SootheDaemon(DaemonHandlersMixin):
 
     async def _broadcast(self, msg: dict[str, Any]) -> None:
         """Broadcast message to all connected clients via transport manager."""
+        logger.debug("Broadcasting event: type=%s", msg.get("type"))
         if self._transport_manager:
+            logger.debug(
+                "Broadcasting via transport manager, started=%s, client_count=%d",
+                self._transport_manager._started,
+                self._transport_manager.client_count,
+            )
             await self._transport_manager.broadcast(msg)
+        else:
+            logger.warning("Transport manager is None, cannot broadcast")
 
         # Legacy broadcast for backward compatibility (will be removed in future)
         data = encode(msg)
@@ -395,7 +403,8 @@ class SootheDaemon(DaemonHandlersMixin):
             try:
                 client.writer.write(data)
                 await client.writer.drain()
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to write to legacy client: %s", e)
                 dead.append(client)
         for d in dead:
             self._clients = [c for c in self._clients if c is not d]

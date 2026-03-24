@@ -613,7 +613,10 @@ class DaemonHandlersMixin:
         full_response: list[str] = []
 
         # Create task for cancellation support
+        chunk_count = 0
+
         async def _run_stream() -> None:
+            nonlocal chunk_count
             try:
                 stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
                 if autonomous:
@@ -622,10 +625,14 @@ class DaemonHandlersMixin:
                         stream_kwargs["max_iterations"] = max_iterations
                 if subagent is not None:
                     stream_kwargs["subagent"] = subagent
+                logger.debug("Starting runner.astream() for thread %s", thread_id)
                 async for chunk in self._runner.astream(text, **stream_kwargs):
+                    chunk_count += 1
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
+                        logger.debug("Skipping invalid chunk #%d: type=%s", chunk_count, type(chunk).__name__)
                         continue
                     namespace, mode, data = chunk
+                    logger.debug("Received chunk #%d: namespace=%s, mode=%s", chunk_count, namespace, mode)
 
                     self._thread_logger.log(tuple(namespace), mode, data)
 
@@ -650,7 +657,9 @@ class DaemonHandlersMixin:
                         "mode": mode,
                         "data": data,
                     }
+                    logger.debug("Broadcasting event #%d: type=%s, mode=%s", chunk_count, event_msg["type"], mode)
                     await self._broadcast(event_msg)
+                logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
                 await self._broadcast(

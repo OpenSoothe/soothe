@@ -151,13 +151,54 @@ class TestClassifyRouting:
     async def test_routing_llm_failure_returns_defaults(self) -> None:
         mock_model = MagicMock()
         mock_routing = MagicMock()
-        mock_routing.ainvoke = AsyncMock(side_effect=Exception("LLM error"))
+        mock_routing.ainvoke = AsyncMock(side_effect=[Exception("LLM error"), Exception("LLM error")])
         mock_model.with_structured_output = MagicMock(return_value=mock_routing)
 
         classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
         result = await classifier.classify_routing("test query")
 
         assert result.task_complexity == "medium"  # Fallback
+        assert mock_routing.ainvoke.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_routing_retries_then_succeeds(self) -> None:
+        mock_model = MagicMock()
+        mock_routing = MagicMock()
+        mock_routing.ainvoke = AsyncMock(
+            side_effect=[
+                Exception("OutputParserException"),
+                RoutingResult(
+                    task_complexity="chitchat",
+                    chitchat_response="I'm doing well, thanks for asking!",
+                ),
+            ]
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_routing)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+        result = await classifier.classify_routing("how are you")
+
+        assert result.task_complexity == "chitchat"
+        assert result.chitchat_response is not None
+        assert mock_routing.ainvoke.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_how_are_you_chitchat_when_llm_output_is_valid(self) -> None:
+        mock_model = MagicMock()
+        mock_routing = MagicMock()
+        mock_routing.ainvoke = AsyncMock(
+            return_value=RoutingResult(
+                task_complexity="chitchat",
+                chitchat_response="I'm doing well, thank you! How can I help?",
+            )
+        )
+        mock_model.with_structured_output = MagicMock(return_value=mock_routing)
+
+        classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
+        result = await classifier.classify_routing("how are you")
+
+        assert result.task_complexity == "chitchat"
+        assert result.chitchat_response is not None
 
 
 # ---------------------------------------------------------------------------

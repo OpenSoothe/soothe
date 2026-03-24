@@ -66,23 +66,29 @@ class AgenticMixin:
 
         # Two-tier classification for proper routing
         if self._unified_classifier:
-            routing = await self._unified_classifier.classify_routing(user_input)
-            complexity = routing.task_complexity
-            logger.info(
-                "Agentic mode: tier-1 routing task_complexity=%s - %s",
-                complexity,
-                user_input[:50],
-            )
+            try:
+                routing = await self._unified_classifier.classify_routing(user_input)
+                complexity = routing.task_complexity
+                logger.info(
+                    "Agentic mode: tier-1 routing task_complexity=%s - %s",
+                    complexity,
+                    user_input[:50],
+                )
 
-            # Fast path for chitchat - skip agentic loop
-            if complexity == "chitchat":
-                async for chunk in self._run_chitchat(user_input, classification=routing):
-                    yield chunk
-                return
+                # Fast path for chitchat - skip agentic loop
+                if complexity == "chitchat":
+                    async for chunk in self._run_chitchat(user_input, classification=routing):
+                        yield chunk
+                    return
 
-            state.unified_classification = UnifiedClassification.from_routing(routing)
-            # Cache routing for reuse in observe phase
-            state.cached_routing = routing
+                state.unified_classification = UnifiedClassification.from_routing(routing)
+                # Cache routing for reuse in observe phase
+                state.cached_routing = routing
+            except Exception as e:
+                logger.warning("Routing classification failed, defaulting to medium: %s", e, exc_info=True)
+                state.unified_classification = None
+                state.cached_routing = None
+                complexity = "medium"
         else:
             state.unified_classification = None
             state.cached_routing = None
@@ -356,7 +362,7 @@ class AgenticMixin:
         self,
         user_input: str,
         state: Any,
-        cumulative_context: list,
+        _cumulative_context: list,
         iteration: int,
         planning_strategy: str,
     ) -> AsyncGenerator[StreamChunk]:
@@ -370,7 +376,7 @@ class AgenticMixin:
         Args:
             user_input: User's query
             state: Runner state
-            cumulative_context: Context from previous observations
+            _cumulative_context: Context from previous observations (unused)
             iteration: Current iteration number
             planning_strategy: "none", "lightweight", or "comprehensive"
         """
@@ -385,21 +391,13 @@ class AgenticMixin:
                 context = PlanContext(
                     recent_messages=[user_input],
                     available_capabilities=capabilities,
-                    completed_steps=[{"iteration": i, "context": ctx} for i, ctx in enumerate(cumulative_context)],
+                    completed_steps=[],
                     unified_classification=state.unified_classification,
                 )
-
-                # Configure planning depth based on strategy
-                if planning_strategy == "lightweight":
-                    # Limit steps for lightweight planning
-                    max_steps = self._config.agentic.planning.medium_max_steps
-                else:  # comprehensive
-                    max_steps = None  # No limit
 
                 plan = await self._planner.create_plan(
                     user_input,
                     context,
-                    max_steps=max_steps,
                 )
 
                 state.plan = plan

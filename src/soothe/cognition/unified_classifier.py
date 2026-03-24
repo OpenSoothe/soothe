@@ -21,7 +21,7 @@ Classification Tiers:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -105,18 +105,36 @@ class UnifiedClassification(BaseModel):
 # ---------------------------------------------------------------------------
 
 _ROUTING_PROMPT = """\
-You are {assistant_name}, created by Dr. Xiaming Chen. Classify this request and respond with JSON only.
+You are {assistant_name}, created by Dr. Xiaming Chen. Classify this request.
 Current time: {current_time}
 
 Request: {query}
 
-{{"task_complexity":"chitchat"|"medium"|"complex","chitchat_response":"string or null"}}
+Return ONLY a JSON object (no markdown, no extra text) with this structure:
+{{"task_complexity": "chitchat" or "medium" or "complex", "chitchat_response": "response" or null}}
 
-chitchat=greetings/thanks/fillers needing no action.
-medium=research/questions/tasks/debugging (DEFAULT when uncertain).
-complex=architecture design/large migrations/major refactoring.
-If chitchat, set chitchat_response to a warm reply in the user's language \
-mentioning you're {assistant_name} and that you were created by Dr. Xiaming Chen. Otherwise null.\
+Classification rules:
+- chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response to a warm
+  reply in the user's language mentioning you are {assistant_name} created by Dr. Xiaming Chen.
+- medium: Research, questions, tasks, debugging. DEFAULT when uncertain. chitchat_response=null.
+- complex: Architecture design, large migrations, major refactoring. chitchat_response=null.\
+"""
+
+_ROUTING_RETRY_PROMPT = """\
+You are {assistant_name}, created by Dr. Xiaming Chen. Re-classify this request.
+Current time: {current_time}
+
+Request: {query}
+
+CRITICAL OUTPUT RULES:
+- Return ONLY valid JSON.
+- "task_complexity" MUST be exactly one of: "chitchat", "medium", "complex".
+- For "chitchat", provide a short friendly "chitchat_response" string.
+- For "medium" or "complex", set "chitchat_response" to null.
+- Do not output placeholders, punctuation, comments, markdown, or extra keys.
+
+Required JSON shape:
+{{"task_complexity": "chitchat"|"medium"|"complex", "chitchat_response": string|null}}\
 """
 
 # ---------------------------------------------------------------------------
@@ -154,7 +172,7 @@ class UnifiedClassifier:
         self._assistant_name = assistant_name
 
         if fast_model:
-            self._routing_model = fast_model.with_structured_output(RoutingResult, method="json_mode")
+            self._routing_model = self._create_routing_model(fast_model)
         else:
             self._routing_model = None
 
@@ -175,10 +193,25 @@ class UnifiedClassifier:
         if self._mode == "disabled" or not self._fast_model:
             return RoutingResult(task_complexity="medium")
 
-        try:
-            result = await self._llm_routing(query)
-        except Exception:
-            logger.exception("Tier-1 routing classification failed")
+        attempts: tuple[tuple[bool, str], ...] = (
+            (False, "primary"),
+            (True, "retry"),
+        )
+        result: RoutingResult | None = None
+        last_error: Exception | None = None
+
+        for retry_mode, label in attempts:
+            try:
+                result = await self._llm_routing(query, retry_mode=retry_mode)
+                break
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Tier-1 routing classification attempt failed (%s)", label, exc_info=True)
+
+        if result is None:
+            logger.warning("Tier-1 routing classification failed after retry, using default 'medium'")
+            if last_error:
+                logger.debug("Last routing failure: %s", type(last_error).__name__)
             return RoutingResult(task_complexity="medium")
 
         if result.task_complexity == "chitchat" and not result.chitchat_response:
@@ -190,17 +223,44 @@ class UnifiedClassifier:
 
     # -- internal LLM calls -------------------------------------------------
 
-    async def _llm_routing(self, query: str) -> RoutingResult:
+    async def _llm_routing(self, query: str, *, retry_mode: bool = False) -> RoutingResult:
         """Tier-1 LLM call with compact routing prompt."""
         from datetime import UTC, datetime
 
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        prompt = _ROUTING_PROMPT.format(
+        prompt_template = _ROUTING_RETRY_PROMPT if retry_mode else _ROUTING_PROMPT
+        prompt = prompt_template.format(
             query=query,
             current_time=current_time,
             assistant_name=self._assistant_name,
         )
-        return await self._routing_model.ainvoke(prompt)
+        result = await self._routing_model.ainvoke(prompt)
+
+        # Ensure parsed output still obeys strict literal contract.
+        if not result.task_complexity or result.task_complexity not in ("chitchat", "medium", "complex"):
+            msg = f"Invalid task_complexity from LLM: {result.task_complexity!r}"
+            raise ValueError(msg)
+
+        return result
+
+    @staticmethod
+    def _create_routing_model(fast_model: BaseChatModel) -> Any:
+        """Create a robust structured-output model for routing classification.
+
+        Prefers function-calling over json_mode because certain providers can
+        emit malformed literal content under json_mode for strict enums.
+        """
+        methods = ("function_calling", None, "json_mode")
+        for method in methods:
+            try:
+                if method is None:
+                    return fast_model.with_structured_output(RoutingResult)
+                return fast_model.with_structured_output(RoutingResult, method=method)
+            except Exception:
+                logger.debug("with_structured_output init failed for method=%s", method, exc_info=True)
+
+        # Final fallback preserves legacy behavior if all attempts failed.
+        return fast_model.with_structured_output(RoutingResult, method="json_mode")
 
     # -- helpers ------------------------------------------------------------
 

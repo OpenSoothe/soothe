@@ -23,8 +23,6 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pyperclip
-from rich.markdown import Markdown
-from rich.panel import Panel
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container
@@ -32,11 +30,11 @@ from textual.containers import Container
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.daemon.thread_logger import ThreadLogger
-from soothe.ux.shared.progress_verbosity import should_show
 from soothe.ux.shared.rendering import render_plan_tree
 from soothe.ux.shared.slash_commands import parse_autonomous_command
 from soothe.ux.tui.event_processors import process_daemon_event
 from soothe.ux.tui.modals import ThreadSelectionModal
+from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line, make_user_prompt_line
 from soothe.ux.tui.state import TuiState
 from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTree
 
@@ -143,13 +141,13 @@ class SootheApp(App):
         super().__init__(**kwargs)
         self._config = config or SootheConfig()
         self._thread_id = thread_id
+        logger.debug("__init__: thread_id=%r", self._thread_id)
         self._client: DaemonClient | None = None
         self._state = TuiState()
         self._connected = False
-        self._conversation_history: list[str | Panel] = []
-        self._message_history: list[dict[str, str]] = []
+        # Clean cut: removed _conversation_history and _message_history
+        # Display is now via direct panel writes only
         self._history_loaded_thread_id: str | None = None
-        self._last_activity_count = 0
         self._progress_verbosity = self._config.logging.progress_verbosity
         self._thread_logger: ThreadLogger | None = None
         self._was_running = False
@@ -183,15 +181,45 @@ class SootheApp(App):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
 
-        # Don't load history here with partial thread_id - wait for daemon to resolve full thread_id
-        # The daemon will send back a thread_resumed event with the resolved ID,
-        # and the event handler will load history with the correct full thread_id
         if self._thread_id:
             self._state.thread_id = self._thread_id
+            logger.debug("on_mount: state.thread_id=%r", self._state.thread_id)
             self._update_status_bar("Idle")
 
         self._refresh_plan()
         self.run_worker(self._connect_and_listen(), exclusive=True)
+
+    def _on_panel_write(self, renderable: Any) -> None:
+        """Append a renderable to the conversation panel (thread-safe).
+
+        Args:
+            renderable: Rich renderable content to append.
+        """
+
+        def _do_write() -> None:
+            try:
+                panel = self.query_one("#conversation", ConversationPanel)
+                panel.append_entry(renderable)
+            except Exception:
+                logger.debug("Failed to write to panel", exc_info=True)
+
+        self.call_from_thread(_do_write)
+
+    def _on_panel_update_last(self, renderable: Any) -> None:
+        """Update the last entry in the conversation panel (thread-safe).
+
+        Args:
+            renderable: Rich renderable content to replace the last entry with.
+        """
+
+        def _do_update() -> None:
+            try:
+                panel = self.query_one("#conversation", ConversationPanel)
+                panel.update_last_entry(renderable)
+            except Exception:
+                logger.debug("Failed to update panel", exc_info=True)
+
+        self.call_from_thread(_do_update)
 
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events."""
@@ -201,13 +229,16 @@ class SootheApp(App):
             try:
                 await self._client.connect()
                 self._connected = True
+                logger.warning("DEBUG before Connected: self._state.thread_id = %r", self._state.thread_id)
                 self._update_status("Connected")
                 break
             except (OSError, ConnectionRefusedError):
                 if attempt == max_retries - 1:
-                    self._log_conversation(
-                        "[red]Failed to connect to daemon after retries. "
-                        "Is the socket at " + str(socket_path()) + " available?[/red]"
+                    self._on_panel_write(
+                        make_dot_line(
+                            DOT_COLORS["error"],
+                            f"Failed to connect to daemon after retries. Is the socket at {socket_path()} available?",
+                        )
                     )
                     return
                 await asyncio.sleep(0.25)
@@ -219,11 +250,16 @@ class SootheApp(App):
             await self._client.send_new_thread()
 
         while self._connected:
-            event = await self._client.read_event()
-            if event is None:
-                self._connected = False
-                self._log_conversation("[dim]Daemon connection closed.[/dim]")
-                break
+            try:
+                event = await asyncio.wait_for(self._client.read_event(), timeout=30.0)
+                if event is None:
+                    logger.warning("read_event returned None, connection closed")
+                    self._connected = False
+                    self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Daemon connection closed."))
+                    break
+            except TimeoutError:
+                logger.debug("No event received for 30 seconds, connection still alive")
+                continue
 
             # Capture thread_id BEFORE process_daemon_event updates it
             # This is critical for detecting thread changes correctly
@@ -234,33 +270,29 @@ class SootheApp(App):
                 self._state,
                 verbosity=self._progress_verbosity,
                 on_status_update=self._update_status,
-                on_conversation_append=self._append_conversation,
                 on_plan_refresh=self._refresh_plan,
+                on_panel_write=self._on_panel_write,
+                on_panel_update_last=self._on_panel_update_last,
             )
+            if event.get("type") == "status":
+                logger.debug("after process: state.thread_id=%r", self._state.thread_id)
 
             # Update activity display after processing event
             self._flush_new_activity()
 
             # Handle TUI-specific actions for status events
-            # NOTE: process_daemon_event() already updated self._state.thread_id correctly
-            # (it preserves existing thread_id when daemon sends empty handshake)
             if event.get("type") == "status":
                 state_str = event.get("state", "")
                 thread_resumed = event.get("thread_resumed", False)
-
-                # Use the thread_id from state (already correctly updated by process_daemon_event)
                 current_tid = self._state.thread_id
 
-                # Clear local history only on explicit new-thread signal.
+                # Clear panel on explicit new-thread signal
                 if event.get("new_thread", False):
-                    # Starting a fresh thread, clear previous conversation
                     self._thread_id = current_tid or None
                     self._history_loaded_thread_id = current_tid or None
-                    self._conversation_history.clear()
-                    self._message_history.clear()
-                    self._state.full_response.clear()
-                    self._state.activity_lines.clear()
-                    # Don't load old input history for new threads
+                    self._state.streaming_text_buffer = ""
+                    self._state.streaming_active = False
+                    self._state.current_tool_calls.clear()
                     with contextlib.suppress(Exception):
                         panel = self.query_one("#conversation", ConversationPanel)
                         panel.clear()
@@ -269,36 +301,19 @@ class SootheApp(App):
                     or thread_resumed
                     or current_tid != self._history_loaded_thread_id
                 ):
-                    # Thread switch or resume - load input history
+                    # Thread switch or resume - load input history for chat navigation
                     history = event.get("input_history", [])
                     if history:
                         chat_input = self.query_one("#chat-input", ChatInput)
                         chat_input.set_history(history)
-
-                    # Thread switch or explicit resume - load history from disk
                     self._thread_id = current_tid
-
-                    # Load history from disk when we have a thread_id (either resume or first assignment)
-                    # Skip loading if this is a post-query thread change (was_running and not resumed)
-                    if self._was_running and not thread_resumed:
-                        # Post-query thread change: the runner assigned a new
-                        # thread_id during execution.  Preserve the in-memory
-                        # conversation (already rendered) and just update the
-                        # thread logger so future persistence uses the right id.
-                        self._thread_logger = ThreadLogger(
-                            thread_id=current_tid,
-                            retention_days=self._config.logging.thread_logging.retention_days,
-                            max_size_mb=self._config.logging.thread_logging.max_size_mb,
-                        )
-                        self._history_loaded_thread_id = current_tid
-                    else:
-                        # Explicit thread switch (initial connect, resume):
-                        # reload history from disk.
-                        self._load_thread_history(current_tid)
-                        self._history_loaded_thread_id = current_tid
-                        # Use call_after_refresh to ensure rendering happens on main thread
-                        # This is safer than direct call when running inside a worker callback
-                        self._render_history_to_conversation_panel(use_call_later=True)
+                    self._history_loaded_thread_id = current_tid
+                    # Initialize thread logger for future persistence
+                    self._thread_logger = ThreadLogger(
+                        thread_id=current_tid,
+                        retention_days=self._config.logging.thread_logging.retention_days,
+                        max_size_mb=self._config.logging.thread_logging.max_size_mb,
+                    )
 
                 if state_str == "running":
                     self._was_running = True
@@ -309,7 +324,8 @@ class SootheApp(App):
             if event.get("type") == "command_response":
                 content = event.get("content", "")
                 if content:
-                    self._log_conversation(content)
+                    # Display command output in panel
+                    self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], content[:200]))
 
             # Handle clear event
             if event.get("type") == "clear":
@@ -317,291 +333,8 @@ class SootheApp(App):
 
             await asyncio.sleep(0)
 
-    def _render_history_to_conversation_panel(self, *, use_call_later: bool = True) -> None:
-        """Render loaded conversation history into the conversation panel.
-
-        Args:
-            use_call_later: If True, defer rendering via call_after_refresh to ensure widget is ready.
-        """
-        if use_call_later:
-            # Use call_after_refresh instead of call_later to ensure widget is fully rendered (Bug #3)
-            self.call_after_refresh(self._do_render_history)
-        else:
-            self._do_render_history()
-
-    def _do_render_history(self) -> None:
-        """Actual rendering of conversation history (called via call_after_refresh)."""
-        try:
-            # Reuse the standard conversation repaint pipeline to keep
-            # resume rendering consistent with normal turn-end rendering.
-            self._state.full_response.clear()
-            self._append_conversation()
-            panel = self.query_one("#conversation", ConversationPanel)
-            panel.refresh(layout=True)
-            # Scroll to bottom after rendering history
-            panel.scroll_end(animate=False)
-            self.refresh(layout=True)
-            self._flush_new_activity()
-            logger.debug(
-                "Rendered thread history: %d conversation items",
-                len(self._conversation_history),
-            )
-        except Exception:
-            logger.exception(
-                "Failed to render thread history (conversation_items=%d, thread_id=%s)",
-                len(self._conversation_history),
-                self._state.thread_id,
-            )
-
-    def _load_thread_history(self, thread_id: str) -> None:
-        """Load conversation and activity history for a thread.
-
-        Searches both 'sessions' and 'threads' directories for backward compatibility.
-        Falls back to extracting conversation from LangGraph checkpoint if conversation.jsonl doesn't exist.
-
-        Args:
-            thread_id: Thread ID to load history for.
-        """
-        if not thread_id:
-            return
-
-        # Clear previous history to prevent unbounded memory growth
-        self._conversation_history.clear()
-        self._message_history.clear()
-
-        # Use runs/{thread_id}/ directory (RFC-0010)
-        self._thread_logger = ThreadLogger(
-            thread_id=thread_id,
-            retention_days=self._config.logging.thread_logging.retention_days,
-            max_size_mb=self._config.logging.thread_logging.max_size_mb,
-        )
-
-        try:
-            # Load recent conversation history
-            conversations = self._thread_logger.recent_conversation(limit=50)
-
-            # Fallback: Load from LangGraph checkpoint if conversation.jsonl is empty or missing
-            if not conversations:
-                conversations = self._load_conversation_from_checkpoint(thread_id)
-            else:
-                # Partial fallback: some legacy logs include user turns but miss assistant turns.
-                has_assistant = any(
-                    c.get("role") == "assistant" and str(c.get("text", "")).strip() for c in conversations
-                )
-                if not has_assistant:
-                    checkpoint_conversations = self._load_conversation_from_checkpoint(thread_id)
-                    conversations.extend([c for c in checkpoint_conversations if c.get("role") == "assistant"])
-
-                    from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
-                    from soothe.ux.shared.message_processing import strip_internal_tags
-
-                    # Recover assistant output from custom output events if needed.
-                    for record in self._thread_logger.recent_actions(limit=300):
-                        data = record.get("data", {})
-                        if not isinstance(data, dict):
-                            continue
-                        event_type = str(data.get("type", ""))
-                        recovered_text = ""
-                        if event_type == CHITCHAT_RESPONSE:
-                            recovered_text = strip_internal_tags(str(data.get("content", ""))).strip()
-                        elif event_type == FINAL_REPORT:
-                            recovered_text = strip_internal_tags(str(data.get("summary", ""))).strip()
-                        if recovered_text:
-                            conversations.append({"role": "assistant", "text": recovered_text})
-
-            for record in conversations:
-                role = record.get("role", "unknown")
-                text = record.get("text", "")
-                if role == "user":
-                    # Create panel with cyan border for user messages
-                    panel = Panel(text, title="👤 User", border_style="cyan", padding=(0, 1))
-                    self._conversation_history.append(panel)
-                    self._message_history.append({"role": "user", "content": text, "index": len(self._message_history)})
-                elif role == "assistant":
-                    # Create panel with green border for assistant messages
-                    # Use Markdown renderer for proper formatting
-                    markdown_content = Markdown(text)
-                    panel = Panel(markdown_content, title="🤖 Assistant", border_style="green", padding=(0, 1))
-                    self._conversation_history.append(panel)
-                    self._message_history.append(
-                        {"role": "assistant", "content": text, "index": len(self._message_history)}
-                    )
-
-            # Load recent activity
-            events = self._thread_logger.recent_actions(limit=100)
-            for record in events:
-                namespace = record.get("namespace", [])
-                data = record.get("data", {})
-                if isinstance(data, dict):
-                    # Re-render the event using existing handlers
-                    from soothe.ux.shared.progress_verbosity import classify_custom_event
-
-                    category = classify_custom_event(tuple(namespace), data)
-                    if should_show(category, self._progress_verbosity):
-                        from soothe.ux.tui.renderers import _handle_generic_custom_activity
-
-                        _handle_generic_custom_activity(
-                            tuple(namespace),
-                            data,
-                            self._state,
-                            verbosity=self._progress_verbosity,
-                        )
-
-            logger.info(
-                "Loaded thread history: %d conversations, %d events for thread %s",
-                len(conversations),
-                len(events),
-                thread_id,
-            )
-        except Exception:
-            logger.debug("Failed to load thread history", exc_info=True)
-
-    def _load_conversation_from_checkpoint(self, thread_id: str) -> list[dict[str, Any]]:
-        """Load conversation history from LangGraph checkpoint as fallback.
-
-        This method extracts user and assistant messages from the checkpoint.json file
-        when conversation.jsonl is missing or empty.
-
-        Args:
-            thread_id: Thread ID to load checkpoint for.
-
-        Returns:
-            List of conversation records with 'role' and 'text' fields.
-        """
-        from pathlib import Path
-
-        from soothe.config import SOOTHE_HOME
-
-        checkpoint_path = Path(SOOTHE_HOME) / "runs" / thread_id / "checkpoint.json"
-        if not checkpoint_path.exists():
-            logger.debug("No checkpoint found at %s", checkpoint_path)
-            return []
-
-        try:
-            import json
-
-            with checkpoint_path.open(encoding="utf-8") as f:
-                checkpoint_data = json.load(f)
-
-            # Extract conversation from checkpoint structure
-            conversations = []
-
-            # Try to extract from 'last_query' and plan steps
-            last_query = checkpoint_data.get("last_query", "")
-            if last_query:
-                conversations.append(
-                    {
-                        "role": "user",
-                        "text": last_query,
-                    }
-                )
-
-            # Extract assistant responses from completed plan steps
-            plan = checkpoint_data.get("plan", {})
-            steps = plan.get("steps", [])
-            for step in steps:
-                if step.get("status") == "completed" and step.get("result"):
-                    result_text = step["result"]
-                    if result_text.strip():
-                        conversations.append(
-                            {
-                                "role": "assistant",
-                                "text": result_text,
-                            }
-                        )
-
-            logger.info(
-                "Loaded %d conversations from checkpoint for thread %s",
-                len(conversations),
-                thread_id,
-            )
-        except Exception:
-            logger.debug("Failed to load checkpoint for thread %s", thread_id, exc_info=True)
-            return []
-        else:
-            return conversations
-
-    def _log_conversation(self, text: str) -> None:
-        # Check if this is a user message
-        if "👤 User:" in text:
-            # Extract the raw message content
-            raw_content = text.split("👤 User:", 1)[-1].strip()
-            # Remove Rich markup tags
-            import re
-
-            raw_content = re.sub(r"\[/?[^\]]+\]", "", raw_content)
-
-            # Store for copying
-            self._message_history.append({"role": "user", "content": raw_content, "index": len(self._message_history)})
-
-            # Create panel with cyan border
-            panel_widget = Panel(
-                raw_content,
-                title="👤 User",
-                border_style="cyan",
-                padding=(0, 1),
-            )
-            self._conversation_history.append(panel_widget)
-            logger.info("Conversation: User message - %s", raw_content[:200])
-
-            with contextlib.suppress(Exception):
-                conv_panel = self.query_one("#conversation", ConversationPanel)
-                conv_panel.write(panel_widget)
-        else:
-            # Non-user messages (system messages, etc.) - keep as plain text
-            self._conversation_history.append(text)
-            with contextlib.suppress(Exception):
-                conv_panel = self.query_one("#conversation", ConversationPanel)
-                conv_panel.write(text)
-
-    def _append_conversation(self) -> None:
-        """Rewrite the conversation panel with history + accumulated streaming text."""
-        try:
-            panel = self.query_one("#conversation", ConversationPanel)
-            response_text = "".join(self._state.full_response)
-
-            # Clear panel only if it has content (skip clear on fresh panel to avoid init issues)
-            # RichLog doesn't expose a direct way to check if empty, but clear() on empty is safe
-            panel.clear()
-
-            # Always show conversation history, even if response is empty
-            for entry in self._conversation_history:
-                panel.write(entry)
-
-            # Append response if available
-            if response_text:
-                # Remove Rich markup for raw storage
-                import re
-
-                raw_content = re.sub(r"\[/?[^\]]+\]", "", response_text)
-
-                # Check if we already have this assistant message stored
-                # (streaming continues on the same message)
-                if self._message_history and self._message_history[-1]["role"] == "assistant":
-                    # Update the last assistant message content
-                    self._message_history[-1]["content"] = raw_content
-                else:
-                    # New assistant message - add to history
-                    self._message_history.append(
-                        {"role": "assistant", "content": raw_content, "index": len(self._message_history)}
-                    )
-
-                # Convert to Markdown for proper formatting (headings, spacing, etc.)
-                markdown_content = Markdown(response_text)
-
-                # Create panel with green border (always create fresh for streaming)
-                assistant_panel = Panel(
-                    markdown_content,
-                    title="🤖 Assistant",
-                    border_style="green",
-                    padding=(0, 1),
-                )
-                panel.write(assistant_panel, scroll_end=True)
-        except Exception:
-            logger.exception("Failed to append conversation to panel")
-
     def _flush_new_activity(self) -> None:
-        """Update plan tree with activity info (merged display)."""
+        """Update plan tree display."""
         self._refresh_plan()
 
     def _refresh_plan(self) -> None:
@@ -640,27 +373,25 @@ class SootheApp(App):
             conv_panel = self.query_one("#conversation", ConversationPanel)
             conv_panel.clear()
 
-            # Clear plan tree and hide it (Bug #2 consistency)
+            # Clear plan tree and hide it
             plan_tree = self.query_one("#plan-tree", PlanTree)
             plan_tree.update("")
             plan_tree.remove_class("visible")
             self._state.current_plan = None
 
-            # Clear internal state
-            self._conversation_history.clear()
-            self._message_history.clear()
-            self._state.full_response.clear()
-            self._state.activity_lines.clear()
-            self._state.tool_call_buffers.clear()
-            self._state.errors.clear()
+            # Clear streaming state
+            self._state.streaming_text_buffer = ""
+            self._state.streaming_active = False
+            self._state.current_tool_calls.clear()
             self._state.seen_message_ids.clear()
-            self._last_activity_count = 0
+            self._state.errors.clear()
 
             logger.info("TUI panels cleared")
         except Exception:
             logger.exception("Failed to clear TUI panels")
 
     def _update_status(self, state: str) -> None:
+        logger.warning("DEBUG _update_status(%r): self._state.thread_id = %r", state, self._state.thread_id)
         # Start/stop typing indicator based on state
         if state == "running":
             self._is_running = True
@@ -711,6 +442,7 @@ class SootheApp(App):
     def _update_status_bar(self, status_text: str) -> None:
         """Update the info bar with current status."""
         with contextlib.suppress(Exception):
+            logger.debug("_update_status_bar(%r): thread_id=%r", status_text, self._state.thread_id)
             bar = self.query_one("#info-bar", InfoBar)
             # Ensure thread_id is a proper string and truncate for display (Bug #1)
             raw_tid = self._state.thread_id
@@ -741,30 +473,22 @@ class SootheApp(App):
         with contextlib.suppress(Exception):
             chat_input.add_to_history(text)
 
-        if self._state.full_response:
-            # Store the previous assistant response in conversation history
-            response_text = "".join(self._state.full_response)
+        # Display user input in conversation panel with Claude Code style
+        try:
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.append_separator()
+            panel.append_entry(make_user_prompt_line(text))
+        except Exception:
+            logger.debug("Failed to write user input to panel", exc_info=True)
 
-            # Convert to Markdown for proper formatting
-            markdown_content = Markdown(response_text)
-
-            # Create and store panel
-            assistant_panel = Panel(
-                markdown_content,
-                title="🤖 Assistant",
-                border_style="green",
-                padding=(0, 1),
-            )
-            self._conversation_history.append(assistant_panel)
-            # Note: _message_history is already updated during streaming in _append_conversation
-
-        self._log_conversation(f"\n[bold cyan]👤 User:[/bold cyan] {text}")
-        self._state.full_response.clear()
+        # Reset streaming state for new turn
+        self._state.streaming_text_buffer = ""
+        self._state.streaming_active = False
         self._state.seen_message_ids.clear()
         self._state.last_user_input = text
 
         if not self._client or not self._connected:
-            self._log_conversation("[red]Not connected to daemon.[/red]")
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Not connected to daemon."))
             return
 
         if text.startswith("/"):
@@ -808,7 +532,7 @@ class SootheApp(App):
     async def _show_thread_selection(self) -> None:
         """Show thread selection modal and resume selected thread."""
         if not self._client or not self._connected:
-            self._log_conversation("[red]Not connected to daemon.[/red]")
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Not connected to daemon."))
             return
 
         # Create a runner instance for the modal
@@ -821,7 +545,7 @@ class SootheApp(App):
 
         if selected_thread_id:
             # Resume the selected thread
-            self._log_conversation(f"[dim]Resuming thread {selected_thread_id}...[/dim]")
+            self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], f"Resuming thread {selected_thread_id}..."))
             await self._client.send_resume_thread(selected_thread_id)
 
     async def action_detach(self) -> None:
@@ -852,25 +576,31 @@ class SootheApp(App):
             await self._client.send_command("/cancel")
 
     async def action_copy_last(self) -> None:
-        """Copy the last message to clipboard."""
-        if not self._message_history:
-            self._log_conversation("[dim]No messages to copy.[/dim]")
+        """Copy the last streamed text to clipboard."""
+        # In clean-cut mode, we copy from the streaming buffer or show a message
+        content = self._state.last_assistant_output.strip()
+        if not content:
+            # Show dim message in panel
+            try:
+                panel = self.query_one("#conversation", ConversationPanel)
+                panel.append_entry(make_dot_line(DOT_COLORS["protocol"], "No recent content to copy"))
+            except Exception:
+                logger.debug("Failed to show no-content message")
             return
 
-        last_msg = self._message_history[-1]
         try:
-            content = last_msg.get("content", "")
-            if not content:
-                self._log_conversation("[dim]Last message is empty.[/dim]")
-                return
-
             pyperclip.copy(content)
-            role = last_msg.get("role", "unknown").title()
-            self._log_conversation(f"[dim]✓ Copied {role} message to clipboard[/dim]")
+            # Show confirmation in panel
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.append_entry(make_dot_line(DOT_COLORS["success"], "Copied to clipboard"))
         except Exception as e:
             logger.exception("Failed to copy to clipboard")
             error_msg = str(e) or "Unknown error"
-            self._log_conversation(f"[red]Failed to copy to clipboard: {error_msg}[/red]")
+            try:
+                panel = self.query_one("#conversation", ConversationPanel)
+                panel.append_entry(make_dot_line(DOT_COLORS["error"], f"Failed to copy: {error_msg}"))
+            except Exception:
+                logger.debug("Failed to show copy error message")
 
     async def action_focus_input(self) -> None:
         """Focus the chat input field."""
