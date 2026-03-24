@@ -431,21 +431,25 @@ class TestProtocolConfig:
         cfg = SootheConfig(protocols={"memory": {"enabled": True}})
         assert cfg.protocols.memory.enabled is True
 
-        # Test database provider options
-        for provider in ("inmemory", "sqlite", "postgres"):
-            cfg = SootheConfig(protocols={"memory": {"database_provider": provider}})
-            assert cfg.protocols.memory.database_provider == provider
+        # Test persist_dir option
+        cfg = SootheConfig(protocols={"memory": {"persist_dir": "/custom/memory/dir"}})
+        assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
+
+        # Test LLM role configuration
+        cfg = SootheConfig(protocols={"memory": {"llm_chat_role": "fast", "llm_embed_role": "embedding"}})
+        assert cfg.protocols.memory.llm_chat_role == "fast"
+        assert cfg.protocols.memory.llm_embed_role == "embedding"
 
     def test_combined_backend_options(self) -> None:
         """Test combined backend format for context and memory."""
         cfg = SootheConfig(
             protocols={
                 "context": {"backend": "keyword-rocksdb"},
-                "memory": {"database_provider": "postgres"},
+                "memory": {"persist_dir": "/custom/memory/dir"},
             }
         )
         assert cfg.protocols.context.backend == "keyword-rocksdb"
-        assert cfg.protocols.memory.database_provider == "postgres"
+        assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
 
     def test_vector_store_config(self) -> None:
         """Test vector store multi-provider configuration."""

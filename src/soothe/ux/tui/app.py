@@ -178,13 +178,13 @@ class SootheApp(App):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
 
-        # Preload thread history immediately on mount to avoid waiting for
-        # daemon handshake/status sequencing before showing resumed context.
+        # Don't render history here - wait for daemon connection and thread_resumed event
+        # to ensure the widget tree is fully ready.
         if self._thread_id:
             self._state.thread_id = self._thread_id
             self._load_thread_history(self._thread_id)
             self._history_loaded_thread_id = self._thread_id
-            self._render_history_to_conversation_panel()
+            # Rendering will happen when daemon sends thread_resumed=True
             self._update_status_bar("Idle")
 
         self._refresh_plan()
@@ -520,12 +520,15 @@ class SootheApp(App):
 
     def _append_conversation(self) -> None:
         """Rewrite the conversation panel with history + accumulated streaming text."""
-        with contextlib.suppress(Exception):
+        try:
             panel = self.query_one("#conversation", ConversationPanel)
             response_text = "".join(self._state.full_response)
 
-            # Always show conversation history, even if response is empty
+            # Clear panel only if it has content (skip clear on fresh panel to avoid init issues)
+            # RichLog doesn't expose a direct way to check if empty, but clear() on empty is safe
             panel.clear()
+
+            # Always show conversation history, even if response is empty
             for entry in self._conversation_history:
                 panel.write(entry)
 
@@ -558,6 +561,8 @@ class SootheApp(App):
                     padding=(0, 1),
                 )
                 panel.write(assistant_panel, scroll_end=True)
+        except Exception:
+            logger.exception("Failed to append conversation to panel")
 
     def _flush_new_activity(self) -> None:
         """Update plan tree with activity info (merged display)."""
