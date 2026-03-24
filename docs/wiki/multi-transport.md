@@ -86,13 +86,13 @@ daemon:
 
 2. **Restart daemon**:
 ```bash
-soothe server stop
-soothe server start
+soothe daemon stop
+soothe daemon start
 ```
 
 3. **Verify**:
 ```bash
-soothe server status
+soothe daemon status
 # Should show: WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
 ```
 
@@ -168,8 +168,8 @@ daemon:
 
 2. **Restart daemon**:
 ```bash
-soothe server stop
-soothe server start
+soothe daemon stop
+soothe daemon start
 ```
 
 ### Key Endpoints

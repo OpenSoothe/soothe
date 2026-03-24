@@ -286,17 +286,16 @@ async def test_daemon_handles_new_thread_message_creates_thread() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    with patch("soothe.core.thread.ThreadContextManager") as manager_cls:
-        manager = MagicMock()
-        manager.create_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-new-1"))
-        manager_cls.return_value = manager
-        await daemon._handle_client_message(SimpleNamespace(), {"type": "new_thread"})
+    await daemon._handle_client_message(SimpleNamespace(), {"type": "new_thread"})
 
-    manager.create_thread.assert_awaited_once()
-    assert daemon._runner.current_thread_id == "thread-new-1"  # type: ignore[attr-defined]
+    # Verify draft thread was created (not persisted yet)
+    assert daemon._draft_thread_id is not None
+    assert daemon._runner.current_thread_id == daemon._draft_thread_id
+
+    # Verify status was broadcast
     status_msgs = [msg for msg in sent if msg.get("type") == "status"]
     assert status_msgs
-    assert status_msgs[0].get("thread_id") == "thread-new-1"
+    assert status_msgs[0].get("thread_id") == daemon._draft_thread_id
     assert status_msgs[0].get("new_thread") is True
 
 

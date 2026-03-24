@@ -56,6 +56,7 @@ def mock_memory_store():
         created_at=datetime.now(UTC),
     )
     from soothe.backends.memory.memu.models import SearchResult
+
     search_result = SearchResult(
         memory_item=memu_item,
         relevance_score=0.9,

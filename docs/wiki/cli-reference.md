@@ -83,30 +83,30 @@ soothe thread tag <thread-id> research analysis
 soothe thread tag <thread-id> research --remove
 ```
 
-## Server Management
+## Daemon Management
 
 Manage the Soothe daemon process.
 
 ```bash
 # Start daemon in background
-soothe server start
+soothe daemon start
 
 # Check daemon status
-soothe server status
+soothe daemon status
 
 # Stop daemon gracefully
-soothe server stop
+soothe daemon stop
 
 # Restart daemon
-soothe server restart
+soothe daemon restart
 ```
 
-**Note**: The `server attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
+**Note**: The `daemon attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
 ```bash
 soothe thread continue --daemon
 ```
 
-**Server Status Output**:
+**Daemon Status Output**:
 ```
 Daemon Status: running
 PID: 12345
@@ -181,13 +181,13 @@ soothe thread continue abc123
 
 ```bash
 # Start daemon
-soothe server start
+soothe daemon start
 
 # Run in detached mode
 soothe "Long running task" &
 
 # Check status later
-soothe server status
+soothe daemon status
 ```
 
 ## Related Guides

@@ -18,7 +18,7 @@ The Soothe daemon is a background process that:
 Start the daemon in the background:
 
 ```bash
-soothe server start
+soothe daemon start
 ```
 
 **Output**:
@@ -34,7 +34,7 @@ Status: running
 View daemon status:
 
 ```bash
-soothe server status
+soothe daemon status
 ```
 
 **Output**:
@@ -55,7 +55,7 @@ Memory Usage: 256 MB
 Gracefully stop the daemon:
 
 ```bash
-soothe server stop
+soothe daemon stop
 ```
 
 **Output**:
@@ -67,7 +67,7 @@ Daemon stopped successfully
 
 ### Attach to Daemon
 
-**Note**: The `soothe server attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
+**Note**: The `soothe daemon attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
 
 ```bash
 # Resume last active thread via daemon
@@ -112,7 +112,7 @@ Run long tasks without keeping the TUI open:
 
 ```bash
 # Start daemon
-soothe server start
+soothe daemon start
 
 # Run task in background
 soothe "Analyze the entire codebase" &
@@ -165,7 +165,7 @@ Enable verbose logging:
 
 ```bash
 export SOOTHE_DEBUG=true
-soothe server start
+soothe daemon start
 ```
 
 ## Configuration
@@ -240,15 +240,15 @@ curl http://localhost:8766/api/v1/health
 **Solution**: Socket file exists from previous run
 ```bash
 rm ~/.soothe/soothe.sock
-soothe server start
+soothe daemon start
 ```
 
 ### Daemon Not Responding
 
 **Solution**: Restart the daemon
 ```bash
-soothe server stop
-soothe server start
+soothe daemon stop
+soothe daemon start
 ```
 
 ### Can't Connect to Daemon
@@ -257,7 +257,7 @@ soothe server start
 
 **Solution**: Start daemon first, then use thread continue
 ```bash
-soothe server start
+soothe daemon start
 soothe thread continue --daemon
 ```
 

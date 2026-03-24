@@ -54,7 +54,7 @@ All 6 phases of the unified thread management architecture have been successfull
 - `src/soothe/ux/cli/commands/thread_cmd.py` - Enhanced `thread continue`, added new commands
 
 **CLI Enhancements**:
-- Removed: `soothe server attach` (deprecated)
+- Removed: `soothe daemon attach` (deprecated)
 - Enhanced: `soothe thread continue` now supports `--daemon` and `--new` flags
 - New: `soothe thread stats <id>` - Show thread statistics
 - New: `soothe thread tag <id> <tags...>` - Add/remove tags
@@ -196,7 +196,7 @@ All existing functionality preserved:
 ## Migration Guide
 
 ### For Users
-1. Replace `soothe server attach --thread-id X` with `soothe thread continue --daemon X`
+1. Replace `soothe daemon attach --thread-id X` with `soothe thread continue --daemon X`
 2. Use new `thread stats` and `thread tag` commands for enhanced management
 3. HTTP REST API is now fully functional for thread operations
 
@@ -229,7 +229,7 @@ All existing functionality preserved:
 ## Success Criteria
 
 ✅ All HTTP REST endpoints functional (not placeholders)
-✅ `soothe thread continue --daemon` replaces `soothe server attach`
+✅ `soothe thread continue --daemon` replaces `soothe daemon attach`
 ✅ Thread statistics calculate correctly
 ✅ Thread filtering works by status, tags, labels
 ✅ Multi-threading support with isolation

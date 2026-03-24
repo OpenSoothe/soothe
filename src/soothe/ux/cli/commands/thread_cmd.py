@@ -180,7 +180,7 @@ def thread_continue(
     # Handle --daemon flag
     if daemon:
         if not SootheDaemon.is_running():
-            typer.echo("Error: No daemon running. Start with 'soothe server start'.", err=True)
+            typer.echo("Error: No daemon running. Start with 'soothe daemon start'.", err=True)
             sys.exit(1)
 
         # Connect to daemon and resume thread

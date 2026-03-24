@@ -260,13 +260,13 @@ def _thread_export(
     thread_export(thread_id=thread_id, output=output, export_format=export_format)
 
 
-server_app = typer.Typer(name="server", help="Manage daemon process")
-add_help_alias(server_app)
-app.add_typer(server_app)
+daemon_app = typer.Typer(name="daemon", help="Manage daemon process")
+add_help_alias(daemon_app)
+app.add_typer(daemon_app)
 
 
-@server_app.command("start")
-def _server_start(
+@daemon_app.command("start")
+def _daemon_start(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -278,41 +278,41 @@ def _server_start(
     ] = False,
 ) -> None:
     """Start the Soothe daemon."""
-    from soothe.ux.cli.commands.server_cmd import server_start
+    from soothe.ux.cli.commands.daemon_cmd import daemon_start
 
-    server_start(config=config, foreground=foreground)
+    daemon_start(config=config, foreground=foreground)
 
 
-@server_app.command("stop")
-def _server_stop() -> None:
+@daemon_app.command("stop")
+def _daemon_stop() -> None:
     """Stop the running Soothe daemon."""
-    from soothe.ux.cli.commands.server_cmd import server_stop
+    from soothe.ux.cli.commands.daemon_cmd import daemon_stop
 
-    server_stop()
+    daemon_stop()
 
 
-@server_app.command("status")
-def _server_status() -> None:
+@daemon_app.command("status")
+def _daemon_status() -> None:
     """Show Soothe daemon status."""
-    from soothe.ux.cli.commands.server_cmd import server_status
+    from soothe.ux.cli.commands.daemon_cmd import daemon_status
 
-    server_status()
+    daemon_status()
 
 
-@server_app.command("restart")
-def _server_restart(
+@daemon_app.command("restart")
+def _daemon_restart(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
     """Restart the Soothe daemon."""
-    from soothe.ux.cli.commands.server_cmd import server_restart
+    from soothe.ux.cli.commands.daemon_cmd import daemon_restart
 
-    server_restart(config=config)
+    daemon_restart(config=config)
 
 
-# NOTE: server "attach" command removed in RFC-0017
+# NOTE: daemon "attach" command removed in RFC-0017
 # Use 'soothe thread continue --daemon' instead
 
 agent_app = typer.Typer(name="agent", help="List and manage agents")

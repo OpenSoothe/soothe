@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.core.events import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
 from soothe.daemon.protocol import decode, encode
-from soothe.daemon.thread_logger import ThreadLogger
+from soothe.daemon.thread_logger import InputHistory, ThreadLogger
 
 if TYPE_CHECKING:
     from soothe.daemon.server import _ClientConn
@@ -130,17 +130,24 @@ class DaemonHandlersMixin:
                         }
                     )
         elif msg_type == "new_thread":
-            # Start a fresh thread and return its real ID immediately.
-            from soothe.core.thread import ThreadContextManager
+            # Start a fresh thread - create draft thread ID without persisting yet
+            import uuid
 
-            manager = ThreadContextManager(self._runner._durability, self._config)
-            thread_info = await manager.create_thread()
-            self._runner.set_current_thread_id(thread_info.thread_id)
+            # Generate a draft thread ID
+            draft_thread_id = str(uuid.uuid4())
+
+            # Track as draft (not persisted until first message)
+            self._draft_thread_id = draft_thread_id
+            self._runner.set_current_thread_id(draft_thread_id)
+
+            # Initialize input history for the draft thread
+            self._input_history = InputHistory()
+
             await self._broadcast(
                 {
                     "type": "status",
                     "state": "idle",
-                    "thread_id": self._runner.current_thread_id or "",
+                    "thread_id": draft_thread_id,
                     "new_thread": True,
                     "input_history": [],
                 }
@@ -553,6 +560,20 @@ class DaemonHandlersMixin:
 
         # Legacy single-threaded execution (backward compatible)
         thread_id = await self._ensure_active_thread_id()
+
+        # Persist draft thread on first message
+        if self._draft_thread_id and self._draft_thread_id == thread_id:
+            from soothe.core.thread import ThreadContextManager
+
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            thread_info = await manager.create_thread()
+            # Use the persisted thread ID going forward
+            actual_thread_id = thread_info.thread_id
+            self._runner.set_current_thread_id(actual_thread_id)
+            thread_id = actual_thread_id
+            # Log and clear draft state
+            logger.info("Persisted draft thread -> %s", thread_id)
+            self._draft_thread_id = None
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:
             self._thread_logger = ThreadLogger(

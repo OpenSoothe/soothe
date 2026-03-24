@@ -652,13 +652,13 @@ def server_attach(
     """Attach TUI to running daemon.
 
     Examples:
-        soothe server attach
-        soothe server attach --thread-id abc123
+        soothe daemon attach
+        soothe daemon attach --thread-id abc123
     """
     from soothe.daemon import SootheDaemon
 
     if not SootheDaemon.is_running():
-        typer.echo("Error: No daemon running. Use 'soothe server start'.", err=True)
+        typer.echo("Error: No daemon running. Use 'soothe daemon start'.", err=True)
         sys.exit(1)
 
     cfg = load_config(config)
@@ -819,7 +819,7 @@ If you've been using older versions of Soothe, here are the command changes:
 - Old: `soothe show_config` → New: `soothe config show`
 
 ### Better Naming
-- Old: `soothe attach` → New: `soothe server attach`
+- Old: `soothe attach` → New: `soothe daemon attach`
 - Old: `soothe list-subagents` → New: `soothe agent list`
 - Old: `soothe thread resume` → New: `soothe thread continue`
 ```
@@ -858,10 +858,10 @@ soothe thread archive <id>
 soothe thread export <id>
 
 # Server commands
-soothe server start
-soothe server status
-soothe server attach
-soothe server stop
+soothe daemon start
+soothe daemon status
+soothe daemon attach
+soothe daemon stop
 
 # Agent commands
 soothe agent list
@@ -879,7 +879,7 @@ soothe autopilot "test" --max-iterations 5
 soothe --help
 soothe config --help
 soothe thread --help
-soothe server --help
+soothe daemon --help
 soothe agent --help
 soothe autopilot --help
 ```

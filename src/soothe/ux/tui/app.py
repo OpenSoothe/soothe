@@ -178,13 +178,13 @@ class SootheApp(App):
             chat_input = self.query_one("#chat-input", ChatInput)
             chat_input.focus()
 
-        # Don't render history here - wait for daemon connection and thread_resumed event
-        # to ensure the widget tree is fully ready.
+        # Load history now but render it via call_later to ensure widget tree is ready
         if self._thread_id:
             self._state.thread_id = self._thread_id
             self._load_thread_history(self._thread_id)
             self._history_loaded_thread_id = self._thread_id
-            # Rendering will happen when daemon sends thread_resumed=True
+            # Use call_later to ensure widget is mounted before rendering
+            self._render_history_to_conversation_panel(use_call_later=True)
             self._update_status_bar("Idle")
 
         self._refresh_plan()
@@ -243,6 +243,10 @@ class SootheApp(App):
                 tid = self._state.thread_id if tid_raw in (None, "") else str(tid_raw)
                 previous_thread_id = self._thread_id
 
+                # Update state thread_id for status bar display
+                if tid:
+                    self._state.thread_id = tid
+
                 # Clear local history only on explicit new-thread signal.
                 if event.get("new_thread", False):
                     # Starting a fresh thread, clear previous conversation
@@ -284,7 +288,8 @@ class SootheApp(App):
                         # reload history from disk.
                         self._load_thread_history(tid)
                         self._history_loaded_thread_id = tid
-                        self._render_history_to_conversation_panel()
+                        # Don't use call_later here - we're already in event loop and widget is ready
+                        self._render_history_to_conversation_panel(use_call_later=False)
 
                 if state_str == "running":
                     self._was_running = True
@@ -303,8 +308,19 @@ class SootheApp(App):
 
             await asyncio.sleep(0)
 
-    def _render_history_to_conversation_panel(self) -> None:
-        """Render loaded conversation history into the conversation panel."""
+    def _render_history_to_conversation_panel(self, *, use_call_later: bool = True) -> None:
+        """Render loaded conversation history into the conversation panel.
+
+        Args:
+            use_call_later: If True, defer rendering via call_later to ensure widget is ready.
+        """
+        if use_call_later:
+            self.call_later(self._do_render_history)
+        else:
+            self._do_render_history()
+
+    def _do_render_history(self) -> None:
+        """Actual rendering of conversation history (called via call_later or directly)."""
         try:
             # Reuse the standard conversation repaint pipeline to keep
             # resume rendering consistent with normal turn-end rendering.
@@ -779,7 +795,7 @@ class SootheApp(App):
             await self._client.send_detach()
             await self._client.close()
         self._connected = False
-        self.exit(message="Detached from Soothe daemon. Use 'soothe server attach' to reconnect.")
+        self.exit(message="Detached from Soothe daemon. Use 'soothe thread continue --daemon' to reconnect.")
 
     async def action_quit_app(self) -> None:
         """Stop daemon and quit."""
@@ -807,12 +823,18 @@ class SootheApp(App):
 
         last_msg = self._message_history[-1]
         try:
-            pyperclip.copy(last_msg["content"])
-            role = last_msg["role"].title()
+            content = last_msg.get("content", "")
+            if not content:
+                self._log_conversation("[dim]Last message is empty.[/dim]")
+                return
+
+            pyperclip.copy(content)
+            role = last_msg.get("role", "unknown").title()
             self._log_conversation(f"[dim]✓ Copied {role} message to clipboard[/dim]")
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to copy to clipboard")
-            self._log_conversation("[red]Failed to copy to clipboard[/red]")
+            error_msg = str(e) or "Unknown error"
+            self._log_conversation(f"[red]Failed to copy to clipboard: {error_msg}[/red]")
 
     async def action_focus_input(self) -> None:
         """Focus the chat input field."""

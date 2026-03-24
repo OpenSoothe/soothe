@@ -87,7 +87,7 @@ store internals could deadlock when called from the active event loop.
 ## Validation
 
 - `soothe run --no-tui "who are you"` finishes successfully with daemon running.
-- `soothe server stop` exits cleanly and removes pid/socket.
+- `soothe daemon stop` exits cleanly and removes pid/socket.
 - starting daemon twice reports "already running" on second attempt.
 - in dockerized postgres, both `vectordb` and `soothe` exist.
 - config can be user-overridden via:

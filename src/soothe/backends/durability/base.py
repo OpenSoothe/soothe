@@ -42,15 +42,48 @@ class BasePersistStoreDurability:
         return info
 
     async def resume_thread(self, thread_id: str) -> ThreadInfo:
-        """Resume a suspended thread."""
+        """Resume a suspended thread.
+
+        Supports longest prefix matching for thread IDs. If the provided thread_id
+        is a prefix that matches exactly one thread, that thread is resumed.
+
+        Args:
+            thread_id: Full thread ID or prefix.
+
+        Returns:
+            ThreadInfo for the resumed thread.
+
+        Raises:
+            KeyError: If thread not found or prefix matches multiple threads.
+        """
+        # First try exact match
         data = self._store.load(f"thread:{thread_id}")
+        if data is not None:
+            info = ThreadInfo.model_validate(data)
+            info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
+            self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+            return info
+
+        # Try prefix matching
+        matching_threads = await self._find_threads_by_prefix(thread_id)
+        if len(matching_threads) == 0:
+            msg = f"Thread '{thread_id}' not found"
+            raise KeyError(msg)
+        if len(matching_threads) > 1:
+            matches = ", ".join(t.thread_id[:8] for t in matching_threads[:5])
+            msg = f"Thread prefix '{thread_id}' is ambiguous (matches {len(matching_threads)} threads: {matches}...)"
+            raise KeyError(msg)
+
+        # Exactly one match - use the full thread ID
+        matched_thread = matching_threads[0]
+        data = self._store.load(f"thread:{matched_thread.thread_id}")
         if data is None:
             msg = f"Thread '{thread_id}' not found"
             raise KeyError(msg)
 
         info = ThreadInfo.model_validate(data)
         info = info.model_copy(update={"status": "active", "updated_at": datetime.now(tz=UTC)})
-        self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
+        self._store.save(f"thread:{matched_thread.thread_id}", info.model_dump(mode="json"))
         return info
 
     async def suspend_thread(self, thread_id: str) -> None:
@@ -161,3 +194,26 @@ class BasePersistStoreDurability:
             thread_ids.discard(thread_id)
 
         self._store.save(self._thread_index_key, list(thread_ids))
+
+    async def _find_threads_by_prefix(self, prefix: str) -> list[ThreadInfo]:
+        """Find threads whose IDs start with the given prefix.
+
+        Args:
+            prefix: Thread ID prefix to search for.
+
+        Returns:
+            List of ThreadInfo objects matching the prefix.
+        """
+        # Load thread index
+        index_data = self._store.load(self._thread_index_key)
+        thread_ids: list[str] = index_data if isinstance(index_data, list) else []
+
+        # Find threads starting with prefix
+        matching = []
+        for tid in thread_ids:
+            if tid.startswith(prefix):
+                data = self._store.load(f"thread:{tid}")
+                if data:
+                    matching.append(ThreadInfo.model_validate(data))
+
+        return matching

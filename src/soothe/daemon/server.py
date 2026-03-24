@@ -83,6 +83,8 @@ class SootheDaemon(DaemonHandlersMixin):
         # Multi-threading support (RFC-0017)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
+        # Draft thread tracking for lazy creation
+        self._draft_thread_id: str | None = None  # Thread ID created but not yet persisted
 
     # -- lifecycle ----------------------------------------------------------
 

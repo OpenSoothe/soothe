@@ -1,4 +1,4 @@
-"""Server commands for Soothe CLI."""
+"""Daemon commands for Soothe CLI."""
 
 import subprocess
 import sys
@@ -12,7 +12,7 @@ from soothe.config import SOOTHE_HOME
 from soothe.ux.core import load_config, setup_logging
 
 
-def server_start(
+def daemon_start(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -61,7 +61,7 @@ def server_start(
             typer.echo("Soothe daemon started in background.")
 
 
-def server_stop() -> None:
+def daemon_stop() -> None:
     """Stop the running Soothe daemon."""
     from soothe.daemon import SootheDaemon
 
@@ -71,7 +71,7 @@ def server_stop() -> None:
         typer.echo("No Soothe daemon is running.")
 
 
-def server_status() -> None:
+def daemon_status() -> None:
     """Show Soothe daemon status."""
     from soothe.daemon import SootheDaemon, pid_path
 
@@ -83,7 +83,7 @@ def server_status() -> None:
         typer.echo("Soothe daemon is not running.")
 
 
-def server_restart(
+def daemon_restart(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -94,8 +94,8 @@ def server_restart(
     Stops the running daemon (if any) and starts a new one.
 
     Examples:
-        soothe server restart
-        soothe server restart --config my_config.yml
+        soothe daemon restart
+        soothe daemon restart --config my_config.yml
     """
     from soothe.daemon import SootheDaemon
 
@@ -108,8 +108,8 @@ def server_restart(
 
     # Start a new daemon
     typer.echo("Starting Soothe daemon...")
-    server_start(config=config, foreground=False)
+    daemon_start(config=config, foreground=False)
 
 
-# NOTE: server_attach() removed in RFC-0017
+# NOTE: daemon_attach() removed in RFC-0017
 # Use 'soothe thread continue --daemon' instead

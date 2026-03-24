@@ -301,9 +301,9 @@ soothe run
 soothe run "test prompt"
 
 # Test daemon
-soothe server start
-soothe server status
-soothe server stop
+soothe daemon start
+soothe daemon status
+soothe daemon stop
 ```
 
 ### Step 16: Update CHANGELOG (15 min)

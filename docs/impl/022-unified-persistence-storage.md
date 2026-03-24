@@ -501,10 +501,10 @@ docker-compose up -d
 soothe run "Hello, I'm Alice"
 
 # Stop daemon
-soothe server stop
+soothe daemon stop
 
 # Restart daemon
-soothe server start
+soothe daemon start
 
 # Resume conversation
 soothe attach
@@ -562,7 +562,7 @@ After implementation, verify:
 
 1. **Daemon starts without errors**:
    ```bash
-   soothe server start
+   soothe daemon start
    # Check logs for: "Using AsyncPostgresSaver with DSN: postgresql://postgres:****@localhost:5432/soothe"
    ```
 
@@ -572,7 +572,7 @@ After implementation, verify:
    soothe run "Remember: my favorite color is blue"
 
    # Restart daemon
-   soothe server stop && sleep 2 && soothe server start
+   soothe daemon stop && sleep 2 && soothe daemon start
 
    # Resume and ask
    soothe run "What's my favorite color?"
