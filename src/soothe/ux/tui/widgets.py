@@ -37,10 +37,10 @@ class ConversationPanel(RichLog):
         Args:
             renderable: Rich renderable content to replace the last entry with.
         """
-        # Access internal _lines list to remove last entry
-        if self._lines:
-            self._lines.pop()
-            # Also need to trigger refresh after modifying _lines
+        # Access internal lines list to remove last entry
+        if self.lines:
+            self.lines.pop()
+            # Trigger refresh after modifying lines
             self.refresh()
         self.write(renderable)
         self.scroll_end(animate=False)
