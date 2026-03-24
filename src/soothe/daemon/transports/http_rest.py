@@ -451,6 +451,22 @@ class HttpRestTransport(TransportServer):
         """
         # HTTP REST doesn't maintain persistent connections for broadcasting
 
+    async def send(self, client: Any, message: dict[str, Any]) -> None:
+        """Send message to specific client.
+
+        Note: HTTP REST doesn't maintain persistent connections, so this
+        is a no-op. Streaming responses use different mechanisms.
+
+        Args:
+            client: Client identifier (not used for HTTP REST)
+            message: Message dictionary to send
+
+        Raises:
+            NotImplementedError: HTTP REST doesn't support persistent messaging
+        """
+        # HTTP REST doesn't maintain persistent connections
+        # Streaming is handled via SSE endpoints
+
     async def stop(self) -> None:
         """Stop the HTTP REST server."""
         if self._server:

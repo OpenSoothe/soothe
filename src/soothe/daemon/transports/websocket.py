@@ -110,6 +110,24 @@ class WebSocketTransport(TransportServer):
         for dead in dead_clients:
             self._clients.pop(dead, None)
 
+    async def send(self, client: Any, message: dict[str, Any]) -> None:
+        """Send message to specific WebSocket client.
+
+        Args:
+            client: WebSocket ServerConnection object
+            message: Message dictionary to send
+
+        Raises:
+            ConnectionError: If send fails
+        """
+        try:
+            data = encode(message)
+            await client.send(data)
+        except Exception as e:
+            logger.exception("Failed to send to WebSocket client")
+            error_msg = f"Failed to send: {e}"
+            raise ConnectionError(error_msg) from e
+
     async def stop(self) -> None:
         """Stop the WebSocket server and close all connections."""
         if not self._server:

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from pathlib import Path
 from typing import Any
 
 from soothe.daemon.paths import socket_path
 from soothe.daemon.protocol import decode, encode
+
+logger = logging.getLogger(__name__)
 
 
 class DaemonClient:
@@ -86,6 +89,53 @@ class DaemonClient:
     async def send_new_thread(self) -> None:
         """Request the daemon to start a new thread."""
         await self._send({"type": "new_thread"})
+
+    async def subscribe_thread(self, thread_id: str) -> None:
+        """Subscribe to receive events for a thread.
+
+        Args:
+            thread_id: Thread identifier to subscribe to
+
+        Raises:
+            ConnectionError: If not connected
+        """
+        if not self._writer:
+            raise ConnectionError("Not connected to daemon")
+
+        msg = {"type": "subscribe_thread", "thread_id": thread_id}
+        await self._send(msg)
+        logger.info("Subscribed to thread %s", thread_id)
+
+    async def wait_for_subscription_confirmed(
+        self,
+        thread_id: str,
+        timeout: float = 5.0,  # noqa: ASYNC109
+    ) -> None:
+        """Wait for subscription confirmation message.
+
+        Args:
+            thread_id: Expected thread ID
+            timeout: Maximum seconds to wait
+
+        Raises:
+            TimeoutError: If confirmation not received
+            ValueError: If confirmation has different thread_id
+        """
+        async with asyncio.timeout(timeout):
+            event = await self.read_event()
+
+        if not event:
+            raise ValueError("No event received")
+
+        if event.get("type") != "subscription_confirmed":
+            msg = f"Expected subscription_confirmed, got {event.get('type')}"
+            raise ValueError(msg)
+
+        if event.get("thread_id") != thread_id:
+            msg = f"Subscription thread_id mismatch: expected {thread_id}, got {event.get('thread_id')}"
+            raise ValueError(msg)
+
+        logger.debug("Subscription confirmed for thread %s", thread_id)
 
     # Thread management methods (RFC-0017)
 

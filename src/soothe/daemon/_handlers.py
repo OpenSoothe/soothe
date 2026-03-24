@@ -5,14 +5,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from soothe.core.events import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
 from soothe.daemon.protocol import decode, encode
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
-
-if TYPE_CHECKING:
-    from soothe.daemon.server import _ClientConn
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +69,13 @@ class DaemonHandlersMixin:
 
     async def _handle_client_message(
         self,
-        client: _ClientConn | None,
+        client_id: str,
         msg: dict[str, Any],
     ) -> None:
         """Handle a message from a client.
 
         Args:
-            client: Client connection (None for messages from transport layer).
+            client_id: Unique client identifier (never None).
             msg: Message dict from the client.
         """
         msg_type = msg.get("type", "")
@@ -184,10 +181,43 @@ class DaemonHandlersMixin:
         elif msg_type == "thread_artifacts":
             await self._handle_thread_artifacts(msg)
         elif msg_type == "detach":
-            if client:
-                await self._send(client, {"type": "status", "state": "detached"})
-            else:
-                await self._broadcast({"type": "status", "state": "detached"})
+            session = await self._session_manager.get_session(client_id)
+            if session:
+                await session.transport.send(session.transport_client, {"type": "status", "state": "detached"})
+        elif msg_type == "subscribe_thread":
+            thread_id = msg.get("thread_id", "").strip()
+            if not thread_id:
+                session = await self._session_manager.get_session(client_id)
+                if session:
+                    await session.transport.send(
+                        session.transport_client,
+                        {"type": "error", "code": "INVALID_MESSAGE", "message": "subscribe_thread requires thread_id"},
+                    )
+                return
+
+            try:
+                await self._session_manager.subscribe_thread(client_id, thread_id)
+
+                # Send confirmation
+                session = await self._session_manager.get_session(client_id)
+                if session:
+                    await session.transport.send(
+                        session.transport_client,
+                        {"type": "subscription_confirmed", "thread_id": thread_id, "client_id": client_id},
+                    )
+                logger.info("Client %s subscribed to thread %s", client_id, thread_id)
+            except ValueError as e:
+                logger.exception("Subscription failed")
+                session = await self._session_manager.get_session(client_id)
+                if session:
+                    await session.transport.send(
+                        session.transport_client,
+                        {
+                            "type": "error",
+                            "code": "SUBSCRIPTION_FAILED",
+                            "message": str(e),
+                        },
+                    )
         else:
             logger.debug("Unknown client message type: %s", msg_type)
 

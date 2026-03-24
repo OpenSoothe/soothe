@@ -21,6 +21,7 @@ from soothe.config.models import (
     ModelRouter,
     PerformanceConfig,
     PersistenceConfig,
+    PluginConfig,
     ProtocolsConfig,
     SecurityConfig,
     SkillifyConfig,
@@ -98,6 +99,9 @@ class SootheConfig(BaseSettings):
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     """MCP server configurations (Claude Desktop JSON format)."""
+
+    plugins: list[PluginConfig] = Field(default_factory=list)
+    """Plugin configurations. Third-party plugins can be loaded via entry points, config, or filesystem."""
 
     skills: list[str] = Field(default_factory=list)
     """SKILL.md source paths passed to deepagents SkillsMiddleware."""
@@ -335,6 +339,20 @@ class SootheConfig(BaseSettings):
         if value:
             return value
         return self.router.default
+
+    def get_plugin_config(self, name: str) -> dict[str, Any]:
+        """Get plugin-specific configuration.
+
+        Args:
+            name: Plugin name.
+
+        Returns:
+            Configuration dictionary for the plugin, or empty dict if not found.
+        """
+        for plugin in self.plugins:
+            if plugin.name == name:
+                return plugin.config
+        return {}
 
     def _find_provider(self, provider_name: str) -> ModelProviderConfig | None:
         """Find a provider config by name.

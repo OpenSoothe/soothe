@@ -32,6 +32,7 @@ def pytest_addoption(parser) -> None:
 def pytest_configure(config) -> None:
     """Configure pytest markers."""
     config.addinivalue_line("markers", "integration: mark test as integration test")
+    config.addinivalue_line("markers", "slow: mark test as slow running test")
 
 
 def pytest_collection_modifyitems(config, items) -> None:

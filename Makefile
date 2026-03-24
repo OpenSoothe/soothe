@@ -63,7 +63,7 @@ test: test-unit test-integration
 # Run unit tests only
 test-unit: sync-dev
 	@echo "Running unit tests..."
-	uv run pytest tests/unit_tests/ -v
+	uv run pytest tests/unit/ -v
 	@echo "✓ Unit tests complete"
 
 # Run integration tests (requires external services and real LLM calls)

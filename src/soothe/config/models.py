@@ -107,6 +107,22 @@ class SubagentConfig(BaseModel):
     """Runtime directory for subagent. Defaults to SOOTHE_HOME/agents/<name>/."""
 
 
+class PluginConfig(BaseModel):
+    """Configuration for a single plugin.
+
+    Args:
+        name: Plugin name.
+        enabled: Whether this plugin is enabled.
+        module: Python import path (e.g., "my_package:MyPlugin").
+        config: Plugin-specific configuration dictionary.
+    """
+
+    name: str
+    enabled: bool = True
+    module: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
 class MCPServerConfig(BaseModel):
     """Configuration for a single MCP server.
 

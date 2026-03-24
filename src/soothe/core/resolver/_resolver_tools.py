@@ -221,6 +221,20 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         name: Tool group name.
         config: Optional Soothe config for tool configuration.
     """
+    # Try plugin registry first
+    try:
+        from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
+
+        if is_plugins_loaded():
+            registry = get_plugin_registry()
+            plugin_tools = registry.get_tools_for_group(name)
+            if plugin_tools:
+                logger.debug("Resolved tool group '%s' from plugins (%d tools)", name, len(plugin_tools))
+                return [wrap_main_agent_tool_with_logging(t, logger, tool_group=name) for t in plugin_tools]
+    except RuntimeError:
+        logger.debug("Plugin registry not loaded, falling back to hardcoded dispatch for '%s'", name)
+
+    # Fallback to hardcoded dispatch (to be removed after migration)
     if name == "datetime":
         from soothe.tools.datetime import create_datetime_tools
 
@@ -482,7 +496,24 @@ def resolve_subagents(
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:
             continue
-        factory = SUBAGENT_FACTORIES.get(name)
+
+        # Try plugin registry first
+        factory = None
+        try:
+            from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
+
+            if is_plugins_loaded():
+                registry = get_plugin_registry()
+                factory = registry.get_subagent_factory(name)
+                if factory:
+                    logger.debug("Resolved subagent '%s' from plugin registry", name)
+        except RuntimeError:
+            logger.debug("Plugin registry not loaded, using fallback for '%s'", name)
+
+        # Fallback to SUBAGENT_FACTORIES
+        if factory is None:
+            factory = SUBAGENT_FACTORIES.get(name)
+
         if factory is None:
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue

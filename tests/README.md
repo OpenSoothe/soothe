@@ -6,25 +6,30 @@ This directory contains comprehensive unit tests and integration tests for the S
 
 ```
 tests/
-├── unit_tests/           # Unit tests (fast, no external dependencies)
+├── unit/                    # Unit tests (fast, no external dependencies)
 │   ├── test_config.py
 │   ├── test_context.py
 │   ├── test_durability.py
-│   ├── test_memory_store.py
+│   ├── test_memory_memu.py
 │   ├── test_persistence.py
 │   ├── test_planning.py
 │   ├── test_policy.py
 │   ├── test_subagents.py
 │   ├── test_tools.py
-│   └── test_vector_store.py
-└── integration_tests/    # Integration tests (require external services)
+│   ├── test_vector_store.py
+│   ├── test_event_bus.py
+│   ├── test_client_session.py
+│   ├── middleware/          # Middleware unit tests
+│   │   └── test_system_prompt_optimization.py
+│   └── ... (55 more test files)
+└── integration/             # Integration tests (require external services)
     ├── conftest.py
-    ├── test_tool_integration_real_llm.py
+    ├── test_daemon_*.py     # Daemon protocol tests
+    ├── test_rfc0013_e2e.py  # RFC-0013 comprehensive E2E tests
     ├── test_vector_store_integration.py
     ├── test_performance.py
-    ├── test_tools_integration.py
-    ├── test_system_prompt_optimization_integration.py
-    └── test_python_session_integration.py
+    ├── test_python_session_integration.py
+    └── ... (21 more test files)
 ```
 
 ## Running Tests
@@ -34,19 +39,19 @@ tests/
 Run all unit tests:
 
 ```bash
-pytest tests/unit_tests/
+pytest tests/unit/
 ```
 
 Run a specific test file:
 
 ```bash
-pytest tests/unit_tests/test_persistence.py
+pytest tests/unit/test_persistence.py
 ```
 
 Run with coverage:
 
 ```bash
-pytest tests/unit_tests/ --cov=soothe --cov-report=html
+pytest tests/unit/ --cov=soothe --cov-report=html
 ```
 
 ### Integration Tests
@@ -56,74 +61,107 @@ Integration tests require external services (PostgreSQL, Weaviate, etc.) and are
 Run integration tests:
 
 ```bash
-pytest tests/integration_tests/ --run-integration
+# Run all integration tests
+pytest tests/integration/ --run-integration
+
+# Run specific integration test file
+pytest tests/integration/test_daemon_multi_client.py --run-integration
+
+# Run RFC-0013 E2E tests
+pytest tests/integration/test_rfc0013_e2e.py --run-integration
+
+# Run slow tests (stress tests)
+pytest tests/integration/test_rfc0013_e2e.py --run-integration -m slow
 ```
 
 ## Test Coverage
 
 The test suite covers the following modules:
 
-### Unit Tests
+### Unit Tests (61 files, ~900 tests)
 
-1. **Persistence Layer** (`test_persistence.py`)
-   - JsonPersistStore: save/load/delete operations, error handling
-   - RocksDBPersistStore: database operations (when rocksdict is installed)
-   - create_persist_store factory function
+**Core Framework:**
+- Configuration (`test_config.py`)
+- Context Protocol (`test_context.py`)
+- Memory Protocol (`test_memory_memu.py`)
+- Durability Protocol (`test_durability.py`)
+- Persistence Layer (`test_persistence.py`)
+- Planning Protocol (`test_planning.py`, `test_auto_planner.py`, `test_shared_planning.py`)
+- Policy Protocol (`test_policy.py`)
+- Vector Stores (`test_vector_store.py`)
 
-2. **Context Implementations** (`test_context.py`)
-   - KeywordContext: ingest, project, summarize, persist/restore
-   - VectorContext: embedding-based operations (with mocked dependencies)
+**Daemon & Protocol:**
+- Event Bus (`test_event_bus.py`)
+- Client Session Management (`test_client_session.py`)
+- Protocol v2 (`test_protocol_v2.py`)
+- Transport Abstraction (`test_transport_abstraction.py`)
+- Daemon CLI (`test_cli_daemon.py`)
 
-3. **Vector Stores** (`test_vector_store.py`)
-   - PGVectorStore: interface compliance, initialization, method signatures
-   - WeaviateVectorStore: interface compliance, UUID generation
-   - create_vector_store factory function
+**Agent Runtime:**
+- Subagents (`test_subagents.py`)
+- Tools (`test_tools.py`, `test_consolidated_tools.py`)
+- Goal Engine (`test_goal_engine.py`, `test_goal_tools.py`, `test_dynamic_goals.py`)
+- Concurrency (`test_concurrency_controller.py`)
+- Step Scheduler (`test_step_scheduler.py`)
+- Thread Management (`test_thread_manager.py`, `test_thread_deletion.py`)
 
-4. **Memory Stores** (`test_memory_memu.py`)
-   - MemUMemory: remember, recall, recall_by_tags, forget, update operations
-   - Integration with MemU MemoryService (with mocked dependencies)
-   - Importance score computation from reinforcement tracking
+**CLI & TUI:**
+- CLI Commands (`test_cli_commands_autonomous.py`, `test_init_command.py`)
+- TUI App (`test_cli_tui_app.py`)
+- Health State (`test_cli_health_state.py`)
+- Session Management (`test_cli_session.py`)
 
-5. **Durability** (`test_durability.py`)
-   - InMemoryDurability: thread lifecycle, state persistence
+**Tools:**
+- Code Edit (`test_tools_code_edit.py`)
+- File Edit (`test_tools_file_edit.py`)
+- Document Tools (`test_tools_document.py`)
+- Audio Tools (`test_tools_audio.py`)
+- Video Tools (`test_tools_video.py`)
+- CLI Tools (`test_tools_cli.py`)
 
-6. **Planning** (`test_planning.py`)
-   - SimplePlanner: plan creation, revision, reflection
+**Middleware:**
+- System Prompt Optimization (`middleware/test_system_prompt_optimization.py`)
 
-7. **Policy** (`test_policy.py`)
-   - ConfigDrivenPolicy: permission checking, profile management
-   - Permission and PermissionSet classes
-   - Standard, readonly, and privileged profiles
+**SDK:**
+- Plugin System (`test_sdk_basic.py`, `test_sdk_comprehensive.py`)
+- Tool Error Handler (`test_tool_error_handler.py`)
 
-8. **Existing Tests**
-   - Configuration (`test_config.py`)
-   - Subagents (`test_subagents.py`)
-   - Tools (`test_tools.py`)
+**Other:**
+- Artifact Store (`test_artifact_store.py`)
+- Browser Runtime (`test_browser_runtime.py`, `test_browser_subagent_integration.py`)
+- Inquiry Engine (`test_inquiry.py`)
+- Logging (`test_logging_setup.py`)
+- Progress Rendering (`test_progress_rendering.py`, `test_progress_verbosity.py`)
+- Token Counting (`test_token_counting.py`)
+- URL Validation (`test_url_validation.py`)
 
-### Integration Tests
+### Integration Tests (24 files, ~210 tests)
 
-1. **Vector Store Integration** (`test_vector_store_integration.py`)
-   - PGVectorStore: CRUD operations with real PostgreSQL database
-   - WeaviateVectorStore: CRUD operations with real Weaviate instance
-   - Search functionality, filtering, batch operations
+**Daemon Protocol (RFC-0013):**
+- Multi-Client Isolation (`test_daemon_multi_client.py`)
+- Event Protocol (`test_daemon_event_protocol.py`)
+- Multi-Transport (`test_daemon_multi_transport.py`)
+- Unix Socket (`test_daemon_domainsocket_protocol.py`)
+- WebSocket (`test_daemon_websocket_protocol.py`)
+- HTTP REST (`test_daemon_http_protocol.py`)
+- Thread Recovery (`test_daemon_thread_recovery.py`)
+- Security (`test_daemon_security.py`)
+- Error Handling (`test_daemon_error_handling.py`)
+- **Comprehensive E2E** (`test_rfc0013_e2e.py` - 18 tests)
 
-2. **Tool Integration with Real LLM** (`test_tool_integration_real_llm.py`)
-   - Tool execution with real language model API calls
-   - End-to-end tool usage workflows
-
-3. **Performance Tests** (`test_performance.py`)
-   - Query latency benchmarks with real LLM API calls
-   - Complexity classification performance
-   - Template planning and conditional execution
-
-4. **Tools Integration** (`test_tools_integration.py`)
-   - Real shell command execution (requires pexpect)
-   - Real Python execution with IPython
-   - Audio/video tool integration (requires API keys)
-
-5. **System Prompt Optimization Integration** (`test_system_prompt_optimization_integration.py`)
-   - End-to-end prompt optimization with real LLM instances
-   - Middleware registration and configuration
+**Tool Integration:**
+- Code Edit Tools (`test_code_edit_tools.py`)
+- Data Tools (`test_data_tools.py`)
+- Execution Tools (`test_execution_tools.py`)
+- File Operations (`test_file_ops_tools.py`)
+- HTTP REST Transport (`test_http_rest_transport.py`)
+- Multi-Transport (`test_multi_transport.py`)
+- Multimedia Tools (`test_multimedia_tools.py`)
+- Performance (`test_performance.py`)
+- Python Session (`test_python_session_integration.py`)
+- System Prompt Optimization (`test_system_prompt_optimization.py`)
+- Vector Store (`test_vector_store_integration.py`)
+- Web Tools (`test_web_tools.py`)
 
 ## Test Dependencies
 
@@ -158,6 +196,8 @@ Some tests require optional dependencies:
 - **pgvector**: `pip install soothe[pgvector]`
 - **weaviate**: `pip install soothe[weaviate]`
 - **rocksdb**: `pip install soothe[rocksdb]`
+- **research**: `pip install soothe[research]`
+- **websearch**: `pip install soothe[websearch]`
 
 Tests will be skipped automatically if dependencies are not installed.
 
@@ -219,13 +259,31 @@ class TestPGVectorStoreIntegration:
         # ...
 ```
 
+### Slow Test Markers
+
+Slow-running tests (stress tests, performance benchmarks) are marked with `@pytest.mark.slow`:
+
+```python
+@pytest.mark.integration
+@pytest.mark.slow
+async def test_event_throughput_stress():
+    # ...
+```
+
+## Test Documentation
+
+- **RFC-0013 Test Coverage**: `docs/testing/rfc0013_test_coverage.md`
+  - Complete mapping of RFC-0013 requirements to tests
+  - 88 total tests for daemon protocol
+  - Breaking changes validation matrix
+
 ## Continuous Integration
 
 Tests are designed to run in CI/CD pipelines:
 
-- Unit tests run on every push
-- Integration tests run on schedule or manual trigger
-- Coverage reports are generated automatically
+- **Unit tests**: Run on every push
+- **Integration tests**: Run on schedule or manual trigger
+- **Coverage reports**: Generated automatically
 
 ## Best Practices
 
@@ -234,8 +292,19 @@ Tests are designed to run in CI/CD pipelines:
 3. **Fixtures**: Use fixtures for common setup
 4. **Async**: Use pytest-asyncio for async tests
 5. **Cleanup**: Ensure proper cleanup in integration tests
+6. **Markers**: Use appropriate markers (`@pytest.mark.integration`, `@pytest.mark.slow`)
+7. **Naming**: Follow `test_<module>_<scenario>_<expected_result>` pattern
+
+## Test Statistics
+
+| Category | Files | Tests | Purpose |
+|----------|-------|-------|---------|
+| Unit Tests | 61 | ~900 | Fast, isolated component tests |
+| Integration Tests | 24 | ~210 | End-to-end daemon and tool tests |
+| **Total** | **85** | **~1110** | **Comprehensive coverage** |
 
 ## References
 
-Test patterns are inspired by the noesium project's test suite:
-- `thirdparty/noesium/noesium/tests/vector_store/test_pgvector_store.py`
+- RFC-0013: Unified Daemon Communication Protocol
+- RFC-0015: Event Protocol Specification
+- Test patterns inspired by the noesium project's test suite

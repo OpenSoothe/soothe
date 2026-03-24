@@ -241,6 +241,36 @@ class SootheApp(App):
         else:
             await self._client.send_new_thread()
 
+        # Wait for status message with thread_id
+        try:
+            status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
+            if not status_event or status_event.get("type") != "status":
+                self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Expected status message from daemon"))
+                return
+
+            # Extract thread_id and client_id
+            thread_id = status_event.get("thread_id")
+            client_id = status_event.get("client_id")
+            if not thread_id:
+                self._on_panel_write(make_dot_line(DOT_COLORS["error"], "No thread_id in status message"))
+                return
+
+            self._state.thread_id = thread_id
+            self._state.client_id = client_id
+            logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
+
+            # Subscribe to thread (RFC-0013)
+            await self._client.subscribe_thread(thread_id)
+            await self._client.wait_for_subscription_confirmed(thread_id)
+            logger.info("Subscribed to thread %s", thread_id)
+
+        except TimeoutError:
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Timeout waiting for status from daemon"))
+            return
+        except ValueError as e:
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Subscription failed: {e}"))
+            return
+
         while self._connected:
             try:
                 # Use timeout to prevent indefinite blocking and allow UI updates

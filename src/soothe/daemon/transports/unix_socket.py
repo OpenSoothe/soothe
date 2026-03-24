@@ -27,6 +27,7 @@ class _ClientConn:
 
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
+    client_id: str | None = None  # Set by session manager
 
 
 class UnixSocketTransport(TransportServer):
@@ -48,13 +49,15 @@ class UnixSocketTransport(TransportServer):
         self._config = config
         self._server: asyncio.AbstractServer | None = None
         self._clients: list[_ClientConn] = []
-        self._message_handler: Callable[[dict[str, Any]], None] | None = None
+        self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
+        self._session_manager: Any = None  # Set by daemon
 
-    async def start(self, message_handler: Callable[[dict[str, Any]], None]) -> None:
+    async def start(self, message_handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Start the Unix socket server.
 
         Args:
             message_handler: Callback to handle incoming messages.
+                Takes (client_id, message) as arguments.
         """
         if not self._config.enabled:
             logger.info("Unix socket transport disabled by configuration")
@@ -111,6 +114,29 @@ class UnixSocketTransport(TransportServer):
             with contextlib.suppress(ValueError):
                 self._clients.remove(dead)
 
+    async def send(self, client: Any, message: dict[str, Any]) -> None:
+        """Send message to specific client.
+
+        Args:
+            client: Client connection object (_ClientConn)
+            message: Message dictionary to send
+
+        Raises:
+            ConnectionError: If write fails
+        """
+        if not isinstance(client, _ClientConn):
+            msg = f"Expected _ClientConn, got {type(client).__name__}"
+            raise TypeError(msg)
+
+        try:
+            data = encode(message)
+            client.writer.write(data)
+            await client.writer.drain()
+        except Exception as e:
+            logger.exception("Failed to send to Unix socket client")
+            msg = f"Failed to send: {e}"
+            raise ConnectionError(msg) from e
+
     async def stop(self) -> None:
         """Stop the Unix socket server and close all connections."""
         if not self._server:
@@ -162,6 +188,9 @@ class UnixSocketTransport(TransportServer):
         """
         client = _ClientConn(reader=reader, writer=writer)
         self._clients.append(client)
+
+        # Session manager should be set by daemon before start
+        # For now, we'll handle it in the message flow
         logger.info("Unix socket client connected (total=%d)", len(self._clients))
 
         try:
@@ -174,10 +203,12 @@ class UnixSocketTransport(TransportServer):
                 if msg is None:
                     continue
 
-                # Pass message to handler
+                # Pass message to handler with client_id
+                # For initial implementation, client_id will be set after first message
                 if self._message_handler:
                     try:
-                        self._message_handler(msg)
+                        client_id = client.client_id or "pending"
+                        self._message_handler(client_id, msg)
                     except Exception:
                         logger.exception("Error handling Unix socket message")
 

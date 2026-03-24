@@ -45,6 +45,27 @@ async def run_headless_via_daemon(
     try:
         await asyncio.wait_for(client.connect(), timeout=5.0)
 
+        # Request thread creation or resumption
+        if thread_id:
+            await client.send_resume_thread(thread_id)
+        else:
+            await client.send_new_thread()
+
+        # Wait for status message with thread_id
+        status_event = await asyncio.wait_for(client.read_event(), timeout=5.0)
+        if not status_event or status_event.get("type") != "status":
+            typer.echo("Error: Expected status message from daemon", err=True)
+            return 1
+
+        actual_thread_id = status_event.get("thread_id")
+        if not actual_thread_id:
+            typer.echo("Error: No thread_id in status message", err=True)
+            return 1
+
+        # Subscribe to the thread (RFC-0013)
+        await client.subscribe_thread(actual_thread_id)
+        await client.wait_for_subscription_confirmed(actual_thread_id)
+
         # Send the input
         await asyncio.wait_for(
             client.send_input(

@@ -15,6 +15,8 @@ from typing import Any
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon._handlers import DaemonHandlersMixin
+from soothe.daemon.client_session import ClientSessionManager
+from soothe.daemon.event_bus import EventBus
 from soothe.daemon.paths import pid_path, socket_path
 from soothe.daemon.protocol import encode
 from soothe.daemon.singleton import (
@@ -80,6 +82,9 @@ class SootheDaemon(DaemonHandlersMixin):
         self._pid_lock_fd: int | None = None
         # Transport manager for multi-transport support (RFC-0013)
         self._transport_manager: TransportManager | None = None
+        # Event bus architecture (RFC-0013, IG-047)
+        self._event_bus: EventBus = EventBus()
+        self._session_manager: ClientSessionManager = ClientSessionManager(self._event_bus)
         # Multi-threading support (RFC-0017)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
@@ -397,47 +402,53 @@ class SootheDaemon(DaemonHandlersMixin):
     # -- broadcast ----------------------------------------------------------
 
     async def _broadcast(self, msg: dict[str, Any]) -> None:
-        """Broadcast message to all connected clients via transport manager."""
-        logger.debug("Broadcasting event: type=%s", msg.get("type"))
-        if self._transport_manager:
-            logger.debug(
-                "Broadcasting via transport manager, started=%s, client_count=%d",
-                self._transport_manager._started,
-                self._transport_manager.client_count,
-            )
-            await self._transport_manager.broadcast(msg)
-        else:
-            logger.warning("Transport manager is None, cannot broadcast")
+        """Route event to appropriate subscribers via event bus.
 
-        # Legacy broadcast for backward compatibility (will be removed in future)
-        data = encode(msg)
-        dead: list[_ClientConn] = []
-        for client in self._clients:
-            try:
-                client.writer.write(data)
-                await client.writer.drain()
-            except Exception as e:
-                logger.warning("Failed to write to legacy client: %s", e)
-                dead.append(client)
-        for d in dead:
-            self._clients = [c for c in self._clients if c is not d]
+        Events with thread_id are routed to thread-specific topics.
+        Events without thread_id are broadcast to all clients (legacy behavior).
+
+        Args:
+            msg: Message dict to route. Must contain 'type' field.
+        """
+        msg_type = msg.get("type", "")
+        logger.debug("Broadcasting event: type=%s", msg_type)
+
+        # Extract thread_id for routing
+        thread_id = msg.get("thread_id")
+
+        # For status messages without thread_id, try current thread
+        if not thread_id and msg_type == "status":
+            thread_id = self._runner.current_thread_id if self._runner else None
+
+        if thread_id:
+            # Route to thread-specific topic
+            topic = f"thread:{thread_id}"
+            logger.debug("Publishing event to topic %s: %s", topic, msg_type)
+            await self._event_bus.publish(topic, msg)
+        else:
+            # Event without thread_id - broadcast to all transports
+            # This maintains backward compatibility for non-thread-specific messages
+            logger.debug("Event has no thread_id, broadcasting to all: %s", msg_type)
+            if self._transport_manager:
+                await self._transport_manager.broadcast(msg)
 
     async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
         with contextlib.suppress(Exception):
             client.writer.write(encode(msg))
             await client.writer.drain()
 
-    def _handle_transport_message(self, msg: dict[str, Any]) -> None:
+    def _handle_transport_message(self, client_id: str, msg: dict[str, Any]) -> None:
         """Handle incoming message from any transport.
 
         This method routes messages from the transport layer to the
         existing message handling logic.
 
         Args:
+            client_id: Unique client identifier
             msg: Message dict from a transport client.
         """
         # Create a task to handle the message asynchronously
-        task = asyncio.create_task(self._handle_client_message(None, msg))  # type: ignore[arg-type]
+        task = asyncio.create_task(self._handle_client_message(client_id, msg))
         _ = task  # Suppress RUF006 warning - we intentionally don't track the task
 
     # -- static helpers -----------------------------------------------------

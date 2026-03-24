@@ -178,6 +178,22 @@ def create_soothe_agent(
 
     goal_engine = resolve_goal_engine(config)
 
+    # Load plugins
+    import asyncio
+
+    from soothe.plugin.global_registry import load_plugins
+
+    plugins_start = time.perf_counter()
+    try:
+        # Try to load plugins asynchronously
+        asyncio.run(load_plugins(config))
+    except RuntimeError:
+        # Already in async context, skip for now
+        # (plugins will be loaded in async context if needed)
+        logger.debug("Skipping plugin loading in async context")
+    plugins_ms = (time.perf_counter() - plugins_start) * 1000
+    logger.info("Plugins loaded in %.1fms", plugins_ms)
+
     tools_start = time.perf_counter()
     config_tools = resolve_tools(config.tools, lazy=config.performance.parallel_tool_loading, config=config)
     goal_tools = resolve_goal_tools(goal_engine)

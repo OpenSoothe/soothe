@@ -53,14 +53,15 @@ class TransportManager:
         self._runner = runner
         self._soothe_config = soothe_config
         self._transports: list[TransportServer] = []
-        self._message_handler: Callable[[dict[str, Any]], None] | None = None
+        self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._started = False
 
-    def set_message_handler(self, handler: Callable[[dict[str, Any]], None]) -> None:
+    def set_message_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
         """Set the unified message handler for all transports.
 
         Args:
             handler: Callback to handle incoming messages from any transport.
+                Takes (client_id, message) as arguments.
         """
         self._message_handler = handler
 
