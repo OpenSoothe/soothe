@@ -265,7 +265,19 @@ def _build_browser_graph(
                     browser=browser_instance,
                     use_vision=use_vision,
                 )
-                history = await agent.run(max_steps=max_steps, on_step_end=on_step_end)
+
+                # Run step-by-step to emit progress events
+                for _ in range(max_steps):
+                    try:
+                        await agent.step()
+                        await on_step_end(agent)
+                        if agent.history.is_done():
+                            break
+                    except Exception:
+                        logger.exception("Browser step failed")
+                        raise
+
+                history = agent.history
                 result = history.final_result() or "Browser task completed (no extracted content)."
 
                 if browser_config.cleanup_on_exit:

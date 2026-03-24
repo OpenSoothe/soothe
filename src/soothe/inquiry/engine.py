@@ -13,9 +13,11 @@ file_edit, or any specific tool -- those details live in the sources.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import datetime
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from operator import add
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -42,6 +44,27 @@ if TYPE_CHECKING:
     from soothe.inquiry.protocol import InformationSource, InquiryConfig
 
 logger = logging.getLogger(__name__)
+
+# Module-level shared thread pool for async-to-sync conversion in inquiry engine
+# This prevents creating new thread pools for each query
+_shared_pool: ThreadPoolExecutor | None = None
+
+
+def _get_shared_pool() -> ThreadPoolExecutor:
+    """Get or create the shared thread pool."""
+    global _shared_pool
+    if _shared_pool is None:
+        _shared_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="inquiry-async")
+        atexit.register(_cleanup_pool)
+    return _shared_pool
+
+
+def _cleanup_pool() -> None:
+    """Cleanup the shared thread pool on exit."""
+    global _shared_pool
+    if _shared_pool is not None:
+        _shared_pool.shutdown(wait=True)
+        _shared_pool = None
 
 
 # ---------------------------------------------------------------------------
@@ -319,10 +342,8 @@ def build_inquiry_engine(
 
                 if loop.is_running():
                     # If loop is running, we need to run in a separate thread
-                    import concurrent.futures
-
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        results = pool.submit(asyncio.run, src.query(query, context)).result()
+                    # Use shared module-level pool to avoid creating temporary pools
+                    results = _get_shared_pool().submit(asyncio.run, src.query(query, context)).result()
                 else:
                     # Loop exists but not running, use it
                     results = loop.run_until_complete(src.query(query, context))

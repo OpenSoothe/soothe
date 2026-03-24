@@ -10,6 +10,8 @@ Exposes GoalEngine operations as single-purpose tools following RFC-0016:
 from __future__ import annotations
 
 import asyncio
+import atexit
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -17,16 +19,35 @@ from pydantic import Field
 
 from soothe.cognition import GoalEngine
 
+# Module-level shared thread pool for async-to-sync conversion
+# This prevents creating new thread pools for each tool invocation
+_shared_pool: ThreadPoolExecutor | None = None
+
+
+def _get_shared_pool() -> ThreadPoolExecutor:
+    """Get or create the shared thread pool."""
+    global _shared_pool
+    if _shared_pool is None:
+        _shared_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="goals-async")
+        atexit.register(_cleanup_pool)
+    return _shared_pool
+
+
+def _cleanup_pool() -> None:
+    """Cleanup the shared thread pool on exit."""
+    global _shared_pool
+    if _shared_pool is not None:
+        _shared_pool.shutdown(wait=True)
+        _shared_pool = None
+
 
 def _run_async(coro: Any) -> Any:
     """Run async coroutine from sync context."""
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result()
+        pool = _get_shared_pool()
+        future = pool.submit(asyncio.run, coro)
+        return future.result()
     return asyncio.run(coro)
 
 

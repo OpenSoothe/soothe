@@ -190,36 +190,28 @@ class SootheApp(App):
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
     def _on_panel_write(self, renderable: Any) -> None:
-        """Append a renderable to the conversation panel (thread-safe).
+        """Append a renderable to the conversation panel.
 
         Args:
             renderable: Rich renderable content to append.
         """
-
-        def _do_write() -> None:
-            try:
-                panel = self.query_one("#conversation", ConversationPanel)
-                panel.append_entry(renderable)
-            except Exception:
-                logger.debug("Failed to write to panel", exc_info=True)
-
-        self.call_from_thread(_do_write)
+        try:
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.append_entry(renderable)
+        except Exception:
+            logger.debug("Failed to write to panel", exc_info=True)
 
     def _on_panel_update_last(self, renderable: Any) -> None:
-        """Update the last entry in the conversation panel (thread-safe).
+        """Update the last entry in the conversation panel.
 
         Args:
             renderable: Rich renderable content to replace the last entry with.
         """
-
-        def _do_update() -> None:
-            try:
-                panel = self.query_one("#conversation", ConversationPanel)
-                panel.update_last_entry(renderable)
-            except Exception:
-                logger.debug("Failed to update panel", exc_info=True)
-
-        self.call_from_thread(_do_update)
+        try:
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.update_last_entry(renderable)
+        except Exception:
+            logger.debug("Failed to update panel", exc_info=True)
 
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events."""
@@ -251,14 +243,16 @@ class SootheApp(App):
 
         while self._connected:
             try:
-                event = await asyncio.wait_for(self._client.read_event(), timeout=30.0)
+                # Use timeout to prevent indefinite blocking and allow UI updates
+                event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
                 if event is None:
                     logger.warning("read_event returned None, connection closed")
                     self._connected = False
                     self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Daemon connection closed."))
                     break
             except TimeoutError:
-                logger.debug("No event received for 30 seconds, connection still alive")
+                # No event received for 5 seconds - connection is still alive
+                # This timeout allows the UI to remain responsive
                 continue
 
             # Capture thread_id BEFORE process_daemon_event updates it

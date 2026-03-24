@@ -54,6 +54,7 @@ class AgenticMixin:
             AgenticLoopCompletedEvent,
             AgenticLoopStartedEvent,
             AgenticPlanningStrategyDeterminedEvent,
+            FinalReportEvent,
         )
 
         from ._types import AgenticIterationRecord, RunnerState
@@ -65,6 +66,7 @@ class AgenticMixin:
         self._current_thread_id = state.thread_id or None
 
         # Two-tier classification for proper routing
+        complexity = "medium"  # Default value
         if self._unified_classifier:
             try:
                 routing = await self._unified_classifier.classify_routing(user_input)
@@ -88,11 +90,9 @@ class AgenticMixin:
                 logger.warning("Routing classification failed, defaulting to medium: %s", e, exc_info=True)
                 state.unified_classification = None
                 state.cached_routing = None
-                complexity = "medium"
         else:
             state.unified_classification = None
             state.cached_routing = None
-            complexity = "medium"
 
         # Emit loop started event
         yield _custom(
@@ -194,6 +194,40 @@ class AgenticMixin:
         # Post-stream work
         async for chunk in self._post_stream(user_input, state):
             yield chunk
+
+        # Emit final report for multi-step plans (RFC-0010 / IG-027)
+        if state.plan and len(state.plan.steps) > 1:
+            # For multi-step plans, use the last step's result as the summary
+            # (typically the synthesis step that combines all prior results)
+            last_step = state.plan.steps[-1]
+            if last_step.status == "completed" and last_step.result:
+                summary = last_step.result
+            else:
+                # Fallback: join all completed step results
+                response_text = "".join(state.full_response)
+                if response_text:
+                    completed_steps = [s for s in state.plan.steps if s.status == "completed"]
+                    failed_steps = [s for s in state.plan.steps if s.status == "failed"]
+
+                    summary = await self._synthesize_agentic_summary(
+                        state.plan,
+                        completed_steps,
+                        failed_steps,
+                        response_text,
+                    )
+                else:
+                    summary = ""
+
+            if summary:
+                failed_steps = [s for s in state.plan.steps if s.status == "failed"]
+                yield _custom(
+                    FinalReportEvent(
+                        goal_id=state.thread_id,
+                        description=state.plan.goal,
+                        status="completed" if not failed_steps else "partial",
+                        summary=summary,
+                    ).to_dict()
+                )
 
         # Emit loop completed
         yield _custom(
@@ -565,3 +599,41 @@ class AgenticMixin:
         # strict: Continue only with strong evidence of incompleteness
         strong_evidence = ["need to verify", "must test", "critically missing", "incomplete -", "failed to", "error:"]
         return reflection.should_revise and any(sig in response_lower for sig in strong_evidence)
+
+    async def _synthesize_agentic_summary(
+        self,
+        plan: Any,
+        completed_steps: list[Any],
+        failed_steps: list[Any],
+        response_text: str,
+    ) -> str:
+        """Synthesize a summary for the final report in agentic mode.
+
+        Args:
+            plan: The executed plan
+            completed_steps: List of completed step objects
+            failed_steps: List of failed step objects
+            response_text: The full response text
+
+        Returns:
+            A summary string for the final report
+        """
+        n_completed = len(completed_steps)
+        n_total = len(plan.steps)
+
+        # Build summary
+        parts = [
+            f"Successfully completed {n_completed}/{n_total} steps.",
+        ]
+
+        if failed_steps:
+            failed_desc = ", ".join(s.description[:50] for s in failed_steps[:3])
+            parts.append(f"Failed steps: {failed_desc}")
+
+        # Extract key findings from response (first 500 chars as preview)
+        if response_text:
+            preview = response_text[:500].strip()
+            if preview:
+                parts.append(f"\n\nKey findings:\n{preview}")
+
+        return "\n".join(parts)

@@ -612,11 +612,8 @@ class DaemonHandlersMixin:
 
         full_response: list[str] = []
 
-        # Create task for cancellation support
-        chunk_count = 0
-
         async def _run_stream() -> None:
-            nonlocal chunk_count
+            chunk_count = 0  # Track chunks inside the function
             try:
                 stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
                 if autonomous:

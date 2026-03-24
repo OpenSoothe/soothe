@@ -90,6 +90,8 @@ class SootheDaemon(DaemonHandlersMixin):
 
     async def start(self) -> None:
         """Start the daemon server using the transport manager."""
+        from concurrent.futures import ThreadPoolExecutor
+
         from soothe.core.runner import SootheRunner
 
         # Acquire singleton lock *before* heavy init
@@ -108,6 +110,12 @@ class SootheDaemon(DaemonHandlersMixin):
             release_pid_lock(self._pid_lock_fd)
             self._pid_lock_fd = None
             raise RuntimeError("Another daemon still owns the socket")
+
+        # Configure custom default executor for asyncio.to_thread() calls
+        # This prevents "couldn't stop thread" errors on daemon shutdown
+        loop = asyncio.get_running_loop()
+        self._default_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="daemon-async")
+        loop.set_default_executor(self._default_executor)
 
         # Run heavy SootheRunner init off the event loop
         self._runner = await asyncio.to_thread(SootheRunner, self._config)
@@ -371,6 +379,11 @@ class SootheDaemon(DaemonHandlersMixin):
             self._server.close()
             await self._server.wait_closed()
             self._server = None
+
+        # Shutdown default executor
+        if hasattr(self, "_default_executor") and self._default_executor:
+            self._default_executor.shutdown(wait=True)
+            logger.debug("Default executor shut down")
 
         # Release singleton lock and clean up files
         if self._pid_lock_fd is not None:
