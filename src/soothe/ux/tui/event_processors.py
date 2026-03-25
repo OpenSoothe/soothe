@@ -361,7 +361,7 @@ def process_daemon_event(
             etype = data.get("type", "")
 
             # Check for multi-step plan creation
-            from soothe.core.events import PLAN_CREATED
+            from soothe.core.event_catalog import PLAN_CREATED
 
             if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
                 state.multi_step_active = True

@@ -6,12 +6,25 @@ lifecycle, protocol, tool, subagent, output, error.
 
 This module provides:
 - Core protocol and lifecycle event models
+- Event type string constants
 - Event registry for O(1) lookup and dispatch
-- Helper functions for tool events
+- Helper functions for event emission
 
 Base event classes are defined in soothe.core.base_events.
 Module-specific events (subagents, tools) are defined in their respective modules
 and imported here for registry.
+
+**Usage:**
+
+For type-safe event emission (recommended):
+    from soothe.core.event_catalog import ThreadCreatedEvent, PlanStepStartedEvent
+    yield custom_event(ThreadCreatedEvent(thread_id=tid).to_dict())
+
+For event type string constants:
+    from soothe.core.event_catalog import THREAD_CREATED, PLAN_STEP_STARTED
+    # Use constants for comparisons, routing, etc.
+    if event_type == THREAD_CREATED:
+        ...
 """
 
 from __future__ import annotations
@@ -27,42 +40,88 @@ from soothe.core.base_events import (
     SootheEvent,
     ToolEvent,
 )
-from soothe.core.events import (
-    CHECKPOINT_SAVED,
-    CHITCHAT_RESPONSE,
-    CHITCHAT_STARTED,
-    CONTEXT_INGESTED,
-    CONTEXT_PROJECTED,
-    ERROR,
-    FINAL_REPORT,
-    GOAL_BATCH_STARTED,
-    GOAL_COMPLETED,
-    GOAL_CREATED,
-    GOAL_DEFERRED,
-    GOAL_DIRECTIVES_APPLIED,
-    GOAL_FAILED,
-    GOAL_REPORT,
-    ITERATION_COMPLETED,
-    ITERATION_STARTED,
-    MEMORY_RECALLED,
-    MEMORY_STORED,
-    PLAN_BATCH_STARTED,
-    PLAN_CREATED,
-    PLAN_DAG_SNAPSHOT,
-    PLAN_ONLY,
-    PLAN_REFLECTED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_FAILED,
-    PLAN_STEP_STARTED,
-    POLICY_CHECKED,
-    POLICY_DENIED,
-    RECOVERY_RESUMED,
-    THREAD_CREATED,
-    THREAD_ENDED,
-    THREAD_RESUMED,
-    THREAD_SAVED,
-    THREAD_STARTED,
-)
+
+# ---------------------------------------------------------------------------
+# Type aliases and helpers
+# ---------------------------------------------------------------------------
+
+StreamChunk = tuple[tuple[str, ...], str, Any]
+"""Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
+
+STREAM_CHUNK_LEN = 3
+MSG_PAIR_LEN = 2
+
+
+def custom_event(data: dict[str, Any]) -> StreamChunk:
+    """Build a soothe protocol custom event chunk.
+
+    Args:
+        data: Event data dict with 'type' key.
+
+    Returns:
+        Stream chunk in deepagents-canonical format.
+    """
+    return ((), "custom", data)
+
+
+# ---------------------------------------------------------------------------
+# Event type string constants
+# All event types follow RFC-0015's 4-segment naming convention:
+# ``soothe.<domain>.<component>.<action>``
+# ---------------------------------------------------------------------------
+
+# -- Lifecycle events --------------------------------------------------------
+THREAD_CREATED = "soothe.lifecycle.thread.created"
+THREAD_STARTED = "soothe.lifecycle.thread.started"
+THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
+THREAD_SAVED = "soothe.lifecycle.thread.saved"
+THREAD_ENDED = "soothe.lifecycle.thread.ended"
+ITERATION_STARTED = "soothe.lifecycle.iteration.started"
+ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
+CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saved"
+RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
+
+# -- Protocol events ---------------------------------------------------------
+CONTEXT_PROJECTED = "soothe.protocol.context.projected"
+CONTEXT_INGESTED = "soothe.protocol.context.ingested"
+MEMORY_RECALLED = "soothe.protocol.memory.recalled"
+MEMORY_STORED = "soothe.protocol.memory.stored"
+PLAN_CREATED = "soothe.protocol.plan.created"
+PLAN_STEP_STARTED = "soothe.protocol.plan.step_started"
+PLAN_STEP_COMPLETED = "soothe.protocol.plan.step_completed"
+PLAN_STEP_FAILED = "soothe.protocol.plan.step_failed"
+PLAN_BATCH_STARTED = "soothe.protocol.plan.batch_started"
+PLAN_REFLECTED = "soothe.protocol.plan.reflected"
+PLAN_DAG_SNAPSHOT = "soothe.protocol.plan.dag_snapshot"
+PLAN_ONLY = "soothe.protocol.plan.plan_only"
+POLICY_CHECKED = "soothe.protocol.policy.checked"
+POLICY_DENIED = "soothe.protocol.policy.denied"
+GOAL_CREATED = "soothe.protocol.goal.created"
+GOAL_COMPLETED = "soothe.protocol.goal.completed"
+GOAL_FAILED = "soothe.protocol.goal.failed"
+GOAL_BATCH_STARTED = "soothe.protocol.goal.batch_started"
+GOAL_REPORT = "soothe.protocol.goal.report"
+GOAL_DIRECTIVES_APPLIED = "soothe.protocol.goal.directives_applied"
+GOAL_DEFERRED = "soothe.protocol.goal.deferred"
+
+# -- Output events -----------------------------------------------------------
+CHITCHAT_STARTED = "soothe.output.chitchat.started"
+CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
+FINAL_REPORT = "soothe.output.autonomous.final_report"
+
+# -- Error events ------------------------------------------------------------
+ERROR = "soothe.error.general"
+
+# -- Plugin events -----------------------------------------------------------
+PLUGIN_LOADED = "soothe.plugin.loaded"
+PLUGIN_FAILED = "soothe.plugin.failed"
+PLUGIN_UNLOADED = "soothe.plugin.unloaded"
+PLUGIN_HEALTH_CHECKED = "soothe.plugin.health_checked"
+
+
+# ---------------------------------------------------------------------------
+# Core event class definitions
+# ---------------------------------------------------------------------------
 
 if TYPE_CHECKING:
     from soothe.ux.shared.progress_verbosity import ProgressCategory
@@ -767,5 +826,13 @@ import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402
 import soothe.subagents.skillify.events  # noqa: E402
 import soothe.subagents.weaver.events  # noqa: E402
+import soothe.tools.audio.events  # noqa: E402
+import soothe.tools.code_edit.events  # noqa: E402
+import soothe.tools.data.events  # noqa: E402
+import soothe.tools.execution.events  # noqa: E402
+import soothe.tools.file_ops.events  # noqa: E402
+import soothe.tools.goals.events  # noqa: E402
+import soothe.tools.image.events  # noqa: E402
 import soothe.tools.research.events  # noqa: E402
+import soothe.tools.video.events  # noqa: E402
 import soothe.tools.web_search.events  # noqa: F401, E402

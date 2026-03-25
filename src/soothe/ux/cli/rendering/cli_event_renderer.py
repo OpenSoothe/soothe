@@ -11,8 +11,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from soothe.core.event_catalog import REGISTRY
-from soothe.core.events import (
+from soothe.core.event_catalog import (
     CONTEXT_INGESTED,
     CONTEXT_PROJECTED,
     ERROR,
@@ -31,19 +30,27 @@ from soothe.core.events import (
     PLAN_STEP_STARTED,
     POLICY_CHECKED,
     POLICY_DENIED,
-    SUBAGENT_BROWSER_CDP,
-    SUBAGENT_BROWSER_STEP,
+    REGISTRY,
     THREAD_CREATED,
     THREAD_ENDED,
     THREAD_RESUMED,
     THREAD_SAVED,
     THREAD_STARTED,
+)
+from soothe.subagents.browser.events import (
+    SUBAGENT_BROWSER_CDP,
+    SUBAGENT_BROWSER_STEP,
+)
+from soothe.tools.display_names import get_tool_display_name
+from soothe.tools.research.events import (
     TOOL_RESEARCH_ANALYZE,
     TOOL_RESEARCH_COMPLETED,
     TOOL_RESEARCH_GATHER,
     TOOL_RESEARCH_GATHER_DONE,
     TOOL_RESEARCH_QUERIES_GENERATED,
     TOOL_RESEARCH_SYNTHESIZE,
+)
+from soothe.tools.web_search.events import (
     TOOL_WEBSEARCH_CRAWL_COMPLETED,
     TOOL_WEBSEARCH_CRAWL_FAILED,
     TOOL_WEBSEARCH_CRAWL_STARTED,
@@ -51,7 +58,6 @@ from soothe.core.events import (
     TOOL_WEBSEARCH_SEARCH_FAILED,
     TOOL_WEBSEARCH_SEARCH_STARTED,
 )
-from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.shared.progress_verbosity import ProgressVerbosity, should_show
 
 logger = logging.getLogger(__name__)

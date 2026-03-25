@@ -6,7 +6,7 @@ import sys
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT
+from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
 from soothe.ux.shared.message_processing import (
     MessageProcessor,
     OutputFormatter,

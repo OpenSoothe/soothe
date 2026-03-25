@@ -8,12 +8,12 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.core.events import (
+from soothe.tools._internal.wizsearch._helpers import _require_wizsearch, _run_coro
+from soothe.tools.web_search.events import (
     TOOL_WEBSEARCH_CRAWL_COMPLETED,
     TOOL_WEBSEARCH_CRAWL_FAILED,
     TOOL_WEBSEARCH_CRAWL_STARTED,
 )
-from soothe.tools._internal.wizsearch._helpers import _require_wizsearch, _run_coro
 from soothe.utils.url_validation import validate_url
 
 logger = logging.getLogger(__name__)

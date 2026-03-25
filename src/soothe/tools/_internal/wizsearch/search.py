@@ -9,11 +9,6 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.core.events import (
-    TOOL_WEBSEARCH_SEARCH_COMPLETED,
-    TOOL_WEBSEARCH_SEARCH_FAILED,
-    TOOL_WEBSEARCH_SEARCH_STARTED,
-)
 from soothe.tools._internal.wizsearch._helpers import (
     _extract_domain,
     _maybe_apply_tavily_key,
@@ -21,6 +16,11 @@ from soothe.tools._internal.wizsearch._helpers import (
     _run_coro,
     _save_raw_results,
     _to_serializable_sources,
+)
+from soothe.tools.web_search.events import (
+    TOOL_WEBSEARCH_SEARCH_COMPLETED,
+    TOOL_WEBSEARCH_SEARCH_FAILED,
+    TOOL_WEBSEARCH_SEARCH_STARTED,
 )
 
 logger = logging.getLogger(__name__)

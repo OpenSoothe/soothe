@@ -90,7 +90,21 @@ register_event(
 )
 register_event(WebsearchCrawlFailedEvent, summary_template="Crawl failed: {error}")
 
+# Event type constants for convenient imports
+TOOL_WEBSEARCH_SEARCH_STARTED = "soothe.tool.websearch.search_started"
+TOOL_WEBSEARCH_SEARCH_COMPLETED = "soothe.tool.websearch.search_completed"
+TOOL_WEBSEARCH_SEARCH_FAILED = "soothe.tool.websearch.search_failed"
+TOOL_WEBSEARCH_CRAWL_STARTED = "soothe.tool.websearch.crawl_started"
+TOOL_WEBSEARCH_CRAWL_COMPLETED = "soothe.tool.websearch.crawl_completed"
+TOOL_WEBSEARCH_CRAWL_FAILED = "soothe.tool.websearch.crawl_failed"
+
 __all__ = [
+    "TOOL_WEBSEARCH_CRAWL_COMPLETED",
+    "TOOL_WEBSEARCH_CRAWL_FAILED",
+    "TOOL_WEBSEARCH_CRAWL_STARTED",
+    "TOOL_WEBSEARCH_SEARCH_COMPLETED",
+    "TOOL_WEBSEARCH_SEARCH_FAILED",
+    "TOOL_WEBSEARCH_SEARCH_STARTED",
     "WebsearchCrawlCompletedEvent",
     "WebsearchCrawlFailedEvent",
     "WebsearchCrawlStartedEvent",

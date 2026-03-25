@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.core.events import CHITCHAT_RESPONSE
+from soothe.core.event_catalog import CHITCHAT_RESPONSE
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.ux.shared.slash_commands import (
     _show_context,

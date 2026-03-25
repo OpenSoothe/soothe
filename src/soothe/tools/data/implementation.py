@@ -18,6 +18,15 @@ from pathlib import Path
 
 from langchain_core.tools import BaseTool
 
+from soothe.tools.data.events import (
+    DataInspectionCompletedEvent,
+    DataInspectionStartedEvent,
+    DataQualityCheckEvent,
+    TextExtractionCompletedEvent,
+    TextExtractionStartedEvent,
+)
+from soothe.utils.progress import emit_progress
+
 logger = logging.getLogger(__name__)
 
 _TABULAR_EXTENSIONS = frozenset({".csv", ".tsv", ".xlsx", ".xls", ".json", ".parquet"})
@@ -65,23 +74,40 @@ class InspectDataTool(BaseTool):
         """
         domain = _detect_domain(file_path)
 
+        emit_progress(
+            DataInspectionStartedEvent(file_path=file_path, domain=domain).to_dict(),
+            logger,
+        )
+
         if domain == "tabular":
             try:
                 from soothe.tools._internal.tabular import TabularColumnsTool
 
-                return TabularColumnsTool()._run(file_path)
+                result = TabularColumnsTool()._run(file_path)
             except Exception as exc:
                 logger.exception("Tabular inspection failed")
                 return f"Error inspecting tabular file: {exc}"
+            else:
+                emit_progress(
+                    DataInspectionCompletedEvent(file_path=file_path, result_summary="tabular columns").to_dict(),
+                    logger,
+                )
+                return result
 
         if domain == "document":
             try:
                 from soothe.tools._internal.document import DocumentQATool
 
-                return DocumentQATool()._run(file_path)
+                result = DocumentQATool()._run(file_path)
             except Exception as exc:
                 logger.exception("Document inspection failed")
                 return f"Error inspecting document: {exc}"
+            else:
+                emit_progress(
+                    DataInspectionCompletedEvent(file_path=file_path, result_summary="document summary").to_dict(),
+                    logger,
+                )
+                return result
 
         return (
             f"Error: Unsupported file format '{Path(file_path).suffix}'. "
@@ -178,10 +204,18 @@ class CheckDataQualityTool(BaseTool):
             try:
                 from soothe.tools._internal.tabular import TabularQualityTool
 
-                return TabularQualityTool()._run(file_path)
+                result = TabularQualityTool()._run(file_path)
             except Exception as exc:
                 logger.exception("Data quality check failed")
                 return f"Error checking data quality: {exc}"
+            else:
+                # Try to extract issue count from result
+                issues = result.lower().count("issue") + result.lower().count("error") + result.lower().count("warning")
+                emit_progress(
+                    DataQualityCheckEvent(file_path=file_path, issues_found=issues).to_dict(),
+                    logger,
+                )
+                return result
 
         if domain == "document":
             return (
@@ -223,13 +257,25 @@ class ExtractTextTool(BaseTool):
         Returns:
             Extracted text or error message.
         """
+        emit_progress(
+            TextExtractionStartedEvent(file_path=file_path).to_dict(),
+            logger,
+        )
+
         try:
             from soothe.tools._internal.document import ExtractTextTool as InternalExtractTextTool
 
-            return InternalExtractTextTool()._run(file_path)
+            result = InternalExtractTextTool()._run(file_path)
         except Exception as exc:
             logger.exception("Text extraction failed")
             return f"Error extracting text: {exc}"
+        else:
+            char_count = len(result) if isinstance(result, str) else 0
+            emit_progress(
+                TextExtractionCompletedEvent(file_path=file_path, char_count=char_count).to_dict(),
+                logger,
+            )
+            return result
 
     async def _arun(self, file_path: str) -> str:
         """Async dispatch (delegates to sync)."""

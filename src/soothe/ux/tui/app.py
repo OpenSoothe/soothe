@@ -213,6 +213,37 @@ class SootheApp(App):
         except Exception:
             logger.debug("Failed to update panel", exc_info=True)
 
+    def _display_conversation_history(self, history: list[dict[str, Any]]) -> None:
+        """Display conversation history in the conversation panel.
+
+        Args:
+            history: List of conversation records from ThreadLogger.
+                Each record has: timestamp, kind, role, text
+        """
+        try:
+            panel = self.query_one("#conversation", ConversationPanel)
+            # Clear existing content before showing history
+            panel.clear()
+
+            # Add header to indicate this is resumed conversation
+            self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Resuming conversation..."))
+
+            for record in history:
+                role = record.get("role", "")
+                text = record.get("text", "")
+                if not text:
+                    continue
+
+                if role == "user":
+                    self._on_panel_write(make_user_prompt_line(text))
+                elif role == "assistant":
+                    self._on_panel_write(make_dot_line(DOT_COLORS["assistant"], text))
+
+            # Add separator after history
+            self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "---"))
+        except Exception:
+            logger.debug("Failed to display conversation history", exc_info=True)
+
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events."""
         self._client = DaemonClient()
@@ -221,7 +252,7 @@ class SootheApp(App):
             try:
                 await self._client.connect()
                 self._connected = True
-                logger.warning("DEBUG before Connected: self._state.thread_id = %r", self._state.thread_id)
+                logger.debug("Connected to daemon, thread_id=%r", self._state.thread_id)
                 self._update_status("Connected")
                 break
             except (OSError, ConnectionRefusedError):
@@ -236,16 +267,42 @@ class SootheApp(App):
                 await asyncio.sleep(0.25)
 
         # Request thread resumption if thread_id was provided, otherwise request new thread
+        requested_resume = False
         if self._thread_id:
             await self._client.send_resume_thread(self._thread_id)
+            requested_resume = True
         else:
             await self._client.send_new_thread()
 
         # Wait for status message with thread_id
         try:
             status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
+            logger.debug("Received initial event: %r", status_event)
+
+            # Handle error response for thread resumption (thread not found)
+            if status_event and status_event.get("type") == "error":
+                error_code = status_event.get("code", "")
+                error_message = status_event.get("message", "Unknown error")
+                if error_code == "THREAD_NOT_FOUND" and requested_resume:
+                    # Thread doesn't exist anymore - fall back to new thread
+                    logger.warning(
+                        "Thread %s not found, creating new thread: %s",
+                        self._thread_id,
+                        error_message,
+                    )
+                    # Request new thread instead
+                    await self._client.send_new_thread()
+                    status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
+                    logger.debug("Received new thread event: %r", status_event)
+                else:
+                    # Other error - report and return
+                    self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Daemon error: {error_message}"))
+                    return
+
             if not status_event or status_event.get("type") != "status":
-                self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Expected status message from daemon"))
+                self._on_panel_write(
+                    make_dot_line(DOT_COLORS["error"], f"Expected status message from daemon, got: {status_event}")
+                )
                 return
 
             # Extract thread_id and client_id
@@ -339,6 +396,12 @@ class SootheApp(App):
                         max_size_mb=self._config.logging.thread_logging.max_size_mb,
                     )
 
+                    # Display conversation history when resuming a thread
+                    if thread_resumed:
+                        conversation_history = event.get("conversation_history", [])
+                        if conversation_history:
+                            self._display_conversation_history(conversation_history)
+
                 if state_str == "running":
                     self._was_running = True
                 elif state_str in ("idle", "stopped"):
@@ -415,7 +478,7 @@ class SootheApp(App):
             logger.exception("Failed to clear TUI panels")
 
     def _update_status(self, state: str) -> None:
-        logger.warning("DEBUG _update_status(%r): self._state.thread_id = %r", state, self._state.thread_id)
+        logger.debug("_update_status(%r): thread_id=%r", state, self._state.thread_id)
         # Start/stop typing indicator based on state
         if state == "running":
             self._is_running = True

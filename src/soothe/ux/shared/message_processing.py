@@ -320,6 +320,6 @@ def is_multi_step_plan(event: dict[str, Any]) -> bool:
     Returns:
         True if this is a multi-step plan event.
     """
-    from soothe.core.events import PLAN_CREATED
+    from soothe.core.event_catalog import PLAN_CREATED
 
     return event.get("type") == PLAN_CREATED and len(event.get("steps", [])) > 1

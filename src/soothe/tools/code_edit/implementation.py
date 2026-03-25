@@ -15,7 +15,13 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from soothe.tools._internal.file_edit import _display_path
+from soothe.tools.code_edit.events import (
+    FileEditCompletedEvent,
+    FileEditFailedEvent,
+    FileEditStartedEvent,
+)
 from soothe.utils import expand_path
+from soothe.utils.progress import emit_progress
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +81,15 @@ class EditFileLinesTool(BaseTool):
             FileNotFoundError: If file doesn't exist
             ValueError: If line range is invalid
         """
+        # Emit edit started event
+        emit_progress(
+            FileEditStartedEvent(
+                path=path,
+                operation="edit_lines",
+            ).to_dict(),
+            logger,
+        )
+
         try:
             # Validate path
             file_path = self._resolve_path(path)
@@ -118,6 +133,16 @@ class EditFileLinesTool(BaseTool):
             with file_path.open("w", encoding="utf-8") as f:
                 f.writelines(lines)
 
+            # Emit edit completed event
+            emit_progress(
+                FileEditCompletedEvent(
+                    path=path,
+                    lines_removed=lines_removed,
+                    lines_added=lines_added,
+                ).to_dict(),
+                logger,
+            )
+
             return (
                 f"Updated {_display_path(file_path, self.work_dir)}\n"
                 f"Lines {start_line}-{end_line} replaced "
@@ -125,9 +150,17 @@ class EditFileLinesTool(BaseTool):
             )
 
         except (FileNotFoundError, ValueError) as e:
+            emit_progress(
+                FileEditFailedEvent(path=path, error=str(e)).to_dict(),
+                logger,
+            )
             return f"Error: {e}"
         except Exception as e:
             logger.exception("Failed to edit file lines")
+            emit_progress(
+                FileEditFailedEvent(path=path, error=str(e)).to_dict(),
+                logger,
+            )
             return f"Error editing file: {e}"
 
     async def _arun(self, path: str, start_line: int, end_line: int, new_content: str) -> str:

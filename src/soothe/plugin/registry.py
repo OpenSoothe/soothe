@@ -183,6 +183,33 @@ class PluginRegistry:
 
         return None
 
+    def get_subagent_default_config(self, name: str) -> dict[str, Any]:
+        """Get default config for a plugin subagent.
+
+        Args:
+            name: Subagent name.
+
+        Returns:
+            Default config dict (empty if not found or no default config).
+        """
+        factory = self.get_subagent_factory(name)
+        if factory and hasattr(factory, "_subagent_default_config"):
+            return factory._subagent_default_config
+        return {}
+
+    def list_subagent_names(self) -> list[str]:
+        """List all registered subagent names from plugins.
+
+        Returns:
+            List of subagent names.
+        """
+        return [
+            factory._subagent_name
+            for entry in self._plugins.values()
+            for factory in entry.subagents
+            if hasattr(factory, "_subagent_name")
+        ]
+
     def clear(self) -> None:
         """Clear all registered plugins.
 

@@ -8,7 +8,7 @@ import sys
 import typer
 
 from soothe.config import SootheConfig
-from soothe.core.events import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
+from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
 from soothe.ux.shared.message_processing import extract_tool_brief
 
 logger = logging.getLogger(__name__)

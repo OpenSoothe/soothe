@@ -71,11 +71,17 @@ class DurabilityProtocol(Protocol):
     ``RunArtifactStore`` (RFC-0010).
     """
 
-    async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
+    async def create_thread(
+        self,
+        metadata: ThreadMetadata,
+        thread_id: str | None = None,
+    ) -> ThreadInfo:
         """Create a new thread.
 
         Args:
             metadata: Initial metadata for the thread.
+            thread_id: Optional thread ID. If not provided, a new UUID is generated.
+                       Use this to persist a draft thread with its existing ID.
 
         Returns:
             Information about the created thread.

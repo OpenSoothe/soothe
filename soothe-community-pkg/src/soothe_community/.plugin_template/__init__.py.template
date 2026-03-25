@@ -1,0 +1,174 @@
+"""Your plugin description.
+
+Detailed description of what your plugin does, its features, and use cases.
+
+Installation:
+    pip install soothe-community
+
+Configuration (config.yml):
+    subagents:
+      your_agent:
+        enabled: true
+        model: "openai:gpt-4o-mini"
+        config:
+          option1: value1
+          option2: value2
+
+Usage:
+    soothe run "your query" --subagent your_agent
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from soothe_sdk import plugin, subagent, tool
+
+__all__ = [
+    "YourPlugin",
+]
+
+logger = logging.getLogger(__name__)
+
+
+@plugin(
+    name="your_plugin",
+    version="1.0.0",
+    description="Brief description of your plugin",
+    dependencies=[
+        "required-package>=1.0.0",
+    ],
+    trust_level="standard",
+)
+class YourPlugin:
+    """Your plugin implementation.
+
+    This plugin provides:
+    - Feature 1
+    - Feature 2
+    - Feature 3
+    """
+
+    async def on_load(self, context: Any) -> None:
+        """Validate dependencies and initialize plugin.
+
+        Args:
+            context: Plugin context with config, logger, and utilities.
+
+        Raises:
+            PluginError: If required dependencies are not installed.
+        """
+        context.logger.info("Loading your_plugin...")
+
+        # Validate dependencies
+        missing_deps = []
+
+        try:
+            import required_package  # noqa: F401
+        except ImportError:
+            missing_deps.append("required-package>=1.0.0")
+
+        if missing_deps:
+            from soothe.plugin.exceptions import PluginError
+
+            msg = (
+                f"Missing required dependencies: {', '.join(missing_deps)}. "
+                "Install with: pip install soothe-community"
+            )
+            raise PluginError(msg, plugin_name="your_plugin")
+
+        context.logger.info("your_plugin loaded successfully")
+
+    @subagent(
+        name="your_agent",
+        description=(
+            "Detailed description of what your agent does and when to use it. "
+            "This helps the orchestrator decide when to invoke your subagent."
+        ),
+        model="openai:gpt-4o-mini",
+    )
+    async def create_subagent(
+        self,
+        model: Any,
+        config: Any,
+        context: Any,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Create your subagent.
+
+        Args:
+            model: Resolved model (BaseChatModel or string).
+            config: Soothe configuration.
+            context: Plugin context.
+            **kwargs: Additional configuration (store, user_id, etc.).
+
+        Returns:
+            Subagent dict with name, description, and runnable.
+        """
+        from .implementation import create_your_subagent
+        from .state import YourConfig
+
+        # Get plugin configuration
+        plugin_config = None
+        if hasattr(config, "subagents") and "your_agent" in config.subagents:
+            subagent_config = config.subagents["your_agent"]
+            if subagent_config.enabled and subagent_config.config:
+                plugin_config = YourConfig(**subagent_config.config)
+
+        if not plugin_config:
+            plugin_config = YourConfig()
+
+        # Get persistence store
+        store = kwargs.get("store")
+        if not store:
+            from soothe.backends.persistence import get_persistence_backend
+
+            store = get_persistence_backend(config)
+
+        user_id = kwargs.get("user_id", "default")
+
+        # Create subagent
+        subagent_dict = create_your_subagent(
+            config=plugin_config,
+            store=store,
+            user_id=user_id,
+        )
+
+        context.logger.info(
+            f"Created your_agent subagent for user {user_id}"
+        )
+
+        return subagent_dict
+
+    @tool(
+        name="your_tool",
+        description="Brief description of what your tool does",
+    )
+    def your_tool(self, arg: str) -> str:
+        """Your tool implementation.
+
+        Args:
+            arg: Description of argument.
+
+        Returns:
+            Description of return value.
+        """
+        # Tool logic here
+        return f"Result: {arg}"
+
+    def get_subagents(self) -> list[Any]:
+        """Get list of subagent factory functions.
+
+        Returns:
+            List containing subagent factory methods.
+        """
+        return [self.create_subagent]
+
+    def get_tools(self) -> list[Any]:
+        """Get list of tool functions.
+
+        Returns:
+            List containing tool methods.
+        """
+        return [self.your_tool]

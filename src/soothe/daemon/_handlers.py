@@ -7,7 +7,7 @@ import contextlib
 import logging
 from typing import Any
 
-from soothe.core.events import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
+from soothe.core.event_catalog import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
 from soothe.daemon.protocol import decode, encode
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
 
@@ -120,6 +120,9 @@ class DaemonHandlersMixin:
                         max_size_mb=self._config.logging.thread_logging.max_size_mb,
                     )
 
+                    # Load conversation history for display in TUI
+                    conversation_history = self._thread_logger.recent_conversation(limit=50)
+
                     # Clear draft state if resuming an existing thread
                     self._draft_thread_id = None
 
@@ -134,6 +137,7 @@ class DaemonHandlersMixin:
                                 "thread_id": resumed_thread_id,
                                 "thread_resumed": True,
                                 "input_history": self._input_history.history[-100:] if self._input_history else [],
+                                "conversation_history": conversation_history,
                             },
                         )
                     logger.info("Resumed thread %s", resumed_thread_id)
@@ -624,17 +628,14 @@ class DaemonHandlersMixin:
             from soothe.core.thread import ThreadContextManager
 
             manager = ThreadContextManager(self._runner._durability, self._config)
-            thread_info = await manager.create_thread()
-            # Use the persisted thread ID going forward
+            # Persist the draft thread with its existing ID (not a new UUID)
+            thread_info = await manager.create_thread(thread_id=self._draft_thread_id)
+            # The thread_id should remain the same since we passed it explicitly
             actual_thread_id = thread_info.thread_id
-            self._runner.set_current_thread_id(actual_thread_id)
 
-            # Migrate client subscriptions from draft thread_id to actual thread_id
-            if self._session_manager:
-                await self._session_manager.migrate_subscriptions(self._draft_thread_id, actual_thread_id)
-
-            thread_id = actual_thread_id
-            logger.info("Persisted draft thread -> %s", thread_id)
+            # No need to migrate subscriptions since thread_id stays the same
+            # Just clear the draft flag
+            logger.info("Persisted draft thread %s", actual_thread_id)
             self._draft_thread_id = None
 
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:

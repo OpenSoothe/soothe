@@ -28,10 +28,9 @@ class TransportServer(ABC):
 
     @abstractmethod
     async def broadcast(self, message: dict[str, Any]) -> None:
-        """Broadcast a message to all connected clients (deprecated).
+        """Broadcast a message to all connected clients.
 
-        This method is retained for backward compatibility but should not
-        be used in new code. Use send() instead for targeted delivery.
+        Used for events without thread_id that should reach all clients.
 
         Args:
             message: Message dict to broadcast to all clients.

@@ -16,6 +16,15 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.tools.audio.events import (
+    AudioCacheHitEvent,
+    AudioDownloadEvent,
+    AudioTranscriptionCompletedEvent,
+    AudioTranscriptionFailedEvent,
+    AudioTranscriptionStartedEvent,
+)
+from soothe.utils.progress import emit_progress
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,25 +109,51 @@ class AudioTranscriptionTool(BaseTool):
         cache_path = self._get_cache_path(audio_path)
         if cache_path and cache_path.exists():
             logger.info("Using cached transcription for: %s", audio_path)
+            emit_progress(AudioCacheHitEvent(audio_path=audio_path).to_dict(), logger)
             return json.loads(cache_path.read_text())
 
         # Download if URL
         local_path = audio_path
+        is_url = audio_path.startswith(("http://", "https://"))
         try:
+            if is_url:
+                emit_progress(AudioDownloadEvent(url=audio_path).to_dict(), logger)
             local_path = self._download_if_url(audio_path)
         except Exception as e:
+            emit_progress(
+                AudioTranscriptionFailedEvent(audio_path=audio_path, error=f"Failed to download audio: {e}").to_dict(),
+                logger,
+            )
             return {"error": f"Failed to download audio: {e}"}
 
         # Transcribe
         try:
+            emit_progress(
+                AudioTranscriptionStartedEvent(audio_path=audio_path, is_url=is_url).to_dict(),
+                logger,
+            )
             result = self._transcribe_openai(local_path)
 
             # Cache result
             if cache_path and "error" not in result:
                 cache_path.write_text(json.dumps(result, ensure_ascii=False))
 
+            # Emit completion event
+            emit_progress(
+                AudioTranscriptionCompletedEvent(
+                    audio_path=audio_path,
+                    duration=result.get("duration", 0.0),
+                    language=result.get("language", ""),
+                ).to_dict(),
+                logger,
+            )
+
         except Exception as e:
             logger.exception("Transcription failed")
+            emit_progress(
+                AudioTranscriptionFailedEvent(audio_path=audio_path, error=f"Transcription failed: {e}").to_dict(),
+                logger,
+            )
             return {"error": f"Transcription failed: {e}"}
         else:
             return result

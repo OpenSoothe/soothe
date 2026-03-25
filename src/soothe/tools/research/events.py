@@ -130,7 +130,29 @@ register_event(
     summary_template="Research completed ({answer_length} chars)",
 )
 
+# Event type constants for convenient imports
+TOOL_RESEARCH_ANALYZE = "soothe.tool.research.analyze"
+TOOL_RESEARCH_SUB_QUESTIONS = "soothe.tool.research.sub_questions"
+TOOL_RESEARCH_QUERIES_GENERATED = "soothe.tool.research.queries_generated"
+TOOL_RESEARCH_GATHER = "soothe.tool.research.gather"
+TOOL_RESEARCH_GATHER_DONE = "soothe.tool.research.gather_done"
+TOOL_RESEARCH_SUMMARIZE = "soothe.tool.research.summarize"
+TOOL_RESEARCH_REFLECT = "soothe.tool.research.reflect"
+TOOL_RESEARCH_REFLECTION_DONE = "soothe.tool.research.reflection_done"
+TOOL_RESEARCH_SYNTHESIZE = "soothe.tool.research.synthesize"
+TOOL_RESEARCH_COMPLETED = "soothe.tool.research.completed"
+
 __all__ = [
+    "TOOL_RESEARCH_ANALYZE",
+    "TOOL_RESEARCH_COMPLETED",
+    "TOOL_RESEARCH_GATHER",
+    "TOOL_RESEARCH_GATHER_DONE",
+    "TOOL_RESEARCH_QUERIES_GENERATED",
+    "TOOL_RESEARCH_REFLECT",
+    "TOOL_RESEARCH_REFLECTION_DONE",
+    "TOOL_RESEARCH_SUB_QUESTIONS",
+    "TOOL_RESEARCH_SUMMARIZE",
+    "TOOL_RESEARCH_SYNTHESIZE",
     "ResearchAnalyzeEvent",
     "ResearchCompletedEvent",
     "ResearchGatherDoneEvent",

@@ -50,4 +50,13 @@ register_event(
     summary_template="Browser CDP: {status}",
 )
 
-__all__ = ["BrowserCdpEvent", "BrowserStepEvent"]
+# Event type constants for convenient imports
+SUBAGENT_BROWSER_STEP = "soothe.subagent.browser.step"
+SUBAGENT_BROWSER_CDP = "soothe.subagent.browser.cdp"
+
+__all__ = [
+    "SUBAGENT_BROWSER_CDP",
+    "SUBAGENT_BROWSER_STEP",
+    "BrowserCdpEvent",
+    "BrowserStepEvent",
+]

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run:*)",
+      "Bash(python -m pytest tests/unit_tests/test_classification.py -v)",
+      "Bash(python3:*)"
+    ]
+  }
+}

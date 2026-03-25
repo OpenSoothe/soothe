@@ -56,4 +56,16 @@ register_event(
     summary_template="Done (${cost_usd}, {duration_ms}ms)",
 )
 
-__all__ = ["ClaudeResultEvent", "ClaudeTextEvent", "ClaudeToolUseEvent"]
+# Event type constants for convenient imports
+SUBAGENT_CLAUDE_TEXT = "soothe.subagent.claude.text"
+SUBAGENT_CLAUDE_TOOL_USE = "soothe.subagent.claude.tool_use"
+SUBAGENT_CLAUDE_RESULT = "soothe.subagent.claude.result"
+
+__all__ = [
+    "SUBAGENT_CLAUDE_RESULT",
+    "SUBAGENT_CLAUDE_TEXT",
+    "SUBAGENT_CLAUDE_TOOL_USE",
+    "ClaudeResultEvent",
+    "ClaudeTextEvent",
+    "ClaudeToolUseEvent",
+]

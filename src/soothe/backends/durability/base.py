@@ -27,11 +27,24 @@ class BasePersistStoreDurability:
         self._store = persist_store
         self._thread_index_key = "thread_index"
 
-    async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo:
-        """Create a new thread with metadata."""
+    async def create_thread(
+        self,
+        metadata: ThreadMetadata,
+        thread_id: str | None = None,
+    ) -> ThreadInfo:
+        """Create a new thread with metadata.
+
+        Args:
+            metadata: Thread metadata.
+            thread_id: Optional thread ID. If not provided, a new UUID is generated.
+                       Use this to persist a draft thread with its existing ID.
+
+        Returns:
+            ThreadInfo for the created thread.
+        """
         now = datetime.now(tz=UTC)
         info = ThreadInfo(
-            thread_id=str(uuid4()),
+            thread_id=thread_id or str(uuid4()),
             status="active",
             created_at=now,
             updated_at=now,

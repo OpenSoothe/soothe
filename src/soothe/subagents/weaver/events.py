@@ -165,7 +165,37 @@ register_event(WeaverRegistryUpdatedEvent)
 register_event(WeaverExecuteStartedEvent)
 register_event(WeaverExecuteCompletedEvent)
 
+# Event type constants for convenient imports
+SUBAGENT_WEAVER_ANALYSIS_STARTED = "soothe.subagent.weaver.analysis_started"
+SUBAGENT_WEAVER_ANALYSIS_COMPLETED = "soothe.subagent.weaver.analysis_completed"
+SUBAGENT_WEAVER_REUSE_HIT = "soothe.subagent.weaver.reuse_hit"
+SUBAGENT_WEAVER_REUSE_MISS = "soothe.subagent.weaver.reuse_miss"
+SUBAGENT_WEAVER_SKILLIFY_PENDING = "soothe.subagent.weaver.skillify_pending"
+SUBAGENT_WEAVER_HARMONIZE_STARTED = "soothe.subagent.weaver.harmonize_started"
+SUBAGENT_WEAVER_HARMONIZE_COMPLETED = "soothe.subagent.weaver.harmonize_completed"
+SUBAGENT_WEAVER_GENERATE_STARTED = "soothe.subagent.weaver.generate_started"
+SUBAGENT_WEAVER_GENERATE_COMPLETED = "soothe.subagent.weaver.generate_completed"
+SUBAGENT_WEAVER_VALIDATE_STARTED = "soothe.subagent.weaver.validate_started"
+SUBAGENT_WEAVER_VALIDATE_COMPLETED = "soothe.subagent.weaver.validate_completed"
+SUBAGENT_WEAVER_REGISTRY_UPDATED = "soothe.subagent.weaver.registry_updated"
+SUBAGENT_WEAVER_EXECUTE_STARTED = "soothe.subagent.weaver.execute_started"
+SUBAGENT_WEAVER_EXECUTE_COMPLETED = "soothe.subagent.weaver.execute_completed"
+
 __all__ = [
+    "SUBAGENT_WEAVER_ANALYSIS_COMPLETED",
+    "SUBAGENT_WEAVER_ANALYSIS_STARTED",
+    "SUBAGENT_WEAVER_EXECUTE_COMPLETED",
+    "SUBAGENT_WEAVER_EXECUTE_STARTED",
+    "SUBAGENT_WEAVER_GENERATE_COMPLETED",
+    "SUBAGENT_WEAVER_GENERATE_STARTED",
+    "SUBAGENT_WEAVER_HARMONIZE_COMPLETED",
+    "SUBAGENT_WEAVER_HARMONIZE_STARTED",
+    "SUBAGENT_WEAVER_REGISTRY_UPDATED",
+    "SUBAGENT_WEAVER_REUSE_HIT",
+    "SUBAGENT_WEAVER_REUSE_MISS",
+    "SUBAGENT_WEAVER_SKILLIFY_PENDING",
+    "SUBAGENT_WEAVER_VALIDATE_COMPLETED",
+    "SUBAGENT_WEAVER_VALIDATE_STARTED",
     "WeaverAnalysisCompletedEvent",
     "WeaverAnalysisStartedEvent",
     "WeaverExecuteCompletedEvent",

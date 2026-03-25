@@ -161,7 +161,7 @@ def emit_error_event(
         >>> emit_error_event(TimeoutError("Browser timeout"), context="browser launch")
         {'type': 'soothe.error.general', 'error': 'Browser launch failed: TimeoutError: Browser startup timeout'}
     """
-    from soothe.core.events import ERROR
+    from soothe.core.event_catalog import ERROR
 
     simplified = format_cli_error(error, context=context)
     return {"type": ERROR, "error": simplified}

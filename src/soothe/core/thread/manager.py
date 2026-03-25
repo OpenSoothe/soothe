@@ -53,12 +53,15 @@ class ThreadContextManager:
     async def create_thread(
         self,
         metadata: dict[str, Any] | None = None,
+        thread_id: str | None = None,
         **_kwargs: Any,
     ) -> ThreadInfo:
         """Create a new thread with optional initial message.
 
         Args:
             metadata: Optional thread metadata
+            thread_id: Optional thread ID. If not provided, a new UUID is generated.
+                       Use this to persist a draft thread with its existing ID.
             **_kwargs: Additional arguments (ignored, for compatibility)
 
         Returns:
@@ -70,7 +73,10 @@ class ThreadContextManager:
         thread_metadata = ThreadMetadata(**metadata) if metadata else ThreadMetadata()
 
         # Create thread in durability protocol
-        thread_info = await self._durability.create_thread(metadata=thread_metadata)
+        thread_info = await self._durability.create_thread(
+            metadata=thread_metadata,
+            thread_id=thread_id,
+        )
 
         logger.info("Created thread %s", thread_info.thread_id)
 

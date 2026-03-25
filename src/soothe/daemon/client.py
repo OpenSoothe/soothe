@@ -233,6 +233,9 @@ class DaemonClient:
 
         Returns:
             Parsed event dict, or ``None`` on EOF.
+
+        Raises:
+            asyncio.CancelledError: If the read operation was cancelled.
         """
         if not self._reader:
             return None
@@ -241,7 +244,10 @@ class DaemonClient:
             if not line:
                 return None
             return decode(line)
-        except (asyncio.CancelledError, ConnectionError):
+        except asyncio.CancelledError:
+            # Re-raise CancelledError so asyncio.wait_for() can handle timeouts properly
+            raise
+        except ConnectionError:
             return None
 
     async def _send(self, msg: dict[str, Any]) -> None:

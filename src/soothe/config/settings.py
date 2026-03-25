@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 from soothe.config.daemon_config import DaemonConfig
@@ -84,15 +84,44 @@ class SootheConfig(BaseSettings):
     system_prompt: str | None = None
     """System prompt override. When ``None``, a default prompt is generated using ``assistant_name``."""
 
-    subagents: dict[str, SubagentConfig] = Field(
-        default_factory=lambda: {
+    subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
+    """Subagent name to config mapping. Set ``enabled: false`` to disable.
+
+    Builtin subagents (browser, claude, skillify, weaver) are added automatically.
+    Plugin-discovered subagents are merged during config validation.
+    """
+
+    @model_validator(mode="after")
+    def _merge_subagents(self) -> SootheConfig:
+        """Merge builtin and plugin-discovered subagents with user configs."""
+        # Start with builtin defaults
+        builtin_subagents = {
             "browser": SubagentConfig(),
             "claude": SubagentConfig(),
             "skillify": SubagentConfig(),
             "weaver": SubagentConfig(),
         }
-    )
-    """Subagent name to config mapping. Set ``enabled: false`` to disable."""
+
+        # Import here to avoid circular dependency
+        try:
+            from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
+
+            # Add plugin-discovered subagents if plugins are loaded
+            if is_plugins_loaded():
+                registry = get_plugin_registry()
+                for name in registry.list_subagent_names():
+                    if name not in builtin_subagents:
+                        default_config = registry.get_subagent_default_config(name)
+                        builtin_subagents[name] = SubagentConfig(config=default_config)
+        except RuntimeError:
+            # Plugins not loaded yet, use builtin only
+            pass
+
+        # Override with user-provided configs
+        builtin_subagents.update(self.subagents)
+
+        self.subagents = builtin_subagents
+        return self
 
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     """Tool group configurations. Each tool can be enabled/disabled and configured."""

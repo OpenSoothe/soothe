@@ -9,18 +9,25 @@ from typing import Any
 from rich.console import RenderableType
 from rich.text import Text
 
-from soothe.core.events import (
+from soothe.subagents.browser.events import (
     SUBAGENT_BROWSER_CDP,
     SUBAGENT_BROWSER_STEP,
+)
+from soothe.subagents.claude.events import (
     SUBAGENT_CLAUDE_RESULT,
     SUBAGENT_CLAUDE_TEXT,
     SUBAGENT_CLAUDE_TOOL_USE,
+)
+from soothe.tools.display_names import get_tool_display_name
+from soothe.tools.research.events import (
     TOOL_RESEARCH_ANALYZE,
     TOOL_RESEARCH_COMPLETED,
     TOOL_RESEARCH_GATHER,
     TOOL_RESEARCH_GATHER_DONE,
     TOOL_RESEARCH_QUERIES_GENERATED,
     TOOL_RESEARCH_SYNTHESIZE,
+)
+from soothe.tools.web_search.events import (
     TOOL_WEBSEARCH_CRAWL_COMPLETED,
     TOOL_WEBSEARCH_CRAWL_FAILED,
     TOOL_WEBSEARCH_CRAWL_STARTED,
@@ -28,7 +35,6 @@ from soothe.core.events import (
     TOOL_WEBSEARCH_SEARCH_FAILED,
     TOOL_WEBSEARCH_SEARCH_STARTED,
 )
-from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.shared.message_processing import (
     extract_tool_brief as _extract_tool_brief,
     format_tool_call_args,

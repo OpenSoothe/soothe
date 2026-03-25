@@ -101,7 +101,25 @@ register_event(SkillifyIndexUpdatedEvent)
 register_event(SkillifyIndexUnchangedEvent)
 register_event(SkillifyIndexFailedEvent)
 
+# Event type constants for convenient imports
+SUBAGENT_SKILLIFY_INDEXING_PENDING = "soothe.subagent.skillify.indexing_pending"
+SUBAGENT_SKILLIFY_RETRIEVE_STARTED = "soothe.subagent.skillify.retrieve_started"
+SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED = "soothe.subagent.skillify.retrieve_completed"
+SUBAGENT_SKILLIFY_RETRIEVE_NOT_READY = "soothe.subagent.skillify.retrieve_not_ready"
+SUBAGENT_SKILLIFY_INDEX_STARTED = "soothe.subagent.skillify.index_started"
+SUBAGENT_SKILLIFY_INDEX_UPDATED = "soothe.subagent.skillify.index_updated"
+SUBAGENT_SKILLIFY_INDEX_UNCHANGED = "soothe.subagent.skillify.index_unchanged"
+SUBAGENT_SKILLIFY_INDEX_FAILED = "soothe.subagent.skillify.index_failed"
+
 __all__ = [
+    "SUBAGENT_SKILLIFY_INDEXING_PENDING",
+    "SUBAGENT_SKILLIFY_INDEX_FAILED",
+    "SUBAGENT_SKILLIFY_INDEX_STARTED",
+    "SUBAGENT_SKILLIFY_INDEX_UNCHANGED",
+    "SUBAGENT_SKILLIFY_INDEX_UPDATED",
+    "SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED",
+    "SUBAGENT_SKILLIFY_RETRIEVE_NOT_READY",
+    "SUBAGENT_SKILLIFY_RETRIEVE_STARTED",
     "SkillifyIndexFailedEvent",
     "SkillifyIndexStartedEvent",
     "SkillifyIndexUnchangedEvent",
