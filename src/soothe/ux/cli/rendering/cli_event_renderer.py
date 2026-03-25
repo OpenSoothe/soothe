@@ -64,6 +64,8 @@ logger = logging.getLogger(__name__)
 
 _MAX_INLINE_QUERIES = 3
 _EVENT_TYPE_MIN_SEGMENTS = 4
+_EVENT_TYPE_DOMAIN_INDEX = 2
+_EVENT_TYPE_ACTION_INDEX = 3
 
 
 class CliEventRenderer:
@@ -198,13 +200,50 @@ class CliEventRenderer:
                 summary = meta.summary_template.format(**event)
             except KeyError:
                 # Fallback: extract key fields
-                summary = event.get("description", event.get("summary", str(event)))
+                summary = event.get("description", event.get("summary", self._format_unregistered_event(event)))
             else:
                 return [summary]
 
         # Fallback: extract key fields
-        summary = event.get("description", event.get("summary", str(event)))
+        summary = event.get("description", event.get("summary", self._format_unregistered_event(event)))
         return [str(summary)[:120]]
+
+    def _format_unregistered_event(self, event: dict[str, Any]) -> str:
+        """Format an unregistered event for display without dumping raw dict.
+
+        Args:
+            event: Event dictionary to format.
+
+        Returns:
+            Human-readable summary string.
+        """
+        etype = event.get("type", "unknown")
+
+        # Extract the most relevant field for display
+        # Priority: tool/result_preview > error > description > generic summary
+        if "result_preview" in event:
+            return str(event["result_preview"])[:100]
+        if "error" in event:
+            return f"Error: {str(event['error'])[:80]}"
+        if "description" in event:
+            return str(event["description"])[:100]
+        if "tool" in event:
+            tool = event["tool"]
+            args = event.get("args", "")
+            if args:
+                return f"{tool}({str(args)[:50]})"
+            return str(tool)
+
+        # Last resort: show event type without full dict dump
+        parts = etype.split(".")
+        if len(parts) >= _EVENT_TYPE_MIN_SEGMENTS:
+            # Extract meaningful parts: soothe.tool.research.started -> research started
+            domain = parts[_EVENT_TYPE_DOMAIN_INDEX] if len(parts) > _EVENT_TYPE_DOMAIN_INDEX else ""
+            action = parts[_EVENT_TYPE_ACTION_INDEX] if len(parts) > _EVENT_TYPE_ACTION_INDEX else ""
+            if domain and action:
+                return f"{domain} {action}".replace("_", " ")
+
+        return etype[:80]
 
     # --- Tool event handlers ---
 

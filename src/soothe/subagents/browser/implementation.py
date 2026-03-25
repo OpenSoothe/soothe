@@ -180,7 +180,7 @@ def _build_browser_graph(
         try:
             with capture_subagent_output("browser", suppress=True):
                 from browser_use import Agent as BrowserAgent, Browser
-                from langchain_openai import ChatOpenAI
+                from browser_use.llm.openai import ChatOpenAI
 
                 messages = state.get("messages", [])
                 task = messages[-1].content if messages else ""
