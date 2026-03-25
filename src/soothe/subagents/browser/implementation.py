@@ -179,7 +179,7 @@ def _build_browser_graph(
 
         try:
             with capture_subagent_output("browser", suppress=True):
-                from browser_use import Agent as BrowserAgent, Browser, BrowserConfig as BUBrowserConfig
+                from browser_use import Agent as BrowserAgent, Browser
                 from langchain_openai import ChatOpenAI
 
                 messages = state.get("messages", [])
@@ -227,12 +227,12 @@ def _build_browser_graph(
                         await asyncio.sleep(1)
 
                 extra_args = [f"--user-data-dir={browser_user_data_dir}"]
-                bu_config = BUBrowserConfig(
+                browser_instance = Browser(
                     headless=headless if not cdp_url else False,
                     cdp_url=cdp_url,
-                    extra_chromium_args=extra_args,
+                    args=extra_args,
+                    user_data_dir=browser_user_data_dir,
                 )
-                browser_instance = Browser(bu_config)
 
                 async def on_step_end(agent: Any) -> None:
                     step_num = agent.state.n_steps

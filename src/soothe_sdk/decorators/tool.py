@@ -25,8 +25,8 @@ def tool(
         name: Tool name (used to invoke the tool).
         description: Tool description for the LLM (shown in tool selection).
         group: Optional tool group name for organization.
-        display_name: Optional user-facing display name (PascalCase). If not provided,
-            will be auto-converted from name (snake_case -> PascalCase).
+        display_name: Optional user-facing display name. If not provided,
+            auto-converts from snake_case to PascalCase.
 
     Returns:
         Decorated method with tool metadata.
@@ -35,22 +35,33 @@ def tool(
         ```python
         @plugin(name="my-plugin", version="1.0.0", description="My plugin")
         class MyPlugin:
-            @tool(name="greet", description="Greet someone by name", display_name="Greet")
+            @tool(name="greet", description="Greet someone by name")
             def greet(self, name: str) -> str:
                 return f"Hello, {name}!"
+
+            @tool(name="custom_op", display_name="MyCustomOp")
+            def custom_operation(self, data: str) -> str:
+                return f"Processed: {data}"
         ```
     """
 
     def decorator(func: Callable) -> Callable:
-        # Compute display name if not provided
-        computed_display_name = display_name or name.replace("_", " ").title().replace(" ", "")
+        # Determine display name
+        final_display_name = display_name or name.replace("_", " ").title().replace(" ", "")
+
+        # Register display name if custom name provided
+        if display_name:
+            # Lazy import to avoid circular dependency
+            from soothe.tools.display_names import register_tool_display_name
+
+            register_tool_display_name(name, final_display_name)
 
         # Mark as tool
         func._is_tool = True
         func._tool_name = name
         func._tool_description = description
         func._tool_group = group
-        func._tool_display_name = computed_display_name
+        func._tool_display_name = final_display_name
 
         @wraps(func)
         async def async_wrapper(self, *args, **kwargs):
@@ -75,13 +86,7 @@ def tool(
         wrapper._tool_name = name
         wrapper._tool_description = description
         wrapper._tool_group = group
-        wrapper._tool_display_name = computed_display_name
-
-        # Register display name if explicitly provided
-        if display_name:
-            from soothe.tools.display_names import register_tool_display_name
-
-            register_tool_display_name(name, display_name)
+        wrapper._tool_display_name = final_display_name
 
         return wrapper
 

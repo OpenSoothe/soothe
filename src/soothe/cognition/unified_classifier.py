@@ -241,7 +241,11 @@ class UnifiedClassifier:
         )
         result = await self._routing_model.ainvoke(prompt)
 
-        # Ensure parsed output still obeys strict literal contract.
+        # Ensure parsed output exists and obeys strict literal contract.
+        if result is None:
+            msg = "LLM returned None - structured output parsing failed"
+            raise ValueError(msg)
+
         if not result.task_complexity or result.task_complexity not in ("chitchat", "medium", "complex"):
             msg = f"Invalid task_complexity from LLM: {result.task_complexity!r}"
             raise ValueError(msg)

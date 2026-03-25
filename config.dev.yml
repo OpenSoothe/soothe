@@ -19,7 +19,7 @@ providers:
       - qwen-max
       - qwen3.5-flash
       - qwen3.5-plus
-      - text-embedding-v4
+      - multimodal-embedding-v1
 
   - name: coding-plan
     provider_type: openai

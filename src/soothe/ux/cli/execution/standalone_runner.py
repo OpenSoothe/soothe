@@ -36,13 +36,21 @@ class _CliOutputFormatter(OutputFormatter):
         sys.stdout.flush()
         self.needs_stdout_newline = True
 
-    def emit_tool_call(self, name: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
+    def emit_tool_call(
+        self,
+        name: str,
+        *,
+        prefix: str | None,
+        is_main: bool,  # noqa: ARG002
+        tool_call: dict[str, Any] | None = None,  # noqa: ARG002
+    ) -> None:
         """Emit a tool call notification to stderr.
 
         Args:
             name: The tool name being called.
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent (unused in CLI).
+            tool_call: Optional tool call dict with args (unused in CLI).
         """
         # Add newline before stderr output if needed
         if self.needs_stdout_newline:
