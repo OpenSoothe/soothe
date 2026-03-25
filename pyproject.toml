@@ -55,7 +55,7 @@ research = [
     "wikipedia>=1.4.0",
 ]
 websearch = [
-    "browser-use<=0.12.0",
+    "browser-use>=0.11.0,<=0.12.0",
     "wizsearch>=1.1.7,<2.0.0",
     "langchain-tavily>=0.2.17",
 ]
