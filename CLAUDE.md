@@ -1,126 +1,301 @@
-# Soothe Development Rules
+# Soothe Development Guide for AI Agents
 
-## Project Vision
+> **Purpose**: This guide helps AI coding agents work effectively on the Soothe codebase.
 
-Soothe is a protocol-driven orchestration framework for building 24/7 long-running autonomous
-agents. It extends deepagents with planning, context engineering, security policy, durability,
-and remote agent interop while remaining langchain-ecosystem-friendly. See
-[RFC-0001](docs/specs/RFC-0001.md) for the full conceptual design.
+---
 
-## Design Principles (RFC-0001)
+## 🎯 Project Overview
 
-1. **Protocol-first, runtime-second** -- every module is a protocol; implementations are swappable.
-2. **Extend deepagents, don't fork it** -- use deepagents as-is for what it provides.
-3. **Orchestration is the product** -- compose capabilities, don't implement domain logic.
-4. **Unbounded context, bounded projection** -- context ledger is unlimited; only projections are bounded.
-5. **Durable by default** -- agent state is persistable and resumable.
-6. **Plan-driven execution** -- complex goals decompose into plans with steps.
-7. **Least-privilege delegation** -- every action passes through PolicyProtocol.
-8. **Controlled concurrency** -- parallel execution within configurable limits.
-9. **Uniform delegation envelope** -- local and remote subagents share the same interface.
-10. **Graceful degradation** -- partial results over hard failure.
+**Soothe** is a protocol-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining langchain-ecosystem-friendly.
 
-## Mandatory Constraints
+**Key Architecture**: See [RFC-0001](docs/specs/RFC-0001.md) for the full conceptual design.
 
-- **Built on deepagents and langchain ecosystem.** DO NOT reinvent modules if the langchain
-  ecosystem already provides them. Always check langchain-core, langchain-community, and
-  deepagents before implementing any tool, middleware, or agent pattern.
-- Subagents MUST use deepagents' `SubAgent` or `CompiledSubAgent` types.
-- Tools MUST use langchain's `BaseTool` subclass or `@tool` decorator.
-- MCP integration MUST use `langchain-mcp-adapters`.
-- Skills MUST use deepagents' `SkillsMiddleware` (SKILL.md format).
-- Memory MUST use deepagents' `MemoryMiddleware` (AGENTS.md format).
-- Protocols MUST be defined as `typing.Protocol` with no runtime dependencies in signatures.
-- All protocol implementations MUST be swappable via `SootheConfig`.
-- **Configuration changes MUST update the config template.** When modifying `src/soothe/config.py`,
-  you MUST also update `src/soothe/config/config.yml` to reflect the changes.
+---
 
-## Code Standards
+## ⚠️ CRITICAL RULES - READ FIRST
 
-- Python >=3.11, type hints on all public functions.
-- Google-style docstrings with Args, Returns, Raises sections.
-- Use `ruff` for linting and formatting.
-- **MUST run `make lint` before committing** - all linting errors must be fixed.
-- Unit tests for all new features; `pytest` with `asyncio_mode = "auto"`.
-- No bare `except:`; use typed exception handling.
-- Single backticks for inline code in docstrings (not Sphinx double backticks).
+### 1. MUST Create Implementation Guide
+**Before implementing ANY plan or refactoring task**, create a new implementation guide in `docs/impl/`:
+- Naming: `NNN-brief-title.md` (NNN = next available number)
+- Purpose: Track all implementation work
+- Example: This document guides all code changes
 
-## Architecture
+### 2. Ecosystem Dependencies
+**DO NOT reinvent modules** if langchain ecosystem already provides them:
+- Tools: Use `langchain.BaseTool` or `@tool` decorator
+- Subagents: Use `deepagents.SubAgent` or `CompiledSubAgent`
+- MCP: Use `langchain-mcp-adapters`
+- Skills: Use `deepagents.SkillsMiddleware`
+- Memory: Use `deepagents.MemoryMiddleware`
+- Check: `langchain-core`, `langchain-community`, `deepagents` first!
+
+### 3. Verification Before Commit
+**MANDATORY**: Run verification script after ANY code change:
+```bash
+./scripts/verify_finally.sh
+```
+This runs:
+- Code formatting check
+- Linting (zero errors required)
+- Unit tests (900+ tests must pass)
+
+**NEVER commit code without running this verification first!**
+
+---
+
+## 🏗️ Architecture at a Glance
+
+### Layer Stack (Bottom to Top)
 
 ```
-+--------------------------------------------------------------+
-|  CLI Layer                                                    |
-|  cli/main.py (Typer), cli/commands/, cli/tui/,              |
-|  cli/execution/, cli/slash_commands.py                       |
-+--------------------------------------------------------------+
-|  Daemon Layer (NEW: Multi-Transport)                         |
-|  daemon/server.py, daemon/client.py, daemon/transports/,     |
-|  daemon/auth.py, daemon/protocol_v2.py                       |
-+--------------------------------------------------------------+
-|  Core Framework (no CLI deps)                                |
-|  core/agent.py (factory), core/runner.py (SootheRunner),    |
-|  core/resolver.py (protocol resolution), core/events.py     |
-+--------------------------------------------------------------+
-|  Protocol Layer                                               |
-|  protocols/: Context, Memory, Planner, Policy, Durability,  |
-|  RemoteAgent, Concurrency, VectorStore                        |
-+--------------------------------------------------------------+
-|  Backends Layer                                               |
-|  backends/context/, backends/memory/, backends/planning/,    |
-|  backends/policy/, backends/durability/, backends/remote/,   |
-|  backends/persistence/, backends/vector_store/               |
-+--------------------------------------------------------------+
-|  Capability Layer                                             |
-|  subagents/ (planner, scout, research, browser, claude,     |
-|              skillify, weaver)                                |
-|  tools/ (jina, serper, image, audio, video, tabular)         |
-|  mcp/ (MCP server loading)                                   |
-+--------------------------------------------------------------+
-|  deepagents + langchain / langgraph                          |
-+--------------------------------------------------------------+
+┌─────────────────────────────────────────────────────────┐
+│  CLI Layer (cli/)                                        │
+│  - Typer app, commands/, TUI, execution                  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Daemon Layer (daemon/)                                  │
+│  - Multi-transport server (Unix, WebSocket, HTTP REST)  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Core Framework (core/)                                  │
+│  - Agent factory, runner, resolver, events               │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Protocol Layer (protocols/)                             │
+│  - 8 runtime-agnostic protocol definitions              │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Backends Layer (backends/)                              │
+│  - Protocol implementations (context, memory, etc.)     │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Capability Layer (subagents/, tools/, mcp/)            │
+│  - Subagents, tools, MCP servers                        │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  deepagents + langchain / langgraph                     │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Entry Points
+### Key Entry Points
 
-- `create_soothe_agent()` in `core/agent.py` -- main factory, returns `CompiledStateGraph`
-- `SootheConfig` in `config.py` -- declarative configuration (pydantic-settings, `SOOTHE_` prefix)
-- `soothe` CLI in `cli/main.py` -- Typer app, entry point `soothe.ux.cli.main:app`
-- `SootheRunner` in `core/runner.py` -- protocol orchestration + streaming wrapper
+| Entry Point | Location | Purpose |
+|-------------|----------|---------|
+| Agent Factory | `core/agent.py:create_soothe_agent()` | Main factory, returns `CompiledStateGraph` |
+| Configuration | `config.py:SootheConfig` | Declarative config with `SOOTHE_` env prefix |
+| CLI | `cli/main.py:app` | Typer app entry point |
+| Runner | `core/runner.py:SootheRunner` | Protocol orchestration + streaming |
 
-### Configuration System
+---
 
-- `SootheConfig(BaseSettings)` with `env_prefix = "SOOTHE_"` for env var overrides
-- YAML/JSON config file loaded via `--config` CLI flag
-- `resolve_model(role)` maps purpose roles to `provider:model` strings
-- `create_chat_model(role)` and `create_embedding_model()` instantiate langchain models
-- `propagate_env()` sets `OPENAI_API_KEY`/`OPENAI_BASE_URL` for downstream libraries
-- Provider `api_key` supports `${ENV_VAR}` syntax for secret injection
+## 📁 Module Map
 
-## Module Map
+### Core Modules
+| Package | Purpose |
+|---------|---------|
+| `core/` | Framework logic (factory, runner, events, goal engine) |
+| `protocols/` | 8 runtime-agnostic protocol definitions |
+| `middleware/` | deepagents middleware wrappers |
+| `utils/` | Shared runtime helpers |
 
-| Package | Contents | Purpose |
-|---------|----------|---------|
-| `core/` | `agent`, `runner`, `resolver`, `events`, `goal_engine`, `artifact_store`, `concurrency`, `step_scheduler` | Framework logic (factory, orchestration, resolution, goal lifecycle, artifact storage) |
-| `protocols/` | `context`, `memory`, `planner`, `policy`, `durability`, `remote`, `concurrency`, `vector_store` | 8 runtime-agnostic protocol definitions |
-| `daemon/` | `server`, `client`, `protocol`, `protocol_v2`, `auth`, `transport_manager`, `transports/` | Multi-transport daemon (Unix Socket, WebSocket, HTTP REST) |
-| `backends/context/` | `KeywordContext`, `VectorContext` | ContextProtocol implementations |
-| `backends/memory/` | `KeywordMemory`, `VectorMemory` | MemoryProtocol implementations |
-| `backends/planning/` | `DirectPlanner`, `SubagentPlanner`, `ClaudePlanner`, `AutoPlanner` | PlannerProtocol implementations |
-| `backends/policy/` | `ConfigDrivenPolicy` | PolicyProtocol implementations |
-| `backends/durability/` | `JsonDurability`, `RocksDBDurability`, `PostgreSQLDurability` | DurabilityProtocol implementations |
-| `backends/remote/` | `LangGraphRemoteAgent` | RemoteAgentProtocol implementations |
-| `backends/persistence/` | `JsonPersistStore`, `RocksDBPersistStore`, `PostgreSQLPersistStore` | PersistStore implementations for context/memory/durability |
-| `backends/vector_store/` | `PGVectorStore`, `WeaviateVectorStore`, `InMemoryVectorStore` | VectorStoreProtocol implementations |
-| `subagents/` | `planner`, `browser`, `claude`, `skillify`, `weaver` | deepagents SubAgent/CompiledSubAgent |
-| `tools/` | `jina`, `serper`, `wizsearch`, `image`, `audio`, `video`, `tabular`, `bash`, `file_edit`, `document`, `python_executor`, `goals`, `datetime` | langchain BaseTool groups |
-| `mcp/` | `loader` | MCP server session management |
-| `cli/` | `main`, `commands/`, `execution/`, `tui/`, `slash_commands` | Typer CLI with modular commands + Textual TUI |
-| `config/` | `models`, `settings`, `env`, `daemon_config` | Configuration models and daemon configuration |
-| `middleware/` | `ContextMiddleware`, `PolicyMiddleware` | deepagents AgentMiddleware wrappers |
-| `utils/` | `progress` | Shared runtime progress helper |
+### Backends (Protocol Implementations)
+| Package | Implements |
+|---------|------------|
+| `backends/context/` | ContextProtocol (KeywordContext, VectorContext) |
+| `backends/memory/` | MemoryProtocol (KeywordMemory, VectorMemory) |
+| `backends/planning/` | PlannerProtocol (Simple, Subagent, Claude, Auto) |
+| `backends/policy/` | PolicyProtocol (ConfigDrivenPolicy) |
+| `backends/durability/` | DurabilityProtocol (Json, RocksDB, PostgreSQL) |
+| `backends/remote/` | RemoteAgentProtocol (LangGraphRemoteAgent) |
+| `backends/persistence/` | PersistStore for context/memory/durability |
+| `backends/vector_store/` | VectorStoreProtocol (PGVector, Weaviate, InMemory) |
 
-## What deepagents Provides (DO NOT reimplement)
+### Capabilities
+| Package | Contents |
+|---------|----------|
+| `subagents/` | Browser, Claude, Skillify, Weaver (deepagents SubAgents) |
+| `tools/` | Tool groups (execution, websearch, research, etc.) |
+| `mcp/` | MCP server loading and management |
 
+### User Interface
+| Package | Purpose |
+|---------|---------|
+| `cli/` | Typer CLI with modular commands |
+| `daemon/` | Multi-transport daemon server |
+
+---
+
+## 🔧 Configuration System
+
+### SootheConfig (BaseSettings)
+- **Environment prefix**: `SOOTHE_` (e.g., `SOOTHE_PROVIDERS__OPENAI__API_KEY`)
+- **Config file**: YAML/JSON via `--config` flag
+- **Secret injection**: `${ENV_VAR}` syntax in config values
+
+### Key Methods
+```python
+config.resolve_model(role)          # Map purpose role to "provider:model"
+config.create_chat_model(role)       # Instantiate langchain chat model
+config.create_embedding_model()      # Instantiate embedding model
+config.propagate_env()               # Set OPENAI_API_KEY for downstream libs
+```
+
+---
+
+## 📚 Specifications (RFCs)
+
+All RFCs are in `docs/specs/`. Key specifications:
+
+| RFC | Title | Purpose |
+|-----|-------|---------|
+| [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design | Overall architecture |
+| [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture | Module interactions |
+| [RFC-0008](docs/specs/RFC-0008.md) | Agentic Loop Execution | Iteration patterns |
+| [RFC-0013](docs/specs/RFC-0013.md) | Daemon Communication Protocol | Multi-transport daemon |
+| [RFC-0015](docs/specs/RFC-0015.md) | Authentication and Security | Security model |
+| [RFC-0018](docs/specs/RFC-0018.md) | Plugin Extension System | Plugin architecture |
+
+**See all RFCs**: Check `docs/specs/` directory.
+
+---
+
+## 📝 Implementation Guides
+
+All implementation guides are in `docs/impl/`. Recent guides:
+
+| Guide | Title | Status |
+|-------|-------|--------|
+| IG-047 | Module Self-Containment Refactoring | ✅ Completed |
+| IG-051 | Plugin API Implementation | ✅ Completed |
+| IG-052 | RFC-0018 Event System Optimization | ✅ Completed |
+
+**See all guides**: Check `docs/impl/` directory.
+
+---
+
+## 🔌 Plugin System (RFC-0018)
+
+### Event Registration (NEW!)
+Each module registers its own events using `register_event()`:
+
+```python
+from soothe.core.event_catalog import register_event
+from soothe.core.base_events import SootheEvent
+
+class MyCustomEvent(SootheEvent):
+    type: str = "soothe.plugin.custom.event"
+    data: str
+
+# Register at module load time
+register_event(MyCustomEvent, summary_template="Custom: {data}")
+```
+
+**Third-party plugins** can now register custom events without modifying core files!
+
+### Plugin Structure
+```python
+from soothe_sdk import plugin, tool, subagent
+
+@plugin(name="my-plugin", version="1.0.0")
+class MyPlugin:
+    async def on_load(self, context):
+        # Initialize plugin
+        pass
+
+    @tool(name="my_tool", description="Does something")
+    def my_tool(self, arg: str) -> str:
+        return f"Result: {arg}"
+
+    @subagent(name="my_agent", description="Custom agent")
+    async def create_agent(self, model, config, context):
+        # Return deepagents CompiledSubAgent
+        pass
+```
+
+---
+
+## 🚦 Development Workflow
+
+### 1. Plan Mode
+When in plan mode:
+- **ASK for confirmation** when alternatives exist
+- **EXPLORE the codebase** first
+- **CREATE implementation guide** before starting
+- **END with ExitPlanMode** for user approval
+
+### 2. Implementation
+1. Read existing code thoroughly
+2. Check langchain ecosystem first
+3. Follow existing patterns
+4. Add type hints and docstrings
+5. Run `make lint` frequently
+
+### 3. Verification
+```bash
+# Run full verification suite
+./scripts/verify_finally.sh
+
+# Or run checks individually:
+make format-check    # Check formatting
+make lint            # Check linting (zero errors)
+make test-unit       # Run 900+ tests
+```
+
+### 4. Commit
+**Only after all checks pass!**
+
+---
+
+## 🎨 Code Standards
+
+### Python Style
+- **Python >=3.11**
+- **Type hints** on all public functions
+- **Google-style docstrings** with Args, Returns, Raises
+- **Ruff** for linting and formatting
+- **No bare `except:`** - use typed exception handling
+
+### Docstring Format
+```python
+def my_function(arg: str, optional: int = 0) -> dict:
+    """Brief description of function.
+
+    Args:
+        arg: Description of arg.
+        optional: Description of optional parameter.
+
+    Returns:
+        Description of return value.
+
+    Raises:
+        ValueError: When arg is invalid.
+    """
+    pass
+```
+
+### Single Backticks
+Use single backticks for inline code in docstrings (not Sphinx double backticks):
+```python
+# ✅ Good
+"""Use `create_agent()` to instantiate."""
+
+# ❌ Bad
+"""Use ``create_agent()`` to instantiate."""
+```
+
+---
+
+## 🛠️ What NOT to Implement
+
+**Check these before implementing anything:**
+
+### deepagents Provides
 - File operations: `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`
 - Shell execution: `execute`
 - Task tracking: `write_todos`
@@ -131,8 +306,7 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 - Middleware: TodoList, Filesystem, SubAgent, Summarization, PromptCaching
 - Streaming: `agent.astream(stream_mode=["messages", "updates", "custom"], subgraphs=True)`
 
-## What langchain Provides (DO NOT reimplement)
-
+### langchain Provides
 - Web search: `TavilySearchResults`, `DuckDuckGoSearchRun`
 - ArXiv: `ArxivQueryRun`
 - Wikipedia: `WikipediaQueryRun`
@@ -142,200 +316,9 @@ and remote agent interop while remaining langchain-ecosystem-friendly. See
 - Document loaders: `PyPDFLoader`, `Docx2txtLoader`, etc.
 - Model init: `init_chat_model()`, `init_embeddings()`
 
-## CLI TUI Architecture (RFC-0003, RFC-0013)
+---
 
-- `SootheRunner` wraps `create_soothe_agent()` with three-phase execution:
-  pre-stream (context, memory, planner, policy), LangGraph stream pass-through
-  with HITL interrupt loop, post-stream (ingestion, reflection, persistence).
-- Protocol events are `((), "custom", {"type": "soothe.*", ...})` plain dicts
-  in the deepagents-canonical `(namespace, mode, data)` stream format.
-- **Daemon mode**: `SootheDaemon` in `daemon/server.py` runs `SootheRunner` in background,
-  serves events over multiple transports:
-  - **Unix Socket**: Default local IPC (`~/.soothe/soothe.sock`)
-  - **WebSocket**: Web/remote clients (opt-in, port 8765)
-  - **HTTP REST**: REST API for CRUD operations (opt-in, port 8766)
-- **Transport abstraction**: `daemon/transports/` provides `TransportServer` interface
-  with implementations for Unix socket, WebSocket, and HTTP REST.
-- **Authentication**: `daemon/auth.py` provides API key and JWT authentication
-  for WebSocket and HTTP REST transports (RFC-0015).
-- **Textual TUI**: `SootheApp` in `cli/tui/app.py` connects to daemon, provides always-on
-  two-column layout with ChatInput, ConversationPanel, PlanPanel, ActivityPanel.
-- **Shared TUI helpers**: `cli/tui/shared.py` provides shared activity/plan/subagent rendering utilities.
-- **Headless**: `cli/execution/headless.py` renders `soothe.*` events as progress, supports `--format jsonl`.
-- **Slash commands**: `cli/slash_commands.py` handles TUI commands and subagent routing.
-- **Session logging**: `daemon/thread_logger.py` provides JSONL logging and input history.
-- **CLI Commands**: Modular structure in `cli/commands/`:
-  - `auth_cmd.py` - API key management
-  - `autopilot_cmd.py` - Autonomous execution
-  - `config_cmd.py` - Configuration management
-  - `server_cmd.py` - Daemon lifecycle management
-  - `thread_cmd.py` - Thread operations
-  - `status_cmd.py` - Agent status
-  - `run_cmd.py` - Main execution logic
-
-## Specifications and Implementation Guides
-
-### RFCs
-
-| RFC | Title |
-|-----|-------|
-| [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design |
-| [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture Design |
-| [RFC-0003](docs/specs/RFC-0003.md) | CLI TUI Architecture Design |
-| [RFC-0004](docs/specs/RFC-0004.md) | Skillify Agent Architecture Design |
-| [RFC-0005](docs/specs/RFC-0005.md) | Weaver Agent Architecture Design |
-| [RFC-0006](docs/specs/RFC-0006.md) | Context and Memory Architecture Design |
-| [RFC-0007](docs/specs/RFC-0007.md) | Autonomous Iteration Loop |
-| [RFC-0008](docs/specs/RFC-0008.md) | Protocol Specification |
-| [RFC-0009](docs/specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
-| [RFC-0010](docs/specs/RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
-| [RFC-0011](docs/specs/RFC-0011.md) | Unified Planning Architecture |
-| [RFC-0012](docs/specs/RFC-0012.md) | Unified Complexity Classification |
-| [RFC-0013](docs/specs/RFC-0013.md) | Unified Daemon Communication Protocol |
-| [RFC-0014](docs/specs/RFC-0014.md) | Transport Abstraction Layer |
-| [RFC-0015](docs/specs/RFC-0015.md) | Authentication and Security Model |
-| [RFC-0016](docs/specs/RFC-0016.md) | HTTP REST API Specification |
-
-### Implementation Guides
-
-| Guide | Title |
-|-------|-------|
-| [IG-001](docs/impl/001-soothe-setup-migration.md) | Soothe Setup and Migration |
-| [IG-002](docs/impl/002-soothe-polish.md) | Soothe Polish |
-| [IG-003](docs/impl/003-streaming-examples.md) | Streaming Examples |
-| [IG-004](docs/impl/004-ecosystem-capability-analysis.md) | Ecosystem Capability Analysis |
-| [IG-005](docs/impl/005-core-protocols-implementation.md) | Core Protocols Implementation |
-| [IG-006](docs/impl/006-vectorstore-router-persistence.md) | VectorStore, Router, Persistence |
-| [IG-007](docs/impl/007-cli-tui-implementation.md) | CLI TUI Implementation |
-| [IG-008](docs/impl/008-config-docs-revision.md) | Config and Docs Revision |
-| [IG-009](docs/impl/009-ollama-provider.md) | Ollama Provider |
-| [IG-010](docs/impl/010-tui-layout-history-refresh.md) | Textual TUI and Daemon Implementation |
-| [IG-011](docs/impl/011-skillify-agent-implementation.md) | Skillify Agent Implementation |
-| [IG-012](docs/impl/012-weaver-agent-implementation.md) | Weaver Agent Implementation |
-| [IG-013](docs/impl/013-soothe-polish-pass.md) | Soothe Polish Pass |
-| [IG-014](docs/impl/014-code-structure-revision.md) | Code Structure Revision |
-| [IG-015](docs/impl/015-rfc-gap-closure-and-compat-hard-cut.md) | RFC Gap Closure and Compatibility Hard-Cut |
-| [IG-016](docs/impl/016-agent-optimization-pass.md) | Agent Optimization Pass |
-| [IG-017](docs/impl/017-progress-events-tools-polish.md) | Progress Events and Tools Polish |
-| [IG-018](docs/impl/018-autonomous-iteration-loop.md) | Autonomous Iteration Loop |
-| [IG-019](docs/impl/019-soothe-tools-enhancement.md) | Soothe Tools Enhancement |
-| [IG-020](docs/impl/020-detached-daemon-autonomous-capability.md) | Detached Daemon Autonomous Capability |
-| [IG-021](docs/impl/021-daemon-lifecycle-fixes.md) | Daemon Lifecycle Fixes |
-| [IG-021](docs/impl/021-dag-execution-unified-concurrency.md) | DAG-Based Execution and Unified Concurrency |
-| [IG-021](docs/impl/021-performance-optimization-implementation.md) | Performance Optimization Implementation |
-| [IG-022](docs/impl/022-rfc0009-gaps-tests-tui-dag.md) | RFC-0009 Gaps, Tests, TUI DAG |
-| [IG-022](docs/impl/022-unified-persistence-storage.md) | Unified Persistence Storage |
-| [IG-023](docs/impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence |
-| [IG-023](docs/impl/023-postgres-db-separation-and-persistence-deadlock-fix.md) | PostgreSQL DB Separation and Persistence Deadlock Fix |
-| [IG-024](docs/impl/024-existing-browser-connection.md) | Existing Browser Connection |
-| [IG-024](docs/impl/024-rfc0010-gap-fixes.md) | RFC-0010 Gap Fixes |
-| [IG-025](docs/impl/025-subagent-progress-visibility.md) | Subagent Progress Visibility |
-| [IG-026](docs/impl/026-rfc0009-logging-enhancements.md) | RFC-0009 Logging Enhancements |
-| [IG-027](docs/impl/027-final-report-cli-output.md) | Final Report CLI Output |
-| [IG-028](docs/impl/028-direct-to-simple-planner-renaming.md) | Direct to Simple Planner Renaming |
-| [IG-028](docs/impl/028-dynamic-goal-management.md) | Dynamic Goal Management |
-| [IG-029](docs/impl/029-planner-refactoring.md) | Planner Refactoring |
-| [IG-032](docs/impl/032-unified-complexity-classification.md) | Unified Complexity Classification |
-| [IG-033](docs/impl/033-secure-filesystem-path-handling.md) | Secure Filesystem Path Handling |
-| [IG-034](docs/impl/034-cli-modularization.md) | CLI Modularization |
-| [IG-035](docs/impl/035-scout-then-plan-implementation.md) | Scout-Then-Plan Implementation |
-| [IG-036](docs/impl/036-planning-workflow-refactoring.md) | Planning Workflow Refactoring |
-| [IG-037](docs/impl/037-unified-classifier-refactoring.md) | Unified Classifier Refactoring |
-| [IG-038](docs/impl/038-code-structure-refactoring.md) | Code Structure Refactoring |
-| [IG-039](docs/impl/039-capability-abstraction-tool-consolidation.md) | Capability Abstraction and Tool Consolidation |
-| [IG-040](docs/impl/040-tool-optimization-complete.md) | Tool Optimization Complete |
-| [IG-041](docs/impl/041-cli-polish.md) | CLI Polish |
-| [IG-042](docs/impl/042-tool-events-polish.md) | Tool Events Polish |
-| [IG-043](docs/impl/043-unified-planning-complete.md) | Unified Planning Complete |
-| [IG-044](docs/impl/044-unified-planning-final-report.md) | Unified Planning Final Report |
-| [IG-045](docs/impl/045-agentic-loop-implementation.md) | Agentic Loop Implementation |
-| [IG-046](docs/impl/046-unified-daemon-protocol.md) | Unified Daemon Protocol |
-
-## Daemon Multi-Transport Architecture (RFC-0013)
-
-### Transport Layer
-
-The Soothe daemon supports three transports simultaneously:
-
-1. **Unix Socket** (default, always enabled)
-   - Path: `~/.soothe/soothe.sock`
-   - Authentication: None (filesystem permissions)
-   - Use case: Local CLI/TUI clients
-
-2. **WebSocket** (opt-in)
-   - Port: 8765 (configurable)
-   - Authentication: Optional (API key or JWT)
-   - Use case: Web applications, remote clients
-   - Features: CORS validation, TLS support, rate limiting
-
-3. **HTTP REST API** (opt-in)
-   - Port: 8766 (configurable)
-   - Authentication: Optional (API key or JWT)
-   - Use case: CRUD operations, file management, health checks
-   - Features: OpenAPI documentation, Swagger UI, ReDoc
-
-### Authentication System
-
-Located in `daemon/auth.py`:
-- API key management (`AuthManager`)
-- JWT token validation
-- Rate limiting (token bucket algorithm)
-- Secure key storage in `~/.soothe/api_keys.json`
-
-### CLI Commands for Auth
-
-```bash
-# Create API key
-soothe auth create-key --description "Web UI" --permissions read,write
-
-# List keys
-soothe auth list-keys
-
-# Revoke key
-soothe auth revoke-key <key-id>
-```
-
-### Configuration
-
-```yaml
-daemon:
-  transports:
-    unix_socket:
-      enabled: true
-      path: "~/.soothe/soothe.sock"
-    websocket:
-      enabled: false
-      host: "127.0.0.1"
-      port: 8765
-      cors_origins: ["http://localhost:*"]
-    http_rest:
-      enabled: false
-      host: "127.0.0.1"
-      port: 8766
-  auth:
-    enabled: false
-    mode: "api_key"
-    require_for_localhost: false
-```
-
-## Interaction Rules
-
-- **MUST create implementation guide**: Before implementing ANY plan or refactoring task,
-  ALWAYS create a new implementation guide in `docs/impl/` following the naming convention
-  `NNN-brief-title.md` where NNN is the next available number. This ensures proper documentation
-  and tracking of all implementation work.
-
-- **Plan mode confirmation**: In plan mode, ALWAYS ask for the user's confirmation when
-  there are alternative solutions or design trade-offs before proceeding.
-
-## Third-party Reference Code
-
-The `thirdparty/` directory contains source code of upstream dependencies
-(deepagents, langchain, langgraph, browser-use, claude-agent-sdk, etc.)
-for **reference only**. DO NOT copy code from or import modules in `thirdparty/`.
-These are solely to help understand upstream APIs and behaviour.
-
-### Configuration Reference
+## 📖 Configuration Reference
 
 | File | Purpose |
 |------|---------|
@@ -343,19 +326,130 @@ These are solely to help understand upstream APIs and behaviour.
 | [config/config.yml](config/config.yml) | Full YAML config example |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |
 
-## ⚠️ CRITICAL: Verification Before Commit
+---
 
-**MANDATORY**: After completing ANY code change, you MUST run the verification script:
+## 🐛 Debugging Tips
 
+### Check Health
 ```bash
-./scripts/verify_finally.sh
+soothe checkhealth
+```
+Runs comprehensive health checks for daemon, protocols, persistence, and integrations.
+
+### Verbose Logging
+```bash
+SOOTHE_LOG_LEVEL=DEBUG soothe run "your query"
 ```
 
-This script runs:
-- Code formatting check
-- Linting (zero errors required)
-- Unit tests (900+ tests must pass)
+### TUI Debug Mode
+```bash
+soothe run --tui --debug "your query"
+```
 
-**NEVER commit code without running this verification first!**
+---
 
-See [VERIFY_REQUIREMENT.md](./VERIFY_REQUIREMENT.md) for details.
+## 📦 Third-party Reference Code
+
+The `thirdparty/` directory contains source code of upstream dependencies for **reference only**.
+- **DO NOT** copy code from `thirdparty/`
+- **DO NOT** import modules from `thirdparty/`
+- **ONLY USE** to understand upstream APIs and behavior
+
+---
+
+## 🔄 Recent Changes
+
+### IG-052: Event System Optimization (Just Completed)
+- Created `register_event()` public API
+- Migrated plugin/tool/subagent events to self-registration
+- Reduced `event_catalog.py` by 12% (105 lines)
+- Enabled third-party plugins to register custom events
+- All tests passing ✅
+
+### IG-051: Plugin API Implementation
+- Implemented decorator-based plugin system
+- Added plugin lifecycle management
+- Created plugin discovery and loading
+
+### IG-047: Module Self-Containment
+- Moved events into their respective modules
+- Converted tools to packages
+- Eliminated redundant plugin shims
+
+---
+
+## 🎯 Quick Start for Common Tasks
+
+### Adding a New Tool
+1. Create package in `tools/my_tool/`
+2. Add `__init__.py`, `events.py`, `implementation.py`
+3. Use `@tool` decorator in plugin class
+4. Register events with `register_event()`
+5. Run `./scripts/verify_finally.sh`
+
+### Adding a New Subagent
+1. Create package in `subagents/my_agent/`
+2. Add `__init__.py`, `events.py`, `implementation.py`
+3. Use `@subagent` decorator in plugin class
+4. Return `CompiledSubAgent` from factory
+5. Run `./scripts/verify_finally.sh`
+
+### Modifying Core Events
+1. Check if event should be in core or module
+2. If core: add to `core/event_catalog.py`
+3. If module: add to module's `events.py`
+4. Use `register_event()` for registration
+5. Run `./scripts/verify_finally.sh`
+
+---
+
+## 💡 Key Design Principles
+
+From RFC-0001:
+
+1. **Protocol-first, runtime-second** - Every module is a protocol; implementations are swappable
+2. **Extend deepagents, don't fork it** - Use deepagents as-is
+3. **Orchestration is the product** - Compose capabilities, don't implement domain logic
+4. **Unbounded context, bounded projection** - Context ledger is unlimited; projections are bounded
+5. **Durable by default** - Agent state is persistable and resumable
+6. **Plan-driven execution** - Complex goals decompose into plans with steps
+7. **Least-privilege delegation** - Every action passes through PolicyProtocol
+8. **Controlled concurrency** - Parallel execution within configurable limits
+9. **Uniform delegation envelope** - Local and remote subagents share the same interface
+10. **Graceful degradation** - Partial results over hard failure
+
+---
+
+## 📋 Interaction Rules
+
+### MUST Rules
+1. **Create implementation guide** before implementing any plan
+2. **Check langchain ecosystem** before implementing any functionality
+3. **Run verification script** before committing any code
+4. **Fix all linting errors** before committing
+
+### SHOULD Rules
+1. **Ask for clarification** when requirements are ambiguous
+2. **Read existing code** before proposing changes
+3. **Follow existing patterns** in the codebase
+4. **Add tests** for new functionality
+
+### Plan Mode Behavior
+- **ASK for confirmation** when alternatives exist
+- **EXPLORE thoroughly** before planning
+- **USE AskUserQuestion** for clarifications
+- **END with ExitPlanMode** for approval
+
+---
+
+## 🆘 Getting Help
+
+- **Architecture questions**: Check RFCs in `docs/specs/`
+- **Implementation patterns**: Check recent IGs in `docs/impl/`
+- **API questions**: Check `thirdparty/` for upstream code
+- **User guide**: See `docs/user_guide.md`
+- **Issues**: Report at GitHub issues
+
+---
+
+**Remember**: When in doubt, read the code first, check the ecosystem second, and ask for clarification third! 🚀
