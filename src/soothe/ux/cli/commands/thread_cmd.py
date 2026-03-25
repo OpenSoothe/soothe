@@ -173,6 +173,7 @@ def thread_continue(
     if new:
         thread_id = None
     elif not thread_id:
+
         async def get_last_thread_via_daemon() -> str | None:
             """Find the most recently updated active thread through the daemon."""
             from soothe.daemon import DaemonClient

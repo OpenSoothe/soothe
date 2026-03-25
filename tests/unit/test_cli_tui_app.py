@@ -168,6 +168,22 @@ async def test_connect_and_listen_restores_history_from_initial_resume_status(mo
     assert any("hi there" in entry for entry in rendered_entries)
 
 
+def test_on_mount_uses_requested_thread_id_even_if_internal_thread_id_changes(monkeypatch) -> None:
+    """Textual internal thread bookkeeping must not overwrite the requested resume ID."""
+    app = tui_app.SootheApp(config=SootheConfig(), thread_id="us4gvy5i4utk")
+    widgets = _mount_fake_widgets(app)
+    app._thread_id = 8676418112  # type: ignore[attr-defined]
+    app.run_worker = lambda coro, **_kwargs: coro.close()  # type: ignore[method-assign]
+    app._refresh_plan = lambda: None  # type: ignore[method-assign]
+
+    import asyncio
+
+    asyncio.run(app.on_mount())
+
+    assert app._state.thread_id == "us4gvy5i4utk"
+    assert "us4gvy5i" in widgets["#info-bar"].value
+
+
 @pytest.mark.asyncio
 async def test_connect_and_listen_does_not_create_new_thread_on_missing_resume(monkeypatch) -> None:
     """Explicit resume failure should surface an error instead of creating a new thread."""
