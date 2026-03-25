@@ -427,6 +427,7 @@ From RFC-0001:
 2. **Check langchain ecosystem** before implementing any functionality
 3. **Run verification script** before committing any code
 4. **Fix all linting errors** before committing
+5. **Call platonic-coding skill** when generating plans and implementing code to follow spec-driven development workflow
 
 ### SHOULD Rules
 1. **Ask for clarification** when requirements are ambiguous
@@ -435,6 +436,7 @@ From RFC-0001:
 4. **Add tests** for new functionality
 
 ### Plan Mode Behavior
+- **CALL platonic-coding skill** to follow spec-driven development workflow
 - **ASK for confirmation** when alternatives exist
 - **EXPLORE thoroughly** before planning
 - **USE AskUserQuestion** for clarifications
