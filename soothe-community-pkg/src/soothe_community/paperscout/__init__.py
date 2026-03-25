@@ -128,6 +128,7 @@ class PaperScoutPlugin:
             "and automated literature monitoring."
         ),
         model="openai:gpt-4o-mini",  # For TLDR generation
+        display_name="PaperScout",  # Custom display name
     )
     async def create_paperscout(
         self,

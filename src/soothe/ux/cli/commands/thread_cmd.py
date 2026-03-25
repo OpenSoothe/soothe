@@ -16,6 +16,10 @@ from soothe.config import SootheConfig
 _TOPIC_DISPLAY_LIMIT = 30
 # Characters to keep when truncating (leave room for "...")
 _TOPIC_TRUNCATE_KEEP = 27
+# Maximum display width for thread IDs (accommodates 12-char new IDs and truncated UUIDs)
+_THREAD_ID_DISPLAY_WIDTH = 20
+# Characters to keep when truncating thread IDs (leave room for "...")
+_THREAD_ID_TRUNCATE_KEEP = 17
 
 
 def thread_list(
@@ -101,11 +105,16 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
                 return
             # Sort by updated_at in descending order (most recent first)
             threads.sort(key=lambda x: x.updated_at, reverse=True)
-            # Print header
-            typer.echo(f"{'ID':<36}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
-            typer.echo("─" * 120)
+            # Print header - use 20-char ID width (fits 12-char new IDs and truncated old UUIDs)
+            typer.echo(f"{'ID':<20}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
+            typer.echo("─" * 104)
             for t in threads:
-                tid = t.thread_id
+                # Truncate long thread IDs (old UUIDs) to display width with ellipsis
+                tid = (
+                    t.thread_id
+                    if len(t.thread_id) <= _THREAD_ID_DISPLAY_WIDTH
+                    else t.thread_id[:_THREAD_ID_TRUNCATE_KEEP] + "..."
+                )
                 t_status = t.status
                 created = str(t.created_at)[:19]
                 last_msg = str(t.updated_at)[:19]
@@ -115,7 +124,7 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
                     if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT
                     else (t.last_human_message or "")
                 )
-                typer.echo(f"{tid:<36}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
+                typer.echo(f"{tid:<20}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
         finally:
             await runner.cleanup()
 

@@ -87,6 +87,7 @@ class YourPlugin:
             "This helps the orchestrator decide when to invoke your subagent."
         ),
         model="openai:gpt-4o-mini",
+        display_name="YourAgent",  # Custom display name (optional)
     )
     async def create_subagent(
         self,
@@ -144,6 +145,7 @@ class YourPlugin:
     @tool(
         name="your_tool",
         description="Brief description of what your tool does",
+        display_name="YourTool",  # Custom display name (optional)
     )
     def your_tool(self, arg: str) -> str:
         """Your tool implementation.

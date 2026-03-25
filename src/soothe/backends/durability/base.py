@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import uuid4
 
 from soothe.backends.persistence import PersistStore
+from soothe.core.runner._types import _generate_thread_id
 from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
@@ -44,7 +44,7 @@ class BasePersistStoreDurability:
         """
         now = datetime.now(tz=UTC)
         info = ThreadInfo(
-            thread_id=thread_id or str(uuid4()),
+            thread_id=thread_id or _generate_thread_id(),
             status="active",
             created_at=now,
             updated_at=now,
@@ -57,8 +57,8 @@ class BasePersistStoreDurability:
     async def resume_thread(self, thread_id: str) -> ThreadInfo:
         """Resume a suspended thread.
 
-        Supports longest prefix matching for thread IDs. If the provided thread_id
-        is a prefix that matches exactly one thread, that thread is resumed.
+        Supports prefix matching for thread IDs. If the provided thread_id
+        is a prefix that matches one or more threads, the first match is resumed.
 
         Args:
             thread_id: Full thread ID or prefix.
@@ -67,7 +67,7 @@ class BasePersistStoreDurability:
             ThreadInfo for the resumed thread.
 
         Raises:
-            KeyError: If thread not found or prefix matches multiple threads.
+            KeyError: If thread not found.
         """
         # First try exact match
         data = self._store.load(f"thread:{thread_id}")
@@ -82,12 +82,9 @@ class BasePersistStoreDurability:
         if len(matching_threads) == 0:
             msg = f"Thread '{thread_id}' not found"
             raise KeyError(msg)
-        if len(matching_threads) > 1:
-            matches = ", ".join(t.thread_id[:8] for t in matching_threads[:5])
-            msg = f"Thread prefix '{thread_id}' is ambiguous (matches {len(matching_threads)} threads: {matches}...)"
-            raise KeyError(msg)
 
-        # Exactly one match - use the full thread ID
+        # Return the first match (sorted by updated_at descending for consistency)
+        matching_threads.sort(key=lambda t: t.updated_at, reverse=True)
         matched_thread = matching_threads[0]
         data = self._store.load(f"thread:{matched_thread.thread_id}")
         if data is None:

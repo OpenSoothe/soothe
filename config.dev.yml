@@ -150,13 +150,13 @@ tools:
 
   # Optional tools (require API keys or external services):
   image:
-    enabled: false   # Image analysis (OpenAI GPT-4o)
+    enabled: true   # Image analysis (OpenAI GPT-4o)
   audio:
-    enabled: false   # Audio transcription (OpenAI Whisper)
+    enabled: true   # Audio transcription (OpenAI Whisper)
   video:
-    enabled: false   # Video analysis (Google Gemini)
+    enabled: true   # Video analysis (Google Gemini)
   github:
-    enabled: false   # GitHub API (GITHUB_TOKEN)
+    enabled: true   # GitHub API (GITHUB_TOKEN)
 
 # =============================================================================
 # MCP Servers

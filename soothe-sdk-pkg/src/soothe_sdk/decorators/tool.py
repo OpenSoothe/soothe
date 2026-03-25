@@ -13,6 +13,7 @@ def tool(
     name: str,
     description: str = "",
     group: str | None = None,
+    display_name: str | None = None,
 ) -> Callable:
     """Decorator that marks a method as a langchain tool.
 
@@ -24,6 +25,8 @@ def tool(
         name: Tool name (used to invoke the tool).
         description: Tool description for the LLM (shown in tool selection).
         group: Optional tool group name for organization.
+        display_name: Optional user-facing display name. If not provided,
+            auto-converts from snake_case to PascalCase.
 
     Returns:
         Decorated method with tool metadata.
@@ -35,15 +38,30 @@ def tool(
             @tool(name="greet", description="Greet someone by name")
             def greet(self, name: str) -> str:
                 return f"Hello, {name}!"
+
+            @tool(name="custom_op", display_name="MyCustomOp")
+            def custom_operation(self, data: str) -> str:
+                return f"Processed: {data}"
         ```
     """
 
     def decorator(func: Callable) -> Callable:
+        # Determine display name
+        final_display_name = display_name or name.replace("_", " ").title().replace(" ", "")
+
+        # Register display name if custom name provided
+        if display_name:
+            # Lazy import to avoid circular dependency
+            from soothe.tools.display_names import register_tool_display_name
+
+            register_tool_display_name(name, final_display_name)
+
         # Mark as tool
         func._is_tool = True
         func._tool_name = name
         func._tool_description = description
         func._tool_group = group
+        func._tool_display_name = final_display_name
 
         @wraps(func)
         async def async_wrapper(self, *args, **kwargs):
@@ -68,6 +86,7 @@ def tool(
         wrapper._tool_name = name
         wrapper._tool_description = description
         wrapper._tool_group = group
+        wrapper._tool_display_name = final_display_name
 
         return wrapper
 

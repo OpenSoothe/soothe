@@ -102,6 +102,7 @@ class DaemonHandlersMixin:
             await self._current_input_queue.put({"type": "command", "cmd": cmd})
         elif msg_type == "resume_thread":
             thread_id = msg.get("thread_id", "")
+            logger.info("Received resume_thread request for thread_id=%r from client=%s", thread_id, client_id)
             if thread_id:
                 from soothe.core.thread import ThreadContextManager
 
@@ -111,6 +112,7 @@ class DaemonHandlersMixin:
                     # (supports partial prefix matching in durability layer)
                     thread_info = await manager.resume_thread(str(thread_id))
                     resumed_thread_id = thread_info.thread_id
+                    logger.info("resume_thread: resolved %r -> %s", thread_id, resumed_thread_id)
                     self._runner.set_current_thread_id(resumed_thread_id)
 
                     # Initialize thread logger for the resumed thread
@@ -128,6 +130,7 @@ class DaemonHandlersMixin:
 
                     # Send status directly to requesting client (not broadcast - no subscribers yet)
                     session = await self._session_manager.get_session(client_id)
+                    logger.info("resume_thread: session for client %s = %s", client_id, session is not None)
                     if session:
                         await session.transport.send(
                             session.transport_client,
@@ -141,7 +144,8 @@ class DaemonHandlersMixin:
                             },
                         )
                     logger.info("Resumed thread %s", resumed_thread_id)
-                except KeyError:
+                except KeyError as e:
+                    logger.warning("resume_thread: KeyError for %r: %s", thread_id, e)
                     session = await self._session_manager.get_session(client_id)
                     if session:
                         await session.transport.send(
@@ -154,10 +158,10 @@ class DaemonHandlersMixin:
                         )
         elif msg_type == "new_thread":
             # Start a fresh thread - create draft thread ID without persisting yet
-            import uuid
+            from soothe.core.runner._types import _generate_thread_id
 
-            # Generate a draft thread ID
-            draft_thread_id = str(uuid.uuid4())
+            # Generate a draft thread ID (12-char alphanumeric)
+            draft_thread_id = _generate_thread_id()
 
             # Track as draft (not persisted until first message)
             self._draft_thread_id = draft_thread_id
@@ -776,6 +780,21 @@ class DaemonHandlersMixin:
             subagent: Optional subagent name to route the query to.
         """
         thread_id = await self._ensure_active_thread_id()
+
+        # Persist draft thread on first message (same as _run_query)
+        if self._draft_thread_id and self._draft_thread_id == thread_id:
+            from soothe.core.thread import ThreadContextManager
+
+            manager = ThreadContextManager(self._runner._durability, self._config)
+            # Persist the draft thread with its existing ID (not a new UUID)
+            thread_info = await manager.create_thread(thread_id=self._draft_thread_id)
+            # The thread_id should remain the same since we passed it explicitly
+            actual_thread_id = thread_info.thread_id
+
+            # No need to migrate subscriptions since thread_id stays the same
+            # Just clear the draft flag
+            logger.info("Persisted draft thread %s", actual_thread_id)
+            self._draft_thread_id = None
 
         # Initialize thread logger
         if not self._thread_logger or self._thread_logger._thread_id != thread_id:

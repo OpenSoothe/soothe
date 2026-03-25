@@ -12,6 +12,7 @@ def subagent(
     name: str,
     description: str,
     model: str | None = None,
+    display_name: str | None = None,
 ) -> Callable:
     """Decorator that marks a method as a subagent factory.
 
@@ -23,6 +24,8 @@ def subagent(
         name: Subagent name (used in task tool to invoke subagent).
         description: Subagent description for the task tool.
         model: Optional default model string (e.g., "openai:gpt-4o-mini").
+        display_name: Optional user-facing display name. If not provided,
+            auto-converts from snake_case to PascalCase.
 
     Returns:
         Decorated method with subagent metadata.
@@ -61,11 +64,22 @@ def subagent(
     """
 
     def decorator(func: Callable) -> Callable:
+        # Determine display name
+        final_display_name = display_name or name.replace("_", " ").title().replace(" ", "")
+
+        # Register display name if custom name provided
+        if display_name:
+            # Lazy import to avoid circular dependency
+            from soothe.tools.display_names import register_tool_display_name
+
+            register_tool_display_name(name, final_display_name)
+
         # Mark as subagent factory
         func._is_subagent = True
         func._subagent_name = name
         func._subagent_description = description
         func._subagent_model = model
+        func._subagent_display_name = final_display_name
 
         @wraps(func)
         async def wrapper(self, model, config, context, **kwargs):
@@ -77,6 +91,7 @@ def subagent(
         wrapper._subagent_name = name
         wrapper._subagent_description = description
         wrapper._subagent_model = model
+        wrapper._subagent_display_name = final_display_name
 
         return wrapper
 

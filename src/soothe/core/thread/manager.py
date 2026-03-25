@@ -122,8 +122,11 @@ class ThreadContextManager:
     async def _recover_missing_thread_metadata(self, thread_id: str) -> ThreadInfo:
         """Recover thread metadata when durability entry is missing but run data exists.
 
+        Supports prefix matching - if the provided thread_id is a prefix,
+        finds the matching thread from the runs directory.
+
         Args:
-            thread_id: Requested thread ID.
+            thread_id: Requested thread ID (full or prefix).
 
         Returns:
             Recovered ThreadInfo.
@@ -133,17 +136,39 @@ class ThreadContextManager:
         """
         from soothe.protocols.durability import ThreadInfo, ThreadMetadata
 
-        def _get_run_dir() -> Path:
-            return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+        def _find_matching_thread() -> str | None:
+            """Find a thread ID matching the provided ID or prefix."""
+            runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"
+            if not runs_dir.exists():
+                return None
 
-        run_dir = await asyncio.to_thread(_get_run_dir)
-        exists = await asyncio.to_thread(run_dir.exists)
-        if not exists:
+            # First try exact match
+            exact_dir = runs_dir / thread_id
+            if exact_dir.exists() and exact_dir.is_dir():
+                return thread_id
+
+            # Try prefix matching
+            matching = [
+                subdir.name for subdir in runs_dir.iterdir() if subdir.is_dir() and subdir.name.startswith(thread_id)
+            ]
+
+            if not matching:
+                return None
+
+            # Sort by modification time (most recent first) and return first match
+            matching.sort(
+                key=lambda x: (runs_dir / x).stat().st_mtime,
+                reverse=True,
+            )
+            return matching[0]
+
+        matched_thread_id = await asyncio.to_thread(_find_matching_thread)
+        if not matched_thread_id:
             msg = f"Thread '{thread_id}' not found"
             raise KeyError(msg)
 
         recovered = ThreadInfo(
-            thread_id=thread_id,
+            thread_id=matched_thread_id,
             status="active",
             created_at=datetime.now(tz=UTC),
             updated_at=datetime.now(tz=UTC),
@@ -154,11 +179,11 @@ class ThreadContextManager:
         store = getattr(self._durability, "_store", None)
         update_index = getattr(self._durability, "_update_thread_index", None)
         if store and callable(getattr(store, "save", None)):
-            store.save(f"thread:{thread_id}", recovered.model_dump(mode="json"))
+            store.save(f"thread:{matched_thread_id}", recovered.model_dump(mode="json"))
             if callable(update_index):
-                update_index(thread_id, action="add")
+                update_index(matched_thread_id, action="add")
 
-        logger.info("Recovered missing durability metadata for thread %s from run artifacts", thread_id)
+        logger.info("Recovered missing durability metadata for thread %s from run artifacts", matched_thread_id)
         return recovered
 
     async def get_thread(self, thread_id: str) -> EnhancedThreadInfo:

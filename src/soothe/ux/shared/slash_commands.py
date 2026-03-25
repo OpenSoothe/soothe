@@ -61,6 +61,10 @@ _THREAD_ARCHIVE_MIN_PARTS = 3
 _TOPIC_DISPLAY_LIMIT = 30
 # Characters to keep when truncating (leave room for "...")
 _TOPIC_TRUNCATE_KEEP = 27
+# Maximum display width for thread IDs (accommodates 12-char new IDs and truncated UUIDs)
+_THREAD_ID_DISPLAY_WIDTH = 20
+# Characters to keep when truncating thread IDs (leave room for "...")
+_THREAD_ID_TRUNCATE_KEEP = 17
 
 
 def parse_autonomous_command(cmd: str) -> tuple[int | None, str] | None:
@@ -376,13 +380,19 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
             threads.sort(key=lambda x: x.updated_at, reverse=True)
 
             table = Table(title="Threads", show_lines=False)
-            table.add_column("ID", style="dim")
+            table.add_column("ID", style="dim", no_wrap=True, min_width=12, max_width=20)
             table.add_column("Status")
             table.add_column("Created")
             table.add_column("Last Message")
             table.add_column("Topic")
 
             for t in threads:
+                # Truncate long thread IDs (old UUIDs) to display width with ellipsis
+                tid = (
+                    t.thread_id
+                    if len(t.thread_id) <= _THREAD_ID_DISPLAY_WIDTH
+                    else t.thread_id[:_THREAD_ID_TRUNCATE_KEEP] + "..."
+                )
                 created = str(t.created_at)[:19]
                 last_msg = str(t.updated_at)[:19]
                 # Truncate last human message to fit display limit
@@ -391,7 +401,7 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
                     if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT
                     else (t.last_human_message or "")
                 )
-                table.add_row(t.thread_id, t.status, created, last_msg, topic)
+                table.add_row(tid, t.status, created, last_msg, topic)
 
             console.print(table)
         except Exception as exc:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -10,8 +9,15 @@ from pydantic import BaseModel
 
 
 def _generate_thread_id() -> str:
-    """Generate an 8-char hex thread ID (matching deepagents convention)."""
-    return uuid.uuid4().hex[:8]
+    """Generate a 12-char alphanumeric thread ID.
+
+    Uses base36 encoding (0-9, a-z) for compact, human-readable IDs.
+    """
+    import secrets
+
+    # Generate 12 random characters from base36 alphabet
+    alphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+    return "".join(secrets.choice(alphabet) for _ in range(12))
 
 
 class IterationRecord(BaseModel):
