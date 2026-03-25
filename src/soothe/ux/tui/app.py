@@ -141,7 +141,6 @@ class SootheApp(App):
         super().__init__(**kwargs)
         self._config = config or SootheConfig()
         self._requested_thread_id = thread_id
-        logger.debug("__init__: thread_id=%r", self._requested_thread_id)
         self._client: DaemonClient | None = None
         self._state = TuiState()
         self._connected = False
@@ -183,7 +182,6 @@ class SootheApp(App):
 
         if self._requested_thread_id:
             self._state.thread_id = self._requested_thread_id
-            logger.debug("on_mount: state.thread_id=%r", self._state.thread_id)
             self._update_status_bar("Idle")
 
         self._refresh_plan()
@@ -303,7 +301,7 @@ class SootheApp(App):
             try:
                 await self._client.connect()
                 self._connected = True
-                logger.debug("Connected to daemon, thread_id=%r", self._state.thread_id)
+                logger.info("Connected to daemon")
                 self._update_status("Connected")
                 break
             except (OSError, ConnectionRefusedError):
@@ -328,7 +326,6 @@ class SootheApp(App):
         # Wait for status message with thread_id
         try:
             status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
-            logger.debug("Received initial event: %r", status_event)
 
             # Handle error response for thread resumption (thread not found)
             if status_event and status_event.get("type") == "error":
@@ -410,8 +407,6 @@ class SootheApp(App):
                 on_panel_write=self._on_panel_write,
                 on_panel_update_last=self._on_panel_update_last,
             )
-            if event.get("type") == "status":
-                logger.debug("after process: state.thread_id=%r", self._state.thread_id)
 
             # Update activity display after processing event
             self._flush_new_activity()
@@ -490,7 +485,6 @@ class SootheApp(App):
             logger.exception("Failed to clear TUI panels")
 
     def _update_status(self, state: str) -> None:
-        logger.debug("_update_status(%r): thread_id=%r", state, self._state.thread_id)
         # Start/stop typing indicator based on state
         if state == "running":
             self._is_running = True
@@ -541,7 +535,6 @@ class SootheApp(App):
     def _update_status_bar(self, status_text: str) -> None:
         """Update the info bar with current status."""
         with contextlib.suppress(Exception):
-            logger.debug("_update_status_bar(%r): thread_id=%r", status_text, self._state.thread_id)
             bar = self.query_one("#info-bar", InfoBar)
             # Ensure thread_id is a proper string and truncate for display (Bug #1)
             raw_tid = self._state.thread_id

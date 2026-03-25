@@ -191,13 +191,6 @@ class _TuiOutputFormatter:
             text: The assistant text to emit.
             is_main: Whether this is from the main agent.
         """
-        logger.debug(
-            "emit_assistant_text: text_len=%d, is_main=%s, on_panel_write=%s, on_panel_update_last=%s",
-            len(text),
-            is_main,
-            self.on_panel_write is not None,
-            self.on_panel_update_last is not None,
-        )
         if is_main:
             # Stream main agent text to panel in real time
             self._stream_assistant_text(text)
@@ -224,30 +217,19 @@ class _TuiOutputFormatter:
         if not self.state.streaming_active:
             # First chunk - append new entry
             self.state.streaming_active = True
-            logger.debug(
-                "_stream_assistant_text: first chunk, buffer_len=%d, on_panel_write=%s",
-                len(self.state.streaming_text_buffer),
-                self.on_panel_write is not None,
-            )
             if self.on_panel_write:
                 self.on_panel_write(display_text)
             else:
                 logger.warning("_stream_assistant_text: on_panel_write is None, cannot write first chunk")
-        else:
+        elif self.on_panel_update_last:
             # Subsequent chunks - update the last entry
-            logger.debug(
-                "_stream_assistant_text: subsequent chunk, buffer_len=%d, on_panel_update_last=%s",
-                len(self.state.streaming_text_buffer),
-                self.on_panel_update_last is not None,
-            )
-            if self.on_panel_update_last:
-                self.on_panel_update_last(display_text)
-            else:
-                # Fallback: if on_panel_update_last is not available, use on_panel_write
-                # This ensures text is still displayed even if callbacks aren't fully configured
-                logger.warning("_stream_assistant_text: on_panel_update_last is None, falling back to on_panel_write")
-                if self.on_panel_write:
-                    self.on_panel_write(display_text)
+            self.on_panel_update_last(display_text)
+        else:
+            # Fallback: if on_panel_update_last is not available, use on_panel_write
+            # This ensures text is still displayed even if callbacks aren't fully configured
+            logger.warning("_stream_assistant_text: on_panel_update_last is None, falling back to on_panel_write")
+            if self.on_panel_write:
+                self.on_panel_write(display_text)
 
     def emit_tool_call(
         self,
@@ -308,13 +290,6 @@ def process_daemon_event(
         on_panel_write: Callback to append a renderable to conversation panel.
         on_panel_update_last: Callback to update the last entry in conversation panel.
     """
-    logger.debug(
-        "process_daemon_event: type=%s mode=%s has_on_panel_write=%s has_on_panel_update_last=%s",
-        msg.get("type"),
-        msg.get("mode"),
-        on_panel_write is not None,
-        on_panel_update_last is not None,
-    )
     msg_type = msg.get("type", "")
 
     if msg_type == "status":
@@ -419,13 +394,6 @@ def handle_messages_event(
         on_panel_write: Callback to append to conversation panel.
         on_panel_update_last: Callback to update last entry in panel.
     """
-    logger.debug(
-        "handle_messages_event: namespace=%s verbosity=%s has_on_panel_write=%s has_on_panel_update_last=%s",
-        namespace,
-        verbosity,
-        on_panel_write is not None,
-        on_panel_update_last is not None,
-    )
     if isinstance(data, (list, tuple)) and len(data) == _MSG_PAIR_LEN:
         msg, metadata = data
     elif isinstance(data, dict):
@@ -513,17 +481,9 @@ def handle_messages_event(
     if isinstance(msg, dict):
         msg_id = msg.get("id", "")
         is_chunk = msg.get("type") == "AIMessageChunk"
-        msg_type = msg.get("type", "unknown")
-        logger.debug(
-            "handle_messages_event: dict msg type=%s msg_id=%s is_chunk=%s",
-            msg_type,
-            msg_id,
-            is_chunk,
-        )
 
         if not is_chunk:
             if msg_id and msg_id in state.seen_message_ids:
-                logger.debug("handle_messages_event: skipping seen msg_id=%s", msg_id)
                 return
             if msg_id:
                 state.seen_message_ids.add(msg_id)
@@ -536,20 +496,10 @@ def handle_messages_event(
         blocks = msg.get("content_blocks") or []
         if not blocks:
             content = msg.get("content", "")
-            logger.debug(
-                "handle_messages_event: no blocks, content type=%s content_len=%d is_main=%s",
-                type(content).__name__,
-                len(content) if isinstance(content, (str, list)) else 0,
-                is_main,
-            )
             if isinstance(content, list):
                 blocks = content
             elif is_main and isinstance(content, str) and content and should_show("assistant_text", verbosity):
                 cleaned = strip_internal_tags(content)
-                logger.debug(
-                    "handle_messages_event: string content, cleaned_len=%d, emitting",
-                    len(cleaned),
-                )
                 if cleaned:
                     formatter.emit_assistant_text(cleaned, is_main=is_main)
 

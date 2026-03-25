@@ -426,7 +426,6 @@ def _handle_subagent_custom(
         summary = etype.replace("_", " ")[:50]
 
     logger.info("Subagent event [%s]: %s", tag, summary)
-    logger.debug("Subagent event raw [%s]: %s  data=%s", tag, etype, data)
     _add_activity_from_event(state, Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (summary, "dim")), data)
 
 
