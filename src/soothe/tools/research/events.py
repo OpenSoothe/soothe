@@ -1,4 +1,8 @@
-"""Research tool events."""
+"""Research tool events.
+
+This module defines events for the research tool.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -105,6 +109,26 @@ class ResearchCompletedEvent(SootheEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all research events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(ResearchAnalyzeEvent, summary_template="Analyzing: {topic}")
+register_event(ResearchSubQuestionsEvent, summary_template="Identified {count} sub-questions")
+register_event(ResearchQueriesGeneratedEvent, summary_template="Generated {queries} queries")
+register_event(ResearchGatherEvent, summary_template="Gathering from {domain}: {query}")
+register_event(ResearchGatherDoneEvent, summary_template="Gathered {result_count} results")
+register_event(ResearchSummarizeEvent, summary_template="Summarizing {total_summaries} results")
+register_event(ResearchReflectEvent, summary_template="Reflecting (loop {loop})")
+register_event(
+    ResearchReflectionDoneEvent,
+    summary_template="Reflection: sufficient={is_sufficient}",
+)
+register_event(ResearchSynthesizeEvent, summary_template="Synthesizing findings")
+register_event(
+    ResearchCompletedEvent,
+    summary_template="Research completed ({answer_length} chars)",
+)
 
 __all__ = [
     "ResearchAnalyzeEvent",

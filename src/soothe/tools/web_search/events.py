@@ -1,4 +1,8 @@
-"""Web search tool events."""
+"""Web search tool events.
+
+This module defines events for the websearch tool.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -72,6 +76,19 @@ class WebsearchCrawlFailedEvent(ToolEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all websearch events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(WebsearchSearchStartedEvent, summary_template="Searching: {query}")
+register_event(WebsearchSearchCompletedEvent, summary_template="Found {result_count} results")
+register_event(WebsearchSearchFailedEvent, summary_template="Search failed: {error}")
+register_event(WebsearchCrawlStartedEvent, summary_template="Crawling: {url}")
+register_event(
+    WebsearchCrawlCompletedEvent,
+    summary_template="Crawl complete: {content_length} bytes",
+)
+register_event(WebsearchCrawlFailedEvent, summary_template="Crawl failed: {error}")
 
 __all__ = [
     "WebsearchCrawlCompletedEvent",

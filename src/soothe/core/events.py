@@ -150,6 +150,14 @@ SUBAGENT_WEAVER_EXECUTE_COMPLETED = "soothe.subagent.weaver.execute_completed"
 # ---------------------------------------------------------------------------
 ERROR = "soothe.error.general"
 
+# ---------------------------------------------------------------------------
+# Plugin events
+# ---------------------------------------------------------------------------
+PLUGIN_LOADED = "soothe.plugin.loaded"
+PLUGIN_FAILED = "soothe.plugin.failed"
+PLUGIN_UNLOADED = "soothe.plugin.unloaded"
+PLUGIN_HEALTH_CHECKED = "soothe.plugin.health_checked"
+
 
 def custom_event(data: dict[str, Any]) -> StreamChunk:
     """Build a soothe protocol custom event chunk.

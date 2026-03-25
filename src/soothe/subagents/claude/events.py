@@ -1,4 +1,8 @@
-"""Claude subagent events."""
+"""Claude subagent events.
+
+This module defines events for the Claude subagent.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -36,5 +40,20 @@ class ClaudeResultEvent(SubagentEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all Claude events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(
+    ClaudeTextEvent,
+    verbosity="protocol",
+    summary_template="Text: {text}",
+)
+register_event(ClaudeToolUseEvent, summary_template="Tool: {tool}")
+register_event(
+    ClaudeResultEvent,
+    verbosity="protocol",
+    summary_template="Done (${cost_usd}, {duration_ms}ms)",
+)
 
 __all__ = ["ClaudeResultEvent", "ClaudeTextEvent", "ClaudeToolUseEvent"]

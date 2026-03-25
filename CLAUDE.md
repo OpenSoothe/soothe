@@ -320,6 +320,11 @@ daemon:
 
 ## Interaction Rules
 
+- **MUST create implementation guide**: Before implementing ANY plan or refactoring task,
+  ALWAYS create a new implementation guide in `docs/impl/` following the naming convention
+  `NNN-brief-title.md` where NNN is the next available number. This ensures proper documentation
+  and tracking of all implementation work.
+
 - **Plan mode confirmation**: In plan mode, ALWAYS ask for the user's confirmation when
   there are alternative solutions or design trade-offs before proceeding.
 

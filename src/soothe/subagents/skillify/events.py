@@ -1,4 +1,8 @@
-"""Skillify subagent events."""
+"""Skillify subagent events.
+
+This module defines events for the skillify subagent.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -84,6 +88,18 @@ class SkillifyIndexFailedEvent(SubagentEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all skillify events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(SkillifyIndexingPendingEvent)
+register_event(SkillifyRetrieveStartedEvent)
+register_event(SkillifyRetrieveCompletedEvent)
+register_event(SkillifyRetrieveNotReadyEvent)
+register_event(SkillifyIndexStartedEvent)
+register_event(SkillifyIndexUpdatedEvent)
+register_event(SkillifyIndexUnchangedEvent)
+register_event(SkillifyIndexFailedEvent)
 
 __all__ = [
     "SkillifyIndexFailedEvent",

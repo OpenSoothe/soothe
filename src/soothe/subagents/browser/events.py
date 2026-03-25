@@ -1,4 +1,8 @@
-"""Browser subagent events."""
+"""Browser subagent events.
+
+This module defines events for the browser subagent.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -31,5 +35,19 @@ class BrowserCdpEvent(SubagentEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all browser events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(
+    BrowserStepEvent,
+    verbosity="subagent_progress",
+    summary_template="Step {step}",
+)
+register_event(
+    BrowserCdpEvent,
+    verbosity="subagent_progress",
+    summary_template="Browser CDP: {status}",
+)
 
 __all__ = ["BrowserCdpEvent", "BrowserStepEvent"]

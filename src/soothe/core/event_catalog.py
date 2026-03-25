@@ -57,54 +57,11 @@ from soothe.core.events import (
     POLICY_CHECKED,
     POLICY_DENIED,
     RECOVERY_RESUMED,
-    SUBAGENT_BROWSER_CDP,
-    SUBAGENT_BROWSER_STEP,
-    SUBAGENT_CLAUDE_RESULT,
-    SUBAGENT_CLAUDE_TEXT,
-    SUBAGENT_CLAUDE_TOOL_USE,
-    SUBAGENT_SKILLIFY_INDEX_FAILED,
-    SUBAGENT_SKILLIFY_INDEX_STARTED,
-    SUBAGENT_SKILLIFY_INDEX_UNCHANGED,
-    SUBAGENT_SKILLIFY_INDEX_UPDATED,
-    SUBAGENT_SKILLIFY_INDEXING_PENDING,
-    SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED,
-    SUBAGENT_SKILLIFY_RETRIEVE_NOT_READY,
-    SUBAGENT_SKILLIFY_RETRIEVE_STARTED,
-    SUBAGENT_WEAVER_ANALYSIS_COMPLETED,
-    SUBAGENT_WEAVER_ANALYSIS_STARTED,
-    SUBAGENT_WEAVER_EXECUTE_COMPLETED,
-    SUBAGENT_WEAVER_EXECUTE_STARTED,
-    SUBAGENT_WEAVER_GENERATE_COMPLETED,
-    SUBAGENT_WEAVER_GENERATE_STARTED,
-    SUBAGENT_WEAVER_HARMONIZE_COMPLETED,
-    SUBAGENT_WEAVER_HARMONIZE_STARTED,
-    SUBAGENT_WEAVER_REGISTRY_UPDATED,
-    SUBAGENT_WEAVER_REUSE_HIT,
-    SUBAGENT_WEAVER_REUSE_MISS,
-    SUBAGENT_WEAVER_SKILLIFY_PENDING,
-    SUBAGENT_WEAVER_VALIDATE_COMPLETED,
-    SUBAGENT_WEAVER_VALIDATE_STARTED,
     THREAD_CREATED,
     THREAD_ENDED,
     THREAD_RESUMED,
     THREAD_SAVED,
     THREAD_STARTED,
-    TOOL_RESEARCH_ANALYZE,
-    TOOL_RESEARCH_COMPLETED,
-    TOOL_RESEARCH_GATHER,
-    TOOL_RESEARCH_GATHER_DONE,
-    TOOL_RESEARCH_QUERIES_GENERATED,
-    TOOL_RESEARCH_REFLECT,
-    TOOL_RESEARCH_REFLECTION_DONE,
-    TOOL_RESEARCH_SUB_QUESTIONS,
-    TOOL_RESEARCH_SUMMARIZE,
-    TOOL_RESEARCH_SYNTHESIZE,
-    TOOL_WEBSEARCH_CRAWL_COMPLETED,
-    TOOL_WEBSEARCH_CRAWL_FAILED,
-    TOOL_WEBSEARCH_CRAWL_STARTED,
-    TOOL_WEBSEARCH_SEARCH_COMPLETED,
-    TOOL_WEBSEARCH_SEARCH_FAILED,
-    TOOL_WEBSEARCH_SEARCH_STARTED,
 )
 
 if TYPE_CHECKING:
@@ -456,56 +413,6 @@ def make_tool_failed(tool_name: str, *, tool_group: str | None = None, **extra: 
 # Tool and subagent event helpers
 # ---------------------------------------------------------------------------
 
-# Import events from modules for registry (E402: must come after class definitions)
-from soothe.subagents.browser.events import BrowserCdpEvent, BrowserStepEvent  # noqa: E402
-from soothe.subagents.claude.events import ClaudeResultEvent, ClaudeTextEvent, ClaudeToolUseEvent  # noqa: E402
-from soothe.subagents.skillify.events import (  # noqa: E402
-    SkillifyIndexFailedEvent,
-    SkillifyIndexingPendingEvent,
-    SkillifyIndexStartedEvent,
-    SkillifyIndexUnchangedEvent,
-    SkillifyIndexUpdatedEvent,
-    SkillifyRetrieveCompletedEvent,
-    SkillifyRetrieveNotReadyEvent,
-    SkillifyRetrieveStartedEvent,
-)
-from soothe.subagents.weaver.events import (  # noqa: E402
-    WeaverAnalysisCompletedEvent,
-    WeaverAnalysisStartedEvent,
-    WeaverExecuteCompletedEvent,
-    WeaverExecuteStartedEvent,
-    WeaverGenerateCompletedEvent,
-    WeaverGenerateStartedEvent,
-    WeaverHarmonizeCompletedEvent,
-    WeaverHarmonizeStartedEvent,
-    WeaverRegistryUpdatedEvent,
-    WeaverReuseHitEvent,
-    WeaverReuseMissEvent,
-    WeaverSkillifyPendingEvent,
-    WeaverValidateCompletedEvent,
-    WeaverValidateStartedEvent,
-)
-from soothe.tools.research.events import (  # noqa: E402
-    ResearchAnalyzeEvent,
-    ResearchCompletedEvent,
-    ResearchGatherDoneEvent,
-    ResearchGatherEvent,
-    ResearchQueriesGeneratedEvent,
-    ResearchReflectEvent,
-    ResearchReflectionDoneEvent,
-    ResearchSubQuestionsEvent,
-    ResearchSummarizeEvent,
-    ResearchSynthesizeEvent,
-)
-from soothe.tools.web_search.events import (  # noqa: E402
-    WebsearchCrawlCompletedEvent,
-    WebsearchCrawlFailedEvent,
-    WebsearchCrawlStartedEvent,
-    WebsearchSearchCompletedEvent,
-    WebsearchSearchFailedEvent,
-    WebsearchSearchStartedEvent,
-)
-
 # ---------------------------------------------------------------------------
 # Subagent tool events (generic for any subagent)
 # ---------------------------------------------------------------------------
@@ -647,6 +554,14 @@ def _reg(
     verbosity: ProgressCategory | None = None,
     summary_template: str = "",
 ) -> None:
+    """Internal helper for registering core events.
+
+    Args:
+        type_string: Event type string (e.g., "soothe.lifecycle.thread.created").
+        model: Event model class.
+        verbosity: Optional verbosity category override.
+        summary_template: Optional template for event summaries.
+    """
     parts = type_string.split(".")
     domain = parts[1] if len(parts) >= 2 else "unknown"
     component = parts[2] if len(parts) >= 3 else ""
@@ -663,6 +578,61 @@ def _reg(
             summary_template=summary_template,
         )
     )
+
+
+def register_event(
+    event_class: type[SootheEvent],
+    verbosity: ProgressCategory | None = None,
+    summary_template: str = "",
+) -> None:
+    """Register an event class with the global event registry.
+
+    This is the public API for registering events from modules and plugins.
+    It auto-extracts the type string from the event class's Pydantic model
+    and sets appropriate defaults based on the event's domain.
+
+    **Usage**:
+
+    ```python
+    from soothe.core.event_catalog import register_event
+    from soothe.core.base_events import SootheEvent
+
+
+    class MyCustomEvent(SootheEvent):
+        type: str = "soothe.plugin.custom.event"
+        data: str
+
+
+    # Register the event
+    register_event(
+        MyCustomEvent,
+        verbosity="tool_activity",
+        summary_template="Custom event: {data}",
+    )
+    ```
+
+    Args:
+        event_class: Event class to register (must have 'type' field with default value).
+        verbosity: Optional verbosity category. If not provided, inferred from domain.
+        summary_template: Optional template for event summaries (supports field interpolation).
+
+    Raises:
+        KeyError: If event class doesn't have 'type' field with default value.
+    """
+    # Extract type string from Pydantic model field
+    if "type" not in event_class.model_fields:
+        msg = f"Event class {event_class.__name__} must have a 'type' field with a default value"
+        raise KeyError(msg)
+
+    type_field = event_class.model_fields["type"]
+    type_string = type_field.default
+
+    if not isinstance(type_string, str):
+        msg = f"Event class {event_class.__name__} 'type' field must have a string default value"
+        raise KeyError(msg)
+
+    # Use internal _reg helper for actual registration
+    _reg(type_string, event_class, verbosity=verbosity, summary_template=summary_template)
 
 
 # -- Lifecycle ---------------------------------------------------------------
@@ -778,92 +748,6 @@ _reg(
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
 
-# -- Tool: websearch group (search + crawl) --------------------------
-_reg(TOOL_WEBSEARCH_SEARCH_STARTED, WebsearchSearchStartedEvent, summary_template="Searching: {query}")
-_reg(TOOL_WEBSEARCH_SEARCH_COMPLETED, WebsearchSearchCompletedEvent, summary_template="Found {result_count} results")
-_reg(TOOL_WEBSEARCH_SEARCH_FAILED, WebsearchSearchFailedEvent, summary_template="Search failed: {error}")
-_reg(TOOL_WEBSEARCH_CRAWL_STARTED, WebsearchCrawlStartedEvent, summary_template="Crawling: {url}")
-_reg(
-    TOOL_WEBSEARCH_CRAWL_COMPLETED,
-    WebsearchCrawlCompletedEvent,
-    summary_template="Crawl complete: {content_length} bytes",
-)
-_reg(TOOL_WEBSEARCH_CRAWL_FAILED, WebsearchCrawlFailedEvent, summary_template="Crawl failed: {error}")
-
-# -- Subagent: browser -------------------------------------------------------
-_reg(SUBAGENT_BROWSER_STEP, BrowserStepEvent, verbosity="subagent_progress", summary_template="Step {step}")
-_reg(SUBAGENT_BROWSER_CDP, BrowserCdpEvent, verbosity="subagent_progress", summary_template="Browser CDP: {status}")
-
-# -- Subagent: claude --------------------------------------------------------
-_reg(SUBAGENT_CLAUDE_TEXT, ClaudeTextEvent, verbosity="protocol", summary_template="Text: {text}")
-_reg(SUBAGENT_CLAUDE_TOOL_USE, ClaudeToolUseEvent, summary_template="Tool: {tool}")
-_reg(
-    SUBAGENT_CLAUDE_RESULT,
-    ClaudeResultEvent,
-    verbosity="protocol",
-    summary_template="Done (${cost_usd}, {duration_ms}ms)",
-)
-
-# -- Subagent: skillify ------------------------------------------------------
-_reg(SUBAGENT_SKILLIFY_INDEXING_PENDING, SkillifyIndexingPendingEvent)
-_reg(SUBAGENT_SKILLIFY_RETRIEVE_STARTED, SkillifyRetrieveStartedEvent)
-_reg(SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED, SkillifyRetrieveCompletedEvent)
-_reg(SUBAGENT_SKILLIFY_RETRIEVE_NOT_READY, SkillifyRetrieveNotReadyEvent)
-_reg(SUBAGENT_SKILLIFY_INDEX_STARTED, SkillifyIndexStartedEvent)
-_reg(SUBAGENT_SKILLIFY_INDEX_UPDATED, SkillifyIndexUpdatedEvent)
-_reg(SUBAGENT_SKILLIFY_INDEX_UNCHANGED, SkillifyIndexUnchangedEvent)
-_reg(SUBAGENT_SKILLIFY_INDEX_FAILED, SkillifyIndexFailedEvent)
-
-# -- Subagent: weaver --------------------------------------------------------
-_reg(SUBAGENT_WEAVER_ANALYSIS_STARTED, WeaverAnalysisStartedEvent)
-_reg(SUBAGENT_WEAVER_ANALYSIS_COMPLETED, WeaverAnalysisCompletedEvent)
-_reg(SUBAGENT_WEAVER_REUSE_HIT, WeaverReuseHitEvent)
-_reg(SUBAGENT_WEAVER_REUSE_MISS, WeaverReuseMissEvent)
-_reg(SUBAGENT_WEAVER_SKILLIFY_PENDING, WeaverSkillifyPendingEvent)
-_reg(SUBAGENT_WEAVER_HARMONIZE_STARTED, WeaverHarmonizeStartedEvent)
-_reg(SUBAGENT_WEAVER_HARMONIZE_COMPLETED, WeaverHarmonizeCompletedEvent)
-_reg(SUBAGENT_WEAVER_GENERATE_STARTED, WeaverGenerateStartedEvent)
-_reg(SUBAGENT_WEAVER_GENERATE_COMPLETED, WeaverGenerateCompletedEvent)
-_reg(SUBAGENT_WEAVER_VALIDATE_STARTED, WeaverValidateStartedEvent)
-_reg(SUBAGENT_WEAVER_VALIDATE_COMPLETED, WeaverValidateCompletedEvent)
-_reg(SUBAGENT_WEAVER_REGISTRY_UPDATED, WeaverRegistryUpdatedEvent)
-_reg(SUBAGENT_WEAVER_EXECUTE_STARTED, WeaverExecuteStartedEvent)
-_reg(SUBAGENT_WEAVER_EXECUTE_COMPLETED, WeaverExecuteCompletedEvent)
-
-# -- Tool: research group (InquiryEngine phases) -----------------------------
-_reg(TOOL_RESEARCH_ANALYZE, ResearchAnalyzeEvent, verbosity="protocol", summary_template="Analyzing: {topic}")
-_reg(TOOL_RESEARCH_SUB_QUESTIONS, ResearchSubQuestionsEvent, summary_template="Identified {count} sub-questions")
-_reg(
-    TOOL_RESEARCH_QUERIES_GENERATED,
-    ResearchQueriesGeneratedEvent,
-    summary_template="Generated {queries} queries",
-)
-_reg(TOOL_RESEARCH_GATHER, ResearchGatherEvent, summary_template="Gathering from {domain}: {query}")
-_reg(
-    TOOL_RESEARCH_GATHER_DONE,
-    ResearchGatherDoneEvent,
-    summary_template="Gathered {result_count} results",
-)
-_reg(TOOL_RESEARCH_SUMMARIZE, ResearchSummarizeEvent, summary_template="Summarizing {total_summaries} results")
-_reg(TOOL_RESEARCH_REFLECT, ResearchReflectEvent, summary_template="Reflecting (loop {loop})")
-_reg(
-    TOOL_RESEARCH_REFLECTION_DONE,
-    ResearchReflectionDoneEvent,
-    summary_template="Reflection: sufficient={is_sufficient}",
-)
-_reg(
-    TOOL_RESEARCH_SYNTHESIZE,
-    ResearchSynthesizeEvent,
-    verbosity="protocol",
-    summary_template="Synthesizing findings",
-)
-_reg(
-    TOOL_RESEARCH_COMPLETED,
-    ResearchCompletedEvent,
-    verbosity="protocol",
-    summary_template="Research completed ({answer_length} chars)",
-)
-
 # -- Output ------------------------------------------------------------------
 _reg(CHITCHAT_STARTED, ChitchatStartedEvent, summary_template="Chitchat: {query}")
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity="assistant_text")
@@ -871,3 +755,17 @@ _reg(FINAL_REPORT, FinalReportEvent, verbosity="assistant_text")
 
 # -- Error -------------------------------------------------------------------
 _reg(ERROR, GeneralErrorEvent, verbosity="error", summary_template="{error}")
+
+
+# ---------------------------------------------------------------------------
+# Import event modules to trigger self-registration
+# These modules call register_event() at import time
+# Must be at the end after all core events are registered
+# ---------------------------------------------------------------------------
+import soothe.plugin.events  # noqa: E402
+import soothe.subagents.browser.events  # noqa: E402
+import soothe.subagents.claude.events  # noqa: E402
+import soothe.subagents.skillify.events  # noqa: E402
+import soothe.subagents.weaver.events  # noqa: E402
+import soothe.tools.research.events  # noqa: E402
+import soothe.tools.web_search.events  # noqa: F401, E402

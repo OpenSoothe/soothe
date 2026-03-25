@@ -1,4 +1,8 @@
-"""Weaver subagent events."""
+"""Weaver subagent events.
+
+This module defines events for the weaver subagent.
+Events are self-registered at module load time.
+"""
 
 from __future__ import annotations
 
@@ -142,6 +146,24 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
 
     model_config = ConfigDict(extra="allow")
 
+
+# Register all weaver events with the global registry
+from soothe.core.event_catalog import register_event  # noqa: E402
+
+register_event(WeaverAnalysisStartedEvent)
+register_event(WeaverAnalysisCompletedEvent)
+register_event(WeaverReuseHitEvent)
+register_event(WeaverReuseMissEvent)
+register_event(WeaverSkillifyPendingEvent)
+register_event(WeaverHarmonizeStartedEvent)
+register_event(WeaverHarmonizeCompletedEvent)
+register_event(WeaverGenerateStartedEvent)
+register_event(WeaverGenerateCompletedEvent)
+register_event(WeaverValidateStartedEvent)
+register_event(WeaverValidateCompletedEvent)
+register_event(WeaverRegistryUpdatedEvent)
+register_event(WeaverExecuteStartedEvent)
+register_event(WeaverExecuteCompletedEvent)
 
 __all__ = [
     "WeaverAnalysisCompletedEvent",
