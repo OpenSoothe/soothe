@@ -7,7 +7,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.event_catalog import (
+from soothe.subagents.skillify.events import (
     SkillifyIndexFailedEvent,
     SkillifyIndexStartedEvent,
     SkillifyIndexUnchangedEvent,

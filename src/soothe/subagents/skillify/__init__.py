@@ -18,7 +18,7 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from soothe.core.event_catalog import (
+from soothe.subagents.skillify.events import (
     SkillifyIndexingPendingEvent,
     SkillifyRetrieveCompletedEvent,
     SkillifyRetrieveNotReadyEvent,

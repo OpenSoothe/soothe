@@ -25,7 +25,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
-from soothe.core.event_catalog import (
+from soothe.tools.research.events import (
     ResearchAnalyzeEvent,
     ResearchCompletedEvent,
     ResearchGatherDoneEvent,

@@ -1,19 +1,14 @@
 """Unified event type definitions for soothe.* events.
 
-This module provides event type constants derived from the event catalog,
-ensuring a single source of truth. All event types follow RFC-0015's 4-segment
-naming convention: ``soothe.<domain>.<component>.<action>``.
-
-**Single Source of Truth:**
-All event type strings are defined once in ``soothe.core.event_catalog`` and
-re-exported here as constants for convenient use throughout the codebase.
+This module provides event type constants used throughout the codebase.
+All event types follow RFC-0015's 4-segment naming convention:
+``soothe.<domain>.<component>.<action>``.
 
 **Usage:**
 
 For type-safe event emission (recommended):
     from soothe.core.event_catalog import ThreadCreatedEvent, PlanStepStartedEvent
     yield _custom(ThreadCreatedEvent(thread_id=tid).to_dict())
-    yield _custom(PlanStepStartedEvent(step_id=sid, ...).to_dict())
 
 For event type string constants:
     from soothe.core.events import THREAD_CREATED, PLAN_STEP_STARTED
@@ -34,6 +29,9 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 
 STREAM_CHUNK_LEN = 3
 MSG_PAIR_LEN = 2
+
+# Re-export event type constants for backward compatibility
+# These are defined inline here for constants, but event classes are in event_catalog
 
 # ---------------------------------------------------------------------------
 # Lifecycle events

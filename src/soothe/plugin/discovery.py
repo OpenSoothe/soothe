@@ -158,7 +158,7 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
 def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
     """Run all discovery mechanisms and return plugin module paths.
 
-    This function runs all three discovery mechanisms and returns a dict
+    This function runs all discovery mechanisms and returns a dict
     mapping plugin names to (module_path, config_dict) tuples. Duplicate
     names are resolved later by the registry based on priority.
 
@@ -175,6 +175,30 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
         is responsible for resolving conflicts when plugins are registered.
     """
     discovered = {}
+
+    # Built-in subagent plugins (new module structure)
+    for subagent_name in ["browser", "claude", "skillify", "weaver"]:
+        module_path = f"soothe.subagents.{subagent_name}"
+        discovered[subagent_name] = (module_path, {})
+        logger.debug("Discovered built-in subagent plugin: %s", subagent_name)
+
+    # Built-in tool plugins (new module structure)
+    for tool_name in [
+        "execution",
+        "file_ops",
+        "code_edit",
+        "data",
+        "datetime",
+        "goals",
+        "web_search",
+        "research",
+        "image",
+        "audio",
+        "video",
+    ]:
+        module_path = f"soothe.tools.{tool_name}"
+        discovered[tool_name] = (module_path, {})
+        logger.debug("Discovered built-in tool plugin: %s", tool_name)
 
     # Entry points (no config available)
     for module_path in discover_entry_points():

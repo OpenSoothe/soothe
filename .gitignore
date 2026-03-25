@@ -213,3 +213,4 @@ thirdparty/
 large_tool_results/
 plot_*
 .claude/
+.DS_Store

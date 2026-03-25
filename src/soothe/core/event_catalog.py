@@ -1,20 +1,32 @@
-"""Typed progress event models, registry, and catalog for soothe.* events.
+"""Core events and event registry for soothe.* events.
 
 RFC-0015: All progress events use 4-segment type strings
 ``soothe.<domain>.<component>.<action>`` with six domains:
 lifecycle, protocol, tool, subagent, output, error.
 
-This module is the single source of truth for event type definitions.
+This module provides:
+- Core protocol and lifecycle event models
+- Event registry for O(1) lookup and dispatch
+- Helper functions for tool events
+
+Base event classes are defined in soothe.core.base_events.
+Module-specific events (subagents, tools) are defined in their respective modules
+and imported here for registry.
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict
-
+from soothe.core.base_events import (
+    ErrorEvent,
+    LifecycleEvent,
+    OutputEvent,
+    ProtocolEvent,
+    SootheEvent,
+    ToolEvent,
+)
 from soothe.core.events import (
     CHECKPOINT_SAVED,
     CHITCHAT_RESPONSE,
@@ -99,57 +111,6 @@ if TYPE_CHECKING:
     from soothe.ux.shared.progress_verbosity import ProgressCategory
 
 # ---------------------------------------------------------------------------
-# Base models
-# ---------------------------------------------------------------------------
-
-
-class SootheEvent(BaseModel):
-    """Base class for all Soothe progress events."""
-
-    type: str
-
-    model_config = ConfigDict(extra="allow")
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to a plain dict for wire-format emission."""
-        return self.model_dump(exclude_none=True)
-
-    def emit(self, logger: logging.Logger) -> None:
-        """Emit this event via the LangGraph stream writer."""
-        from soothe.utils.progress import emit_progress
-
-        emit_progress(self.to_dict(), logger)
-
-
-class LifecycleEvent(SootheEvent):
-    """Thread and session lifecycle events."""
-
-
-class ProtocolEvent(SootheEvent):
-    """Core protocol activity events."""
-
-
-class ToolEvent(SootheEvent):
-    """Main agent tool execution events."""
-
-    tool: str
-
-
-class SubagentEvent(SootheEvent):
-    """Subagent activity events."""
-
-
-class OutputEvent(SootheEvent):
-    """Content destined for user display."""
-
-
-class ErrorEvent(SootheEvent):
-    """Error events."""
-
-    error: str
-
-
-# ---------------------------------------------------------------------------
 # Lifecycle events
 # ---------------------------------------------------------------------------
 
@@ -162,7 +123,7 @@ class ThreadCreatedEvent(LifecycleEvent):
 class ThreadStartedEvent(LifecycleEvent):
     type: Literal["soothe.lifecycle.thread.started"] = "soothe.lifecycle.thread.started"
     thread_id: str
-    protocols: dict[str, Any] = {}
+    protocols: dict[str, Any] = {}  # noqa: RUF012
 
 
 class ThreadResumedEvent(LifecycleEvent):
@@ -206,8 +167,8 @@ class CheckpointSavedEvent(LifecycleEvent):
 class RecoveryResumedEvent(LifecycleEvent):
     type: Literal["soothe.lifecycle.recovery.resumed"] = "soothe.lifecycle.recovery.resumed"
     thread_id: str
-    completed_steps: list[str] = []
-    completed_goals: list[str] = []
+    completed_steps: list[str] = []  # noqa: RUF012
+    completed_goals: list[str] = []  # noqa: RUF012
     mode: str = ""
 
 
@@ -313,14 +274,14 @@ class MemoryStoredEvent(ProtocolEvent):
 class PlanCreatedEvent(ProtocolEvent):
     type: Literal["soothe.protocol.plan.created"] = "soothe.protocol.plan.created"
     goal: str = ""
-    steps: list[dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []  # noqa: RUF012
 
 
 class PlanStepStartedEvent(ProtocolEvent):
     type: Literal["soothe.protocol.plan.step_started"] = "soothe.protocol.plan.step_started"
     step_id: str = ""
     description: str = ""
-    depends_on: list[str] = []
+    depends_on: list[str] = []  # noqa: RUF012
     batch_index: int | None = None
     index: int | None = None
 
@@ -345,7 +306,7 @@ class PlanStepFailedEvent(ProtocolEvent):
 class PlanBatchStartedEvent(ProtocolEvent):
     type: Literal["soothe.protocol.plan.batch_started"] = "soothe.protocol.plan.batch_started"
     batch_index: int = 0
-    step_ids: list[str] = []
+    step_ids: list[str] = []  # noqa: RUF012
     parallel_count: int = 1
 
 
@@ -357,7 +318,7 @@ class PlanReflectedEvent(ProtocolEvent):
 
 class PlanDagSnapshotEvent(ProtocolEvent):
     type: Literal["soothe.protocol.plan.dag_snapshot"] = "soothe.protocol.plan.dag_snapshot"
-    steps: list[dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []  # noqa: RUF012
 
 
 class PlanOnlyEvent(ProtocolEvent):
@@ -402,7 +363,7 @@ class GoalFailedEvent(ProtocolEvent):
 
 class GoalBatchStartedEvent(ProtocolEvent):
     type: Literal["soothe.protocol.goal.batch_started"] = "soothe.protocol.goal.batch_started"
-    goal_ids: list[str] = []
+    goal_ids: list[str] = []  # noqa: RUF012
     parallel_count: int = 1
 
 
@@ -419,7 +380,7 @@ class GoalDirectivesAppliedEvent(ProtocolEvent):
     type: Literal["soothe.protocol.goal.directives_applied"] = "soothe.protocol.goal.directives_applied"
     goal_id: str = ""
     directives_count: int = 0
-    changes: list[Any] = []
+    changes: list[Any] = []  # noqa: RUF012
 
 
 class GoalDeferredEvent(ProtocolEvent):
@@ -492,237 +453,58 @@ def make_tool_failed(tool_name: str, *, tool_group: str | None = None, **extra: 
 
 
 # ---------------------------------------------------------------------------
-# Subagent events — Browser
+# Tool and subagent event helpers
 # ---------------------------------------------------------------------------
 
-
-class BrowserStepEvent(SubagentEvent):
-    type: Literal["soothe.subagent.browser.step"] = "soothe.subagent.browser.step"
-    step: int | str = ""
-    url: str = ""
-    action: str = ""
-    title: str = ""
-    is_done: bool = False
-
-
-class BrowserCdpEvent(SubagentEvent):
-    type: Literal["soothe.subagent.browser.cdp"] = "soothe.subagent.browser.cdp"
-    status: str = ""
-    cdp_url: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Subagent events — Claude
-# ---------------------------------------------------------------------------
-
-
-class ClaudeTextEvent(SubagentEvent):
-    type: Literal["soothe.subagent.claude.text"] = "soothe.subagent.claude.text"
-    text: str = ""
-
-
-class ClaudeToolUseEvent(SubagentEvent):
-    type: Literal["soothe.subagent.claude.tool_use"] = "soothe.subagent.claude.tool_use"
-    tool: str = ""
-
-
-class ClaudeResultEvent(SubagentEvent):
-    type: Literal["soothe.subagent.claude.result"] = "soothe.subagent.claude.result"
-    cost_usd: float = 0.0
-    duration_ms: int = 0
-
-
-# ---------------------------------------------------------------------------
-# Subagent events — Skillify
-# ---------------------------------------------------------------------------
-
-
-class SkillifyIndexingPendingEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.indexing_pending"] = "soothe.subagent.skillify.indexing_pending"
-    query: str = ""
-
-
-class SkillifyRetrieveStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.retrieve_started"] = "soothe.subagent.skillify.retrieve_started"
-    query: str = ""
-
-
-class SkillifyRetrieveCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.retrieve_completed"] = "soothe.subagent.skillify.retrieve_completed"
-    query: str = ""
-    result_count: int = 0
-    top_score: float = 0.0
-
-
-class SkillifyRetrieveNotReadyEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.retrieve_not_ready"] = "soothe.subagent.skillify.retrieve_not_ready"
-    message: str = ""
-
-
-class SkillifyIndexStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.index_started"] = "soothe.subagent.skillify.index_started"
-    collection: str = ""
-
-
-class SkillifyIndexUpdatedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.index_updated"] = "soothe.subagent.skillify.index_updated"
-    new: int = 0
-    changed: int = 0
-    deleted: int = 0
-    total: int = 0
-
-
-class SkillifyIndexUnchangedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.index_unchanged"] = "soothe.subagent.skillify.index_unchanged"
-    total: int = 0
-
-
-class SkillifyIndexFailedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.skillify.index_failed"] = "soothe.subagent.skillify.index_failed"
-
-
-# ---------------------------------------------------------------------------
-# Subagent events — Weaver
-# ---------------------------------------------------------------------------
-
-
-class WeaverAnalysisStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.analysis_started"] = "soothe.subagent.weaver.analysis_started"
-    task_preview: str = ""
-
-
-class WeaverAnalysisCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.analysis_completed"] = "soothe.subagent.weaver.analysis_completed"
-    capabilities: list[Any] = []
-    constraints: list[Any] = []
-
-
-class WeaverReuseHitEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.reuse_hit"] = "soothe.subagent.weaver.reuse_hit"
-    agent_name: str = ""
-    confidence: float = 0.0
-
-
-class WeaverReuseMissEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.reuse_miss"] = "soothe.subagent.weaver.reuse_miss"
-    best_confidence: float = 0.0
-
-
-class WeaverSkillifyPendingEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.skillify_pending"] = "soothe.subagent.weaver.skillify_pending"
-
-
-class WeaverHarmonizeStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.harmonize_started"] = "soothe.subagent.weaver.harmonize_started"
-    skill_count: int = 0
-
-
-class WeaverHarmonizeCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.harmonize_completed"] = "soothe.subagent.weaver.harmonize_completed"
-    retained: int = 0
-    dropped: int = 0
-    bridge_length: int = 0
-
-
-class WeaverGenerateStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.generate_started"] = "soothe.subagent.weaver.generate_started"
-    agent_name: str = ""
-
-
-class WeaverGenerateCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.generate_completed"] = "soothe.subagent.weaver.generate_completed"
-    agent_name: str = ""
-    path: str = ""
-
-
-class WeaverValidateStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.validate_started"] = "soothe.subagent.weaver.validate_started"
-    agent_name: str = ""
-
-
-class WeaverValidateCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.validate_completed"] = "soothe.subagent.weaver.validate_completed"
-    agent_name: str = ""
-
-
-class WeaverRegistryUpdatedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.registry_updated"] = "soothe.subagent.weaver.registry_updated"
-    agent_name: str = ""
-    version: str = ""
-
-
-class WeaverExecuteStartedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.execute_started"] = "soothe.subagent.weaver.execute_started"
-    agent_name: str = ""
-    task_preview: str = ""
-
-
-class WeaverExecuteCompletedEvent(SubagentEvent):
-    type: Literal["soothe.subagent.weaver.execute_completed"] = "soothe.subagent.weaver.execute_completed"
-    agent_name: str = ""
-    result_length: int = 0
-
-
-# ---------------------------------------------------------------------------
-# Tool events — Research (InquiryEngine phases, exposed as the "research" tool)
-# ---------------------------------------------------------------------------
-
-
-class ResearchAnalyzeEvent(SootheEvent):
-    type: Literal["soothe.tool.research.analyze"] = "soothe.tool.research.analyze"
-    topic: str = ""
-
-
-class ResearchSubQuestionsEvent(SootheEvent):
-    type: Literal["soothe.tool.research.sub_questions"] = "soothe.tool.research.sub_questions"
-    count: int = 0
-
-
-class ResearchQueriesGeneratedEvent(SootheEvent):
-    type: Literal["soothe.tool.research.queries_generated"] = "soothe.tool.research.queries_generated"
-    queries: list[str] = []
-
-
-class ResearchGatherEvent(SootheEvent):
-    type: Literal["soothe.tool.research.gather"] = "soothe.tool.research.gather"
-    query: str = ""
-    domain: str = ""
-
-
-class ResearchGatherDoneEvent(SootheEvent):
-    type: Literal["soothe.tool.research.gather_done"] = "soothe.tool.research.gather_done"
-    query: str = ""
-    result_count: int = 0
-    sources_used: list[str] = []
-
-
-class ResearchSummarizeEvent(SootheEvent):
-    type: Literal["soothe.tool.research.summarize"] = "soothe.tool.research.summarize"
-    total_summaries: int = 0
-
-
-class ResearchReflectEvent(SootheEvent):
-    type: Literal["soothe.tool.research.reflect"] = "soothe.tool.research.reflect"
-    loop: int = 0
-
-
-class ResearchReflectionDoneEvent(SootheEvent):
-    type: Literal["soothe.tool.research.reflection_done"] = "soothe.tool.research.reflection_done"
-    loop: int = 0
-    is_sufficient: bool = False
-    follow_up_count: int = 0
-
-
-class ResearchSynthesizeEvent(SootheEvent):
-    type: Literal["soothe.tool.research.synthesize"] = "soothe.tool.research.synthesize"
-    topic: str = ""
-    total_sources: int = 0
-
-
-class ResearchCompletedEvent(SootheEvent):
-    type: Literal["soothe.tool.research.completed"] = "soothe.tool.research.completed"
-    answer_length: int = 0
-
+# Import events from modules for registry (E402: must come after class definitions)
+from soothe.subagents.browser.events import BrowserCdpEvent, BrowserStepEvent  # noqa: E402
+from soothe.subagents.claude.events import ClaudeResultEvent, ClaudeTextEvent, ClaudeToolUseEvent  # noqa: E402
+from soothe.subagents.skillify.events import (  # noqa: E402
+    SkillifyIndexFailedEvent,
+    SkillifyIndexingPendingEvent,
+    SkillifyIndexStartedEvent,
+    SkillifyIndexUnchangedEvent,
+    SkillifyIndexUpdatedEvent,
+    SkillifyRetrieveCompletedEvent,
+    SkillifyRetrieveNotReadyEvent,
+    SkillifyRetrieveStartedEvent,
+)
+from soothe.subagents.weaver.events import (  # noqa: E402
+    WeaverAnalysisCompletedEvent,
+    WeaverAnalysisStartedEvent,
+    WeaverExecuteCompletedEvent,
+    WeaverExecuteStartedEvent,
+    WeaverGenerateCompletedEvent,
+    WeaverGenerateStartedEvent,
+    WeaverHarmonizeCompletedEvent,
+    WeaverHarmonizeStartedEvent,
+    WeaverRegistryUpdatedEvent,
+    WeaverReuseHitEvent,
+    WeaverReuseMissEvent,
+    WeaverSkillifyPendingEvent,
+    WeaverValidateCompletedEvent,
+    WeaverValidateStartedEvent,
+)
+from soothe.tools.research.events import (  # noqa: E402
+    ResearchAnalyzeEvent,
+    ResearchCompletedEvent,
+    ResearchGatherDoneEvent,
+    ResearchGatherEvent,
+    ResearchQueriesGeneratedEvent,
+    ResearchReflectEvent,
+    ResearchReflectionDoneEvent,
+    ResearchSubQuestionsEvent,
+    ResearchSummarizeEvent,
+    ResearchSynthesizeEvent,
+)
+from soothe.tools.web_search.events import (  # noqa: E402
+    WebsearchCrawlCompletedEvent,
+    WebsearchCrawlFailedEvent,
+    WebsearchCrawlStartedEvent,
+    WebsearchSearchCompletedEvent,
+    WebsearchSearchFailedEvent,
+    WebsearchSearchStartedEvent,
+)
 
 # ---------------------------------------------------------------------------
 # Subagent tool events (generic for any subagent)
@@ -997,12 +779,16 @@ _reg(
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
 
 # -- Tool: websearch group (search + crawl) --------------------------
-_reg(TOOL_WEBSEARCH_SEARCH_STARTED, ToolStartedEvent, summary_template="Searching: {query}")
-_reg(TOOL_WEBSEARCH_SEARCH_COMPLETED, ToolCompletedEvent, summary_template="Found {result_count} results")
-_reg(TOOL_WEBSEARCH_SEARCH_FAILED, ToolFailedEvent, summary_template="Search failed: {error}")
-_reg(TOOL_WEBSEARCH_CRAWL_STARTED, ToolStartedEvent, summary_template="Crawling: {url}")
-_reg(TOOL_WEBSEARCH_CRAWL_COMPLETED, ToolCompletedEvent, summary_template="Crawl complete: {content_length} bytes")
-_reg(TOOL_WEBSEARCH_CRAWL_FAILED, ToolFailedEvent, summary_template="Crawl failed: {error}")
+_reg(TOOL_WEBSEARCH_SEARCH_STARTED, WebsearchSearchStartedEvent, summary_template="Searching: {query}")
+_reg(TOOL_WEBSEARCH_SEARCH_COMPLETED, WebsearchSearchCompletedEvent, summary_template="Found {result_count} results")
+_reg(TOOL_WEBSEARCH_SEARCH_FAILED, WebsearchSearchFailedEvent, summary_template="Search failed: {error}")
+_reg(TOOL_WEBSEARCH_CRAWL_STARTED, WebsearchCrawlStartedEvent, summary_template="Crawling: {url}")
+_reg(
+    TOOL_WEBSEARCH_CRAWL_COMPLETED,
+    WebsearchCrawlCompletedEvent,
+    summary_template="Crawl complete: {content_length} bytes",
+)
+_reg(TOOL_WEBSEARCH_CRAWL_FAILED, WebsearchCrawlFailedEvent, summary_template="Crawl failed: {error}")
 
 # -- Subagent: browser -------------------------------------------------------
 _reg(SUBAGENT_BROWSER_STEP, BrowserStepEvent, verbosity="subagent_progress", summary_template="Step {step}")

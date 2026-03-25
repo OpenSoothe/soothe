@@ -4,9 +4,11 @@ This module provides the PluginLifecycleManager that orchestrates the complete
 plugin lifecycle from discovery through initialization to shutdown.
 """
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe.plugin.cache import cache_plugin, get_cached_plugin
 from soothe.plugin.context import create_plugin_context
 from soothe.plugin.discovery import discover_all_plugins
 from soothe.plugin.events import PluginFailedEvent, PluginLoadedEvent, PluginUnloadedEvent
@@ -47,18 +49,23 @@ class PluginLifecycleManager:
         self.loader = PluginLoader(registry)
         self.loaded_plugins: dict[str, Any] = {}
 
-    async def load_all(self, config: "SootheConfig") -> dict[str, Any]:
-        """Load all discovered plugins.
+    async def load_all(
+        self,
+        config: "SootheConfig",
+        lazy_plugins: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Load all discovered plugins with parallel loading.
 
         This is the main entry point for plugin loading. It:
         1. Discovers plugins from all sources
-        2. Loads and validates each plugin
+        2. Loads and validates each plugin in parallel
         3. Calls on_load() hooks
         4. Registers tools and subagents
         5. Emits lifecycle events
 
         Args:
             config: Soothe configuration.
+            lazy_plugins: Optional list of plugin names to load lazily.
 
         Returns:
             Dict mapping plugin names to loaded instances.
@@ -69,9 +76,16 @@ class PluginLifecycleManager:
         discovered = discover_all_plugins(config)
         logger.info("Discovered %s plugins", len(discovered))
 
-        # Phase 2: Load each plugin
-        for module_path, plugin_config in discovered.values():
-            await self._load_single_plugin(module_path, config, plugin_config)
+        # Phase 2: Build dependency graph
+        dependency_graph = self._build_dependency_graph(discovered)
+
+        # Phase 3: Load plugins in parallel respecting dependencies
+        await self._load_plugins_parallel(
+            dependency_graph,
+            discovered,
+            config,
+            lazy_plugins=lazy_plugins,
+        )
 
         logger.info("Successfully loaded %s plugins", len(self.loaded_plugins))
         return self.loaded_plugins
@@ -100,19 +114,126 @@ class PluginLifecycleManager:
 
         self.loaded_plugins.clear()
 
+    def _build_dependency_graph(
+        self,
+        discovered: dict[str, tuple[str, dict]],
+    ) -> dict[str, set[str]]:
+        """Build plugin dependency graph from manifests.
+
+        Args:
+            discovered: Discovered plugins dict mapping name to (module_path, config).
+
+        Returns:
+            Dict mapping plugin name to set of dependency names.
+        """
+        graph: dict[str, set[str]] = {}
+
+        for plugin_name in discovered:
+            # Try to load manifest to check dependencies
+            try:
+                # For now, assume no dependencies for built-in plugins
+                # This can be enhanced later to read from plugin manifest
+                graph[plugin_name] = set()
+            except Exception:
+                logger.debug(
+                    "Could not load manifest for plugin '%s', assuming no dependencies",
+                    plugin_name,
+                )
+                graph[plugin_name] = set()
+
+        return graph
+
+    async def _load_plugins_parallel(
+        self,
+        graph: dict[str, set[str]],
+        discovered: dict[str, tuple[str, dict]],
+        config: "SootheConfig",
+        lazy_plugins: list[str] | None = None,
+    ) -> None:
+        """Load plugins in parallel respecting dependencies.
+
+        Args:
+            graph: Dependency graph mapping plugin name to dependencies.
+            discovered: Discovered plugins dict.
+            config: Soothe configuration.
+            lazy_plugins: Plugins to load lazily.
+        """
+        loaded: set[str] = set()
+        lazy_plugins_set = set(lazy_plugins or [])
+
+        while len(loaded) < len(graph):
+            # Find plugins with all dependencies satisfied
+            ready = [name for name, deps in graph.items() if name not in loaded and deps.issubset(loaded)]
+
+            if not ready:
+                # Circular dependency or missing dependency
+                remaining = set(graph.keys()) - loaded
+                logger.error(
+                    "Cannot resolve dependencies for plugins: %s",
+                    remaining,
+                )
+                break
+
+            # Separate eager and lazy plugins
+            eager = [name for name in ready if name not in lazy_plugins_set]
+            lazy = [name for name in ready if name in lazy_plugins_set]
+
+            # Load eager plugins in parallel
+            if eager:
+                tasks = [
+                    self._load_single_plugin(
+                        discovered[name][0],
+                        config,
+                        discovered[name][1],
+                    )
+                    for name in eager
+                ]
+                await asyncio.gather(*tasks, return_exceptions=True)
+                loaded.update(eager)
+
+            # Create lazy proxies for lazy plugins
+            for name in lazy:
+                from soothe.plugin.lazy import LazyPlugin
+
+                def loader(n: str = name) -> Any:
+                    # Sync loader for lazy plugin
+                    return self.loader.load_plugin(
+                        discovered[n][0],
+                        config,
+                        discovered[n][1],
+                    )
+
+                lazy_proxy = LazyPlugin(name, loader)
+                cache_plugin(name, lazy_proxy)
+                self.loaded_plugins[name] = lazy_proxy
+                loaded.add(name)
+                logger.info("Created lazy proxy for plugin '%s'", name)
+
     async def _load_single_plugin(
         self,
         module_path: str,
         config: "SootheConfig",
         plugin_config: dict[str, Any],
     ) -> None:
-        """Load a single plugin from module path.
+        """Load a single plugin from module path with caching.
 
         Args:
             module_path: Python import path.
             config: Soothe configuration.
             plugin_config: Plugin-specific configuration.
         """
+        # Extract plugin name from module_path for caching
+        plugin_name_guess = (
+            module_path.rsplit(".", maxsplit=1)[-1] if "." in module_path else module_path.split(":", maxsplit=1)[0]
+        )
+
+        # Check cache first
+        cached = get_cached_plugin(plugin_name_guess)
+        if cached:
+            logger.debug("Using cached plugin '%s'", plugin_name_guess)
+            self.loaded_plugins[plugin_name_guess] = cached
+            return
+
         try:
             # Load plugin instance
             plugin_instance = self.loader.load_plugin(module_path, config, plugin_config)
@@ -153,6 +274,9 @@ class PluginLifecycleManager:
 
             # Store in loaded plugins
             self.loaded_plugins[name] = plugin_instance
+
+            # Cache the loaded plugin
+            cache_plugin(name, plugin_instance)
 
             # Emit loaded event
             emit_progress(

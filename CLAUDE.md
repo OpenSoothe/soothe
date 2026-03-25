@@ -337,3 +337,20 @@ These are solely to help understand upstream APIs and behaviour.
 | [config/env.example](config/env.example) | All environment variables |
 | [config/config.yml](config/config.yml) | Full YAML config example |
 | [docs/user_guide.md](docs/user_guide.md) | End-user guide |
+
+## ⚠️ CRITICAL: Verification Before Commit
+
+**MANDATORY**: After completing ANY code change, you MUST run the verification script:
+
+```bash
+./scripts/verify_finally.sh
+```
+
+This script runs:
+- Code formatting check
+- Linting (zero errors required)
+- Unit tests (900+ tests must pass)
+
+**NEVER commit code without running this verification first!**
+
+See [VERIFY_REQUIREMENT.md](./VERIFY_REQUIREMENT.md) for details.

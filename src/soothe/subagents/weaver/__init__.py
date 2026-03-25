@@ -16,7 +16,9 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from soothe.core.event_catalog import (
+from soothe.subagents.weaver.analyzer import RequirementAnalyzer
+from soothe.subagents.weaver.composer import AgentComposer
+from soothe.subagents.weaver.events import (
     WeaverAnalysisCompletedEvent,
     WeaverAnalysisStartedEvent,
     WeaverExecuteCompletedEvent,
@@ -32,8 +34,6 @@ from soothe.core.event_catalog import (
     WeaverValidateCompletedEvent,
     WeaverValidateStartedEvent,
 )
-from soothe.subagents.weaver.analyzer import RequirementAnalyzer
-from soothe.subagents.weaver.composer import AgentComposer
 from soothe.subagents.weaver.generator import AgentGenerator
 from soothe.subagents.weaver.registry import GeneratedAgentRegistry
 from soothe.subagents.weaver.reuse import ReuseIndex
