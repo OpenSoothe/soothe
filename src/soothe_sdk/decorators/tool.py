@@ -13,6 +13,7 @@ def tool(
     name: str,
     description: str = "",
     group: str | None = None,
+    display_name: str | None = None,
 ) -> Callable:
     """Decorator that marks a method as a langchain tool.
 
@@ -24,6 +25,8 @@ def tool(
         name: Tool name (used to invoke the tool).
         description: Tool description for the LLM (shown in tool selection).
         group: Optional tool group name for organization.
+        display_name: Optional user-facing display name (PascalCase). If not provided,
+            will be auto-converted from name (snake_case -> PascalCase).
 
     Returns:
         Decorated method with tool metadata.
@@ -32,18 +35,22 @@ def tool(
         ```python
         @plugin(name="my-plugin", version="1.0.0", description="My plugin")
         class MyPlugin:
-            @tool(name="greet", description="Greet someone by name")
+            @tool(name="greet", description="Greet someone by name", display_name="Greet")
             def greet(self, name: str) -> str:
                 return f"Hello, {name}!"
         ```
     """
 
     def decorator(func: Callable) -> Callable:
+        # Compute display name if not provided
+        computed_display_name = display_name or name.replace("_", " ").title().replace(" ", "")
+
         # Mark as tool
         func._is_tool = True
         func._tool_name = name
         func._tool_description = description
         func._tool_group = group
+        func._tool_display_name = computed_display_name
 
         @wraps(func)
         async def async_wrapper(self, *args, **kwargs):
@@ -68,6 +75,13 @@ def tool(
         wrapper._tool_name = name
         wrapper._tool_description = description
         wrapper._tool_group = group
+        wrapper._tool_display_name = computed_display_name
+
+        # Register display name if explicitly provided
+        if display_name:
+            from soothe.tools.display_names import register_tool_display_name
+
+            register_tool_display_name(name, display_name)
 
         return wrapper
 
