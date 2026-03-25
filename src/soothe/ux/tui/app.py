@@ -244,6 +244,59 @@ class SootheApp(App):
         except Exception:
             logger.debug("Failed to display conversation history", exc_info=True)
 
+    def _apply_thread_status(self, event: dict[str, Any], *, previous_thread_id: str | None) -> None:
+        """Apply TUI-specific thread status updates after state has been refreshed.
+
+        Args:
+            event: Status event received from the daemon.
+            previous_thread_id: Thread ID before the current event was processed.
+        """
+        if event.get("type") != "status":
+            return
+
+        state_str = event.get("state", "")
+        thread_resumed = event.get("thread_resumed", False)
+        current_tid = self._state.thread_id
+
+        # Clear panel on explicit new-thread signal.
+        if event.get("new_thread", False):
+            self._thread_id = current_tid or None
+            self._history_loaded_thread_id = current_tid or None
+            self._state.streaming_text_buffer = ""
+            self._state.streaming_active = False
+            self._state.current_tool_calls.clear()
+            with contextlib.suppress(Exception):
+                panel = self.query_one("#conversation", ConversationPanel)
+                panel.clear()
+        elif current_tid and (
+            current_tid != previous_thread_id
+            or thread_resumed
+            or current_tid != self._history_loaded_thread_id
+        ):
+            # Thread switch or resume: restore chat navigation history.
+            history = event.get("input_history", [])
+            if history:
+                with contextlib.suppress(Exception):
+                    chat_input = self.query_one("#chat-input", ChatInput)
+                    chat_input.set_history(history)
+            self._thread_id = current_tid
+            self._history_loaded_thread_id = current_tid
+            self._thread_logger = ThreadLogger(
+                thread_id=current_tid,
+                retention_days=self._config.logging.thread_logging.retention_days,
+                max_size_mb=self._config.logging.thread_logging.max_size_mb,
+            )
+
+            if thread_resumed:
+                conversation_history = event.get("conversation_history", [])
+                if conversation_history:
+                    self._display_conversation_history(conversation_history)
+
+        if state_str == "running":
+            self._was_running = True
+        elif state_str in ("idle", "stopped"):
+            self._was_running = False
+
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events."""
         self._client = DaemonClient()
@@ -284,16 +337,9 @@ class SootheApp(App):
                 error_code = status_event.get("code", "")
                 error_message = status_event.get("message", "Unknown error")
                 if error_code == "THREAD_NOT_FOUND" and requested_resume:
-                    # Thread doesn't exist anymore - fall back to new thread
-                    logger.warning(
-                        "Thread %s not found, creating new thread: %s",
-                        self._thread_id,
-                        error_message,
-                    )
-                    # Request new thread instead
-                    await self._client.send_new_thread()
-                    status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
-                    logger.debug("Received new thread event: %r", status_event)
+                    logger.warning("Thread %s not found during resume: %s", self._thread_id, error_message)
+                    self._on_panel_write(make_dot_line(DOT_COLORS["error"], error_message))
+                    return
                 else:
                     # Other error - report and return
                     self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Daemon error: {error_message}"))
@@ -305,15 +351,27 @@ class SootheApp(App):
                 )
                 return
 
+            pre_status_thread_id = self._state.thread_id
+            process_daemon_event(
+                status_event,
+                self._state,
+                verbosity=self._progress_verbosity,
+                on_status_update=self._update_status,
+                on_plan_refresh=self._refresh_plan,
+                on_panel_write=self._on_panel_write,
+                on_panel_update_last=self._on_panel_update_last,
+            )
+            self._flush_new_activity()
+
             # Extract thread_id and client_id
-            thread_id = status_event.get("thread_id")
+            thread_id = self._state.thread_id
             client_id = status_event.get("client_id")
             if not thread_id:
                 self._on_panel_write(make_dot_line(DOT_COLORS["error"], "No thread_id in status message"))
                 return
 
-            self._state.thread_id = thread_id
             self._state.client_id = client_id
+            self._apply_thread_status(status_event, previous_thread_id=pre_status_thread_id)
             logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
 
             # Subscribe to thread (RFC-0013)
@@ -361,51 +419,8 @@ class SootheApp(App):
             # Update activity display after processing event
             self._flush_new_activity()
 
-            # Handle TUI-specific actions for status events
-            if event.get("type") == "status":
-                state_str = event.get("state", "")
-                thread_resumed = event.get("thread_resumed", False)
-                current_tid = self._state.thread_id
-
-                # Clear panel on explicit new-thread signal
-                if event.get("new_thread", False):
-                    self._thread_id = current_tid or None
-                    self._history_loaded_thread_id = current_tid or None
-                    self._state.streaming_text_buffer = ""
-                    self._state.streaming_active = False
-                    self._state.current_tool_calls.clear()
-                    with contextlib.suppress(Exception):
-                        panel = self.query_one("#conversation", ConversationPanel)
-                        panel.clear()
-                elif current_tid and (
-                    current_tid != pre_event_thread_id
-                    or thread_resumed
-                    or current_tid != self._history_loaded_thread_id
-                ):
-                    # Thread switch or resume - load input history for chat navigation
-                    history = event.get("input_history", [])
-                    if history:
-                        chat_input = self.query_one("#chat-input", ChatInput)
-                        chat_input.set_history(history)
-                    self._thread_id = current_tid
-                    self._history_loaded_thread_id = current_tid
-                    # Initialize thread logger for future persistence
-                    self._thread_logger = ThreadLogger(
-                        thread_id=current_tid,
-                        retention_days=self._config.logging.thread_logging.retention_days,
-                        max_size_mb=self._config.logging.thread_logging.max_size_mb,
-                    )
-
-                    # Display conversation history when resuming a thread
-                    if thread_resumed:
-                        conversation_history = event.get("conversation_history", [])
-                        if conversation_history:
-                            self._display_conversation_history(conversation_history)
-
-                if state_str == "running":
-                    self._was_running = True
-                elif state_str in ("idle", "stopped"):
-                    self._was_running = False
+            # Handle TUI-specific actions for status events.
+            self._apply_thread_status(event, previous_thread_id=pre_event_thread_id)
 
             # Handle command_response
             if event.get("type") == "command_response":

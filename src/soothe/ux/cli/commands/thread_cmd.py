@@ -173,12 +173,38 @@ def thread_continue(
     if new:
         thread_id = None
     elif not thread_id:
-        # Find last active thread
-        from soothe.core.runner import SootheRunner
+        async def get_last_thread_via_daemon() -> str | None:
+            """Find the most recently updated active thread through the daemon."""
+            from soothe.daemon import DaemonClient
 
-        runner = SootheRunner(cfg)
+            client = DaemonClient()
+            try:
+                await client.connect()
+                await client.send_thread_list()
+                while True:
+                    event = await client.read_event()
+                    if not event:
+                        break
+                    if event.get("type") != "thread_list_response":
+                        continue
+                    threads = event.get("threads", [])
+                    active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
+                    if not active_threads:
+                        typer.echo("No active threads found.", err=True)
+                        sys.exit(1)
+                    active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+                    return active_threads[0].get("thread_id")
+            finally:
+                await client.close()
 
-        async def get_last_thread() -> str | None:
+            typer.echo("No active threads found.", err=True)
+            sys.exit(1)
+
+        async def get_last_thread_standalone() -> str | None:
+            """Find the most recently updated active thread from local durability."""
+            from soothe.core.runner import SootheRunner
+
+            runner = SootheRunner(cfg)
             try:
                 threads = await runner.list_threads()
                 active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
@@ -190,7 +216,10 @@ def thread_continue(
             finally:
                 await runner.cleanup()
 
-        thread_id = asyncio.run(get_last_thread())
+        if SootheDaemon.is_running():
+            thread_id = asyncio.run(get_last_thread_via_daemon())
+        else:
+            thread_id = asyncio.run(get_last_thread_standalone())
 
     # Handle --daemon flag
     if daemon:

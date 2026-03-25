@@ -128,6 +128,9 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
             await client2.send_resume_thread(thread_id)
             resume_status = await await_event_type(client2.read_event, "status", timeout=3.0)
             assert resume_status.get("thread_resumed") is True
+            assert resume_status.get("thread_id") == thread_id
+            assert resume_status.get("new_thread") is not True
+            assert isinstance(resume_status.get("conversation_history", []), list)
 
             # Verify conversation history
             await client2.send_thread_messages(thread_id)
