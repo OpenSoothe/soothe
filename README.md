@@ -98,7 +98,7 @@ Soothe grows with your needs:
 
 3. **Run Soothe**:
    ```bash
-   soothe run
+   soothe
    ```
 
 That's it! You'll see an interactive terminal interface where you can start giving Soothe tasks.

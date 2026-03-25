@@ -28,7 +28,12 @@ def thread_list(
         typer.Option("--status", "-s", help="Filter by status (active, archived)."),
     ] = None,
 ) -> None:
-    """List all agent threads."""
+    """List all agent threads.
+
+    Examples:
+        soothe thread list
+        soothe thread list --status active
+    """
     from soothe.daemon import SootheDaemon
     from soothe.ux.core import load_config
 
@@ -143,10 +148,10 @@ def thread_continue(
     2. Daemon mode (--daemon): Connects to running daemon
 
     Examples:
-        soothe thread continue abc123          # Continue thread standalone
-        soothe thread continue --daemon abc123 # Continue via daemon
-        soothe thread continue --new           # Start new thread
-        soothe thread continue                 # Continue last active thread
+        soothe thread continue abc123
+        soothe thread continue abc123 --daemon
+        soothe thread continue --new
+        soothe thread continue
     """
     from soothe.daemon import SootheDaemon
     from soothe.ux.cli.execution import run_tui
@@ -199,7 +204,11 @@ def thread_archive(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Archive a thread."""
+    """Archive a thread.
+
+    Example:
+        soothe thread archive abc123
+    """
     from soothe.core.runner import SootheRunner
     from soothe.ux.core import load_config
 
@@ -223,7 +232,11 @@ def thread_show(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
 ) -> None:
-    """Show thread details."""
+    """Show thread details.
+
+    Example:
+        soothe thread show abc123
+    """
     from soothe.core.runner import SootheRunner
     from soothe.daemon.thread_logger import ThreadLogger
     from soothe.ux.core import load_config
@@ -272,7 +285,11 @@ def thread_delete(
         typer.Option("--yes", "-y", help="Skip confirmation."),
     ] = False,
 ) -> None:
-    """Permanently delete a thread."""
+    """Permanently delete a thread.
+
+    Example:
+        soothe thread delete abc123
+    """
     from soothe.config import SOOTHE_HOME
     from soothe.core.runner import SootheRunner
     from soothe.ux.core import load_config
@@ -312,7 +329,11 @@ def thread_export(
         typer.Option("--format", "-f", help="Export format: jsonl or md."),
     ] = "jsonl",
 ) -> None:
-    """Export thread conversation to a file."""
+    """Export thread conversation to a file.
+
+    Example:
+        soothe thread export abc123 --output out.json
+    """
     from soothe.daemon.thread_logger import ThreadLogger
 
     logger = ThreadLogger(thread_id=thread_id)

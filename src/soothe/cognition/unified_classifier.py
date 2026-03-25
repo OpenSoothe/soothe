@@ -206,12 +206,17 @@ class UnifiedClassifier:
                 break
             except Exception as exc:
                 last_error = exc
-                logger.warning("Tier-1 routing classification attempt failed (%s)", label, exc_info=True)
+                logger.warning(
+                    "Tier-1 routing classification attempt failed (%s), retrying...",
+                    label,
+                )
+                logger.debug("Routing failure details: %s", exc, exc_info=True)
 
         if result is None:
-            logger.warning("Tier-1 routing classification failed after retry, using default 'medium'")
-            if last_error:
-                logger.debug("Last routing failure: %s", type(last_error).__name__)
+            logger.warning(
+                "Tier-1 routing classification failed after retry, using default 'medium' (last error: %s)",
+                type(last_error).__name__ if last_error else "unknown",
+            )
             return RoutingResult(task_complexity="medium")
 
         if result.task_complexity == "chitchat" and not result.chitchat_response:

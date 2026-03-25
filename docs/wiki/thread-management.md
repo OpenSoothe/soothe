@@ -22,13 +22,11 @@ View all your threads:
 
 ```bash
 # List all threads
-soothe thread
-soothe thread -l
-soothe thread --list
+soothe thread list
 
 # Filter by status
-soothe thread -l --status active
-soothe thread -l --status archived
+soothe thread list --status active
+soothe thread list --status archived
 ```
 
 **Output**:
@@ -45,17 +43,16 @@ Continue a previous conversation:
 
 ```bash
 # Continue a specific thread
-soothe thread -c abc123
-soothe thread --continue abc123
+soothe thread continue abc123
 
 # Continue last active thread
-soothe thread -c
+soothe thread continue
 
 # Resume via running daemon
-soothe thread -c --daemon abc123
+soothe thread continue abc123 --daemon
 
 # Start a new thread
-soothe thread -c --new
+soothe thread continue --new
 
 # In TUI - Interactive thread selection
 /resume
@@ -74,9 +71,8 @@ When you resume a thread:
 View detailed information about a thread:
 
 ```bash
-# Show thread details (default action with thread-id)
-soothe thread abc123
-soothe thread --show abc123
+# Show thread details
+soothe thread show abc123
 ```
 
 **Output**:
@@ -106,8 +102,7 @@ Clean up old threads without deleting them:
 
 ```bash
 # Archive a thread
-soothe thread -a abc123
-soothe thread --archive abc123
+soothe thread archive abc123
 ```
 
 Archived threads:
@@ -121,7 +116,7 @@ Archived threads:
 View execution statistics for a thread:
 
 ```bash
-soothe thread --stats abc123
+soothe thread stats abc123
 ```
 
 **Output**:
@@ -140,10 +135,10 @@ Add or remove tags to organize threads:
 
 ```bash
 # Add tags
-soothe thread --tag abc123 research analysis
+soothe thread tag abc123 research analysis
 
 # Remove tags
-soothe thread --tag abc123 research --remove
+soothe thread tag abc123 research --remove
 ```
 
 Tags help you categorize and find threads later.
@@ -154,11 +149,10 @@ Permanently remove a thread:
 
 ```bash
 # Delete with confirmation
-soothe thread -d abc123
-soothe thread --delete abc123
+soothe thread delete abc123
 
 # Skip confirmation
-soothe thread -d abc123 --yes
+soothe thread delete abc123 --yes
 ```
 
 **Warning**: This action cannot be undone. All conversation history, context, and memory will be lost.
@@ -169,11 +163,10 @@ Export a thread to a file:
 
 ```bash
 # Export as JSONL (default)
-soothe thread -e abc123 -o thread_abc123.json
-soothe thread --export abc123 --output thread_abc123.json
+soothe thread export abc123 --output thread_abc123.json
 
 # Export as markdown
-soothe thread -e abc123 -o thread_abc123.md --format md
+soothe thread export abc123 --output thread_abc123.md --format md
 ```
 
 **Export includes**:

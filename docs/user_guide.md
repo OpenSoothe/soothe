@@ -15,7 +15,7 @@ Get started with Soothe in minutes:
 pip install soothe
 
 # 2. Initialize default configuration
-soothe config -i
+soothe config init
 
 # 3. Set your API key
 export OPENAI_API_KEY=sk-your-key-here
