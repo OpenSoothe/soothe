@@ -189,9 +189,13 @@ class UnixSocketTransport(TransportServer):
         client = _ClientConn(reader=reader, writer=writer)
         self._clients.append(client)
 
-        # Session manager should be set by daemon before start
-        # For now, we'll handle it in the message flow
-        logger.info("Unix socket client connected (total=%d)", len(self._clients))
+        # Create session for this client
+        if self._session_manager:
+            client.client_id = await self._session_manager.create_session(self, client)
+            logger.info("Unix socket client connected (client_id=%s, total=%d)", client.client_id, len(self._clients))
+        else:
+            logger.warning("No session manager set, client will not have session")
+            logger.info("Unix socket client connected (total=%d)", len(self._clients))
 
         try:
             while True:
@@ -204,7 +208,6 @@ class UnixSocketTransport(TransportServer):
                     continue
 
                 # Pass message to handler with client_id
-                # For initial implementation, client_id will be set after first message
                 if self._message_handler:
                     try:
                         client_id = client.client_id or "pending"

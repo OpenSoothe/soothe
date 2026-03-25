@@ -136,23 +136,33 @@ def create_soothe_agent(
         try:
             import asyncio
 
-            async def resolve_protocols_parallel() -> list[object]:
-                return await asyncio.gather(
-                    asyncio.to_thread(resolve_context, config),
-                    asyncio.to_thread(resolve_memory, config),
-                    asyncio.to_thread(resolve_planner, config, default_model_instance),
-                    asyncio.to_thread(resolve_policy, config),
-                    return_exceptions=True,
-                )
+            # Check if we're already in an async context before creating coroutines
+            try:
+                asyncio.get_running_loop()
+                # We're in an async context, use sequential
+                logger.debug("Parallel protocol resolution not available in async context, using sequential")
+                resolved_context = context or resolve_context(config)
+                resolved_memory = memory_store or resolve_memory(config)
+                resolved_planner = planner or resolve_planner(config, default_model_instance)
+                resolved_policy = policy or resolve_policy(config)
+            except RuntimeError:
+                # No running loop, safe to use asyncio.run()
+                async def resolve_protocols_parallel() -> list[object]:
+                    return await asyncio.gather(
+                        asyncio.to_thread(resolve_context, config),
+                        asyncio.to_thread(resolve_memory, config),
+                        asyncio.to_thread(resolve_planner, config, default_model_instance),
+                        asyncio.to_thread(resolve_policy, config),
+                        return_exceptions=True,
+                    )
 
-            # Run async (will fail if we're in an async context)
-            results = asyncio.run(resolve_protocols_parallel())
-            resolved_context, resolved_memory, resolved_planner, resolved_policy = [
-                r if not isinstance(r, Exception) else None for r in results
-            ]
+                results = asyncio.run(resolve_protocols_parallel())
+                resolved_context, resolved_memory, resolved_planner, resolved_policy = [
+                    r if not isinstance(r, Exception) else None for r in results
+                ]
         except RuntimeError:
-            # Already in async context, fall back to sequential
-            logger.debug("Parallel protocol resolution not available in async context, using sequential")
+            # Fallback to sequential
+            logger.debug("Parallel protocol resolution failed, using sequential")
             resolved_context = context or resolve_context(config)
             resolved_memory = memory_store or resolve_memory(config)
             resolved_planner = planner or resolve_planner(config, default_model_instance)
@@ -185,12 +195,17 @@ def create_soothe_agent(
 
     plugins_start = time.perf_counter()
     try:
-        # Try to load plugins asynchronously
-        asyncio.run(load_plugins(config))
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # Already in async context, skip for now
+            # (plugins will be loaded in async context if needed)
+            logger.debug("Skipping plugin loading in async context")
+        except RuntimeError:
+            # No running loop, safe to use asyncio.run()
+            asyncio.run(load_plugins(config))
     except RuntimeError:
-        # Already in async context, skip for now
-        # (plugins will be loaded in async context if needed)
-        logger.debug("Skipping plugin loading in async context")
+        logger.debug("Plugin loading failed, will load on demand")
     plugins_ms = (time.perf_counter() - plugins_start) * 1000
     logger.info("Plugins loaded in %.1fms", plugins_ms)
 

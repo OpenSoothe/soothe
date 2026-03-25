@@ -39,6 +39,7 @@ class TransportManager:
         thread_manager: Any | None = None,
         runner: Any | None = None,
         soothe_config: Any | None = None,
+        session_manager: Any | None = None,
     ) -> None:
         """Initialize transport manager.
 
@@ -47,11 +48,13 @@ class TransportManager:
             thread_manager: Optional ThreadContextManager for HTTP REST transport.
             runner: Optional SootheRunner for HTTP REST transport.
             soothe_config: Optional SootheConfig for HTTP REST transport.
+            session_manager: Optional ClientSessionManager for session management.
         """
         self._config = config
         self._thread_manager = thread_manager
         self._runner = runner
         self._soothe_config = soothe_config
+        self._session_manager = session_manager
         self._transports: list[TransportServer] = []
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._started = False
@@ -70,6 +73,8 @@ class TransportManager:
         # Unix socket transport
         if self._config.transports.unix_socket.enabled:
             unix_transport = UnixSocketTransport(self._config.transports.unix_socket)
+            if self._session_manager:
+                unix_transport._session_manager = self._session_manager
             self._transports.append(unix_transport)
             logger.debug("Configured Unix socket transport")
 

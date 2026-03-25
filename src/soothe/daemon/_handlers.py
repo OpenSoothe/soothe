@@ -123,25 +123,31 @@ class DaemonHandlersMixin:
                     # Clear draft state if resuming an existing thread
                     self._draft_thread_id = None
 
-                    # Broadcast the resumed thread status
-                    await self._broadcast(
-                        {
-                            "type": "status",
-                            "state": "idle",
-                            "thread_id": resumed_thread_id,
-                            "thread_resumed": True,
-                            "input_history": self._input_history.history[-100:] if self._input_history else [],
-                        }
-                    )
+                    # Send status directly to requesting client (not broadcast - no subscribers yet)
+                    session = await self._session_manager.get_session(client_id)
+                    if session:
+                        await session.transport.send(
+                            session.transport_client,
+                            {
+                                "type": "status",
+                                "state": "idle",
+                                "thread_id": resumed_thread_id,
+                                "thread_resumed": True,
+                                "input_history": self._input_history.history[-100:] if self._input_history else [],
+                            },
+                        )
                     logger.info("Resumed thread %s", resumed_thread_id)
                 except KeyError:
-                    await self._broadcast(
-                        {
-                            "type": "error",
-                            "code": "THREAD_NOT_FOUND",
-                            "message": f"Thread {thread_id} not found",
-                        }
-                    )
+                    session = await self._session_manager.get_session(client_id)
+                    if session:
+                        await session.transport.send(
+                            session.transport_client,
+                            {
+                                "type": "error",
+                                "code": "THREAD_NOT_FOUND",
+                                "message": f"Thread {thread_id} not found",
+                            },
+                        )
         elif msg_type == "new_thread":
             # Start a fresh thread - create draft thread ID without persisting yet
             import uuid
@@ -156,15 +162,20 @@ class DaemonHandlersMixin:
             # Initialize input history for the draft thread
             self._input_history = InputHistory()
 
-            await self._broadcast(
-                {
-                    "type": "status",
-                    "state": "idle",
-                    "thread_id": draft_thread_id,
-                    "new_thread": True,
-                    "input_history": [],
-                }
-            )
+            # Send status directly to requesting client (not broadcast - no subscribers yet)
+            session = await self._session_manager.get_session(client_id)
+            if session:
+                await session.transport.send(
+                    session.transport_client,
+                    {
+                        "type": "status",
+                        "state": "idle",
+                        "thread_id": draft_thread_id,
+                        "new_thread": True,
+                        "input_history": [],
+                    },
+                )
+            logger.info("Created draft thread %s", draft_thread_id)
         # Thread management handlers (RFC-0017)
         elif msg_type == "thread_list":
             await self._handle_thread_list(msg)
@@ -261,6 +272,7 @@ class DaemonHandlersMixin:
                 await self._broadcast(
                     {
                         "type": "event",
+                        "thread_id": self._runner.current_thread_id or "",
                         "namespace": [],
                         "mode": "custom",
                         "data": {"type": ERROR, "error": "Daemon failed to process input"},
@@ -616,8 +628,12 @@ class DaemonHandlersMixin:
             # Use the persisted thread ID going forward
             actual_thread_id = thread_info.thread_id
             self._runner.set_current_thread_id(actual_thread_id)
+
+            # Migrate client subscriptions from draft thread_id to actual thread_id
+            if self._session_manager:
+                await self._session_manager.migrate_subscriptions(self._draft_thread_id, actual_thread_id)
+
             thread_id = actual_thread_id
-            # Log and clear draft state
             logger.info("Persisted draft thread -> %s", thread_id)
             self._draft_thread_id = None
 
@@ -680,6 +696,7 @@ class DaemonHandlersMixin:
 
                     event_msg = {
                         "type": "event",
+                        "thread_id": thread_id,
                         "namespace": list(namespace),
                         "mode": mode,
                         "data": data,
@@ -692,6 +709,7 @@ class DaemonHandlersMixin:
                 await self._broadcast(
                     {
                         "type": "event",
+                        "thread_id": thread_id,
                         "namespace": [],
                         "mode": "custom",
                         "data": {"type": ERROR, "error": "Query cancelled by user"},
@@ -705,6 +723,7 @@ class DaemonHandlersMixin:
                 await self._broadcast(
                     {
                         "type": "event",
+                        "thread_id": thread_id,
                         "namespace": [],
                         "mode": "custom",
                         "data": emit_error_event(exc),
@@ -822,6 +841,7 @@ class DaemonHandlersMixin:
                 # Broadcast event to clients
                 event_msg = {
                     "type": "event",
+                    "thread_id": thread_id,
                     "namespace": list(namespace),
                     "mode": mode,
                     "data": data,
@@ -833,6 +853,7 @@ class DaemonHandlersMixin:
             await self._broadcast(
                 {
                     "type": "event",
+                    "thread_id": thread_id,
                     "namespace": [],
                     "mode": "custom",
                     "data": {"type": ERROR, "error": f"Query cancelled in thread {thread_id}"},
@@ -846,6 +867,7 @@ class DaemonHandlersMixin:
             await self._broadcast(
                 {
                     "type": "event",
+                    "thread_id": thread_id,
                     "namespace": [],
                     "mode": "custom",
                     "data": emit_error_event(exc),

@@ -1,9 +1,18 @@
 """Soothe: Protocol-driven orchestration framework built on deepagents."""
 
+import warnings
 from typing import Any
 
-# Import lightweight protocol definitions (no heavy dependencies)
-from soothe.protocols import (
+# Suppress requests library warning about chardet version mismatch
+# chardet 7.1.0 is required by crawl4ai, but requests only supports < 6.0.0
+# requests will use charset_normalizer (which is at the correct version) anyway
+warnings.filterwarnings(
+    "ignore",
+    category=Warning,
+    message="urllib3 .* or chardet .*/charset_normalizer .* doesn't match a supported version",
+)
+
+from soothe.protocols import (  # noqa: E402
     ConcurrencyPolicy,
     ContextEntry,
     ContextProjection,

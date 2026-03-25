@@ -148,6 +148,7 @@ class SootheDaemon(DaemonHandlersMixin):
             thread_manager=thread_manager,
             runner=self._runner,
             soothe_config=self._config,
+            session_manager=self._session_manager,
         )
         self._transport_manager.set_message_handler(self._handle_transport_message)
         await self._transport_manager.start_all()

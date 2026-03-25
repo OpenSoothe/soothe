@@ -141,6 +141,37 @@ class ClientSessionManager:
 
         logger.info("Client %s unsubscribed from thread %s", client_id, thread_id)
 
+    async def migrate_subscriptions(self, old_thread_id: str, new_thread_id: str) -> None:
+        """Migrate all client subscriptions from old thread_id to new thread_id.
+
+        This is used when a draft thread is persisted and gets a new thread_id.
+        Clients subscribed to the draft thread need to be re-subscribed to the
+        persisted thread.
+
+        Args:
+            old_thread_id: Original thread ID (draft)
+            new_thread_id: New thread ID (persisted)
+        """
+        async with self._lock:
+            for client_id, session in self._sessions.items():
+                if old_thread_id in session.subscriptions:
+                    # Unsubscribe from old topic
+                    old_topic = f"thread:{old_thread_id}"
+                    await self._event_bus.unsubscribe(old_topic, session.event_queue)
+                    session.subscriptions.discard(old_thread_id)
+
+                    # Subscribe to new topic
+                    new_topic = f"thread:{new_thread_id}"
+                    await self._event_bus.subscribe(new_topic, session.event_queue)
+                    session.subscriptions.add(new_thread_id)
+
+                    logger.info(
+                        "Migrated client %s subscription: %s -> %s",
+                        client_id,
+                        old_thread_id[:8],
+                        new_thread_id[:8],
+                    )
+
     async def remove_session(self, client_id: str) -> None:
         """Remove client session and cleanup.
 
