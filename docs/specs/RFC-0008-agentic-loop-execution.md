@@ -311,50 +311,22 @@ sequenceDiagram
 
 ## Configuration
 
-### Agentic Loop Configuration
+Key configuration parameters:
 
 ```yaml
 agentic:
   enabled: true
   max_iterations: 3
-
   observation_strategy: "adaptive"      # minimal | comprehensive | adaptive
-  verification_strictness: "moderate"    # lenient | moderate | strict
-
+  verification_strictness: "moderate"   # lenient | moderate | strict
   planning:
-    simple_max_tokens: 50               # Skip planning for queries < 50 tokens
-    medium_max_steps: 3                 # Lightweight planning step limit
-    complexity_threshold: 160           # Tokens → complex planning
-
+    simple_max_tokens: 50
+    medium_max_steps: 3
+    complexity_threshold: 160
+    force_keywords: ["plan for", "create a plan", "steps to"]
   early_termination:
     enabled: true
-    completion_signals: ["task complete", "done", "finished"]
-    error_threshold: 3                  # Max errors before stopping
-```
-
-### Planning Strategy Rules
-
-```yaml
-agentic:
-  planning:
-    force_keywords: ["plan for", "create a plan", "steps to"]
-
-    adaptive_escalation: true           # Escalate planning if iteration shows complexity
-```
-
-### Performance Configuration
-
-**Preserved from original RFC-0008**:
-
-```yaml
-performance:
-  enabled: true
-  unified_classification: true
-  classification_mode: "llm"
-
-  conditional_memory_recall: true
-  conditional_context_projection: true
-  parallel_pre_stream: true
+    error_threshold: 3
 ```
 
 ## Event System
@@ -396,108 +368,37 @@ soothe.agentic.loop_started
 soothe.agentic.loop_completed
 ```
 
-## Comparison: Agentic vs. Autonomous
+## When to Use Agentic Loop vs. Autonomous Mode
 
-### When to Use Agentic Loop (Default)
+**Agentic Loop** (default): Single implicit goal, standard iteration, moderate complexity
+- Examples: "Debug the failing tests", "Refine documentation", "Add error handling"
 
-**Characteristics**:
-- Single implicit goal (user query)
-- Standard iterative refinement
-- Moderate complexity
-- No explicit goal dependencies
+**Autonomous Mode** (RFC-0007): Multiple explicit goals, complex dependencies, hierarchical workflows
+- Examples: "Set up CI/CD pipeline", "Migrate to microservices", "Optimize entire system"
+- Requires explicit `--autonomous` flag
 
-**Examples**:
-- "Debug the failing tests"
-- "Refine the documentation"
-- "Improve code coverage"
-- "Add error handling"
-
-### When to Use Autonomous Mode (Explicit)
-
-**Characteristics**:
-- Multiple explicit goals
-- Complex goal dependencies
-- Hierarchical goal structure
-- Multi-phase workflows
-
-**Examples**:
-- "Set up the entire CI/CD pipeline" (multiple goals: build, test, deploy, monitor)
-- "Migrate the monolith to microservices" (phases: design, extract, deploy, validate)
-- "Optimize the entire system performance" (areas: DB, API, caching, monitoring)
-
-**Decision Flow**:
-
-```mermaid
-flowchart TD
-    Query[User Query] --> Multi{Multiple<br/>Goals?}
-
-    Multi -->|Yes| Autonomous[Use Autonomous Mode<br/>RFC-0007]
-    Multi -->|No| Complex{Complex<br/>Dependencies?}
-
-    Complex -->|Yes| Autonomous
-    Complex -->|No| Agentic[Use Agentic Loop<br/>This RFC]
-
-    classDef decision fill:#87CEEB,stroke:#333
-    classDef autonomous fill:#DDA0DD,stroke:#333
-    classDef agentic fill:#90EE90,stroke:#333
-
-    class Multi,Complex decision
-    class Autonomous autonomous
-    class Agentic agentic
-```
+**Decision**: Use Autonomous mode for multi-goal workflows with complex dependencies.
 
 ## Migration Guide
 
-### From Single-Pass to Agentic Loop
+**No API changes** - agentic loop is transparent. The same `runner.astream()` call now iterates automatically:
 
-**Before (Single-Pass)**:
 ```python
-# One-shot execution
+# Same code, automatic iteration
 async for chunk in runner.astream("debug the tests"):
     process(chunk)
 ```
 
-**After (Agentic Loop)**:
+For multi-goal workflows with dependencies, use Autonomous mode (RFC-0007):
+
 ```python
-# Same code, but now iterates automatically
-async for chunk in runner.astream("debug the tests"):
+async for chunk in runner.astream("Set up CI/CD pipeline", autonomous=True):
     process(chunk)
-
-# Iteration happens automatically:
-# Iteration 1: Run tests, observe failure
-# Iteration 2: Fix code, run tests again
-# Iteration 3: Verify all tests pass
-```
-
-**No API changes** - agentic loop is transparent to users.
-
-### When to Use Autonomous Mode
-
-**Use Autonomous (RFC-0007) for**:
-- Multiple explicit goals with dependencies
-- Complex multi-phase workflows
-- Hierarchical goal structures
-- User wants explicit goal tracking
-
-**Example**:
-```python
-# Multiple goals with dependencies
-async for chunk in runner.astream(
-    "Set up CI/CD pipeline",
-    autonomous=True
-):
-    process(chunk)
-
-# Internally creates goal DAG:
-# Goal 1: Build system
-# Goal 2: Test framework (depends on Goal 1)
-# Goal 3: Deploy automation (depends on Goal 2)
-# Goal 4: Monitoring setup (depends on Goal 3)
 ```
 
 ## Performance Metrics
 
-### Latency Targets
+**Latency Targets**:
 
 | Complexity | P50 | P90 | P99 | Notes |
 |------------|-----|-----|-----|-------|
@@ -506,25 +407,10 @@ async for chunk in runner.astream(
 | Medium | 2s | 3s | 4s | Lightweight planning, 2-3 iterations |
 | Complex | 3s | 5s | 8s | Comprehensive planning, 3+ iterations |
 
-### Quality Metrics
-
-- **Iteration efficiency**: Avg iterations to completion per complexity
-- **Planning accuracy**: % plans completed without revision
-- **Early termination accuracy**: % correct early stops
-- **Chitchat classification**: % queries correctly identified as chitchat
-
-### Observable Metrics
-
-**Per-iteration metrics**:
-- Observe phase duration
-- Planning duration (if triggered)
-- Act phase duration
-- Verify phase duration
-- Total iteration duration
-
-**Aggregate metrics**:
+**Observable Metrics**:
+- Per-iteration duration (observe, plan, act, verify phases)
 - Total iterations per query
-- Planning strategy distribution (none/lightweight/comprehensive)
+- Planning strategy distribution
 - Early termination rate
 - Chitchat fast path hit rate
 
@@ -559,80 +445,10 @@ async for chunk in runner.astream(
 ## References
 
 - RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture
-- RFC-0003: CLI TUI Architecture
 - RFC-0007: Autonomous Iteration Loop (explicit goal-driven mode)
 - RFC-0009: DAG-Based Execution and Unified Concurrency
 - RFC-0012: Unified LLM-Based Classification System
 - RFC-0015: Progress Event Protocol
-
-## Appendix: Example Scenarios
-
-### Scenario 1: Debug Failing Tests (Medium Complexity)
-
-```
-User: "Debug why the auth tests are failing"
-
-Iteration 0:
-  Observe: Classify as "medium", recall auth test history
-  Planning: Lightweight (2 steps)
-    - Step 1: Run tests, capture failures
-    - Step 2: Analyze error messages
-  Act: Execute steps
-  Verify: Tests still failing, but root cause identified
-  Decision: Continue (should_continue=true)
-
-Iteration 1:
-  Observe: Recall root cause from iteration 0
-  Planning: Lightweight (2 steps)
-    - Step 1: Fix authentication logic
-    - Step 2: Run tests again
-  Act: Execute steps
-  Verify: All tests pass
-  Decision: Stop (should_continue=false)
-
-Total: 2 iterations, 4 steps executed
-```
-
-### Scenario 2: Refactor Authentication (Complex)
-
-```
-User: "Refactor the authentication system to use OAuth"
-
-Iteration 0:
-  Observe: Classify as "complex", large codebase context
-  Planning: Comprehensive (5 steps with dependencies)
-    - Step 1: Analyze current auth implementation
-    - Step 2: Design OAuth integration
-    - Step 3: Implement OAuth handlers (depends on 2)
-    - Step 4: Update tests (depends on 3)
-    - Step 5: Migration guide (depends on 3)
-  Act: Execute steps in parallel where possible
-  Verify: OAuth working but edge cases missing
-  Decision: Continue
-
-Iteration 1:
-  Observe: Identify missing edge cases
-  Planning: Lightweight (2 steps)
-    - Step 1: Handle token refresh edge case
-    - Step 2: Add error handling
-  Act: Execute steps
-  Verify: All edge cases covered
-  Decision: Stop
-
-Total: 2 iterations, 7 steps executed
-```
-
-### Scenario 3: Simple Query (Chitchat Fast Path)
-
-```
-User: "Hello, how are you?"
-
-Classification: Chitchat (< 30 tokens)
-Fast Path: Direct LLM call
-Response: "Hello! I'm doing well, thanks for asking!"
-Total: < 500ms, no iteration
-```
 
 ## Changelog
 

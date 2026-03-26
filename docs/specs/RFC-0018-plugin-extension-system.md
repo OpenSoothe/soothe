@@ -339,25 +339,7 @@ class ResearchPlugin:
 
 ### 1.5 Plugin Context
 
-The `context` parameter provides access to Soothe internals:
-
-```python
-from soothe_sdk.types import PluginContext
-
-class MyPlugin:
-    async def on_load(self, context: PluginContext):
-        # Plugin-specific configuration
-        self.api_key = context.config.get("api_key")
-
-        # Global Soothe configuration
-        self.model = context.soothe_config.resolve_model("default")
-
-        # Logger
-        self.logger = context.logger
-
-        # Event emitter
-        context.emit_event("plugin.loaded", {"name": "my-plugin"})
-```
+The `context` parameter provides access to Soothe internals.
 
 **PluginContext Fields**:
 
@@ -423,44 +405,16 @@ class PluginManifest(BaseModel):
 
 #### 3.1 Python Entry Points
 
-Plugin packages declare themselves via Python entry points.
-
-**Declaration in `pyproject.toml`**:
+Plugin packages declare themselves via Python entry points in `pyproject.toml`:
 
 ```toml
 [project.entry-points."soothe.plugins"]
 my_plugin = "my_package:MyPlugin"
-research = "research_package.plugin:ResearchPlugin"
-```
-
-**Discovery implementation**:
-
-```python
-import importlib.metadata
-
-def discover_entry_points() -> list[str]:
-    """Discover plugins from Python entry points.
-
-    Returns:
-        List of module paths (e.g., "my_package:MyPlugin").
-    """
-    plugins = []
-    try:
-        entry_points = importlib.metadata.entry_points(group="soothe.plugins")
-        for ep in entry_points:
-            plugins.append(f"{ep.value}")
-            logger.info(f"Discovered plugin '{ep.name}' from entry point")
-    except Exception:
-        logger.debug("No soothe.plugins entry points found")
-
-    return plugins
 ```
 
 #### 3.2 Config-Declared Plugins
 
-Users can declare plugins directly in `config.yml`.
-
-**Configuration format**:
+Users can declare plugins directly in `config.yml`:
 
 ```yaml
 plugins:
@@ -469,153 +423,21 @@ plugins:
     module: "my_package:MyPlugin"
     config:
       api_key: "${MY_API_KEY}"
-      max_results: 10
-
-  - name: another-plugin
-    enabled: false
-    module: "another.module:AnotherPlugin"
-```
-
-**Discovery implementation**:
-
-```python
-from typing import Sequence
-
-def discover_config_declared(config: SootheConfig) -> list[tuple[str, dict]]:
-    """Discover plugins declared in configuration.
-
-    Args:
-        config: Resolved Soothe configuration.
-
-    Returns:
-        List of (module_path, config_dict) tuples for enabled plugins.
-    """
-    plugins = []
-    if hasattr(config, "plugins"):
-        for plugin_config in config.plugins:
-            if plugin_config.enabled and plugin_config.module:
-                plugins.append((plugin_config.module, plugin_config.config))
-    return plugins
 ```
 
 #### 3.3 Filesystem Discovery
 
-Plugins can be placed in a standard filesystem location.
-
-**Directory structure**:
-
-```
-~/.soothe/plugins/
-  my_plugin/
-    plugin.py  # Contains MyPlugin class decorated with @plugin
-  research/
-    __init__.py  # Contains ResearchPlugin class
-```
-
-**Discovery implementation**:
-
-```python
-from pathlib import Path
-
-def discover_filesystem(base_dir: Path = Path("~/.soothe/plugins")) -> list[str]:
-    """Discover plugins from filesystem directory.
-
-    Args:
-        base_dir: Base directory for plugin discovery.
-
-    Returns:
-        List of module paths.
-    """
-    plugins = []
-    base = base_dir.expanduser()
-
-    if not base.is_dir():
-        return plugins
-
-    for plugin_dir in base.iterdir():
-        if plugin_dir.is_dir():
-            # Look for plugin.py or __init__.py
-            plugin_file = plugin_dir / "plugin.py"
-            init_file = plugin_dir / "__init__.py"
-
-            if plugin_file.exists():
-                plugins.append(f"{plugin_dir.name}.plugin")
-            elif init_file.exists():
-                plugins.append(plugin_dir.name)
-
-    return plugins
-```
+Plugins can be placed in `~/.soothe/plugins/<name>/` with `plugin.py` or `__init__.py`.
 
 #### 3.4 Priority and Conflict Resolution
 
-When multiple sources provide the same plugin name, priority determines which is used.
+Priority levels (higher = preferred):
+- Built-in: 100
+- Entry point: 50
+- Config: 30
+- Filesystem: 10
 
-```python
-from typing import Literal
-from dataclasses import dataclass
-
-@dataclass
-class RegistryEntry:
-    """Entry in the plugin registry."""
-    manifest: PluginManifest
-    source: Literal["built-in", "entry_point", "config", "filesystem"]
-    priority: int
-    plugin_instance: Any | None = None
-
-
-class PluginRegistry:
-    """Registry for discovered plugins with priority handling."""
-
-    # Priority levels (higher = preferred)
-    PRIORITY_BUILTIN = 100
-    PRIORITY_ENTRY_POINT = 50
-    PRIORITY_CONFIG = 30
-    PRIORITY_FILESYSTEM = 10
-
-    def __init__(self):
-        self._plugins: dict[str, RegistryEntry] = {}
-
-    def register(
-        self,
-        manifest: PluginManifest,
-        source: Literal["built-in", "entry_point", "config", "filesystem"],
-        priority: int | None = None,
-    ) -> None:
-        """Register a plugin manifest with source and priority."""
-        if priority is None:
-            priority = {
-                "built-in": self.PRIORITY_BUILTIN,
-                "entry_point": self.PRIORITY_ENTRY_POINT,
-                "config": self.PRIORITY_CONFIG,
-                "filesystem": self.PRIORITY_FILESYSTEM,
-            }[source]
-
-        existing = self._plugins.get(manifest.name)
-        if existing and existing.priority >= priority:
-            logger.warning(
-                f"Ignoring duplicate plugin '{manifest.name}' from {source} "
-                f"(existing has priority {existing.priority} >= {priority})"
-            )
-            return
-
-        self._plugins[manifest.name] = RegistryEntry(
-            manifest=manifest,
-            source=source,
-            priority=priority,
-        )
-        logger.info(
-            f"Registered plugin '{manifest.name}' v{manifest.version} "
-            f"from {source} (priority={priority})"
-        )
-
-    def get(self, name: str) -> RegistryEntry | None:
-        """Get registry entry by name."""
-        return self._plugins.get(name)
-
-    def list_all(self) -> list[RegistryEntry]:
-        """List all registered entries."""
-        return list(self._plugins.values())
-```
+When multiple sources provide the same plugin name, the highest priority source is used.
 
 ### 4. Dependency Declaration
 
@@ -623,63 +445,21 @@ Plugins declare dependencies in the `@plugin` decorator using PEP 440 version sp
 
 #### 4.1 Library Dependencies
 
-Plugins can declare required Python packages.
-
-**Example**:
-
 ```python
 @plugin(
     name="research",
     version="1.0.0",
-    dependencies=[
-        "arxiv>=2.0.0",
-        "langchain>=0.1.0",
-    ],
+    dependencies=["arxiv>=2.0.0", "langchain>=0.1.0"],
 )
 class ResearchPlugin:
     pass
 ```
 
-**Resolution**:
-
-```python
-import importlib.metadata
-from packaging.specifiers import SpecifierSet
-
-def resolve_library_dependency(dep_string: str) -> bool:
-    """Check if a library dependency is satisfied.
-
-    Args:
-        dep_string: PEP 440 dependency string (e.g., "langchain>=0.1.0").
-
-    Returns:
-        True if library is installed and meets version constraint.
-    """
-    try:
-        # Parse package name and version constraint
-        from packaging.requirements import Requirement
-        req = Requirement(dep_string)
-
-        # Get installed version
-        version = importlib.metadata.version(req.name)
-
-        # Check version constraint
-        if req.specifier:
-            return version in req.specifier
-
-        return True
-    except importlib.metadata.PackageNotFoundError:
-        return False
-    except Exception as e:
-        logger.warning(f"Failed to check dependency '{dep_string}': {e}")
-        return False
-```
+Dependencies are checked at load time. Missing required dependencies prevent plugin loading.
 
 #### 4.2 Configuration Dependencies
 
-Plugins can declare required configuration values.
-
-**Example**:
+Plugins can declare required configuration values using dot-separated paths:
 
 ```python
 @plugin(
@@ -691,206 +471,28 @@ class MyPlugin:
     pass
 ```
 
-**Resolution**:
-
-```python
-def resolve_config_dependency(config_path: str, config: SootheConfig) -> bool:
-    """Check if a configuration dependency is satisfied.
-
-    Args:
-        config_path: Dot-separated config path (e.g., "providers.openai.api_key").
-        config: Resolved Soothe configuration.
-
-    Returns:
-        True if config path exists and is non-empty.
-    """
-    # Navigate dot-separated path
-    parts = config_path.split(".")
-    obj = config
-
-    for part in parts:
-        if hasattr(obj, part):
-            obj = getattr(obj, part)
-        elif isinstance(obj, dict) and part in obj:
-            obj = obj[part]
-        else:
-            return False
-
-    # Check non-empty
-    if obj is None:
-        return False
-    if isinstance(obj, str) and not obj:
-        return False
-
-    return True
-```
-
 ### 5. Configuration Integration
 
 #### 5.1 Configuration Schema
 
-Extend `SootheConfig` to support plugins.
+Extend `SootheConfig` with plugin configuration:
 
 ```python
-from pydantic import BaseModel, Field
-
 class PluginConfig(BaseModel):
     """Configuration for a single plugin."""
-
     name: str
     enabled: bool = True
-    module: str | None = None  # Python import path
+    module: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
-
-
-class SootheConfig(BaseSettings):
-    # ... existing fields ...
-
-    # Plugin system
-    plugins: list[PluginConfig] = Field(default_factory=list)
-
-    def get_plugin_config(self, name: str) -> dict[str, Any]:
-        """Get plugin-specific configuration.
-
-        Args:
-            name: Plugin name.
-
-        Returns:
-            Configuration dict for the plugin.
-        """
-        for plugin in self.plugins:
-            if plugin.name == name:
-                return plugin.config
-        return {}
 ```
 
-#### 5.2 Configuration Example
+#### 5.2 Environment Variable Substitution
 
-```yaml
-# config.yml
-
-# Plugin system configuration
-plugins:
-  # Built-in plugins
-  - name: browser
-    enabled: true
-    config:
-      headless: true
-      max_steps: 100
-
-  - name: claude
-    enabled: true
-
-  # Third-party plugins
-  - name: research-assistant
-    enabled: true
-    module: "my_package:ResearchPlugin"
-    config:
-      arxiv_api_key: "${ARXIV_API_KEY}"
-      max_results: 10
-
-  - name: custom-tools
-    enabled: false
-    module: "custom.plugin:CustomPlugin"
-```
-
-#### 5.3 Environment Variable Substitution
-
-Plugin configuration supports environment variable substitution using `${VAR_NAME}` syntax:
-
-```yaml
-plugins:
-  - name: my-plugin
-    config:
-      api_key: "${MY_API_KEY}"  # Replaced with value of MY_API_KEY env var
-      endpoint: "${API_ENDPOINT:-https://default.api.com}"  # With default value
-```
+Plugin configuration supports `${VAR_NAME}` and `${VAR_NAME:-default}` syntax for environment variable substitution.
 
 ### 6. Event Integration
 
 #### 6.1 Plugin Events
-
-```python
-from typing import Literal
-from pydantic import BaseModel
-
-
-class PluginLoadedEvent(BaseModel):
-    """Emitted when a plugin is loaded."""
-
-    type: Literal["soothe.plugin.loaded"] = "soothe.plugin.loaded"
-    name: str
-    version: str
-    source: str  # entry_point, config, filesystem
-
-
-class PluginFailedEvent(BaseModel):
-    """Emitted when a plugin fails to load."""
-
-    type: Literal["soothe.plugin.failed"] = "soothe.plugin.failed"
-    name: str
-    error: str
-    phase: str  # discovery, validation, dependency, initialization
-
-
-class PluginUnloadedEvent(BaseModel):
-    """Emitted when a plugin is unloaded."""
-
-    type: Literal["soothe.plugin.unloaded"] = "soothe.plugin.unloaded"
-    name: str
-
-
-class PluginHealthCheckedEvent(BaseModel):
-    """Emitted when a health check completes."""
-
-    type: Literal["soothe.plugin.health_checked"] = "soothe.plugin.health_checked"
-    name: str
-    status: str
-    message: str = ""
-```
-
-#### 6.2 Event Emission
-
-```python
-from soothe.core.events import emit_progress
-
-
-async def load_plugin(
-    plugin_class,
-    config: SootheConfig,
-) -> None:
-    """Load plugin with progress events."""
-    # Get manifest
-    plugin_instance = plugin_class()
-    manifest = plugin_instance.manifest
-
-    # Emit loading event
-    emit_progress(PluginLoadedEvent(
-        name=manifest.name,
-        version=manifest.version,
-        source="entry_point",
-    ))
-
-    try:
-        # Initialize
-        context = PluginContext(config=config.get_plugin_config(manifest.name), ...)
-        await plugin_instance.on_load(context)
-
-        # Register tools and subagents
-        # ...
-
-        logger.info(f"Loaded plugin '{manifest.name}' v{manifest.version}")
-
-    except Exception as e:
-        emit_progress(PluginFailedEvent(
-            name=manifest.name,
-            error=str(e),
-            phase="initialization",
-        ))
-        raise
-```
-
-#### 6.3 Event Catalog
 
 | Event Type | Description | Fields |
 |------------|-------------|--------|
@@ -899,120 +501,24 @@ async def load_plugin(
 | `soothe.plugin.unloaded` | Plugin unloaded | name |
 | `soothe.plugin.health_checked` | Health check completed | name, status, message |
 
+#### 6.2 Event Emission
+
+Events are emitted during plugin lifecycle phases (discovery, validation, dependency resolution, initialization, shutdown).
+
 ### 7. Security Model
 
 #### 7.1 Trust Levels
 
-Plugins are categorized by trust level, which determines their default permissions.
-
-```python
-from enum import Enum
-
-
-class TrustLevel(str, Enum):
-    """Plugin trust levels."""
-
-    BUILT_IN = "built-in"      # Soothe core plugins (browser, claude, skillify, weaver, core_tools)
-    TRUSTED = "trusted"        # Cryptographically signed third-party plugins (future)
-    STANDARD = "standard"      # Unsigned but reviewed plugins (default)
-    UNTRUSTED = "untrusted"    # Unknown/unverified plugins
-```
-
-**Trust Level Permissions**:
-
-| Trust Level | Filesystem | Network | Subprocess | Notes |
-|-------------|------------|---------|------------|-------|
-| built-in | Full | Full | Yes | Core Soothe functionality |
+| Trust Level | Filesystem | Network | Subprocess | Description |
+|-------------|------------|---------|------------|-------------|
+| built-in | Full | Full | Yes | Core Soothe plugins |
 | trusted | Full | Full | Yes | Signed third-party (future) |
 | standard | Read/Write | Full | No | Default for unsigned plugins |
-| untrusted | None | None | No | Restricted, requires explicit approval |
+| untrusted | None | None | No | Requires explicit approval |
 
-#### 7.2 Permission Profiles
+#### 7.2 Permission Enforcement
 
-Default permission profiles for each trust level.
-
-```yaml
-plugin_permissions:
-  built-in:
-    filesystem: full
-    network: full
-    subprocess: true
-
-  trusted:
-    filesystem: full
-    network: full
-    subprocess: true
-
-  standard:
-    filesystem: read-write
-    network: full
-    subprocess: false
-
-  untrusted:
-    filesystem: none
-    network: none
-    subprocess: false
-```
-
-#### 7.3 Permission Enforcement
-
-Permission enforcement is implemented at the plugin loader level:
-
-```python
-from pathlib import Path
-from urllib.parse import urlparse
-
-
-class PermissionEnforcer:
-    """Enforce permissions for plugin actions."""
-
-    def __init__(self, trust_level: TrustLevel):
-        self.trust_level = trust_level
-        self.permissions = get_permissions_for_trust_level(trust_level)
-
-    def check_filesystem_access(self, path: Path, mode: str) -> bool:
-        """Check if filesystem access is allowed.
-
-        Args:
-            path: File path to access.
-            mode: Access mode ("r", "w", "x").
-
-        Returns:
-            True if access is permitted.
-        """
-        if self.permissions.filesystem == "none":
-            return False
-
-        if self.permissions.filesystem == "read-write" and mode in ("r", "rb", "w", "wb"):
-            return True
-
-        if self.permissions.filesystem == "full":
-            return True
-
-        return False
-
-    def check_network_access(self, url: str) -> bool:
-        """Check if network access is allowed.
-
-        Args:
-            url: URL to access.
-
-        Returns:
-            True if access is permitted.
-        """
-        if self.permissions.network == "none":
-            return False
-
-        if self.permissions.network == "localhost":
-            parsed = urlparse(url)
-            return parsed.hostname in ("localhost", "127.0.0.1", "::1")
-
-        return True
-
-    def check_subprocess(self) -> bool:
-        """Check if subprocess execution is allowed."""
-        return self.permissions.subprocess
-```
+Permissions are enforced at the plugin loader level based on trust level. Filesystem, network, and subprocess access can be restricted.
 
 ### 8. Loading Lifecycle
 

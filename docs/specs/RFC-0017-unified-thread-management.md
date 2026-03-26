@@ -209,63 +209,27 @@ Client → ThreadExecutor.execute_thread(thread_id, user_input)
   → Update thread timestamp on completion
 ```
 
-### Thread Lifecycle State Machine
+### Thread Lifecycle
 
-```
-┌─────────┐
-│  New    │
-└────┬────┘
-     │ create_thread()
-     ▼
-┌─────────┐
-│  Idle   │◄──────────────┐
-└────┬────┘               │
-     │ execute query      │
-     ▼                    │
-┌─────────┐               │
-│ Running │               │
-└────┬────┘               │
-     │ complete/stop      │
-     └────────────────────┘
-     │ archive_thread()
-     ▼
-┌──────────┐
-│ Archived │
-└────┬─────┘
-     │ delete_thread()
-     ▼
-┌──────────┐
-│ Deleted  │ (permanently removed)
-└──────────┘
-```
-
-**States**:
-- `idle`: Thread created but not currently executing
-- `running`: Thread is actively processing a query
-- `suspended`: Thread paused mid-execution (future feature)
-- `archived`: Thread archived, read-only
-- `error`: Thread encountered unrecoverable error
+Thread states: `idle` → `running` → `idle` (cycle) → `archived` → `deleted` (terminal). The `suspended` state is reserved for future features.
 
 ## Abstract Schemas
 
 ### Enhanced Thread Metadata
 
 ```python
-# Extension to protocols/durability.py
-
 class ThreadMetadata(BaseModel):
     """Enhanced thread metadata with organization tools."""
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-
-    # NEW FIELDS (RFC-0017):
+    # RFC-0017 additions:
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
 ```
 
-### Thread Statistics
+### Thread Statistics and Info
 
 ```python
 class ThreadStats(BaseModel):
@@ -277,71 +241,25 @@ class ThreadStats(BaseModel):
     total_cost: float = 0.0
     avg_response_time_ms: float = 0.0
     error_count: int = 0
-    last_error: str | None = None
-```
 
-### Enhanced Thread Info
-
-```python
 class EnhancedThreadInfo(BaseModel):
     """Complete thread information with statistics."""
     thread_id: str
     status: Literal["idle", "running", "suspended", "archived", "error"]
     created_at: datetime
     updated_at: datetime
-    last_activity_at: datetime
     metadata: ThreadMetadata
     stats: ThreadStats = Field(default_factory=ThreadStats)
     execution_context: ExecutionContext | None = None
 
-
-class ExecutionContext(BaseModel):
-    """Current execution state for running threads."""
-    current_goal: str | None = None
-    current_step: str | None = None
-    iteration: int = 0
-    started_at: datetime
-    estimated_completion: datetime | None = None
-```
-
-### Thread Filter
-
-```python
 class ThreadFilter(BaseModel):
     """Thread filtering criteria."""
-    status: Literal["idle", "running", "suspended", "archived", "error"] | None = None
-    tags: list[str] | None = None  # Match ANY tag
-    labels: list[str] | None = None  # Match ANY label
-    priority: Literal["low", "normal", "high"] | None = None
-    category: str | None = None
+    status: str | None = None
+    tags: list[str] | None = None
+    labels: list[str] | None = None
+    priority: str | None = None
     created_after: datetime | None = None
-    created_before: datetime | None = None
     updated_after: datetime | None = None
-    updated_before: datetime | None = None
-```
-
-### Thread Message
-
-```python
-class ThreadMessage(BaseModel):
-    """Single message in thread conversation."""
-    timestamp: datetime
-    kind: Literal["conversation", "event", "tool_call", "tool_result"]
-    role: Literal["user", "assistant", "system"] | None = None
-    content: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
-```
-
-### Artifact Entry
-
-```python
-class ArtifactEntry(BaseModel):
-    """Thread artifact metadata."""
-    filename: str
-    size_bytes: int
-    created_at: datetime
-    artifact_type: Literal["file", "report", "checkpoint", "other"]
-    download_url: str
 ```
 
 ## Protocol Specification
@@ -350,324 +268,36 @@ class ArtifactEntry(BaseModel):
 
 ```python
 class ThreadContextManagerProtocol(Protocol):
-    """Protocol for thread lifecycle management."""
+    """Central coordinator for thread lifecycle operations."""
 
-    async def create_thread(
-        self,
-        initial_message: str | None = None,
-        metadata: ThreadMetadata | None = None,
-    ) -> ThreadInfo:
-        """Create new thread with optional initial message."""
-        ...
-
-    async def resume_thread(
-        self,
-        thread_id: str,
-        load_history: bool = True,
-    ) -> ThreadInfo:
-        """Resume existing thread, loading history if requested."""
-        ...
-
-    async def get_thread(self, thread_id: str) -> EnhancedThreadInfo:
-        """Get enhanced thread information with statistics."""
-        ...
-
-    async def list_threads(
-        self,
-        filter: ThreadFilter | None = None,
-        include_stats: bool = False,
-    ) -> list[EnhancedThreadInfo]:
-        """List threads with optional filtering and statistics."""
-        ...
-
-    async def update_thread_metadata(
-        self,
-        thread_id: str,
-        metadata: ThreadMetadata,
-    ) -> None:
-        """Update thread metadata (tags, labels, priority, category)."""
-        ...
-
-    async def archive_thread(self, thread_id: str) -> None:
-        """Archive thread, making it read-only."""
-        ...
-
-    async def delete_thread(self, thread_id: str) -> None:
-        """Permanently delete thread and all associated data."""
-        ...
-
-    async def get_thread_messages(
-        self,
-        thread_id: str,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[ThreadMessage]:
-        """Get thread conversation history."""
-        ...
-
-    async def get_thread_artifacts(
-        self,
-        thread_id: str,
-    ) -> list[ArtifactEntry]:
-        """Get list of artifacts produced by thread."""
-        ...
-
-    async def get_thread_stats(self, thread_id: str) -> ThreadStats:
-        """Get thread execution statistics."""
-        ...
+    async def create_thread(self, initial_message: str | None = None,
+                           metadata: ThreadMetadata | None = None) -> ThreadInfo: ...
+    async def resume_thread(self, thread_id: str, load_history: bool = True) -> ThreadInfo: ...
+    async def get_thread(self, thread_id: str) -> EnhancedThreadInfo: ...
+    async def list_threads(self, filter: ThreadFilter | None = None,
+                          include_stats: bool = False) -> list[EnhancedThreadInfo]: ...
+    async def update_thread_metadata(self, thread_id: str, metadata: ThreadMetadata) -> None: ...
+    async def archive_thread(self, thread_id: str) -> None: ...
+    async def delete_thread(self, thread_id: str) -> None: ...
+    async def get_thread_messages(self, thread_id: str, limit: int = 100,
+                                  offset: int = 0) -> list[ThreadMessage]: ...
+    async def get_thread_artifacts(self, thread_id: str) -> list[ArtifactEntry]: ...
+    async def get_thread_stats(self, thread_id: str) -> ThreadStats: ...
 ```
 
 ### Daemon Protocol Extensions (RFC-0013)
 
-Add thread-specific message types:
+Thread management operations are exposed through daemon protocol messages:
 
-#### Client → Server Messages
+**Client → Server**: `thread_list`, `thread_create`, `thread_get`, `thread_archive`, `thread_delete`, `thread_messages`, `thread_artifacts`
 
-```json
-{
-  "type": "thread_list",
-  "filter": {
-    "status": "active",
-    "tags": ["research", "analysis"],
-    "updated_after": "2026-03-01T00:00:00Z"
-  },
-  "include_stats": true
-}
-```
+**Server → Client**: `thread_list_response`, `thread_get_response`, `thread_created`, `thread_operation_ack`
 
-```json
-{
-  "type": "thread_create",
-  "initial_message": "Analyze authentication code",
-  "metadata": {
-    "tags": ["security"],
-    "priority": "high",
-    "category": "code-review"
-  }
-}
-```
+These messages map directly to ThreadContextManager method calls, enabling Unix socket and WebSocket clients to perform thread operations.
 
-```json
-{
-  "type": "thread_get",
-  "thread_id": "abc123"
-}
-```
+### HTTP REST API
 
-```json
-{
-  "type": "thread_archive",
-  "thread_id": "abc123"
-}
-```
-
-```json
-{
-  "type": "thread_delete",
-  "thread_id": "abc123"
-}
-```
-
-```json
-{
-  "type": "thread_messages",
-  "thread_id": "abc123",
-  "limit": 50,
-  "offset": 0
-}
-```
-
-```json
-{
-  "type": "thread_artifacts",
-  "thread_id": "abc123"
-}
-```
-
-#### Server → Client Messages
-
-```json
-{
-  "type": "thread_list_response",
-  "threads": [
-    {
-      "thread_id": "abc123",
-      "status": "idle",
-      "created_at": "2026-03-19T10:00:00Z",
-      "updated_at": "2026-03-19T12:30:00Z",
-      "metadata": {...},
-      "stats": {...}
-    }
-  ],
-  "total": 1
-}
-```
-
-```json
-{
-  "type": "thread_get_response",
-  "thread": {
-    "thread_id": "abc123",
-    "status": "idle",
-    ...
-  }
-}
-```
-
-```json
-{
-  "type": "thread_created",
-  "thread_id": "xyz789",
-  "status": "idle"
-}
-```
-
-```json
-{
-  "type": "thread_operation_ack",
-  "operation": "archive",
-  "thread_id": "abc123",
-  "success": true,
-  "message": "Thread archived successfully"
-}
-```
-
-### HTTP REST API (RFC-0016 Extension)
-
-Complete implementation of thread endpoints:
-
-#### List Threads
-
-```http
-GET /api/v1/threads?status=active&tags=research,analysis&limit=50&offset=0&include_stats=true
-```
-
-**Response**:
-```json
-{
-  "threads": [...],
-  "total": 10,
-  "limit": 50,
-  "offset": 0
-}
-```
-
-#### Get Thread
-
-```http
-GET /api/v1/threads/{thread_id}
-```
-
-**Response**:
-```json
-{
-  "thread": {
-    "thread_id": "abc123",
-    "status": "idle",
-    "created_at": "2026-03-19T10:00:00Z",
-    "updated_at": "2026-03-19T12:30:00Z",
-    "metadata": {...},
-    "stats": {...}
-  }
-}
-```
-
-#### Create Thread
-
-```http
-POST /api/v1/threads
-Content-Type: application/json
-
-{
-  "initial_message": "Analyze authentication code",
-  "metadata": {
-    "tags": ["security"],
-    "priority": "high"
-  }
-}
-```
-
-**Response**: `201 Created`
-```json
-{
-  "thread_id": "xyz789",
-  "status": "idle",
-  "created_at": "2026-03-22T10:00:00Z"
-}
-```
-
-#### Delete Thread
-
-```http
-DELETE /api/v1/threads/{thread_id}?archive=true
-```
-
-**Response**: `200 OK`
-```json
-{
-  "thread_id": "abc123",
-  "status": "archived"
-}
-```
-
-#### Get Thread Messages
-
-```http
-GET /api/v1/threads/{thread_id}/messages?limit=100&offset=0
-```
-
-**Response**:
-```json
-{
-  "thread_id": "abc123",
-  "messages": [...],
-  "limit": 100,
-  "offset": 0
-}
-```
-
-#### Get Thread Artifacts
-
-```http
-GET /api/v1/threads/{thread_id}/artifacts
-```
-
-**Response**:
-```json
-{
-  "thread_id": "abc123",
-  "artifacts": [
-    {
-      "filename": "report.md",
-      "size_bytes": 4096,
-      "created_at": "2026-03-19T10:10:00Z",
-      "artifact_type": "report",
-      "download_url": "/api/v1/files/report.md"
-    }
-  ]
-}
-```
-
-#### Get Thread Stats
-
-```http
-GET /api/v1/threads/{thread_id}/stats
-```
-
-**Response**:
-```json
-{
-  "thread_id": "abc123",
-  "stats": {
-    "message_count": 15,
-    "artifact_count": 2,
-    "total_tokens_used": 45000,
-    "total_cost": 0.45,
-    "avg_response_time_ms": 2500.0,
-    "error_count": 0
-  }
-}
-```
+Thread management REST endpoints are defined in the REST API specification (RFC-0016). The ThreadContextManager serves as the backend implementation for these endpoints.
 
 ## Multi-Threading Architecture
 
@@ -746,95 +376,15 @@ class APIRateLimiter:
 
 ## CLI Commands
 
-### Enhanced thread continue
-
-```bash
-# Standalone mode (default)
-soothe thread continue abc123
-
-# Daemon mode
-soothe thread continue --daemon abc123
-
-# New thread
-soothe thread continue --new
-
-# Continue last active thread
-soothe thread continue
-```
-
-### New thread commands
-
-```bash
-# Show thread statistics
-soothe thread stats abc123
-
-# Add tags
-soothe thread tag abc123 research analysis
-
-# Remove tags
-soothe thread tag abc123 research --remove
-```
-
-### Removed commands
-
-```bash
-# DEPRECATED: Use 'soothe thread continue --daemon' instead
-soothe daemon attach --thread-id abc123
-```
+The `soothe thread continue` command supports both standalone and daemon modes. The deprecated `soothe daemon attach --thread-id` is replaced by `soothe thread continue --daemon`. See user documentation for complete CLI reference.
 
 ## Implementation Notes
 
-### Statistics Calculation
-
-Thread statistics are calculated lazily when requested:
-
-1. **Message Count**: Read from ThreadLogger JSONL file, count records with `kind="conversation"`
-2. **Event Count**: Count records with `kind="event"`
-3. **Artifact Count**: List files in `~/.soothe/runs/{thread_id}/` directory
-4. **Token Usage**: Sum token counts from event records (if tracked)
-5. **Cost**: Calculate from token usage using model pricing
-6. **Error Count**: Count records with `kind="event"` and `data.type` containing "error"
-
-### Backward Compatibility
-
-- Existing threads automatically get default values for new metadata fields
-- Old protocol messages (`resume_thread`, `new_thread`) continue working
-- HTTP REST endpoints were never functional, no breaking changes
-- `soothe daemon attach` shows deprecation warning, continues working in this version
-
-### Performance Considerations
-
-- Statistics calculation is O(n) where n = number of log records
-- Consider caching for frequently accessed threads
-- Thread listing without stats is fast (metadata only)
-- Pagination limits prevent excessive data transfer
+Thread statistics are calculated lazily on demand from ThreadLogger records and artifact directories. Existing threads automatically receive default values for new metadata fields. Old protocol messages (`resume_thread`, `new_thread`) remain supported for backward compatibility.
 
 ## Migration Path
 
-### Phase 1: Core Infrastructure
-- Create ThreadContextManager, ThreadExecutor, enhanced metadata models
-- Integrate with SootheRunner
-
-### Phase 2: Daemon Protocol
-- Add thread message types to protocol
-- Implement message handlers
-
-### Phase 3: HTTP REST API
-- Implement all thread endpoints
-
-### Phase 4: CLI Simplification
-- Remove `server attach` duplication
-- Enhance `thread continue`
-- Add new thread commands
-
-### Phase 5: Multi-Threading
-- Implement concurrent execution
-- Add rate limiting
-
-### Phase 6: Testing and Documentation
-- Comprehensive test coverage
-- User guide updates
-- API documentation
+Implementation phases are detailed in the associated implementation guide. The migration maintains backward compatibility while progressively adding ThreadContextManager, daemon protocol extensions, REST API implementation, and multi-threading support.
 
 ## Success Metrics
 
