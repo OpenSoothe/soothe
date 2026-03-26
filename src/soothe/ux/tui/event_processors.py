@@ -335,6 +335,11 @@ def process_daemon_event(
             category = classify_custom_event(namespace, data)
             etype = data.get("type", "")
 
+            # Skip tool events - they're handled by message processing layer with tree format (RFC-0019)
+            # This prevents duplicate output in TUI (tree format + protocol event rendering)
+            if etype.startswith("soothe.tool."):
+                return
+
             # Check for multi-step plan creation
             from soothe.core.event_catalog import PLAN_CREATED
 
