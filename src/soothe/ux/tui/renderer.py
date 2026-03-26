@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import RenderableType
 from rich.text import Text
 
+from soothe.core.event_catalog import REGISTRY
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.tui.utils import DOT_COLORS, make_dot_line, make_tool_block
@@ -246,7 +247,7 @@ class TuiRenderer:
         *,
         namespace: tuple[str, ...],
     ) -> None:
-        """Write progress event to panel.
+        """Write progress event to panel with two-level tree structure.
 
         Args:
             event_type: Event type string.
@@ -256,16 +257,25 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # Build summary based on event type
+        # Build top-level summary from registry template
         summary = self._build_event_summary(event_type, data)
-        if summary:
-            color = DOT_COLORS.get("protocol", "dim")
-            if namespace:
-                color = DOT_COLORS.get("subagent", "magenta")
+        if not summary:
+            return
+
+        # Determine color based on namespace
+        color = DOT_COLORS.get("subagent", "magenta") if namespace else DOT_COLORS.get("protocol", "dim")
+
+        # Get details for second level
+        details = self._format_event_details(event_type, data)
+
+        # Create two-level tree display
+        if details:
+            self._on_panel_write(make_dot_line(color, summary, details))
+        else:
             self._on_panel_write(make_dot_line(color, summary))
 
     def _build_event_summary(self, event_type: str, data: dict[str, Any]) -> str:
-        """Build human-readable summary for event.
+        """Build human-readable summary for event using registry template.
 
         Args:
             event_type: Event type string.
@@ -274,32 +284,73 @@ class TuiRenderer:
         Returns:
             Human-readable summary or empty string.
         """
-        # Agentic events
+        # Query event registry for template
+        meta = REGISTRY.get_meta(event_type)
+        if meta and meta.summary_template:
+            try:
+                # Format template with event data
+                return meta.summary_template.format(**data)
+            except (KeyError, ValueError) as e:
+                logger.debug("Failed to format template for %s: %s", event_type, e)
+                return ""
+
+        # Fallback: Return empty string (no display)
+        return ""
+
+    def _format_event_details(self, event_type: str, data: dict[str, Any]) -> str | None:
+        """Extract additional details for second-level display.
+
+        Args:
+            event_type: Event type string.
+            data: Event payload.
+
+        Returns:
+            Details string for second level, or None if no details.
+        """
+        # Browser step events: show action + url
+        if "browser.step" in event_type:
+            parts = []
+            if action := data.get("action"):
+                parts.append(str(action)[:60])
+            if url := data.get("url"):
+                parts.append(url[:80])
+            return " | ".join(parts) if parts else None
+
+        # Browser CDP events: show CDP URL
+        if "browser.cdp" in event_type:
+            return data.get("cdp_url")
+
+        # Claude text events: show text preview
+        if "claude.text" in event_type:
+            text = data.get("text", "")
+            return text[:120] if text else None
+
+        # Claude tool use: no additional details
+        if "claude.tool_use" in event_type:
+            return None
+
+        # Claude result: cost and duration already in summary
+        if "claude.result" in event_type:
+            return None
+
+        # Agentic events: preserve existing logic
         if "agentic" in event_type:
             if "loop.started" in event_type:
-                return f"Agentic loop started (max {data.get('max_iterations', 3)} iterations)"
+                return f"max {data.get('max_iterations', 3)} iterations"
             if "loop.completed" in event_type:
-                return f"Agentic loop completed ({data.get('total_iterations', 0)} iterations)"
+                return f"{data.get('total_iterations', 0)} iterations"
             if "iteration.started" in event_type:
                 return f"Iteration {data.get('iteration', 0) + 1}"
             if "observation.completed" in event_type:
                 context = data.get("context_entries", 0)
                 memories = data.get("memories_recalled", 0)
                 strategy = data.get("planning_strategy", "unknown")
-                return f"Observed: {context} context, {memories} memories → {strategy}"
+                return f"{context} context, {memories} memories → {strategy}"
             if "verification.completed" in event_type:
                 should_continue = data.get("should_continue", False)
-                outcome = "→ continuing" if should_continue else "✓ complete"
-                return f"Verified: {outcome}"
-            return ""
+                return "→ continuing" if should_continue else "✓ complete"
 
-        # Browser/subagent events
-        if "browser" in event_type:
-            step = data.get("step", "?")
-            action = str(data.get("action", ""))[:40]
-            return f"Step {step}: {action}" if action else f"Step {step}"
-
-        return ""
+        return None
 
     def on_plan_created(self, plan: Plan) -> None:  # noqa: ARG002
         """Handle plan creation.

@@ -184,22 +184,6 @@ class TestDataTools:
 # ---------------------------------------------------------------------------
 
 
-class TestResearchToolRename:
-    """Tests for the research tool."""
-
-    def test_tool_name_is_research(self) -> None:
-        from soothe.tools.research import ResearchTool
-
-        tool = ResearchTool()
-        assert tool.name == "research"
-
-    def test_description_mentions_research(self) -> None:
-        from soothe.tools.research import ResearchTool
-
-        tool = ResearchTool()
-        assert "research" in tool.description.lower()
-
-
 # ---------------------------------------------------------------------------
 # Resolver: consolidated names resolve, old names rejected
 # ---------------------------------------------------------------------------
@@ -207,13 +191,6 @@ class TestResearchToolRename:
 
 class TestResolverConsolidatedNames:
     """Consolidated tool names resolve; legacy names are rejected."""
-
-    def test_research_resolves(self) -> None:
-        from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
-
-        tools = _resolve_single_tool_group_uncached("research")
-        assert len(tools) == 1
-        assert tools[0].name == "research"
 
     def test_websearch_resolves(self) -> None:
         from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
@@ -395,26 +372,8 @@ class TestConsolidatedToolLogging:
             # Tools that handle errors internally don't raise, so they emit completed
             assert "soothe.tool.read_file.completed" in event_types
 
-    def test_research_emits_events(self) -> None:
-        """ResearchTool should emit started/completed events."""
-        from soothe.tools.research import ResearchTool
-        from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
-
-        tool = ResearchTool()
-
-        with patch("soothe.utils.progress.emit_progress") as mock_emit:
-            wrapped = wrap_main_agent_tool_with_logging(tool, logging.getLogger(__name__))
-
-            # Mock the engine to avoid running full research
-            mock_engine = MagicMock()
-            mock_engine.invoke.return_value = {"answer": "Research completed"}
-            with patch.object(tool, "_build_engine", return_value=mock_engine):
-                result = wrapped._run(topic="test topic")
-
-                # Verify events were emitted
-                event_types = [call[0][0]["type"] for call in mock_emit.call_args_list]
-                assert "soothe.tool.research.started" in event_types
-                assert "soothe.tool.research.completed" in event_types
+    # Research is now a subagent, not a tool
+    # Research event tests moved to subagent tests
 
     def test_no_double_wrapping(self) -> None:
         """Tools should not be wrapped twice."""

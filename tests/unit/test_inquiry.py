@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.inquiry.protocol import (
+from soothe.subagents.research import (
     GatherContext,
     InformationSource,
     InquiryConfig,
@@ -129,21 +129,21 @@ class TestProtocolCompliance:
 
 class TestSourceScoring:
     def test_web_source_scoring(self) -> None:
-        from soothe.inquiry.sources.web import WebSource
+        from soothe.subagents.research.sources.web import WebSource
 
         src = WebSource()
         assert src.relevance_score("latest news about AI") > 0.3
         assert src.relevance_score("src/main.py line 42") < 0.4
 
     def test_academic_source_scoring(self) -> None:
-        from soothe.inquiry.sources.academic import AcademicSource
+        from soothe.subagents.research.sources.academic import AcademicSource
 
         src = AcademicSource()
         assert src.relevance_score("research papers on transformer architecture") > 0.3
         assert src.relevance_score("delete all files") < 0.15
 
     def test_filesystem_source_scoring(self) -> None:
-        from soothe.inquiry.sources.filesystem import FilesystemSource
+        from soothe.subagents.research.sources.filesystem import FilesystemSource
 
         src = FilesystemSource()
         assert src.relevance_score("authentication module in the codebase") > 0.3
@@ -151,7 +151,7 @@ class TestSourceScoring:
         assert src.relevance_score("latest news") < 0.3
 
     def test_cli_source_scoring(self) -> None:
-        from soothe.inquiry.sources.cli import CLISource
+        from soothe.subagents.research.sources.cli import CLISource
 
         src = CLISource()
         assert src.relevance_score("$ git log") > 0.5
@@ -159,14 +159,14 @@ class TestSourceScoring:
         assert src.relevance_score("what is machine learning") < 0.1
 
     def test_browser_source_scoring(self) -> None:
-        from soothe.inquiry.sources.browser import BrowserSource
+        from soothe.subagents.research.sources.browser import BrowserSource
 
         src = BrowserSource()
         assert src.relevance_score("https://example.com/dashboard") > 0.7
         assert src.relevance_score("simple factual question") < 0.2
 
     def test_document_source_scoring(self) -> None:
-        from soothe.inquiry.sources.document import DocumentSource
+        from soothe.subagents.research.sources.document import DocumentSource
 
         src = DocumentSource()
         assert src.relevance_score("what does the spec.pdf say about auth") > 0.5
@@ -180,7 +180,7 @@ class TestSourceScoring:
 
 class TestSourceRouter:
     def test_selects_highest_scoring(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [
             MockSource("low", "web", 0.2),
@@ -192,7 +192,7 @@ class TestSourceRouter:
         assert selected[0].name == "high"
 
     def test_respects_max_sources(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [
             MockSource("a", "web", 0.9),
@@ -206,7 +206,7 @@ class TestSourceRouter:
         assert len(selected) == 2
 
     def test_domain_filtering(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [
             MockSource("web1", "web", 0.9),
@@ -220,7 +220,7 @@ class TestSourceRouter:
         assert "web" not in source_types
 
     def test_fallback_when_no_relevant(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [MockSource("only", "web", 0.05)]
         router = SourceRouter(sources)
@@ -228,7 +228,7 @@ class TestSourceRouter:
         assert len(selected) >= 1
 
     def test_auto_domain_uses_all(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [
             MockSource("web1", "web", 0.8),
@@ -239,7 +239,7 @@ class TestSourceRouter:
         assert len(selected) == 2
 
     def test_available_source_types(self) -> None:
-        from soothe.inquiry.router import SourceRouter
+        from soothe.subagents.research.router import SourceRouter
 
         sources = [
             MockSource("a", "web", 0.5),
@@ -258,18 +258,18 @@ class TestSourceRouter:
 
 class TestCLISourceCommandTranslation:
     def test_direct_command(self) -> None:
-        from soothe.inquiry.sources.cli import CLISource
+        from soothe.subagents.research.sources.cli import CLISource
 
         assert CLISource._query_to_command("$ ls -la") == "ls -la"
 
     def test_git_log_mapping(self) -> None:
-        from soothe.inquiry.sources.cli import CLISource
+        from soothe.subagents.research.sources.cli import CLISource
 
         cmd = CLISource._query_to_command("show me the git log")
         assert "git log" in cmd
 
     def test_unknown_returns_empty(self) -> None:
-        from soothe.inquiry.sources.cli import CLISource
+        from soothe.subagents.research.sources.cli import CLISource
 
         cmd = CLISource._query_to_command("what is the meaning of life")
         assert cmd == ""
@@ -282,7 +282,7 @@ class TestCLISourceCommandTranslation:
 
 class TestFilesystemSourceHelpers:
     def test_looks_like_path(self) -> None:
-        from soothe.inquiry.sources.filesystem import FilesystemSource
+        from soothe.subagents.research.sources.filesystem import FilesystemSource
 
         assert FilesystemSource._looks_like_path("src/auth/module.py")
         assert FilesystemSource._looks_like_path("./config.yml")
@@ -290,7 +290,7 @@ class TestFilesystemSourceHelpers:
         assert not FilesystemSource._looks_like_path("https://example.com")
 
     def test_query_to_pattern(self) -> None:
-        from soothe.inquiry.sources.filesystem import FilesystemSource
+        from soothe.subagents.research.sources.filesystem import FilesystemSource
 
         pattern = FilesystemSource._query_to_pattern("authentication module handler")
         assert "authentication" in pattern
@@ -303,67 +303,37 @@ class TestFilesystemSourceHelpers:
 
 class TestDocumentSourceHelpers:
     def test_split_path_question(self) -> None:
-        from soothe.inquiry.sources.document import DocumentSource
+        from soothe.subagents.research.sources.document import DocumentSource
 
         path, q = DocumentSource._split_path_question("spec.pdf: what is the API?")
         assert path == "spec.pdf"
         assert "API" in q
 
     def test_split_no_path(self) -> None:
-        from soothe.inquiry.sources.document import DocumentSource
+        from soothe.subagents.research.sources.document import DocumentSource
 
         path, q = DocumentSource._split_path_question("what is machine learning")
         assert path == ""
 
 
 # ---------------------------------------------------------------------------
-# Research tool structure tests
+# Research subagent tests
 # ---------------------------------------------------------------------------
 
 
-class TestResearchTool:
-    def test_tool_metadata(self) -> None:
-        from soothe.tools.research import ResearchTool
+class TestResearchSubagent:
+    """Tests for the research subagent."""
 
-        tool = ResearchTool()
-        assert tool.name == "research"
-        assert "domain" in tool.description.lower()
-        assert "deep" in tool.description.lower()
+    def test_subagent_factory_exists(self) -> None:
+        from soothe.subagents.research import create_research_subagent
 
-    def test_build_sources_web(self) -> None:
-        from soothe.tools.research import ResearchTool
+        assert callable(create_research_subagent)
 
-        tool = ResearchTool()
-        sources = tool._build_sources("web")
-        types = {s.source_type for s in sources}
-        assert "web" in types
-        assert "academic" in types
-        assert "filesystem" not in types
+    def test_plugin_definition(self) -> None:
+        from soothe.subagents.research import ResearchPlugin
 
-    def test_build_sources_code(self) -> None:
-        from soothe.tools.research import ResearchTool
-
-        tool = ResearchTool()
-        sources = tool._build_sources("code")
-        types = {s.source_type for s in sources}
-        assert "filesystem" in types
-        assert "cli" in types
-        assert "web" not in types
-
-    def test_build_sources_deep(self) -> None:
-        from soothe.tools.research import ResearchTool
-
-        tool = ResearchTool()
-        sources = tool._build_sources("deep")
-        types = {s.source_type for s in sources}
-        assert len(types) >= 4
-
-    def test_build_sources_auto(self) -> None:
-        from soothe.tools.research import ResearchTool
-
-        tool = ResearchTool()
-        sources = tool._build_sources("auto")
-        assert len(sources) >= 3
+        plugin = ResearchPlugin()
+        assert plugin is not None
 
 
 # ---------------------------------------------------------------------------

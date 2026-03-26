@@ -7,12 +7,12 @@ them without knowing implementation details.
 
 from __future__ import annotations
 
-from soothe.inquiry.sources.academic import AcademicSource
-from soothe.inquiry.sources.browser import BrowserSource
-from soothe.inquiry.sources.cli import CLISource
-from soothe.inquiry.sources.document import DocumentSource
-from soothe.inquiry.sources.filesystem import FilesystemSource
-from soothe.inquiry.sources.web import WebSource
+from .academic import AcademicSource
+from .browser import BrowserSource
+from .cli import CLISource
+from .document import DocumentSource
+from .filesystem import FilesystemSource
+from .web import WebSource
 
 __all__ = [
     "AcademicSource",

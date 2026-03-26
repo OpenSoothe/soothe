@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.inquiry.protocol import GatherContext, SourceResult, SourceType
+from soothe.subagents.research.protocol import GatherContext, SourceResult, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class BrowserSource:
 
     def relevance_score(self, query: str) -> float:
         """Score high for URLs and interactive-content queries."""
-        from soothe.inquiry.sources._scoring import _BROWSER_KEYWORDS, has_url, keyword_score
+        from ._scoring import _BROWSER_KEYWORDS, has_url, keyword_score
 
         if has_url(query):
             return _URL_RELEVANCE_SCORE

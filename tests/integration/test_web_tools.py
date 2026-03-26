@@ -142,40 +142,12 @@ class TestWebCrawlTools:
         # (would need specific test setup for reliable timeout testing)
         pytest.skip("Requires specific test setup for timeout scenarios")
 
+    # ---------------------------------------------------------------------------
+    # Research Tool Tests
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Research Tool Tests
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.integration
-class TestResearchTools:
-    """Integration tests for deep research capabilities."""
-
-    @pytest.fixture
-    def research_tool(self):
-        """Create ResearchTool instance."""
-        from soothe.tools.research import ResearchTool
-
-        return ResearchTool()
-
-    def test_research_basic_query(self, research_tool) -> None:
-        """Test research tool with basic query."""
-        import os
-
-        if not (os.getenv("SERPER_API_KEY") or os.getenv("OPENAI_API_KEY")):
-            pytest.skip("SERPER_API_KEY or OPENAI_API_KEY required for research tool")
-
-        try:
-            result = research_tool._run("What is Python asyncio?")
-
-            # Should return a result
-            assert isinstance(result, (str, dict))
-        except Exception as e:
-            # Research may fail due to model availability or API issues
-            if "not supported" in str(e) or "invalid" in str(e).lower():
-                pytest.skip(f"Model or API not available: {e}")
-            raise
+    # Research is now a subagent, not a tool
+    # Research integration tests moved to tests/subagents/research/
 
     def test_research_multi_source(self, research_tool) -> None:
         """Test research aggregates multiple sources."""

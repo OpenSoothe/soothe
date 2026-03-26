@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.inquiry.protocol import GatherContext, SourceResult, SourceType
+from soothe.subagents.research.protocol import GatherContext, SourceResult, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ class AcademicSource:
 
     def relevance_score(self, query: str) -> float:
         """Score high for academic/encyclopedic queries."""
-        from soothe.inquiry.sources._scoring import (
+        from ._scoring import (
             _ACADEMIC_KEYWORDS,
             _ENCYCLOPEDIC_KEYWORDS,
             keyword_score,
@@ -142,12 +142,12 @@ class AcademicSource:
 
     @staticmethod
     def _is_academic_query(q: str) -> bool:
-        from soothe.inquiry.sources._scoring import _ACADEMIC_KEYWORDS, keyword_score
+        from ._scoring import _ACADEMIC_KEYWORDS, keyword_score
 
         return keyword_score(q, _ACADEMIC_KEYWORDS, weight=0.2) > _KEYWORD_MATCH_THRESHOLD
 
     @staticmethod
     def _is_encyclopedic_query(q: str) -> bool:
-        from soothe.inquiry.sources._scoring import _ENCYCLOPEDIC_KEYWORDS, keyword_score
+        from ._scoring import _ENCYCLOPEDIC_KEYWORDS, keyword_score
 
         return keyword_score(q, _ENCYCLOPEDIC_KEYWORDS, weight=0.2) > _KEYWORD_MATCH_THRESHOLD

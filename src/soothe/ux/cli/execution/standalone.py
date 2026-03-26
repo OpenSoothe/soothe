@@ -319,7 +319,7 @@ async def run_headless_standalone(
                 etype = str(data.get("type", ""))
 
                 # Handle internal context tracking for research events (IG-064)
-                from soothe.tools.research.events import TOOL_RESEARCH_INTERNAL_LLM
+                from soothe.subagents.research.events import TOOL_RESEARCH_INTERNAL_LLM
 
                 if etype == TOOL_RESEARCH_INTERNAL_LLM:
                     state.internal_context_active = True

@@ -20,7 +20,7 @@ from soothe.core.event_catalog import (
     PLAN_STEP_FAILED,
     PLAN_STEP_STARTED,
 )
-from soothe.tools.research.events import (
+from soothe.subagents.research.events import (
     TOOL_RESEARCH_ANALYZE,
     TOOL_RESEARCH_COMPLETED,
     TOOL_RESEARCH_GATHER,

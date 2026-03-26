@@ -25,7 +25,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
-from soothe.tools.research.events import (
+from .events import (
     ResearchAnalyzeEvent,
     ResearchCompletedEvent,
     ResearchGatherDoneEvent,
@@ -42,7 +42,7 @@ from soothe.tools.research.events import (
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from soothe.inquiry.protocol import InformationSource, InquiryConfig
+    from .protocol import InformationSource, InquiryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -223,8 +223,8 @@ def build_inquiry_engine(
     Returns:
         Compiled LangGraph runnable.
     """
-    from soothe.inquiry.protocol import InquiryConfig
-    from soothe.inquiry.router import SourceRouter
+    from .protocol import InquiryConfig
+    from .router import SourceRouter
 
     _default_config = config or InquiryConfig()
     router = SourceRouter(sources, _default_config)
@@ -331,7 +331,7 @@ def build_inquiry_engine(
                 "sources_gathered": [f"none:{query}"],
             }
 
-        from soothe.inquiry.protocol import GatherContext
+        from .protocol import GatherContext
 
         context = GatherContext(
             topic=_extract_topic(state),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.inquiry.protocol import GatherContext, SourceResult, SourceType
+from soothe.subagents.research.protocol import GatherContext, SourceResult, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -87,13 +87,13 @@ class WebSource:
 
     def relevance_score(self, query: str) -> float:
         """Web search is the default fallback -- always somewhat relevant."""
-        from soothe.inquiry.sources._scoring import (
+        from ._scoring import (
             _ACADEMIC_KEYWORDS,
             _CODE_KEYWORDS,
             has_file_path,
             keyword_score,
         )
-        from soothe.inquiry.sources.filesystem import FilesystemSource
+        from .filesystem import FilesystemSource
 
         if has_file_path(query) or FilesystemSource._looks_like_path(query.strip().split()[0] if query.strip() else ""):
             return _LOW_RELEVANCE_SCORE

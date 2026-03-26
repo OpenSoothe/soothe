@@ -73,7 +73,7 @@ class TestProgressVerbosity:
 
         assert classify_custom_event((), {"type": "soothe.subagent.claude.text"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.subagent.claude.result"}) == "protocol"
-        assert classify_custom_event((), {"type": "soothe.subagent.claude.tool_use"}) == "subagent_custom"
+        assert classify_custom_event((), {"type": "soothe.subagent.claude.tool_use"}) == "subagent_progress"
         assert classify_custom_event((), {"type": "soothe.subagent.skillify.retrieve_started"}) == "subagent_custom"
         assert classify_custom_event((), {"type": "soothe.subagent.weaver.generate_started"}) == "subagent_custom"
 

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.inquiry.protocol import GatherContext, SourceResult, SourceType
+from soothe.subagents.research.protocol import GatherContext, SourceResult, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class FilesystemSource:
 
     def relevance_score(self, query: str) -> float:
         """Score high for queries referencing files, code, or the codebase."""
-        from soothe.inquiry.sources._scoring import (
+        from ._scoring import (
             _CODE_KEYWORDS,
             has_file_path,
             keyword_score,

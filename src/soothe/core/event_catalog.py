@@ -824,6 +824,7 @@ _reg(ERROR, GeneralErrorEvent, verbosity="error", summary_template="{error}")
 import soothe.plugin.events  # noqa: E402
 import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402
+import soothe.subagents.research.events  # noqa: E402
 import soothe.subagents.skillify.events  # noqa: E402
 import soothe.subagents.weaver.events  # noqa: E402
 import soothe.tools.audio.events  # noqa: E402
@@ -833,6 +834,5 @@ import soothe.tools.execution.events  # noqa: E402
 import soothe.tools.file_ops.events  # noqa: E402
 import soothe.tools.goals.events  # noqa: E402
 import soothe.tools.image.events  # noqa: E402
-import soothe.tools.research.events  # noqa: E402
 import soothe.tools.video.events  # noqa: E402
 import soothe.tools.web_search.events  # noqa: F401, E402

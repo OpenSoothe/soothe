@@ -49,7 +49,11 @@ register_event(
     verbosity="protocol",
     summary_template="Text: {text}",
 )
-register_event(ClaudeToolUseEvent, summary_template="Tool: {tool}")
+register_event(
+    ClaudeToolUseEvent,
+    verbosity="subagent_progress",
+    summary_template="Tool: {tool}",
+)
 register_event(
     ClaudeResultEvent,
     verbosity="protocol",

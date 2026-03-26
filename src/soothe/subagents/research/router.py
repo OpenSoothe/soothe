@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from soothe.inquiry.protocol import InformationSource, InquiryConfig, SourceType
+    from .protocol import InformationSource, InquiryConfig, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class SourceRouter:
         config: InquiryConfig | None = None,
     ) -> None:
         """Initialize the router with sources and optional config."""
-        from soothe.inquiry.protocol import InquiryConfig
+        from .protocol import InquiryConfig
 
         self._sources = list(sources)
         self._config = config or InquiryConfig()
