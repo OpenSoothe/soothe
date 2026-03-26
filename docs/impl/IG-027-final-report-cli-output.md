@@ -62,7 +62,7 @@ the full report to stdout with a visual separator.
 | `core/runner.py` | Rewrite synthesis prompt, improve heuristic, emit final report event |
 | `cli/main.py` | Handle `soothe.autonomous.final_report` in headless CLI |
 | `core/artifact_store.py` | Improve goal report markdown when summary is substantial |
-| `docs/impl/024-rfc0010-gap-fixes.md` | Update status to Completed |
+| `docs/impl/IG-024-rfc0010-gap-fixes.md` | Update status to Completed |
 
 ## Verification
 

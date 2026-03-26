@@ -338,5 +338,5 @@ if __name__ == "__main__":
 
 For detailed protocol definitions and architecture context:
 - [RFC-0002: Architecture Design](../../docs/specs/RFC-0002.md) -- core protocol modules
-- [IG-004: Ecosystem Capability Analysis](../../docs/impl/004-ecosystem-capability-analysis.md) -- what deepagents/langchain provide vs gaps
+- [IG-004: Ecosystem Capability Analysis](../../docs/impl/IG-004-ecosystem-capability-analysis.md) -- what deepagents/langchain provide vs gaps
 - [AGENTS.md](../../AGENTS.md) -- mandatory development constraints

@@ -2,7 +2,7 @@
 
 ## ✅ ALL PHASES COMPLETED SUCCESSFULLY
 
-All tasks from `docs/impl/047-module-self-containment-refactoring.md` have been completed with **zero linting errors**.
+All tasks from `docs/impl/IG-047-module-self-containment-refactoring.md` have been completed with **zero linting errors**.
 
 ---
 
@@ -218,7 +218,7 @@ src/soothe/
 
 ## Conclusion
 
-The module self-containment refactoring has been **100% completed** according to all specifications in `docs/impl/047-module-self-containment-refactoring.md`.
+The module self-containment refactoring has been **100% completed** according to all specifications in `docs/impl/IG-047-module-self-containment-refactoring.md`.
 
 The codebase now follows a clean, self-contained module architecture with:
 - ✅ Improved performance (parallel loading, lazy loading, caching)

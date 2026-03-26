@@ -3,7 +3,7 @@
 ## Summary
 
 Successfully completed all 4 phases of the module self-containment refactoring as specified in
-`docs/impl/047-module-self-containment-refactoring.md`. The codebase now follows the canonical
+`docs/impl/IG-047-module-self-containment-refactoring.md`. The codebase now follows the canonical
 module structure with self-contained plugins, events, and implementations.
 
 ## Phase 1: Event Migration ✅
@@ -215,6 +215,6 @@ All changes maintain backward compatibility:
 ## Conclusion
 
 The module self-containment refactoring has been successfully completed according to all
-specifications in `docs/impl/047-module-self-containment-refactoring.md`. The codebase now
+specifications in `docs/impl/IG-047-module-self-containment-refactoring.md`. The codebase now
 follows a clean, self-contained module architecture with improved performance and developer
 experience.

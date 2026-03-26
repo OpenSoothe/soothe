@@ -3,7 +3,7 @@
 **Impl ID**: 025
 **Date**: 2026-03-17
 **Status**: Completed with Known Limitations
-**Related**: Gap Analysis Report (docs/impl/024-existing-browser-connection.md)
+**Related**: Gap Analysis Report (docs/impl/IG-024-existing-browser-connection.md)
 
 ## Known Limitations
 
@@ -737,7 +737,7 @@ These were identified but deferred to Phase 2/3:
 
 ## References
 
-- Gap Analysis: `docs/impl/024-existing-browser-connection.md`
+- Gap Analysis: `docs/impl/IG-024-existing-browser-connection.md`
 - Implementation Summary: `IMPLEMENTATION_SUMMARY.md`
 - Progress Verbosity: `src/soothe/cli/progress_verbosity.py`
 - Output Capture: `src/soothe/utils/output_capture.py`

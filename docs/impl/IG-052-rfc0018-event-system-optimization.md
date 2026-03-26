@@ -312,7 +312,7 @@ for event_type in expected_events:
 
 - RFC-0018: Plugin Extension Specification
 - IG-047: Module Self-Containment Refactoring
-- `docs/impl/047-module-self-containment-refactoring-FINAL.md`
+- `docs/impl/IG-047-module-self-containment-refactoring-FINAL.md`
 
 ---
 
