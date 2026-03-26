@@ -27,6 +27,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0013](./RFC-0013.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Draft | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0015](./RFC-0015.md) | Progress Event Protocol | Draft | RFC-0003, RFC-0013 |
 | [RFC-0018](./RFC-0018.md) | Plugin Extension Specification | Draft | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
+| [RFC-0019](./RFC-0019.md) | Unified Event Processing Architecture | Implemented | RFC-0003, RFC-0015 |
 
 ### Implementation Interface Design
 
@@ -44,7 +45,8 @@ RFC-0001 (System Conceptual Design)
 │   │   ├── RFC-0004 (Skillify)
 │   │   │   └── RFC-0005 (Weaver)
 │   │   ├── RFC-0006 (Context & Memory)
-│   │   └── RFC-0013 (Unified Daemon Protocol)
+│   │   ├── RFC-0013 (Unified Daemon Protocol)
+│   │   └── RFC-0019 (Unified Event Processing) [depends on RFC-0015]
 │   ├── RFC-0015 (Progress Event Protocol) [depends on RFC-0003, RFC-0013]
 │   ├── RFC-0016 (Tool Interface Optimization)
 │   ├── RFC-0007 (Autonomous Iteration)

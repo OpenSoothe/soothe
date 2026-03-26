@@ -12,10 +12,13 @@
 
 ### Bug Fixes Implemented
 
-1. **Tool args not displayed in CLI** - Fixed by implementing streaming args accumulation
+1. **Tool args not displayed in CLI/TUI** - Fixed by implementing streaming args accumulation
    - Root cause: LangChain streams tool args in chunks, first chunk has empty args
    - Solution: Track pending tool calls, accumulate args from `tool_call_chunks`, emit when complete
-   - Files: `src/soothe/ux/shared/message_processing.py`
+   - Files: 
+     - `src/soothe/ux/shared/message_processing.py` (SharedState, MessageProcessor)
+     - `src/soothe/ux/tui/event_processors.py` (TUI-specific handler)
+     - `src/soothe/ux/tui/state.py` (TuiState property accessor)
 
 2. **Text spacing broken in streaming output** - Fixed by preserving whitespace in chunks
    - Root cause: `strip_internal_tags()` called `.strip()` removing leading spaces from chunks like `" the"`
@@ -24,36 +27,67 @@
 
 ### Key Implementation Details
 
+**Shared Helper Functions** in `src/soothe/ux/shared/message_processing.py`:
+
 ```python
-# SharedState now tracks pending tool calls for streaming arg accumulation
-@dataclass
-class SharedState:
-    # ...
-    pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+# Accumulate streaming tool call chunks
+def accumulate_tool_call_chunks(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    tool_call_chunks: list[dict[str, Any]],
+    *,
+    is_main: bool = True,
+) -> None:
+    """Track tool calls and accumulate args from streaming chunks."""
 
-# MessageProcessor accumulates args from tool_call_chunks
-for tcc in tool_call_chunks:
-    # First chunk with tool name: register the pending tool call
-    if tc_name and tc_id and tc_id not in self.state.pending_tool_calls:
-        self.state.pending_tool_calls[tc_id] = {...}
-    # Subsequent chunks: accumulate args
-    elif tc_args:
-        pending["args_str"] += tc_args
+# Try to parse accumulated args as JSON
+def try_parse_pending_tool_call_args(
+    pending: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Returns parsed args dict if valid JSON, None otherwise."""
 
-# Emit when JSON args are complete
-try:
-    parsed_args = json.loads(args_str)
-    self.formatter.emit_tool_call(name, tool_call={"args": parsed_args})
-except json.JSONDecodeError:
-    pass  # Keep accumulating
+# Finalize pending tool call when result arrives
+def finalize_pending_tool_call(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    tool_call_id: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
+    """Returns (parsed_args, pending_state, needs_emit)."""
+```
+
+**Usage in both CLI and TUI**:
+```python
+# Accumulate args from streaming chunks
+tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
+accumulate_tool_call_chunks(state.pending_tool_calls, tool_call_chunks, is_main=is_main)
+
+# Emit when args are complete
+for tc_id, pending in list(state.pending_tool_calls.items()):
+    if pending["emitted"]:
+        continue
+    parsed_args = try_parse_pending_tool_call_args(pending)
+    if parsed_args is not None:
+        formatter.emit_tool_call(pending["name"], tool_call={"args": parsed_args})
+        pending["emitted"] = True
+
+# On ToolMessage, finalize and clean up
+parsed_args, pending, needs_emit = finalize_pending_tool_call(
+    state.pending_tool_calls, tool_call_id
+)
+if needs_emit:
+    # Emit with final args
 ```
 
 ### Test Results
 
 - All 924 unit tests pass
-- Manual verification: `uv run soothe --no-tui -p "list the root directory"`
+- Manual verification CLI: `uv run soothe --no-tui -p "list the root directory"`
   - Shows: `⚙ Ls(/)` with correct argument
+  - Shows: `  └ ✓ brief_result` tree-style result
   - Text output has proper spacing
+- TUI fixes applied:
+  - Tool calls now show args (e.g., `Ls(/)` not `Ls()`)
+  - Tool results use tree-style format (`  └ ✓ result`) consistent with CLI
+  - No more duplicated tool blocks
+  - Output truncated to 120 chars (not verbose 200+ chars)
 
 ---
 

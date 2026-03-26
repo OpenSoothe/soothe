@@ -30,12 +30,13 @@ from textual.containers import Container
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon, socket_path
 from soothe.daemon.thread_logger import ThreadLogger
-from soothe.ux.shared.rendering import render_plan_tree
-from soothe.ux.shared.slash_commands import parse_autonomous_command
-from soothe.ux.tui.event_processors import process_daemon_event
+from soothe.ux.core import EventProcessor
+from soothe.ux.core.rendering import render_plan_tree
+from soothe.ux.tui.commands import parse_autonomous_command
 from soothe.ux.tui.modals import ThreadSelectionModal
-from soothe.ux.tui.renderers import DOT_COLORS, make_dot_line, make_user_prompt_line
+from soothe.ux.tui.renderer import TuiRenderer
 from soothe.ux.tui.state import TuiState
+from soothe.ux.tui.utils import DOT_COLORS, make_dot_line, make_user_prompt_line
 from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTree
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,9 @@ class SootheApp(App):
         self._typing_indicator_task: asyncio.Task | None = None
         self._typing_frame = 0
         self._is_running = False
+        # RFC-0019: Unified event processor with TUI renderer
+        self._renderer: TuiRenderer | None = None
+        self._processor: EventProcessor | None = None
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: simplified layout with footer stack."""
@@ -185,6 +189,14 @@ class SootheApp(App):
             self._update_status_bar("Idle")
 
         self._refresh_plan()
+        # Initialize RFC-0019 unified event processor
+        self._renderer = TuiRenderer(
+            on_panel_write=self._on_panel_write,
+            on_panel_update_last=self._on_panel_update_last,
+            on_status_update=self._update_status,
+            on_plan_refresh=self._refresh_plan,
+        )
+        self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
     def _on_panel_write(self, renderable: Any) -> None:
@@ -346,15 +358,21 @@ class SootheApp(App):
                 return
 
             pre_status_thread_id = self._state.thread_id
-            process_daemon_event(
-                status_event,
-                self._state,
-                verbosity=self._progress_verbosity,
-                on_status_update=self._update_status,
-                on_plan_refresh=self._refresh_plan,
-                on_panel_write=self._on_panel_write,
-                on_panel_update_last=self._on_panel_update_last,
-            )
+            # RFC-0019: Use unified event processor (lazy init for testing)
+            if not self._renderer:
+                self._renderer = TuiRenderer(
+                    on_panel_write=self._on_panel_write,
+                    on_panel_update_last=self._on_panel_update_last,
+                    on_status_update=self._update_status,
+                    on_plan_refresh=self._refresh_plan,
+                )
+            if not self._processor:
+                self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
+            self._processor.process_event(status_event)
+            # Sync state from processor
+            self._state.thread_id = self._processor.thread_id
+            if self._processor.current_plan:
+                self._state.current_plan = self._processor.current_plan
             self._flush_new_activity()
 
             # Extract thread_id and client_id
@@ -394,19 +412,22 @@ class SootheApp(App):
                 # This timeout allows the UI to remain responsive
                 continue
 
-            # Capture thread_id BEFORE process_daemon_event updates it
+            # Capture thread_id BEFORE processor updates it
             # This is critical for detecting thread changes correctly
             pre_event_thread_id = self._state.thread_id
 
-            process_daemon_event(
-                event,
-                self._state,
-                verbosity=self._progress_verbosity,
-                on_status_update=self._update_status,
-                on_plan_refresh=self._refresh_plan,
-                on_panel_write=self._on_panel_write,
-                on_panel_update_last=self._on_panel_update_last,
-            )
+            # RFC-0019: Use unified event processor
+            # Processor is guaranteed to be initialized by the status event above
+            if self._processor:
+                self._processor.process_event(event)
+                # Sync state from processor
+                self._state.thread_id = self._processor.thread_id
+                if self._processor.current_plan:
+                    self._state.current_plan = self._processor.current_plan
+            # Sync streaming state from renderer
+            if self._renderer:
+                self._state.streaming_active = self._renderer.streaming_active
+                self._state.last_assistant_output = self._renderer.last_assistant_output
 
             # Update activity display after processing event
             self._flush_new_activity()

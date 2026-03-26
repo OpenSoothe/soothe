@@ -26,8 +26,8 @@ def run_headless(
     """
     import asyncio
 
-    from soothe.ux.cli.execution.daemon_runner import run_headless_via_daemon
-    from soothe.ux.cli.execution.standalone_runner import run_headless_standalone
+    from soothe.ux.cli.execution.daemon import run_headless_via_daemon
+    from soothe.ux.cli.execution.standalone import run_headless_standalone
 
     if SootheDaemon.is_running():
         daemon_exit_code = asyncio.run(

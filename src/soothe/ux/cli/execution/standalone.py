@@ -7,7 +7,7 @@ from typing import Any
 
 from soothe.config import SootheConfig
 from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
-from soothe.ux.shared.message_processing import (
+from soothe.ux.core.message_processing import (
     MessageProcessor,
     OutputFormatter,
     SharedState,
@@ -62,7 +62,7 @@ class _CliOutputFormatter(OutputFormatter):
 
         # Format with tree structure (see IG-053)
         from soothe.tools.display_names import get_tool_display_name
-        from soothe.ux.shared.message_processing import format_tool_call_args
+        from soothe.ux.core.message_processing import format_tool_call_args
 
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, tool_call) if tool_call else ""
@@ -122,9 +122,9 @@ async def run_headless_standalone(
 
     from soothe.core.runner import SootheRunner
     from soothe.daemon.thread_logger import ThreadLogger
-    from soothe.ux.cli.rendering import render_progress_event
-    from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
-    from soothe.ux.shared.rendering import resolve_namespace_label
+    from soothe.ux.cli.progress import render_progress_event
+    from soothe.ux.core.progress_verbosity import classify_custom_event, should_show
+    from soothe.ux.core.rendering import resolve_namespace_label
 
     runner = SootheRunner(cfg)
     thread_logger = ThreadLogger(
@@ -203,7 +203,7 @@ async def run_headless_standalone(
                             sys.stdout.flush()
                             formatter.needs_stdout_newline = False
                         prefix = resolve_namespace_label(namespace, state.name_map) if namespace else None
-                        render_progress_event(data, prefix=prefix, verbosity=verbosity)
+                        render_progress_event(data, prefix=prefix)
                     if category == "error":
                         state.has_error = True
 

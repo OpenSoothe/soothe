@@ -7,7 +7,7 @@ import pytest
 from rich.console import Console
 
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
-from soothe.ux.shared.slash_commands import handle_slash_command
+from soothe.ux.tui.commands import handle_slash_command
 
 
 class DummyRunner:

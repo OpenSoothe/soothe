@@ -124,7 +124,7 @@ PLUGIN_HEALTH_CHECKED = "soothe.plugin.health_checked"
 # ---------------------------------------------------------------------------
 
 if TYPE_CHECKING:
-    from soothe.ux.shared.progress_verbosity import ProgressCategory
+    from soothe.ux.core.progress_verbosity import ProgressCategory
 
 # ---------------------------------------------------------------------------
 # Lifecycle events

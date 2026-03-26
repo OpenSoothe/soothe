@@ -11,7 +11,7 @@ import pytest
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE
 from soothe.daemon import DaemonClient, SootheDaemon
-from soothe.ux.shared.slash_commands import (
+from soothe.ux.tui.commands import (
     _show_context,
     _show_memory,
     handle_slash_command,
@@ -329,14 +329,55 @@ async def test_tui_sends_thread_id_on_connection() -> None:
 
 def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
     """Empty handshake thread_id must not clear an already selected TUI thread."""
-    from soothe.ux.tui.event_processors import process_daemon_event
-    from soothe.ux.tui.state import TuiState
+    from dataclasses import dataclass, field
+    from typing import Any
 
-    state = TuiState(thread_id="thread-keep")
+    from soothe.ux.core.event_processor import EventProcessor
 
-    process_daemon_event({"type": "status", "state": "idle", "thread_id": ""}, state)
+    @dataclass
+    class MockRenderer:
+        calls: list[tuple[str, tuple, dict]] = field(default_factory=list)
 
-    assert state.thread_id == "thread-keep"
+        def on_assistant_text(self, text: str, *, is_main: bool, is_streaming: bool) -> None:
+            pass
+
+        def on_tool_call(self, name: str, args: dict, tool_call_id: str, *, is_main: bool) -> None:
+            pass
+
+        def on_tool_result(self, name: str, result: str, tool_call_id: str, *, is_error: bool, is_main: bool) -> None:
+            pass
+
+        def on_status_change(self, state: str) -> None:
+            self.calls.append(("on_status_change", (state,), {}))
+
+        def on_error(self, error: str, *, context: str | None = None) -> None:
+            pass
+
+        def on_progress_event(self, event_type: str, data: dict, *, namespace: tuple[str, ...]) -> None:
+            pass
+
+        def on_plan_created(self, plan: Any) -> None:
+            pass
+
+        def on_plan_step_started(self, step_id: str, description: str) -> None:
+            pass
+
+        def on_plan_step_completed(self, step_id: str, success: bool, duration_ms: int) -> None:  # noqa: FBT001
+            pass
+
+        def on_turn_end(self) -> None:
+            pass
+
+    renderer = MockRenderer()
+    processor = EventProcessor(renderer)
+
+    # First set a thread_id
+    processor.process_event({"type": "status", "state": "running", "thread_id": "thread-keep"})
+    assert processor.thread_id == "thread-keep"
+
+    # Empty thread_id should not clear it
+    processor.process_event({"type": "status", "state": "idle", "thread_id": ""})
+    assert processor.thread_id == "thread-keep"
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ between headless CLI mode and the TUI interface.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -25,8 +26,113 @@ class SharedState:
     multi_step_active: bool = False
     has_error: bool = False
     # Track pending tool calls for streaming arg accumulation (IG-053)
-    # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool}
+    # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool, 'is_main': bool}
     pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+# ============================================================================
+# Shared Tool Call Streaming Helpers (IG-053)
+# ============================================================================
+
+
+def accumulate_tool_call_chunks(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    tool_call_chunks: list[dict[str, Any]],
+    *,
+    is_main: bool = True,
+) -> None:
+    """Accumulate streaming tool call chunks into pending_tool_calls.
+
+    LangChain streams tool args in chunks - first chunk has the tool name but
+    empty args, subsequent chunks contain partial JSON strings. This function
+    tracks and accumulates them.
+
+    Args:
+        pending_tool_calls: Dict to store pending tool calls (tool_call_id -> state).
+        tool_call_chunks: List of tool_call_chunk dicts from AIMessageChunk.
+        is_main: Whether this is from the main agent.
+    """
+    for tcc in tool_call_chunks:
+        if not isinstance(tcc, dict):
+            continue
+        tc_id = tcc.get("id", "")
+        tc_name = tcc.get("name")
+        tc_args = tcc.get("args", "")
+
+        # First chunk with a tool name: register the pending tool call
+        if tc_name and tc_id and tc_id not in pending_tool_calls:
+            pending_tool_calls[tc_id] = {
+                "name": tc_name,
+                "args_str": tc_args if isinstance(tc_args, str) else "",
+                "emitted": False,
+                "is_main": is_main,
+            }
+        # Subsequent chunks: accumulate args
+        elif tc_args and isinstance(tc_args, str):
+            # Find the tool call to accumulate args for (by order, first non-emitted)
+            for pending in pending_tool_calls.values():
+                if not pending["emitted"]:
+                    pending["args_str"] += tc_args
+                    break
+
+
+def try_parse_pending_tool_call_args(
+    pending: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Try to parse the accumulated args_str as JSON.
+
+    Args:
+        pending: Pending tool call state dict with 'args_str' key.
+
+    Returns:
+        Parsed args dict if valid JSON, None otherwise.
+    """
+    args_str = pending.get("args_str", "")
+    if not args_str:
+        return None
+    try:
+        parsed = json.loads(args_str)
+        return parsed if isinstance(parsed, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def finalize_pending_tool_call(
+    pending_tool_calls: dict[str, dict[str, Any]],
+    tool_call_id: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
+    """Finalize and remove a pending tool call when its result arrives.
+
+    Args:
+        pending_tool_calls: Dict of pending tool calls.
+        tool_call_id: ID of the tool call to finalize.
+
+    Returns:
+        Tuple of (parsed_args or None, pending_state dict, needs_emit).
+        needs_emit is True if the tool call wasn't emitted yet and should be.
+        If not found, returns (None, {}, False).
+    """
+    str_id = str(tool_call_id) if tool_call_id else ""
+    if not str_id or str_id not in pending_tool_calls:
+        return None, {}, False
+
+    pending = pending_tool_calls[str_id]
+    parsed_args = None
+    needs_emit = not pending.get("emitted", False)
+
+    if needs_emit:
+        # Try to parse args one more time
+        args_str = pending.get("args_str", "")
+        if args_str:
+            with contextlib.suppress(json.JSONDecodeError):
+                result = json.loads(args_str)
+                if isinstance(result, dict):
+                    parsed_args = result
+        pending["emitted"] = True
+
+    # Clean up the pending entry
+    del pending_tool_calls[str_id]
+    return parsed_args, pending, needs_emit
 
 
 class OutputFormatter(Protocol):
@@ -100,8 +206,8 @@ class MessageProcessor:
         """
         from langchain_core.messages import AIMessageChunk
 
-        from soothe.ux.shared.progress_verbosity import should_show
-        from soothe.ux.shared.rendering import update_name_map_from_tool_calls
+        from soothe.ux.core.progress_verbosity import should_show
+        from soothe.ux.core.rendering import update_name_map_from_tool_calls
 
         # Update name_map from tool calls
         update_name_map_from_tool_calls(msg, self.state.name_map)
@@ -121,53 +227,23 @@ class MessageProcessor:
         is_chunk = isinstance(msg, AIMessageChunk)
 
         # Handle streaming tool args accumulation (IG-053)
-        # For chunks, we need to track tool calls and accumulate args
         tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
-        for tcc in tool_call_chunks:
-            if not isinstance(tcc, dict):
-                continue
-            tc_id = tcc.get("id", "")
-            tc_name = tcc.get("name")
-            tc_args = tcc.get("args", "")
-
-            # First chunk with a tool name: register the pending tool call
-            if tc_name and tc_id and tc_id not in self.state.pending_tool_calls:
-                self.state.pending_tool_calls[tc_id] = {
-                    "name": tc_name,
-                    "args_str": tc_args if isinstance(tc_args, str) else "",
-                    "emitted": False,
-                    "is_main": is_main,
-                }
-            # Subsequent chunks: accumulate args
-            elif tc_args and isinstance(tc_args, str):
-                # Find the tool call to accumulate args for (by index/order)
-                for pending_id, pending in self.state.pending_tool_calls.items():
-                    if not pending["emitted"]:
-                        pending["args_str"] += tc_args
-                        break
+        accumulate_tool_call_chunks(self.state.pending_tool_calls, tool_call_chunks, is_main=is_main)
 
         # Try to emit pending tool calls that have complete JSON args
-        for tc_id, pending in list(self.state.pending_tool_calls.items()):
+        for _tc_id, pending in list(self.state.pending_tool_calls.items()):
             if pending["emitted"]:
                 continue
-            args_str = pending["args_str"]
-            if args_str:
-                try:
-                    parsed_args = json.loads(args_str)
-                    if isinstance(parsed_args, dict):
-                        # Complete JSON args - emit the tool call
-                        if should_show("protocol", verbosity):
-                            tc_display = {"args": parsed_args}
-                            self.formatter.emit_tool_call(
-                                pending["name"],
-                                prefix=None,
-                                is_main=pending["is_main"],
-                                tool_call=tc_display,
-                            )
-                            pending["emitted"] = True
-                except json.JSONDecodeError:
-                    # Args not complete yet, keep accumulating
-                    pass
+            parsed_args = try_parse_pending_tool_call_args(pending)
+            if parsed_args is not None and should_show("protocol", verbosity):
+                tc_display = {"args": parsed_args}
+                self.formatter.emit_tool_call(
+                    pending["name"],
+                    prefix=None,
+                    is_main=pending["is_main"],
+                    tool_call=tc_display,
+                )
+                pending["emitted"] = True
 
         # Process content blocks
         tool_call_emitted_from_blocks = False
@@ -253,7 +329,7 @@ class MessageProcessor:
             prefix: Optional namespace prefix for subagents.
             verbosity: Verbosity level for filtering.
         """
-        from soothe.ux.shared.progress_verbosity import should_show
+        from soothe.ux.core.progress_verbosity import should_show
 
         if not should_show("protocol", verbosity):
             return
@@ -264,29 +340,16 @@ class MessageProcessor:
         brief = extract_tool_brief(tool_name, content)
 
         # Check for pending tool call that hasn't been emitted yet (IG-053)
-        # This handles cases where the tool was called before args were fully parsed
-        if tool_call_id and tool_call_id in self.state.pending_tool_calls:
-            pending = self.state.pending_tool_calls[tool_call_id]
-            if not pending["emitted"]:
-                # Try to parse args one more time
-                args_str = pending.get("args_str", "")
-                parsed_args: dict[str, Any] = {}
-                if args_str:
-                    try:
-                        parsed_args = json.loads(args_str)
-                    except json.JSONDecodeError:
-                        pass
-                # Emit the tool call (even with empty args)
-                tc_display = {"args": parsed_args if isinstance(parsed_args, dict) else {}}
-                self.formatter.emit_tool_call(
-                    pending["name"] or tool_name,
-                    prefix=prefix,
-                    is_main=pending.get("is_main", not prefix),
-                    tool_call=tc_display,
-                )
-                pending["emitted"] = True
-            # Clean up the pending entry
-            del self.state.pending_tool_calls[tool_call_id]
+        parsed_args, pending, needs_emit = finalize_pending_tool_call(self.state.pending_tool_calls, tool_call_id)
+        if needs_emit:
+            # Emit the tool call (even with empty args)
+            tc_display = {"args": parsed_args or {}}
+            self.formatter.emit_tool_call(
+                pending.get("name") or tool_name,
+                prefix=prefix,
+                is_main=pending.get("is_main", not prefix),
+                tool_call=tc_display,
+            )
 
         self.formatter.emit_tool_result(tool_name, brief, prefix=prefix, is_main=not prefix)
 
@@ -328,9 +391,7 @@ def strip_internal_tags(text: str) -> str:
 
     # Only normalize excessive internal whitespace (3+ spaces -> 1)
     # Preserve leading/trailing whitespace for streaming chunks
-    result = re.sub(r" {3,}", " ", result)  # Normalize excessive spaces only
-
-    return result
+    return re.sub(r" {3,}", " ", result)  # Normalize excessive spaces only
 
 
 def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> str:

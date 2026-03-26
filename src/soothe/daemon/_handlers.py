@@ -520,7 +520,7 @@ class DaemonHandlersMixin:
 
         from rich.console import Console
 
-        from soothe.ux.shared.slash_commands import handle_slash_command
+        from soothe.ux.tui.commands import handle_slash_command
 
         # Handle /clear command specially
         if cmd.strip().lower() == "/clear":
@@ -695,7 +695,7 @@ class DaemonHandlersMixin:
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                     if not namespace and mode == "messages" and is_msg_pair:
                         msg, _metadata = data
-                        from soothe.ux.shared.rendering import extract_text_from_ai_message
+                        from soothe.ux.core.rendering import extract_text_from_ai_message
 
                         full_response.extend(extract_text_from_ai_message(msg))
 
@@ -854,7 +854,7 @@ class DaemonHandlersMixin:
                 is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
                 if not namespace and mode == "messages" and is_msg_pair:
                     msg, _metadata = data
-                    from soothe.ux.shared.rendering import extract_text_from_ai_message
+                    from soothe.ux.core.rendering import extract_text_from_ai_message
 
                     full_response.extend(extract_text_from_ai_message(msg))
 
@@ -951,7 +951,7 @@ class DaemonHandlersMixin:
     @staticmethod
     def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
         """Extract assistant-visible output text from custom protocol events."""
-        from soothe.ux.shared.message_processing import strip_internal_tags
+        from soothe.ux.core.message_processing import strip_internal_tags
 
         event_type = str(data.get("type", ""))
         if event_type == CHITCHAT_RESPONSE:

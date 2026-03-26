@@ -1,6 +1,6 @@
 """Tests for progress verbosity filtering helpers."""
 
-from soothe.ux.shared.progress_verbosity import (
+from soothe.ux.core.progress_verbosity import (
     classify_custom_event,
     should_show,
 )

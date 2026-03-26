@@ -8,7 +8,7 @@ from typing import Any
 from rich.text import Text
 
 from soothe.protocols.planner import Plan
-from soothe.ux.shared.message_processing import SharedState
+from soothe.ux.core.message_processing import SharedState
 
 
 @dataclass
@@ -126,3 +126,13 @@ class TuiState:
     def has_error(self, value: bool) -> None:
         """Set has_error in shared state."""
         self.shared.has_error = value
+
+    @property
+    def pending_tool_calls(self) -> dict[str, dict[str, Any]]:
+        """Get pending_tool_calls from shared state (IG-053 streaming args)."""
+        return self.shared.pending_tool_calls
+
+    @pending_tool_calls.setter
+    def pending_tool_calls(self, value: dict[str, dict[str, Any]]) -> None:
+        """Set pending_tool_calls in shared state."""
+        self.shared.pending_tool_calls = value
