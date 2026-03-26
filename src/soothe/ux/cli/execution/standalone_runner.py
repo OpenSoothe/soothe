@@ -42,15 +42,15 @@ class _CliOutputFormatter(OutputFormatter):
         *,
         prefix: str | None,
         is_main: bool,  # noqa: ARG002
-        tool_call: dict[str, Any] | None = None,  # noqa: ARG002
+        tool_call: dict[str, Any] | None = None,
     ) -> None:
-        """Emit a tool call notification to stderr.
+        """Emit a tool call notification to stderr with tree format.
 
         Args:
             name: The tool name being called.
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent (unused in CLI).
-            tool_call: Optional tool call dict with args (unused in CLI).
+            tool_call: Optional tool call dict with args for display.
         """
         # Add newline before stderr output if needed
         if self.needs_stdout_newline:
@@ -58,14 +58,21 @@ class _CliOutputFormatter(OutputFormatter):
             sys.stdout.flush()
             self.needs_stdout_newline = False
 
+        # Format with tree structure (RFC-0019)
+        from soothe.tools.display_names import get_tool_display_name
+        from soothe.ux.shared.message_processing import format_tool_call_args
+
+        display_name = get_tool_display_name(name)
+        args_str = format_tool_call_args(name, tool_call) if tool_call else ""
+
         if prefix:
-            sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
+            sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
         else:
-            sys.stderr.write(f"[tool] Calling: {name}\n")
+            sys.stderr.write(f"⚙ {display_name}{args_str}\n")
         sys.stderr.flush()
 
     def emit_tool_result(self, tool_name: str, brief: str, *, prefix: str | None, is_main: bool) -> None:  # noqa: ARG002
-        """Emit a tool result notification to stderr.
+        """Emit a tool result notification to stderr with tree format.
 
         Args:
             tool_name: The tool name that produced the result.
@@ -79,10 +86,11 @@ class _CliOutputFormatter(OutputFormatter):
             sys.stdout.flush()
             self.needs_stdout_newline = False
 
+        # Format as tree child (RFC-0019)
         if prefix:
-            sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
+            sys.stderr.write(f"[{prefix}]   └ ✓ {brief}\n")
         else:
-            sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
+            sys.stderr.write(f"  └ ✓ {brief}\n")
         sys.stderr.flush()
 
 

@@ -216,10 +216,18 @@ async def run_headless_via_daemon(
                                         sys.stdout.flush()
                                         needs_stdout_newline = False
                                     prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+
+                                    # Format with tree structure (RFC-0019)
+                                    from soothe.tools.display_names import get_tool_display_name
+
+                                    display_name = get_tool_display_name(name)
+                                    args = block.get("args", {})
+                                    args_str = f"({str(args)[:50]})" if args else ""
+
                                     if prefix:
-                                        sys.stderr.write(f"[{prefix}] [tool] Calling: {name}\n")
+                                        sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
                                     else:
-                                        sys.stderr.write(f"[tool] Calling: {name}\n")
+                                        sys.stderr.write(f"⚙ {display_name}{args_str}\n")
                                     sys.stderr.flush()
 
                     elif content and isinstance(content, str):
@@ -241,10 +249,12 @@ async def run_headless_via_daemon(
                         sys.stdout.flush()
                         needs_stdout_newline = False
                     prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+
+                    # Format as tree child (RFC-0019)
                     if prefix:
-                        sys.stderr.write(f"[{prefix}] [tool] Result ({tool_name}): {brief}\n")
+                        sys.stderr.write(f"[{prefix}]   └ ✓ {brief}\n")
                     else:
-                        sys.stderr.write(f"[tool] Result ({tool_name}): {brief}\n")
+                        sys.stderr.write(f"  └ ✓ {brief}\n")
                     sys.stderr.flush()
 
         if full_response:

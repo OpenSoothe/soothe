@@ -206,11 +206,18 @@ def strip_internal_tags(text: str) -> str:
         text: The text to strip tags from.
 
     Returns:
-        Cleaned text with internal tags removed.
+        Cleaned text with internal tags removed and normalized whitespace.
     """
     result = _INTERNAL_TAG_PATTERN.sub("", text)
     result = _LEFTOVER_TAG_PATTERN.sub("", result)
     result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
+
+    # Normalize whitespace to fix concatenation issues
+    # Ensure single spaces between words and proper spacing after punctuation
+    result = re.sub(r"\s+", " ", result)  # Normalize multiple spaces to single
+    result = re.sub(r"\s*([.!?])\s*", r"\1 ", result)  # Ensure space after punctuation
+    result = re.sub(r"\s+,", ",", result)  # Remove space before comma
+
     return result.strip()
 
 

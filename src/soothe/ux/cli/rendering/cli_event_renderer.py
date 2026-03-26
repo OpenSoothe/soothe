@@ -245,71 +245,85 @@ class CliEventRenderer:
 
         return etype[:80]
 
-    # --- Tool event handlers ---
+    # --- Tool event handlers (Tree Rendering RFC-0019) ---
 
     def _render_search_started(self, event: dict[str, Any]) -> list[str]:
         query = event.get("query", "")
-        engines = event.get("engines", [])
         display_name = get_tool_display_name("search_web")
-        parts = [f"{display_name}:", str(query)[:40]]
-        if engines:
-            parts.append(f"({', '.join(engines[:_MAX_INLINE_QUERIES])})")
-        return parts
+        # Tree parent: ⚙ ToolName("query")
+        query_display = str(query)[:40]
+        return [f'⚙ {display_name}("{query_display}")']
 
     def _render_search_completed(self, event: dict[str, Any]) -> list[str]:
         count = event.get("result_count", 0)
         response_time = event.get("response_time")
-        parts = [f"Found {count} results"]
+        # Tree child: └ ✓ result summary
+        parts = [f"└ ✓ {count} results"]
         if response_time:
-            parts.append(f"({response_time:.1f}s)")
+            parts[0] += f" ({response_time:.1f}s)"
         return parts
 
     def _render_search_failed(self, event: dict[str, Any]) -> list[str]:
         error = event.get("error", "unknown error")
-        return [f"Search failed: {str(error)[:40]}"]
+        # Tree child with error icon
+        return [f"└ ✗ {str(error)[:40]}"]
 
     def _render_crawl_started(self, event: dict[str, Any]) -> list[str]:
         url = event.get("url", "")
-        return [f"Crawling: {str(url)[:50]}"]
+        display_name = get_tool_display_name("crawl_web")
+        # Tree parent
+        return [f'⚙ {display_name}("{str(url)[:50]}")']
 
     def _render_crawl_completed(self, event: dict[str, Any]) -> list[str]:
         content_length = event.get("content_length", 0)
-        return [f"Crawl complete: {content_length} bytes"]
+        response_time = event.get("response_time")
+        # Tree child
+        parts = [f"└ ✓ {content_length} bytes"]
+        if response_time:
+            parts[0] += f" ({response_time:.1f}s)"
+        return parts
 
     def _render_crawl_failed(self, event: dict[str, Any]) -> list[str]:
         error = event.get("error", "unknown error")
-        return [f"Crawl failed: {str(error)[:40]}"]
+        return [f"└ ✗ {str(error)[:40]}"]
 
-    # --- Research tool event handlers ---
+    # --- Research tool event handlers (Multi-phase Tree RFC-0019) ---
 
     def _render_research_analyze(self, event: dict[str, Any]) -> list[str]:
         topic = str(event.get("topic", ""))[:50]
-        return [f"Analyzing: {topic}"]
+        display_name = get_tool_display_name("research")
+        # Tree parent for research tool
+        return [f'⚙ {display_name}("{topic}")']
 
     def _render_research_queries(self, event: dict[str, Any]) -> list[str]:
         queries = event.get("queries", [])
         count = len(queries)
-        parts = [f"Generated {count} queries"]
+        # Intermediate tree node
+        summary = f"├ Generated {count} queries"
         if queries and count <= _MAX_INLINE_QUERIES:
-            parts.append(f": {', '.join(str(q)[:30] for q in queries[:_MAX_INLINE_QUERIES])}")
-        return parts
+            summary += f": {', '.join(str(q)[:20] for q in queries[:_MAX_INLINE_QUERIES])}"
+        return [summary]
 
     def _render_research_gather(self, event: dict[str, Any]) -> list[str]:
         domain = event.get("domain", "")
-        query = str(event.get("query", ""))[:40]
-        return [f"Gathering from {domain}: {query}"]
+        query = str(event.get("query", ""))[:30]
+        # Intermediate tree node
+        return [f"├ Gathering from {domain}: {query}"]
 
     def _render_research_gather_done(self, event: dict[str, Any]) -> list[str]:
         count = event.get("result_count", 0)
-        return [f"Gathered {count} results"]
+        # Intermediate tree node
+        return [f"├ Gathered {count} results"]
 
     def _render_research_synthesize(self, event: dict[str, Any]) -> list[str]:
         total = event.get("total_sources", 0)
-        return [f"Synthesizing {total} sources"]
+        # Intermediate tree node
+        return [f"├ Synthesizing {total} sources"]
 
     def _render_research_completed(self, event: dict[str, Any]) -> list[str]:
         length = event.get("answer_length", 0)
-        return [f"Research completed ({length} chars)"]
+        # Final tree child
+        return [f"└ ✓ Completed ({length} chars)"]
 
     # --- Subagent event handlers ---
 
