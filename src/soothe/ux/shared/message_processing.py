@@ -249,73 +249,87 @@ def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> s
     return content.replace("\n", " ")[:max_length]
 
 
-# Argument display mapping for tool calls
-_ARG_DISPLAY_MAP: dict[str, str] = {
+# Argument display mapping for tool calls (RFC-0019)
+# Maps tool name to list of argument keys to display (supports multiple args)
+_ARG_DISPLAY_MAP: dict[str, list[str]] = {
     # File operations - show path
-    "read_file": "path",
-    "write_file": "path",
-    "delete_file": "path",
-    "file_info": "path",
-    "edit_file_lines": "path",
-    "insert_lines": "path",
-    "delete_lines": "path",
-    "apply_diff": "path",
+    "read_file": ["path"],
+    "write_file": ["path"],
+    "delete_file": ["path"],
+    "file_info": ["path"],
+    "edit_file_lines": ["path"],
+    "insert_lines": ["path"],
+    "delete_lines": ["path"],
+    "apply_diff": ["path"],
+    "ls": ["path", "pattern"],  # Multiple args support
+    "glob": ["pattern"],  # Glob tool
     # Execution - show command/code
-    "run_command": "command",
-    "run_python": "code",
-    "run_background": "command",
-    "kill_process": "pid",
+    "run_command": ["command", "args"],  # Multiple args support
+    "run_python": ["code"],
+    "run_background": ["command"],
+    "kill_process": ["pid"],
+    "execute": ["command"],  # Alias for run_command
     # Search - show pattern/query
-    "search_files": "pattern",
-    "list_files": "pattern",
-    "search_web": "query",
-    "crawl_web": "url",
+    "search_files": ["pattern"],
+    "list_files": ["pattern"],
+    "search_web": ["query"],
+    "crawl_web": ["url"],
     # Media - show file path
-    "analyze_image": "image_path",
-    "analyze_video": "video_path",
-    "transcribe_audio": "audio_path",
+    "analyze_image": ["image_path"],
+    "analyze_video": ["video_path"],
+    "transcribe_audio": ["audio_path"],
     # Goals - show description or ID
-    "create_goal": "description",
-    "complete_goal": "goal_id",
-    "fail_goal": "goal_id",
+    "create_goal": ["description"],
+    "complete_goal": ["goal_id"],
+    "fail_goal": ["goal_id"],
 }
 
 
 def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
-    """Format key tool arguments for display.
+    """Format key tool arguments for display (RFC-0019).
 
     Extracts the most relevant argument(s) for each tool type to show
-    in activity events.
+    in activity events. Supports multiple arguments per tool.
 
     Args:
         tool_name: Internal tool name (snake_case)
         tool_call: Tool call dict with 'args' key containing arguments
 
     Returns:
-        Formatted argument string like "(file_name.md)" or "(query)"
+        Formatted argument string like "(file_name.md)" or "(path, pattern)"
         Empty string if no relevant argument found
 
     Examples:
         >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
         '(config.yml)'
-        >>> format_tool_call_args("run_command", {"args": {"command": "ls -la"}})
-        '(ls -la)'
+        >>> format_tool_call_args("run_command", {"args": {"command": "ls", "args": "-la"}})
+        '(ls, -la)'
+        >>> format_tool_call_args("ls", {"args": {"path": "/tests", "pattern": "*.py"}})
+        '(/tests, *.py)'
     """
     args = tool_call.get("args", {})
     if not isinstance(args, dict):
         return ""
 
-    key_arg = _ARG_DISPLAY_MAP.get(tool_name)
-    if not key_arg or key_arg not in args:
+    key_args = _ARG_DISPLAY_MAP.get(tool_name)
+    if not key_args:
         return ""
 
-    value = str(args[key_arg])
-    # Truncate long values to prevent activity line overflow
-    max_value_length = 50
-    if len(value) > max_value_length:
-        value = value[:47] + "..."
+    # Extract values for all configured argument keys
+    values = []
+    for key_arg in key_args:
+        if key_arg in args:
+            value = str(args[key_arg])
+            # Truncate long values
+            max_value_length = 30
+            if len(value) > max_value_length:
+                value = value[:27] + "..."
+            values.append(value)
 
-    return f"({value})"
+    if not values:
+        return ""
+
+    return f"({', '.join(values)})"
 
 
 def is_multi_step_plan(event: dict[str, Any]) -> bool:

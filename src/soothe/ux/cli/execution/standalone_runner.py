@@ -24,6 +24,8 @@ class _CliOutputFormatter(OutputFormatter):
     def __init__(self) -> None:
         """Initialize CLI output formatter."""
         self.needs_stdout_newline = False
+        self._recent_tool_calls: list[str] = []  # Track recent calls for duplicate suppression
+        self._max_recent_calls = 10  # Keep last N tool calls
 
     def emit_assistant_text(self, text: str, *, is_main: bool) -> None:  # noqa: ARG002
         """Emit assistant text to stdout.
@@ -65,6 +67,18 @@ class _CliOutputFormatter(OutputFormatter):
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, tool_call) if tool_call else ""
 
+        # Duplicate suppression (RFC-0019)
+        call_signature = f"{display_name}{args_str}"
+        if call_signature in self._recent_tool_calls:
+            # Skip duplicate successive call
+            return
+
+        # Track this call
+        self._recent_tool_calls.append(call_signature)
+        if len(self._recent_tool_calls) > self._max_recent_calls:
+            self._recent_tool_calls.pop(0)
+
+        # Output the tool call
         if prefix:
             sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
         else:
