@@ -98,6 +98,11 @@ class CliEventRenderer:
         if meta and not should_show(meta.verbosity, verbosity):
             return
 
+        # Skip tool events - they're handled by message processing layer with tree format (RFC-0019)
+        # This prevents duplicate output (tree format + [tool] prefix)
+        if etype.startswith("soothe.tool."):
+            return
+
         if etype == POLICY_CHECKED:
             parts = self._render_policy_checked(event, verbosity)
             if not parts:
