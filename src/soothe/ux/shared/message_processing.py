@@ -124,8 +124,8 @@ class MessageProcessor:
                 elif btype in ("tool_call", "tool_call_chunk"):
                     name = block.get("name", "")
                     if name and should_show("protocol", verbosity):
-                        # Extract args for display
-                        tool_call = {"args": block.get("args", {})}
+                        # Only include detailed args in debug mode (RFC-0019)
+                        tool_call = {"args": block.get("args", {})} if verbosity == "debug" else None
                         self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tool_call)
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
             # Handle simple string content
