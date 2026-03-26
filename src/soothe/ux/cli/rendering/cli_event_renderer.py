@@ -369,38 +369,51 @@ class CliEventRenderer:
         return [f"Stored memory from thread {source_thread}"]
 
     def _render_plan_created(self, event: dict[str, Any]) -> list[str]:
+        """Render plan creation with tree structure (RFC-0019)."""
         goal = event.get("goal", "")
         steps = event.get("steps", [])
-        return [f"Plan: {goal[:80]} ({len(steps)} steps)"]
+        # Tree parent: ● Plan: goal (N steps)
+        return [f"● Plan: {goal[:60]} ({len(steps)} steps)"]
 
     def _render_plan_step_started(self, event: dict[str, Any]) -> list[str]:
+        """Render plan step start as tree node."""
         description = event.get("description", "")
         step_id = event.get("step_id", "?")
-        return [f"Step {step_id}: {description[:80]}"]
+        # Intermediate node: ├ Step N: description
+        return [f"├ Step {step_id}: {description[:60]}"]
 
     def _render_plan_step_completed(self, event: dict[str, Any]) -> list[str]:
+        """Render plan step completion."""
         step_id = event.get("step_id", "?")
         success = event.get("success", False)
         duration_ms = event.get("duration_ms", 0)
+        # Update step status: ✓ or ✗
         status = "✓" if success else "✗"
-        return [f"Step {step_id} {status} ({duration_ms}ms)"]
+        summary = f"├ Step {step_id} {status}"
+        if duration_ms > 0:
+            summary += f" ({duration_ms}ms)"
+        return [summary]
 
     def _render_plan_step_failed(self, event: dict[str, Any]) -> list[str]:
+        """Render plan step failure."""
         step_id = event.get("step_id", "?")
         error = event.get("error", "unknown error")
-        return [f"Step {step_id} failed: {str(error)[:60]}"]
+        return [f"├ Step {step_id} ✗: {str(error)[:50]}"]
 
     def _render_plan_batch_started(self, event: dict[str, Any]) -> list[str]:
+        """Render plan batch start (debug only in normal mode)."""
         batch_index = event.get("batch_index", 0)
         step_ids = event.get("step_ids", [])
         parallel_count = event.get("parallel_count", 1)
-        return [f"Batch {batch_index}: {len(step_ids)} steps (parallelism={parallel_count})"]
+        return [f"├ Batch {batch_index}: {len(step_ids)} steps (parallelism={parallel_count})"]
 
     def _render_plan_reflected(self, event: dict[str, Any]) -> list[str]:
+        """Render plan reflection result."""
         should_revise = event.get("should_revise", False)
-        assessment = str(event.get("assessment", ""))[:80]
+        assessment = str(event.get("assessment", ""))[:60]
+        # Final child: └ Plan accepted/Revising
         action = "Revising plan" if should_revise else "Plan accepted"
-        return [f"{action}: {assessment}"]
+        return [f"└ {action}: {assessment}"]
 
     def _render_policy_checked(self, event: dict[str, Any], verbosity: ProgressVerbosity) -> list[str]:
         """Render policy.checked event with conditional suppression.
