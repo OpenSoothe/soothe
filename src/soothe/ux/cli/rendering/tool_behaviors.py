@@ -1,4 +1,4 @@
-"""Special tool behaviors for custom tree rendering (RFC-0019).
+"""Special tool behaviors for custom tree rendering (see IG-053).
 
 This module provides a registry for custom tool rendering behaviors,
 allowing complex tools to override the default two-level tree structure
@@ -7,7 +7,57 @@ with multi-step progress displays.
 
 from __future__ import annotations
 
+import time
+from collections import deque
 from typing import Any, Protocol
+
+
+class DuplicateSuppressor:
+    """Suppress duplicate successive tool calls.
+
+    Tracks recent tool calls and suppresses display if the same tool
+    with the same arguments is called multiple times in succession.
+    """
+
+    def __init__(self, max_age_seconds: float = 2.0, max_entries: int = 50) -> None:
+        """Initialize the duplicate suppressor.
+
+        Args:
+            max_age_seconds: Maximum age of entries to consider for suppression.
+            max_entries: Maximum number of entries to track.
+        """
+        self._recent_calls: deque[tuple[str, str, float]] = deque(maxlen=max_entries)
+        self._max_age_seconds = max_age_seconds
+
+    def should_suppress(self, tool_name: str, args_str: str) -> bool:
+        """Check if this tool call should be suppressed as duplicate.
+
+        Args:
+            tool_name: Name of the tool.
+            args_str: Formatted arguments string.
+
+        Returns:
+            True if this call should be suppressed, False otherwise.
+        """
+        now = time.time()
+        key = (tool_name, args_str)
+
+        # Clean old entries
+        while self._recent_calls and (now - self._recent_calls[0][2]) > self._max_age_seconds:
+            self._recent_calls.popleft()
+
+        # Check if we've seen this exact call recently
+        for name, args, _ in self._recent_calls:
+            if (name, args) == key:
+                return True
+
+        # Add this call to tracking
+        self._recent_calls.append((tool_name, args_str, now))
+        return False
+
+
+# Global duplicate suppressor instance
+_DUPLICATE_SUPPRESSOR = DuplicateSuppressor()
 
 
 class ToolBehavior(Protocol):
@@ -17,14 +67,14 @@ class ToolBehavior(Protocol):
     instead of the default start/complete tree.
     """
 
-    def render_start(self, event: dict[str, Any]) -> str:
+    def render_start(self, event: dict[str, Any]) -> str | None:
         """Render tool start event.
 
         Args:
             event: Tool start event data.
 
         Returns:
-            Rendered string for the parent node.
+            Rendered string for the parent node, or None to suppress display.
         """
         ...
 
@@ -54,15 +104,23 @@ class ToolBehavior(Protocol):
 class DefaultToolBehavior:
     """Default two-level tree behavior for most tools."""
 
-    def render_start(self, event: dict[str, Any]) -> str:
-        """Render tool start with name and args."""
+    def render_start(self, event: dict[str, Any]) -> str | None:
+        """Render tool start with name and args.
+
+        Returns None if this is a duplicate call that should be suppressed.
+        """
         from soothe.tools.display_names import get_tool_display_name
         from soothe.ux.shared.message_processing import format_tool_call_args
 
         tool_name = event.get("tool", event.get("name", "tool"))
         args = event.get("args", {})
+
         display_name = get_tool_display_name(tool_name)
         args_str = format_tool_call_args(tool_name, {"args": args}) if args else ""
+
+        # Check for duplicate successive calls
+        if _DUPLICATE_SUPPRESSOR.should_suppress(tool_name, args_str):
+            return None
 
         return f"⚙ {display_name}{args_str}"
 

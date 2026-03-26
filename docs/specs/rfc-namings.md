@@ -58,7 +58,7 @@ This document defines the terminology and naming conventions used in this projec
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | Single-Purpose Tool | A tool that performs exactly one operation with direct naming (e.g., `run_command`, `read_file`). Replaces unified dispatch tools for better LLM tool selection. | RFC-0016 |
-| Unified Dispatch Tool | DEPRECATED pattern. A tool that routes to multiple operations via mode/action parameters (e.g., `execute(mode="shell")`). Replaced by single-purpose tools due to cognitive load. | RFC-0014, RFC-0016 |
+| Unified Dispatch Tool | DEPRECATED pattern. A tool that routes to multiple operations via mode/action parameters (e.g., `execute(mode="shell")`). Replaced by single-purpose tools due to cognitive load. | RFC-0016 |
 | Surgical Editing | Line-based file modification using tools like `edit_file_lines`, `insert_lines`, `delete_lines`. Safer than full-file rewrites. | RFC-0016 |
 | Python Session | Persistent IPython InteractiveShell instance keyed by thread_id. Enables variable persistence across `run_python` calls. | RFC-0016 |
 | Session Manager | Singleton managing Python sessions with thread_id isolation, cleanup, and thread-safe execution. | RFC-0016 |

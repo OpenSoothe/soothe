@@ -170,7 +170,7 @@ def wrap_main_agent_tool_with_logging(
 
             def logged_func(*args: Any, **kwargs: Any) -> Any:
                 emit_progress(
-                    _started(args=str(args)[:200] if args else "", kwargs=str(kwargs)[:200] if kwargs else ""),
+                    _started(args=kwargs or {}),
                     logger,
                 )
                 try:
@@ -192,7 +192,7 @@ def wrap_main_agent_tool_with_logging(
             @functools.wraps(original_run)
             def logged_run(*args: Any, **kwargs: Any) -> Any:
                 emit_progress(
-                    _started(args=str(args)[:200] if args else "", kwargs=str(kwargs)[:200] if kwargs else ""),
+                    _started(args=kwargs or {}),
                     logger,
                 )
                 try:
@@ -213,7 +213,7 @@ def wrap_main_agent_tool_with_logging(
                 @functools.wraps(original_arun)
                 async def logged_arun(*args: Any, **kwargs: Any) -> Any:
                     emit_progress(
-                        _started(args=str(args)[:200] if args else "", kwargs=str(kwargs)[:200] if kwargs else ""),
+                        _started(args=kwargs or {}),
                         logger,
                     )
                     try:

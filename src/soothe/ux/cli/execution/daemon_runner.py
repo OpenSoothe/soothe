@@ -3,17 +3,42 @@
 import asyncio
 import json
 import logging
+import re
 import sys
 
 import typer
 
 from soothe.config import SootheConfig
 from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT, PLAN_CREATED
-from soothe.ux.shared.message_processing import extract_tool_brief
+from soothe.ux.shared.message_processing import (
+    coerce_tool_call_args_to_dict,
+    extract_tool_brief,
+    format_tool_call_args,
+    normalize_tool_calls_list,
+    tool_calls_have_any_arg_dict,
+)
 
 logger = logging.getLogger(__name__)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
+
+
+def _to_snake_case(name: str) -> str:
+    """Convert PascalCase or camelCase to snake_case.
+
+    Args:
+        name: Tool name in any case format.
+
+    Returns:
+        snake_case version of the name.
+
+    Examples:
+        >>> _to_snake_case("ReadFile")
+        'read_file'
+        >>> _to_snake_case("Ls")
+        'ls'
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower() if name else name
 
 
 def _daemon_tool_brief(tool_name: str, content: object) -> str:
@@ -187,13 +212,19 @@ async def run_headless_via_daemon(
                     content = msg_data.get("content", "")
 
                     if content_blocks and isinstance(content_blocks, list):
-                        # Format 1: content_blocks array
+                        # Format 1: content_blocks array (align with MessageProcessor / IG-053)
                         update_name_map_from_tool_calls({"content_blocks": content_blocks}, name_map)
 
                         if msg_id:
                             if msg_id in seen_message_ids:
                                 continue
                             seen_message_ids.add(msg_id)
+
+                        from soothe.tools.display_names import get_tool_display_name
+
+                        raw_tcs = msg_data.get("tool_calls") or []
+                        has_tc_args = tool_calls_have_any_arg_dict(raw_tcs)
+                        tool_call_emitted_from_blocks = False
 
                         for block in content_blocks:
                             if not isinstance(block, dict):
@@ -208,27 +239,71 @@ async def run_headless_via_daemon(
                                         sys.stdout.flush()
                                         needs_stdout_newline = True
                             elif btype in ("tool_call", "tool_call_chunk") and should_show("tool_activity", verbosity):
+                                if has_tc_args:
+                                    continue
                                 name = block.get("name", "")
-                                if name:
-                                    # Add newline before stderr output if needed
-                                    if needs_stdout_newline:
-                                        sys.stdout.write("\n")
-                                        sys.stdout.flush()
-                                        needs_stdout_newline = False
-                                    prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                                if not name:
+                                    continue
+                                coerced = coerce_tool_call_args_to_dict(block.get("args"))
+                                # Direct stderr debug to see what's happening
+                                sys.stderr.write(
+                                    f"[DEBUG-daemon] Tool: {name}, args={block.get('args')}, coerced={coerced}\n"
+                                )
+                                sys.stderr.flush()
+                                logger.debug(
+                                    "Tool call block: name=%s, args_raw=%s, coerced=%s, block_keys=%s",
+                                    name,
+                                    block.get("args"),
+                                    coerced,
+                                    list(block.keys()),
+                                )
+                                if not coerced and raw_tcs:
+                                    continue
+                                if needs_stdout_newline:
+                                    sys.stdout.write("\n")
+                                    sys.stdout.flush()
+                                    needs_stdout_newline = False
+                                prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                                display_name = get_tool_display_name(name)
+                                internal_name = _to_snake_case(name)
+                                args_str = format_tool_call_args(internal_name, {"args": coerced})
+                                logger.debug(
+                                    "Tool display: name=%s, internal_name=%s, args_str=%s",
+                                    name,
+                                    internal_name,
+                                    args_str,
+                                )
+                                if coerced:
+                                    tool_call_emitted_from_blocks = True
+                                if prefix:
+                                    sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
+                                else:
+                                    sys.stderr.write(f"⚙ {display_name}{args_str}\n")
+                                sys.stderr.flush()
 
-                                    # Format with tree structure (RFC-0019)
-                                    from soothe.tools.display_names import get_tool_display_name
-
-                                    display_name = get_tool_display_name(name)
-                                    args = block.get("args", {})
-                                    args_str = f"({str(args)[:50]})" if args else ""
-
-                                    if prefix:
-                                        sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
-                                    else:
-                                        sys.stderr.write(f"⚙ {display_name}{args_str}\n")
-                                    sys.stderr.flush()
+                        tcs = normalize_tool_calls_list(raw_tcs)
+                        if tcs and should_show("tool_activity", verbosity):
+                            for tc in tcs:
+                                name = tc.get("name", "")
+                                if not name:
+                                    continue
+                                tc_display = dict(tc)
+                                tc_display["args"] = coerce_tool_call_args_to_dict(tc.get("args"))
+                                if not (has_tc_args or (not tc_display["args"] and not tool_call_emitted_from_blocks)):
+                                    continue
+                                if needs_stdout_newline:
+                                    sys.stdout.write("\n")
+                                    sys.stdout.flush()
+                                    needs_stdout_newline = False
+                                prefix = resolve_namespace_label(namespace, name_map) if namespace else None
+                                display_name = get_tool_display_name(name)
+                                internal_name = _to_snake_case(name)
+                                args_str = format_tool_call_args(internal_name, tc_display)
+                                if prefix:
+                                    sys.stderr.write(f"[{prefix}] ⚙ {display_name}{args_str}\n")
+                                else:
+                                    sys.stderr.write(f"⚙ {display_name}{args_str}\n")
+                                sys.stderr.flush()
 
                     elif content and isinstance(content, str):
                         # Format 2: simple content string (from daemon serialization)
@@ -250,7 +325,7 @@ async def run_headless_via_daemon(
                         needs_stdout_newline = False
                     prefix = resolve_namespace_label(namespace, name_map) if namespace else None
 
-                    # Format as tree child (RFC-0019)
+                    # Format as tree child (see IG-053)
                     if prefix:
                         sys.stderr.write(f"[{prefix}]   └ ✓ {brief}\n")
                     else:

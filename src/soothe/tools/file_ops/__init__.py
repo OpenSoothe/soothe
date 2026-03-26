@@ -52,7 +52,7 @@ class FileOpsPlugin:
             context: Plugin context with config and logger.
         """
         workspace_root = context.config.get("workspace_root", "")
-        self._tools = create_file_ops_tools(workspace_root=workspace_root)
+        self._tools = create_file_ops_tools(work_dir=workspace_root)
 
         context.logger.info(
             "Loaded %d file_ops tools (workspace=%s)",

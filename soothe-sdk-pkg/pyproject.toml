@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "SDK for building Soothe plugins with decorator-based API"
 readme = "README.md"
 license = { text = "MIT" }

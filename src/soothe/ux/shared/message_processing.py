@@ -6,6 +6,7 @@ between headless CLI mode and the TUI interface.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
@@ -102,16 +103,19 @@ class MessageProcessor:
         # Update name_map from tool calls
         update_name_map_from_tool_calls(msg, self.state.name_map)
 
-        # Track seen message IDs
+        # Track seen message IDs (complete AIMessages only; chunks share ids with the final message)
         msg_id = msg.id or ""
         if not isinstance(msg, AIMessageChunk):
             if msg_id in self.state.seen_message_ids:
                 return
             self.state.seen_message_ids.add(msg_id)
-        elif msg_id:
-            self.state.seen_message_ids.add(msg_id)
+
+        raw_tcs = getattr(msg, "tool_calls", None) or []
+        tcs = normalize_tool_calls_list(raw_tcs)
+        has_tc_args = tool_calls_have_any_arg_dict(raw_tcs)
 
         # Process content blocks
+        tool_call_emitted_from_blocks = False
         if hasattr(msg, "content_blocks") and msg.content_blocks:
             for block in msg.content_blocks:
                 if not isinstance(block, dict):
@@ -122,14 +126,33 @@ class MessageProcessor:
                     if text and should_show("assistant_text", verbosity):
                         self._process_text_block(text, is_main=is_main)
                 elif btype in ("tool_call", "tool_call_chunk"):
+                    # When tool_calls already have args, use that path only (see IG-053).
+                    if has_tc_args:
+                        continue
                     name = block.get("name", "")
                     if name and should_show("protocol", verbosity):
-                        # Only include detailed args in debug mode (RFC-0019)
-                        tool_call = {"args": block.get("args", {})} if verbosity == "debug" else None
+                        coerced = coerce_tool_call_args_to_dict(block.get("args"))
+                        # Chunks often have empty/partial args before merge; prefer msg.tool_calls when present.
+                        if not coerced and raw_tcs:
+                            continue
+                        tool_call = {"args": coerced}
                         self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tool_call)
+                        if coerced:
+                            tool_call_emitted_from_blocks = True
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
             # Handle simple string content
             self._process_text_block(msg.content, is_main=is_main)
+
+        # LangChain stores parsed args on msg.tool_calls; use when present to get full args (see IG-053).
+        if tcs:
+            for tc in tcs:
+                name = tc.get("name", "")
+                if not name or not should_show("protocol", verbosity):
+                    continue
+                tc_display = dict(tc)
+                tc_display["args"] = coerce_tool_call_args_to_dict(tc.get("args"))
+                if has_tc_args or (not tc_display["args"] and not tool_call_emitted_from_blocks):
+                    self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tc_display)
 
     def _process_text_block(self, text: str, *, is_main: bool) -> None:
         """Process a text block from an AI message.
@@ -249,20 +272,75 @@ def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> s
     return content.replace("\n", " ")[:max_length]
 
 
-# Argument display mapping for tool calls (RFC-0019)
+def coerce_tool_call_args_to_dict(raw: Any) -> dict[str, Any]:
+    """Normalize tool arguments for display.
+
+    ``tool_call_chunk`` content blocks use a JSON string; merged ``tool_calls`` use dicts
+    (see LangChain ``ToolCall`` / ``ToolCallChunk``).
+    """
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return {}
+        try:
+            parsed = json.loads(s)
+        except json.JSONDecodeError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        return {}
+    return {}
+
+
+def coerce_tool_call_entry_to_dict(tc: Any) -> dict[str, Any] | None:
+    """Normalize a ``tool_calls`` entry to a plain dict (handles Pydantic models)."""
+    if isinstance(tc, dict):
+        return tc
+    model_dump = getattr(tc, "model_dump", None)
+    if callable(model_dump):
+        try:
+            dumped = model_dump()
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception:
+            return None
+    return None
+
+
+def normalize_tool_calls_list(raw: list[Any]) -> list[dict[str, Any]]:
+    """Coerce ``msg.tool_calls`` to ``dict`` entries for display logic."""
+    out: list[dict[str, Any]] = []
+    for tc in raw:
+        coerced = coerce_tool_call_entry_to_dict(tc)
+        if coerced:
+            out.append(coerced)
+    return out
+
+
+def tool_calls_have_any_arg_dict(tc_list: list[Any]) -> bool:
+    """True if any tool call has non-empty coerced argument dict."""
+    return any(coerce_tool_call_args_to_dict(tc.get("args")) for tc in normalize_tool_calls_list(tc_list))
+
+
+# Argument display mapping for tool calls (see IG-053)
 # Maps tool name to list of argument keys to display (supports multiple args)
 _ARG_DISPLAY_MAP: dict[str, list[str]] = {
-    # File operations - show path
-    "read_file": ["path"],
-    "write_file": ["path"],
-    "delete_file": ["path"],
-    "file_info": ["path"],
-    "edit_file_lines": ["path"],
-    "insert_lines": ["path"],
-    "delete_lines": ["path"],
-    "apply_diff": ["path"],
+    # File operations — deepagents uses ``file_path`` for read/write/edit (see IG-053)
+    "read_file": ["file_path", "path"],
+    "write_file": ["file_path", "path"],
+    "delete_file": ["file_path", "path"],
+    "file_info": ["path", "file_path"],
+    "edit_file_lines": ["path", "file_path"],
+    "insert_lines": ["path", "file_path"],
+    "delete_lines": ["path", "file_path"],
+    "apply_diff": ["path", "file_path"],
+    "edit_file": ["file_path", "path"],
     "ls": ["path", "pattern"],  # Multiple args support
-    "glob": ["pattern"],  # Glob tool
+    "glob": ["pattern", "path"],  # Glob tool
+    "list_files": ["pattern"],
+    "search_files": ["pattern"],
     # Execution - show command/code
     "run_command": ["command", "args"],  # Multiple args support
     "run_python": ["code"],
@@ -270,8 +348,6 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     "kill_process": ["pid"],
     "execute": ["command"],  # Alias for run_command
     # Search - show pattern/query
-    "search_files": ["pattern"],
-    "list_files": ["pattern"],
     "search_web": ["query"],
     "crawl_web": ["url"],
     # Media - show file path
@@ -285,14 +361,22 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
 }
 
 
+def _normalize_tool_name_for_arg_map(tool_name: str) -> str:
+    """Map API tool names (any casing) to snake_case for `_ARG_DISPLAY_MAP` lookup."""
+    if not tool_name:
+        return tool_name
+    # PascalCase / camelCase -> snake_case; already-snake names pass through
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", tool_name).lower()
+
+
 def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
-    """Format key tool arguments for display (RFC-0019).
+    """Format key tool arguments for display (see IG-053).
 
     Extracts the most relevant argument(s) for each tool type to show
     in activity events. Supports multiple arguments per tool.
 
     Args:
-        tool_name: Internal tool name (snake_case)
+        tool_name: Tool name as emitted by the model (snake_case or PascalCase).
         tool_call: Tool call dict with 'args' key containing arguments
 
     Returns:
@@ -302,16 +386,19 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     Examples:
         >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
         '(config.yml)'
+        >>> format_tool_call_args("read_file", {"args": '{"file_path": "/README.md"}'})
+        '(/README.md)'
         >>> format_tool_call_args("run_command", {"args": {"command": "ls", "args": "-la"}})
         '(ls, -la)'
         >>> format_tool_call_args("ls", {"args": {"path": "/tests", "pattern": "*.py"}})
         '(/tests, *.py)'
     """
-    args = tool_call.get("args", {})
-    if not isinstance(args, dict):
+    args = coerce_tool_call_args_to_dict(tool_call.get("args"))
+    if not args:
         return ""
 
-    key_args = _ARG_DISPLAY_MAP.get(tool_name)
+    internal = _normalize_tool_name_for_arg_map(tool_name)
+    key_args = _ARG_DISPLAY_MAP.get(internal)
     if not key_args:
         return ""
 
@@ -327,6 +414,16 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
             values.append(value)
 
     if not values:
+        # Model may use different arg names than _ARG_DISPLAY_MAP; still show something useful.
+        if args:
+            max_value_length = 30
+            parts: list[str] = []
+            for _k, v in list(args.items())[:3]:
+                s = str(v)
+                if len(s) > max_value_length:
+                    s = s[: max_value_length - 3] + "..."
+                parts.append(s)
+            return f"({', '.join(parts)})"
         return ""
 
     return f"({', '.join(values)})"

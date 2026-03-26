@@ -60,14 +60,14 @@ class _CliOutputFormatter(OutputFormatter):
             sys.stdout.flush()
             self.needs_stdout_newline = False
 
-        # Format with tree structure (RFC-0019)
+        # Format with tree structure (see IG-053)
         from soothe.tools.display_names import get_tool_display_name
         from soothe.ux.shared.message_processing import format_tool_call_args
 
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, tool_call) if tool_call else ""
 
-        # Duplicate suppression (RFC-0019)
+        # Duplicate suppression (see IG-053)
         call_signature = f"{display_name}{args_str}"
         if call_signature in self._recent_tool_calls:
             # Skip duplicate successive call
@@ -100,7 +100,7 @@ class _CliOutputFormatter(OutputFormatter):
             sys.stdout.flush()
             self.needs_stdout_newline = False
 
-        # Format as tree child (RFC-0019)
+        # Format as tree child (see IG-053)
         if prefix:
             sys.stderr.write(f"[{prefix}]   └ ✓ {brief}\n")
         else:

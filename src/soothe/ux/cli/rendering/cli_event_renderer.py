@@ -98,7 +98,7 @@ class CliEventRenderer:
         if meta and not should_show(meta.verbosity, verbosity):
             return
 
-        # Skip tool events - they're handled by message processing layer with tree format (RFC-0019)
+        # Skip tool events - they're handled by message processing layer with tree format (see IG-053)
         # This prevents duplicate output (tree format + [tool] prefix)
         if etype.startswith("soothe.tool."):
             return
@@ -250,7 +250,7 @@ class CliEventRenderer:
 
         return etype[:80]
 
-    # --- Tool event handlers (Tree Rendering RFC-0019) ---
+    # --- Tool event handlers (Tree Rendering - see IG-053) ---
 
     def _render_search_started(self, event: dict[str, Any]) -> list[str]:
         query = event.get("query", "")
@@ -292,7 +292,7 @@ class CliEventRenderer:
         error = event.get("error", "unknown error")
         return [f"└ ✗ {str(error)[:40]}"]
 
-    # --- Research tool event handlers (Multi-phase Tree RFC-0019) ---
+    # --- Research tool event handlers (Multi-phase Tree - see IG-053) ---
 
     def _render_research_analyze(self, event: dict[str, Any]) -> list[str]:
         topic = str(event.get("topic", ""))[:50]
@@ -374,7 +374,7 @@ class CliEventRenderer:
         return [f"Stored memory from thread {source_thread}"]
 
     def _render_plan_created(self, event: dict[str, Any]) -> list[str]:
-        """Render plan creation with tree structure (RFC-0019)."""
+        """Render plan creation with tree structure (see IG-053)."""
         goal = event.get("goal", "")
         steps = event.get("steps", [])
         # Tree parent: ● Plan: goal (N steps)

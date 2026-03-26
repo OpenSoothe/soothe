@@ -18,6 +18,7 @@ import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
@@ -55,7 +56,14 @@ class ReadFileTool(BaseTool):
     allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
-        """Resolve file path relative to work directory."""
+        """Resolve file path relative to work directory.
+
+        Resolution order (for absolute paths that don't exist):
+        1. Try as relative path from workspace
+        2. Try as relative path from workspace root (for /file paths)
+
+        This handles LLM convention where /file.txt means "relative to workspace root".
+        """
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
 
         # Log if normalization changed the path
@@ -65,30 +73,65 @@ class ReadFileTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir and not self.allow_outside_workdir:
-                work = expand_path(self.work_dir)
-                try:
-                    path.resolve().relative_to(work)
-                except ValueError as err:
-                    msg = f"Path {normalized_input} is outside work directory"
-                    raise ValueError(msg) from err
+            # If absolute path exists, use it
+            if path.exists():
+                if self.work_dir and not self.allow_outside_workdir:
+                    work = expand_path(self.work_dir)
+                    try:
+                        path.resolve().relative_to(work)
+                    except ValueError as err:
+                        msg = f"Path {normalized_input} is outside work directory"
+                        raise ValueError(msg) from err
+                return path
+
+            # If absolute path doesn't exist, try as workspace-relative
+            # This handles LLM convention where /file means "relative to workspace root"
+            if self.work_dir:
+                base = expand_path(self.work_dir)
+                # Strip leading slash to make it relative
+                relative_path = path.relative_to("/") if path.is_absolute() else path
+                resolved = (base / relative_path).resolve()
+
+                # If resolved path exists, use it
+                if resolved.exists():
+                    logger.debug(
+                        "Absolute path %s doesn't exist, found at workspace-relative: %s",
+                        file_path,
+                        resolved,
+                    )
+                    return resolved
+
+                # Path doesn't exist anywhere - return the workspace-relative version
+                # (will fail later with a clearer error message)
+                logger.debug(
+                    "Absolute path %s doesn't exist, treating as workspace-relative: %s",
+                    file_path,
+                    resolved,
+                )
+                return resolved
+
+            # No workspace, return the absolute path (will fail later)
             return path
 
+        # Relative path - resolve relative to workspace
         base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
-
         return (base / path).resolve()
 
-    def _run(self, path: str, start_line: int | None = None, end_line: int | None = None) -> str:
+    def _run(self, path: str, start_line: int | None = None, end_line: int | None = None, **kwargs: Any) -> str:
         """Read file contents.
 
         Args:
             path: Absolute file path
             start_line: First line to read (1-indexed, inclusive)
             end_line: Last line to read (1-indexed, inclusive)
+            **kwargs: Additional ignored parameters (for flexibility)
 
         Returns:
             File contents with line numbers
         """
+        # Ignore unexpected kwargs like 'limit' that LLM might pass
+        _ = kwargs
+
         try:
             resolved = self._resolve_path(path)
 
@@ -123,9 +166,9 @@ class ReadFileTool(BaseTool):
             )
             return result
 
-    async def _arun(self, path: str, start_line: int | None = None, end_line: int | None = None) -> str:
+    async def _arun(self, path: str, start_line: int | None = None, end_line: int | None = None, **kwargs: Any) -> str:
         """Async execution (delegates to sync)."""
-        return self._run(path, start_line, end_line)
+        return self._run(path, start_line, end_line, **kwargs)
 
 
 class WriteFileTool(BaseTool):
@@ -170,13 +213,31 @@ class WriteFileTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir and not self.allow_outside_workdir:
-                work = expand_path(self.work_dir)
-                try:
-                    path.resolve().relative_to(work)
-                except ValueError as err:
-                    msg = f"Path {normalized_input} is outside work directory"
-                    raise ValueError(msg) from err
+            # If absolute path exists or parent exists, use it
+            if path.exists() or path.parent.exists():
+                if self.work_dir and not self.allow_outside_workdir:
+                    work = expand_path(self.work_dir)
+                    try:
+                        path.resolve().relative_to(work)
+                    except ValueError as err:
+                        msg = f"Path {normalized_input} is outside work directory"
+                        raise ValueError(msg) from err
+                return path
+
+            # If absolute path doesn't exist, treat as workspace-relative
+            # This handles LLM convention where /file means "relative to workspace root"
+            if self.work_dir:
+                base = expand_path(self.work_dir)
+                relative_path = path.relative_to("/") if path.is_absolute() else path
+                resolved = (base / relative_path).resolve()
+                logger.debug(
+                    "Absolute path %s doesn't exist, treating as workspace-relative: %s",
+                    file_path,
+                    resolved,
+                )
+                return resolved
+
+            # No workspace, return the absolute path
             return path
 
         base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
@@ -295,7 +356,14 @@ class DeleteFileTool(BaseTool):
     allow_outside_workdir: bool = Field(default=False)
 
     def _resolve_path(self, file_path: str) -> Path:
-        """Resolve file path relative to work directory."""
+        """Resolve file path relative to work directory.
+
+        Resolution order (for absolute paths that don't exist):
+        1. Try as relative path from workspace
+        2. Try as relative path from workspace root (for /file paths)
+
+        This handles LLM convention where /file.txt means "relative to workspace root".
+        """
         normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
 
         # Log if normalization changed the path
@@ -305,17 +373,48 @@ class DeleteFileTool(BaseTool):
         path = Path(normalized_input)
 
         if path.is_absolute():
-            if self.work_dir and not self.allow_outside_workdir:
-                work = expand_path(self.work_dir)
-                try:
-                    path.resolve().relative_to(work)
-                except ValueError as err:
-                    msg = f"Path {normalized_input} is outside work directory"
-                    raise ValueError(msg) from err
+            # If absolute path exists, use it
+            if path.exists():
+                if self.work_dir and not self.allow_outside_workdir:
+                    work = expand_path(self.work_dir)
+                    try:
+                        path.resolve().relative_to(work)
+                    except ValueError as err:
+                        msg = f"Path {normalized_input} is outside work directory"
+                        raise ValueError(msg) from err
+                return path
+
+            # If absolute path doesn't exist, try as workspace-relative
+            # This handles LLM convention where /file means "relative to workspace root"
+            if self.work_dir:
+                base = expand_path(self.work_dir)
+                # Strip leading slash to make it relative
+                relative_path = path.relative_to("/") if path.is_absolute() else path
+                resolved = (base / relative_path).resolve()
+
+                # If resolved path exists, use it
+                if resolved.exists():
+                    logger.debug(
+                        "Absolute path %s doesn't exist, found at workspace-relative: %s",
+                        file_path,
+                        resolved,
+                    )
+                    return resolved
+
+                # Path doesn't exist anywhere - return the workspace-relative version
+                # (will fail later with a clearer error message)
+                logger.debug(
+                    "Absolute path %s doesn't exist, treating as workspace-relative: %s",
+                    file_path,
+                    resolved,
+                )
+                return resolved
+
+            # No workspace, return the absolute path (will fail later)
             return path
 
+        # Relative path - resolve relative to workspace
         base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
-
         return (base / path).resolve()
 
     def _create_backup(self, file_path: Path) -> Path | None:

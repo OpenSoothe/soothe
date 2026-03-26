@@ -1,11 +1,58 @@
-"""Test message processing utilities (RFC-0019).
+"""Test message processing utilities (see IG-053).
 
 Tests for whitespace normalization and internal tag stripping.
 """
 
 import pytest
 
-from soothe.ux.shared.message_processing import strip_internal_tags
+from soothe.ux.shared.message_processing import (
+    coerce_tool_call_args_to_dict,
+    format_tool_call_args,
+    strip_internal_tags,
+)
+
+
+class TestFormatToolCallArgs:
+    """Display strings for tool call arguments (see IG-053)."""
+
+    def test_pascal_case_tool_name_maps_to_arg_display(self) -> None:
+        """Model may emit PascalCase names; lookup uses snake_case map."""
+        assert (
+            format_tool_call_args(
+                "ReadFile",
+                {"args": {"path": "README.md"}},
+            )
+            == "(README.md)"
+        )
+
+    def test_snake_case_unchanged(self) -> None:
+        assert (
+            format_tool_call_args(
+                "read_file",
+                {"args": {"path": "x.txt"}},
+            )
+            == "(x.txt)"
+        )
+
+    def test_fallback_when_mapped_keys_missing(self) -> None:
+        """If the model uses different parameter names, show raw values."""
+        assert format_tool_call_args("ls", {"args": {"directory": "/tmp"}}) == "(/tmp)"
+
+    def test_deepagents_read_file_uses_file_path(self) -> None:
+        """Filesystem middleware passes ``file_path``, not ``path``."""
+        assert (
+            format_tool_call_args(
+                "read_file",
+                {"args": {"file_path": "/README.md"}},
+            )
+            == "(/README.md)"
+        )
+
+    def test_string_json_args_from_tool_call_chunk(self) -> None:
+        """Streaming chunks encode args as JSON text."""
+        raw = '{"file_path": "/pyproject.toml"}'
+        assert coerce_tool_call_args_to_dict(raw) == {"file_path": "/pyproject.toml"}
+        assert format_tool_call_args("read_file", {"args": raw}) == "(/pyproject.toml)"
 
 
 class TestStripInternalTags:

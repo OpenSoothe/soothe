@@ -1,7 +1,6 @@
-# Implementation Guide: RFC-0019 CLI/TUI Event Progress Clarity
+# Implementation Guide: CLI/TUI Event Progress Clarity
 
 **Guide**: IG-053
-**RFC**: RFC-0019
 **Title**: CLI/TUI Event Progress Clarity
 **Status**: In Progress
 **Created**: 2026-03-26
@@ -11,7 +10,7 @@
 
 ## Overview
 
-This guide implements RFC-0019 to improve CLI/TUI event progress clarity through:
+This guide implements CLI/TUI event progress clarity improvements through:
 1. Text formatting fixes (whitespace normalization)
 2. Two-level tree structure for tool calls
 3. Special tool behaviors for complex tools
@@ -168,7 +167,7 @@ class TestStripInternalTags:
 ```python
 """Track tool call start/complete pairs for tree rendering.
 
-This module implements RFC-0019's two-level tree structure for tool calls,
+This module implements the two-level tree structure for tool calls,
 matching tool start events with their completion events to render as
 parent/child tree nodes.
 """
@@ -372,7 +371,7 @@ def _render_tool_complete(self, event: dict[str, Any]) -> list[str]:
 **File**: `tests/ux/cli/test_tree_rendering.py`
 
 ```python
-"""Test tree rendering for tool calls (RFC-0019)."""
+"""Test tree rendering for tool calls."""
 
 import pytest
 from soothe.ux.cli.rendering.tool_call_tracker import ToolCallTracker, ToolCallState
@@ -467,6 +466,7 @@ uv run soothe --no-tui -p "analyze the codebase structure"
 
 ## References
 
-- RFC-0019: CLI/TUI Event Progress Clarity
+- RFC-0003: CLI TUI Architecture Design
+- RFC-0015: Progress Event Protocol
 - Design Draft: `docs/drafts/003-cli-tui-event-progress-clarity.md`
 - Current Implementation: `src/soothe/ux/cli/rendering/cli_event_renderer.py`

@@ -1,4 +1,4 @@
-"""Tests for RFC-0014 consolidated capability tools."""
+"""Tests for consolidated capability tools (see RFC-0016)."""
 
 from __future__ import annotations
 

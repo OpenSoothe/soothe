@@ -10,9 +10,12 @@ from langchain_core.messages import AIMessage, ToolMessage
 from rich.console import RenderableType
 
 from soothe.ux.shared.message_processing import (
+    coerce_tool_call_args_to_dict,
     extract_tool_brief,
     format_tool_call_args,
+    normalize_tool_calls_list,
     strip_internal_tags,
+    tool_calls_have_any_arg_dict,
 )
 from soothe.ux.shared.progress_verbosity import classify_custom_event, should_show
 from soothe.ux.shared.rendering import update_name_map_from_tool_calls
@@ -335,7 +338,7 @@ def process_daemon_event(
             category = classify_custom_event(namespace, data)
             etype = data.get("type", "")
 
-            # Skip tool events - they're handled by message processing layer with tree format (RFC-0019)
+            # Skip tool events - they're handled by message processing layer with tree format (see IG-053)
             # This prevents duplicate output in TUI (tree format + protocol event rendering)
             if etype.startswith("soothe.tool."):
                 return
@@ -417,7 +420,7 @@ def handle_messages_event(
         # Update name_map from tool calls
         update_name_map_from_tool_calls(msg, state.name_map)
 
-        # Track seen message IDs
+        # Track seen message IDs (complete AIMessages only; chunks share ids with the final message)
         from langchain_core.messages import AIMessageChunk
 
         msg_id = msg.id or ""
@@ -425,10 +428,13 @@ def handle_messages_event(
             if msg_id in state.seen_message_ids:
                 return
             state.seen_message_ids.add(msg_id)
-        elif msg_id:
-            state.seen_message_ids.add(msg_id)
+
+        raw_tcs = getattr(msg, "tool_calls", None) or []
+        tcs = normalize_tool_calls_list(raw_tcs)
+        has_tc_args = tool_calls_have_any_arg_dict(raw_tcs)
 
         # Process content blocks
+        tool_call_emitted_from_blocks = False
         if hasattr(msg, "content_blocks") and msg.content_blocks:
             for block in msg.content_blocks:
                 if not isinstance(block, dict):
@@ -441,22 +447,35 @@ def handle_messages_event(
                         if cleaned:
                             formatter.emit_assistant_text(cleaned, is_main=is_main)
                 elif btype in ("tool_call", "tool_call_chunk"):
+                    if has_tc_args:
+                        continue
                     name = block.get("name", "")
                     if name and should_show("protocol", verbosity):
-                        tool_call = {"args": block.get("args", {}), "id": block.get("id", "")}
+                        coerced = coerce_tool_call_args_to_dict(block.get("args"))
+                        if not coerced and raw_tcs:
+                            continue
+                        tool_call = {
+                            "args": coerced,
+                            "id": block.get("id", ""),
+                        }
                         formatter.emit_tool_call(name, tool_call=tool_call)
+                        if coerced:
+                            tool_call_emitted_from_blocks = True
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
             cleaned = strip_internal_tags(msg.content)
             if cleaned:
                 formatter.emit_assistant_text(cleaned, is_main=is_main)
 
-        # Handle tool_calls attribute
-        if hasattr(msg, "tool_calls") and msg.tool_calls:
-            for tc in msg.tool_calls:
-                if isinstance(tc, dict):
-                    name = tc.get("name", "")
-                    if name and should_show("protocol", verbosity):
-                        formatter.emit_tool_call(name, tool_call=tc)
+        # Handle tool_calls attribute (see IG-053, align with MessageProcessor)
+        if tcs:
+            for tc in tcs:
+                name = tc.get("name", "")
+                if not name or not should_show("protocol", verbosity):
+                    continue
+                tc_display = dict(tc)
+                tc_display["args"] = coerce_tool_call_args_to_dict(tc.get("args"))
+                if has_tc_args or (not tc_display["args"] and not tool_call_emitted_from_blocks):
+                    formatter.emit_tool_call(name, tool_call=tc_display)
         return
 
     # Handle ToolMessage objects

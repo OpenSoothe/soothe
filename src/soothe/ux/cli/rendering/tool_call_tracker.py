@@ -1,8 +1,8 @@
 """Track tool call start/complete pairs for tree rendering.
 
-This module implements RFC-0019's two-level tree structure for tool calls,
+This module implements the two-level tree structure for tool calls,
 matching tool start events with their completion events to render as
-parent/child tree nodes.
+parent/child tree nodes. See IG-053 for design details.
 
 Example:
     ⚙ WebSearch("Iran wars")
