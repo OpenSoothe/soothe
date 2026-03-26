@@ -384,7 +384,7 @@ logging:
     format: "%(levelname)-8s %(name)s %(message)s"
 
   # Progress event visibility (TUI/headless activity display)
-  progress_verbosity: normal  # minimal | normal | detailed | debug
+  verbosity: normal  # minimal | normal | detailed | debug
 
   # Thread conversation logging for audit and recovery
   thread_logging:

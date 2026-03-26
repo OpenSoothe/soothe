@@ -239,7 +239,12 @@ class UnifiedClassifier:
             current_time=current_time,
             assistant_name=self._assistant_name,
         )
-        result = await self._routing_model.ainvoke(prompt)
+
+        try:
+            result = await self._routing_model.ainvoke(prompt)
+        except Exception:
+            logger.exception("LLM routing call failed")
+            raise
 
         # Ensure parsed output exists and obeys strict literal contract.
         if result is None:

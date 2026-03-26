@@ -87,7 +87,7 @@ def config_show(
             general_table.add_row("Context Backend", cfg.protocols.context.backend.title())
             general_table.add_row("Memory Backend", cfg.protocols.memory.database_provider.title())
             general_table.add_row("Policy Profile", cfg.protocols.policy.profile)
-            general_table.add_row("Progress Verbosity", cfg.logging.progress_verbosity)
+            general_table.add_row("Progress Verbosity", cfg.logging.verbosity)
             # Show vector store providers count
             vs_count = len(cfg.vector_stores)
             general_table.add_row("Vector Store Providers", f"{vs_count} configured")

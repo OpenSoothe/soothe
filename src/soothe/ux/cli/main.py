@@ -48,12 +48,12 @@ def main(
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
-    progress_verbosity: Annotated[
+    verbosity: Annotated[
         Literal["minimal", "normal", "detailed", "debug"] | None,
         typer.Option(
-            "--progress-verbosity",
+            "--verbosity",
             "-v",
-            help="Progress visibility: minimal, normal, detailed, debug.",
+            help="Verbosity level: minimal, normal, detailed, debug.",
         ),
     ] = None,
     show_help: Annotated[  # noqa: FBT002
@@ -100,7 +100,7 @@ def main(
             autonomous=False,
             max_iterations=None,
             output_format=output_format,
-            progress_verbosity=progress_verbosity,
+            verbosity=verbosity,
         )
 
 
@@ -471,6 +471,63 @@ def _agent_status(
     from soothe.ux.cli.commands.status_cmd import agent_status
 
     agent_status(config=config)
+
+
+# ---------------------------------------------------------------------------
+# Health Check Command
+# ---------------------------------------------------------------------------
+
+
+@app.command("checkhealth")
+def _checkhealth(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    output: Annotated[
+        Literal["text", "json"],
+        typer.Option("--output", "-o", help="Output format: text or json."),
+    ] = "text",
+    quiet: Annotated[  # noqa: FBT002
+        bool,
+        typer.Option("--quiet", "-q", help="Suppress output, return exit code only."),
+    ] = False,
+    categories: Annotated[
+        list[str] | None,
+        typer.Option("--check", help="Run specific checks (can be used multiple times)."),
+    ] = None,
+    exclude: Annotated[
+        list[str] | None,
+        typer.Option("--exclude", help="Exclude checks (can be used multiple times)."),
+    ] = None,
+    save_report: Annotated[
+        str | None,
+        typer.Option("--save-report", help="Save report to file (markdown format)."),
+    ] = None,
+) -> None:
+    """Run comprehensive health checks.
+
+    Validates configuration and checks backend service availability including
+    PostgreSQL, LLM providers, vector stores, and external APIs.
+
+    Exit codes: 0=OK, 1=warnings, 2=critical issues
+
+    Examples:
+        soothe checkhealth
+        soothe checkhealth --output json
+        soothe checkhealth --check daemon --check persistence
+        soothe checkhealth --save-report report.md
+    """
+    from soothe.ux.cli.commands.health_cmd import checkhealth as _checkhealth_impl
+
+    _checkhealth_impl(
+        config=config,
+        output=output,
+        quiet=quiet,
+        categories=categories,
+        exclude=exclude,
+        save_report=save_report,
+    )
 
 
 # ---------------------------------------------------------------------------

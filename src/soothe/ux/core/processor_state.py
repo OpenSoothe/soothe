@@ -41,6 +41,9 @@ class ProcessorState:
     # Multi-step plan suppression flag (suppress step text, show final report)
     multi_step_active: bool = False
 
+    # Internal context tracking (suppress internal LLM responses)
+    internal_context_active: bool = False
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -58,3 +61,4 @@ class ProcessorState:
         self.pending_tool_calls.clear()
         self.current_plan = None
         self.multi_step_active = False
+        self.internal_context_active = False

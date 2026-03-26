@@ -672,14 +672,25 @@ class LoggingConfig(BaseModel):
     Args:
         file: File logging configuration.
         console: Console logging configuration.
-        progress_verbosity: Progress event visibility level (TUI/headless activity display).
+        verbosity: Verbosity level (TUI/headless activity display).
         thread_logging: Thread logging configuration.
     """
 
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
-    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
+    verbosity: Literal["minimal", "normal", "detailed", "debug"] = Field(
+        default="normal",
+        alias="progress_verbosity",
+        validation_alias="progress_verbosity",
+    )
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
+
+    model_config = {"populate_by_name": True}
+
+    @property
+    def progress_verbosity(self) -> Literal["minimal", "normal", "detailed", "debug"]:
+        """Backward compatibility alias for verbosity."""
+        return self.verbosity
 
 
 class RecoveryConfig(BaseModel):

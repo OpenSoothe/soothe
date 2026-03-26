@@ -93,6 +93,10 @@ class ChatInput(TextArea):
     Enter submits the message. Shift+Enter inserts a newline.
     Auto-expands from 1 line up to 50% of viewport height based on content.
     When content exceeds max height, scrollbar appears automatically.
+
+    History Navigation:
+    - UP arrow: Shows newest message first, then older messages on subsequent presses
+    - DOWN arrow: Shows newer messages, returns to current input at newest
     """
 
     MAX_HEIGHT = 50  # Maximum height in lines (CSS max-height: 50vh handles actual limit)
@@ -210,30 +214,36 @@ class ChatInput(TextArea):
                 await app.submit_chat_input()
             return
 
-        # Up arrow for history navigation
+        # Up arrow for history navigation (newest first, then older)
         if event.key == "up" and self.cursor_location[0] == 0:
             event.prevent_default()
             if not self._history:
                 return
             if self._history_index == -1:
+                # First press: save current input and start at newest message (index 0)
                 self._saved_input = self.text
-                self._history_index = len(self._history) - 1
-            elif self._history_index > 0:
-                self._history_index -= 1
-            self.text = self._history[self._history_index]
+                self._history_index = 0
+            elif self._history_index < len(self._history) - 1:
+                # Navigate to older messages
+                self._history_index += 1
+            # Map index to reversed history: 0 = newest, 1 = second newest, etc.
+            self.text = self._history[-(self._history_index + 1)]
             self.cursor_location = (0, 0)
             return
 
-        # Down arrow for history navigation
+        # Down arrow for history navigation (newer messages, then back to current)
         line_count = len(self.text.split("\n"))
         if event.key == "down" and self.cursor_location[0] == line_count - 1:
             event.prevent_default()
             if self._history_index == -1:
+                # No history active, do nothing
                 return
-            if self._history_index < len(self._history) - 1:
-                self._history_index += 1
-                self.text = self._history[self._history_index]
+            if self._history_index > 0:
+                # Navigate to newer messages
+                self._history_index -= 1
+                self.text = self._history[-(self._history_index + 1)]
             else:
+                # At newest message, return to current input
                 self._history_index = -1
                 self.text = self._saved_input
             self.cursor_location = (0, 0)

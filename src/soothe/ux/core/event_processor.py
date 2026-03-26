@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
+from soothe.tools.research.events import TOOL_RESEARCH_INTERNAL_LLM
+from soothe.ux.core.display_policy import VerbosityLevel
 from soothe.ux.core.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
@@ -25,7 +27,6 @@ from soothe.ux.core.message_processing import (
 )
 from soothe.ux.core.processor_state import ProcessorState
 from soothe.ux.core.progress_verbosity import (
-    ProgressVerbosity,
     classify_custom_event,
     should_show,
 )
@@ -58,7 +59,7 @@ class EventProcessor:
         self,
         renderer: RendererProtocol,
         *,
-        verbosity: ProgressVerbosity = "normal",
+        verbosity: VerbosityLevel = "normal",
     ) -> None:
         """Initialize processor with renderer and verbosity level.
 
@@ -213,6 +214,9 @@ class EventProcessor:
                 btype = block.get("type")
                 if btype == "text":
                     text = block.get("text", "")
+                    # Suppress during internal context (research internal LLM responses)
+                    if self._state.internal_context_active and not is_main:
+                        continue
                     if (
                         text
                         and should_show("assistant_text", self._verbosity)
@@ -410,8 +414,17 @@ class EventProcessor:
         """Process protocol/progress events."""
         etype = data.get("type", "")
 
-        # Skip tool events (handled by message layer)
-        if etype.startswith("soothe.tool."):
+        # Handle internal context tracking for research events
+        if etype == TOOL_RESEARCH_INTERNAL_LLM:
+            self._state.internal_context_active = True
+            return  # Don't display internal events
+
+        # Exit internal context on non-internal research events
+        if etype.startswith("soothe.tool.research.") and etype != TOOL_RESEARCH_INTERNAL_LLM:
+            self._state.internal_context_active = False
+
+        # Skip most tool events (handled by message layer) except research tool events
+        if etype.startswith("soothe.tool.") and not etype.startswith("soothe.tool.research."):
             return
 
         category = classify_custom_event(namespace, data)

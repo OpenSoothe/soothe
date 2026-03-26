@@ -28,6 +28,7 @@ class ResearchSubQuestionsEvent(SootheEvent):
 
     type: Literal["soothe.tool.research.sub_questions"] = "soothe.tool.research.sub_questions"
     count: int = 0
+    sub_questions: list[dict[str, str]] = field(default_factory=list)
 
     model_config = ConfigDict(extra="allow")
 
@@ -110,6 +111,21 @@ class ResearchCompletedEvent(SootheEvent):
     model_config = ConfigDict(extra="allow")
 
 
+class ResearchInternalLLMResponseEvent(SootheEvent):
+    """Internal LLM response from research engine - NOT for display.
+
+    This event wraps the raw LLM JSON responses (sub_questions, queries,
+    is_sufficient, etc.) that are internal to the research process.
+    By emitting them as events with "internal" verbosity, they get properly
+    filtered instead of leaking as assistant text.
+    """
+
+    type: Literal["soothe.tool.research.internal_llm"] = "soothe.tool.research.internal_llm"
+    response_type: str = ""  # "analysis", "queries", "reflection"
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Register all research events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 
@@ -129,6 +145,11 @@ register_event(
     ResearchCompletedEvent,
     summary_template="Research completed ({answer_length} chars)",
 )
+register_event(
+    ResearchInternalLLMResponseEvent,
+    verbosity="internal",
+    summary_template="Internal: {response_type}",
+)
 
 # Event type constants for convenient imports
 TOOL_RESEARCH_ANALYZE = "soothe.tool.research.analyze"
@@ -141,12 +162,14 @@ TOOL_RESEARCH_REFLECT = "soothe.tool.research.reflect"
 TOOL_RESEARCH_REFLECTION_DONE = "soothe.tool.research.reflection_done"
 TOOL_RESEARCH_SYNTHESIZE = "soothe.tool.research.synthesize"
 TOOL_RESEARCH_COMPLETED = "soothe.tool.research.completed"
+TOOL_RESEARCH_INTERNAL_LLM = "soothe.tool.research.internal_llm"
 
 __all__ = [
     "TOOL_RESEARCH_ANALYZE",
     "TOOL_RESEARCH_COMPLETED",
     "TOOL_RESEARCH_GATHER",
     "TOOL_RESEARCH_GATHER_DONE",
+    "TOOL_RESEARCH_INTERNAL_LLM",
     "TOOL_RESEARCH_QUERIES_GENERATED",
     "TOOL_RESEARCH_REFLECT",
     "TOOL_RESEARCH_REFLECTION_DONE",
@@ -157,6 +180,7 @@ __all__ = [
     "ResearchCompletedEvent",
     "ResearchGatherDoneEvent",
     "ResearchGatherEvent",
+    "ResearchInternalLLMResponseEvent",
     "ResearchQueriesGeneratedEvent",
     "ResearchReflectEvent",
     "ResearchReflectionDoneEvent",

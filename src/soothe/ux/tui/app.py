@@ -148,7 +148,7 @@ class SootheApp(App):
         # Clean cut: removed _conversation_history and _message_history
         # Display is now via direct panel writes only
         self._history_loaded_thread_id: str | None = None
-        self._progress_verbosity = self._config.logging.progress_verbosity
+        self._progress_verbosity = self._config.logging.verbosity
         self._thread_logger: ThreadLogger | None = None
         self._was_running = False
         self._typing_indicator_task: asyncio.Task | None = None

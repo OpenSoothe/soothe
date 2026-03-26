@@ -61,5 +61,5 @@ def autopilot(
         autonomous=True,
         max_iterations=max_iterations,
         output_format=output_format,
-        progress_verbosity=None,
+        verbosity=None,
     )

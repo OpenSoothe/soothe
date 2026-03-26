@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-ProgressVerbosity = Literal["minimal", "normal", "detailed", "debug"]
+from soothe.ux.core.display_policy import VerbosityLevel
+
 ProgressCategory = Literal[
     "assistant_text",
     "protocol",
@@ -18,6 +19,7 @@ ProgressCategory = Literal[
     "thinking",
     "error",
     "debug",
+    "internal",  # Internal events - NEVER shown at any verbosity level
 ]
 
 
@@ -84,8 +86,11 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     return "protocol"
 
 
-def should_show(category: ProgressCategory, verbosity: ProgressVerbosity) -> bool:
+def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
     """Return whether a progress category is visible at the given verbosity."""
+    # Internal category is NEVER shown at any verbosity level
+    if category == "internal":
+        return False
     if verbosity == "debug":
         return True
     if verbosity == "detailed":

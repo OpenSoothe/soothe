@@ -147,7 +147,7 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
 
 Updated visibility matrix:
 ```python
-def should_show(category: ProgressCategory, verbosity: ProgressVerbosity) -> bool:
+def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
     if verbosity == "normal":
         return category in {
             "assistant_text",
@@ -167,7 +167,7 @@ def _handle_subagent_progress(
     data: dict[str, Any],
     state: TuiState,
     *,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
 ) -> None:
     """Render key subagent progress events visible at normal verbosity."""
     etype = data.get("type", "")
@@ -473,7 +473,7 @@ def _handle_tool_activity_event(
     data: dict[str, Any],
     state: TuiState,
     *,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
 ) -> None:
     """Render tool activity progress events."""
     if not should_show("tool_activity", verbosity):

@@ -32,7 +32,7 @@ soothe --config custom.yml
 soothe "Analyze data" --format jsonl
 
 # Set progress verbosity
-soothe "Complex task" --progress-verbosity detailed
+soothe "Complex task" --verbosity detailed
 ```
 
 ## Thread Management

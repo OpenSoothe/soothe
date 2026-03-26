@@ -3,11 +3,21 @@
 This module provides:
 - Configuration loading and logging setup
 - Unified event processing (RFC-0019)
+- Unified display policy for event/content filtering
 - Abstract renderer protocol for CLI/TUI
 - Shared message processing and utilities
 """
 
 from soothe.ux.core.config_loader import load_config
+from soothe.ux.core.display_policy import (
+    INTERNAL_EVENT_TYPES,
+    INTERNAL_JSON_KEYS,
+    SKIP_EVENT_TYPES,
+    DisplayPolicy,
+    EventCategory,
+    VerbosityLevel,
+    create_display_policy,
+)
 from soothe.ux.core.event_processor import EventProcessor
 from soothe.ux.core.logging_setup import setup_logging
 from soothe.ux.core.message_processing import (
@@ -26,7 +36,6 @@ from soothe.ux.core.message_processing import (
 from soothe.ux.core.processor_state import ProcessorState
 from soothe.ux.core.progress_verbosity import (
     ProgressCategory,
-    ProgressVerbosity,
     classify_custom_event,
     should_show,
 )
@@ -39,19 +48,26 @@ from soothe.ux.core.rendering import (
 )
 
 __all__ = [
+    "INTERNAL_EVENT_TYPES",
+    "INTERNAL_JSON_KEYS",
+    "SKIP_EVENT_TYPES",
+    "DisplayPolicy",
+    "EventCategory",
     # Event processing
     "EventProcessor",
     "ProcessorState",
-    # Progress verbosity
+    # Progress verbosity (legacy - use DisplayPolicy for new code)
     "ProgressCategory",
-    "ProgressVerbosity",
+    # Rendering
     "RendererProtocol",
     # Message processing
     "SharedState",
+    "VerbosityLevel",
     "accumulate_tool_call_chunks",
     "classify_custom_event",
     "coerce_tool_call_args_to_dict",
-    # Rendering
+    # Display Policy (unified filtering module)
+    "create_display_policy",
     "extract_text_from_ai_message",
     "extract_tool_brief",
     "finalize_pending_tool_call",

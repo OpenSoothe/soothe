@@ -22,7 +22,7 @@ def run_impl(
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     output_format: str,
-    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
+    verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
@@ -34,14 +34,14 @@ def run_impl(
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
         output_format: Output format (text or jsonl)
-        progress_verbosity: Progress detail level
+        verbosity: Verbosity level
     """
     startup_start = time.perf_counter()
 
     try:
         cfg = load_config(config)
-        if progress_verbosity is not None:
-            logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+        if verbosity is not None:
+            logging_config = cfg.logging.model_copy(update={"verbosity": verbosity})
             cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
 

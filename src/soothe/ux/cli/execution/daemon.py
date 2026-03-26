@@ -75,7 +75,7 @@ async def run_headless_via_daemon(
         )
 
         # Initialize RFC-0019 unified event processor
-        verbosity = cfg.logging.progress_verbosity
+        verbosity = cfg.logging.verbosity
         renderer = CliRenderer(verbosity=verbosity)
         processor = EventProcessor(renderer, verbosity=verbosity)
 

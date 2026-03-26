@@ -95,10 +95,10 @@ def main(
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
-    progress_verbosity: Annotated[
+    verbosity: Annotated[
         Literal["minimal", "normal", "detailed", "debug"] | None,
         typer.Option(
-            "--progress-verbosity",
+            "--verbosity",
             help="Progress visibility: minimal, normal, detailed, debug.",
         ),
     ] = None,
@@ -119,7 +119,7 @@ def main(
             autonomous=False,
             max_iterations=None,
             output_format=output_format,
-            progress_verbosity=progress_verbosity,
+            verbosity=verbosity,
         )
 
 # ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ def run_impl(
     autonomous: bool,
     max_iterations: int | None,
     output_format: str,
-    progress_verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
+    verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
@@ -226,14 +226,14 @@ def run_impl(
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
         output_format: Output format (text or jsonl)
-        progress_verbosity: Progress detail level
+        verbosity: Verbosity level
     """
     startup_start = time.perf_counter()
 
     try:
         cfg = load_config(config)
-        if progress_verbosity is not None:
-            logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+        if verbosity is not None:
+            logging_config = cfg.logging.model_copy(update={"verbosity": verbosity})
             cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
         migrate_rocksdb_to_data_subfolder()
@@ -317,7 +317,7 @@ def autopilot(
         autonomous=True,
         max_iterations=max_iterations,
         output_format=output_format,
-        progress_verbosity=None,
+        verbosity=None,
     )
 ```
 
@@ -644,9 +644,9 @@ def server_attach(
         str | None,
         typer.Option("--thread-id", "-t", help="Thread ID to resume."),
     ] = None,
-    progress_verbosity: Annotated[
+    verbosity: Annotated[
         str | None,
-        typer.Option("--progress-verbosity", help="Progress detail level."),
+        typer.Option("--verbosity", help="Verbosity level."),
     ] = None,
 ) -> None:
     """Attach TUI to running daemon.
@@ -662,8 +662,8 @@ def server_attach(
         sys.exit(1)
 
     cfg = load_config(config)
-    if progress_verbosity is not None:
-        logging_config = cfg.logging.model_copy(update={"progress_verbosity": progress_verbosity})
+    if verbosity is not None:
+        logging_config = cfg.logging.model_copy(update={"verbosity": verbosity})
         cfg = cfg.model_copy(update={"logging": logging_config})
 
     try:

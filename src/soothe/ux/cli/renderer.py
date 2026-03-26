@@ -11,8 +11,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.tools.display_names import get_tool_display_name
+from soothe.ux.core.display_policy import VerbosityLevel
 from soothe.ux.core.message_processing import format_tool_call_args
-from soothe.ux.core.progress_verbosity import ProgressVerbosity, should_show
+from soothe.ux.core.progress_verbosity import should_show
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -31,6 +32,9 @@ class CliRendererState:
     # Accumulated response text
     full_response: list[str] = field(default_factory=list)
 
+    # Track current plan for status display
+    current_plan: Plan | None = None
+
 
 class CliRenderer:
     """CLI renderer for headless stdout/stderr output.
@@ -46,7 +50,7 @@ class CliRenderer:
         processor = EventProcessor(renderer, verbosity="normal")
     """
 
-    def __init__(self, *, verbosity: ProgressVerbosity = "normal") -> None:
+    def __init__(self, *, verbosity: VerbosityLevel = "normal") -> None:
         """Initialize CLI renderer.
 
         Args:
@@ -113,7 +117,8 @@ class CliRenderer:
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, {"args": args})
 
-        sys.stderr.write(f"⚙ {display_name}{args_str}\n")
+        # Add separator newline before event
+        sys.stderr.write(f"\n⚙ {display_name}{args_str}\n")
         sys.stderr.flush()
 
     def on_tool_result(
@@ -161,12 +166,13 @@ class CliRenderer:
         """
         self._ensure_newline()
         prefix = f"[{context}] " if context else ""
-        sys.stderr.write(f"{prefix}ERROR: {error}\n")
+        # Add separator newline before error
+        sys.stderr.write(f"\n{prefix}ERROR: {error}\n")
         sys.stderr.flush()
 
     def on_progress_event(
         self,
-        event_type: str,  # noqa: ARG002
+        event_type: str,
         data: dict[str, Any],
         *,
         namespace: tuple[str, ...],  # noqa: ARG002
@@ -181,7 +187,9 @@ class CliRenderer:
         from soothe.ux.cli.progress import render_progress_event
 
         self._ensure_newline()
-        render_progress_event(data)
+        # Add separator newline before event
+        sys.stderr.write("\n")
+        render_progress_event(event_type, data, current_plan=self._state.current_plan)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -190,40 +198,73 @@ class CliRenderer:
             plan: Created plan object.
         """
         self._ensure_newline()
-        sys.stderr.write(f"[plan] ● Plan: {plan.goal} ({len(plan.steps)} steps)\n")
-        sys.stderr.flush()
+        self._state.current_plan = plan
         self._state.multi_step_active = len(plan.steps) > 1
+        # Add separator newline and display plan with steps
+        sys.stderr.write(f"\n[plan] ● {plan.goal} ({len(plan.steps)} steps)\n")
+        for step in plan.steps:
+            sys.stderr.write(f"  ├ {step.id}: {step.description} [pending]\n")
+        sys.stderr.flush()
 
-    def on_plan_step_started(self, step_id: str, description: str) -> None:
-        """Write plan step start to stderr.
+    def on_plan_step_started(self, step_id: str, _description: str) -> None:
+        """Update plan state and show updated plan status.
 
         Args:
             step_id: Step identifier.
             description: Step description.
         """
-        self._ensure_newline()
-        sys.stderr.write(f"[plan] ├ Step {step_id}: {description}\n")
-        sys.stderr.flush()
+        # Update step status in current plan
+        if self._state.current_plan:
+            for step in self._state.current_plan.steps:
+                if step.id == step_id:
+                    step.status = "in_progress"
+                    break
+            # Display updated plan status
+            self._render_plan_update()
 
     def on_plan_step_completed(
         self,
         step_id: str,
         success: bool,  # noqa: FBT001
-        duration_ms: int,
+        _duration_ms: int,
     ) -> None:
-        """Write plan step completion to stderr.
+        """Update plan state and show updated plan status.
 
         Args:
             step_id: Step identifier.
             success: True if step succeeded.
             duration_ms: Step duration in milliseconds.
         """
+        # Update step status in current plan
+        if self._state.current_plan:
+            for step in self._state.current_plan.steps:
+                if step.id == step_id:
+                    step.status = "completed" if success else "failed"
+                    break
+            # Display updated plan status
+            self._render_plan_update()
+
+    def _render_plan_update(self) -> None:
+        """Render the current plan with status indicators."""
+        if not self._state.current_plan:
+            return
+
         self._ensure_newline()
-        icon = "✓" if success else "✗"
-        line = f"[plan] ├ Step {step_id} {icon}"
-        if duration_ms > 0:
-            line += f" ({duration_ms}ms)"
-        sys.stderr.write(line + "\n")
+        plan = self._state.current_plan
+
+        # Status indicators
+        status_icons = {
+            "pending": "○",
+            "in_progress": "◐",
+            "completed": "✓",
+            "failed": "✗",
+        }
+
+        # Add separator and header
+        sys.stderr.write(f"\n[plan] ● {plan.goal}\n")
+        for step in plan.steps:
+            icon = status_icons.get(step.status, "○")
+            sys.stderr.write(f"  ├ {icon} {step.id}: {step.description}\n")
         sys.stderr.flush()
 
     def on_turn_end(self) -> None:

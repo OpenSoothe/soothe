@@ -7,7 +7,7 @@ Refactored for RFC-0019 unified event processing.
 from __future__ import annotations
 
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.core.event_catalog import (
     GOAL_BATCH_STARTED,
@@ -20,37 +20,73 @@ from soothe.core.event_catalog import (
     PLAN_STEP_FAILED,
     PLAN_STEP_STARTED,
 )
+from soothe.tools.research.events import (
+    TOOL_RESEARCH_ANALYZE,
+    TOOL_RESEARCH_COMPLETED,
+    TOOL_RESEARCH_GATHER,
+    TOOL_RESEARCH_GATHER_DONE,
+    TOOL_RESEARCH_QUERIES_GENERATED,
+    TOOL_RESEARCH_REFLECT,
+    TOOL_RESEARCH_REFLECTION_DONE,
+    TOOL_RESEARCH_SUB_QUESTIONS,
+    TOOL_RESEARCH_SUMMARIZE,
+    TOOL_RESEARCH_SYNTHESIZE,
+)
+
+if TYPE_CHECKING:
+    from soothe.protocols.planner import Plan
 
 # Event type to human-readable label mapping
 _EVENT_LABELS: dict[str, str] = {
     PLAN_CREATED: "plan",
-    PLAN_BATCH_STARTED: "batch",
-    PLAN_STEP_STARTED: "step",
-    PLAN_STEP_COMPLETED: "step",
-    PLAN_STEP_FAILED: "step",
     PLAN_REFLECTED: "reflect",
     GOAL_BATCH_STARTED: "goals",
     ITERATION_STARTED: "iteration",
     ITERATION_COMPLETED: "iteration",
+    # Research tool events
+    TOOL_RESEARCH_ANALYZE: "research",
+    TOOL_RESEARCH_SUB_QUESTIONS: "research",
+    TOOL_RESEARCH_QUERIES_GENERATED: "research",
+    TOOL_RESEARCH_GATHER: "research",
+    TOOL_RESEARCH_GATHER_DONE: "research",
+    TOOL_RESEARCH_SUMMARIZE: "research",
+    TOOL_RESEARCH_REFLECT: "research",
+    TOOL_RESEARCH_REFLECTION_DONE: "research",
+    TOOL_RESEARCH_SYNTHESIZE: "research",
+    TOOL_RESEARCH_COMPLETED: "research",
 }
 
-# Max number of step IDs to display in batch summary
-_MAX_BATCH_IDS_DISPLAY = 3
+# Events to skip (handled by renderer's plan update mechanism)
+_SKIP_EVENTS = {
+    PLAN_BATCH_STARTED,
+    PLAN_STEP_STARTED,
+    PLAN_STEP_COMPLETED,
+    PLAN_STEP_FAILED,
+}
 
 
 def render_progress_event(
+    event_type: str,
     data: dict[str, Any],
     *,
     prefix: str | None = None,
+    current_plan: Plan | None = None,
 ) -> None:
     """Render a soothe.* event as a structured progress line to stderr.
 
     Args:
+        event_type: Event type string.
         data: Event dict with 'type' key.
         prefix: Optional prefix for subagent namespace.
+        current_plan: Current plan for status display.
     """
-    event_type = data.get("type", "")
     if not event_type:
+        event_type = data.get("type", "")
+    if not event_type:
+        return
+
+    # Skip batch/step events (handled by renderer's plan update mechanism)
+    if event_type in _SKIP_EVENTS:
         return
 
     # Get label for event type
@@ -59,7 +95,7 @@ def render_progress_event(
         return
 
     # Build summary based on event type
-    summary = _build_summary(event_type, data)
+    summary = _build_summary(event_type, data, current_plan)
     if not summary:
         return
 
@@ -71,50 +107,50 @@ def render_progress_event(
     sys.stderr.flush()
 
 
-def _build_summary(event_type: str, data: dict[str, Any]) -> str:
+def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | None = None) -> str:
     """Build human-readable summary for an event.
 
     Args:
         event_type: Event type string.
         data: Event payload.
+        current_plan: Current plan for status display.
 
     Returns:
         Summary string or empty.
     """
     if event_type == PLAN_CREATED:
-        goal = data.get("goal", "")[:60]
-        steps = len(data.get("steps", []))
-        return f"● {goal} ({steps} steps)"
+        # Show full goal and all steps in a tree
+        goal = data.get("goal", "")
+        steps = data.get("steps", [])
+        lines = [f"● {goal} ({len(steps)} steps)"]
+        # Show all steps as a tree
+        for step in steps:
+            step_id = step.get("id", "?")
+            desc = step.get("description", "")
+            lines.append(f"  ├ {step_id}: {desc}")
+        return "\n".join(lines)
 
+    # Batch and step events are now skipped (handled by renderer)
+    # Keeping this for backwards compatibility if called directly
     if event_type == PLAN_BATCH_STARTED:
-        batch_ids = data.get("step_ids", [])
-        shown = batch_ids[:_MAX_BATCH_IDS_DISPLAY]
-        suffix = "..." if len(batch_ids) > _MAX_BATCH_IDS_DISPLAY else ""
-        return f"┬ Starting batch: {', '.join(str(s) for s in shown)}{suffix}"
+        return ""
 
     if event_type == PLAN_STEP_STARTED:
-        step_id = data.get("step_id", "?")
-        desc = data.get("description", "")[:50]
-        return f"├ {step_id}: {desc}"
+        return ""
 
     if event_type == PLAN_STEP_COMPLETED:
-        step_id = data.get("step_id", "?")
-        success = data.get("success", True)
-        duration = data.get("duration_ms", 0)
-        icon = "✓" if success else "✗"
-        dur_str = f" ({duration}ms)" if duration else ""
-        return f"├ {step_id} {icon}{dur_str}"
+        return ""
 
     if event_type == PLAN_STEP_FAILED:
-        step_id = data.get("step_id", "?")
-        error = data.get("error", "")[:40]
-        blocked = data.get("blocked_steps", [])
-        blocked_str = f" (blocked: {blocked})" if blocked else ""
-        return f"├ {step_id} ✗ {error}{blocked_str}"
+        return ""
 
     if event_type == PLAN_REFLECTED:
-        status = data.get("status", "unknown")
-        return f"○ Reflection: {status}"
+        assessment = data.get("assessment", "")
+        should_revise = data.get("should_revise", False)
+        status = "needs revision" if should_revise else "complete"
+        # Show full assessment, no truncation
+        brief = f"{status}: {assessment}" if assessment else status
+        return f"○ Reflection: {brief}"
 
     if event_type == GOAL_BATCH_STARTED:
         goals = data.get("goal_indices", [])
@@ -127,5 +163,61 @@ def _build_summary(event_type: str, data: dict[str, Any]) -> str:
     if event_type == ITERATION_COMPLETED:
         iteration = data.get("iteration", 0)
         return f"└ Iteration {iteration + 1} done"
+
+    # Research tool events
+    if event_type == TOOL_RESEARCH_ANALYZE:
+        topic = data.get("topic", "")
+        return f"● Research: {topic}"
+
+    if event_type == TOOL_RESEARCH_SUB_QUESTIONS:
+        sub_questions = data.get("sub_questions", [])
+        count = data.get("count", len(sub_questions))
+        if sub_questions:
+            # Show subquestions as a tree
+            lines = [f"├ Sub-questions ({count}):"]
+            for sq in sub_questions:
+                q = sq.get("question", str(sq)) if isinstance(sq, dict) else str(sq)
+                lines.append(f"  ├ {q}")
+            return "\n".join(lines)
+        return f"├ Identified {count} sub-questions"
+
+    if event_type == TOOL_RESEARCH_QUERIES_GENERATED:
+        queries = data.get("queries", [])
+        if queries:
+            lines = [f"├ Generated queries ({len(queries)}):"]
+            for q in queries:
+                lines.append(f"  ├ {q}")
+            return "\n".join(lines)
+        return ""
+
+    if event_type == TOOL_RESEARCH_GATHER:
+        query = data.get("query", "")
+        domain = data.get("domain", "")
+        return f"├ Gathering from {domain}: {query}"
+
+    if event_type == TOOL_RESEARCH_GATHER_DONE:
+        result_count = data.get("result_count", 0)
+        return f"  └ Gathered {result_count} results"
+
+    if event_type == TOOL_RESEARCH_SUMMARIZE:
+        total = data.get("total_summaries", 0)
+        return f"├ Summarizing {total} results"
+
+    if event_type == TOOL_RESEARCH_REFLECT:
+        loop = data.get("loop", 0)
+        return f"├ Reflecting (loop {loop + 1})"
+
+    if event_type == TOOL_RESEARCH_REFLECTION_DONE:
+        is_sufficient = data.get("is_sufficient", False)
+        follow_up = data.get("follow_up_count", 0)
+        status = "✓ sufficient" if is_sufficient else f"needs {follow_up} follow-ups"
+        return f"  └ Reflection: {status}"
+
+    if event_type == TOOL_RESEARCH_SYNTHESIZE:
+        return "├ Synthesizing findings"
+
+    if event_type == TOOL_RESEARCH_COMPLETED:
+        answer_length = data.get("answer_length", 0)
+        return f"└ Research completed ({answer_length} chars)"
 
     return ""

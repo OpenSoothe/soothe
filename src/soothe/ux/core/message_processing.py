@@ -28,6 +28,8 @@ class SharedState:
     # Track pending tool calls for streaming arg accumulation (IG-053)
     # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool, 'is_main': bool}
     pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Track internal context for research tool filtering (IG-064)
+    internal_context_active: bool = False
 
 
 # ============================================================================
@@ -154,6 +156,7 @@ class OutputFormatter(Protocol):
         prefix: str | None,
         is_main: bool,
         tool_call: dict[str, Any] | None = None,
+        tool_call_id: str | None = None,
     ) -> None:
         """Emit a tool call notification.
 
@@ -162,10 +165,19 @@ class OutputFormatter(Protocol):
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent.
             tool_call: Optional tool call dict with args for display.
+            tool_call_id: Optional unique identifier for matching with results.
         """
         ...
 
-    def emit_tool_result(self, tool_name: str, brief: str, *, prefix: str | None, is_main: bool) -> None:
+    def emit_tool_result(
+        self,
+        tool_name: str,
+        brief: str,
+        *,
+        prefix: str | None,
+        is_main: bool,
+        tool_call_id: str | None = None,
+    ) -> None:
         """Emit a tool result notification.
 
         Args:
@@ -173,6 +185,7 @@ class OutputFormatter(Protocol):
             brief: Brief summary of the result.
             prefix: Optional namespace prefix for subagents.
             is_main: Whether this is from the main agent.
+            tool_call_id: Optional unique identifier for matching with calls.
         """
         ...
 
@@ -231,7 +244,7 @@ class MessageProcessor:
         accumulate_tool_call_chunks(self.state.pending_tool_calls, tool_call_chunks, is_main=is_main)
 
         # Try to emit pending tool calls that have complete JSON args
-        for _tc_id, pending in list(self.state.pending_tool_calls.items()):
+        for tc_id, pending in list(self.state.pending_tool_calls.items()):
             if pending["emitted"]:
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
@@ -242,6 +255,7 @@ class MessageProcessor:
                     prefix=None,
                     is_main=pending["is_main"],
                     tool_call=tc_display,
+                    tool_call_id=tc_id,
                 )
                 pending["emitted"] = True
 
@@ -261,13 +275,20 @@ class MessageProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
+                    block_tc_id = block.get("id")
                     if name and should_show("protocol", verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         # Chunks often have empty/partial args before merge; prefer msg.tool_calls when present.
                         if not coerced and raw_tcs:
                             continue
                         tool_call = {"args": coerced}
-                        self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tool_call)
+                        self.formatter.emit_tool_call(
+                            name,
+                            prefix=None,
+                            is_main=is_main,
+                            tool_call=tool_call,
+                            tool_call_id=block_tc_id,
+                        )
                         if coerced:
                             tool_call_emitted_from_blocks = True
         elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
@@ -280,6 +301,7 @@ class MessageProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
+                tc_id = tc.get("id")
                 if not name or not should_show("protocol", verbosity):
                     continue
                 tc_display = dict(tc)
@@ -290,7 +312,13 @@ class MessageProcessor:
                     continue
 
                 if has_tc_args or (not tc_display["args"] and not tool_call_emitted_from_blocks):
-                    self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tc_display)
+                    self.formatter.emit_tool_call(
+                        name,
+                        prefix=None,
+                        is_main=is_main,
+                        tool_call=tc_display,
+                        tool_call_id=tc_id,
+                    )
 
     def _process_text_block(self, text: str, *, is_main: bool) -> None:
         """Process a text block from an AI message.
@@ -299,6 +327,10 @@ class MessageProcessor:
             text: The text content to process.
             is_main: Whether this is from the main agent.
         """
+        # Suppress text during internal context (research tool internal LLM responses)
+        if self.state.internal_context_active and not is_main:
+            return
+
         # Strip internal tags
         cleaned = strip_internal_tags(text)
         if not cleaned:
@@ -349,25 +381,19 @@ class MessageProcessor:
                 prefix=prefix,
                 is_main=pending.get("is_main", not prefix),
                 tool_call=tc_display,
+                tool_call_id=tool_call_id,
             )
 
-        self.formatter.emit_tool_result(tool_name, brief, prefix=prefix, is_main=not prefix)
+        self.formatter.emit_tool_result(
+            tool_name,
+            brief,
+            prefix=prefix,
+            is_main=not prefix,
+            tool_call_id=tool_call_id,
+        )
 
 
 # Shared utilities
-
-# Patterns for stripping internal tags
-_INTERNAL_TAG_PATTERN = re.compile(
-    r"<search_data>.*?</search_data>\s*"
-    r"(?:Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*)?",
-    re.DOTALL,
-)
-_LEFTOVER_TAG_PATTERN = re.compile(r"</?search_data>")
-_SYNTHESIS_INSTRUCTION_PATTERN = re.compile(
-    r"Synthesize the search data into a clear answer\.\s*"
-    r"Do NOT reproduce raw results, source listings, or URLs\.\s*"
-)
 
 
 def strip_internal_tags(text: str) -> str:
@@ -375,6 +401,10 @@ def strip_internal_tags(text: str) -> str:
 
     Removes `<search_data>...</search_data>` blocks and associated
     synthesis instructions that should not be shown to users.
+    Also filters out internal LLM JSON responses from research/inquiry engine.
+
+    This function delegates to DisplayPolicy.filter_content() for unified
+    content filtering logic using JSON parsing (not regex).
 
     Note: This function preserves leading/trailing whitespace to support
     streaming text chunks (e.g., " the" should keep its leading space).
@@ -383,15 +413,14 @@ def strip_internal_tags(text: str) -> str:
         text: The text to strip tags from.
 
     Returns:
-        Cleaned text with internal tags removed.
+        Cleaned text with internal tags removed, or empty string if
+        the text is an internal LLM response that should be suppressed.
     """
-    result = _INTERNAL_TAG_PATTERN.sub("", text)
-    result = _LEFTOVER_TAG_PATTERN.sub("", result)
-    result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
+    from soothe.ux.core.display_policy import DisplayPolicy
 
-    # Only normalize excessive internal whitespace (3+ spaces -> 1)
-    # Preserve leading/trailing whitespace for streaming chunks
-    return re.sub(r" {3,}", " ", result)  # Normalize excessive spaces only
+    # Use unified display policy for content filtering
+    policy = DisplayPolicy()
+    return policy.filter_content(text)
 
 
 def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> str:
@@ -500,6 +529,8 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     # Search - show pattern/query
     "search_web": ["query"],
     "crawl_web": ["url"],
+    # Research - show topic
+    "research": ["topic", "domain"],
     # Media - show file path
     "analyze_image": ["image_path"],
     "analyze_video": ["video_path"],
@@ -525,24 +556,29 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     Extracts the most relevant argument(s) for each tool type to show
     in activity events. Supports multiple arguments per tool.
 
+    Path arguments are converted from deepagents workspace-relative format
+    to actual OS paths and abbreviated for display.
+
     Args:
         tool_name: Tool name as emitted by the model (snake_case or PascalCase).
         tool_call: Tool call dict with 'args' key containing arguments
 
     Returns:
-        Formatted argument string like "(file_name.md)" or "(path, pattern)"
+        Formatted argument string like "(file_name.md)" or "(/Users/dev/.../file.md, pattern)"
         Empty string if no relevant argument found
 
     Examples:
         >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
         '(config.yml)'
         >>> format_tool_call_args("read_file", {"args": '{"file_path": "/README.md"}'})
-        '(/README.md)'
+        '(/Users/dev/project/README.md)'  # Converted to OS path
         >>> format_tool_call_args("run_command", {"args": {"command": "ls", "args": "-la"}})
         '(ls, -la)'
         >>> format_tool_call_args("ls", {"args": {"path": "/tests", "pattern": "*.py"}})
-        '(/tests, *.py)'
+        '(/Users/dev/.../tests, *.py)'  # Path converted and abbreviated
     """
+    from soothe.utils.path_display import convert_and_abbreviate_path, is_path_argument
+
     args = coerce_tool_call_args_to_dict(tool_call.get("args"))
     if not args:
         return ""
@@ -554,23 +590,28 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
 
     # Extract values for all configured argument keys
     values = []
+    max_value_length = 30
     for key_arg in key_args:
         if key_arg in args:
             value = str(args[key_arg])
-            # Truncate long values
-            max_value_length = 30
-            if len(value) > max_value_length:
-                value = value[:27] + "..."
+            # Convert and abbreviate path arguments
+            if is_path_argument(key_arg):
+                value = convert_and_abbreviate_path(value, max_value_length)
+            elif len(value) > max_value_length:
+                # Truncate non-path long values
+                value = value[: max_value_length - 3] + "..."
             values.append(value)
 
     if not values:
         # Model may use different arg names than _ARG_DISPLAY_MAP; still show something useful.
         if args:
-            max_value_length = 30
             parts: list[str] = []
-            for _k, v in list(args.items())[:3]:
+            for k, v in list(args.items())[:3]:
                 s = str(v)
-                if len(s) > max_value_length:
+                # Convert and abbreviate path arguments
+                if is_path_argument(k):
+                    s = convert_and_abbreviate_path(s, max_value_length)
+                elif len(s) > max_value_length:
                     s = s[: max_value_length - 3] + "..."
                 parts.append(s)
             return f"({', '.join(parts)})"

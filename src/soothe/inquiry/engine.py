@@ -30,6 +30,7 @@ from soothe.tools.research.events import (
     ResearchCompletedEvent,
     ResearchGatherDoneEvent,
     ResearchGatherEvent,
+    ResearchInternalLLMResponseEvent,
     ResearchQueriesGeneratedEvent,
     ResearchReflectEvent,
     ResearchReflectionDoneEvent,
@@ -238,6 +239,10 @@ def build_inquiry_engine(
             current_date=_now_str(),
             topic=topic,
         )
+
+        # Emit internal event to signal we're doing internal LLM work
+        _emit_progress(ResearchInternalLLMResponseEvent(response_type="analysis").to_dict())
+
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
 
@@ -250,6 +255,7 @@ def build_inquiry_engine(
         _emit_progress(
             ResearchSubQuestionsEvent(
                 count=len(sub_questions),
+                sub_questions=sub_questions,
             ).to_dict()
         )
         return {
@@ -269,6 +275,10 @@ def build_inquiry_engine(
             current_date=_now_str(),
             sub_questions=sq_text,
         )
+
+        # Emit internal event to signal we're doing internal LLM work
+        _emit_progress(ResearchInternalLLMResponseEvent(response_type="queries").to_dict())
+
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
 
@@ -420,6 +430,10 @@ def build_inquiry_engine(
             max_loops=state.get("max_loops", _default_config.max_loops),
             summaries=summaries[:4000] or "(no summaries yet)",
         )
+
+        # Emit internal event to signal we're doing internal LLM work
+        _emit_progress(ResearchInternalLLMResponseEvent(response_type="reflection").to_dict())
+
         resp = model.invoke([{"role": "user", "content": prompt}])
         content = str(resp.content)
 

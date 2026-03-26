@@ -423,7 +423,7 @@ def _handle_tool_call_activity(
     name: str,
     *,
     prefix: str | None = None,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
 ) -> None:
     if not name or not should_show("tool_activity", verbosity):
         return
@@ -444,7 +444,7 @@ def _handle_tool_call_activity(
     name: str,
     *,
     prefix: str | None = None,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
     tool_call: dict[str, Any] | None = None,  # NEW
 ) -> None:
     if not name or not should_show("protocol", verbosity):  # Changed
@@ -492,7 +492,7 @@ def _handle_tool_result_activity(
     content: str,
     *,
     prefix: str | None = None,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
 ) -> None:
     if not should_show("tool_activity", verbosity):
         return
@@ -517,7 +517,7 @@ def _handle_tool_result_activity(
     content: str,
     *,
     prefix: str | None = None,
-    verbosity: ProgressVerbosity = "normal",
+    verbosity: VerbosityLevel = "normal",
 ) -> None:
     if not should_show("protocol", verbosity):  # Changed
         return

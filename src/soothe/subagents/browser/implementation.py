@@ -30,7 +30,7 @@ async def detect_existing_browser_intent(prompt: str, model: Any) -> bool:
 
     Args:
         prompt: User's task prompt.
-        model: Language model for intent detection (LangChain BaseChatModel).
+        model: Language model for intent detection (browser-use or LangChain BaseChatModel).
 
     Returns:
         True if user wants existing browser, False otherwise.
@@ -180,7 +180,7 @@ def _build_browser_graph(
         try:
             with capture_subagent_output("browser", suppress=True):
                 from browser_use import Agent as BrowserAgent, Browser
-                from browser_use.llm.openai import ChatOpenAI
+                from browser_use.llm import ChatOpenAI as BrowserChatOpenAI
 
                 messages = state.get("messages", [])
                 task = messages[-1].content if messages else ""
@@ -194,7 +194,7 @@ def _build_browser_graph(
                     llm_kwargs["base_url"] = browser_base_url
                 if browser_api_key:
                     llm_kwargs["api_key"] = browser_api_key
-                llm = ChatOpenAI(**llm_kwargs)
+                llm = BrowserChatOpenAI(**llm_kwargs)
 
                 cdp_url = None
                 if browser_config.enable_existing_browser:
