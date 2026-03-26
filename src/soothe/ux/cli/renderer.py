@@ -26,6 +26,9 @@ class CliRendererState:
     # Track if stdout needs newline before stderr output
     needs_stdout_newline: bool = False
 
+    # Track if stderr was just written (to add spacing before next stdout)
+    stderr_just_written: bool = False
+
     # Suppress step text during multi-step plans
     multi_step_active: bool = False
 
@@ -89,6 +92,11 @@ class CliRenderer:
         self._state.full_response.append(text)
 
         if not self._state.multi_step_active:
+            # Add spacing if this is the first text after stderr output
+            if self._state.stderr_just_written:
+                sys.stdout.write("\n\n")
+                self._state.stderr_just_written = False
+
             sys.stdout.write(text)
             sys.stdout.flush()
             self._state.needs_stdout_newline = True
@@ -109,7 +117,7 @@ class CliRenderer:
             tool_call_id: Tool call identifier.
             is_main: True if from main agent.
         """
-        if not should_show("tool_activity", self._verbosity):
+        if not should_show("protocol", self._verbosity):
             return
 
         self._ensure_newline()
@@ -117,9 +125,11 @@ class CliRenderer:
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, {"args": args})
 
-        # Add separator newline before event
-        sys.stderr.write(f"\n⚙ {display_name}{args_str}\n")
+        # Add double newline before tool for clear visual separation
+        sys.stderr.write(f"\n\n⚙ {display_name}{args_str}\n")
         sys.stderr.flush()
+        # Mark that stderr was just written
+        self._state.stderr_just_written = True
 
     def on_tool_result(
         self,
@@ -139,7 +149,7 @@ class CliRenderer:
             is_error: True if result indicates error.
             is_main: True if from main agent.
         """
-        if not should_show("tool_activity", self._verbosity):
+        if not should_show("protocol", self._verbosity):
             return
 
         self._ensure_newline()
@@ -166,9 +176,11 @@ class CliRenderer:
         """
         self._ensure_newline()
         prefix = f"[{context}] " if context else ""
-        # Add separator newline before error
-        sys.stderr.write(f"\n{prefix}ERROR: {error}\n")
+        # Add double newline before error for clear visual separation
+        sys.stderr.write(f"\n\n{prefix}ERROR: {error}\n")
         sys.stderr.flush()
+        # Mark that stderr was just written
+        self._state.stderr_just_written = True
 
     def on_progress_event(
         self,
@@ -187,9 +199,11 @@ class CliRenderer:
         from soothe.ux.cli.progress import render_progress_event
 
         self._ensure_newline()
-        # Add separator newline before event
-        sys.stderr.write("\n")
+        # Add double newline before progress event for clear separation
+        sys.stderr.write("\n\n")
         render_progress_event(event_type, data, current_plan=self._state.current_plan)
+        # Mark that stderr was just written
+        self._state.stderr_just_written = True
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -200,11 +214,13 @@ class CliRenderer:
         self._ensure_newline()
         self._state.current_plan = plan
         self._state.multi_step_active = len(plan.steps) > 1
-        # Add separator newline and display plan with steps
-        sys.stderr.write(f"\n[plan] ● {plan.goal} ({len(plan.steps)} steps)\n")
+        # Add double newline before plan for clear visual separation
+        sys.stderr.write(f"\n\n[plan] ● {plan.goal} ({len(plan.steps)} steps)\n")
         for step in plan.steps:
             sys.stderr.write(f"  ├ {step.id}: {step.description} [pending]\n")
         sys.stderr.flush()
+        # Mark that stderr was just written
+        self._state.stderr_just_written = True
 
     def on_plan_step_started(self, step_id: str, _description: str) -> None:
         """Update plan state and show updated plan status.
@@ -260,12 +276,14 @@ class CliRenderer:
             "failed": "✗",
         }
 
-        # Add separator and header
-        sys.stderr.write(f"\n[plan] ● {plan.goal}\n")
+        # Add double newline before plan update for clear visual separation
+        sys.stderr.write(f"\n\n[plan] ● {plan.goal}\n")
         for step in plan.steps:
             icon = status_icons.get(step.status, "○")
             sys.stderr.write(f"  ├ {icon} {step.id}: {step.description}\n")
         sys.stderr.flush()
+        # Mark that stderr was just written
+        self._state.stderr_just_written = True
 
     def on_turn_end(self) -> None:
         """Finalize output on turn end."""

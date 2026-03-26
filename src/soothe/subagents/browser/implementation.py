@@ -25,16 +25,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def detect_existing_browser_intent(prompt: str, model: Any) -> bool:
+async def detect_existing_browser_intent(
+    prompt: str,
+    model_name: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> bool:
     """Use LLM to detect if user wants to use existing browser instance.
 
     Args:
         prompt: User's task prompt.
-        model: Language model for intent detection (browser-use or LangChain BaseChatModel).
+        model_name: Model name for intent detection (e.g., "gpt-4o-mini").
+        base_url: Base URL for the LLM API.
+        api_key: API key for the LLM.
 
     Returns:
         True if user wants existing browser, False otherwise.
     """
+    from langchain.chat_models import init_chat_model
     from langchain_core.messages import HumanMessage, SystemMessage
 
     detection_prompt = f"""Analyze this user request and determine if the user wants to use an \
@@ -53,6 +61,14 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
+        # Use langchain's init_chat_model which properly supports langchain_core messages
+        model = init_chat_model(
+            model=model_name or "gpt-4o-mini",
+            model_provider="openai",
+            base_url=base_url,
+            api_key=api_key,
+            temperature=0.0,
+        )
         messages = [
             SystemMessage(content=detection_prompt),
             HumanMessage(content=prompt),
@@ -198,7 +214,12 @@ def _build_browser_graph(
 
                 cdp_url = None
                 if browser_config.enable_existing_browser:
-                    use_existing = await detect_existing_browser_intent(task, llm)
+                    use_existing = await detect_existing_browser_intent(
+                        task,
+                        model_name=model_name,
+                        base_url=browser_base_url,
+                        api_key=browser_api_key,
+                    )
                     if use_existing:
                         from soothe.utils.browser_cdp import find_available_cdp
 
@@ -266,6 +287,10 @@ def _build_browser_graph(
                     use_vision=use_vision,
                 )
 
+                # Start the browser session (Agent.run() does this automatically,
+                # but we're calling step() directly to emit progress events)
+                await agent.browser_session.start()
+
                 # Run step-by-step to emit progress events
                 for _ in range(max_steps):
                     try:
@@ -279,6 +304,12 @@ def _build_browser_graph(
 
                 history = agent.history
                 result = history.final_result() or "Browser task completed (no extracted content)."
+
+                # Stop the browser session
+                try:
+                    await agent.browser_session.stop()
+                except Exception:
+                    logger.debug("Failed to stop browser session (already stopped?)")
 
                 if browser_config.cleanup_on_exit:
                     from soothe.utils.runtime import cleanup_browser_temp_files

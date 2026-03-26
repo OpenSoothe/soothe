@@ -113,14 +113,40 @@ def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
 
 #### 7. CLI Renderer Separator Newlines (`src/soothe/ux/cli/renderer.py`)
 
-**Added**: Separator newline before each event for clearer visual separation
+**Added**: Double separator newlines before each major UI element for clearer visual separation
+
+**Key Challenge**: Assistant text goes to stdout while tools/plans/reports go to stderr. These are separate streams, so we need to track when stderr was just written and add spacing at the start of the next stdout output.
+
+**State Tracking Added**:
+- `CliRendererState.stderr_just_written: bool` - Flag to track when stderr output was just written
+- When `on_assistant_text()` is called after stderr output, it adds `\n\n` before the text
+- All stderr output methods set `stderr_just_written = True`
 
 **Changes**:
-- `on_tool_call()`: `\n⚙ {display_name}{args_str}\n`
-- `on_progress_event()`: `\n` before rendering event
-- `on_plan_created()`: `\n[plan] ● {goal}...`
-- `_render_plan_update()`: `\n[plan] ● {goal}...`
-- `on_error()`: `\n{prefix}ERROR: {error}\n` (newly added)
+- `on_assistant_text()`: Adds `\n\n` before text when `stderr_just_written` is True
+- `on_tool_call()`: `\n\n⚙ {display_name}{args_str}\n` + sets flag
+- `on_progress_event()`: `\n\n` before event + sets flag
+- `on_plan_created()`: `\n\n[plan] ● {goal}...` + sets flag
+- `_render_plan_update()`: `\n\n[plan] ● {goal}...` + sets flag
+- `on_error()`: `\n\n{prefix}ERROR: {error}\n` + sets flag
+
+**Visual Example**:
+```
+Some text from assistant...
+
+
+⚙ Research(meaning and origin of the t..., web)
+  └ ✓ Research completed
+
+
+Based on my research, I need to clarify that "balabalaxmx" does not appear...
+
+
+[research] ● Research: balabalaxmx origin
+  └ Research completed (256 chars)
+```
+
+**Result**: Clear visual separation between all major UI elements - plans, tools, reports, and assistant text all have distinct spacing.
 
 #### 8. Message Processing Simplification (`src/soothe/ux/core/message_processing.py`)
 
