@@ -64,17 +64,18 @@ class TestStripInternalTags:
         result = strip_internal_tags(text)
         assert result == "Hello world this is a test"
 
-    def test_normalizes_multiple_spaces(self):
-        """Multiple spaces should collapse to single space."""
-        text = "Hello    world   test"
+    def test_normalizes_excessive_spaces(self):
+        """Three or more spaces should collapse to single space."""
+        text = "Hello      world    test"  # 6 spaces, then 4 spaces
         result = strip_internal_tags(text)
-        assert result == "Hello world test"
+        assert result == "Hello world test"  # 6->1, 4->1
 
-    def test_adds_space_after_punctuation(self):
-        """Ensure space after sentence-ending punctuation."""
+    def test_preserves_punctuation_as_is(self):
+        """Punctuation spacing is preserved as-is for streaming."""
         text = "First sentence.Second sentence.Third one"
         result = strip_internal_tags(text)
-        assert result == "First sentence. Second sentence. Third one"
+        # We no longer auto-add spaces after punctuation (was causing streaming bugs)
+        assert result == "First sentence.Second sentence.Third one"
 
     def test_removes_search_data_tags(self):
         """Remove <search_data> tags and content."""
@@ -89,17 +90,19 @@ class TestStripInternalTags:
         # No spaces before/after tags means no space in result
         assert result == "BeforeAfter"
 
-    def test_complex_formatting(self):
-        """Test complex markdown formatting."""
+    def test_complex_formatting_preserved(self):
+        """Test complex markdown formatting is preserved."""
         text = "**Bold text** here.More text after."
         result = strip_internal_tags(text)
-        assert result == "**Bold text** here. More text after."
+        # Punctuation spacing preserved as-is (no auto-correction)
+        assert result == "**Bold text** here.More text after."
 
     def test_preserves_newlines_in_input(self):
-        """Newlines should be converted to spaces."""
+        """Newlines are preserved (needed for markdown formatting)."""
         text = "Line one\nLine two\nLine three"
         result = strip_internal_tags(text)
-        assert result == "Line one Line two Line three"
+        # Newlines preserved for markdown tables, code blocks, etc.
+        assert result == "Line one\nLine two\nLine three"
 
     def test_removes_synthesis_instructions(self):
         """Remove synthesis instruction text."""
@@ -111,12 +114,9 @@ class TestStripInternalTags:
         assert "Synthesize" not in result
         assert "More text" in result
 
-    def test_fixes_concatenated_text(self):
-        """Fix the actual issue from the test run."""
-        text = "I'llsearchforinformationaboutIranwarsusingthebrowsertool."
-        # This should normalize if we add spaces (which the fix does)
+    def test_preserves_streaming_chunk_whitespace(self):
+        """Streaming chunks with leading spaces should preserve them."""
+        # This is the key fix for IG-053
+        text = " the"  # Chunk with leading space
         result = strip_internal_tags(text)
-        # After normalization, multiple words should have spaces
-        assert "I'll" in result
-        assert "search" in result
-        assert "information" in result
+        assert result == " the"  # Leading space preserved for proper concatenation

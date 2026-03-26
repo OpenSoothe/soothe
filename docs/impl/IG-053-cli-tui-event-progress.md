@@ -2,9 +2,58 @@
 
 **Guide**: IG-053
 **Title**: CLI/TUI Event Progress Clarity
-**Status**: In Progress
+**Status**: Completed
 **Created**: 2026-03-26
 **Updated**: 2026-03-26
+
+---
+
+## Summary of Changes
+
+### Bug Fixes Implemented
+
+1. **Tool args not displayed in CLI** - Fixed by implementing streaming args accumulation
+   - Root cause: LangChain streams tool args in chunks, first chunk has empty args
+   - Solution: Track pending tool calls, accumulate args from `tool_call_chunks`, emit when complete
+   - Files: `src/soothe/ux/shared/message_processing.py`
+
+2. **Text spacing broken in streaming output** - Fixed by preserving whitespace in chunks
+   - Root cause: `strip_internal_tags()` called `.strip()` removing leading spaces from chunks like `" the"`
+   - Solution: Removed aggressive whitespace normalization, preserve leading/trailing whitespace
+   - Files: `src/soothe/ux/shared/message_processing.py`
+
+### Key Implementation Details
+
+```python
+# SharedState now tracks pending tool calls for streaming arg accumulation
+@dataclass
+class SharedState:
+    # ...
+    pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+# MessageProcessor accumulates args from tool_call_chunks
+for tcc in tool_call_chunks:
+    # First chunk with tool name: register the pending tool call
+    if tc_name and tc_id and tc_id not in self.state.pending_tool_calls:
+        self.state.pending_tool_calls[tc_id] = {...}
+    # Subsequent chunks: accumulate args
+    elif tc_args:
+        pending["args_str"] += tc_args
+
+# Emit when JSON args are complete
+try:
+    parsed_args = json.loads(args_str)
+    self.formatter.emit_tool_call(name, tool_call={"args": parsed_args})
+except json.JSONDecodeError:
+    pass  # Keep accumulating
+```
+
+### Test Results
+
+- All 924 unit tests pass
+- Manual verification: `uv run soothe --no-tui -p "list the root directory"`
+  - Shows: `⚙ Ls(/)` with correct argument
+  - Text output has proper spacing
 
 ---
 

@@ -24,6 +24,9 @@ class SharedState:
     name_map: dict[str, str] = field(default_factory=dict)
     multi_step_active: bool = False
     has_error: bool = False
+    # Track pending tool calls for streaming arg accumulation (IG-053)
+    # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool}
+    pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class OutputFormatter(Protocol):
@@ -114,6 +117,58 @@ class MessageProcessor:
         tcs = normalize_tool_calls_list(raw_tcs)
         has_tc_args = tool_calls_have_any_arg_dict(raw_tcs)
 
+        # Determine if we're in a streaming chunk vs complete message
+        is_chunk = isinstance(msg, AIMessageChunk)
+
+        # Handle streaming tool args accumulation (IG-053)
+        # For chunks, we need to track tool calls and accumulate args
+        tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
+        for tcc in tool_call_chunks:
+            if not isinstance(tcc, dict):
+                continue
+            tc_id = tcc.get("id", "")
+            tc_name = tcc.get("name")
+            tc_args = tcc.get("args", "")
+
+            # First chunk with a tool name: register the pending tool call
+            if tc_name and tc_id and tc_id not in self.state.pending_tool_calls:
+                self.state.pending_tool_calls[tc_id] = {
+                    "name": tc_name,
+                    "args_str": tc_args if isinstance(tc_args, str) else "",
+                    "emitted": False,
+                    "is_main": is_main,
+                }
+            # Subsequent chunks: accumulate args
+            elif tc_args and isinstance(tc_args, str):
+                # Find the tool call to accumulate args for (by index/order)
+                for pending_id, pending in self.state.pending_tool_calls.items():
+                    if not pending["emitted"]:
+                        pending["args_str"] += tc_args
+                        break
+
+        # Try to emit pending tool calls that have complete JSON args
+        for tc_id, pending in list(self.state.pending_tool_calls.items()):
+            if pending["emitted"]:
+                continue
+            args_str = pending["args_str"]
+            if args_str:
+                try:
+                    parsed_args = json.loads(args_str)
+                    if isinstance(parsed_args, dict):
+                        # Complete JSON args - emit the tool call
+                        if should_show("protocol", verbosity):
+                            tc_display = {"args": parsed_args}
+                            self.formatter.emit_tool_call(
+                                pending["name"],
+                                prefix=None,
+                                is_main=pending["is_main"],
+                                tool_call=tc_display,
+                            )
+                            pending["emitted"] = True
+                except json.JSONDecodeError:
+                    # Args not complete yet, keep accumulating
+                    pass
+
         # Process content blocks
         tool_call_emitted_from_blocks = False
         if hasattr(msg, "content_blocks") and msg.content_blocks:
@@ -144,6 +199,8 @@ class MessageProcessor:
             self._process_text_block(msg.content, is_main=is_main)
 
         # LangChain stores parsed args on msg.tool_calls; use when present to get full args (see IG-053).
+        # For streaming chunks: only emit tool call if we have complete args (IG-053 bug fix)
+        # For complete messages: always emit tool call (may have empty args for tools with defaults)
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
@@ -151,6 +208,11 @@ class MessageProcessor:
                     continue
                 tc_display = dict(tc)
                 tc_display["args"] = coerce_tool_call_args_to_dict(tc.get("args"))
+
+                # Skip emitting on chunks with empty args - args will arrive in later chunks
+                if is_chunk and not tc_display["args"] and not has_tc_args:
+                    continue
+
                 if has_tc_args or (not tc_display["args"] and not tool_call_emitted_from_blocks):
                     self.formatter.emit_tool_call(name, prefix=None, is_main=is_main, tool_call=tc_display)
 
@@ -197,8 +259,34 @@ class MessageProcessor:
             return
 
         tool_name = getattr(msg, "name", "tool")
+        tool_call_id = getattr(msg, "tool_call_id", None)
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         brief = extract_tool_brief(tool_name, content)
+
+        # Check for pending tool call that hasn't been emitted yet (IG-053)
+        # This handles cases where the tool was called before args were fully parsed
+        if tool_call_id and tool_call_id in self.state.pending_tool_calls:
+            pending = self.state.pending_tool_calls[tool_call_id]
+            if not pending["emitted"]:
+                # Try to parse args one more time
+                args_str = pending.get("args_str", "")
+                parsed_args: dict[str, Any] = {}
+                if args_str:
+                    try:
+                        parsed_args = json.loads(args_str)
+                    except json.JSONDecodeError:
+                        pass
+                # Emit the tool call (even with empty args)
+                tc_display = {"args": parsed_args if isinstance(parsed_args, dict) else {}}
+                self.formatter.emit_tool_call(
+                    pending["name"] or tool_name,
+                    prefix=prefix,
+                    is_main=pending.get("is_main", not prefix),
+                    tool_call=tc_display,
+                )
+                pending["emitted"] = True
+            # Clean up the pending entry
+            del self.state.pending_tool_calls[tool_call_id]
 
         self.formatter.emit_tool_result(tool_name, brief, prefix=prefix, is_main=not prefix)
 
@@ -225,23 +313,24 @@ def strip_internal_tags(text: str) -> str:
     Removes `<search_data>...</search_data>` blocks and associated
     synthesis instructions that should not be shown to users.
 
+    Note: This function preserves leading/trailing whitespace to support
+    streaming text chunks (e.g., " the" should keep its leading space).
+
     Args:
         text: The text to strip tags from.
 
     Returns:
-        Cleaned text with internal tags removed and normalized whitespace.
+        Cleaned text with internal tags removed.
     """
     result = _INTERNAL_TAG_PATTERN.sub("", text)
     result = _LEFTOVER_TAG_PATTERN.sub("", result)
     result = _SYNTHESIS_INSTRUCTION_PATTERN.sub("", result)
 
-    # Normalize whitespace to fix concatenation issues
-    # Ensure single spaces between words and proper spacing after punctuation
-    result = re.sub(r"\s+", " ", result)  # Normalize multiple spaces to single
-    result = re.sub(r"\s*([.!?])\s*", r"\1 ", result)  # Ensure space after punctuation
-    result = re.sub(r"\s+,", ",", result)  # Remove space before comma
+    # Only normalize excessive internal whitespace (3+ spaces -> 1)
+    # Preserve leading/trailing whitespace for streaming chunks
+    result = re.sub(r" {3,}", " ", result)  # Normalize excessive spaces only
 
-    return result.strip()
+    return result
 
 
 def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> str:
