@@ -30,6 +30,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | RFC-0003, RFC-0015 |
 | [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
 | [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | RFC-0018, RFC-0019 |
+| [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Draft | RFC-0013, RFC-0015 |
 
 ### Implementation Interface Design
 
@@ -70,9 +71,9 @@ RFC-0001 (System Conceptual Design)
 
 ## RFC Status Summary
 
-- **Total RFCs**: 21
+- **Total RFCs**: 22
 - **Implemented**: 19
-- **Draft**: 2
+- **Draft**: 3
 
 ## Line Count Summary (After Compaction)
 

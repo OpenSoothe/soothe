@@ -117,7 +117,14 @@ class GoalEngine:
             max_retries=max_retries if max_retries is not None else self._max_retries,
         )
         self._goals[goal.id] = goal
-        logger.info("Created goal %s: %s (priority=%d)", goal.id, description, priority)
+
+        # Enhanced logging with parent context
+        parent_context = ""
+        if parent_id:
+            parent = self._goals.get(parent_id)
+            if parent:
+                parent_context = f' | parent: "{parent.description}"'
+        logger.info('Created goal %s: "%s"%s (priority=%d)', goal.id, description, parent_context, priority)
         logger.debug(self._format_goal_dag())
         return goal
 
@@ -165,13 +172,13 @@ class GoalEngine:
                 goal.status = "active"
                 goal.updated_at = datetime.now(UTC)
 
-        # Log ready goals (RFC-0009 / IG-026)
+        # Log ready goals (RFC-0009 / IG-026) - Enhanced natural language format
         if result:
-            logger.info(
-                "Ready goals: %d (%s)",
-                len(result),
-                [(g.id, g.description, f"priority={g.priority}") for g in result],
-            )
+            goal_summaries = []
+            for g in result:
+                context = self._get_goal_context(g.id)
+                goal_summaries.append(f'\n  → {g.id}: "{context}" (priority={g.priority})')
+            logger.info("Ready goals: %d%s", len(result), "".join(goal_summaries))
         else:
             logger.debug("No ready goals (waiting for dependencies)")
 
@@ -203,9 +210,27 @@ class GoalEngine:
         if not goal:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
+
+        # Calculate duration before updating timestamp
+        duration = (datetime.now(UTC) - goal.created_at).total_seconds()
+
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
-        logger.info("Completed goal %s: %s (priority=%d)", goal_id, goal.description, goal.priority)
+
+        # Enhanced logging with parent context and duration
+        parent_context = ""
+        if goal.parent_id:
+            parent = self._goals.get(goal.parent_id)
+            if parent:
+                parent_context = f' | parent: "{parent.description}"'
+        logger.info(
+            'Completed goal %s: "%s"%s (priority=%d, duration=%.1fs)',
+            goal_id,
+            goal.description,
+            parent_context,
+            goal.priority,
+            duration,
+        )
         logger.debug(self._format_goal_dag())
         return goal
 
@@ -254,10 +279,23 @@ class GoalEngine:
 
         goal.status = "failed"
         goal.updated_at = datetime.now(UTC)
+
+        # Enhanced logging with dependency context and status
+        dep_context = ""
+        if goal.depends_on:
+            dep_descs = []
+            for dep_id in goal.depends_on:
+                dep = self._goals.get(dep_id)
+                if dep:
+                    dep_descs.append(f"{dep.description} ({dep.status})")
+                else:
+                    dep_descs.append(dep_id)
+            dep_context = f" | depends_on: [{', '.join(dep_descs)}]"
         logger.warning(
-            "Failed goal %s: %s (priority=%d, retries=%d/%d)%s",
+            'Failed goal %s: "%s"%s (priority=%d, retries=%d/%d)%s',
             goal_id,
             goal.description,
+            dep_context,
             goal.priority,
             goal.retry_count,
             goal.max_retries,
@@ -403,9 +441,57 @@ class GoalEngine:
                 goal.depends_on.append(dep_id)
 
         goal.updated_at = datetime.now(UTC)
-        logger.info("Added dependencies to goal %s: %s", goal_id, depends_on)
+
+        # Enhanced logging with dependency descriptions
+        dep_descs = []
+        for dep_id in depends_on:
+            dep = self._goals.get(dep_id)
+            if dep:
+                dep_descs.append(f'{dep_id}: "{dep.description}"')
+            else:
+                dep_descs.append(dep_id)
+        logger.info(
+            'Added dependencies to goal %s "%s": [%s]',
+            goal_id,
+            goal.description,
+            ", ".join(dep_descs),
+        )
         logger.debug(self._format_goal_dag())
         return goal
+
+    def _get_goal_context(self, goal_id: str) -> str:
+        """Get natural language context for a goal.
+
+        Args:
+            goal_id: Goal ID to get context for.
+
+        Returns:
+            Context string with parent and dependency descriptions.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal:
+            return goal_id
+
+        context_parts = [goal.description]
+
+        # Add parent context
+        if goal.parent_id:
+            parent = self._goals.get(goal.parent_id)
+            if parent:
+                context_parts.append(f"parent: {parent.description}")
+
+        # Add dependency context
+        if goal.depends_on:
+            dep_descs = []
+            for dep_id in goal.depends_on:
+                dep = self._goals.get(dep_id)
+                if dep:
+                    dep_descs.append(dep.description)
+                else:
+                    dep_descs.append(dep_id)
+            context_parts.append(f"depends_on: [{', '.join(dep_descs)}]")
+
+        return " | ".join(context_parts)
 
     def _format_goal_dag(self) -> str:
         """Format the current goal DAG state for logging.
@@ -418,10 +504,28 @@ class GoalEngine:
 
         lines = ["Goal DAG:"]
         for goal in sorted(self._goals.values(), key=lambda g: (-g.priority, g.created_at)):
-            deps_str = f" depends_on=[{', '.join(goal.depends_on)}]" if goal.depends_on else ""
-            parent_str = f" parent={goal.parent_id}" if goal.parent_id else ""
+            # Add parent description
+            parent_str = ""
+            if goal.parent_id:
+                parent = self._goals.get(goal.parent_id)
+                if parent:
+                    parent_str = f' parent={goal.parent_id} "{parent.description[:30]}"'
+                else:
+                    parent_str = f" parent={goal.parent_id}"
+
+            # Add dependency descriptions
+            deps_with_desc = []
+            for dep_id in goal.depends_on:
+                dep = self._goals.get(dep_id)
+                if dep:
+                    deps_with_desc.append(f'{dep_id} "{dep.description[:30]}"')
+                else:
+                    deps_with_desc.append(dep_id)
+            deps_str = f" depends_on=[{', '.join(deps_with_desc)}]" if goal.depends_on else ""
+
             lines.append(
-                f"  [{goal.id}] {goal.status} priority={goal.priority}{parent_str}{deps_str} {goal.description[:60]}"
+                f"  [{goal.id}] {goal.status} priority={goal.priority}{parent_str}{deps_str}"
+                f"\n      → {goal.description}"
             )
         return "\n".join(lines)
 

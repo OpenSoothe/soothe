@@ -5,7 +5,7 @@ This document describes the final polished structure of the soothe-sdk package.
 ## Package Layout
 
 ```
-soothe-sdk-pkg/
+sdk/
 ├── .gitignore                    # Git ignore patterns
 ├── MIGRATION.md                  # Migration guide for standalone repo
 ├── README.md                     # Package overview and API reference

@@ -5,7 +5,7 @@ This document describes how to migrate soothe_sdk to a standalone repository.
 ## Current Status
 
 The `soothe-sdk` package is currently located in the Soothe monorepo at:
-- `soothe-sdk-pkg/` - Standalone package structure
+- `sdk/` - Standalone package structure
 - `src/soothe_sdk/` - Original location (to be removed after migration)
 
 ## Migration Steps
@@ -21,7 +21,7 @@ git clone <soothe-repo>
 cd soothe
 
 # Copy standalone package to new location
-cp -r soothe-sdk-pkg ../soothe-sdk/
+cp -r sdk ../soothe-sdk/
 cd ../soothe-sdk
 git init
 git add .
@@ -37,7 +37,7 @@ After the standalone package is tested and working:
 ```bash
 # In Soothe monorepo
 rm -rf src/soothe_sdk
-rm -rf soothe-sdk-pkg
+rm -rf sdk
 ```
 
 ### 3. Update Soothe Dependencies

@@ -13,7 +13,17 @@ def write_pid() -> None:
     """Write current process PID to the PID file."""
     pf = pid_path()
     pf.parent.mkdir(parents=True, exist_ok=True)
-    pf.write_text(str(os.getpid()))
+
+    # Use FrameworkFilesystem for consistency if available
+    try:
+        from soothe.core.filesystem import FrameworkFilesystem
+
+        backend = FrameworkFilesystem.get()
+        # Write to the PID file location
+        backend.write(str(pf), str(os.getpid()))
+    except RuntimeError:
+        # FrameworkFilesystem not initialized - fallback to direct write
+        pf.write_text(str(os.getpid()))
 
 
 def cleanup_pid() -> None:

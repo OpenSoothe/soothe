@@ -214,3 +214,6 @@ large_tool_results/
 plot_*
 .claude/
 .DS_Store
+
+checkpoint.json
+manifest.json

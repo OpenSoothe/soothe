@@ -225,19 +225,26 @@ def _output_final_report(
     else:
         # Large report: write to file and show preview
         try:
-            # Create reports directory in workspace
-            reports_dir = Path(workspace_path) / ".soothe" / "reports"
-            reports_dir.mkdir(parents=True, exist_ok=True)
+            from soothe.core.filesystem import FrameworkFilesystem
 
             # Generate unique filename with timestamp
             import time
 
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            report_path = reports_dir / f"report_{timestamp}.md"
-            report_path.write_text(report_text, encoding="utf-8")
+            report_path = f".soothe/reports/report_{timestamp}.md"
+
+            backend = FrameworkFilesystem.get()
+            result = backend.write(report_path, report_text)
+
+            if result.error:
+                # Write failed - fallback to temp file
+                raise RuntimeError(f"Backend write failed: {result.error}")
+
+            # Get the actual resolved path for display
+            actual_path = backend._resolve_path(report_path)
 
             # Show notification with character count
-            sys.stdout.write(f"\n\n[Report: {len(report_text):,} chars → saved to: {report_path}]\n")
+            sys.stdout.write(f"\n\n[Report: {len(report_text):,} chars → saved to: {actual_path}]\n")
 
             # Show preview
             if len(report_text) > preview_chars:

@@ -6,10 +6,13 @@ import asyncio
 import contextlib
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from soothe.daemon.paths import socket_path
 from soothe.daemon.protocol import decode, encode
+
+# Type alias for verbosity levels (RFC-0015, RFC-0022)
+VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +93,16 @@ class DaemonClient:
         """Request the daemon to start a new thread."""
         await self._send({"type": "new_thread"})
 
-    async def subscribe_thread(self, thread_id: str) -> None:
+    async def subscribe_thread(
+        self,
+        thread_id: str,
+        verbosity: VerbosityLevel = "normal",
+    ) -> None:
         """Subscribe to receive events for a thread.
 
         Args:
             thread_id: Thread identifier to subscribe to
+            verbosity: Verbosity preference (minimal|normal|detailed|debug)
 
         Raises:
             ConnectionError: If not connected
@@ -102,24 +110,30 @@ class DaemonClient:
         if not self._writer:
             raise ConnectionError("Not connected to daemon")
 
-        msg = {"type": "subscribe_thread", "thread_id": thread_id}
+        msg = {
+            "type": "subscribe_thread",
+            "thread_id": thread_id,
+            "verbosity": verbosity,
+        }
         await self._send(msg)
-        logger.info("Subscribed to thread %s", thread_id)
+        logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
 
     async def wait_for_subscription_confirmed(
         self,
         thread_id: str,
+        verbosity: VerbosityLevel = "normal",
         timeout: float = 5.0,  # noqa: ASYNC109
     ) -> None:
         """Wait for subscription confirmation message.
 
         Args:
             thread_id: Expected thread ID
+            verbosity: Expected verbosity level
             timeout: Maximum seconds to wait
 
         Raises:
             TimeoutError: If confirmation not received
-            ValueError: If confirmation has different thread_id
+            ValueError: If confirmation has different thread_id or verbosity
         """
         async with asyncio.timeout(timeout):
             event = await self.read_event()
@@ -135,7 +149,15 @@ class DaemonClient:
             msg = f"Subscription thread_id mismatch: expected {thread_id}, got {event.get('thread_id')}"
             raise ValueError(msg)
 
-        logger.debug("Subscription confirmed for thread %s", thread_id)
+        echoed_verbosity = event.get("verbosity", "normal")
+        if echoed_verbosity != verbosity:
+            logger.warning(
+                "Verbosity mismatch: requested=%s, received=%s",
+                verbosity,
+                echoed_verbosity,
+            )
+
+        logger.debug("Subscription confirmed for thread %s with verbosity=%s", thread_id, echoed_verbosity)
 
     # Thread management methods (RFC-0017)
 

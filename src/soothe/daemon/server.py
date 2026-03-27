@@ -421,11 +421,16 @@ class SootheDaemon(DaemonHandlersMixin):
         if not thread_id and msg_type == "status":
             thread_id = self._runner.current_thread_id if self._runner else None
 
+        # Get event metadata for filtering (RFC-0022)
+        from soothe.core.event_catalog import REGISTRY
+
+        event_meta = REGISTRY.get_meta(msg_type) if msg_type else None
+
         if thread_id:
             # Route to thread-specific topic
             topic = f"thread:{thread_id}"
             logger.debug("Publishing event to topic %s: %s", topic, msg_type)
-            await self._event_bus.publish(topic, msg)
+            await self._event_bus.publish(topic, msg, event_meta=event_meta)
         else:
             # Event without thread_id - broadcast to all transports
             # This maintains backward compatibility for non-thread-specific messages

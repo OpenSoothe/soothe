@@ -87,7 +87,17 @@ def checkhealth(
         if save_report:
             report_path = Path(save_report)
             report_content = format_markdown(report)
-            report_path.write_text(report_content)
+
+            # Use FrameworkFilesystem for consistency
+            try:
+                from soothe.core.filesystem import FrameworkFilesystem
+
+                backend = FrameworkFilesystem.get()
+                backend.write(str(report_path), report_content)
+            except RuntimeError:
+                # FrameworkFilesystem not initialized - fallback to direct write
+                report_path.write_text(report_content)
+
             if not quiet:
                 typer.echo(f"\nReport saved to: {report_path}")
 

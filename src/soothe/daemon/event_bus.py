@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from soothe.core.event_catalog import EventMeta
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +37,18 @@ class EventBus:
         self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {}
         self._lock = asyncio.Lock()
 
-    async def publish(self, topic: str, event: dict[str, Any]) -> None:
-        """Publish event to all subscribers of topic.
+    async def publish(
+        self,
+        topic: str,
+        event: dict[str, Any],
+        event_meta: EventMeta | None = None,
+    ) -> None:
+        """Publish event to all subscribers of topic with optional metadata.
 
         Args:
             topic: Topic identifier (e.g., "thread:abc123")
             event: Event dictionary to broadcast
+            event_meta: Optional EventMeta for filtering (RFC-0022)
         """
         async with self._lock:
             queues = self._subscribers.get(topic, set()).copy()
@@ -48,16 +57,22 @@ class EventBus:
             logger.debug("No subscribers for topic %s", topic)
             return
 
-        # Send to all subscriber queues concurrently
+        # Send (event, event_meta) tuple to queues for filtering (RFC-0022)
         dropped = 0
         for queue in queues:
             try:
-                queue.put_nowait(event)
+                queue.put_nowait((event, event_meta))
             except asyncio.QueueFull:
                 dropped += 1
                 logger.warning("Queue full for topic %s, dropping event", topic)
 
-        logger.debug("Published event to topic %s: %d delivered, %d dropped", topic, len(queues) - dropped, dropped)
+        logger.debug(
+            "Published event %s to topic %s: %d delivered, %d dropped",
+            event.get("type"),
+            topic,
+            len(queues) - dropped,
+            dropped,
+        )
 
     async def subscribe(self, topic: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Subscribe queue to receive events for topic.

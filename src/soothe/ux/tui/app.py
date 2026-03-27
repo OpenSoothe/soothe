@@ -386,10 +386,12 @@ class SootheApp(App):
             self._apply_thread_status(status_event, previous_thread_id=pre_status_thread_id)
             logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
 
-            # Subscribe to thread (RFC-0013)
-            await self._client.subscribe_thread(thread_id)
-            await self._client.wait_for_subscription_confirmed(thread_id)
-            logger.info("Subscribed to thread %s", thread_id)
+            # Subscribe to thread with verbosity preference (RFC-0013, RFC-0022)
+            # TUI uses 'normal' verbosity by default
+            verbosity = "normal"
+            await self._client.subscribe_thread(thread_id, verbosity=verbosity)
+            await self._client.wait_for_subscription_confirmed(thread_id, verbosity=verbosity)
+            logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
 
         except TimeoutError:
             self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Timeout waiting for status from daemon"))

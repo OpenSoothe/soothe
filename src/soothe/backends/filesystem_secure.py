@@ -103,8 +103,12 @@ class SecureFilesystemBackend:
     def _normalize_for_backend(self, file_path: str, operation: str) -> str:
         """Normalize path before passing to backend.
 
-        Converts absolute paths under root to relative paths to work around
-        virtual_mode bug in FilesystemBackend.
+        Converts absolute paths under root to relative paths for consistent
+        behavior with FilesystemBackend's virtual_mode semantics.
+
+        In virtual_mode=True, absolute paths are treated as virtual paths
+        under root_dir, which is intentional design for backend-agnostic
+        path semantics. This normalization ensures paths resolve as expected.
         """
         resolved = self._resolve_and_validate_path(file_path, operation)
 

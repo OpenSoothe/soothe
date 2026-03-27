@@ -233,20 +233,14 @@ def create_soothe_agent(
 
     resolved_backend = backend
     if resolved_backend is None:
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe.core.filesystem import FrameworkFilesystem
 
-        from soothe.backends.filesystem_secure import SecureFilesystemBackend
-
-        base_backend = FilesystemBackend(
-            root_dir=resolved_workspace,
-            virtual_mode=not config.security.allow_paths_outside_workspace,
-        )
-        resolved_backend = SecureFilesystemBackend(
-            backend=base_backend,
-            root_dir=resolved_workspace,
+        # Initialize framework-wide singleton
+        # Use deepagents FilesystemBackend directly with proper virtual_mode semantics
+        # No wrapper needed - virtual_mode handles path containment correctly
+        resolved_backend = FrameworkFilesystem.initialize(
+            config=config,
             policy=resolved_policy,
-            policy_context=None,  # Will be set during tool execution
-            allow_outside_root=config.security.allow_paths_outside_workspace,
         )
 
     default_middleware: list[AgentMiddleware] = []

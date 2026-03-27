@@ -148,37 +148,37 @@ clean:
 
 sdk-sync:
 	@echo "Syncing SDK dependencies..."
-	cd soothe-sdk-pkg && uv sync --all-extras
+	cd sdk && uv sync --all-extras
 	@echo "✓ SDK dependencies synced"
 
 sdk-format:
 	@echo "Formatting SDK code..."
-	cd soothe-sdk-pkg && uv run ruff format src/ tests/
+	cd sdk && uv run ruff format src/ tests/
 	@echo "✓ SDK code formatted"
 
 sdk-lint:
 	@echo "Linting SDK code..."
-	cd soothe-sdk-pkg && uv run ruff check src/ tests/
+	cd sdk && uv run ruff check src/ tests/
 	@echo "✓ SDK linting complete"
 
 sdk-test:
 	@echo "Running SDK tests..."
-	cd soothe-sdk-pkg && uv run pytest tests/ -v
+	cd sdk && uv run pytest tests/ -v
 	@echo "✓ SDK tests complete"
 
 sdk-build:
 	@echo "Building SDK package..."
-	cd soothe-sdk-pkg && uv build
+	cd sdk && uv build
 	@echo "✓ SDK package built"
 
 sdk-publish:
 	@echo "Publishing SDK package to PyPI..."
-	cd soothe-sdk-pkg && uv publish
+	cd sdk && uv publish
 	@echo "✓ SDK package published to PyPI"
 
 sdk-publish-test:
 	@echo "Publishing SDK package to TestPyPI..."
-	cd soothe-sdk-pkg && uv publish --index-url https://test.pypi.org/simple/
+	cd sdk && uv publish --index-url https://test.pypi.org/simple/
 	@echo "✓ SDK package published to TestPyPI"
 
 # ============================================================================
@@ -244,8 +244,8 @@ all-publish: publish sdk-publish community-publish
 
 all-clean: clean
 	@echo "Cleaning all package artifacts..."
-	rm -rf soothe-sdk-pkg/dist/ soothe-sdk-pkg/*.egg-info
+	rm -rf sdk/dist/ sdk/*.egg-info
 	rm -rf soothe-community-pkg/dist/ soothe-community-pkg/*.egg-info
-	find soothe-sdk-pkg -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find sdk -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find soothe-community-pkg -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ All packages cleaned"

@@ -205,6 +205,8 @@ class DaemonHandlersMixin:
                 await session.transport.send(session.transport_client, {"type": "status", "state": "detached"})
         elif msg_type == "subscribe_thread":
             thread_id = msg.get("thread_id", "").strip()
+            verbosity = msg.get("verbosity", "normal")  # RFC-0022: optional, default='normal'
+
             if not thread_id:
                 session = await self._session_manager.get_session(client_id)
                 if session:
@@ -214,17 +216,44 @@ class DaemonHandlersMixin:
                     )
                 return
 
-            try:
-                await self._session_manager.subscribe_thread(client_id, thread_id)
-
-                # Send confirmation
+            # Validate verbosity value (RFC-0022)
+            valid_verbosity = {"minimal", "normal", "detailed", "debug"}
+            if verbosity not in valid_verbosity:
                 session = await self._session_manager.get_session(client_id)
                 if session:
                     await session.transport.send(
                         session.transport_client,
-                        {"type": "subscription_confirmed", "thread_id": thread_id, "client_id": client_id},
+                        {
+                            "type": "error",
+                            "code": "INVALID_MESSAGE",
+                            "message": f"Invalid verbosity value: {verbosity}. "
+                            f"Must be one of: {', '.join(sorted(valid_verbosity))}",
+                        },
                     )
-                logger.info("Client %s subscribed to thread %s", client_id, thread_id)
+                return
+
+            try:
+                # Subscribe with verbosity preference (RFC-0022)
+                await self._session_manager.subscribe_thread(client_id, thread_id, verbosity=verbosity)
+
+                # Send confirmation with echoed verbosity
+                session = await self._session_manager.get_session(client_id)
+                if session:
+                    await session.transport.send(
+                        session.transport_client,
+                        {
+                            "type": "subscription_confirmed",
+                            "thread_id": thread_id,
+                            "client_id": client_id,
+                            "verbosity": verbosity,  # RFC-0022: echo verbosity
+                        },
+                    )
+                logger.info(
+                    "Client %s subscribed to thread %s with verbosity=%s",
+                    client_id,
+                    thread_id,
+                    verbosity,
+                )
             except ValueError as e:
                 logger.exception("Subscription failed")
                 session = await self._session_manager.get_session(client_id)

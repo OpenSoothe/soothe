@@ -32,8 +32,17 @@ class JsonPersistStore:
     def save(self, key: str, data: Any) -> None:
         """Persist data as a JSON file."""
         path = self._path(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, default=str))
+
+        # Use FrameworkFilesystem for consistency
+        try:
+            from soothe.core.filesystem import FrameworkFilesystem
+
+            backend = FrameworkFilesystem.get()
+            backend.write(str(path), json.dumps(data, default=str))
+        except RuntimeError:
+            # FrameworkFilesystem not initialized - fallback to direct write
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, default=str))
 
     def load(self, key: str) -> Any | None:
         """Load data from a JSON file."""

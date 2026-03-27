@@ -10,8 +10,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from soothe.core.event_catalog import EventMeta
     from soothe.daemon.event_bus import EventBus
     from soothe.daemon.transports.base import TransportServer
+
+# Type alias for verbosity levels (RFC-0015, RFC-0022)
+from typing import Literal
+
+VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +44,7 @@ class ClientSession:
     subscriptions: set[str] = field(default_factory=set)
     event_queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue(maxsize=100))
     sender_task: asyncio.Task[None] | None = None
+    verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
 
 
 class ClientSessionManager:
@@ -95,12 +102,18 @@ class ClientSessionManager:
 
         return client_id
 
-    async def subscribe_thread(self, client_id: str, thread_id: str) -> None:
+    async def subscribe_thread(
+        self,
+        client_id: str,
+        thread_id: str,
+        verbosity: VerbosityLevel = "normal",
+    ) -> None:
         """Subscribe client to receive events for thread.
 
         Args:
             client_id: Client identifier
             thread_id: Thread identifier to subscribe to
+            verbosity: Verbosity preference (minimal|normal|detailed|debug)
 
         Raises:
             ValueError: If client_id not found
@@ -112,11 +125,19 @@ class ClientSessionManager:
             msg = f"Client {client_id} not found"
             raise ValueError(msg)
 
+        # Set client verbosity preference (RFC-0022)
+        session.verbosity = verbosity
+
         topic = f"thread:{thread_id}"
         await self._event_bus.subscribe(topic, session.event_queue)
         session.subscriptions.add(thread_id)
 
-        logger.info("Client %s subscribed to thread %s", client_id, thread_id)
+        logger.info(
+            "Client %s subscribed to thread %s with verbosity=%s",
+            client_id,
+            thread_id,
+            verbosity,
+        )
 
     async def unsubscribe_thread(self, client_id: str, thread_id: str) -> None:
         """Unsubscribe client from thread.
@@ -208,18 +229,49 @@ class ClientSessionManager:
             return self._sessions.get(client_id)
 
     async def _sender_loop(self, session: ClientSession) -> None:
-        """Send events from queue to client via transport.
+        """Send events from queue with daemon-side filtering (RFC-0022).
 
         This task runs continuously, pulling events from the client's
-        event queue and sending them via the transport layer.
+        event queue, applying verbosity filtering, and sending them
+        via the transport layer.
 
         Args:
             session: ClientSession to send events for
         """
         try:
             while True:
-                event = await session.event_queue.get()
+                # Get event data (may be tuple with metadata)
+                event_data = await session.event_queue.get()
 
+                # Extract event and metadata
+                event: dict[str, Any]
+                event_meta: EventMeta | None = None
+
+                if isinstance(event_data, tuple):
+                    # New format: (event, event_meta)
+                    event, event_meta = event_data
+                else:
+                    # Legacy format: event dict without metadata
+                    event = event_data
+
+                # Daemon-side filtering (RFC-0022)
+                if event_meta:
+                    # Import should_show from RFC-0015's progress_verbosity
+                    from soothe.ux.core.progress_verbosity import should_show
+
+                    # Check if event should be shown at client's verbosity level
+                    if not should_show(event_meta.verbosity, session.verbosity):
+                        # Filter out - do not send to client
+                        logger.debug(
+                            "Filtered event %s for client %s (event_verbosity=%s, client_verbosity=%s)",
+                            event.get("type"),
+                            session.client_id,
+                            event_meta.verbosity,
+                            session.verbosity,
+                        )
+                        continue  # Skip this event
+
+                # Send filtered event to client
                 try:
                     await session.transport.send(session.transport_client, event)
                 except Exception:

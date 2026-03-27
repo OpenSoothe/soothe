@@ -75,9 +75,13 @@ Convert absolute paths under root_dir to relative paths before passing to the wr
 ```python
 def _normalize_for_backend(file_path: str, operation: str) -> str:
     """
-    Workaround for FilesystemBackend virtual_mode bug:
+    Normalize path for FilesystemBackend:
     - If path is under root_dir, convert to relative path
     - If path is outside root_dir, pass as-is (already validated)
+
+    Note: This normalization ensures consistent behavior regardless of
+    virtual_mode setting. In virtual_mode=True, absolute paths are treated
+    as virtual paths under root_dir, which is intentional design.
     """
 ```
 

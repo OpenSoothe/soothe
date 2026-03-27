@@ -15,6 +15,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.config import SOOTHE_HOME
+from soothe.core.filesystem import FrameworkFilesystem
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +166,15 @@ class RunArtifactStore:
             duration_ms=duration_ms,
             depends_on=deps,
         )
-        (step_dir / "report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
+        # Use FrameworkFilesystem for all file operations
+        backend = FrameworkFilesystem.get()
+
+        # Write JSON report
+        json_path = f"goals/{goal_id}/steps/{step_id}/report.json"
+        backend.write(json_path, report.model_dump_json(indent=2))
+
+        # Write Markdown report
         md_parts = [
             f"# Step: {description}\n",
             f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
@@ -174,7 +182,9 @@ class RunArtifactStore:
         if deps:
             md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
         md_parts.append(f"\n## Result\n\n{result}\n")
-        (step_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
+
+        md_path = f"goals/{goal_id}/steps/{step_id}/report.md"
+        backend.write(md_path, "\n".join(md_parts))
         logger.debug(
             "Step report written: goal=%s step=%s status=%s duration=%dms",
             goal_id,
@@ -191,8 +201,15 @@ class RunArtifactStore:
         """
         goal_dir = self._run_dir / "goals" / report.goal_id
         goal_dir.mkdir(parents=True, exist_ok=True)
-        (goal_dir / "report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
+        # Use FrameworkFilesystem for all file operations
+        backend = FrameworkFilesystem.get()
+
+        # Write JSON report
+        json_path = f"goals/{report.goal_id}/report.json"
+        backend.write(json_path, report.model_dump_json(indent=2))
+
+        # Build Markdown report
         md_parts = [
             f"# Goal: {report.description}\n",
             f"**Status**: {report.status}  \n**Duration**: {report.duration_ms}ms\n",
@@ -209,7 +226,10 @@ class RunArtifactStore:
                 icon = "+" if sr.status == "completed" else "x"
                 md_parts.append(f"- [{icon}] **{sr.step_id}**: {sr.description} ({sr.status})")
             md_parts.append("")
-        (goal_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
+
+        # Write Markdown report
+        md_path = f"goals/{report.goal_id}/report.md"
+        backend.write(md_path, "\n".join(md_parts))
 
         step_count = len(getattr(report, "step_reports", []))
         logger.info("Goal report written: goal=%s status=%s steps=%d", report.goal_id, report.status, step_count)
@@ -234,17 +254,27 @@ class RunArtifactStore:
         Args:
             envelope: CheckpointEnvelope data as a dict.
         """
-        target = self._run_dir / "checkpoint.json"
-        tmp = target.with_suffix(".json.tmp")
+        backend = FrameworkFilesystem.get()
+
+        # Write to temp file first
+        tmp_path = "checkpoint.json.tmp"
+        backend.write(tmp_path, json.dumps(envelope, default=str, indent=2))
+
+        # Atomic rename using resolved paths
         try:
-            tmp.write_text(json.dumps(envelope, default=str, indent=2), encoding="utf-8")
-            tmp.rename(target)
+            tmp_resolved = backend._resolve_path(tmp_path)
+            target_resolved = backend._resolve_path("checkpoint.json")
+            tmp_resolved.rename(target_resolved)
             n_completed = len(envelope.get("completed_step_ids", []))
             logger.debug("Checkpoint saved: status=%s completed_steps=%d", envelope.get("status"), n_completed)
         except Exception:
             logger.debug("Checkpoint write failed", exc_info=True)
-            if tmp.exists():
-                tmp.unlink(missing_ok=True)
+            # Clean up temp file
+            try:
+                tmp_resolved = backend._resolve_path(tmp_path)
+                tmp_resolved.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def load_checkpoint(self) -> dict[str, Any] | None:
         """Load checkpoint from disk.
@@ -268,14 +298,11 @@ class RunArtifactStore:
     def save_manifest(self) -> None:
         """Persist the current manifest to disk."""
         self._manifest.updated_at = datetime.now(UTC).isoformat()
-        target = self._run_dir / "manifest.json"
-        try:
-            target.write_text(self._manifest.model_dump_json(indent=2), encoding="utf-8")
-            logger.debug(
-                "Manifest saved: goals=%d artifacts=%d", len(self._manifest.goals), len(self._manifest.artifacts)
-            )
-        except Exception:
-            logger.debug("Manifest write failed", exc_info=True)
+
+        backend = FrameworkFilesystem.get()
+        backend.write("manifest.json", self._manifest.model_dump_json(indent=2))
+
+        logger.debug("Manifest saved: goals=%d artifacts=%d", len(self._manifest.goals), len(self._manifest.artifacts))
 
     def load_manifest(self) -> RunManifest | None:
         """Load manifest from disk.

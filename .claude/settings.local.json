@@ -3,7 +3,11 @@
     "allow": [
       "Bash(uv run:*)",
       "Bash(python -m pytest tests/unit_tests/test_classification.py -v)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(./scripts/verify_finally.sh)",
+      "Bash(make format:*)",
+      "Bash(make lint:*)",
+      "Bash(python -m pytest tests/unit/daemon/test_client_session.py -xvs)"
     ]
   }
 }

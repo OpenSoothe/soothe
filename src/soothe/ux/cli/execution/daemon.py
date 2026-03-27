@@ -60,9 +60,10 @@ async def run_headless_via_daemon(
             typer.echo("Error: No thread_id in status message", err=True)
             return 1
 
-        # Subscribe to the thread (RFC-0013)
-        await client.subscribe_thread(actual_thread_id)
-        await client.wait_for_subscription_confirmed(actual_thread_id)
+        # Subscribe to the thread with verbosity preference (RFC-0013, RFC-0022)
+        verbosity = cfg.logging.verbosity
+        await client.subscribe_thread(actual_thread_id, verbosity=verbosity)
+        await client.wait_for_subscription_confirmed(actual_thread_id, verbosity=verbosity)
 
         # Send the input
         await asyncio.wait_for(
@@ -75,7 +76,7 @@ async def run_headless_via_daemon(
         )
 
         # Initialize RFC-0019 unified event processor
-        verbosity = cfg.logging.verbosity
+        # Note: verbosity already determined above for subscription
         renderer = CliRenderer(verbosity=verbosity)
         processor = EventProcessor(renderer, verbosity=verbosity)
 
