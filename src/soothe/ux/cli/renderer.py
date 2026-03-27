@@ -242,7 +242,8 @@ class CliRenderer:
         if plan.reasoning:
             sys.stderr.write(f"  Reasoning: {plan.reasoning}\n")
         for step in plan.steps:
-            sys.stderr.write(f"  ├ {step.id}: {step.description} [pending]\n")
+            dep_str = f" (< {', '.join(step.depends_on)})" if step.depends_on else ""
+            sys.stderr.write(f"  ├ {step.id}: {step.description}{dep_str} [pending]\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -305,7 +306,8 @@ class CliRenderer:
         sys.stderr.write(f"\n\n[plan] ● {plan.goal}\n")
         for step in plan.steps:
             icon = status_icons.get(step.status, "○")
-            sys.stderr.write(f"  ├ {icon} {step.id}: {step.description}\n")
+            dep_str = f" (< {', '.join(step.depends_on)})" if step.depends_on else ""
+            sys.stderr.write(f"  ├ {icon} {step.id}: {step.description}{dep_str}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True

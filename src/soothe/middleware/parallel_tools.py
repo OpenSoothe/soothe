@@ -1,91 +1,89 @@
-"""ParallelToolsMiddleware -- enable parallel tool execution in agents.
+"""ParallelToolsMiddleware -- control parallel tool execution with semaphore.
 
-This middleware intercepts tool execution and enables parallel invocation
-of independent tools for 2.5-3x performance improvement.
+This middleware intercepts tool execution to limit concurrent invocation
+of multiple tools from a single LLM response using semaphore-based control.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from langchain.agents.middleware import AgentMiddleware
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable
 
-    from langchain_core.tools import BaseTool
-    from langgraph.graph.state import CompiledStateGraph
+    from langchain_core.messages import ToolMessage
+    from langgraph.prebuilt.tool_node import ToolCallRequest
+    from langgraph.types import Command
 
 logger = logging.getLogger(__name__)
 
 
 class ParallelToolsMiddleware(AgentMiddleware):
-    """Middleware to enable parallel tool execution.
+    """Middleware to control parallel tool execution with semaphore.
 
-    This middleware wraps tool execution to enable concurrent invocation
-    of multiple independent tools from a single LLM response. It uses
-    ParallelToolExecutor to execute tools in parallel with semaphore-based
-    concurrency control.
+    LangGraph ToolNode executes all tool calls from a single LLM response
+    in parallel via asyncio.gather() with unlimited parallelism. This middleware
+    uses awrap_tool_call hook to limit concurrent execution with a semaphore.
 
     Args:
         max_parallel_tools: Maximum number of tools to execute concurrently.
-            Default is 3 for balanced performance and API rate limit safety.
+            Default is 10 for balanced API usage. LangGraph default is unlimited.
     """
 
-    def __init__(self, max_parallel_tools: int = 3) -> None:
-        """Initialize parallel tools middleware."""
+    def __init__(self, max_parallel_tools: int = 10) -> None:
+        """Initialize parallel tools middleware with semaphore."""
         self.max_parallel_tools = max_parallel_tools
+        self._semaphore = asyncio.Semaphore(max_parallel_tools)
         logger.info(
-            "ParallelToolsMiddleware initialized with max_parallel_tools=%d",
+            "ParallelToolsMiddleware initialized: max_parallel_tools=%d (LangGraph default: unlimited)",
             max_parallel_tools,
         )
 
-    def modify_graph(self, graph: CompiledStateGraph) -> CompiledStateGraph:
-        """Modify the agent graph to enable parallel tool execution.
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], ToolMessage | Command],
+    ) -> ToolMessage | Command:
+        """Control tool execution with semaphore.
 
-        This method is called during graph compilation to inject parallel
-        execution capabilities. Note: The actual implementation depends on
-        how deepagents structures its tool execution node.
+        This hook is called for each tool during parallel batch execution.
+        LangGraph's asyncio.gather() launches all tools simultaneously,
+        but the semaphore limits how many can proceed concurrently.
 
         Args:
-            graph: The compiled agent graph.
+            request: Tool call request with tool_call, tool, state, runtime.
+            handler: Callable that executes the tool (can be called multiple times for retries).
 
         Returns:
-            Modified graph with parallel tool execution enabled.
+            ToolMessage or Command from tool execution.
         """
-        # Note: This is a placeholder for graph modification
-        # The actual implementation would depend on how deepagents
-        # structures its tool execution node
+        tool_name = request.tool_call.get("name", "unknown")
+
+        # Calculate active slots for logging
+        active_count = self.max_parallel_tools - self._semaphore._value
         logger.debug(
-            "ParallelToolsMiddleware: Graph modification for parallel tools (max_parallel=%d)",
+            "Tool %s: %d/%d parallel slots active, waiting for slot",
+            tool_name,
+            active_count,
             self.max_parallel_tools,
         )
-        return graph
 
+        # Acquire semaphore slot (wait if limit reached)
+        async with self._semaphore:
+            active_count = self.max_parallel_tools - self._semaphore._value
+            logger.debug(
+                "Tool %s: acquired slot (%d/%d active), executing",
+                tool_name,
+                active_count,
+                self.max_parallel_tools,
+            )
 
-def create_parallel_tool_executor(
-    tools: Sequence[BaseTool],
-    max_parallel: int = 3,
-) -> Any:
-    """Create a ParallelToolExecutor for the given tools.
+            # Execute tool (handler can be called multiple times for retries)
+            result = await handler(request)
 
-    This factory function creates a ParallelToolExecutor instance
-    configured with the specified concurrency limit.
-
-    Args:
-        tools: Sequence of tools to enable for parallel execution.
-        max_parallel: Maximum concurrent tool executions.
-
-    Returns:
-        ParallelToolExecutor instance ready for use.
-    """
-    from soothe.core.parallel_tool_node import ParallelToolExecutor
-
-    logger.info(
-        "Creating ParallelToolExecutor with %d tools, max_parallel=%d",
-        len(tools),
-        max_parallel,
-    )
-
-    return ParallelToolExecutor(tools=tools, max_parallel=max_parallel)
+            logger.debug("Tool %s: completed, releasing slot", tool_name)
+            return result

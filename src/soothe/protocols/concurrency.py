@@ -29,10 +29,11 @@ class ConcurrencyPolicy(BaseModel):
     max_parallel_steps: int = 1
     max_parallel_subagents: int = 1
     max_parallel_tools: int = Field(
-        default=3,
+        default=10,
         description="Maximum tool calls running simultaneously. "
-        "Set to 1 for sequential execution, 3-5 for balanced parallelism, "
-        "10+ for high-limit APIs. Controls ParallelToolNode concurrency.",
+        "Set to 1 for sequential execution, 3-5 for conservative parallelism, "
+        "10 for balanced API usage, 20+ for high-limit APIs. "
+        "LangGraph default is unlimited; this provides sensible default.",
     )
     global_max_llm_calls: int = 5
     step_parallelism: Literal["sequential", "dependency", "max"] = "dependency"

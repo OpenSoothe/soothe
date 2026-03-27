@@ -82,7 +82,9 @@ class ConcurrencyController:
     async def acquire_tool(self) -> AsyncGenerator[None]:
         """Acquire a tool execution slot.
 
-        Controls parallel execution of tool calls within a single LLM invocation.
+        Reserved for future hierarchical control across multiple agents.
+        Currently not used for single-agent tool parallelism, which is
+        handled by ParallelToolsMiddleware.awrap_tool_call() instead.
 
         Yields:
             None -- releases the slot on exit.

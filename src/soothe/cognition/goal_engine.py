@@ -170,7 +170,7 @@ class GoalEngine:
             logger.info(
                 "Ready goals: %d (%s)",
                 len(result),
-                [(g.id, g.description) for g in result],
+                [(g.id, g.description, f"priority={g.priority}") for g in result],
             )
         else:
             logger.debug("No ready goals (waiting for dependencies)")
@@ -205,7 +205,7 @@ class GoalEngine:
             raise KeyError(msg)
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
-        logger.info("Completed goal %s: %s", goal_id, goal.description)
+        logger.info("Completed goal %s: %s (priority=%d)", goal_id, goal.description, goal.priority)
         logger.debug(self._format_goal_dag())
         return goal
 
@@ -254,7 +254,15 @@ class GoalEngine:
 
         goal.status = "failed"
         goal.updated_at = datetime.now(UTC)
-        logger.warning("Failed goal %s: %s%s", goal_id, goal.description, f" - {error}" if error else "")
+        logger.warning(
+            "Failed goal %s: %s (priority=%d, retries=%d/%d)%s",
+            goal_id,
+            goal.description,
+            goal.priority,
+            goal.retry_count,
+            goal.max_retries,
+            f" - {error}" if error else "",
+        )
         logger.debug(self._format_goal_dag())
         return goal
 
