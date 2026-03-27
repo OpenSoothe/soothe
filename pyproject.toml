@@ -183,7 +183,7 @@ keep-runtime-typing = true
 [tool.ruff.lint.isort]
 force-single-line = false
 combine-as-imports = true
-known-first-party = ["soothe"]
+known-first-party = ["soothe", "soothe_sdk"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

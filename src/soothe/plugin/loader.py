@@ -10,9 +10,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from packaging.requirements import Requirement
-from soothe_sdk.types.manifest import PluginManifest
 
 from soothe.plugin.exceptions import DependencyError, DiscoveryError
+from soothe_sdk.types.manifest import PluginManifest
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
