@@ -497,10 +497,24 @@ class SootheConfig(BaseSettings):
         provider_type, kwargs = self._provider_kwargs(provider_name)
         kwargs.pop("use_responses_api", None)
 
+        # Check if DashScope is using OpenAI-compatible endpoint
         if provider_name == "dashscope":
-            from soothe.utils.embeddings_dashscope import DashScopeEmbeddings
+            base_url = kwargs.get("base_url", "")
+            # If using OpenAI-compatible endpoint, use custom wrapper
+            if "compatible-mode" in base_url:
+                logger.debug("DashScope provider using OpenAI-compatible endpoint, using custom wrapper")
+                from soothe.utils.embeddings_dashscope_openai import DashScopeOpenAIEmbeddings
 
-            embeddings = DashScopeEmbeddings(model=model_name, dimension=self.embedding_dims, **kwargs)
+                # Remove base_url from kwargs to avoid duplicate parameter
+                embedding_kwargs = {k: v for k, v in kwargs.items() if k != "base_url"}
+                embeddings = DashScopeOpenAIEmbeddings(
+                    model=model_name, dimension=self.embedding_dims, base_url=base_url, **embedding_kwargs
+                )
+            else:
+                # Use native DashScope SDK for non-compatible endpoints
+                from soothe.utils.embeddings_dashscope import DashScopeEmbeddings
+
+                embeddings = DashScopeEmbeddings(model=model_name, dimension=self.embedding_dims, **kwargs)
             self._embedding_cache[cache_key] = embeddings
             logger.debug("Created and cached DashScope embedding model for '%s'", model_str)
             return embeddings

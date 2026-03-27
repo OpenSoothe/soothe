@@ -5,6 +5,7 @@ from __future__ import annotations
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "browser": "Browser",
     "claude": "Claude",
+    "research": "Research",
     "skillify": "Skillify",
     "weaver": "Weaver",
 }

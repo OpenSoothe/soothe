@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ConcurrencyPolicy(BaseModel):
@@ -16,7 +16,7 @@ class ConcurrencyPolicy(BaseModel):
         max_parallel_subagents: Maximum subagents running simultaneously.
             Reserved for future ConcurrencyMiddleware enforcement.
         max_parallel_tools: Maximum tool calls running simultaneously.
-            Reserved for future ConcurrencyMiddleware enforcement.
+            Controls ParallelToolNode concurrency for parallel tool execution.
         global_max_llm_calls: Cross-level circuit breaker limiting total
             concurrent LLM invocations across all goals and steps.
         step_parallelism: Scheduling strategy for plan steps.
@@ -28,6 +28,11 @@ class ConcurrencyPolicy(BaseModel):
     max_parallel_goals: int = 1
     max_parallel_steps: int = 1
     max_parallel_subagents: int = 1
-    max_parallel_tools: int = 3
+    max_parallel_tools: int = Field(
+        default=3,
+        description="Maximum tool calls running simultaneously. "
+        "Set to 1 for sequential execution, 3-5 for balanced parallelism, "
+        "10+ for high-limit APIs. Controls ParallelToolNode concurrency.",
+    )
     global_max_llm_calls: int = 5
     step_parallelism: Literal["sequential", "dependency", "max"] = "dependency"

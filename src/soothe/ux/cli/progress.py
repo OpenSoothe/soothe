@@ -21,19 +21,9 @@ from soothe.core.event_catalog import (
     PLAN_STEP_COMPLETED,
     PLAN_STEP_FAILED,
     PLAN_STEP_STARTED,
+    POLICY_CHECKED,
+    POLICY_DENIED,
     REGISTRY,
-)
-from soothe.subagents.research.events import (
-    SUBAGENT_RESEARCH_ANALYZE,
-    SUBAGENT_RESEARCH_COMPLETED,
-    SUBAGENT_RESEARCH_GATHER,
-    SUBAGENT_RESEARCH_GATHER_DONE,
-    SUBAGENT_RESEARCH_QUERIES_GENERATED,
-    SUBAGENT_RESEARCH_REFLECT,
-    SUBAGENT_RESEARCH_REFLECTION_DONE,
-    SUBAGENT_RESEARCH_SUB_QUESTIONS,
-    SUBAGENT_RESEARCH_SUMMARIZE,
-    SUBAGENT_RESEARCH_SYNTHESIZE,
 )
 
 if TYPE_CHECKING:
@@ -48,25 +38,16 @@ _EVENT_LABELS: dict[str, str] = {
     GOAL_BATCH_STARTED: "goals",
     ITERATION_STARTED: "iteration",
     ITERATION_COMPLETED: "iteration",
-    # Research subagent events
-    SUBAGENT_RESEARCH_ANALYZE: "research",
-    SUBAGENT_RESEARCH_SUB_QUESTIONS: "research",
-    SUBAGENT_RESEARCH_QUERIES_GENERATED: "research",
-    SUBAGENT_RESEARCH_GATHER: "research",
-    SUBAGENT_RESEARCH_GATHER_DONE: "research",
-    SUBAGENT_RESEARCH_SUMMARIZE: "research",
-    SUBAGENT_RESEARCH_REFLECT: "research",
-    SUBAGENT_RESEARCH_REFLECTION_DONE: "research",
-    SUBAGENT_RESEARCH_SYNTHESIZE: "research",
-    SUBAGENT_RESEARCH_COMPLETED: "research",
 }
 
-# Events to skip (handled by renderer's plan update mechanism)
+# Events to skip (handled by renderer's plan update mechanism, or not rendered by CLI)
 _SKIP_EVENTS = {
     PLAN_BATCH_STARTED,
     PLAN_STEP_STARTED,
     PLAN_STEP_COMPLETED,
     PLAN_STEP_FAILED,
+    POLICY_CHECKED,  # Policy events not rendered by simplified CLI (RFC-0019)
+    POLICY_DENIED,  # Policy events not rendered by simplified CLI (RFC-0019)
 }
 
 
@@ -94,11 +75,6 @@ def render_progress_event(
     if event_type in _SKIP_EVENTS:
         return
 
-    # This is a simplified renderer - only handle whitelisted events
-    # Policy events and other events are handled elsewhere
-    if event_type not in _EVENT_LABELS:
-        return
-
     # Try registry first (RFC-0020 Principle 1: Registry-Driven Display)
     meta = REGISTRY.get_meta(event_type)
     if meta and meta.summary_template:
@@ -108,6 +84,10 @@ def render_progress_event(
             logger.debug("Failed to format template for %s: %s", event_type, e)
             # Fall through to hardcoded logic
         else:
+            # Truncate long text per RFC-0020 (max ~80 chars for terminal width)
+            # Preserve word boundaries when possible
+            if len(summary) > 80:  # noqa: PLR2004
+                summary = summary[:77].rsplit(" ", 1)[0] + "..."
             prefix_str = f"[{prefix}] " if prefix else ""
             label = _get_event_label(event_type)
             line = f"{prefix_str}[{label}] {summary}\n"
@@ -210,60 +190,7 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
         iteration = data.get("iteration", 0)
         return f"└ Iteration {iteration + 1} done"
 
-    # Research subagent events
-    if event_type == SUBAGENT_RESEARCH_ANALYZE:
-        topic = data.get("topic", "")
-        return f"● Research: {topic}"
-
-    if event_type == SUBAGENT_RESEARCH_SUB_QUESTIONS:
-        sub_questions = data.get("sub_questions", [])
-        count = data.get("count", len(sub_questions))
-        if sub_questions:
-            # Show subquestions as a tree
-            lines = [f"├ Sub-questions ({count}):"]
-            for sq in sub_questions:
-                q = sq.get("question", str(sq)) if isinstance(sq, dict) else str(sq)
-                lines.append(f"  ├ {q}")
-            return "\n".join(lines)
-        return f"├ Identified {count} sub-questions"
-
-    if event_type == SUBAGENT_RESEARCH_QUERIES_GENERATED:
-        queries = data.get("queries", [])
-        if queries:
-            lines = [f"├ Generated queries ({len(queries)}):"]
-            for q in queries:
-                lines.append(f"  ├ {q}")
-            return "\n".join(lines)
-        return ""
-
-    if event_type == SUBAGENT_RESEARCH_GATHER:
-        query = data.get("query", "")
-        domain = data.get("domain", "")
-        return f"├ Gathering from {domain}: {query}"
-
-    if event_type == SUBAGENT_RESEARCH_GATHER_DONE:
-        result_count = data.get("result_count", 0)
-        return f"  └ Gathered {result_count} results"
-
-    if event_type == SUBAGENT_RESEARCH_SUMMARIZE:
-        total = data.get("total_summaries", 0)
-        return f"├ Summarizing {total} results"
-
-    if event_type == SUBAGENT_RESEARCH_REFLECT:
-        loop = data.get("loop", 0)
-        return f"├ Reflecting (loop {loop + 1})"
-
-    if event_type == SUBAGENT_RESEARCH_REFLECTION_DONE:
-        is_sufficient = data.get("is_sufficient", False)
-        follow_up = data.get("follow_up_count", 0)
-        status = "✓ sufficient" if is_sufficient else f"needs {follow_up} follow-ups"
-        return f"  └ Reflection: {status}"
-
-    if event_type == SUBAGENT_RESEARCH_SYNTHESIZE:
-        return "├ Synthesizing findings"
-
-    if event_type == SUBAGENT_RESEARCH_COMPLETED:
-        answer_length = data.get("answer_length", 0)
-        return f"└ Research completed ({answer_length} chars)"
+    # Research subagent events now use registry templates (RFC-0020)
+    # Removed hardcoded research logic - events have proper summary_template registrations
 
     return ""

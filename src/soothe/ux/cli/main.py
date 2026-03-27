@@ -1,9 +1,15 @@
 """Main CLI entry point using Typer."""
 
-from importlib.metadata import version
-from typing import Annotated, Literal
+# Load environment variables from .env file BEFORE any langchain imports
+# This is required for LangSmith tracing to be activated at import time
+from dotenv import load_dotenv
 
-import typer
+load_dotenv()
+
+from importlib.metadata import version  # noqa: E402
+from typing import Annotated, Literal  # noqa: E402
+
+import typer  # noqa: E402
 
 app = typer.Typer(
     name="soothe",

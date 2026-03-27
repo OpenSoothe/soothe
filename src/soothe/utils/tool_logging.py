@@ -7,10 +7,17 @@ from __future__ import annotations
 
 import functools
 import logging
+import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
+
+    from langchain_core.tools import BaseTool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Generator
 
     from langchain_core.tools import BaseTool
 
@@ -248,3 +255,42 @@ def wrap_main_agent_tool_with_logging(
 
     logged_callable._soothe_progress_wrapped = True
     return logged_callable
+
+
+# ---------------------------------------------------------------------------
+# Thread-safe event emission for parallel tool execution
+# ---------------------------------------------------------------------------
+
+# Global lock for thread-safe event emission
+_event_lock = threading.Lock()
+
+
+@contextmanager
+def thread_safe_event_emission() -> Generator[None, None, None]:
+    """Ensure events from parallel tools don't interleave.
+
+    Use this context manager when emitting events from concurrently executing
+    tools to prevent interleaved output.
+
+    Yields:
+        None
+
+    Example:
+        ```python
+        with thread_safe_event_emission():
+            emit_tool_started(name, args)
+            # ... execute tool ...
+            emit_tool_completed(name, result)
+        ```
+    """
+    with _event_lock:
+        yield
+
+
+def get_event_lock() -> threading.Lock:
+    """Get the global event emission lock.
+
+    Returns:
+        The global threading.Lock instance for event emission.
+    """
+    return _event_lock

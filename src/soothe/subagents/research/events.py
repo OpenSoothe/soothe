@@ -14,6 +14,25 @@ from pydantic import ConfigDict
 from soothe.core.base_events import SootheEvent
 
 
+class ResearchDispatchedEvent(SootheEvent):
+    """Research subagent dispatched event."""
+
+    type: Literal["soothe.subagent.research.dispatched"] = "soothe.subagent.research.dispatched"
+    topic: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ResearchCompletedEvent(SootheEvent):
+    """Research completed event."""
+
+    type: Literal["soothe.subagent.research.completed"] = "soothe.subagent.research.completed"
+    duration_ms: int = 0
+    answer_length: int = 0
+
+    model_config = ConfigDict(extra="allow")
+
+
 class ResearchAnalyzeEvent(SootheEvent):
     """Research analyze event."""
 
@@ -102,15 +121,6 @@ class ResearchSynthesizeEvent(SootheEvent):
     model_config = ConfigDict(extra="allow")
 
 
-class ResearchCompletedEvent(SootheEvent):
-    """Research completed event."""
-
-    type: Literal["soothe.subagent.research.completed"] = "soothe.subagent.research.completed"
-    answer_length: int = 0
-
-    model_config = ConfigDict(extra="allow")
-
-
 class ResearchInternalLLMResponseEvent(SootheEvent):
     """Internal LLM response from research engine - NOT for display.
 
@@ -129,6 +139,16 @@ class ResearchInternalLLMResponseEvent(SootheEvent):
 # Register all research events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 
+register_event(
+    ResearchDispatchedEvent,
+    verbosity="subagent_progress",
+    summary_template="Research: {topic}",
+)
+register_event(
+    ResearchCompletedEvent,
+    verbosity="subagent_progress",
+    summary_template="Completed in {duration_ms}ms",
+)
 register_event(ResearchAnalyzeEvent, summary_template="Analyzing: {topic}")
 register_event(ResearchSubQuestionsEvent, summary_template="Identified {count} sub-questions")
 register_event(ResearchQueriesGeneratedEvent, summary_template="Generated {queries} queries")
@@ -142,16 +162,13 @@ register_event(
 )
 register_event(ResearchSynthesizeEvent, summary_template="Synthesizing findings")
 register_event(
-    ResearchCompletedEvent,
-    summary_template="Research completed ({answer_length} chars)",
-)
-register_event(
     ResearchInternalLLMResponseEvent,
     verbosity="internal",
     summary_template="Internal: {response_type}",
 )
 
 # Event type constants for convenient imports
+SUBAGENT_RESEARCH_DISPATCHED = "soothe.subagent.research.dispatched"
 SUBAGENT_RESEARCH_ANALYZE = "soothe.subagent.research.analyze"
 SUBAGENT_RESEARCH_SUB_QUESTIONS = "soothe.subagent.research.sub_questions"
 SUBAGENT_RESEARCH_QUERIES_GENERATED = "soothe.subagent.research.queries_generated"
@@ -167,6 +184,7 @@ SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.subagent.research.internal_llm"
 __all__ = [
     "SUBAGENT_RESEARCH_ANALYZE",
     "SUBAGENT_RESEARCH_COMPLETED",
+    "SUBAGENT_RESEARCH_DISPATCHED",
     "SUBAGENT_RESEARCH_GATHER",
     "SUBAGENT_RESEARCH_GATHER_DONE",
     "SUBAGENT_RESEARCH_INTERNAL_LLM",
@@ -178,6 +196,7 @@ __all__ = [
     "SUBAGENT_RESEARCH_SYNTHESIZE",
     "ResearchAnalyzeEvent",
     "ResearchCompletedEvent",
+    "ResearchDispatchedEvent",
     "ResearchGatherDoneEvent",
     "ResearchGatherEvent",
     "ResearchInternalLLMResponseEvent",

@@ -528,7 +528,7 @@ class DaemonHandlersMixin:
             return
 
         output = StringIO()
-        console = Console(file=output, force_terminal=False, width=100)
+        console = Console(file=output, force_terminal=False, width=120)
 
         should_exit = await handle_slash_command(
             cmd,

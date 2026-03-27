@@ -13,6 +13,25 @@ from pydantic import ConfigDict
 from soothe.core.base_events import SubagentEvent
 
 
+class SkillifyDispatchedEvent(SubagentEvent):
+    """Skillify subagent dispatched event."""
+
+    type: Literal["soothe.subagent.skillify.dispatched"] = "soothe.subagent.skillify.dispatched"
+    task: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class SkillifyCompletedEvent(SubagentEvent):
+    """Skillify subagent completed event."""
+
+    type: Literal["soothe.subagent.skillify.completed"] = "soothe.subagent.skillify.completed"
+    duration_ms: int = 0
+    result_count: int = 0
+
+    model_config = ConfigDict(extra="allow")
+
+
 class SkillifyIndexingPendingEvent(SubagentEvent):
     """Skillify indexing pending event."""
 
@@ -92,6 +111,16 @@ class SkillifyIndexFailedEvent(SubagentEvent):
 # Register all skillify events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 
+register_event(
+    SkillifyDispatchedEvent,
+    verbosity="subagent_progress",
+    summary_template="Skillify: {task}",
+)
+register_event(
+    SkillifyCompletedEvent,
+    verbosity="subagent_progress",
+    summary_template="Completed in {duration_ms}ms ({result_count} results)",
+)
 register_event(SkillifyIndexingPendingEvent)
 register_event(SkillifyRetrieveStartedEvent)
 register_event(SkillifyRetrieveCompletedEvent)
@@ -102,6 +131,8 @@ register_event(SkillifyIndexUnchangedEvent)
 register_event(SkillifyIndexFailedEvent)
 
 # Event type constants for convenient imports
+SUBAGENT_SKILLIFY_DISPATCHED = "soothe.subagent.skillify.dispatched"
+SUBAGENT_SKILLIFY_COMPLETED = "soothe.subagent.skillify.completed"
 SUBAGENT_SKILLIFY_INDEXING_PENDING = "soothe.subagent.skillify.indexing_pending"
 SUBAGENT_SKILLIFY_RETRIEVE_STARTED = "soothe.subagent.skillify.retrieve_started"
 SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED = "soothe.subagent.skillify.retrieve_completed"
@@ -112,6 +143,8 @@ SUBAGENT_SKILLIFY_INDEX_UNCHANGED = "soothe.subagent.skillify.index_unchanged"
 SUBAGENT_SKILLIFY_INDEX_FAILED = "soothe.subagent.skillify.index_failed"
 
 __all__ = [
+    "SUBAGENT_SKILLIFY_COMPLETED",
+    "SUBAGENT_SKILLIFY_DISPATCHED",
     "SUBAGENT_SKILLIFY_INDEXING_PENDING",
     "SUBAGENT_SKILLIFY_INDEX_FAILED",
     "SUBAGENT_SKILLIFY_INDEX_STARTED",
@@ -120,6 +153,8 @@ __all__ = [
     "SUBAGENT_SKILLIFY_RETRIEVE_COMPLETED",
     "SUBAGENT_SKILLIFY_RETRIEVE_NOT_READY",
     "SUBAGENT_SKILLIFY_RETRIEVE_STARTED",
+    "SkillifyCompletedEvent",
+    "SkillifyDispatchedEvent",
     "SkillifyIndexFailedEvent",
     "SkillifyIndexStartedEvent",
     "SkillifyIndexUnchangedEvent",

@@ -21,6 +21,7 @@ from soothe.core.resolver import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.middleware.parallel_tools import ParallelToolsMiddleware
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
@@ -238,14 +239,14 @@ def create_soothe_agent(
 
         base_backend = FilesystemBackend(
             root_dir=resolved_workspace,
-            virtual_mode=True,
+            virtual_mode=not config.security.allow_paths_outside_workspace,
         )
         resolved_backend = SecureFilesystemBackend(
             backend=base_backend,
             root_dir=resolved_workspace,
             policy=resolved_policy,
             policy_context=None,  # Will be set during tool execution
-            allow_outside_root=False,  # Configure via security policy
+            allow_outside_root=config.security.allow_paths_outside_workspace,
         )
 
     default_middleware: list[AgentMiddleware] = []
@@ -268,6 +269,11 @@ def create_soothe_agent(
 
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))
+
+    # Add parallel tools middleware for performance (always enabled with safe defaults)
+    max_parallel_tools = config.execution.concurrency.max_parallel_tools if hasattr(config, "execution") else 3
+    default_middleware.append(ParallelToolsMiddleware(max_parallel_tools=max_parallel_tools))
+    logger.info("Parallel tools middleware enabled with max_parallel_tools=%d", max_parallel_tools)
 
     all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 

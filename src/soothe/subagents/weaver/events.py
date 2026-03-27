@@ -14,6 +14,25 @@ from pydantic import ConfigDict
 from soothe.core.base_events import SubagentEvent
 
 
+class WeaverDispatchedEvent(SubagentEvent):
+    """Weaver subagent dispatched event."""
+
+    type: Literal["soothe.subagent.weaver.dispatched"] = "soothe.subagent.weaver.dispatched"
+    task: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class WeaverCompletedEvent(SubagentEvent):
+    """Weaver subagent completed event."""
+
+    type: Literal["soothe.subagent.weaver.completed"] = "soothe.subagent.weaver.completed"
+    duration_ms: int = 0
+    agent_name: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
 class WeaverAnalysisStartedEvent(SubagentEvent):
     """Weaver analysis started event."""
 
@@ -150,6 +169,16 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
 # Register all weaver events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 
+register_event(
+    WeaverDispatchedEvent,
+    verbosity="subagent_progress",
+    summary_template="Weaver: {task}",
+)
+register_event(
+    WeaverCompletedEvent,
+    verbosity="subagent_progress",
+    summary_template="Completed in {duration_ms}ms",
+)
 register_event(WeaverAnalysisStartedEvent)
 register_event(WeaverAnalysisCompletedEvent)
 register_event(WeaverReuseHitEvent)
@@ -166,6 +195,8 @@ register_event(WeaverExecuteStartedEvent)
 register_event(WeaverExecuteCompletedEvent)
 
 # Event type constants for convenient imports
+SUBAGENT_WEAVER_DISPATCHED = "soothe.subagent.weaver.dispatched"
+SUBAGENT_WEAVER_COMPLETED = "soothe.subagent.weaver.completed"
 SUBAGENT_WEAVER_ANALYSIS_STARTED = "soothe.subagent.weaver.analysis_started"
 SUBAGENT_WEAVER_ANALYSIS_COMPLETED = "soothe.subagent.weaver.analysis_completed"
 SUBAGENT_WEAVER_REUSE_HIT = "soothe.subagent.weaver.reuse_hit"
@@ -184,6 +215,8 @@ SUBAGENT_WEAVER_EXECUTE_COMPLETED = "soothe.subagent.weaver.execute_completed"
 __all__ = [
     "SUBAGENT_WEAVER_ANALYSIS_COMPLETED",
     "SUBAGENT_WEAVER_ANALYSIS_STARTED",
+    "SUBAGENT_WEAVER_COMPLETED",
+    "SUBAGENT_WEAVER_DISPATCHED",
     "SUBAGENT_WEAVER_EXECUTE_COMPLETED",
     "SUBAGENT_WEAVER_EXECUTE_STARTED",
     "SUBAGENT_WEAVER_GENERATE_COMPLETED",
@@ -198,6 +231,8 @@ __all__ = [
     "SUBAGENT_WEAVER_VALIDATE_STARTED",
     "WeaverAnalysisCompletedEvent",
     "WeaverAnalysisStartedEvent",
+    "WeaverCompletedEvent",
+    "WeaverDispatchedEvent",
     "WeaverExecuteCompletedEvent",
     "WeaverExecuteStartedEvent",
     "WeaverGenerateCompletedEvent",

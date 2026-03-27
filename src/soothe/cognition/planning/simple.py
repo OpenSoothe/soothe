@@ -128,7 +128,10 @@ class SimplePlanner:
             return self._parse_json_from_response(content, goal)
         except Exception as e:
             logger.warning("Fallback parsing failed: %s", e)
-            return Plan(goal=goal, steps=[{"id": "step_1", "description": goal}])
+            return Plan(
+                goal=goal or "Unnamed goal",
+                steps=[{"id": "step_1", "description": goal or "Execute task"}],
+            )
 
     def _parse_json_from_response(self, content: str, fallback_goal: str) -> Plan:
         """Parse Plan from JSON content, optionally wrapped in markdown.
@@ -151,7 +154,10 @@ class SimplePlanner:
             return Plan(**self._normalize_hints_in_dict(data))
         except Exception as e:
             logger.warning("JSON parsing failed: %s", e)
-            return Plan(goal=fallback_goal, steps=[{"id": "step_1", "description": fallback_goal}])
+            return Plan(
+                goal=fallback_goal or "Unnamed goal",
+                steps=[{"id": "step_1", "description": fallback_goal or "Execute task"}],
+            )
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
         """Build unified planning prompt with embedded classification."""

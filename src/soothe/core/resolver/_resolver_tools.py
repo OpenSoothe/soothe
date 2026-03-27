@@ -34,12 +34,14 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     """
     from soothe.subagents.browser import create_browser_subagent
     from soothe.subagents.claude import create_claude_subagent
+    from soothe.subagents.research import create_research_subagent
     from soothe.subagents.skillify import create_skillify_subagent
     from soothe.subagents.weaver import create_weaver_subagent
 
     return {
         "browser": create_browser_subagent,
         "claude": create_claude_subagent,
+        "research": create_research_subagent,
         "skillify": create_skillify_subagent,
         "weaver": create_weaver_subagent,
     }

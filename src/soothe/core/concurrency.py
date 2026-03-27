@@ -1,7 +1,7 @@
 """ConcurrencyController -- hierarchical concurrency enforcement (RFC-0009).
 
-Provides semaphore-based concurrency control at three levels:
-goal scheduling, step scheduling, and global LLM call budget.
+Provides semaphore-based concurrency control at four levels:
+goal scheduling, step scheduling, tool execution, and global LLM call budget.
 Created once in ``SootheRunner.__init__`` and shared across all
 execution paths.
 """
@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 class ConcurrencyController:
     """Hierarchical concurrency enforcement via semaphores.
 
-    Controls parallel execution at three levels:
+    Controls parallel execution at four levels:
 
     - **Goal level** (autonomous mode): limits concurrent goal executions.
     - **Step level** (within a goal's plan): limits concurrent step executions.
+    - **Tool level** (within a step): limits concurrent tool calls.
     - **LLM call level** (global circuit breaker): caps total concurrent
       LangGraph invocations across all goals and steps to prevent API
       rate-limit exhaustion.
@@ -42,6 +43,7 @@ class ConcurrencyController:
         self._goal_sem = asyncio.Semaphore(policy.max_parallel_goals)
         self._step_sem = asyncio.Semaphore(policy.max_parallel_steps)
         self._llm_sem = asyncio.Semaphore(policy.global_max_llm_calls)
+        self._tool_sem = asyncio.Semaphore(policy.max_parallel_tools)
 
     @asynccontextmanager
     async def acquire_goal(self) -> AsyncGenerator[None]:
@@ -76,6 +78,18 @@ class ConcurrencyController:
         async with self._llm_sem:
             yield
 
+    @asynccontextmanager
+    async def acquire_tool(self) -> AsyncGenerator[None]:
+        """Acquire a tool execution slot.
+
+        Controls parallel execution of tool calls within a single LLM invocation.
+
+        Yields:
+            None -- releases the slot on exit.
+        """
+        async with self._tool_sem:
+            yield
+
     @property
     def policy(self) -> ConcurrencyPolicy:
         """The active concurrency policy."""
@@ -95,3 +109,8 @@ class ConcurrencyController:
     def max_parallel_goals(self) -> int:
         """Maximum parallel goals allowed."""
         return self._policy.max_parallel_goals
+
+    @property
+    def max_parallel_tools(self) -> int:
+        """Maximum parallel tools allowed."""
+        return self._policy.max_parallel_tools

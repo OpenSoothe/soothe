@@ -39,6 +39,7 @@ SLASH_COMMANDS: dict[str, str] = {
     "/help": "Show available commands",
     "/browser <query>": "Route query to Browser subagent",
     "/claude <query>": "Route query to Claude subagent",
+    "/research <query>": "Route query to Research subagent",
     "/skillify <query>": "Route query to Skillify subagent",
     "/weaver <query>": "Route query to Weaver subagent",
 }

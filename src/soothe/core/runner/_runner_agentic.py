@@ -10,7 +10,7 @@ import logging
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal
 
-from ._runner_shared import StreamChunk, _custom
+from ._runner_shared import StreamChunk, _custom, _validate_goal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -383,10 +383,21 @@ class AgenticMixin:
             observations.get("classification", {}).task_complexity if observations.get("classification") else "medium"
         )
 
+        # Handle context entries (can be list or ContextProjection object)
+        context_data = observations.get("context")
+        if context_data is None:
+            context_entries = 0
+        elif isinstance(context_data, list):
+            context_entries = len(context_data)
+        elif hasattr(context_data, "entries"):
+            context_entries = len(context_data.entries)
+        else:
+            context_entries = 0
+
         yield _custom(
             AgenticObservationCompletedEvent(
                 iteration=iteration,
-                context_entries=len(observations.get("context", [])),
+                context_entries=context_entries,
                 memories_recalled=len(observations.get("memories", [])),
                 planning_strategy=self._determine_planning_strategy(complexity, user_input, state),
             ).to_dict()
@@ -440,7 +451,7 @@ class AgenticMixin:
                 # Emit plan created event
                 yield _custom(
                     PlanCreatedEvent(
-                        goal=plan.goal,
+                        goal=_validate_goal(plan.goal, user_input),
                         steps=[{"id": s.id, "description": s.description} for s in plan.steps],
                     ).to_dict()
                 )

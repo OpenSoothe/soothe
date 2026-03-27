@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import typer
+from dotenv import load_dotenv
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 
@@ -32,6 +33,10 @@ def load_config(config_path: str | None = None) -> SootheConfig:
     Returns:
         A ``SootheConfig`` instance.
     """
+    # Load environment variables from .env file
+    # This ensures LangSmith and other env vars are available
+    load_dotenv()
+
     # Determine the actual path to use
     if not config_path and _DEFAULT_CONFIG_PATH.is_file():
         config_path = str(_DEFAULT_CONFIG_PATH)

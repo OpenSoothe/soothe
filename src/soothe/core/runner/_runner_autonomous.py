@@ -31,7 +31,7 @@ from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import PlanContext, StepResult
 
 from ._runner_goal_directives import GoalDirectivesMixin
-from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
+from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _validate_goal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -293,7 +293,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     self._current_plan = plan
                     yield _custom(
                         PlanCreatedEvent(
-                            goal=plan.goal,
+                            goal=_validate_goal(plan.goal, current_input),
                             steps=[
                                 {
                                     "id": s.id,

@@ -273,10 +273,16 @@ async def run_headless_standalone(
     workspace_path = str(expand_path(cfg.workspace_dir))
     set_workspace_root(workspace_path)
 
+    # Set thread_id for logging early (before runner creation) - IG-073
+    from soothe.ux.core.logging_setup import set_thread_id
+
+    active_thread_id = thread_id or "headless"
+    set_thread_id(active_thread_id)
+
     runner = SootheRunner(cfg)
     thread_logger = ThreadLogger(
         thread_dir=cfg.logging.thread_logging.dir,
-        thread_id=thread_id or "headless",
+        thread_id=active_thread_id,
         retention_days=cfg.logging.thread_logging.retention_days,
         max_size_mb=cfg.logging.thread_logging.max_size_mb,
     )
@@ -294,14 +300,24 @@ async def run_headless_standalone(
 
     thread_logger.log_user_input(prompt)
 
+    # Parse slash commands for subagent routing (IG-072)
+    from soothe.ux.cli.commands.subagent_names import parse_subagent_from_input
+
+    subagent_name, cleaned_prompt = parse_subagent_from_input(prompt)
+
     stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
     if autonomous:
         stream_kwargs["autonomous"] = True
         if max_iterations is not None:
             stream_kwargs["max_iterations"] = max_iterations
+    if subagent_name:
+        stream_kwargs["subagent"] = subagent_name
+
+    # Use cleaned prompt if subagent was extracted, otherwise use original
+    query_text = cleaned_prompt if subagent_name else prompt
 
     try:
-        async for chunk in runner.astream(prompt, **stream_kwargs):
+        async for chunk in runner.astream(query_text, **stream_kwargs):
             if not isinstance(chunk, tuple) or len(chunk) != _chunk_len:
                 continue
             namespace, mode, data = chunk

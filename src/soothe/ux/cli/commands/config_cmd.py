@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sys
 from typing import Annotated
 
@@ -220,6 +221,28 @@ def config_validate(
         # Show enabled subagents count
         enabled_subagents = sum(1 for s in cfg.subagents.values() if s.enabled)
         typer.echo(f"\nSubagents: {enabled_subagents} enabled")
+
+        # Show LangSmith tracing status
+        typer.echo("\nObservability:")
+        langsmith_tracing = os.getenv("LANGSMITH_TRACING", "").lower()
+        langchain_tracing = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
+        langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+        langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
+        langsmith_project = os.getenv("LANGSMITH_PROJECT")
+        langchain_project = os.getenv("LANGCHAIN_PROJECT")
+
+        tracing_enabled = langsmith_tracing == "true" or langchain_tracing == "true"
+        has_api_key = bool(langsmith_api_key or langchain_api_key)
+
+        if tracing_enabled and has_api_key:
+            project_name = langsmith_project or langchain_project or "default"
+            typer.echo(f"  LangSmith: ✓ Enabled (project: {project_name})")
+        elif tracing_enabled and not has_api_key:
+            typer.echo("  LangSmith: ⚠ Tracing enabled but API key missing", err=True)
+        elif has_api_key and not tracing_enabled:
+            typer.echo("  LangSmith: ○ API key found but tracing disabled")
+        else:
+            typer.echo("  LangSmith: ○ Not configured")
 
         typer.echo()  # Blank line at end
 

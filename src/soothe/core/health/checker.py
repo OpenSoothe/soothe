@@ -54,6 +54,7 @@ class HealthChecker:
             "providers",
             "mcp_servers",
             "external_apis",
+            "observability",
         ]
 
         # Filter categories
@@ -72,6 +73,7 @@ class HealthChecker:
             "providers": self.check_providers,
             "mcp_servers": self.check_mcp_servers,
             "external_apis": self.check_external_apis,
+            "observability": self.check_observability,
         }
 
         # Run selected checks in parallel
@@ -201,3 +203,13 @@ class HealthChecker:
         from soothe.core.health.checks.external_apis_check import check_external_apis
 
         return await check_external_apis(self.config)
+
+    async def check_observability(self) -> CategoryResult:
+        """Check observability and tracing configuration.
+
+        Returns:
+            CategoryResult with observability check results
+        """
+        from soothe.core.health.checks.observability_check import check_observability
+
+        return await check_observability(self.config)

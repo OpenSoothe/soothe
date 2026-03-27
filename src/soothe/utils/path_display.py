@@ -151,7 +151,7 @@ def is_path_argument(arg_key: str) -> bool:
     return arg_key.lower() in path_arg_keys
 
 
-def abbreviate_path(path: str, max_length: int = 30) -> str:
+def abbreviate_path(path: str, max_length: int = 40) -> str:
     """Abbreviate a long path for display while keeping key context.
 
     Format: /prefix/some/.../file.md
@@ -188,21 +188,30 @@ def abbreviate_path(path: str, max_length: int = 30) -> str:
     # For paths like /a/b/c/d/e/file.md, keep /a/b
     if parts[0] == "/":
         # Unix absolute path: parts[0] is "/", so parts[1] is first segment
-        if len(parts) >= 5:  # noqa: PLR2004
-            # Keep "/" + first segment + "..." + filename
-            abbreviated = "/" + parts[1] + "/.../" + parts[-1]
+        if len(parts) >= 6:  # noqa: PLR2004
+            # Keep "/" + first segment + "..." + last two segments
+            # e.g., /Users/.../Workspace/Soothe
+            abbreviated = "/" + parts[1] + "/.../" + parts[-2] + "/" + parts[-1]
+        elif len(parts) >= 5:  # noqa: PLR2004
+            # Not enough for 2 tail segments, show first two + "..." + last
+            # e.g., /Users/xiamingchen/.../Soothe
+            abbreviated = "/" + parts[1] + "/" + parts[2] + "/.../" + parts[-1]
         else:
             # Not long enough to abbreviate meaningfully
             return path
     elif parts[0].endswith(":\\") or (len(parts[0]) == 2 and parts[0][1] == ":"):  # noqa: PLR2004
         # Windows path like "C:\\" - keep drive + first dir + ... + filename
-        if len(parts) >= 5:  # noqa: PLR2004
-            abbreviated = parts[0] + parts[1] + "\\...\\" + parts[-1]
+        if len(parts) >= 6:  # noqa: PLR2004
+            abbreviated = parts[0] + parts[1] + "\\...\\" + parts[-2] + "\\" + parts[-1]
+        elif len(parts) >= 5:  # noqa: PLR2004
+            abbreviated = parts[0] + parts[1] + "\\" + parts[2] + "\\...\\" + parts[-1]
         else:
             return path
     # Relative path: keep first segment + ... + filename
+    elif len(parts) >= 5:  # noqa: PLR2004
+        abbreviated = parts[0] + "/.../" + parts[-2] + "/" + parts[-1]
     elif len(parts) >= 4:  # noqa: PLR2004
-        abbreviated = parts[0] + "/.../" + parts[-1]
+        abbreviated = parts[0] + "/" + parts[1] + "/.../" + parts[-1]
     else:
         return path
 

@@ -590,7 +590,7 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
 
     # Extract values for all configured argument keys
     values = []
-    max_value_length = 30
+    max_value_length = 40  # Increased for 120-char terminal width
     for key_arg in key_args:
         if key_arg in args:
             value = str(args[key_arg])

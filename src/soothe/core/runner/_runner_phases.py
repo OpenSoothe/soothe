@@ -34,7 +34,7 @@ from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
 
-from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
+from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _validate_goal
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -429,7 +429,7 @@ class PhasesMixin:
                 self._current_plan = plan
                 yield _custom(
                     PlanCreatedEvent(
-                        goal=plan.goal,
+                        goal=_validate_goal(plan.goal, user_input),
                         steps=[
                             {
                                 "id": s.id,

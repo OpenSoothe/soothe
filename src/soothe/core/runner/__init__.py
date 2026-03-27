@@ -328,7 +328,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         thread_id: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
-        subagent: str | None = None,  # noqa: ARG002
+        subagent: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Stream agent execution with protocol orchestration.
 
@@ -340,6 +340,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit goal management
         - Default (RFC-0008): Agentic loop with observe → act → verify iteration
 
+        **Quick path optimization**:
+        - If `subagent` is provided, bypass classifier and route directly to subagent
+
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
@@ -347,6 +350,25 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
         """
+        # Update thread_id for logging if different from current
+        from soothe.ux.core.logging_setup import set_thread_id
+
+        active_thread_id = thread_id or self._current_thread_id or ""
+        set_thread_id(active_thread_id)
+
+        # Quick path: direct subagent routing (bypasses classifier)
+        if subagent:
+            from ._types import RunnerState
+
+            state = RunnerState()
+            state.thread_id = str(thread_id or self._current_thread_id or "")
+
+            logger.info("Quick path: routing directly to subagent '%s'", subagent)
+            async for chunk in self._run_direct_subagent(user_input, subagent, state):
+                yield chunk
+            return
+
+        # Autonomous mode
         if autonomous and self._goal_engine:
             async for chunk in self._run_autonomous(
                 user_input,

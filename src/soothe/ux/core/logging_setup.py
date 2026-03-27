@@ -1,11 +1,51 @@
 """Logging configuration for Soothe CLI."""
 
+import contextvars
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+
+# Thread-local storage for thread_id
+_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_thread_id", default=None)
+
+
+def set_thread_id(thread_id: str | None) -> None:
+    """Set the current thread ID for logging.
+
+    Args:
+        thread_id: The thread ID to include in log messages.
+    """
+    _current_thread_id.set(thread_id)
+
+
+def get_thread_id() -> str | None:
+    """Get the current thread ID for logging.
+
+    Returns:
+        The current thread ID or None if not set.
+    """
+    return _current_thread_id.get()
+
+
+class ThreadFormatter(logging.Formatter):
+    """Custom formatter that includes thread_id in log messages."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record with thread_id.
+
+        Args:
+            record: The log record to format.
+
+        Returns:
+            The formatted log message string.
+        """
+        # Add thread_id to the record
+        record.thread_id = get_thread_id() or ""
+        return super().format(record)
 
 
 def setup_logging(config: SootheConfig | None = None) -> None:
@@ -42,7 +82,7 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         file_handler = RotatingFileHandler(
             log_file, maxBytes=cfg.logging.file.max_bytes, backupCount=cfg.logging.file.backup_count, encoding="utf-8"
         )
-        file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(name)s %(message)s"))
+        file_handler.setFormatter(ThreadFormatter("%(asctime)s [%(thread_id)s] %(levelname)-8s %(name)s %(message)s"))
         file_handler.setLevel(file_level)
         root_logger.addHandler(file_handler)
 
@@ -69,3 +109,36 @@ def setup_logging(config: SootheConfig | None = None) -> None:
     )
     for name in noisy_third_party:
         logging.getLogger(name).setLevel(logging.WARNING)
+
+    # Log LangSmith tracing status if enabled
+    _log_langsmith_status()
+
+
+def _log_langsmith_status() -> None:
+    """Log LangSmith tracing status at startup."""
+    logger = logging.getLogger("soothe.core.tracing")
+
+    # Check for LangSmith environment variables
+    langsmith_tracing = os.getenv("LANGSMITH_TRACING", "").lower()
+    langchain_tracing = os.getenv("LANGCHAIN_TRACING_V2", "").lower()
+    langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+    langchain_api_key = os.getenv("LANGCHAIN_API_KEY")
+    langsmith_project = os.getenv("LANGSMITH_PROJECT")
+    langchain_project = os.getenv("LANGCHAIN_PROJECT")
+
+    # Determine if tracing is enabled
+    tracing_enabled = langsmith_tracing == "true" or langchain_tracing == "true"
+    has_api_key = bool(langsmith_api_key or langchain_api_key)
+
+    if tracing_enabled and has_api_key:
+        project_name = langsmith_project or langchain_project or "default"
+        logger.info(
+            "LangSmith tracing enabled (project: %s)",
+            project_name,
+        )
+    elif tracing_enabled and not has_api_key:
+        logger.warning("LangSmith tracing enabled but API key is missing")
+    elif has_api_key and not tracing_enabled:
+        logger.info("LangSmith API key found but tracing is disabled")
+    else:
+        logger.debug("LangSmith tracing not configured")

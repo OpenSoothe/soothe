@@ -339,11 +339,12 @@ class RunCommandTool(BaseTool):
                     msg = f"Shell recovery failed after {max_retries} attempts: {e}"
                     raise RuntimeError(msg) from e
 
-    def _run(self, command: str) -> str:
+    def _run(self, command: str, timeout: int | None = None) -> str:
         """Execute shell command synchronously.
 
         Args:
             command: Shell command to execute
+            timeout: Optional timeout override (uses instance default if not provided)
 
         Returns:
             Combined stdout and stderr output
@@ -363,9 +364,12 @@ class RunCommandTool(BaseTool):
             logger.warning("Banned command attempted: %s", command)
             return "Error: Command not allowed for security reasons."
 
+        # Use provided timeout or fall back to instance default
+        actual_timeout = timeout if timeout is not None else self.timeout
+
         # Emit command started event
         emit_progress(
-            CommandStartedEvent(command=command, timeout=self.timeout).to_dict(),
+            CommandStartedEvent(command=command, timeout=actual_timeout).to_dict(),
             logger,
         )
 
@@ -399,10 +403,10 @@ class RunCommandTool(BaseTool):
             child.sendline(command)
 
             try:
-                child.expect(self.custom_prompt, timeout=self.timeout)
+                child.expect(self.custom_prompt, timeout=actual_timeout)
             except pexpect.TIMEOUT:
                 duration_ms = int((time.time() - start_time) * 1000)
-                trouble_sign = self._detect_trouble_sign(error=TimeoutError(f"Timeout after {self.timeout}s"))
+                trouble_sign = self._detect_trouble_sign(error=TimeoutError(f"Timeout after {actual_timeout}s"))
                 health.last_command_success = False
                 health.last_command_timestamp = datetime.now()
                 health.consecutive_failures += 1
@@ -413,21 +417,21 @@ class RunCommandTool(BaseTool):
                 emit_progress(
                     CommandTimeoutEvent(
                         command=command,
-                        timeout_seconds=self.timeout,
+                        timeout_seconds=actual_timeout,
                     ).to_dict(),
                     logger,
                 )
                 emit_progress(
                     CommandFailedEvent(
                         command=command,
-                        error=f"Timeout after {self.timeout}s",
+                        error=f"Timeout after {actual_timeout}s",
                         timeout_occurred=True,
                     ).to_dict(),
                     logger,
                 )
 
                 return (
-                    f"Error: Command timed out after {self.timeout}s. "
+                    f"Error: Command timed out after {actual_timeout}s. "
                     f"For long-running operations, use run_background instead, "
                     f"or increase the timeout configuration."
                 )
@@ -504,9 +508,14 @@ class RunCommandTool(BaseTool):
             )
             return f"Error executing command: {e}"
 
-    async def _arun(self, command: str) -> str:
-        """Async execution (delegates to sync)."""
-        return self._run(command)
+    async def _arun(self, command: str, timeout: int | None = None) -> str:  # noqa: ASYNC109
+        """Async execution (delegates to sync).
+
+        Args:
+            command: Shell command to execute
+            timeout: Optional timeout override (uses instance default if not provided)
+        """
+        return self._run(command, timeout)
 
     @classmethod
     def cleanup(cls) -> None:
