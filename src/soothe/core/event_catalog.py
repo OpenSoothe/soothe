@@ -429,6 +429,25 @@ class ToolFailedEvent(ToolEvent):
     error: str = ""
 
 
+class ToolResultEvent(ToolEvent):
+    """Tool execution result with separated LLM and display content.
+
+    This event enables event-level filtering by separating:
+    - llm_content: Full result with instructions/tags (for LLM context)
+    - display_content: Semantic summary (for user display)
+
+    This eliminates the need for post-hoc content filtering in most cases.
+    """
+
+    type: Literal["soothe.tool.execution.result"] = "soothe.tool.execution.result"
+    tool_call_id: str = ""
+    tool_name: str = ""
+    llm_content: str = ""  # Full result for LLM context
+    display_content: str = ""  # Semantic summary for user display
+    duration_ms: int = 0
+    args: dict[str, Any] = field(default_factory=dict)
+
+
 def make_tool_started(tool_name: str, *, tool_group: str | None = None, **extra: Any) -> dict[str, Any]:
     """Build a main-agent tool-started event dict.
 
@@ -810,6 +829,14 @@ _reg(
     summary_template="Directives applied: {directives_count} changes",
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
+
+# -- Tool result event -------------------------------------------------------
+_reg(
+    "soothe.tool.execution.result",
+    ToolResultEvent,
+    verbosity="tool_activity",
+    summary_template="{tool_name}: {display_content}",
+)
 
 # -- Output ------------------------------------------------------------------
 _reg(CHITCHAT_STARTED, ChitchatStartedEvent, summary_template="Chitchat: {query}")
