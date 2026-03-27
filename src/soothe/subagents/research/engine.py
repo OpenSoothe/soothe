@@ -1,4 +1,4 @@
-"""InquiryEngine -- tool-agnostic iterative research loop.
+"""Research engine -- tool-agnostic iterative research loop.
 
 Implements the research paradigm as a LangGraph:
 
@@ -42,11 +42,11 @@ from .events import (
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from .protocol import InformationSource, InquiryConfig
+    from .protocol import InformationSource, ResearchConfig
 
 logger = logging.getLogger(__name__)
 
-# Module-level shared thread pool for async-to-sync conversion in inquiry engine
+# Module-level shared thread pool for async-to-sync conversion in research engine
 # This prevents creating new thread pools for each query
 _shared_pool: ThreadPoolExecutor | None = None
 
@@ -55,7 +55,7 @@ def _get_shared_pool() -> ThreadPoolExecutor:
     """Get or create the shared thread pool."""
     global _shared_pool
     if _shared_pool is None:
-        _shared_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="inquiry-async")
+        _shared_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="research-async")
         atexit.register(_cleanup_pool)
     return _shared_pool
 
@@ -84,8 +84,8 @@ def _emit_progress(event: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-class InquiryState(dict):
-    """Top-level state for the inquiry graph."""
+class ResearchEngineState(dict):
+    """Top-level state for the research engine graph."""
 
     messages: Annotated[list, add_messages]
     research_topic: str
@@ -205,14 +205,14 @@ def _now_str() -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_inquiry_engine(
+def build_research_engine(
     model: BaseChatModel,
     sources: list[InformationSource],
-    config: InquiryConfig | None = None,
+    config: ResearchConfig | None = None,
     *,
     _domain: str = "auto",
 ) -> Any:
-    """Build and compile the tool-agnostic inquiry LangGraph.
+    """Build and compile the tool-agnostic research LangGraph.
 
     Args:
         model: LLM for analysis, reflection, and synthesis.
@@ -223,10 +223,10 @@ def build_inquiry_engine(
     Returns:
         Compiled LangGraph runnable.
     """
-    from .protocol import InquiryConfig
+    from .protocol import ResearchConfig
     from .router import SourceRouter
 
-    _default_config = config or InquiryConfig()
+    _default_config = config or ResearchConfig()
     router = SourceRouter(sources, _default_config)
     available_domains = ", ".join(router.available_source_types())
 
@@ -511,7 +511,7 @@ def build_inquiry_engine(
         )
         return {"answer": answer}
 
-    graph = StateGraph(InquiryState)
+    graph = StateGraph(ResearchEngineState)
 
     graph.add_node("analyze_topic", analyze_topic_node)
     graph.add_node("generate_queries", generate_queries_node)

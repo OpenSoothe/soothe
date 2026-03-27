@@ -24,16 +24,16 @@ from soothe.core.event_catalog import (
     REGISTRY,
 )
 from soothe.subagents.research.events import (
-    TOOL_RESEARCH_ANALYZE,
-    TOOL_RESEARCH_COMPLETED,
-    TOOL_RESEARCH_GATHER,
-    TOOL_RESEARCH_GATHER_DONE,
-    TOOL_RESEARCH_QUERIES_GENERATED,
-    TOOL_RESEARCH_REFLECT,
-    TOOL_RESEARCH_REFLECTION_DONE,
-    TOOL_RESEARCH_SUB_QUESTIONS,
-    TOOL_RESEARCH_SUMMARIZE,
-    TOOL_RESEARCH_SYNTHESIZE,
+    SUBAGENT_RESEARCH_ANALYZE,
+    SUBAGENT_RESEARCH_COMPLETED,
+    SUBAGENT_RESEARCH_GATHER,
+    SUBAGENT_RESEARCH_GATHER_DONE,
+    SUBAGENT_RESEARCH_QUERIES_GENERATED,
+    SUBAGENT_RESEARCH_REFLECT,
+    SUBAGENT_RESEARCH_REFLECTION_DONE,
+    SUBAGENT_RESEARCH_SUB_QUESTIONS,
+    SUBAGENT_RESEARCH_SUMMARIZE,
+    SUBAGENT_RESEARCH_SYNTHESIZE,
 )
 
 if TYPE_CHECKING:
@@ -48,17 +48,17 @@ _EVENT_LABELS: dict[str, str] = {
     GOAL_BATCH_STARTED: "goals",
     ITERATION_STARTED: "iteration",
     ITERATION_COMPLETED: "iteration",
-    # Research tool events
-    TOOL_RESEARCH_ANALYZE: "research",
-    TOOL_RESEARCH_SUB_QUESTIONS: "research",
-    TOOL_RESEARCH_QUERIES_GENERATED: "research",
-    TOOL_RESEARCH_GATHER: "research",
-    TOOL_RESEARCH_GATHER_DONE: "research",
-    TOOL_RESEARCH_SUMMARIZE: "research",
-    TOOL_RESEARCH_REFLECT: "research",
-    TOOL_RESEARCH_REFLECTION_DONE: "research",
-    TOOL_RESEARCH_SYNTHESIZE: "research",
-    TOOL_RESEARCH_COMPLETED: "research",
+    # Research subagent events
+    SUBAGENT_RESEARCH_ANALYZE: "research",
+    SUBAGENT_RESEARCH_SUB_QUESTIONS: "research",
+    SUBAGENT_RESEARCH_QUERIES_GENERATED: "research",
+    SUBAGENT_RESEARCH_GATHER: "research",
+    SUBAGENT_RESEARCH_GATHER_DONE: "research",
+    SUBAGENT_RESEARCH_SUMMARIZE: "research",
+    SUBAGENT_RESEARCH_REFLECT: "research",
+    SUBAGENT_RESEARCH_REFLECTION_DONE: "research",
+    SUBAGENT_RESEARCH_SYNTHESIZE: "research",
+    SUBAGENT_RESEARCH_COMPLETED: "research",
 }
 
 # Events to skip (handled by renderer's plan update mechanism)
@@ -210,12 +210,12 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
         iteration = data.get("iteration", 0)
         return f"└ Iteration {iteration + 1} done"
 
-    # Research tool events
-    if event_type == TOOL_RESEARCH_ANALYZE:
+    # Research subagent events
+    if event_type == SUBAGENT_RESEARCH_ANALYZE:
         topic = data.get("topic", "")
         return f"● Research: {topic}"
 
-    if event_type == TOOL_RESEARCH_SUB_QUESTIONS:
+    if event_type == SUBAGENT_RESEARCH_SUB_QUESTIONS:
         sub_questions = data.get("sub_questions", [])
         count = data.get("count", len(sub_questions))
         if sub_questions:
@@ -227,7 +227,7 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
             return "\n".join(lines)
         return f"├ Identified {count} sub-questions"
 
-    if event_type == TOOL_RESEARCH_QUERIES_GENERATED:
+    if event_type == SUBAGENT_RESEARCH_QUERIES_GENERATED:
         queries = data.get("queries", [])
         if queries:
             lines = [f"├ Generated queries ({len(queries)}):"]
@@ -236,33 +236,33 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
             return "\n".join(lines)
         return ""
 
-    if event_type == TOOL_RESEARCH_GATHER:
+    if event_type == SUBAGENT_RESEARCH_GATHER:
         query = data.get("query", "")
         domain = data.get("domain", "")
         return f"├ Gathering from {domain}: {query}"
 
-    if event_type == TOOL_RESEARCH_GATHER_DONE:
+    if event_type == SUBAGENT_RESEARCH_GATHER_DONE:
         result_count = data.get("result_count", 0)
         return f"  └ Gathered {result_count} results"
 
-    if event_type == TOOL_RESEARCH_SUMMARIZE:
+    if event_type == SUBAGENT_RESEARCH_SUMMARIZE:
         total = data.get("total_summaries", 0)
         return f"├ Summarizing {total} results"
 
-    if event_type == TOOL_RESEARCH_REFLECT:
+    if event_type == SUBAGENT_RESEARCH_REFLECT:
         loop = data.get("loop", 0)
         return f"├ Reflecting (loop {loop + 1})"
 
-    if event_type == TOOL_RESEARCH_REFLECTION_DONE:
+    if event_type == SUBAGENT_RESEARCH_REFLECTION_DONE:
         is_sufficient = data.get("is_sufficient", False)
         follow_up = data.get("follow_up_count", 0)
         status = "✓ sufficient" if is_sufficient else f"needs {follow_up} follow-ups"
         return f"  └ Reflection: {status}"
 
-    if event_type == TOOL_RESEARCH_SYNTHESIZE:
+    if event_type == SUBAGENT_RESEARCH_SYNTHESIZE:
         return "├ Synthesizing findings"
 
-    if event_type == TOOL_RESEARCH_COMPLETED:
+    if event_type == SUBAGENT_RESEARCH_COMPLETED:
         answer_length = data.get("answer_length", 0)
         return f"└ Research completed ({answer_length} chars)"
 

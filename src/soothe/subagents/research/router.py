@@ -1,4 +1,4 @@
-"""SourceRouter -- deterministic source selection for the InquiryEngine.
+"""SourceRouter -- deterministic source selection for the research engine.
 
 Uses ``InformationSource.relevance_score()`` to rank sources per query
 without any LLM calls.  Supports profile-based filtering so the caller
@@ -11,7 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .protocol import InformationSource, InquiryConfig, SourceType
+    from .protocol import InformationSource, ResearchConfig, SourceType
 
 logger = logging.getLogger(__name__)
 
@@ -26,19 +26,19 @@ class SourceRouter:
 
     Args:
         sources: All available InformationSource instances.
-        config: InquiryConfig controlling max_sources_per_query, profiles, etc.
+        config: ResearchConfig controlling max_sources_per_query, profiles, etc.
     """
 
     def __init__(
         self,
         sources: list[InformationSource],
-        config: InquiryConfig | None = None,
+        config: ResearchConfig | None = None,
     ) -> None:
         """Initialize the router with sources and optional config."""
-        from .protocol import InquiryConfig
+        from .protocol import ResearchConfig
 
         self._sources = list(sources)
-        self._config = config or InquiryConfig()
+        self._config = config or ResearchConfig()
 
     # -- Public API ----------------------------------------------------------
 

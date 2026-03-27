@@ -74,7 +74,7 @@ INTERNAL_JSON_KEYS = frozenset(
 # Event types that should NEVER be shown (internal implementation details)
 INTERNAL_EVENT_TYPES = frozenset(
     {
-        "soothe.tool.research.internal_llm",
+        "soothe.subagent.research.internal_llm",
     }
 )
 
@@ -449,8 +449,8 @@ class DisplayPolicy:
         return event_type.startswith("soothe.protocol.plan.")
 
     def is_research_event(self, event_type: str) -> bool:
-        """Check if this is a research tool event."""
-        return event_type.startswith("soothe.tool.research.")
+        """Check if this is a research subagent event."""
+        return event_type.startswith("soothe.subagent.research.")
 
     def is_internal_event(self, event_type: str) -> bool:
         """Check if this is an internal (never-shown) event."""

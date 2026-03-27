@@ -1,8 +1,8 @@
-"""InformationSource protocol and supporting models for the Inquiry Engine.
+"""InformationSource protocol and supporting models for the research engine.
 
 Defines the core abstraction for any queryable information source.
 Implementations wrap existing Soothe tools (web_search, file_edit, cli, etc.)
-behind a uniform interface so the InquiryEngine can orchestrate them
+behind a uniform interface so the research engine can orchestrate them
 without knowing implementation details.
 """
 
@@ -64,8 +64,8 @@ class GatherContext(BaseModel):
     iteration: int = 0
 
 
-class InquiryConfig(BaseModel):
-    """Configuration for the InquiryEngine.
+class ResearchConfig(BaseModel):
+    """Configuration for the research engine.
 
     Args:
         max_loops: Maximum research reflection loops before forced synthesis.
@@ -90,6 +90,10 @@ class InquiryConfig(BaseModel):
             "deep": ["web", "academic", "filesystem", "cli", "browser", "document"],
         },
     )
+
+
+# Backward compatibility alias
+InquiryConfig = ResearchConfig
 
 
 # ---------------------------------------------------------------------------

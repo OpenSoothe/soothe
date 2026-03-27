@@ -1,7 +1,7 @@
 """Research subagent implementation.
 
 Converts the research capability from a tool to a subagent following RFC-0021.
-The subagent wraps the InquiryEngine and provides a CompiledSubAgent interface.
+The subagent wraps the research engine and provides a CompiledSubAgent interface.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Annotated, Any
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from .engine import build_inquiry_engine
-from .protocol import InquiryConfig
+from .engine import build_research_engine
+from .protocol import ResearchConfig
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -59,11 +59,11 @@ def create_research_subagent(
     # Build sources based on domain
     sources = _build_sources(domain, config, work_dir)
 
-    # Create inquiry config
-    inquiry_config = InquiryConfig(max_loops=max_loops)
+    # Create research config
+    research_config = ResearchConfig(max_loops=max_loops)
 
     # Build and return the engine
-    return build_inquiry_engine(model, sources, inquiry_config, _domain=domain)
+    return build_research_engine(model, sources, research_config, _domain=domain)
 
 
 def _build_sources(

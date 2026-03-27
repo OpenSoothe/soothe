@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
-from soothe.subagents.research.events import TOOL_RESEARCH_INTERNAL_LLM
+from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
 from soothe.ux.core.display_policy import VerbosityLevel
 from soothe.ux.core.message_processing import (
     accumulate_tool_call_chunks,
@@ -415,16 +415,16 @@ class EventProcessor:
         etype = data.get("type", "")
 
         # Handle internal context tracking for research events
-        if etype == TOOL_RESEARCH_INTERNAL_LLM:
+        if etype == SUBAGENT_RESEARCH_INTERNAL_LLM:
             self._state.internal_context_active = True
             return  # Don't display internal events
 
         # Exit internal context on non-internal research events
-        if etype.startswith("soothe.tool.research.") and etype != TOOL_RESEARCH_INTERNAL_LLM:
+        if etype.startswith("soothe.subagent.research.") and etype != SUBAGENT_RESEARCH_INTERNAL_LLM:
             self._state.internal_context_active = False
 
-        # Skip most tool events (handled by message layer) except research tool events
-        if etype.startswith("soothe.tool.") and not etype.startswith("soothe.tool.research."):
+        # Skip most tool events (handled by message layer) except research subagent events
+        if etype.startswith("soothe.tool.") and not etype.startswith("soothe.subagent.research."):
             return
 
         category = classify_custom_event(namespace, data)
