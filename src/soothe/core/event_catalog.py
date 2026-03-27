@@ -570,7 +570,7 @@ _DOMAIN_DEFAULT_VERBOSITY: dict[str, ProgressCategory] = {
     "lifecycle": "protocol",
     "protocol": "protocol",
     "cognition": "protocol",
-    "tool": "tool_activity",
+    "tool": "protocol",  # Changed from "tool_activity" - tool progress should be visible at normal verbosity
     "subagent": "subagent_custom",
     "output": "assistant_text",
     "error": "error",

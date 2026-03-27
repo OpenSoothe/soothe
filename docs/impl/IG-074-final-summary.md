@@ -161,7 +161,7 @@ export SOOTHE_AGENTIC__USE_JUDGE_ENGINE=true
 
 ```bash
 # Default config (use_judge_engine=false)
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 
 # Should use OBSERVE → ACT → VERIFY
 # Should work exactly as before
@@ -177,7 +177,7 @@ agentic:
 
 ```bash
 # Run with new mode
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 
 # Should use PLAN → ACT → JUDGE
 # Should emit new events

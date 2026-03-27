@@ -23,16 +23,16 @@ soothe <subcommand> <action> [options]
 soothe
 
 # Headless single-prompt mode
-soothe "Analyze the data"
+soothe -p "Analyze the data"
 
 # Use custom config
 soothe --config custom.yml
 
 # Headless mode with JSONL output
-soothe "Analyze data" --format jsonl
+soothe -p "Analyze data" --format jsonl
 
 # Set progress verbosity
-soothe "Complex task" --verbosity detailed
+soothe -p "Complex task" --verbosity detailed
 ```
 
 ## Thread Management
@@ -412,7 +412,7 @@ These options apply to all commands:
 ### Quick Analysis
 
 ```bash
-soothe "Analyze the performance bottlenecks in this codebase"
+soothe -p "Analyze the performance bottlenecks in this codebase"
 ```
 
 ### Autonomous Optimization
@@ -441,7 +441,7 @@ soothe thread continue
 soothe daemon start
 
 # Run in detached mode
-soothe "Long running task" &
+soothe -p "Long running task" &
 
 # Check status later
 soothe daemon status

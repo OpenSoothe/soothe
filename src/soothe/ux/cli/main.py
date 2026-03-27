@@ -19,29 +19,39 @@ app = typer.Typer(
 )
 
 
-def add_help_alias(app: typer.Typer) -> None:
-    """Add -h as alias for --help to a Typer app."""
+def add_help_alias(nested_app: typer.Typer) -> None:
+    """Add -h as an alias for --help to a nested Typer app.
 
-    @app.callback(invoke_without_command=True)
-    def callback(
+    This is a workaround for Typer not supporting -h for nested command groups.
+    Must be called AFTER creating the nested app but BEFORE adding commands.
+
+    Args:
+        nested_app: The nested Typer app to add -h support to.
+    """
+
+    # Add a callback that defines -h option
+    @nested_app.callback(invoke_without_command=True)
+    def help_callback(
         ctx: typer.Context,
         show_help: Annotated[  # noqa: FBT002
             bool,
             typer.Option("-h", "--help", is_flag=True, help="Show this message and exit."),
         ] = False,
     ) -> None:
+        # If -h/--help is passed, show help and exit before command parsing
         if show_help:
             typer.echo(ctx.get_help())
-            raise typer.Exit
+            raise typer.Exit(code=0)
+
+        # If no subcommand and no help flag, show help by default
+        if ctx.invoked_subcommand is None:
+            typer.echo(ctx.get_help())
+            raise typer.Exit(code=0)
 
 
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    prompt_arg: Annotated[
-        str | None,
-        typer.Argument(help="Prompt to send as user message (headless single-shot mode)."),
-    ] = None,
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -77,16 +87,14 @@ def main(
 ) -> None:
     """Soothe - Intelligent AI assistant for complex tasks.
 
-    Run without arguments for interactive TUI mode, or provide a prompt as the first argument.
-
-    The prompt can be provided either as a positional argument or via the -p/--prompt option.
-    If both are provided, the -p/--prompt option takes precedence.
+    Run without arguments for interactive TUI mode, or provide a prompt via --prompt/-p option.
 
     Examples:
         soothe                           # Interactive TUI mode
-        soothe "Research AI advances"    # Headless single-prompt mode (positional)
-        soothe -p "how are you"          # Headless mode with prompt option
+        soothe -p "Research AI advances" # Headless single-prompt mode
         soothe --config custom.yml       # Use custom config
+        soothe thread list               # List conversation threads
+        soothe daemon start              # Start daemon process
     """
     # Handle -h/--help flag
     if show_help:
@@ -100,13 +108,10 @@ def main(
 
     # Only run default behavior if no subcommand is being invoked
     if ctx.invoked_subcommand is None:
-        # Prefer -p/--prompt option over positional argument
-        effective_prompt = prompt if prompt is not None else prompt_arg
-
         from soothe.ux.cli.commands.run_cmd import run_impl
 
         run_impl(
-            prompt=effective_prompt,
+            prompt=prompt,
             config=config,
             thread_id=None,
             no_tui=no_tui,

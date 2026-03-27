@@ -52,11 +52,11 @@ providers:
 # Maps roles to "provider:model". Unset roles fall back to "default".
 
 router:
-  default: "dashscope:kimi-k2.5"
-  think: "dashscope:qwen3.5-plus"
-  fast: "dashscope:kimi-k2.5"
-  image: "dashscope:qwen3.5-plus"
-  embedding: "dashscope:text-embedding-v4"
+  default: "coding-plan:kimi-k2.5"
+  think: "coding-plan:qwen3.5-plus"
+  fast: "coding-plan:kimi-k2.5"
+  image: "coding-plan:qwen3.5-plus"
+  embedding: "dashscope:multimodal-embedding-v1"
 
 # =============================================================================
 # Agent Behavior

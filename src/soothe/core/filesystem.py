@@ -134,9 +134,8 @@ class FrameworkFilesystem:
             )
             decision = cls._policy.check(action, policy_context)
             if decision.verdict == "deny":
-                raise ValueError(
-                    f"Access denied: Path '{resolved}' is outside workspace. Reason: {decision.reason}"
-                ) from None
+                error_msg = f"Access denied: Path '{resolved}' is outside workspace. Reason: {decision.reason}"
+                raise ValueError(error_msg) from None
             logger.debug("Policy check passed for path outside workspace: %s", resolved)
 
     @classmethod

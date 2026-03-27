@@ -317,12 +317,19 @@ else
   chromedriver_major="${chromedriver_version%%.*}"
   echo_ok "chromedriver version: ${chromedriver_version} (major ${chromedriver_major})"
 
-  if [ "${chrome_major}" = "${chromedriver_major}" ]; then
-    echo_ok "Chrome and chromedriver major versions already match."
+  if [ "${chrome_version}" = "${chromedriver_version}" ]; then
+    echo_ok "Chrome and chromedriver versions match exactly."
     exit 0
   fi
 
-  echo_err "Version mismatch: Chrome major=${chrome_major}, chromedriver major=${chromedriver_major}."
+  if [ "${chrome_major}" = "${chromedriver_major}" ]; then
+    echo_info "Chrome and chromedriver major versions match, but exact versions differ."
+    echo_info "  Chrome:        ${chrome_version}"
+    echo_info "  chromedriver:  ${chromedriver_version}"
+    echo_info "Attempting to download exact matching chromedriver version..."
+  else
+    echo_err "Version mismatch: Chrome major=${chrome_major}, chromedriver major=${chromedriver_major}."
+  fi
 fi
 
 echo_info "Attempting to download chromedriver compatible with Chrome ${chrome_version}..."

@@ -154,7 +154,7 @@ Soothe grows with your needs:
 3. **Run your first task**:
    ```bash
    # Interactive TUI mode (default)
-   soothe "Research the top 5 Python web frameworks and create a comparison table"
+   soothe -p "Research the top 5 Python web frameworks and create a comparison table"
 
    # Or just launch TUI and type your query
    soothe
@@ -164,12 +164,12 @@ Soothe grows with your needs:
 
 **Interactive TUI** (default):
 ```bash
-soothe "Analyze this codebase and suggest improvements"
+soothe -p "Analyze this codebase and suggest improvements"
 ```
 
 **Headless single-shot**:
 ```bash
-soothe "What is 2 + 2?" --no-tui
+soothe -p "What is 2 + 2?" --no-tui
 ```
 
 **Autonomous mode** for complex tasks:
@@ -203,13 +203,13 @@ soothe daemon start --enable-websocket --enable-http
 ### Research Workflow
 ```bash
 # Default mode with automatic planning
-soothe "Research best practices for securing REST APIs, summarize the top 5 recommendations, and create a checklist document"
+soothe -p "Research best practices for securing REST APIs, summarize the top 5 recommendations, and create a checklist document"
 ```
 
 ### Codebase Analysis
 ```bash
 # TUI mode shows real-time progress
-soothe "Analyze the authentication module in src/auth/, identify potential security vulnerabilities, and suggest fixes"
+soothe -p "Analyze the authentication module in src/auth/, identify potential security vulnerabilities, and suggest fixes"
 ```
 
 ### Autonomous Mode (Complex Tasks)

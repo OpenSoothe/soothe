@@ -427,6 +427,13 @@ class EventProcessor:
         if etype.startswith("soothe.tool.") and not etype.startswith("soothe.subagent.research."):
             return
 
+        # Handle chitchat response as assistant text (not progress event)
+        if etype == "soothe.output.chitchat.response":
+            content = data.get("content", "")
+            if content and should_show("assistant_text", self._verbosity):
+                self._renderer.on_assistant_text(content, is_main=True, is_streaming=False)
+            return
+
         category = classify_custom_event(namespace, data)
 
         # Check for multi-step plan

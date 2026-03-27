@@ -208,8 +208,8 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | Command | Description |
 |---------|-------------|
 | `soothe` | Interactive TUI mode (default). |
-| `soothe "prompt"` | Headless single prompt; stream to stdout/stderr. |
-| `soothe "prompt" --format jsonl` | Headless with JSONL event output. |
+| `soothe -p "prompt"` | Headless single prompt; stream to stdout/stderr. |
+| `soothe -p "prompt" --format jsonl` | Headless with JSONL event output. |
 | `soothe autopilot run "task"` | Autonomous execution mode. |
 | `soothe daemon start` | Start daemon in background. |
 | `soothe daemon start --foreground` | Start daemon in foreground. |

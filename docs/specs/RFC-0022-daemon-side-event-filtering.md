@@ -2,7 +2,7 @@
 
 **RFC**: 0022
 **Title**: Daemon-Side Event Filtering Protocol
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-28
 **Updated**: 2026-03-28

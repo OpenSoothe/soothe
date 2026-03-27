@@ -35,7 +35,7 @@ class CheckpointMixin:
         from soothe.utils.runtime import current_run_dir
 
         if self._artifact_store is None or self._artifact_store._thread_id != thread_id:
-            self._artifact_store = RunArtifactStore(thread_id)
+            self._artifact_store = RunArtifactStore(thread_id, config=self._config)
             current_run_dir.set(self._artifact_store.run_dir)
             logger.info("Artifact store initialized for thread %s", thread_id)
         return self._artifact_store

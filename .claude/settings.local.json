@@ -7,7 +7,12 @@
       "Bash(./scripts/verify_finally.sh)",
       "Bash(make format:*)",
       "Bash(make lint:*)",
-      "Bash(python -m pytest tests/unit/daemon/test_client_session.py -xvs)"
+      "Bash(python -m pytest tests/unit/daemon/test_client_session.py -xvs)",
+      "Bash(wait:*)",
+      "Bash(SOOTHE_LOG_LEVEL=DEBUG uv run soothe --no-tui \"analyze this project code structure\")",
+      "Bash(/tmp/check_tool_event_types.py:*)",
+      "Bash(/tmp/test_fix.py:*)",
+      "Bash(soothe stop:*)"
     ]
   }
 }

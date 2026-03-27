@@ -4,7 +4,6 @@ import json
 import logging
 import sys
 import tempfile
-from pathlib import Path
 from typing import Any
 
 from soothe.config import SootheConfig
@@ -201,7 +200,6 @@ class _CliOutputFormatter(OutputFormatter):
 
 def _output_final_report(
     report_text: str,
-    workspace_path: str,
     *,
     display_threshold: int = 20000,
     preview_chars: int = 500,
@@ -213,7 +211,6 @@ def _output_final_report(
 
     Args:
         report_text: The full report text to output.
-        workspace_path: Workspace path for saving report files.
         display_threshold: Max chars for stdout output (default 20KB).
         preview_chars: Chars to show in preview when saved to file.
     """
@@ -225,11 +222,11 @@ def _output_final_report(
     else:
         # Large report: write to file and show preview
         try:
+            import time
+
             from soothe.core.filesystem import FrameworkFilesystem
 
             # Generate unique filename with timestamp
-            import time
-
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             report_path = f".soothe/reports/report_{timestamp}.md"
 
@@ -238,7 +235,8 @@ def _output_final_report(
 
             if result.error:
                 # Write failed - fallback to temp file
-                raise RuntimeError(f"Backend write failed: {result.error}")
+                error_msg = f"Backend write failed: {result.error}"
+                raise RuntimeError(error_msg)
 
             # Get the actual resolved path for display
             actual_path = backend._resolve_path(report_path)
@@ -287,13 +285,13 @@ async def run_headless_standalone(
     # Set thread_id for logging early (before runner creation) - IG-073
     from soothe.ux.core.logging_setup import set_thread_id
 
-    active_thread_id = thread_id or "headless"
-    set_thread_id(active_thread_id)
+    # Only set thread_id if one is provided, otherwise leave it empty
+    set_thread_id(thread_id)
 
     runner = SootheRunner(cfg)
     thread_logger = ThreadLogger(
         thread_dir=cfg.logging.thread_logging.dir,
-        thread_id=active_thread_id,
+        thread_id=thread_id or "",
         retention_days=cfg.logging.thread_logging.retention_days,
         max_size_mb=cfg.logging.thread_logging.max_size_mb,
     )
@@ -362,7 +360,6 @@ async def run_headless_standalone(
                     if report_text:
                         _output_final_report(
                             report_text,
-                            workspace_path,
                             display_threshold=cfg.logging.report_output.display_threshold,
                             preview_chars=cfg.logging.report_output.preview_chars,
                         )

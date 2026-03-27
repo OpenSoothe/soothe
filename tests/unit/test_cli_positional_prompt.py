@@ -1,16 +1,8 @@
-"""Tests for CLI positional prompt argument."""
+"""Tests for CLI prompt option."""
 
 from typer.testing import CliRunner
 
 from soothe.ux.cli.main import app
-
-
-def test_positional_prompt_works() -> None:
-    """Test that prompt can be passed as positional argument."""
-    runner = CliRunner()
-    # This should work without errors (exit code 0)
-    result = runner.invoke(app, ["test prompt"])
-    assert result.exit_code == 0
 
 
 def test_prompt_option_works() -> None:
@@ -20,18 +12,20 @@ def test_prompt_option_works() -> None:
     assert result.exit_code == 0
 
 
-def test_prompt_option_takes_precedence() -> None:
-    """Test that -p option takes precedence over positional argument."""
+def test_prompt_long_option_works() -> None:
+    """Test that prompt can be passed via --prompt option."""
     runner = CliRunner()
-    # When -p is provided before positional, it should work
-    result = runner.invoke(app, ["-p", "option value", "positional value"])
+    result = runner.invoke(app, ["--prompt", "test prompt"])
     assert result.exit_code == 0
 
 
-def test_help_shows_positional_arg() -> None:
-    """Test that help text shows the positional argument."""
+def test_help_shows_prompt_option() -> None:
+    """Test that help text shows the prompt option."""
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "[PROMPT_ARG]" in result.output
-    assert "Prompt to send as user message" in result.output
+    assert "--prompt" in result.output
+    assert "-p" in result.output
+    # Check for prompt-related text (may be wrapped across lines)
+    assert "Prompt" in result.output
+    assert "headless" in result.output

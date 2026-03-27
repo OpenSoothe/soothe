@@ -11,7 +11,7 @@ This guide provides step-by-step instructions for refactoring the Soothe CLI to 
 
 ## Goals
 
-- Simplify the most common operations (`soothe` for TUI, `soothe "prompt"` for headless)
+- Simplify the most common operations (`soothe` for TUI, `soothe -p "prompt"` for headless)
 - Group related commands logically (thread, config, server, agent)
 - Remove redundant commands and options
 - Align CLI commands with TUI slash commands
@@ -107,7 +107,7 @@ def main(
 
     Examples:
         soothe                           # Interactive TUI mode
-        soothe "Research AI advances"    # Headless single-prompt mode
+        soothe -p "Research AI advances"    # Headless single-prompt mode
         soothe --config custom.yml       # Use custom config
     """
     if ctx.invoked_subcommand is None:
@@ -752,7 +752,7 @@ Update Quick Start section:
 
    Or run a single task:
    ```bash
-   soothe "Research quantum computing"
+   soothe -p "Research quantum computing"
    ```
 ```
 
@@ -775,7 +775,7 @@ soothe
 Run a single prompt and exit:
 
 ```bash
-soothe "Research the latest developments in quantum computing"
+soothe -p "Research the latest developments in quantum computing"
 ```
 
 ### Resume a Previous Session
@@ -806,7 +806,7 @@ If you've been using older versions of Soothe, here are the command changes:
 
 ### Simplified Default Command
 - Old: `soothe run` → New: `soothe`
-- Old: `soothe run "prompt"` → New: `soothe "prompt"`
+- Old: `soothe run "prompt"` → New: `soothe -p "prompt"`
 
 ### Better Organization
 - Old: `soothe run --thread abc` → New: `soothe thread continue abc`
@@ -833,7 +833,7 @@ If you've been using older versions of Soothe, here are the command changes:
 soothe
 
 # Should run headless
-soothe "test prompt"
+soothe -p "test prompt"
 
 # Should respect options
 soothe --config custom.yml
@@ -891,7 +891,7 @@ soothe autopilot --help
 soothe config init
 soothe config validate
 soothe agent list
-soothe "test task"
+soothe -p "test task"
 soothe thread list
 soothe thread continue
 ```

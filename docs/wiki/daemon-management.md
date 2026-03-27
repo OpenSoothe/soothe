@@ -127,7 +127,7 @@ Run long tasks without keeping the TUI open:
 soothe daemon start
 
 # Run task in background
-soothe "Analyze the entire codebase" &
+soothe -p "Analyze the entire codebase" &
 
 # Detach and close terminal
 # Task continues running

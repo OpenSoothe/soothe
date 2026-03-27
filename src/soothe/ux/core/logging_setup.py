@@ -4,6 +4,7 @@ import contextvars
 import logging
 import os
 import sys
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -35,7 +36,7 @@ class ThreadFormatter(logging.Formatter):
     """Custom formatter that includes thread_id in log messages."""
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format the log record with thread_id.
+        """Format the log record with both Soothe and OS thread IDs.
 
         Args:
             record: The log record to format.
@@ -43,12 +44,18 @@ class ThreadFormatter(logging.Formatter):
         Returns:
             The formatted log message string.
         """
-        # Add thread_id to the record, but only if it's set
-        thread_id = get_thread_id()
-        if thread_id:
-            record.thread_id = f"[{thread_id}]"
+        # Get OS thread ID (always available)
+        os_thread_id = threading.current_thread().ident
+
+        # Get Soothe conversation thread ID (optional)
+        soothe_thread_id = get_thread_id()
+
+        # Format both IDs: [soothe:id] [os:id]
+        if soothe_thread_id:
+            record.thread_id = f"[soothe:{soothe_thread_id}] [os:{os_thread_id}]"
         else:
-            record.thread_id = ""
+            record.thread_id = f"[os:{os_thread_id}]"
+
         return super().format(record)
 
 

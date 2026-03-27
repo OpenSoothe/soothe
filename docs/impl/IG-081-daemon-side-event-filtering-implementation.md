@@ -3,7 +3,7 @@
 **IG Number**: 081
 **Title**: Daemon-Side Event Filtering Implementation
 **RFC**: RFC-0022
-**Status**: In Progress
+**Status**: Completed
 **Created**: 2026-03-28
 **Dependencies**: RFC-0013, RFC-0015, RFC-0022
 

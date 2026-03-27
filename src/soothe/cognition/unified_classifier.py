@@ -110,8 +110,15 @@ Current time: {current_time}
 
 Request: {query}
 
-Return ONLY a JSON object (no markdown, no extra text) with this structure:
-{{"task_complexity": "chitchat" or "medium" or "complex", "chitchat_response": "response" or null}}
+CRITICAL OUTPUT RULES:
+- Return ONLY valid JSON.
+- "task_complexity" MUST be exactly one of: "chitchat", "medium", "complex".
+- For "chitchat", provide a short friendly "chitchat_response" string.
+- For "medium" or "complex", set "chitchat_response" to null.
+- Do not output placeholders, punctuation, comments, markdown, or extra keys.
+
+Required JSON shape:
+{{"task_complexity": "chitchat"|"medium"|"complex", "chitchat_response": string|null}}
 
 Classification rules:
 - chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response to a warm

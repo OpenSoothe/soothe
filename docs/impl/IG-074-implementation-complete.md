@@ -205,14 +205,14 @@ All events use `soothe.cognition.loop.*` namespace.
 
 ### Run with RFC-0008 Mode (Default)
 ```bash
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 # Uses PLAN → ACT → JUDGE
 ```
 
 ### Run with Legacy Mode
 ```bash
 export SOOTHE_AGENTIC__USE_JUDGE_ENGINE=false
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 # Uses OBSERVE → ACT → VERIFY
 ```
 

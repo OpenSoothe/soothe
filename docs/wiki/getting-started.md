@@ -183,7 +183,7 @@ Just type your request and press Enter.
 Run a single prompt and exit:
 
 ```bash
-soothe "Analyze the codebase structure"
+soothe -p "Analyze the codebase structure"
 ```
 
 Perfect for:
@@ -222,13 +222,13 @@ The default execution mode uses an intelligent loop that:
 
 ```bash
 # Launch TUI with your query (default behavior)
-soothe "Research RAG architectures and create a comparison table"
+soothe -p "Research RAG architectures and create a comparison table"
 
 # Or just launch TUI and type your query interactively
 soothe
 
 # Simple queries work too
-soothe "What is 2 + 2?"  # Fast, sub-second response
+soothe -p "What is 2 + 2?"  # Fast, sub-second response
 ```
 
 **Key Benefits**:
@@ -244,13 +244,13 @@ soothe "What is 2 + 2?"  # Fast, sub-second response
 
 ```bash
 # Run single query and exit (no TUI)
-soothe "What is 2 + 2?" --no-tui
+soothe -p "What is 2 + 2?" --no-tui
 
 # JSON output for scripts
-soothe "Analyze data" --no-tui --format jsonl
+soothe -p "Analyze data" --no-tui --format jsonl
 
 # Pipe results
-soothe "Generate report" --no-tui > output.txt
+soothe -p "Generate report" --no-tui > output.txt
 ```
 
 **When to use**:
@@ -348,7 +348,7 @@ soothe config validate
 soothe config show
 
 # Test with a simple query
-soothe "What is 2 + 2?" --no-tui
+soothe -p "What is 2 + 2?" --no-tui
 ```
 
 ## Configuration Management

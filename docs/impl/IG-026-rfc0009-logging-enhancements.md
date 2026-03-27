@@ -291,7 +291,7 @@ def test_plan_step_failed_with_blocked_steps(self) -> None:
 
 1. **Multi-step plan**:
    ```bash
-   soothe "Research autonomous driving companies and summarize their stock performance"
+   soothe -p "Research autonomous driving companies and summarize their stock performance"
    ```
 
 2. **Check logs** (`~/.soothe/logs/soothe.log`):

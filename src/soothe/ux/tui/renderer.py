@@ -18,7 +18,13 @@ from rich.text import Text
 from soothe.core.event_catalog import REGISTRY
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.core.message_processing import format_tool_call_args
-from soothe.ux.tui.utils import DOT_COLORS, make_dot_line, make_tool_block
+from soothe.ux.tui.utils import (
+    DOT_COLORS,
+    format_duration_enhanced,
+    get_icon,
+    make_dot_line,
+    make_tool_block,
+)
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -162,7 +168,7 @@ class TuiRenderer:
         *,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool call block to panel.
+        """Write tool call block with progress indicator.
 
         Args:
             name: Tool name.
@@ -175,6 +181,9 @@ class TuiRenderer:
 
         display_name = get_tool_display_name(name)
         args_summary = format_tool_call_args(name, {"args": args})
+
+        # Detect long-running tools for special indicator
+        is_long_running = self._is_long_running_tool(name)
 
         # Store for result correlation
         if tool_call_id:
@@ -190,7 +199,15 @@ class TuiRenderer:
             self._state.streaming_active = False
             self._state.streaming_text_buffer = ""
 
+        # Use enhanced tool block with progress indicator
         self._on_panel_write(make_tool_block(display_name, args_summary, status="running"))
+
+        # Optional: Add separate progress line for long-running tools
+        if is_long_running:
+            progress_line = Text()
+            progress_line.append("  ⏳ ", style="dim yellow")
+            progress_line.append("Running...", style="dim")
+            self._on_panel_write(progress_line)
 
     def on_tool_result(
         self,
@@ -201,7 +218,7 @@ class TuiRenderer:
         is_error: bool,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool result to panel with duration.
+        """Write tool result with enhanced duration formatting.
 
         Args:
             name: Tool name.
@@ -217,23 +234,29 @@ class TuiRenderer:
         if tool_call_id:
             self._state.current_tool_calls.pop(tool_call_id, None)
 
-        # Calculate duration (RFC-0020)
+        # Calculate duration
         duration_ms = 0
         if tool_call_id and tool_call_id in self._state.tool_call_start_times:
             start_time = self._state.tool_call_start_times.pop(tool_call_id)
             duration_ms = int((time.time() - start_time) * 1000)
 
-        icon = "✗" if is_error else "✓"
-        icon_color = "red" if is_error else "green"
+        # Format duration with enhanced formatting
+        duration_str, duration_style = format_duration_enhanced(duration_ms, context="tool")
 
+        # Choose icon and color
+        icon_category = "tool_error" if is_error else "tool_success"
+        icon = get_icon(icon_category)
+        color = DOT_COLORS[icon_category]
+
+        # Create result line
         result_line = Text()
         result_line.append("  └ ", style="dim")
-        result_line.append(icon + " ", style=icon_color)
+        result_line.append(icon + " ", style=color)
         result_line.append(result[:120], style="dim")
 
-        # Add duration to result (RFC-0020 two-level tree)
+        # Add duration with appropriate styling
         if duration_ms > 0:
-            result_line.append(f" ({duration_ms}ms)", style="dim")
+            result_line.append(f" [{duration_str}]", style=duration_style)
 
         self._on_panel_write(result_line)
 
@@ -246,15 +269,48 @@ class TuiRenderer:
         if self._on_status_update:
             self._on_status_update(state)
 
-    def on_error(self, error: str, *, context: str | None = None) -> None:  # noqa: ARG002
-        """Write error to panel.
+    def on_error(self, error: str, *, context: str | None = None) -> None:
+        """Write error with severity classification and suggestion.
 
         Args:
             error: Error message.
             context: Optional error context.
         """
-        if self._on_panel_write:
-            self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Error: {error[:80]}"))
+        if not self._on_panel_write:
+            return
+
+        # Classify severity
+        severity = self._classify_error_severity(error, context)
+
+        # Choose icon and color based on severity
+        icon_category = {
+            "critical": "critical",
+            "warning": "warning",
+            "error": "error",
+        }.get(severity, "error")
+
+        icon = get_icon(icon_category)
+        color = DOT_COLORS[icon_category]
+
+        # Create error line
+        error_line = Text()
+        error_line.append(f"{icon} ", style=color)
+
+        if context:
+            error_line.append(f"[{context}] ", style="dim red")
+
+        error_line.append(error[:120], style=color)
+
+        self._on_panel_write(error_line)
+
+        # Add suggestion if available
+        suggestion = self._get_error_suggestion(error, context)
+        if suggestion:
+            suggestion_line = Text()
+            suggestion_line.append("  💡 ", style="dim cyan")
+            suggestion_line.append("Suggestion: ", style="dim italic")
+            suggestion_line.append(suggestion, style="dim cyan")
+            self._on_panel_write(suggestion_line)
 
     def on_progress_event(
         self,
@@ -410,3 +466,69 @@ class TuiRenderer:
             self._state.last_assistant_output = self._state.streaming_text_buffer
             self._state.streaming_text_buffer = ""
             self._state.current_tool_calls.clear()
+
+    def _is_long_running_tool(self, name: str) -> bool:
+        """Detect if tool typically takes >5 seconds.
+
+        Args:
+            name: Tool name.
+
+        Returns:
+            True if tool is known to be long-running.
+        """
+        long_running_tools = {
+            "web_search",
+            "research_subagent",
+            "browser_subagent",
+            "claude_subagent",
+            "execute_bash_command",
+        }
+        return any(lr in name for lr in long_running_tools)
+
+    def _classify_error_severity(self, error: str, context: str | None) -> str:
+        """Classify error severity for appropriate display.
+
+        Args:
+            error: Error message.
+            context: Error context (e.g., "daemon", "thread", "tool_execution").
+
+        Returns:
+            Severity level: "critical", "warning", or "error".
+        """
+        error_lower = error.lower()
+
+        # Critical: system failures or daemon errors
+        if context == "daemon" or any(term in error_lower for term in ["connection", "socket", "fatal", "critical"]):
+            return "critical"
+
+        # Warning: recoverable issues
+        if any(term in error_lower for term in ["retry", "timeout", "warning", "deprecated"]):
+            return "warning"
+
+        return "error"
+
+    def _get_error_suggestion(self, error: str, context: str | None) -> str | None:
+        """Provide actionable suggestion for common errors.
+
+        Args:
+            error: Error message.
+            context: Error context.
+
+        Returns:
+            Suggestion string or None.
+        """
+        error_lower = error.lower()
+
+        if "connection" in error_lower:
+            return "Check if daemon is running: soothe daemon status"
+
+        if "timeout" in error_lower:
+            return "Operation may take longer. Try again or check logs."
+
+        if "permission" in error_lower:
+            return "Check file permissions or run with appropriate access."
+
+        if "not found" in error_lower and context == "thread":
+            return "Thread may have expired. Use 'soothe thread list' to see available threads."
+
+        return None

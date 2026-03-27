@@ -192,11 +192,11 @@ Events for legacy mode (backward compatibility).
 
 ```bash
 # Test with RFC-0008 mode (default)
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 
 # Test with legacy mode
 export SOOTHE_AGENTIC__USE_JUDGE_ENGINE=false
-soothe "What is 2+2?"
+soothe -p "What is 2+2?"
 ```
 
 ### Verification Script
@@ -277,7 +277,7 @@ soothe "What is 2+2?"
    ./scripts/verify_finally.sh
 
    # Test specific scenarios
-   soothe "your test queries"
+   soothe -p "your test queries"
    ```
 
 3. **Monitor events**:

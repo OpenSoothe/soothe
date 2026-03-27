@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents import create_deep_agent
@@ -26,7 +25,6 @@ from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 from soothe.skills import get_built_in_skills_paths
-from soothe.utils import expand_path
 
 
 # ---------------------------------------------------------------------------
@@ -228,8 +226,6 @@ def create_soothe_agent(
         all_subagents.extend(subagents)
     subagents_ms = (time.perf_counter() - subagents_start) * 1000
     logger.info("Subagents resolved in %.1fms", subagents_ms)
-
-    resolved_workspace = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
     resolved_backend = backend
     if resolved_backend is None:

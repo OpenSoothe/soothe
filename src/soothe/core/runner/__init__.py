@@ -350,11 +350,14 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
         """
-        # Update thread_id for logging if different from current
+        # Update thread_id for logging if one is provided
         from soothe.ux.core.logging_setup import set_thread_id
 
-        active_thread_id = thread_id or self._current_thread_id or ""
-        set_thread_id(active_thread_id)
+        # Only set thread_id if explicitly provided
+        if thread_id:
+            set_thread_id(thread_id)
+        elif self._current_thread_id:
+            set_thread_id(self._current_thread_id)
 
         # Quick path: direct subagent routing (bypasses classifier)
         if subagent:

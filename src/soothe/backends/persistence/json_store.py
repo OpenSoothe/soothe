@@ -30,19 +30,15 @@ class JsonPersistStore:
         return self._dir / f"{safe_key}.json"
 
     def save(self, key: str, data: Any) -> None:
-        """Persist data as a JSON file."""
+        """Persist data as a JSON file.
+
+        Note: Persistence files are internal framework state (thread metadata, checkpoints),
+        not user workspace files. They need to support overwrites, so we use direct file
+        operations instead of FrameworkFilesystem (which is sandboxed and refuses overwrites).
+        """
         path = self._path(key)
-
-        # Use FrameworkFilesystem for consistency
-        try:
-            from soothe.core.filesystem import FrameworkFilesystem
-
-            backend = FrameworkFilesystem.get()
-            backend.write(str(path), json.dumps(data, default=str))
-        except RuntimeError:
-            # FrameworkFilesystem not initialized - fallback to direct write
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(data, default=str))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, default=str))
 
     def load(self, key: str) -> Any | None:
         """Load data from a JSON file."""

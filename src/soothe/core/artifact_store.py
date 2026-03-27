@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.config import SOOTHE_HOME
+from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.core.filesystem import FrameworkFilesystem
 
 logger = logging.getLogger(__name__)
@@ -69,25 +69,50 @@ class RunManifest(BaseModel):
 
 
 class RunArtifactStore:
-    """Manages ``$SOOTHE_HOME/runs/{thread_id}/`` directory.
+    """Manages run artifact directory with virtual_mode integration.
 
     Provides atomic checkpoint writes, structured step/goal reports in
     both JSON and Markdown, and a manifest of all tracked artifacts.
 
+    Location depends on virtual_mode:
+    - virtual_mode=True (sandboxed): artifacts in ``{workspace}/.soothe/runs/{thread_id}/``
+    - virtual_mode=False (open): artifacts in ``$SOOTHE_HOME/runs/{thread_id}/``
+
     Args:
         thread_id: Thread identifier for this run.
-        soothe_home: Root Soothe home directory.
+        config: Soothe configuration (optional, determines virtual_mode).
+        soothe_home: Root Soothe home directory (fallback when config=None).
     """
 
-    def __init__(self, thread_id: str, soothe_home: str = SOOTHE_HOME) -> None:
+    def __init__(
+        self,
+        thread_id: str,
+        config: SootheConfig | None = None,
+        soothe_home: str = SOOTHE_HOME,
+    ) -> None:
         """Initialize the artifact store for a run.
 
         Args:
             thread_id: Thread identifier for this run.
-            soothe_home: Root Soothe home directory.
+            config: Soothe configuration (optional, determines virtual_mode).
+            soothe_home: Root Soothe home directory (fallback when config=None).
         """
         self._thread_id = thread_id
-        self._run_dir = Path(soothe_home).expanduser() / "runs" / thread_id
+        self._config = config
+
+        # Determine effective run directory based on virtual_mode
+        if config and not config.security.allow_paths_outside_workspace:
+            # Sandboxed mode: artifacts under workspace/.soothe/runs/
+            from soothe.utils import expand_path
+
+            workspace = expand_path(config.workspace_dir)
+            self._run_dir = workspace / ".soothe" / "runs" / thread_id
+            self._virtual_mode = True
+        else:
+            # Open mode: artifacts under SOOTHE_HOME/runs/ (RFC-0010 default)
+            self._run_dir = Path(soothe_home).expanduser() / "runs" / thread_id
+            self._virtual_mode = False
+
         self._run_dir.mkdir(parents=True, exist_ok=True)
 
         existing = self.load_manifest()
@@ -117,6 +142,22 @@ class RunArtifactStore:
     def manifest(self) -> RunManifest:
         """Current run manifest."""
         return self._manifest
+
+    def _resolve_artifact_path(self, relative_path: str) -> str:
+        """Resolve artifact path based on virtual_mode.
+
+        Args:
+            relative_path: Path like "goals/{goal_id}/steps/{step_id}/report.json".
+
+        Returns:
+            - virtual_mode=True: Relative path with ".soothe/runs/{thread_id}" prefix
+            - virtual_mode=False: Absolute path under self._run_dir
+        """
+        if self._virtual_mode:
+            # Sandboxed: return relative path that backend treats as virtual under workspace
+            return f".soothe/runs/{self._thread_id}/{relative_path}"
+        # Open mode: return absolute path that backend uses as-is
+        return str(self._run_dir / relative_path)
 
     def ensure_step_dir(self, goal_id: str, step_id: str) -> Path:
         """Create and return the step directory.
@@ -155,7 +196,8 @@ class RunArtifactStore:
         """
         from soothe.protocols.planner import StepReport
 
-        step_dir = self.ensure_step_dir(goal_id, step_id)
+        # Ensure step directory exists
+        self.ensure_step_dir(goal_id, step_id)
         deps = depends_on or []
 
         report = StepReport(
@@ -167,24 +209,40 @@ class RunArtifactStore:
             depends_on=deps,
         )
 
-        # Use FrameworkFilesystem for all file operations
-        backend = FrameworkFilesystem.get()
+        # Try FrameworkFilesystem first, fallback to direct Path operations
+        try:
+            backend = FrameworkFilesystem.get()
 
-        # Write JSON report
-        json_path = f"goals/{goal_id}/steps/{step_id}/report.json"
-        backend.write(json_path, report.model_dump_json(indent=2))
+            # Write JSON report
+            json_path = self._resolve_artifact_path(f"goals/{goal_id}/steps/{step_id}/report.json")
+            backend.write(json_path, report.model_dump_json(indent=2))
 
-        # Write Markdown report
-        md_parts = [
-            f"# Step: {description}\n",
-            f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
-        ]
-        if deps:
-            md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
-        md_parts.append(f"\n## Result\n\n{result}\n")
+            # Write Markdown report
+            md_parts = [
+                f"# Step: {description}\n",
+                f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
+            ]
+            if deps:
+                md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
+            md_parts.append(f"\n## Result\n\n{result}\n")
 
-        md_path = f"goals/{goal_id}/steps/{step_id}/report.md"
-        backend.write(md_path, "\n".join(md_parts))
+            md_path = self._resolve_artifact_path(f"goals/{goal_id}/steps/{step_id}/report.md")
+            backend.write(md_path, "\n".join(md_parts))
+        except RuntimeError:
+            # FrameworkFilesystem not initialized - use direct Path writes
+            step_dir = self._run_dir / "goals" / goal_id / "steps" / step_id
+            step_dir.mkdir(parents=True, exist_ok=True)
+
+            (step_dir / "report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+            md_parts = [
+                f"# Step: {description}\n",
+                f"**Status**: {report.status}  \n**Duration**: {duration_ms}ms\n",
+            ]
+            if deps:
+                md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
+            md_parts.append(f"\n## Result\n\n{result}\n")
+            (step_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
         logger.debug(
             "Step report written: goal=%s step=%s status=%s duration=%dms",
             goal_id,
@@ -201,13 +259,6 @@ class RunArtifactStore:
         """
         goal_dir = self._run_dir / "goals" / report.goal_id
         goal_dir.mkdir(parents=True, exist_ok=True)
-
-        # Use FrameworkFilesystem for all file operations
-        backend = FrameworkFilesystem.get()
-
-        # Write JSON report
-        json_path = f"goals/{report.goal_id}/report.json"
-        backend.write(json_path, report.model_dump_json(indent=2))
 
         # Build Markdown report
         md_parts = [
@@ -227,9 +278,21 @@ class RunArtifactStore:
                 md_parts.append(f"- [{icon}] **{sr.step_id}**: {sr.description} ({sr.status})")
             md_parts.append("")
 
-        # Write Markdown report
-        md_path = f"goals/{report.goal_id}/report.md"
-        backend.write(md_path, "\n".join(md_parts))
+        # Try FrameworkFilesystem first, fallback to direct Path operations
+        try:
+            backend = FrameworkFilesystem.get()
+
+            # Write JSON report
+            json_path = self._resolve_artifact_path(f"goals/{report.goal_id}/report.json")
+            backend.write(json_path, report.model_dump_json(indent=2))
+
+            # Write Markdown report
+            md_path = self._resolve_artifact_path(f"goals/{report.goal_id}/report.md")
+            backend.write(md_path, "\n".join(md_parts))
+        except RuntimeError:
+            # FrameworkFilesystem not initialized - use direct Path writes
+            (goal_dir / "report.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
+            (goal_dir / "report.md").write_text("\n".join(md_parts), encoding="utf-8")
 
         step_count = len(getattr(report, "step_reports", []))
         logger.info("Goal report written: goal=%s status=%s steps=%d", report.goal_id, report.status, step_count)
@@ -254,27 +317,41 @@ class RunArtifactStore:
         Args:
             envelope: CheckpointEnvelope data as a dict.
         """
-        backend = FrameworkFilesystem.get()
-
-        # Write to temp file first
-        tmp_path = "checkpoint.json.tmp"
-        backend.write(tmp_path, json.dumps(envelope, default=str, indent=2))
-
-        # Atomic rename using resolved paths
+        # Try FrameworkFilesystem first, fallback to direct Path operations
         try:
-            tmp_resolved = backend._resolve_path(tmp_path)
-            target_resolved = backend._resolve_path("checkpoint.json")
-            tmp_resolved.rename(target_resolved)
-            n_completed = len(envelope.get("completed_step_ids", []))
-            logger.debug("Checkpoint saved: status=%s completed_steps=%d", envelope.get("status"), n_completed)
-        except Exception:
-            logger.debug("Checkpoint write failed", exc_info=True)
-            # Clean up temp file
+            backend = FrameworkFilesystem.get()
+
+            # Write to temp file first
+            tmp_path = self._resolve_artifact_path("checkpoint.json.tmp")
+            backend.write(tmp_path, json.dumps(envelope, default=str, indent=2))
+
+            # Atomic rename using resolved paths
             try:
                 tmp_resolved = backend._resolve_path(tmp_path)
-                tmp_resolved.unlink(missing_ok=True)
+                target_path = self._resolve_artifact_path("checkpoint.json")
+                target_resolved = backend._resolve_path(target_path)
+                tmp_resolved.rename(target_resolved)
+                n_completed = len(envelope.get("completed_step_ids", []))
+                logger.debug("Checkpoint saved: status=%s completed_steps=%d", envelope.get("status"), n_completed)
             except Exception:
-                pass
+                logger.debug("Checkpoint write failed", exc_info=True)
+                # Clean up temp file
+                try:
+                    tmp_resolved = backend._resolve_path(tmp_path)
+                    tmp_resolved.unlink(missing_ok=True)
+                except Exception:
+                    logger.debug("Failed to cleanup temp file: %s", tmp_path)
+        except RuntimeError:
+            # FrameworkFilesystem not initialized - use direct Path writes
+            tmp_file = self._run_dir / "checkpoint.json.tmp"
+            target_file = self._run_dir / "checkpoint.json"
+            try:
+                tmp_file.write_text(json.dumps(envelope, default=str, indent=2), encoding="utf-8")
+                tmp_file.rename(target_file)
+                logger.debug("Checkpoint saved via direct Path: status=%s", envelope.get("status"))
+            except Exception:
+                logger.debug("Checkpoint write failed", exc_info=True)
+                tmp_file.unlink(missing_ok=True)
 
     def load_checkpoint(self) -> dict[str, Any] | None:
         """Load checkpoint from disk.
@@ -299,8 +376,15 @@ class RunArtifactStore:
         """Persist the current manifest to disk."""
         self._manifest.updated_at = datetime.now(UTC).isoformat()
 
-        backend = FrameworkFilesystem.get()
-        backend.write("manifest.json", self._manifest.model_dump_json(indent=2))
+        # Try FrameworkFilesystem first, fallback to direct Path operations
+        try:
+            backend = FrameworkFilesystem.get()
+            manifest_path = self._resolve_artifact_path("manifest.json")
+            backend.write(manifest_path, self._manifest.model_dump_json(indent=2))
+        except RuntimeError:
+            # FrameworkFilesystem not initialized - use direct Path writes
+            manifest_file = self._run_dir / "manifest.json"
+            manifest_file.write_text(self._manifest.model_dump_json(indent=2), encoding="utf-8")
 
         logger.debug("Manifest saved: goals=%d artifacts=%d", len(self._manifest.goals), len(self._manifest.artifacts))
 
