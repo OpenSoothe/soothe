@@ -129,10 +129,17 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 | Type | Fields | Verbosity |
 |------|--------|-----------|
-| `soothe.subagent.research.web_search` | `query: str`, `engines: list[str]` | subagent_custom |
-| `soothe.subagent.research.search_done` | `result_count: int` | subagent_custom |
-| `soothe.subagent.research.queries_generated` | `count: int`, `queries: list[str]` | subagent_custom |
-| `soothe.subagent.research.completed` | *(none)* | subagent_custom |
+| `soothe.subagent.research.analyze` | `topic: str` | subagent_custom |
+| `soothe.subagent.research.sub_questions` | `count: int`, `sub_questions: list[dict]` | subagent_custom |
+| `soothe.subagent.research.queries_generated` | `queries: list[str]` | subagent_custom |
+| `soothe.subagent.research.gather` | `query: str`, `domain: str` | subagent_custom |
+| `soothe.subagent.research.gather_done` | `query: str`, `result_count: int`, `sources_used: list[str]` | subagent_custom |
+| `soothe.subagent.research.summarize` | `total_summaries: int` | subagent_custom |
+| `soothe.subagent.research.reflect` | `loop: int` | subagent_custom |
+| `soothe.subagent.research.reflection_done` | `loop: int`, `is_sufficient: bool`, `follow_up_count: int` | subagent_custom |
+| `soothe.subagent.research.synthesize` | `topic: str`, `total_sources: int` | subagent_custom |
+| `soothe.subagent.research.completed` | `answer_length: int` | subagent_custom |
+| `soothe.subagent.research.internal_llm` | `response_type: str` | internal |
 
 ### Skillify Subagent
 
@@ -165,21 +172,6 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 | `soothe.subagent.weaver.registry_updated` | `agent_name: str`, `version: str` | subagent_custom |
 | `soothe.subagent.weaver.execute_started` | `agent_name: str`, `task_preview: str` | subagent_custom |
 | `soothe.subagent.weaver.execute_completed` | `agent_name: str`, `result_length: int` | subagent_custom |
-
-### Inquiry Subagent
-
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.inquiry.analyze` | `topic: str` | subagent_custom |
-| `soothe.subagent.inquiry.sub_questions` | `count: int` | subagent_custom |
-| `soothe.subagent.inquiry.queries_generated` | `queries: list[str]` | subagent_custom |
-| `soothe.subagent.inquiry.gather` | `query: str`, `domain: str` | subagent_custom |
-| `soothe.subagent.inquiry.gather_done` | `query: str`, `result_count: int`, `sources_used: list[str]` | subagent_custom |
-| `soothe.subagent.inquiry.summarize` | `total_summaries: int` | subagent_custom |
-| `soothe.subagent.inquiry.reflect` | `loop: int` | subagent_custom |
-| `soothe.subagent.inquiry.reflection_done` | `loop: int`, `is_sufficient: bool`, `follow_up_count: int` | subagent_custom |
-| `soothe.subagent.inquiry.synthesize` | `topic: str`, `total_sources: int` | subagent_custom |
-| `soothe.subagent.inquiry.completed` | `answer_length: int` | subagent_custom |
 
 ### Generic Subagent Tool Events
 

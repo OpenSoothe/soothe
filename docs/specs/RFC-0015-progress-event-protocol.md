@@ -36,7 +36,7 @@ Each has its own formatting. For example, `soothe.browser.step` is rendered thre
 
 ### D4. No single source of truth
 
-Event type strings are scattered across `core/events.py`, `_runner_phases.py`, `_runner_steps.py`, `_runner_autonomous.py`, `_runner_checkpoint.py`, `subagents/browser.py`, `subagents/claude.py`, `subagents/weaver/`, `subagents/skillify/`, `inquiry/engine.py`, `tools/_internal/wizsearch/`, and `utils/tool_logging.py`.
+Event type strings are scattered across `core/events.py`, `_runner_phases.py`, `_runner_steps.py`, `_runner_autonomous.py`, `_runner_checkpoint.py`, `subagents/browser.py`, `subagents/claude.py`, `subagents/weaver/`, `subagents/skillify/`, `subagents/research/`, `tools/_internal/wizsearch/`, and `utils/tool_logging.py`.
 
 ### D5. No payload validation
 
@@ -46,7 +46,7 @@ Missing required fields silently produce broken rendering. `soothe.plan.step_sta
 
 - Subagent tools: `soothe.{agent}.tool_start` vs main agent: `soothe.tool.{name}.started`
 - Tense inconsistency: `projected` vs `started` vs `step_completed` in the same domain
-- `soothe.chitchat.*`, `soothe.autonomous.*`, `soothe.inquiry.*` are undocumented in RFC-0003
+- `soothe.chitchat.*`, `soothe.autonomous.*` are undocumented in RFC-0003
 
 ### D7. Closed taxonomy
 
@@ -124,7 +124,7 @@ soothe.<domain>.<component>.<action>
 | `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `normal` |
 | `protocol` | Core protocol activity: context, memory, plan, policy, goal | `normal` |
 | `tool` | Main agent tool execution lifecycle | `normal` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, inquiry, planner tool calls, scout tool calls | `detailed` (promoted key events at `normal`) |
+| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, planner tool calls, scout tool calls | `detailed` (promoted key events at `normal`) |
 | `output` | Content destined for user display: chitchat responses, final reports, subagent text/response | `normal` |
 | `error` | Error events | always shown |
 
@@ -154,7 +154,7 @@ All action suffixes use past participle for state changes and observations:
 
 #### Component names
 
-Components use the existing protocol or subagent name in snake_case: `thread`, `context`, `memory`, `plan`, `policy`, `goal`, `iteration`, `checkpoint`, `recovery`, `browser`, `research`, `claude`, `skillify`, `weaver`, `inquiry`, `planner`, `scout`, `chitchat`, `autonomous`.
+Components use the existing protocol or subagent name in snake_case: `thread`, `context`, `memory`, `plan`, `policy`, `goal`, `iteration`, `checkpoint`, `recovery`, `browser`, `research`, `claude`, `skillify`, `weaver`, `planner`, `scout`, `chitchat`, `autonomous`.
 
 For dynamic main-agent tools, `<component>` is the tool name: `soothe.tool.search.started`, `soothe.tool.read_file.completed`.
 
@@ -180,7 +180,7 @@ All current events migrate to the new domain-prefixed naming. Key patterns:
 
 **Tool**: Largely unchanged (`soothe.tool.{name}.*`)
 
-**Subagent**: `soothe.browser.*` → `soothe.subagent.browser.*`, `soothe.claude.*` → `soothe.subagent.claude.*`, `soothe.research.*` → `soothe.subagent.research.*`, `soothe.skillify.*` → `soothe.subagent.skillify.*`, `soothe.weaver.*` → `soothe.subagent.weaver.*`, `soothe.inquiry.*` → `soothe.subagent.inquiry.*`
+**Subagent**: `soothe.browser.*` → `soothe.subagent.browser.*`, `soothe.claude.*` → `soothe.subagent.claude.*`, `soothe.research.*` → `soothe.subagent.research.*`, `soothe.skillify.*` → `soothe.subagent.skillify.*`, `soothe.weaver.*` → `soothe.subagent.weaver.*`
 
 **Subagent tool events**: `soothe.{agent}.tool_start` → `soothe.subagent.{agent}.tool_started` (unified suffix pattern)
 
@@ -388,7 +388,7 @@ The complete event catalog with all event types, fields, and verbosity classific
 | `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `protocol` |
 | `protocol` | Core protocol activity: context, memory, plan, policy, goal | `protocol` |
 | `tool` | Main agent tool execution lifecycle | `tool_activity` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, inquiry | `subagent_custom` (promoted key events at `subagent_progress`) |
+| `subagent` | All subagent activity: browser, research, claude, skillify, weaver | `subagent_custom` (promoted key events at `subagent_progress`) |
 | `output` | Content destined for user display: chitchat responses, final reports | `assistant_text` |
 | `error` | Error events | `error` (always shown) |
 
