@@ -246,7 +246,7 @@ This implementation guide addresses critical test coverage gaps in Soothe's daem
    - Execute query triggering memory recall
    - Verify `soothe.protocol.memory.recalled` event
    - Execute planning query
-   - Verify `soothe.protocol.plan.created` event
+   - Verify `soothe.cognition.plan.created` event
    - Validate event payload structure per RFC-0015
 
 3. **test_tool_events**

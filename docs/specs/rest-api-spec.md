@@ -184,7 +184,7 @@ GET /api/v1/threads/{thread_id}/messages
     {
       "timestamp": "2026-03-19T10:05:02Z",
       "kind": "event",
-      "type": "soothe.protocol.plan.created",
+      "type": "soothe.cognition.plan.created",
       "data": {"goal": "Analyze auth", "steps": [...]}
     }
   ],

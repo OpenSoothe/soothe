@@ -81,10 +81,10 @@ INTERNAL_EVENT_TYPES = frozenset(
 # Event types to skip in progress display (handled by plan update mechanism)
 SKIP_EVENT_TYPES = frozenset(
     {
-        "soothe.protocol.plan.batch_started",
-        "soothe.protocol.plan.step_started",
-        "soothe.protocol.plan.step_completed",
-        "soothe.protocol.plan.step_failed",
+        "soothe.cognition.plan.batch_started",
+        "soothe.cognition.plan.step_started",
+        "soothe.cognition.plan.step_completed",
+        "soothe.cognition.plan.step_failed",
     }
 )
 
@@ -446,7 +446,7 @@ class DisplayPolicy:
 
     def is_plan_event(self, event_type: str) -> bool:
         """Check if this is a plan-related event."""
-        return event_type.startswith("soothe.protocol.plan.")
+        return event_type.startswith("soothe.cognition.plan.")
 
     def is_research_event(self, event_type: str) -> bool:
         """Check if this is a research subagent event."""

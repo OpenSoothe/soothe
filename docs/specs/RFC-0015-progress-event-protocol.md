@@ -176,7 +176,7 @@ All current events migrate to the new domain-prefixed naming. Key patterns:
 
 **Lifecycle**: `soothe.thread.*` → `soothe.lifecycle.thread.*`, `soothe.iteration.*` → `soothe.lifecycle.iteration.*`
 
-**Protocol**: `soothe.context.*` → `soothe.protocol.context.*`, `soothe.memory.*` → `soothe.protocol.memory.*`, `soothe.plan.*` → `soothe.protocol.plan.*`, `soothe.policy.*` → `soothe.protocol.policy.*`, `soothe.goal.*` → `soothe.protocol.goal.*`
+**Protocol**: `soothe.context.*` → `soothe.protocol.context.*`, `soothe.memory.*` → `soothe.protocol.memory.*`, `soothe.plan.*` → `soothe.cognition.plan.*`, `soothe.policy.*` → `soothe.protocol.policy.*`, `soothe.goal.*` → `soothe.cognition.goal.*`
 
 **Tool**: Largely unchanged (`soothe.tool.{name}.*`)
 
@@ -219,13 +219,13 @@ class SootheEvent(BaseModel):
         return self.model_dump(exclude_none=True)
 ```
 
-The `extra="allow"` policy permits forward-compatible consumption. Each concrete event class uses `Literal` type for the `type` field (e.g., `type: Literal["soothe.protocol.plan.step_started"]`).
+The `extra="allow"` policy permits forward-compatible consumption. Each concrete event class uses `Literal` type for the `type` field (e.g., `type: Literal["soothe.cognition.plan.step_started"]`).
 
 ### Example concrete models
 
 ```python
 class PlanStepStartedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.step_started"] = "soothe.protocol.plan.step_started"
+    type: Literal["soothe.cognition.plan.step_started"] = "soothe.cognition.plan.step_started"
     step_id: str
     description: str
     depends_on: list[str] = []
@@ -340,7 +340,7 @@ Each event registration includes a `summary_template` that defines how to extrac
 
 ```python
 EventMeta(
-    type_string="soothe.protocol.plan.step_started",
+    type_string="soothe.cognition.plan.step_started",
     model=PlanStepStartedEvent,
     domain="protocol",
     component="plan",

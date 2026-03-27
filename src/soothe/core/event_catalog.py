@@ -86,23 +86,23 @@ CONTEXT_PROJECTED = "soothe.protocol.context.projected"
 CONTEXT_INGESTED = "soothe.protocol.context.ingested"
 MEMORY_RECALLED = "soothe.protocol.memory.recalled"
 MEMORY_STORED = "soothe.protocol.memory.stored"
-PLAN_CREATED = "soothe.protocol.plan.created"
-PLAN_STEP_STARTED = "soothe.protocol.plan.step_started"
-PLAN_STEP_COMPLETED = "soothe.protocol.plan.step_completed"
-PLAN_STEP_FAILED = "soothe.protocol.plan.step_failed"
-PLAN_BATCH_STARTED = "soothe.protocol.plan.batch_started"
-PLAN_REFLECTED = "soothe.protocol.plan.reflected"
-PLAN_DAG_SNAPSHOT = "soothe.protocol.plan.dag_snapshot"
-PLAN_ONLY = "soothe.protocol.plan.plan_only"
+PLAN_CREATED = "soothe.cognition.plan.created"
+PLAN_STEP_STARTED = "soothe.cognition.plan.step_started"
+PLAN_STEP_COMPLETED = "soothe.cognition.plan.step_completed"
+PLAN_STEP_FAILED = "soothe.cognition.plan.step_failed"
+PLAN_BATCH_STARTED = "soothe.cognition.plan.batch_started"
+PLAN_REFLECTED = "soothe.cognition.plan.reflected"
+PLAN_DAG_SNAPSHOT = "soothe.cognition.plan.dag_snapshot"
+PLAN_ONLY = "soothe.cognition.plan.plan_only"
 POLICY_CHECKED = "soothe.protocol.policy.checked"
 POLICY_DENIED = "soothe.protocol.policy.denied"
-GOAL_CREATED = "soothe.protocol.goal.created"
-GOAL_COMPLETED = "soothe.protocol.goal.completed"
-GOAL_FAILED = "soothe.protocol.goal.failed"
-GOAL_BATCH_STARTED = "soothe.protocol.goal.batch_started"
-GOAL_REPORT = "soothe.protocol.goal.report"
-GOAL_DIRECTIVES_APPLIED = "soothe.protocol.goal.directives_applied"
-GOAL_DEFERRED = "soothe.protocol.goal.deferred"
+GOAL_CREATED = "soothe.cognition.goal.created"
+GOAL_COMPLETED = "soothe.cognition.goal.completed"
+GOAL_FAILED = "soothe.cognition.goal.failed"
+GOAL_BATCH_STARTED = "soothe.cognition.goal.batch_started"
+GOAL_REPORT = "soothe.cognition.goal.report"
+GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives_applied"
+GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 
 # -- Output events -----------------------------------------------------------
 CHITCHAT_STARTED = "soothe.output.chitchat.started"
@@ -288,13 +288,13 @@ class MemoryStoredEvent(ProtocolEvent):
 
 
 class PlanCreatedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.created"] = "soothe.protocol.plan.created"
+    type: Literal["soothe.cognition.plan.created"] = "soothe.cognition.plan.created"
     goal: str = ""
     steps: list[dict[str, Any]] = []  # noqa: RUF012
 
 
 class PlanStepStartedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.step_started"] = "soothe.protocol.plan.step_started"
+    type: Literal["soothe.cognition.plan.step_started"] = "soothe.cognition.plan.step_started"
     step_id: str = ""
     description: str = ""
     depends_on: list[str] = []  # noqa: RUF012
@@ -303,7 +303,7 @@ class PlanStepStartedEvent(ProtocolEvent):
 
 
 class PlanStepCompletedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.step_completed"] = "soothe.protocol.plan.step_completed"
+    type: Literal["soothe.cognition.plan.step_completed"] = "soothe.cognition.plan.step_completed"
     step_id: str = ""
     success: bool = False
     result_preview: str | None = None
@@ -312,7 +312,7 @@ class PlanStepCompletedEvent(ProtocolEvent):
 
 
 class PlanStepFailedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.step_failed"] = "soothe.protocol.plan.step_failed"
+    type: Literal["soothe.cognition.plan.step_failed"] = "soothe.cognition.plan.step_failed"
     step_id: str = ""
     error: str = ""
     blocked_steps: list[str] | None = None
@@ -320,25 +320,25 @@ class PlanStepFailedEvent(ProtocolEvent):
 
 
 class PlanBatchStartedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.batch_started"] = "soothe.protocol.plan.batch_started"
+    type: Literal["soothe.cognition.plan.batch_started"] = "soothe.cognition.plan.batch_started"
     batch_index: int = 0
     step_ids: list[str] = []  # noqa: RUF012
     parallel_count: int = 1
 
 
 class PlanReflectedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.reflected"] = "soothe.protocol.plan.reflected"
+    type: Literal["soothe.cognition.plan.reflected"] = "soothe.cognition.plan.reflected"
     should_revise: bool = False
     assessment: str = ""
 
 
 class PlanDagSnapshotEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.dag_snapshot"] = "soothe.protocol.plan.dag_snapshot"
+    type: Literal["soothe.cognition.plan.dag_snapshot"] = "soothe.cognition.plan.dag_snapshot"
     steps: list[dict[str, Any]] = []  # noqa: RUF012
 
 
 class PlanOnlyEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.plan.plan_only"] = "soothe.protocol.plan.plan_only"
+    type: Literal["soothe.cognition.plan.plan_only"] = "soothe.cognition.plan.plan_only"
     thread_id: str = ""
     goal: str = ""
     step_count: int = 0
@@ -359,32 +359,32 @@ class PolicyDeniedEvent(ProtocolEvent):
 
 
 class GoalCreatedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.created"] = "soothe.protocol.goal.created"
+    type: Literal["soothe.cognition.goal.created"] = "soothe.cognition.goal.created"
     goal_id: str = ""
     description: str = ""
     priority: int | str = ""
 
 
 class GoalCompletedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.completed"] = "soothe.protocol.goal.completed"
+    type: Literal["soothe.cognition.goal.completed"] = "soothe.cognition.goal.completed"
     goal_id: str = ""
 
 
 class GoalFailedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.failed"] = "soothe.protocol.goal.failed"
+    type: Literal["soothe.cognition.goal.failed"] = "soothe.cognition.goal.failed"
     goal_id: str = ""
     error: str = ""
     retry_count: int = 0
 
 
 class GoalBatchStartedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.batch_started"] = "soothe.protocol.goal.batch_started"
+    type: Literal["soothe.cognition.goal.batch_started"] = "soothe.cognition.goal.batch_started"
     goal_ids: list[str] = []  # noqa: RUF012
     parallel_count: int = 1
 
 
 class GoalReportEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.report"] = "soothe.protocol.goal.report"
+    type: Literal["soothe.cognition.goal.report"] = "soothe.cognition.goal.report"
     goal_id: str = ""
     step_count: int = 0
     completed: int = 0
@@ -393,14 +393,14 @@ class GoalReportEvent(ProtocolEvent):
 
 
 class GoalDirectivesAppliedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.directives_applied"] = "soothe.protocol.goal.directives_applied"
+    type: Literal["soothe.cognition.goal.directives_applied"] = "soothe.cognition.goal.directives_applied"
     goal_id: str = ""
     directives_count: int = 0
     changes: list[Any] = []  # noqa: RUF012
 
 
 class GoalDeferredEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.goal.deferred"] = "soothe.protocol.goal.deferred"
+    type: Literal["soothe.cognition.goal.deferred"] = "soothe.cognition.goal.deferred"
     goal_id: str = ""
     reason: str = ""
     plan_preserved: bool = False

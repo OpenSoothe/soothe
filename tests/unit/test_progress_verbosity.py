@@ -43,7 +43,7 @@ class TestProgressVerbosity:
             assert should_show(category, "debug")
 
     def test_classify_protocol_events(self) -> None:
-        assert classify_custom_event((), {"type": "soothe.protocol.plan.created"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.cognition.plan.created"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.protocol.context.projected"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.protocol.policy.checked"}) == "protocol"
 

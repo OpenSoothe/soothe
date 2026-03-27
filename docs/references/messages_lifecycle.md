@@ -683,8 +683,8 @@ THREAD_ENDED = "soothe.lifecycle.thread.ended"
 # Protocol events
 CONTEXT_PROJECTED = "soothe.protocol.context.projected"
 MEMORY_RECALLED = "soothe.protocol.memory.recalled"
-PLAN_CREATED = "soothe.protocol.plan.created"
-PLAN_STEP_STARTED = "soothe.protocol.plan.step.started"
+PLAN_CREATED = "soothe.cognition.plan.created"
+PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
 
 # Tool events
 TOOL_WEBSEARCH_SEARCH_STARTED = "soothe.tool.websearch.search_started"

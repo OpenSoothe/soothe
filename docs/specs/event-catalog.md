@@ -13,7 +13,7 @@ All events follow the 4-segment pattern:
 soothe.<domain>.<component>.<action>
 ```
 
-Domains: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`
+Domains: `lifecycle`, `protocol`, `cognition`, `tool`, `subagent`, `output`, `error`
 
 ---
 
@@ -49,18 +49,18 @@ Domains: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`
 | `soothe.protocol.memory.recalled` | `count: int`, `query: str` | protocol |
 | `soothe.protocol.memory.stored` | `id: str`, `source_thread: str` | protocol |
 
-### Plan Protocol
+### Plan Cognition
 
 | Type | Fields | Verbosity |
 |------|--------|-----------|
-| `soothe.protocol.plan.created` | `goal: str`, `steps: list[StepDict]` | protocol |
-| `soothe.protocol.plan.step_started` | `step_id: str`, `description: str`, `depends_on: list[str]`, `batch_index: int?` | protocol |
-| `soothe.protocol.plan.step_completed` | `step_id: str`, `success: bool`, `result_preview: str?`, `duration_ms: int?` | protocol |
-| `soothe.protocol.plan.step_failed` | `step_id: str`, `error: str`, `blocked_steps: list[str]?`, `duration_ms: int?` | protocol |
-| `soothe.protocol.plan.batch_started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | protocol |
-| `soothe.protocol.plan.reflected` | `should_revise: bool`, `assessment: str` | protocol |
-| `soothe.protocol.plan.dag_snapshot` | `steps: list[StepDepDict]` | debug |
-| `soothe.protocol.plan.plan_only` | `thread_id: str`, `goal: str`, `step_count: int` | protocol |
+| `soothe.cognition.plan.created` | `goal: str`, `steps: list[StepDict]` | protocol |
+| `soothe.cognition.plan.step_started` | `step_id: str`, `description: str`, `depends_on: list[str]`, `batch_index: int?` | protocol |
+| `soothe.cognition.plan.step_completed` | `step_id: str`, `success: bool`, `result_preview: str?`, `duration_ms: int?` | protocol |
+| `soothe.cognition.plan.step_failed` | `step_id: str`, `error: str`, `blocked_steps: list[str]?`, `duration_ms: int?` | protocol |
+| `soothe.cognition.plan.batch_started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | protocol |
+| `soothe.cognition.plan.reflected` | `should_revise: bool`, `assessment: str` | protocol |
+| `soothe.cognition.plan.dag_snapshot` | `steps: list[StepDepDict]` | debug |
+| `soothe.cognition.plan.plan_only` | `thread_id: str`, `goal: str`, `step_count: int` | protocol |
 
 ### Policy Protocol
 
@@ -69,17 +69,17 @@ Domains: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`
 | `soothe.protocol.policy.checked` | `action: str`, `verdict: str`, `profile: str` | protocol |
 | `soothe.protocol.policy.denied` | `action: str`, `reason: str`, `profile: str` | protocol |
 
-### Goal Protocol
+### Goal Cognition
 
 | Type | Fields | Verbosity |
 |------|--------|-----------|
-| `soothe.protocol.goal.created` | `goal_id: str`, `description: str`, `priority: int\|str` | protocol |
-| `soothe.protocol.goal.completed` | `goal_id: str` | protocol |
-| `soothe.protocol.goal.failed` | `goal_id: str`, `error: str`, `retry_count: int` | protocol |
-| `soothe.protocol.goal.batch_started` | `goal_ids: list[str]`, `parallel_count: int` | protocol |
-| `soothe.protocol.goal.report` | `goal_id: str`, `step_count: int`, `completed: int`, `failed: int`, `summary: str` | protocol |
-| `soothe.protocol.goal.directives_applied` | `goal_id: str`, `directives_count: int`, `changes: list` | protocol |
-| `soothe.protocol.goal.deferred` | `goal_id: str`, `reason: str`, `plan_preserved: bool` | protocol |
+| `soothe.cognition.goal.created` | `goal_id: str`, `description: str`, `priority: int\|str` | protocol |
+| `soothe.cognition.goal.completed` | `goal_id: str` | protocol |
+| `soothe.cognition.goal.failed` | `goal_id: str`, `error: str`, `retry_count: int` | protocol |
+| `soothe.cognition.goal.batch_started` | `goal_ids: list[str]`, `parallel_count: int` | protocol |
+| `soothe.cognition.goal.report` | `goal_id: str`, `step_count: int`, `completed: int`, `failed: int`, `summary: str` | protocol |
+| `soothe.cognition.goal.directives_applied` | `goal_id: str`, `directives_count: int`, `changes: list` | protocol |
+| `soothe.cognition.goal.deferred` | `goal_id: str`, `reason: str`, `plan_preserved: bool` | protocol |
 
 ---
 
