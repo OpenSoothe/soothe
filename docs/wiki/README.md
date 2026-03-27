@@ -1,85 +1,152 @@
 # Soothe Wiki
 
-Welcome to the Soothe end-user wiki. This directory contains comprehensive guides organized by user journey.
+Welcome to the Soothe end-user wiki. This directory contains comprehensive guides organized by topic to help you get the most out of Soothe.
+
+## 🎯 Quick Navigation
+
+**New to Soothe?** Start here → [Getting Started Guide](getting-started.md)
+
+**Looking for a specific command?** → [CLI Reference](cli-reference.md)
+
+**Having issues?** → [Troubleshooting Guide](troubleshooting.md)
+
+---
 
 ## Wiki Index
 
 ### 🚀 Getting Started
 
-- **[Getting Started Guide](getting-started.md)** - Install, configure, and run your first session
-  - Installation (pip, source)
-  - API key setup
-  - First steps (interactive TUI, headless mode)
-  - Resume sessions
+| Guide | What You'll Learn |
+|-------|-------------------|
+| **[Getting Started](getting-started.md)** | Install, configure, and run your first session with Soothe |
+| **[CLI Reference](cli-reference.md)** | Complete command-line interface documentation with examples |
+| **[TUI Guide](tui-guide.md)** | Terminal UI usage, slash commands, keyboard shortcuts |
 
-- **[CLI Reference](cli-reference.md)** - Complete command-line interface documentation
-  - All CLI commands and options
-  - Run, autopilot, thread, server, config, agent commands
-  - Examples and use cases
+### 🤖 Core Capabilities
 
-- **[TUI Guide](tui-guide.md)** - Terminal UI usage, slash commands, and keyboard shortcuts
-  - Interface overview
-  - Slash commands table
-  - Keyboard shortcuts
-  - Subagent routing
-
-### 📖 User Guides
-
-- **[Specialized Subagents](subagents.md)** - Overview of Browser, Claude, Skillify, and Weaver
-  - Subagent capabilities
-  - Installation requirements
-  - Usage with slash commands and prefix routing
-  - Configuration
-
-- **[Autonomous Mode](autonomous-mode.md)** - Enable autonomous iteration for complex tasks
-  - What is autonomous mode
-  - When to use it
-  - How to enable (CLI, TUI)
-  - Configuration and monitoring
-
-- **[Thread Management](thread-management.md)** - Work with conversation threads
-  - What are threads
-  - Listing, resuming, archiving threads
-  - Thread lifecycle
-  - Export threads
+| Guide | What You'll Learn |
+|-------|-------------------|
+| **[Autonomous Mode](autonomous-mode.md)** | Enable autonomous iteration for complex multi-step tasks |
+| **[Specialized Subagents](subagents.md)** | Browser automation, research, planning, and skill creation |
+| **[Thread Management](thread-management.md)** | Work with conversation threads, resume previous sessions |
 
 ### 🔧 Configuration & Management
 
-- **[Configuration Guide](configuration.md)** - Environment variables, YAML config, and model routing
-  - Configuration methods
-  - Essential settings
-  - Model router
-  - Optional extras
-
-- **[Daemon Management](daemon-management.md)** - Manage the Soothe daemon lifecycle
-  - Server lifecycle (start, stop, status, attach)
-  - Detached execution
-  - Logs and monitoring
-
-- **[Multi-Transport Setup](multi-transport.md)** - Configure Unix Socket, WebSocket, and HTTP REST
-  - Transport overview
-  - When to enable each transport
-  - Configuration examples
-  - Use cases
-
-- **[Authentication](authentication.md)** - External authentication with reverse proxies
-  - Authentication architecture (no built-in auth)
-  - Deployment patterns
-  - nginx/Caddy/Traefik examples
-  - Security best practices
+| Guide | What You'll Learn |
+|-------|-------------------|
+| **[Configuration](configuration.md)** | Environment variables, YAML config, model routing |
+| **[Daemon Management](daemon-management.md)** | Manage the Soothe daemon lifecycle (start, stop, attach) |
+| **[Multi-Transport Setup](multi-transport.md)** | Configure Unix Socket, WebSocket, and HTTP REST transports |
+| **[Authentication](authentication.md)** | External authentication with reverse proxies |
 
 ### 🛠️ Troubleshooting & Advanced
 
-- **[Troubleshooting Guide](troubleshooting.md)** - Common issues and solutions
-  - API key issues
-  - Subagent problems
-  - Connection errors
-  - Authentication errors
-  - Performance issues
-  - Debug mode
+| Guide | What You'll Learn |
+|-------|-------------------|
+| **[Troubleshooting](troubleshooting.md)** | Common issues, error messages, and solutions |
 
-## Navigation
+---
 
-Each wiki page includes cross-links to related guides. Start with the [Getting Started Guide](getting-started.md) if you're new to Soothe, or browse the specific guides based on your needs.
+## Key Concepts
 
-For technical documentation, see the main [User Guide](../user_guide.md) which links to RFCs and implementation guides.
+### Execution Modes
+
+Soothe provides multiple execution modes for different use cases:
+
+| Mode | When to Use | Command |
+|------|-------------|---------|
+| **Default (TUI)** | Standard tasks, research, file operations | `soothe "your query"` or just `soothe` |
+| **Headless** | Quick one-off queries, scripts | `soothe "your query" --no-tui` |
+| **Autonomous** | Complex multi-step workflows | `soothe autopilot run "your query"` |
+| **Daemon** | Background operations, remote access | `soothe daemon start` |
+
+Learn more: [Getting Started](getting-started.md#execution-modes)
+
+### Architecture Overview
+
+Soothe uses a **PLAN → ACT → JUDGE** execution loop:
+
+```
+User Query → PLAN (LLM decides action) → ACT (execute tools) → JUDGE (evaluate results)
+                ↑                                                        ↓
+                └────────────────── Retry/Adjust ←───────────────────────┘
+```
+
+**Key Benefits**:
+- Automatic strategy adjustment based on results
+- Structured tool outputs for reliable evaluation
+- Sub-second responses for simple queries
+- Intelligent iteration for complex tasks
+
+Learn more: [RFC-0008: Agentic Loop Execution](../specs/RFC-0008-agentic-loop-execution.md)
+
+### Plugin System
+
+Soothe's extensible architecture allows you to add custom capabilities:
+
+```python
+from soothe_sdk import plugin, tool
+
+@plugin(name="my-plugin", version="1.0.0")
+class MyPlugin:
+    @tool(name="my_tool", description="Custom tool")
+    def my_tool(self, arg: str) -> str:
+        return f"Result: {arg}"
+```
+
+Learn more: [RFC-0018: Plugin Extension System](../specs/RFC-0018-plugin-extension-system.md)
+
+---
+
+## Feature Status
+
+| Feature | Status | Documentation |
+|---------|--------|---------------|
+| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-0008](../specs/RFC-0008-agentic-loop-execution.md) |
+| **Research Subagent** | ✅ Production Ready | [Subagents Guide](subagents.md#research-subagent) |
+| **Plugin System** | ✅ Production Ready | [RFC-0018](../specs/RFC-0018-plugin-extension-system.md) |
+| **Multi-Transport Daemon** | ✅ Production Ready | [Multi-Transport Setup](multi-transport.md) |
+| **Thread Management** | ✅ Production Ready | [Thread Management](thread-management.md) |
+| **Security Policies** | ✅ Production Ready | [RFC-0012](../specs/RFC-0012-secure-filesystem-policy.md) |
+| **Autonomous Mode** | 🚧 Experimental | [Autonomous Mode](autonomous-mode.md) |
+
+---
+
+## Additional Resources
+
+### 📖 Extended Documentation
+
+- **[User Guide](../user_guide.md)** - Comprehensive usage guide with detailed examples
+- **[RFCs & Specifications](../specs/)** - Technical architecture and design documents
+- **[Implementation Guides](../impl/)** - Development documentation
+
+### 🔗 External Links
+
+- **[PyPI Package](https://pypi.org/project/soothe/)** - Install the latest version
+- **[GitHub Repository](https://github.com/caesar0301/Soothe)** - Source code and issues
+- **[DeepWiki](https://deepwiki.com/caesar0301/Soothe)** - AI-powered documentation search
+
+---
+
+## Getting Help
+
+### Common Issues
+
+- **API key errors**: See [Configuration](configuration.md#api-keys)
+- **Connection errors**: See [Troubleshooting](troubleshooting.md#connection-errors)
+- **Performance issues**: See [Troubleshooting](troubleshooting.md#performance)
+
+### Community
+
+- **Report issues**: [GitHub Issues](https://github.com/caesar0301/Soothe/issues)
+- **Ask questions**: Use GitHub Discussions or check the Troubleshooting guide
+
+---
+
+## Contributing
+
+Interested in contributing to Soothe? See:
+
+- **[CLAUDE.md](../../CLAUDE.md)** - Development guide for AI agents
+- **[RFCs](../specs/)** - Architecture design documents
+- **[Implementation Guides](../impl/)** - Development documentation

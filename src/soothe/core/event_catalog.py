@@ -291,6 +291,8 @@ class PlanCreatedEvent(ProtocolEvent):
     type: Literal["soothe.cognition.plan.created"] = "soothe.cognition.plan.created"
     goal: str = ""
     steps: list[dict[str, Any]] = []  # noqa: RUF012
+    reasoning: str | None = None
+    is_plan_only: bool = False
 
 
 class PlanStepStartedEvent(ProtocolEvent):
@@ -782,7 +784,8 @@ _reg(MEMORY_RECALLED, MemoryRecalledEvent, summary_template="{count} items recal
 _reg(MEMORY_STORED, MemoryStoredEvent, summary_template="Stored memory: {id}")
 
 # -- Protocol: plan ----------------------------------------------------------
-_reg(PLAN_CREATED, PlanCreatedEvent, summary_template="Plan: {goal}")
+# Plan display is handled by on_plan_created() renderer, not summary template
+_reg(PLAN_CREATED, PlanCreatedEvent)
 _reg(PLAN_STEP_STARTED, PlanStepStartedEvent, summary_template="Step {step_id}: {description}")
 _reg(PLAN_STEP_COMPLETED, PlanStepCompletedEvent, summary_template="Step {step_id}: done")
 _reg(PLAN_STEP_FAILED, PlanStepFailedEvent, summary_template="Step {step_id}: FAILED - {error}")
@@ -822,6 +825,7 @@ _reg(ERROR, GeneralErrorEvent, verbosity="error", summary_template="{error}")
 # These modules call register_event() at import time
 # Must be at the end after all core events are registered
 # ---------------------------------------------------------------------------
+import soothe.cognition.loop_agent.core.events  # noqa: E402
 import soothe.plugin.events  # noqa: E402
 import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402

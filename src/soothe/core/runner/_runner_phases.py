@@ -439,6 +439,8 @@ class PhasesMixin:
                             }
                             for s in plan.steps
                         ],
+                        reasoning=plan.reasoning,
+                        is_plan_only=plan.is_plan_only,
                     ).to_dict()
                 )
                 if plan.steps:

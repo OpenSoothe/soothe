@@ -207,6 +207,114 @@ soothe thread continue abc123
 soothe thread continue
 ```
 
+## Execution Modes
+
+Soothe provides multiple execution modes tailored to different task types:
+
+### Default Mode (TUI with PLAN → ACT → JUDGE)
+
+**Best for**: Standard tasks, research, file operations, code analysis
+
+The default execution mode uses an intelligent loop that:
+1. **PLAN**: Analyzes your request and decides the best approach
+2. **ACT**: Executes tools with structured outputs
+3. **JUDGE**: Evaluates results and adjusts strategy if needed
+
+```bash
+# Launch TUI with your query (default behavior)
+soothe "Research RAG architectures and create a comparison table"
+
+# Or just launch TUI and type your query interactively
+soothe
+
+# Simple queries work too
+soothe "What is 2 + 2?"  # Fast, sub-second response
+```
+
+**Key Benefits**:
+- Automatic strategy adjustment based on results
+- Structured tool outputs for reliable evaluation
+- Sub-second responses for simple queries
+- Intelligent iteration for complex tasks
+- Rich visual feedback in TUI
+
+### Headless Mode (Single-Shot Execution)
+
+**Best for**: Quick queries, scripts, CI/CD pipelines
+
+```bash
+# Run single query and exit (no TUI)
+soothe "What is 2 + 2?" --no-tui
+
+# JSON output for scripts
+soothe "Analyze data" --no-tui --format jsonl
+
+# Pipe results
+soothe "Generate report" --no-tui > output.txt
+```
+
+**When to use**:
+- Quick one-off queries
+- Automated scripts
+- CI/CD integration
+- Batch processing
+
+### Autonomous Mode (Autopilot for Complex Workflows)
+
+**Best for**: Multi-step workflows requiring explicit goal management
+
+```bash
+# Complex, long-running tasks with autonomous execution
+soothe autopilot run "Set up a monitoring system that checks website uptime every 5 minutes"
+
+# Limit iterations for controlled execution
+soothe autopilot run "Build a web scraper" --max-iterations 10
+
+# JSON output for logging
+soothe autopilot run "Analyze codebase" --format jsonl
+```
+
+**When to use**:
+- Complex multi-step workflows
+- Tasks requiring explicit goal decomposition
+- Operations spanning hours or days
+- Work that needs detailed progress tracking
+- Background execution without user interaction
+
+**Key Features**:
+- No user interaction required
+- Autonomous planning and execution
+- Progress output to stdout
+- Machine-readable JSONL format available
+
+Learn more: [Autonomous Mode Guide](autonomous-mode.md)
+
+### Daemon Mode (Background & Remote)
+
+**Best for**: Long-running operations, remote access, web UIs
+
+```bash
+# Start daemon
+soothe daemon start
+
+# Attach from any terminal
+soothe daemon attach
+
+# Check status
+soothe daemon status
+
+# Multi-transport support (requires config)
+soothe daemon start
+```
+
+**Use cases**:
+- Background operations without keeping a terminal open
+- Remote access via WebSocket or HTTP
+- Integration with web UIs
+- Multi-client access
+
+Learn more: [Daemon Management Guide](daemon-management.md)
+
 ## Optional Extras
 
 Install additional capabilities as needed:
@@ -240,7 +348,7 @@ soothe config validate
 soothe config show
 
 # Test with a simple query
-soothe "What is 2 + 2?"
+soothe "What is 2 + 2?" --no-tui
 ```
 
 ## Configuration Management

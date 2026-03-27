@@ -221,6 +221,7 @@ class CheckpointMixin:
         goal: Any,
         step_reports: list[Any],
         child_goal_reports: list[Any],
+        max_chars: int = 0,
     ) -> str:
         """Generate a cross-validated summary for a goal (RFC-0010).
 
@@ -232,6 +233,7 @@ class CheckpointMixin:
             goal: The goal being summarized.
             step_reports: StepReport instances from this goal's plan.
             child_goal_reports: GoalReport instances from dependency goals.
+            max_chars: Maximum chars for summary (0 = unlimited).
 
         Returns:
             Synthesized summary string.
@@ -271,7 +273,12 @@ class CheckpointMixin:
             if self._planner and hasattr(self._planner, "_invoke"):
                 summary = await self._planner._invoke(synthesis_prompt)  # type: ignore[attr-defined]
                 logger.info("LLM synthesis complete for goal %s (%d chars)", goal.id, len(summary))
-                return summary[:8000]
+
+                # Only truncate if max_chars > 0
+                if max_chars > 0 and len(summary) > max_chars:
+                    logger.warning("Truncating synthesis from %d to %d chars", len(summary), max_chars)
+                    return summary[:max_chars]
+                return summary
         except Exception:
             logger.debug("LLM synthesis failed, using heuristic", exc_info=True)
 

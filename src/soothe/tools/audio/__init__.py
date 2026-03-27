@@ -34,7 +34,9 @@ class AudioPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        self._tools = create_audio_tools()
+        # Extract config from plugin context if available
+        config = getattr(context, "config", None) if context else None
+        self._tools = create_audio_tools(config=config)
         context.logger.info("Loaded %d audio tools", len(self._tools))
 
     def get_tools(self) -> list[Any]:

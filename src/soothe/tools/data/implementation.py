@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 from langchain_core.tools import BaseTool
+from pydantic import Field
 
 from soothe.tools.data.events import (
     DataInspectionCompletedEvent,
@@ -63,6 +65,8 @@ class InspectDataTool(BaseTool):
         "Returns: column listing with types and sample values (tabular) or document summary."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
+
     def _run(self, file_path: str) -> str:
         """Inspect data file structure.
 
@@ -98,7 +102,7 @@ class InspectDataTool(BaseTool):
             try:
                 from soothe.tools._internal.document import DocumentQATool
 
-                result = DocumentQATool()._run(file_path)
+                result = DocumentQATool(config=self.config)._run(file_path)
             except Exception as exc:
                 logger.exception("Document inspection failed")
                 return f"Error inspecting document: {exc}"
@@ -134,6 +138,8 @@ class SummarizeDataTool(BaseTool):
         "Returns: statistical summary (tabular) or document summary."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
+
     def _run(self, file_path: str) -> str:
         """Get statistical summary.
 
@@ -158,7 +164,7 @@ class SummarizeDataTool(BaseTool):
             try:
                 from soothe.tools._internal.document import DocumentQATool
 
-                return DocumentQATool()._run(file_path)
+                return DocumentQATool(config=self.config)._run(file_path)
             except Exception as exc:
                 logger.exception("Document summary failed")
                 return f"Error summarizing document: {exc}"
@@ -347,6 +353,8 @@ class AskAboutFileTool(BaseTool):
         "Returns: answer based on file content."
     )
 
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
+
     def _run(self, file_path: str, question: str = "") -> str:
         """Answer question about file.
 
@@ -381,7 +389,7 @@ class AskAboutFileTool(BaseTool):
             try:
                 from soothe.tools._internal.document import DocumentQATool
 
-                return DocumentQATool()._run(file_path, question=question)
+                return DocumentQATool(config=self.config)._run(file_path, question=question)
             except Exception as exc:
                 logger.exception("Document question answering failed")
                 return f"Error answering question: {exc}"
@@ -396,17 +404,20 @@ class AskAboutFileTool(BaseTool):
         return self._run(file_path, question)
 
 
-def create_data_tools() -> list[BaseTool]:
+def create_data_tools(config: Any = None) -> list[BaseTool]:
     """Create all data inspection tools.
+
+    Args:
+        config: Optional SootheConfig for model creation.
 
     Returns:
         List of 6 data inspection BaseTool instances.
     """
     return [
-        InspectDataTool(),
-        SummarizeDataTool(),
+        InspectDataTool(config=config),
+        SummarizeDataTool(config=config),
         CheckDataQualityTool(),
         ExtractTextTool(),
         GetDataInfoTool(),
-        AskAboutFileTool(),
+        AskAboutFileTool(config=config),
     ]

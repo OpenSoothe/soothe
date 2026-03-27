@@ -94,6 +94,79 @@ Level 2 (Details):    └ Additional context or results
 
 **Note**: Tool activity filtered at normal verbosity. Only subagent tools with `subagent_progress` appear in normal mode.
 
+#### Tool Output Formatting (RFC-0020 Enhancement)
+
+**Problem**: Previous implementation showed verbose, meaningless tool result output with simple truncation, making it difficult to quickly scan tool execution results.
+
+**Solution**: Implement semantic, tool-specific result summarization using a formatter-based pipeline that extracts meaningful metrics instead of raw content truncation.
+
+**Formatter Pipeline**:
+```
+Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RFC-0020 Display
+```
+
+**Key Components**:
+
+1. **ToolBrief**: Structured summary dataclass
+   - `icon`: Status indicator (✓, ✗, ⚠)
+   - `summary`: One-line summary (max 50 chars)
+   - `detail`: Optional detail line (max 80 chars)
+   - `metrics`: Optional metadata dict (size, duration, count, etc.)
+
+2. **Tool Classifier**: Routes tool results to appropriate formatters
+   - Detects tool category by name (file_ops, execution, media, goals, web)
+   - Detects result type (ToolOutput, dict, str)
+   - Priority: ToolOutput > category-specific > fallback
+
+3. **Tool-Specific Formatters**: Semantic summarization by category
+   - FileOpsFormatter: Size, line count, item count
+   - ExecutionFormatter: Done/Failed status, PID, error messages
+   - MediaFormatter: Duration, resolution, format
+   - GoalFormatter: Goal ID, count, status
+   - StructuredFormatter: ToolOutput handling with error classification
+   - FallbackFormatter: Simple truncation for unknown tools
+
+**Tool-Specific Summary Patterns**:
+
+| Category | Tool | Success Pattern | Example Output |
+|----------|------|----------------|----------------|
+| FileOps | read_file | "Read {size} ({lines} lines)" | "✓ Read 2.3 KB (42 lines)" |
+| FileOps | write_file | "Wrote {size}" | "✓ Wrote 1.5 KB" |
+| FileOps | list_files | "Found {count} items" | "✓ Found 15 items" |
+| FileOps | glob | "Found {count} files" | "✓ Found 42 files" |
+| Execution | run_command | "Done" or "Failed: {reason}" | "✓ Done" or "✗ Failed: timeout" |
+| Execution | run_background | "Started PID {pid}" | "✓ Started PID 12345" |
+| Media | transcribe_audio | "Transcribed {duration}s" | "✓ Transcribed 45.2s (en)" |
+| Media | get_video_info | "Video: {duration}s" | "✓ Video: 120s (1920x1080)" |
+| Goals | create_goal | "Created goal {id}" | "✓ Created goal g1" |
+| Goals | list_goals | "Found {count} goals" | "✓ Found 3 goals" |
+
+**Edge Cases**:
+- Empty results: "✓ Found 0 items", "✓ Read 0 B (empty file)"
+- Large output: Truncate to 50/80 chars with ellipsis
+- Errors: "✗ Failed: {error_message}"
+- Unknown tools: Fallback to simple truncation (backward compatible)
+- Formatter errors: Graceful fallback with logging
+
+**Implementation Requirements**:
+- Replace `extract_tool_brief()` with semantic formatting
+- Handle dict and ToolOutput result types (not just str)
+- Error handling with fallback to prevent crashes
+- Maintain RFC-0020 compliance (50/80 char limits)
+- Backward compatible with existing tools
+
+**Integration Points**:
+- `src/soothe/ux/core/message_processing.py::extract_tool_brief()`
+- `src/soothe/ux/core/tool_output_formatter.py` (NEW)
+- `src/soothe/ux/core/tool_formatters/` (NEW package)
+
+**Success Criteria**:
+- Semantic summaries show meaningful metrics instead of raw truncation
+- Each tool type has customized, scannable summary format
+- Unknown tools continue to work with fallback formatter
+- Formatter errors don't crash the display system
+- All summaries respect 50/80 character limits
+
 ### Pattern: Subagent Activity
 
 **Registration**:

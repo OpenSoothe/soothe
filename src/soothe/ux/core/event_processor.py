@@ -459,7 +459,12 @@ class EventProcessor:
             )
             for i, s in enumerate(data.get("steps", []))
         ]
-        plan = Plan(goal=data.get("goal", ""), steps=steps)
+        plan = Plan(
+            goal=data.get("goal", ""),
+            steps=steps,
+            reasoning=data.get("reasoning"),
+            is_plan_only=data.get("is_plan_only", False),
+        )
         self._state.current_plan = plan
         self._renderer.on_plan_created(plan)
 

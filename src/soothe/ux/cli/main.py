@@ -38,6 +38,10 @@ def add_help_alias(app: typer.Typer) -> None:
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
+    prompt_arg: Annotated[
+        str | None,
+        typer.Argument(help="Prompt to send as user message (headless single-shot mode)."),
+    ] = None,
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -75,11 +79,14 @@ def main(
 
     Run without arguments for interactive TUI mode, or provide a prompt as the first argument.
 
+    The prompt can be provided either as a positional argument or via the -p/--prompt option.
+    If both are provided, the -p/--prompt option takes precedence.
+
     Examples:
         soothe                           # Interactive TUI mode
-        soothe "Research AI advances"    # Headless single-prompt mode
+        soothe "Research AI advances"    # Headless single-prompt mode (positional)
+        soothe -p "how are you"          # Headless mode with prompt option
         soothe --config custom.yml       # Use custom config
-        soothe --no-tui -p "how are you" # Headless mode with prompt
     """
     # Handle -h/--help flag
     if show_help:
@@ -93,8 +100,8 @@ def main(
 
     # Only run default behavior if no subcommand is being invoked
     if ctx.invoked_subcommand is None:
-        # Get prompt from -p/--prompt option, or fall back to remaining args
-        effective_prompt = prompt if prompt is not None else (" ".join(ctx.args) if ctx.args else None)
+        # Prefer -p/--prompt option over positional argument
+        effective_prompt = prompt if prompt is not None else prompt_arg
 
         from soothe.ux.cli.commands.run_cmd import run_impl
 

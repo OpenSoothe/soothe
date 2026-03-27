@@ -303,6 +303,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                                 }
                                 for s in plan.steps
                             ],
+                            reasoning=plan.reasoning,
+                            is_plan_only=plan.is_plan_only,
                         ).to_dict()
                     )
                 except Exception:
@@ -477,7 +479,12 @@ class AutonomousMixin(GoalDirectivesMixin):
                             if dep_goal and dep_goal.report:
                                 child_reports.append(dep_goal.report)
 
-                    summary = await self._synthesize_root_goal_report(goal, sr_list, child_reports)
+                    summary = await self._synthesize_root_goal_report(
+                        goal,
+                        sr_list,
+                        child_reports,
+                        max_chars=self._config.logging.report_output.synthesis_max_chars,
+                    )
 
                     refl_assessment = ""
                     if reflection:

@@ -212,7 +212,7 @@ pip install -e /path/to/soothe
 soothe checkhealth
 
 # Run your plugin
-soothe run "test query" --subagent your_agent
+soothe "test query" --subagent your_agent
 ```
 
 ## Testing Guidelines

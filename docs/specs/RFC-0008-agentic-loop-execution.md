@@ -66,6 +66,174 @@ Layer 1: deepagents Tool Loop (graph, langchain)
 
 **Key insight**: deepagents **provides a tool-calling loop** (Layer 1). Soothe adds **reflection** (Layer 2) and **goal management** (Layer 3) on top.
 
+### Layer Integration Architecture
+
+**Layer Boundaries**:
+
+Each layer has distinct ownership and responsibilities:
+
+| Layer | Owns | Borrows | Delegates | Escalates |
+|-------|------|---------|-----------|-----------|
+| **Layer 3** (Goal Management) | Goal DAG, goal lifecycle, dependencies | N/A (top layer) | Sub-goals to Layer 2 | N/A |
+| **Layer 2** (Reflection Loop) | LoopState, PLAN→ACT→JUDGE cycle | Current sub-goal from Layer 3 | Tool execution to Layer 1 | Scope expansion to Layer 3 |
+| **Layer 1** (Tool Loop) | Tool state, Model↔Tools cycle | Previous iteration summaries from Layer 2 | N/A (bottom layer) | N/A |
+
+**Context Borrowing Model**:
+
+**Unidirectional context flow**: Layer 3 → Layer 2 → Layer 1
+
+**Layer 2 borrows from Layer 3**:
+- Receives current sub-goal description
+- Tracks parent goal ID for escalation
+- Read-only injection (not shared mutation)
+
+**Layer 1 borrows from Layer 2**:
+- Receives iteration summaries (not full history)
+- Prevents context explosion while maintaining continuity
+- Summary format: recent tool calls, success/failure, plan progress
+
+**State Isolation**:
+- Each layer owns its state independently
+- Borrowing is read-only (injection, not shared mutation)
+- No cross-layer state mutation
+
+**Execution Flow**:
+
+**Default Mode (No `--autonomous`)**:
+```
+User Request
+    ↓
+UnifiedClassifier (RFC-0012) → complexity, planning_strategy
+    ↓
+LoopAgent (Layer 2)
+    ↓
+PlannerProtocol.create_plan() → Plan (if needed)
+    ↓
+Loop: PLAN → ACT → JUDGE
+    ├─→ PLAN: AgentDecision(tool or final)
+    ├─→ ACT: ToolLoopAdapter.execute_tool() → ToolOutput
+    │       └─> DeepAgents graph (Layer 1)
+    │           └─> Borrows iteration summary from Layer 2
+    └─→ JUDGE: LLM judgment → JudgeResult
+        └─> status: "continue" | "retry" | "replan" | "done"
+    ↓
+Final Answer
+```
+
+**Autonomous Mode (`--autonomous`)**:
+```
+User Request (--autonomous)
+    ↓
+GoalManager (Layer 3)
+    ↓
+Create root goal → decompose into sub-goals (DAG)
+    ↓
+Loop: Goal scheduling
+    ├─→ GoalManager.next_goal() → Goal
+    ├─→ LoopAgent (Layer 2) processes Goal
+    │       └─> Borrows current sub-goal from Layer 3
+    │   Loop: PLAN → ACT → JUDGE
+    │       └─> On scope expansion: escalate to Layer 3
+    │           └─> GoalAdapter.request_goal_revision()
+    │               └─> Layer 3 creates new goal
+    └─→ GoalManager.complete_goal()
+    ↓
+All goals complete
+```
+
+**Goal Delegation Protocol**:
+
+**Layer 3 → Layer 2** (Sub-goal delegation):
+```python
+# In goal_adapter.py
+def inject_goal_context(loop_state: LoopState, goal: Goal) -> None:
+    """Inject Layer 3 goal into Layer 2 state."""
+    loop_state.goal = goal.description
+    loop_state.parent_goal_id = goal.parent_id
+    loop_state.current_goal_id = goal.id
+```
+
+**Layer 2 → Layer 1** (Tool context borrowing):
+```python
+# In context_borrower.py
+def generate_tool_context(loop_state: LoopState, decision: AgentDecision) -> str:
+    """Generate summary for Layer 1 (DeepAgents graph).
+
+    Returns iteration summary, not full history.
+    Prevents context explosion while maintaining continuity.
+    """
+    parts = []
+
+    # Current goal
+    parts.append(f"Current goal: {loop_state.goal}")
+
+    # Plan progress (if planning enabled)
+    if loop_state.plan:
+        completed = sum(1 for s in loop_state.plan.steps if s.status == "completed")
+        total = len(loop_state.plan.steps)
+        parts.append(f"Plan progress: {completed}/{total} steps")
+
+    # Recent iterations (max 3)
+    if loop_state.history:
+        parts.append("\nRecent iterations:")
+        for record in loop_state.history[-3:]:
+            tool = record.decision.tool
+            success = record.result.success
+            status = "✓" if success else "✗"
+            if success:
+                parts.append(f"  {status} {tool}: {record.judgment.reason[:50]}")
+            else:
+                parts.append(f"  {status} {tool}: {record.result.error[:80]}")
+
+    # Current action
+    parts.append(f"\nNow executing: {decision.tool}")
+
+    return "\n".join(parts)
+```
+
+**Layer 2 → Layer 3** (Scope escalation):
+```python
+# In goal_adapter.py
+async def request_goal_revision(
+    loop_state: LoopState,
+    escalation_reason: str
+) -> Optional[Goal]:
+    """Escalate scope expansion from Layer 2 to Layer 3.
+
+    Triggered when judgment detects scope expansion.
+    Only works if autonomous mode enabled (--autonomous flag).
+    """
+    if not goal_manager:
+        return None  # Layer 3 not active
+
+    new_goal = await goal_manager.create_goal(
+        description=escalation_reason,
+        parent_id=loop_state.current_goal_id,
+        priority=60,  # Higher priority for escalated goals
+    )
+
+    return new_goal
+```
+
+**Planning Integration**:
+
+Planning is integrated across layers:
+- **Layer 3**: Creates high-level goal decomposition
+- **Layer 2**: Creates execution plans via `PlannerProtocol`
+- **Layer 1**: Executes tool calls from plan steps
+
+**Separation of Concerns**:
+- **`PlannerProtocol`** (in `protocols/planner.py`): Creates immutable plan outputs
+- **`LoopState`** (in `loop_agent/core/state.py`): Manages mutable plan execution state
+- **Planning module** (in `cognition/planning/`): Implements `PlannerProtocol`
+
+**Module Organization**:
+
+See [Module Structure](#module-structure) section for the hierarchical organization of:
+- `cognition/loop_agent/` - Layer 2 implementation
+- `cognition/goal_manager/` - Layer 3 implementation
+- `cognition/planning/` - PlannerProtocol implementations
+
 ## Architecture Overview
 
 ### Two Execution Modes
@@ -237,18 +405,18 @@ state = LoopState(goal=user_goal, iteration=0, history=[])
 while state.iteration < max_iterations:
     # PLAN: LLM decides next action
     decision = await llm.plan(state)
-    emit_event("soothe.agentic.plan.completed", decision=decision)
+    emit_event("soothe.cognition.loop.phase.plan.completed", decision=decision)
 
     if decision.type == "final":
         return decision.answer
 
     # ACT: Execute tool
     result = await execute_tool(decision.tool, decision.args)
-    emit_event("soothe.agentic.act.completed", result=result)
+    emit_event("soothe.cognition.loop.phase.act.completed", result=result)
 
     # JUDGE: Evaluate result
     judgment = await llm.judge(state.goal, decision, result)
-    emit_event("soothe.agentic.judge.completed", judgment=judgment)
+    emit_event("soothe.cognition.loop.phase.judge.completed", judgment=judgment)
 
     # Update state
     state.add_step(decision, result, judgment)
@@ -309,7 +477,7 @@ stateDiagram-v2
    - Available tools and their schemas
 2. Invoke LLM with structured output request
 3. Parse response as `AgentDecision`
-4. Emit `soothe.agentic.plan.completed` event
+4. Emit `soothe.cognition.loop.phase.plan.completed` event
 
 **Planning Context Example**:
 ```
@@ -345,7 +513,7 @@ What action should you take next?
 3. Execute tool with timeout
 4. Validate result is `ToolOutput` structure
 5. Detect silent failures (success=True but data=None)
-6. Emit `soothe.agentic.act.completed` event
+6. Emit `soothe.cognition.loop.phase.act.completed` event
 
 **Tool Execution**:
 ```python
@@ -388,7 +556,7 @@ async def execute_tool(tool_name: str, args: dict) -> ToolOutput:
    - Previous history
 2. Invoke LLM with structured output request
 3. Parse response as `JudgeResult`
-4. Emit `soothe.agentic.judge.completed` event
+4. Emit `soothe.cognition.loop.phase.judge.completed` event
 5. Apply judgment decision
 
 **Judgment Context Example**:
@@ -663,51 +831,61 @@ await memory.record_failure(
 
 ## Event System
 
-### New Agentic Events
+### Event Namespace Taxonomy
+
+**Migration**: `soothe.agentic.*` → `soothe.cognition.loop.*`
+
+**Rationale**: Events belong to the cognition domain, which encompasses:
+- Loop execution (`soothe.cognition.loop.*`)
+- Goal management (`soothe.cognition.goal.*`)
+- Planning (`soothe.cognition.planning.*`)
+- Classification (`soothe.cognition.classification.*`)
+
+### Loop Events (`soothe.cognition.loop.*`)
 
 **Lifecycle Events**:
-- `soothe.agentic.loop_started` - Agentic loop begins
-- `soothe.agentic.loop_completed` - Agentic loop finishes
-- `soothe.agentic.iteration_started` - Iteration begins
-- `soothe.agentic.iteration_completed` - Iteration finishes
+- `soothe.cognition.loop.started` - Agentic loop begins
+- `soothe.cognition.loop.completed` - Agentic loop finishes
+- `soothe.cognition.loop.iteration.started` - Iteration begins
+- `soothe.cognition.loop.iteration.completed` - Iteration finishes
 
 **Phase Events**:
-- `soothe.agentic.plan.started` - PLAN phase starts
-- `soothe.agentic.plan.completed` - PLAN phase ends (includes `AgentDecision`)
-- `soothe.agentic.act.started` - ACT phase starts
-- `soothe.agentic.act.completed` - ACT phase ends (includes `ToolOutput`)
-- `soothe.agentic.judge.started` - JUDGE phase starts
-- `soothe.agentic.judge.completed` - JUDGE phase ends (includes `JudgeResult`)
+- `soothe.cognition.loop.phase.plan.started` - PLAN phase starts
+- `soothe.cognition.loop.phase.plan.completed` - PLAN phase ends (includes `AgentDecision`)
+- `soothe.cognition.loop.phase.act.started` - ACT phase starts
+- `soothe.cognition.loop.phase.act.completed` - ACT phase ends (includes `ToolOutput`)
+- `soothe.cognition.loop.phase.judge.started` - JUDGE phase starts
+- `soothe.cognition.loop.phase.judge.completed` - JUDGE phase ends (includes `JudgeResult`)
 
 **Decision Events**:
-- `soothe.agentic.judgment_made` - Judge decision made
-- `soothe.agentic.retry_triggered` - Retry triggered
-- `soothe.agentic.replan_triggered` - Replan triggered
+- `soothe.cognition.loop.judgment.decision` - Judge decision made
+- `soothe.cognition.loop.retry.triggered` - Retry triggered
+- `soothe.cognition.loop.replan.triggered` - Replan triggered
 
 **Error Events**:
-- `soothe.agentic.error` - Guardrail triggered or failure detected
-- `soothe.agentic.max_iterations_reached` - Max iterations limit hit
-- `soothe.agentic.degenerate_retry_detected` - Same action repeated
+- `soothe.cognition.loop.error` - Guardrail triggered or failure detected
+- `soothe.cognition.loop.error.max_iterations` - Max iterations limit hit
+- `soothe.cognition.loop.error.degenerate_retry` - Same action repeated
 
 ### Event Flow Example
 
 ```
-soothe.agentic.loop_started
-  soothe.agentic.iteration_started (iteration=0)
-    soothe.agentic.plan.started
-    soothe.agentic.plan.completed (decision=AgentDecision(...))
-    soothe.agentic.act.started (tool="read_file")
-    soothe.agentic.act.completed (result=ToolOutput(...))
-    soothe.agentic.judge.started
-    soothe.agentic.judge.completed (judgment=JudgeResult(status="done"))
-    soothe.agentic.judgment_made (status="done")
-  soothe.agentic.iteration_completed (iteration=0)
-soothe.agentic.loop_completed
+soothe.cognition.loop.started
+  soothe.cognition.loop.iteration.started (iteration=0)
+    soothe.cognition.loop.phase.plan.started
+    soothe.cognition.loop.phase.plan.completed (decision=AgentDecision(...))
+    soothe.cognition.loop.phase.act.started (tool="read_file")
+    soothe.cognition.loop.phase.act.completed (result=ToolOutput(...))
+    soothe.cognition.loop.phase.judge.started
+    soothe.cognition.loop.phase.judge.completed (judgment=JudgeResult(status="done"))
+    soothe.cognition.loop.judgment.decision (status="done")
+  soothe.cognition.loop.iteration.completed (iteration=0)
+soothe.cognition.loop.completed
 ```
 
 ### Event Fields
 
-**`soothe.agentic.plan.completed`**:
+**`soothe.cognition.loop.phase.plan.completed`**:
 ```json
 {
   "iteration": 0,
@@ -720,7 +898,7 @@ soothe.agentic.loop_completed
 }
 ```
 
-**`soothe.agentic.judge.completed`**:
+**`soothe.cognition.loop.phase.judge.completed`**:
 ```json
 {
   "iteration": 0,
@@ -733,7 +911,7 @@ soothe.agentic.loop_completed
 }
 ```
 
-**`soothe.agentic.error`**:
+**`soothe.cognition.loop.error`**:
 ```json
 {
   "iteration": 2,
@@ -742,6 +920,100 @@ soothe.agentic.loop_completed
   "action": "abort"
 }
 ```
+
+### Goal Events (`soothe.cognition.goal.*`)
+
+For Layer 3 goal management events, see RFC-0007. Key events:
+- `soothe.cognition.goal.created` - Goal created
+- `soothe.cognition.goal.activated` - Goal activated for execution
+- `soothe.cognition.goal.completed` - Goal completed successfully
+- `soothe.cognition.goal.failed` - Goal failed
+
+## Module Structure
+
+### Hierarchical Module Organization
+
+**Cognition modules** follow a consistent hierarchical structure:
+
+```
+cognition/
+├── planning/                    # EXISTING: PlannerProtocol implementations
+│   ├── simple.py               # SimplePlanner
+│   ├── claude.py               # ClaudePlanner
+│   ├── router.py               # Planner selection
+│   └── _shared.py              # Utilities
+│
+├── loop_agent/                  # NEW: Layer 2 state management
+│   ├── __init__.py
+│   ├── README.md
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── state.py            # LoopState, StepRecord
+│   │   ├── schemas.py          # AgentDecision, JudgeResult, ToolOutput
+│   │   └── events.py           # cognition.loop.* events
+│   ├── integration/
+│   │   ├── __init__.py
+│   │   ├── tool_loop_adapter.py    # DeepAgents integration
+│   │   ├── goal_adapter.py         # Autonomous goal delegation
+│   │   └── context_borrower.py     # Summary injection
+│   └── execution/
+│       ├── __init__.py
+│       ├── judge.py            # LLM-based judgment
+│       └── failure_detector.py # Guardrails
+│
+├── goal_manager/                # NEW: Restructured goal_engine
+│   ├── __init__.py
+│   ├── README.md
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── goal.py             # Goal model (move from goal_engine.py)
+│   │   ├── state.py            # GoalStatus enum
+│   │   └── events.py           # cognition.goal.* events
+│   ├── dag/
+│   │   ├── __init__.py
+│   │   ├── dependency_resolver.py  # Cycle detection
+│   │   └── scheduler.py            # Priority scheduling
+│   └── manager/
+│       ├── __init__.py
+│       ├── engine.py           # GoalEngine (refactored)
+│       └── persistence.py      # Snapshot/restore
+│
+└── unified_classifier.py        # EXISTING: Keep as-is
+```
+
+### Module Responsibilities
+
+**`planning/`** - PlannerProtocol implementations:
+- Implements `PlannerProtocol` interface
+- Creates immutable `Plan` objects
+- No execution state management
+- Existing module, keep as-is
+
+**`loop_agent/`** - Layer 2 state management:
+- **`core/`**: Domain models (state, schemas, events)
+- **`integration/`**: Cross-layer communication (adapters, context borrowing)
+- **`execution/`**: Loop logic (judge, failure detection)
+
+**`goal_manager/`** - Layer 3 goal management:
+- **`core/`**: Goal model and state enums
+- **`dag/`**: Dependency resolution and scheduling
+- **`manager/`**: GoalEngine orchestration
+
+### Integration with Protocols
+
+**Protocol Layer** (`src/soothe/protocols/`):
+- `planner.py`: `PlannerProtocol`, `Plan`, `PlanStep` (unchanged)
+- `context.py`: `ContextProtocol`, `ContextEntry` (unchanged)
+
+**Implementation Layer** (`src/soothe/cognition/`):
+- `planning/`: Implements `PlannerProtocol`
+- `loop_agent/`: Uses `PlannerProtocol`, manages `LoopState`
+- `goal_manager/`: Independent goal management
+
+**Key Separation**:
+- **PlannerProtocol** creates plans (immutable output)
+- **LoopAgent** manages plan state during execution (mutable tracking)
+- No duplication - clear separation of concerns
 
 ## Performance Optimization
 
@@ -914,7 +1186,7 @@ agentic:
 
 **Iteration 3** (identical to previous):
 - **Guardrail triggers**: Degenerate retry detected
-- **Event**: `soothe.agentic.degenerate_retry_detected`
+- **Event**: `soothe.cognition.loop.error.degenerate_retry`
 - **Action**: Abort loop with error
 
 ### Example 2: Tool Hallucination
@@ -1021,6 +1293,26 @@ agentic:
 ## Changelog
 
 ### 2026-03-27
+- **Major update**: Added Layer Integration Architecture section
+  - Documented layer boundaries, ownership, and responsibilities
+  - Specified context borrowing model (unidirectional: Layer 3 → Layer 2 → Layer 1)
+  - Added execution flow diagrams for default and autonomous modes
+  - Defined goal delegation and escalation protocols
+  - Clarified planning integration across layers
+- **Event namespace migration**: `soothe.agentic.*` → `soothe.cognition.loop.*`
+  - Rationale: Events belong to cognition domain (loops, goals, planning, classification)
+  - Updated all event names and examples throughout RFC
+  - Added event taxonomy: `soothe.cognition.loop.*`, `soothe.cognition.goal.*`
+- **Added Module Structure section**:
+  - Hierarchical organization for `loop_agent/` and `goal_manager/`
+  - Consistent structure: `core/`, `integration/` (or `dag/`), `execution/` (or `manager/`)
+  - Clarified separation from existing `planning/` module
+  - Documented integration with protocol layer
+- **Clarified planning separation**:
+  - PlannerProtocol creates immutable plans
+  - LoopAgent manages mutable plan execution state
+  - No duplication, clear separation of concerns
+- Rewrote RFC-0008 with PLAN → ACT → JUDGE sequence
 - Rewrote RFC-0008 with PLAN → ACT → JUDGE sequence
 - Added structured schemas (AgentDecision, JudgeResult, ToolOutput, LoopState)
 - Added LLM-based judgment with structured output

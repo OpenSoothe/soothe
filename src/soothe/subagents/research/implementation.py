@@ -98,7 +98,7 @@ def _build_sources(
             AcademicSource(),
             FilesystemSource(work_dir=work_dir),
             CLISource(workspace_root=work_dir),
-            DocumentSource(),
+            DocumentSource(config=config),
             BrowserSource(config=config),
         ]
 
@@ -108,5 +108,5 @@ def _build_sources(
         AcademicSource(),
         FilesystemSource(work_dir=work_dir),
         CLISource(workspace_root=work_dir),
-        DocumentSource(),
+        DocumentSource(config=config),
     ]

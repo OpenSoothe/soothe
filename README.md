@@ -6,85 +6,98 @@
 [![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
 
-Your intelligent, always-available AI assistant that works autonomously on complex tasks.
+**Your 24/7 Autonomous AI Agent that Plans, Acts, and Delivers Results**
 
 ## What is Soothe?
 
-Soothe is an AI-powered agent that doesn't just answer questions—it takes action. Unlike traditional chatbots that stop at providing information, Soothe can execute multi-step workflows, conduct research, browse the web, write code, and manage long-running tasks autonomously.
+Soothe is a protocol-driven AI orchestration framework that transforms how you work with AI. Unlike traditional chatbots that merely answer questions, Soothe acts as your intelligent digital colleague that:
 
-Think of Soothe as a tireless digital colleague who can:
-- Research topics across the web and synthesize findings
-- Execute complex workflows that span hours or days
-- Learn from past interactions and remember important context
-- Work independently while you focus on other things
-- Coordinate multiple specialized tools and agents
+✨ **Thinks Ahead** - Automatically plans multi-step workflows and adapts strategies based on results
+🚀 **Acts Autonomously** - Executes complex tasks spanning web research, code execution, file operations, and browser automation
+🧠 **Learns & Remembers** - Maintains persistent memory across sessions, so you never repeat yourself
+🔒 **Stays Secure** - Enforces least-privilege policies and keeps your data under your control
+🔌 **Extends Easily** - Plugin architecture lets you add custom tools and specialized subagents
+🌐 **Works Anywhere** - Multi-transport daemon supports Unix, WebSocket, and HTTP REST connections
 
 ## Design Philosophy
 
-### Autonomous Intelligence
+### 🎯 Intelligent by Default
 
-Soothe is built for **autonomous operation**. Once you give it a goal, it can:
-- Break down complex objectives into manageable steps
-- Execute those steps without constant supervision
-- Reflect on results and adjust its approach
-- Continue working across multiple sessions if needed
+Soothe uses a **PLAN → ACT → JUDGE** execution loop that automatically:
+- Analyzes your request and decides the best approach
+- Executes tools with structured outputs for reliable results
+- Evaluates success and adjusts strategy without manual intervention
+- Works for simple queries in milliseconds or complex tasks in minutes
 
-You don't need to micromanage every step. Soothe handles the details while keeping you informed of progress.
+No micromanagement needed—just state your goal and let Soothe deliver.
 
-### Persistent Memory
+### 🧠 Persistent Memory & Context
 
-Soothe remembers. It maintains:
-- **Context within conversations**: Accumulates knowledge as it works
-- **Memory across sessions**: Recalls important findings from past interactions
-- **Goal tracking**: Keeps track of long-term objectives and their status
+Every conversation builds upon the last:
+- **Session memory**: Accumulates knowledge within a thread
+- **Cross-session memory**: Recalls important context from past interactions
+- **Thread management**: Resume, archive, and organize conversation history
+- **Goal tracking**: Long-running objectives persist across sessions
 
-This means you can have ongoing, evolving conversations without repeating yourself.
+### 🔒 Security & Privacy First
 
-### Privacy-First Design
+Your infrastructure, your rules:
+- **Local execution**: Browser automation, file operations, and code execution run on your machine
+- **Policy enforcement**: Fine-grained access control with least-privilege defaults
+- **No vendor lock-in**: Bring your own API keys, storage backends, and models
+- **Flexible deployment**: Run as CLI, daemon, or integrate into your applications
 
-Your data stays under your control:
-- Browser automation runs locally with privacy-first defaults
-- No mandatory cloud services or telemetry
-- Configurable data persistence on your own infrastructure
-- API keys and secrets managed through environment variables
-
-### Extensible Architecture
+### 🔌 Extensible Plugin System
 
 Soothe grows with your needs:
-- Built-in tools for web search, browsing, code execution, and more
-- Specialized subagents for planning, research, and automation
-- Integration with external services via MCP (Model Context Protocol)
-- Customizable policies for security and access control
+- **Built-in tools**: Web search (Tavily, DuckDuckGo), code execution, file operations, browser automation
+- **Specialized subagents**: Research, browser automation, planning, and more
+- **MCP integration**: Connect to external services via Model Context Protocol
+- **Custom plugins**: Create your own tools and subagents with decorator-based APIs
 
 ## What Can Soothe Do?
 
-### Research & Analysis
-- Search the web and synthesize information from multiple sources
-- Analyze documents, codebases, and datasets
-- Generate reports and summaries
-- Track developments over time
+### 🔍 Deep Research & Synthesis
+**Multi-source investigation in minutes, not hours**
+- Web search with intelligent query generation (Tavily, DuckDuckGo)
+- Academic paper discovery (ArXiv integration)
+- Document analysis (PDF, DOCX, text files)
+- Automatic summarization with citations
+- Iterative refinement based on findings
 
-### Task Automation
-- Execute multi-step workflows autonomously
-- Browse websites, fill forms, and extract data
-- Run code and scripts
-- Manage files and directories
+**Example**: *"Research the latest advances in RAG architectures and compare three different approaches"*
 
-### Planning & Execution
-- Break down complex goals into actionable plans
-- Execute plans step-by-step with progress tracking
-- Adapt plans based on results
-- Handle dependencies and priorities
+### 🤖 Autonomous Task Execution
+**From goal to deliverable without hand-holding**
+- Multi-step workflow execution with automatic planning
+- File operations with security policy enforcement
+- Code execution in sandboxed environments
+- Browser automation for web interactions
+- Parallel tool execution for faster results
 
-### Long-Running Operations
-- Work on tasks that span hours or days
-- Resume work after interruptions
-- Maintain state across sessions
-- Operate in the background while you do other things
+**Example**: *"Set up a new Python project with FastAPI, create the directory structure, and initialize git"*
+
+### 📊 Long-Running Operations
+**Work that spans hours or days, managed automatically**
+- Background daemon mode with multi-transport support
+- Thread management with resume capabilities
+- Persistent state across sessions
+- Progress tracking and artifact storage
+
+**Example**: *"Monitor this website every 6 hours and alert me when the price drops below $50"*
+
+### 🎨 Extensible via Plugins
+**Custom capabilities for your unique workflows**
+- Decorator-based tool creation (`@tool`)
+- Subagent development with `CompiledSubAgent`
+- MCP server integration for external services
+- Custom event types and handlers
+
+**Example**: Create a custom tool that queries your internal APIs and processes results
 
 ## Getting Started
 
-### Quick Start
+### Quick Start (3 Steps)
 
 1. **Install Soothe**:
    ```bash
@@ -94,20 +107,157 @@ Soothe grows with your needs:
 2. **Set your API key**:
    ```bash
    export OPENAI_API_KEY=sk-your-key-here
+   # or use Anthropic Claude:
+   export ANTHROPIC_API_KEY=sk-ant-your-key-here
    ```
 
-3. **Run Soothe**:
+3. **Run your first task**:
    ```bash
+   # Interactive TUI mode (default)
+   soothe "Research the top 5 Python web frameworks and create a comparison table"
+
+   # Or just launch TUI and type your query
    soothe
    ```
 
-That's it! You'll see an interactive terminal interface where you can start giving Soothe tasks.
+### Try Different Modes
+
+**Interactive TUI** (default):
+```bash
+soothe "Analyze this codebase and suggest improvements"
+```
+
+**Headless single-shot**:
+```bash
+soothe "What is 2 + 2?" --no-tui
+```
+
+**Autonomous mode** for complex tasks:
+```bash
+soothe autopilot run "Set up a monitoring system that checks website uptime every 5 minutes"
+```
+
+The TUI shows:
+- Tool execution in real-time
+- Subagent activities and progress
+- Structured event stream
+- Keyboard shortcuts for control
+
+### Run as a Background Daemon
+
+For long-running operations and remote access:
+
+```bash
+# Start daemon
+soothe daemon start
+
+# Attach from any terminal
+soothe daemon attach
+
+# Or connect via WebSocket/HTTP
+soothe daemon start --enable-websocket --enable-http
+```
+
+## Real-World Examples
+
+### Research Workflow
+```bash
+# Default mode with automatic planning
+soothe "Research best practices for securing REST APIs, summarize the top 5 recommendations, and create a checklist document"
+```
+
+### Codebase Analysis
+```bash
+# TUI mode shows real-time progress
+soothe "Analyze the authentication module in src/auth/, identify potential security vulnerabilities, and suggest fixes"
+```
+
+### Autonomous Mode (Complex Tasks)
+```bash
+# Use autopilot for autonomous execution
+soothe autopilot run "Set up a monitoring system that checks website uptime every 5 minutes and logs results to a database"
+```
+
+### Resume Previous Work
+```bash
+# List previous threads
+soothe thread list
+
+# Continue from where you left off
+soothe thread continue <thread-id>
+```
+
+## Key Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Intelligent Execution Loop** | ✅ Implemented | PLAN → ACT → JUDGE architecture with automatic strategy adjustment |
+| **Multi-Source Research** | ✅ Implemented | Web search, academic papers, documents with automatic synthesis |
+| **Specialized Subagents** | ✅ Implemented | Browser automation, planning, research, skill creation |
+| **Plugin System** | ✅ Implemented | Decorator-based tools and subagents with lifecycle management |
+| **Multi-Transport Daemon** | ✅ Implemented | Unix socket, WebSocket, and HTTP REST support |
+| **Thread Management** | ✅ Implemented | Persistent threads with resume, archive, and search |
+| **Security Policies** | ✅ Implemented | Least-privilege access control with configurable policies |
+| **Persistent Memory** | ✅ Implemented | Context and memory across sessions with vector storage support |
+
+## Architecture Highlights
+
+Soothe is built on a **protocol-driven architecture** that ensures flexibility and maintainability:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  CLI / TUI Layer (User Interface)                       │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Daemon Layer (Multi-Transport Server)                  │
+│  Unix Socket | WebSocket | HTTP REST                    │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Core Framework (Agent Factory & Runner)                │
+│  PLAN → ACT → JUDGE Loop                                │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Protocol Layer (8 Swappable Protocols)                 │
+│  Context | Memory | Planning | Policy | Durability |    │
+│  Remote | Persistence | VectorStore                     │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│  Capability Layer (Plugins)                             │
+│  Tools | Subagents | MCP Servers                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Why This Matters**:
+- **Swap any component** without changing your code
+- **Add custom capabilities** via the plugin system
+- **Scale from local CLI to remote daemon** seamlessly
+- **Maintain isolation** between threads and sessions
 
 ## Learn More
 
-- **[User Guide](docs/user_guide.md)**: Complete guide for using Soothe
-- **[Documentation](docs/)**: Design specifications and implementation guides
-- **[Examples](docs/user_guide.md#examples)**: More usage examples and patterns
+### 📚 Documentation
+
+- **[Wiki](docs/wiki/)** - End-user guides organized by topic
+  - [Getting Started](docs/wiki/getting-started.md) - Installation and first steps
+  - [CLI Reference](docs/wiki/cli-reference.md) - Complete command documentation
+  - [Configuration](docs/wiki/configuration.md) - Environment variables and YAML config
+  - [Troubleshooting](docs/wiki/troubleshooting.md) - Common issues and solutions
+
+- **[User Guide](docs/user_guide.md)** - Comprehensive usage guide with examples
+
+- **[RFCs & Specs](docs/specs/)** - Technical specifications and architecture design
+  - [RFC-0001](docs/specs/RFC-0001-system-conceptual-design.md) - System conceptual design
+  - [RFC-0008](docs/specs/RFC-0008-agentic-loop-execution.md) - Execution architecture
+  - [RFC-0018](docs/specs/RFC-0018-plugin-extension-system.md) - Plugin system design
+
+### 🛠️ For Developers
+
+- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI agents
+- **[Implementation Guides](docs/impl/)** - Detailed implementation documentation
 
 ## License
 

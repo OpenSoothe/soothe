@@ -248,7 +248,7 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
     if name == "audio":
         from soothe.tools.audio import create_audio_tools
 
-        return list(create_audio_tools())
+        return list(create_audio_tools(config=config))
     if name == "video":
         from soothe.tools.video import create_video_tools
 
@@ -378,7 +378,7 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
     if name == "data":
         from soothe.tools.data import create_data_tools
 
-        return list(create_data_tools())
+        return list(create_data_tools(config=config))
 
     # Support individual data tool names (map to consolidated group)
     if name in (
@@ -399,9 +399,9 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         )
 
         if name == "inspect_data":
-            return [InspectDataTool()]
+            return [InspectDataTool(config=config)]
         if name == "summarize_data":
-            return [SummarizeDataTool()]
+            return [SummarizeDataTool(config=config)]
         if name == "check_data_quality":
             return [CheckDataQualityTool()]
         if name == "extract_text":
@@ -409,7 +409,7 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
         if name == "get_data_info":
             return [GetDataInfoTool()]
         if name == "ask_about_file":
-            return [AskAboutFileTool()]
+            return [AskAboutFileTool(config=config)]
 
     # --- Goal management tools (RFC-0016 single-purpose) ---
     if name == "goals":

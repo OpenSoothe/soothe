@@ -145,7 +145,7 @@ After installing soothe-community:
 
 ```bash
 # Run PaperScout
-soothe run "Find recent papers on transformer architectures" --subagent paperscout
+soothe "Find recent papers on transformer architectures" --subagent paperscout
 
 # Check plugin is loaded
 soothe checkhealth

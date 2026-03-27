@@ -338,12 +338,13 @@ Runs comprehensive health checks for daemon, protocols, persistence, and integra
 
 ### Verbose Logging
 ```bash
-SOOTHE_LOG_LEVEL=DEBUG soothe run "your query"
+SOOTHE_LOG_LEVEL=DEBUG soothe "your query"
 ```
 
 ### TUI Debug Mode
 ```bash
-soothe run --tui --debug "your query"
+# TUI is default - just add --debug flag
+soothe --debug "your query"
 ```
 
 ---

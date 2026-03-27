@@ -42,7 +42,11 @@ subagents:
 ### As Subagent
 
 ```bash
-soothe run "your query here" --subagent your_agent
+# Via TUI (default)
+soothe "your query here" --subagent your_agent
+
+# Headless mode
+soothe "your query" --subagent your_agent --no-tui
 ```
 
 ### As Tool
@@ -61,13 +65,13 @@ result = plugin.your_tool("input")
 ### Example 1: Basic Usage
 
 ```bash
-soothe run "process data" --subagent your_agent
+soothe "process data" --subagent your_agent
 ```
 
 ### Example 2: Advanced Usage
 
 ```bash
-soothe run "complex operation with parameters" --subagent your_agent --config custom_config.yml
+soothe "complex operation with parameters" --subagent your_agent --config custom_config.yml
 ```
 
 ## Architecture

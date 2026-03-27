@@ -453,6 +453,8 @@ class AgenticMixin:
                     PlanCreatedEvent(
                         goal=_validate_goal(plan.goal, user_input),
                         steps=[{"id": s.id, "description": s.description} for s in plan.steps],
+                        reasoning=plan.reasoning,
+                        is_plan_only=plan.is_plan_only,
                     ).to_dict()
                 )
 
@@ -648,3 +650,172 @@ class AgenticMixin:
                 parts.append(f"\n\nKey findings:\n{preview}")
 
         return "\n".join(parts)
+
+    # =========================================================================
+    # RFC-0008: PLAN → ACT → JUDGE Implementation (New)
+    # =========================================================================
+
+    async def _agentic_plan(
+        self,
+        user_input: str,
+        state: Any,
+        iteration: int,
+    ) -> AsyncGenerator[StreamChunk]:
+        """PLAN phase: LLM decides next action with structured output.
+
+        Returns AgentDecision (tool call or final answer).
+
+        Args:
+            user_input: User query
+            state: Runner state
+            iteration: Current iteration
+
+        Yields:
+            PlanPhaseStartedEvent, PlanPhaseCompletedEvent
+        """
+        from soothe.cognition.loop_agent.core.events import (
+            PlanPhaseCompletedEvent,
+            PlanPhaseStartedEvent,
+        )
+        from soothe.cognition.loop_agent.core.schemas import AgentDecision
+
+        yield _custom(PlanPhaseStartedEvent(iteration=iteration).to_dict())
+
+        # Build planning prompt
+        planning_prompt = f"""Given the goal: {user_input}
+
+Decide the next action to take. You can either:
+1. Call a tool (type="tool")
+2. Provide a final answer (type="final")
+
+If calling a tool, specify:
+- tool: the tool name
+- args: the tool arguments as a dict
+- reasoning: why you're calling this tool
+
+If providing a final answer, specify:
+- answer: your final response to the user
+- reasoning: why this is the complete answer
+
+Consider the current context and any previous iterations."""
+
+        # Add previous iteration context if available
+        if hasattr(state, "plan") and state.plan:
+            planning_prompt += f"\n\nCurrent plan: {state.plan.goal}"
+            completed_steps = [s for s in state.plan.steps if s.status == "completed"]
+            if completed_steps:
+                planning_prompt += f"\nCompleted steps: {len(completed_steps)}/{len(state.plan.steps)}"
+
+        try:
+            # Get structured output from LLM
+            model = self._model
+            structured_model = model.with_structured_output(AgentDecision)
+            decision = await structured_model.ainvoke(planning_prompt)
+
+            # Store decision in state
+            state.current_decision = decision
+
+            logger.info(
+                "PLAN phase: decision_type=%s, reasoning=%s",
+                decision.type,
+                decision.reasoning[:100],
+            )
+
+        except Exception as e:
+            logger.exception("PLAN phase failed")
+            # Fallback: create a final answer decision
+            decision = AgentDecision(
+                type="final",
+                answer="I encountered an error during planning.",
+                reasoning=f"Planning error: {e}",
+            )
+            state.current_decision = decision
+
+        # Emit completion event
+        yield _custom(
+            PlanPhaseCompletedEvent(
+                iteration=iteration,
+                decision=decision.model_dump(),
+            ).to_dict()
+        )
+
+    async def _agentic_judge(
+        self,
+        user_input: str,
+        state: Any,
+        decision: Any,
+        result: Any,
+        iteration: int,
+    ) -> AsyncGenerator[StreamChunk]:
+        """JUDGE phase: LLM evaluates result with structured output.
+
+        Returns JudgeResult (continue/retry/replan/done).
+
+        Args:
+            user_input: User query
+            state: Runner state
+            decision: AgentDecision from PLAN phase
+            result: ToolOutput from ACT phase
+            iteration: Current iteration
+
+        Yields:
+            JudgePhaseStartedEvent, JudgePhaseCompletedEvent
+        """
+        from soothe.cognition.loop_agent.core.events import (
+            JudgePhaseCompletedEvent,
+            JudgePhaseStartedEvent,
+        )
+        from soothe.cognition.loop_agent.core.state import LoopState
+        from soothe.cognition.loop_agent.execution.judge import JudgeEngine
+
+        yield _custom(JudgePhaseStartedEvent(iteration=iteration).to_dict())
+
+        try:
+            # Initialize judge engine if not exists
+            if not hasattr(self, "_judge_engine"):
+                self._judge_engine = JudgeEngine(model=self._model)
+
+            # Convert state to LoopState if needed
+            loop_state = LoopState(
+                goal=user_input,
+                iteration=iteration,
+                history=[],
+            )
+
+            # Execute judgment
+            judgment = await self._judge_engine.judge(
+                loop_state=loop_state,
+                decision=decision,
+                result=result,
+            )
+
+            logger.info(
+                "JUDGE phase: status=%s, confidence=%.2f, reason=%s",
+                judgment.status,
+                judgment.confidence or 0.0,
+                judgment.reason[:100],
+            )
+
+        except Exception as e:
+            logger.exception("JUDGE phase failed")
+            # Fallback: continue with a default judgment
+            from soothe.cognition.loop_agent.core.schemas import JudgeResult
+
+            judgment = JudgeResult(
+                status="continue",
+                reason=f"Judgment error: {e}",
+                confidence=0.0,
+            )
+
+        # Store judgment in state
+        state.current_judgment = judgment
+
+        # Emit completion event
+        yield _custom(
+            JudgePhaseCompletedEvent(
+                iteration=iteration,
+                status=judgment.status,
+                reason=judgment.reason,
+                confidence=judgment.confidence or 0.0,
+            ).to_dict()
+        )

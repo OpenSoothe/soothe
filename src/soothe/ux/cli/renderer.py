@@ -239,6 +239,8 @@ class CliRenderer:
         self._state.multi_step_active = len(plan.steps) > 1
         # Add double newline before plan for clear visual separation
         sys.stderr.write(f"\n\n[plan] ● {plan.goal} ({len(plan.steps)} steps)\n")
+        if plan.reasoning:
+            sys.stderr.write(f"  Reasoning: {plan.reasoning}\n")
         for step in plan.steps:
             sys.stderr.write(f"  ├ {step.id}: {step.description} [pending]\n")
         sys.stderr.flush()

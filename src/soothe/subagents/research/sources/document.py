@@ -22,8 +22,13 @@ class DocumentSource:
     specific document files or asks about content within local documents.
     """
 
-    def __init__(self) -> None:
-        """Initialize the document source."""
+    def __init__(self, config: Any = None) -> None:
+        """Initialize the document source.
+
+        Args:
+            config: Optional SootheConfig for tool configuration.
+        """
+        self._config = config
         self._doc_tool: Any | None = None
         self._loaded = False
 
@@ -34,7 +39,7 @@ class DocumentSource:
         try:
             from soothe.tools._internal.document import create_document_tools
 
-            tools = create_document_tools()
+            tools = create_document_tools(config=self._config)
             if tools:
                 self._doc_tool = tools[0]
         except Exception:

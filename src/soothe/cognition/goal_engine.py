@@ -118,7 +118,7 @@ class GoalEngine:
         )
         self._goals[goal.id] = goal
         logger.info("Created goal %s: %s (priority=%d)", goal.id, description, priority)
-        logger.info(self._format_goal_dag())
+        logger.debug(self._format_goal_dag())
         return goal
 
     async def next_goal(self) -> Goal | None:
@@ -167,7 +167,11 @@ class GoalEngine:
 
         # Log ready goals (RFC-0009 / IG-026)
         if result:
-            logger.info("Ready goals: %d (%s)", len(result), [g.id for g in result])
+            logger.info(
+                "Ready goals: %d (%s)",
+                len(result),
+                [(g.id, g.description) for g in result],
+            )
         else:
             logger.debug("No ready goals (waiting for dependencies)")
 
@@ -202,7 +206,7 @@ class GoalEngine:
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
         logger.info("Completed goal %s: %s", goal_id, goal.description)
-        logger.info(self._format_goal_dag())
+        logger.debug(self._format_goal_dag())
         return goal
 
     async def fail_goal(
@@ -245,13 +249,13 @@ class GoalEngine:
                 goal.description,
                 f" - {error}" if error else "",
             )
-            logger.info(self._format_goal_dag())
+            logger.debug(self._format_goal_dag())
             return goal
 
         goal.status = "failed"
         goal.updated_at = datetime.now(UTC)
         logger.warning("Failed goal %s: %s%s", goal_id, goal.description, f" - {error}" if error else "")
-        logger.info(self._format_goal_dag())
+        logger.debug(self._format_goal_dag())
         return goal
 
     async def list_goals(self, status: GoalStatus | None = None) -> list[Goal]:
@@ -392,7 +396,7 @@ class GoalEngine:
 
         goal.updated_at = datetime.now(UTC)
         logger.info("Added dependencies to goal %s: %s", goal_id, depends_on)
-        logger.info(self._format_goal_dag())
+        logger.debug(self._format_goal_dag())
         return goal
 
     def _format_goal_dag(self) -> str:
@@ -441,4 +445,4 @@ class GoalEngine:
             except Exception:
                 logger.debug("Skipping invalid goal record: %s", item, exc_info=True)
         logger.info("Restored %d goals", len(self._goals))
-        logger.info(self._format_goal_dag())
+        logger.debug(self._format_goal_dag())

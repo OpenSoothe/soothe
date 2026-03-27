@@ -15,7 +15,7 @@ Configuration (config.yml):
           option2: value2
 
 Usage:
-    soothe run "your query" --subagent your_agent
+    soothe "your query" --subagent your_agent
 """
 
 from __future__ import annotations

@@ -148,7 +148,11 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
         # Show full goal and all steps in a tree
         goal = data.get("goal", "")
         steps = data.get("steps", [])
+        reasoning = data.get("reasoning")
         lines = [f"● {goal} ({len(steps)} steps)"]
+        # Show reasoning if present
+        if reasoning:
+            lines.append(f"  Reasoning: {reasoning}")
         # Show all steps as a tree
         for step in steps:
             step_id = step.get("id", "?")

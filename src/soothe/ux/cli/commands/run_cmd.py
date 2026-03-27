@@ -55,6 +55,8 @@ def run_impl(
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
         logger.info("Startup completed in %.1fms", startup_elapsed_ms)
 
+        run_start = time.perf_counter()
+
         if prompt or no_tui:
             run_headless(
                 cfg,
@@ -66,6 +68,9 @@ def run_impl(
             )
         else:
             run_tui(cfg, thread_id=thread_id, config_path=config)
+
+        run_elapsed_s = time.perf_counter() - run_start
+        typer.echo(f"[lifecycle] Total running time: {run_elapsed_s:.2f}s", err=True)
 
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.")

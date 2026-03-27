@@ -46,7 +46,11 @@ subagents:
 **Usage**:
 
 ```bash
-soothe run "Find recent papers on transformers" --subagent paperscout
+# Use the subagent via TUI (default)
+soothe "Find recent papers on transformers" --subagent paperscout
+
+# Or use in headless mode
+soothe "Find recent papers on transformers" --subagent paperscout --no-tui
 ```
 
 ## Extensibility

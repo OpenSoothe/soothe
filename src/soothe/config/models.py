@@ -590,6 +590,11 @@ class AgenticLoopConfig(BaseModel):
         description="Enable agentic loop mode",
     )
 
+    use_judge_engine: bool = Field(
+        default=True,
+        description="Use LLM-based judge engine (PLAN→ACT→JUDGE) instead of text patterns (OBSERVE→ACT→VERIFY)",
+    )
+
     max_iterations: int = Field(
         default=3,
         description="Maximum agentic loop iterations",
@@ -666,6 +671,21 @@ class ThreadLoggingConfig(BaseModel):
     max_size_mb: int = 100
 
 
+class ReportOutputConfig(BaseModel):
+    """Configuration for report output behavior.
+
+    Args:
+        display_threshold: Max chars to display in terminal. Reports larger than this
+            are saved to file with preview. Set to 0 to always save to file.
+        preview_chars: Number of chars to show in terminal preview when report is saved to file.
+        synthesis_max_chars: Max chars for LLM-synthesized reports. Set to 0 for unlimited.
+    """
+
+    display_threshold: int = Field(default=20000, ge=0, le=100000)
+    preview_chars: int = Field(default=500, ge=0, le=5000)
+    synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
+
+
 class LoggingConfig(BaseModel):
     """Logging and observability configuration.
 
@@ -674,6 +694,7 @@ class LoggingConfig(BaseModel):
         console: Console logging configuration.
         verbosity: Verbosity level (TUI/headless activity display).
         thread_logging: Thread logging configuration.
+        report_output: Report output configuration.
     """
 
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
@@ -684,6 +705,7 @@ class LoggingConfig(BaseModel):
         validation_alias="progress_verbosity",
     )
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
+    report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
 
     model_config = {"populate_by_name": True}
 

@@ -52,7 +52,11 @@ subagents:
 
 **Usage**:
 ```bash
-soothe run "Find recent papers on transformer architectures" --subagent paperscout
+# Use via TUI (default)
+soothe "Find recent papers on transformer architectures" --subagent paperscout
+
+# Or headless mode
+soothe "Find recent papers" --subagent paperscout --no-tui
 ```
 
 ## Creating a New Plugin

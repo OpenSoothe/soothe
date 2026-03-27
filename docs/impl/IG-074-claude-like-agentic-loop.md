@@ -3,7 +3,7 @@
 **Implementation Guide**: IG-074
 **Title**: Implement Claude-CLI-Style Agentic Loop with PLAN → ACT → JUDGE
 **Created**: 2026-03-27
-**Status**: In Progress
+**Status**: Core Components Implemented ✅
 **Related**: RFC-0008, RFC-0007, RFC-0012, RFC-0015
 
 ## Summary
@@ -28,6 +28,9 @@ This guide tracks the implementation of a Claude-CLI-style agentic loop (LoopAge
 4. ✅ Add failure mode detection (repeated actions, hallucinations, silent failures)
 5. ✅ Require structured tool outputs
 6. ✅ Document control layer as explicit control system
+7. ✅ Add Layer Integration Architecture (context borrowing, goal delegation)
+8. ✅ Restructure event namespace: `soothe.agentic.*` → `soothe.cognition.loop.*`
+9. 🚧 Create hierarchical module structure: `loop_agent/`, `goal_manager/`
 
 ## Architecture
 
@@ -120,8 +123,55 @@ while state.iteration < max_iterations:
 - ✅ Control flow diagrams updated
 - ✅ Event system documented
 - ✅ Three-layer architecture explained
+- ✅ Layer Integration Architecture section added
+- ✅ Event namespace migrated to `soothe.cognition.loop.*`
+- ✅ Module Structure section added
 
-### Phase 3: Judge Implementation
+### Phase 2.5: Module Structure Creation (NEW)
+
+**Files**: `src/soothe/cognition/loop_agent/`, `src/soothe/cognition/goal_manager/`
+
+**Tasks**:
+- [ ] Create `loop_agent/` module structure
+  - [ ] Create `loop_agent/__init__.py` with public API
+  - [ ] Create `loop_agent/core/` directory
+  - [ ] Create `loop_agent/integration/` directory
+  - [ ] Create `loop_agent/execution/` directory
+- [ ] Move `core/loop_state.py` to `loop_agent/core/state.py`
+- [ ] Create `loop_agent/core/schemas.py` (move schemas from state.py)
+- [ ] Create `loop_agent/core/events.py` with event classes
+- [ ] Create `loop_agent/integration/context_borrower.py`
+- [ ] Create `loop_agent/integration/goal_adapter.py`
+- [ ] Create `loop_agent/integration/tool_loop_adapter.py`
+- [ ] Create `loop_agent/execution/judge.py`
+- [ ] Create `loop_agent/execution/failure_detector.py`
+
+**Acceptance Criteria**:
+- Module structure matches RFC-0008 specification
+- All imports updated from `core.loop_state` to `cognition.loop_agent.core.state`
+- No breaking changes to existing code (backward compatibility maintained)
+
+### Phase 3: Event System Update (NEW)
+
+**Files**: `src/soothe/core/event_catalog.py`, `src/soothe/core/base_events.py`
+
+**Tasks**:
+- [ ] Create event classes in `loop_agent/core/events.py`:
+  - [ ] Loop lifecycle events (started, completed)
+  - [ ] Iteration events (started, completed)
+  - [ ] Phase events (plan/act/judge started/completed)
+  - [ ] Decision events (judgment, retry, replan)
+  - [ ] Error events (max_iterations, degenerate_retry)
+- [ ] Register events in event catalog with `soothe.cognition.loop.*` namespace
+- [ ] Update existing `AgenticIterationCompletedEvent` to use new namespace
+- [ ] Create event emission points in runner
+
+**Acceptance Criteria**:
+- All events use `soothe.cognition.loop.*` namespace
+- Events registered in catalog
+- Event emission tested
+
+### Phase 4: Judge Implementation
 
 **Files**: `src/soothe/core/runner/_runner_agentic.py`
 

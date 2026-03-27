@@ -74,6 +74,11 @@ def render_plan_tree(plan: Plan, title: str | None = None) -> Tree:
     label = title or f"Plan: {plan.goal}"
     tree = Tree(Text(label, style="bold cyan"))
 
+    # Add reasoning if present
+    if plan.reasoning:
+        reasoning_node = tree.add(Text("Reasoning", style="dim italic"))
+        reasoning_node.add(Text(plan.reasoning, style="dim"))
+
     # Add general activity under root if present
     if plan.general_activity:
         activity_node = tree.add(Text("General", style="dim italic"))

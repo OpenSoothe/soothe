@@ -19,10 +19,6 @@ from soothe.ux.core.message_processing import (
 
 logger = logging.getLogger(__name__)
 
-# Threshold for large report detection (characters)
-# Reports exceeding this size are written to file instead of stdout
-REPORT_STDOUT_THRESHOLD = 4000
-
 
 class _CliOutputFormatter(OutputFormatter):
     """CLI output formatter for headless mode with tool call buffering.
@@ -203,17 +199,25 @@ class _CliOutputFormatter(OutputFormatter):
         self._call_order.clear()
 
 
-def _output_final_report(report_text: str, workspace_path: str) -> None:
+def _output_final_report(
+    report_text: str,
+    workspace_path: str,
+    *,
+    display_threshold: int = 20000,
+    preview_chars: int = 500,
+) -> None:
     """Output final report with dynamic routing based on size.
 
-    Small reports (< REPORT_STDOUT_THRESHOLD chars) are written to stdout directly.
+    Small reports (< display_threshold chars) are written to stdout directly.
     Large reports are saved to a file with user notification and preview.
 
     Args:
         report_text: The full report text to output.
         workspace_path: Workspace path for saving report files.
+        display_threshold: Max chars for stdout output (default 20KB).
+        preview_chars: Chars to show in preview when saved to file.
     """
-    if len(report_text) < REPORT_STDOUT_THRESHOLD:
+    if len(report_text) < display_threshold:
         # Small report: output to stdout
         sys.stdout.write("\n\n")
         sys.stdout.write(report_text)
@@ -232,12 +236,12 @@ def _output_final_report(report_text: str, workspace_path: str) -> None:
             report_path = reports_dir / f"report_{timestamp}.md"
             report_path.write_text(report_text, encoding="utf-8")
 
-            # Show notification and preview
-            sys.stdout.write(f"\n\n[Report saved to: {report_path}]\n")
-            # Show preview (first ~500 chars)
-            preview_len = 500
-            if len(report_text) > preview_len:
-                preview = report_text[:preview_len] + "\n...\n(truncated, see full report in file)"
+            # Show notification with character count
+            sys.stdout.write(f"\n\n[Report: {len(report_text):,} chars → saved to: {report_path}]\n")
+
+            # Show preview
+            if len(report_text) > preview_chars:
+                preview = report_text[:preview_chars] + "\n...\n(truncated, see full report in file)"
             else:
                 preview = report_text
             sys.stdout.write(f"\nPreview:\n{preview}\n")
@@ -349,7 +353,12 @@ async def run_headless_standalone(
                 if etype == FINAL_REPORT:
                     report_text = data.get("summary", "")
                     if report_text:
-                        _output_final_report(report_text, workspace_path)
+                        _output_final_report(
+                            report_text,
+                            workspace_path,
+                            display_threshold=cfg.logging.report_output.display_threshold,
+                            preview_chars=cfg.logging.report_output.preview_chars,
+                        )
                         state.full_response.append(report_text)
                     # Reset multi-step flag after final report
                     state.multi_step_active = False

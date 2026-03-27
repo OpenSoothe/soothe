@@ -176,6 +176,7 @@ class AudioQATool(BaseTool):
     )
 
     cache_dir: str = Field(default="")
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
 
     def _run(self, audio_path: str, question: str) -> str:
         """Answer question about audio content.
@@ -200,9 +201,14 @@ class AudioQATool(BaseTool):
 
         # Use LLM to answer question
         try:
-            from langchain_openai import ChatOpenAI
+            # Use Soothe config if available, otherwise fallback to ChatOpenAI
+            if self.config is not None:
+                llm = self.config.create_chat_model("fast")
+            else:
+                from langchain_openai import ChatOpenAI
 
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+                logger.warning("No config provided to AudioQATool, using ChatOpenAI with default model")
+                llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
             prompt = f"""Based on the following audio transcription, answer the question.
 
@@ -224,13 +230,16 @@ Answer:"""
         return self._run(audio_path, question)
 
 
-def create_audio_tools() -> list[BaseTool]:
+def create_audio_tools(config: Any = None) -> list[BaseTool]:
     """Create audio transcription and analysis tools.
+
+    Args:
+        config: Optional SootheConfig for model creation.
 
     Returns:
         List containing AudioTranscriptionTool and AudioQATool.
     """
     return [
         AudioTranscriptionTool(),
-        AudioQATool(),
+        AudioQATool(config=config),
     ]

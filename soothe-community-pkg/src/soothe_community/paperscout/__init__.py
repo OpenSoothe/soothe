@@ -28,7 +28,7 @@ Configuration (config.yml):
             library_id: "${ZOTERO_LIBRARY_ID}"
 
 Usage:
-    soothe run "Find recent papers on transformer architectures" --subagent paperscout
+    soothe "Find recent papers on transformer architectures" --subagent paperscout
 """
 
 from __future__ import annotations

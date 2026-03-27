@@ -1,7 +1,7 @@
 # =============================================================================
 # Soothe Configuration
 # =============================================================================
-# Use: soothe run --config config/config.yml
+# Use: soothe --config config/config.yml
 # All values are defaults unless noted. Remove sections you don't need.
 
 # =============================================================================
@@ -61,6 +61,28 @@ embedding_dims: 1536
 workspace_dir: "."
 debug: false
 activity_max_lines: 300
+
+# =============================================================================
+# Agentic Loop Configuration (RFC-0008)
+# =============================================================================
+
+agentic:
+  # Enable agentic loop mode (default: true)
+  enabled: true
+
+  # Use RFC-0008 PLAN → ACT → JUDGE with LLM-based judgment (default: true)
+  # When false: Uses legacy OBSERVE → ACT → VERIFY with text pattern matching
+  # When true: Uses RFC-0008 PLAN → ACT → JUDGE with structured output
+  use_judge_engine: true
+
+  # Maximum loop iterations (default: 3, max: 10)
+  max_iterations: 3
+
+  # Observation strategy: "minimal" | "comprehensive" | "adaptive"
+  observation_strategy: "adaptive"
+
+  # Verification strictness: "lenient" | "moderate" | "strict"
+  verification_strictness: "moderate"
 
 # =============================================================================
 # Subagents

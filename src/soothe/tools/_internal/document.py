@@ -37,6 +37,7 @@ class DocumentQATool(BaseTool):
     parser: str = Field(default="pymupdf")
     text_limit: int = Field(default=100000)  # Max characters to extract
     cache_dir: str = Field(default="")
+    config: Any = Field(default=None, exclude=True)  # SootheConfig for model creation
 
     def _get_cache_path(self, document_path: str) -> Path | None:
         """Get cache file path for parsed document."""
@@ -147,9 +148,14 @@ class DocumentQATool(BaseTool):
             Summary.
         """
         try:
-            from langchain_openai import ChatOpenAI
+            # Use Soothe config if available, otherwise fallback to ChatOpenAI
+            if self.config is not None:
+                llm = self.config.create_chat_model("fast")
+            else:
+                from langchain_openai import ChatOpenAI
 
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+                logger.warning("No config provided to DocumentQATool, using ChatOpenAI with default model")
+                llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
             # Truncate if too long
             if len(text) > self.text_limit:
@@ -179,9 +185,14 @@ Provide a concise summary highlighting the key points:"""
             Answer to question.
         """
         try:
-            from langchain_openai import ChatOpenAI
+            # Use Soothe config if available, otherwise fallback to ChatOpenAI
+            if self.config is not None:
+                llm = self.config.create_chat_model("fast")
+            else:
+                from langchain_openai import ChatOpenAI
 
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+                logger.warning("No config provided to DocumentQATool, using ChatOpenAI with default model")
+                llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
             # Truncate if too long
             if len(text) > self.text_limit:
@@ -355,14 +366,17 @@ class GetDocumentInfoTool(BaseTool):
         return self._run(document_path)
 
 
-def create_document_tools() -> list[BaseTool]:
+def create_document_tools(config: Any = None) -> list[BaseTool]:
     """Create document parsing tools.
+
+    Args:
+        config: Optional SootheConfig for model creation.
 
     Returns:
         List containing DocumentQATool, ExtractTextTool, and GetDocumentInfoTool.
     """
     return [
-        DocumentQATool(),
+        DocumentQATool(config=config),
         ExtractTextTool(),
         GetDocumentInfoTool(),
     ]

@@ -423,32 +423,47 @@ def strip_internal_tags(text: str) -> str:
     return policy.filter_content(text)
 
 
-def extract_tool_brief(tool_name: str, content: str, max_length: int = 120) -> str:
+def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: int = 120) -> str:
     r"""Extract a concise one-line summary from tool result content.
 
-    For search tools (search_web, crawl_web), the first line
-    is typically a human-readable header like "20 results in 15.0s for 'query'" —
-    use that instead of the raw content which may contain XML tags and source data.
+    Uses semantic formatters to provide tool-specific summaries with meaningful
+    metrics (size, count, status) instead of simple truncation.
 
     Args:
         tool_name: Name of the tool that produced the content.
-        content: Tool result content as string.
-        max_length: Maximum length of the brief (default 120).
+        content: Tool result content (string, dict, or ToolOutput).
+        max_length: Maximum length of the brief (default 120, unused for semantic formatting).
 
     Returns:
-        Truncated brief suitable for display.
+        Semantic brief suitable for display.
 
     Example:
-        >>> extract_tool_brief("search_web", "10 results in 1.2s for 'python'\n...more data...")
-        "10 results in 1.2s for 'python'"
+        >>> extract_tool_brief("read_file", "Hello\\nWorld\\n")
+        "✓ Read 12 B (2 lines)"
+        >>> extract_tool_brief("run_command", "output")
+        "✓ Done (6 chars output)"
     """
-    # Web search/crawl tools return structured output with summary on first line
-    web_tools = {"search_web", "crawl_web"}
-    if tool_name in web_tools:
-        first_line = content.split("\n", 1)[0].strip()
-        if first_line:
-            return first_line[:max_length]
-    return content.replace("\n", " ")[:max_length]
+    # Use semantic formatter for tool-specific summarization
+    from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+
+    try:
+        formatter = ToolOutputFormatter()
+        brief = formatter.format(tool_name, content)
+        return brief.to_display()
+    except Exception:
+        # Fallback to simple truncation if formatter fails
+        if isinstance(content, str):
+            # Web search/crawl tools return structured output with summary on first line
+            web_tools = {"search_web", "crawl_web"}
+            if tool_name in web_tools:
+                first_line = content.split("\n", 1)[0].strip()
+                if first_line:
+                    return first_line[:max_length]
+            return content.replace("\n", " ")[:max_length]
+        if isinstance(content, dict):
+            # Simple dict formatting
+            return f"Dict with {len(content)} fields"
+        return str(content)[:max_length]
 
 
 def coerce_tool_call_args_to_dict(raw: Any) -> dict[str, Any]:
