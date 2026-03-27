@@ -168,9 +168,9 @@ class _CliOutputFormatter(OutputFormatter):
     def _emit_result(self, brief: str, prefix: str | None) -> None:
         """Emit a result line to stderr."""
         if prefix:
-            sys.stderr.write(f"[{prefix}]   └ ✓ {brief}\n")
+            sys.stderr.write(f"[{prefix}]   └ {brief}\n")
         else:
-            sys.stderr.write(f"  └ ✓ {brief}\n")
+            sys.stderr.write(f"  └ {brief}\n")
         sys.stderr.flush()
 
     def _emit_call_result_pair(self, tool_call_id: str) -> None:
