@@ -113,10 +113,18 @@ class _FakeDaemonClient:
             return None
         return self._events.pop(0)
 
-    async def subscribe_thread(self, thread_id: str) -> None:
+    async def subscribe_thread(
+        self,
+        thread_id: str,
+        verbosity: str = "normal",  # RFC-0022: Add verbosity parameter
+    ) -> None:
         self.subscribe_calls.append(thread_id)
 
-    async def wait_for_subscription_confirmed(self, thread_id: str) -> None:
+    async def wait_for_subscription_confirmed(
+        self,
+        thread_id: str,
+        verbosity: str = "normal",  # RFC-0022: Add verbosity parameter
+    ) -> None:
         return None
 
 

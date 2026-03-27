@@ -1,0 +1,3 @@
+[submodule "thirdparty/community"]
+	path = thirdparty/community
+	url = git@github.com:caesar0301/soothe-community.git

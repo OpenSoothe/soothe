@@ -18,8 +18,12 @@ async def test_publish_to_single_subscriber():
     event = {"type": "test", "data": "hello"}
     await bus.publish("thread:abc123", event)
 
-    received = await queue.get()
-    assert received == event
+    received_data = await queue.get()
+    # RFC-0022: EventBus now returns (event, event_meta) tuple
+    assert isinstance(received_data, tuple)
+    received_event, received_meta = received_data
+    assert received_event == event
+    assert received_meta is None  # No metadata provided
 
 
 @pytest.mark.asyncio
@@ -35,8 +39,12 @@ async def test_publish_to_multiple_subscribers():
     event = {"type": "test", "data": "hello"}
     await bus.publish("thread:abc123", event)
 
-    assert await queue1.get() == event
-    assert await queue2.get() == event
+    # RFC-0022: EventBus now returns (event, event_meta) tuple
+    received1 = await queue1.get()
+    received2 = await queue2.get()
+    assert isinstance(received1, tuple) and isinstance(received2, tuple)
+    assert received1[0] == event
+    assert received2[0] == event
 
 
 @pytest.mark.asyncio
@@ -88,7 +96,10 @@ async def test_queue_overflow():
         await bus.publish("thread:abc123", {"type": "test", "data": i})
 
     # Only one event in queue
-    event = await queue.get()
+    received_data = await queue.get()
+    # RFC-0022: EventBus now returns (event, event_meta) tuple
+    assert isinstance(received_data, tuple)
+    event, _ = received_data
     assert event["data"] == 0
 
     # Queue is now empty (overflow events dropped)
@@ -119,10 +130,13 @@ async def test_multiple_topics():
     await bus.publish("thread:def456", {"type": "test2"})
 
     # Each queue only gets its own topic
-    event1 = await queue1.get()
+    # RFC-0022: EventBus now returns (event, event_meta) tuple
+    received1 = await queue1.get()
+    received2 = await queue2.get()
+    assert isinstance(received1, tuple) and isinstance(received2, tuple)
+    event1, _ = received1
+    event2, _ = received2
     assert event1["type"] == "test1"
-
-    event2 = await queue2.get()
     assert event2["type"] == "test2"
 
     # Queues should be empty
