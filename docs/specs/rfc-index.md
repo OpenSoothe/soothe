@@ -24,12 +24,12 @@ This document provides an index of all RFCs in this project.
 | [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | RFC-0001, RFC-0002, RFC-0007 |
 | [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
 | [RFC-0011](./RFC-0011-dynamic-goal-management.md) | Dynamic Goal Management During Reflection | Draft | RFC-0007, RFC-0009, RFC-0010 |
-| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Draft | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Draft | RFC-0003, RFC-0013 |
-| [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Draft | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
+| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Implemented | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | RFC-0003, RFC-0013 |
+| [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
 | [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | RFC-0003, RFC-0015 |
 | [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
-| [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Draft | RFC-0018, RFC-0019 |
+| [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | RFC-0018, RFC-0019 |
 
 ### Implementation Interface Design
 
@@ -71,8 +71,8 @@ RFC-0001 (System Conceptual Design)
 ## RFC Status Summary
 
 - **Total RFCs**: 21
-- **Implemented**: 10
-- **Draft**: 11
+- **Implemented**: 19
+- **Draft**: 2
 
 ## Line Count Summary (After Compaction)
 

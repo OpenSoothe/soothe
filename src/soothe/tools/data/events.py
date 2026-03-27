@@ -72,22 +72,27 @@ from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
     DataInspectionStartedEvent,
+    verbosity="tool_activity",
     summary_template="Inspecting: {file_path} ({domain})",
 )
 register_event(
     DataInspectionCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Inspection complete: {result_summary}",
 )
 register_event(
     DataQualityCheckEvent,
+    verbosity="tool_activity",
     summary_template="Quality check: {issues_found} issues found",
 )
 register_event(
     TextExtractionStartedEvent,
+    verbosity="tool_activity",
     summary_template="Extracting text from: {file_path}",
 )
 register_event(
     TextExtractionCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Extracted {char_count} characters",
 )
 

@@ -176,7 +176,7 @@ class DisplayPolicy:
             # Check if it's an internal research event
             if "internal" in event_type:
                 return EventCategory.INTERNAL
-            return EventCategory.PROTOCOL
+            return EventCategory.TOOL_ACTIVITY
         if domain == "subagent":
             if "thinking" in event_type or "heartbeat" in event_type:
                 return EventCategory.THINKING

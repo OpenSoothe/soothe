@@ -6,10 +6,10 @@
 |-------|-------|
 | RFC Number | 0021 |
 | Title | Research Subagent |
-| Status | Draft |
+| Status | Implemented |
 | Type | Architecture Design |
 | Created | 2026-03-26 |
-| Updated | 2026-03-26 |
+| Updated | 2026-03-27 |
 | Authors | Claude (AI Agent) |
 | Replaces | RFC-0014 (Research Tool - implied) |
 | Superseded By | - |

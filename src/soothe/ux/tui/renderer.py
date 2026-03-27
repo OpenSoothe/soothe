@@ -7,6 +7,7 @@ Rich panel widgets with streaming support and visual styling.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -46,6 +47,9 @@ class TuiRendererState:
 
     # Track in-progress tool calls for result correlation
     current_tool_calls: dict[str, dict[str, str]] = field(default_factory=dict)
+
+    # Track tool call start times for duration display (RFC-0020)
+    tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
 
 class TuiRenderer:
@@ -178,6 +182,8 @@ class TuiRenderer:
                 "name": display_name,
                 "args_summary": args_summary,
             }
+            # Track start time for duration display (RFC-0020)
+            self._state.tool_call_start_times[tool_call_id] = time.time()
 
         # Finalize streaming before tool block
         if self._state.streaming_active:
@@ -195,7 +201,7 @@ class TuiRenderer:
         is_error: bool,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool result to panel.
+        """Write tool result to panel with duration.
 
         Args:
             name: Tool name.
@@ -211,6 +217,12 @@ class TuiRenderer:
         if tool_call_id:
             self._state.current_tool_calls.pop(tool_call_id, None)
 
+        # Calculate duration (RFC-0020)
+        duration_ms = 0
+        if tool_call_id and tool_call_id in self._state.tool_call_start_times:
+            start_time = self._state.tool_call_start_times.pop(tool_call_id)
+            duration_ms = int((time.time() - start_time) * 1000)
+
         icon = "✗" if is_error else "✓"
         icon_color = "red" if is_error else "green"
 
@@ -218,6 +230,10 @@ class TuiRenderer:
         result_line.append("  └ ", style="dim")
         result_line.append(icon + " ", style=icon_color)
         result_line.append(result[:120], style="dim")
+
+        # Add duration to result (RFC-0020 two-level tree)
+        if duration_ms > 0:
+            result_line.append(f" ({duration_ms}ms)", style="dim")
 
         self._on_panel_write(result_line)
 

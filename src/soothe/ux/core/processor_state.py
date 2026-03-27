@@ -44,6 +44,10 @@ class ProcessorState:
     # Internal context tracking (suppress internal LLM responses)
     internal_context_active: bool = False
 
+    # Tool call timing for duration display (RFC-0020)
+    # Maps tool_call_id -> start_timestamp
+    tool_call_start_times: dict[str, float] = field(default_factory=dict)
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -51,6 +55,7 @@ class ProcessorState:
         Clears streaming buffers but preserves session state.
         """
         self.pending_tool_calls.clear()
+        self.tool_call_start_times.clear()
 
     def clear_session(self) -> None:
         """Clear all session state.
@@ -62,3 +67,4 @@ class ProcessorState:
         self.current_plan = None
         self.multi_step_active = False
         self.internal_context_active = False
+        self.tool_call_start_times.clear()

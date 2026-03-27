@@ -7,10 +7,12 @@ stdout (assistant text) and stderr (progress/tool events).
 from __future__ import annotations
 
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.tools.display_names import get_tool_display_name
+from soothe.ux.cli.utils import make_tool_block
 from soothe.ux.core.display_policy import VerbosityLevel
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.core.progress_verbosity import should_show
@@ -37,6 +39,9 @@ class CliRendererState:
 
     # Track current plan for status display
     current_plan: Plan | None = None
+
+    # Track tool call start times for duration display (RFC-0020)
+    tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
 
 class CliRenderer:
@@ -105,7 +110,7 @@ class CliRenderer:
         self,
         name: str,
         args: dict[str, Any],
-        tool_call_id: str,  # noqa: ARG002
+        tool_call_id: str,
         *,
         is_main: bool,  # noqa: ARG002
     ) -> None:
@@ -125,8 +130,15 @@ class CliRenderer:
         display_name = get_tool_display_name(name)
         args_str = format_tool_call_args(name, {"args": args})
 
+        # Use display helper for consistency with TUI (RFC-0020 Principle 5)
+        tool_block = make_tool_block(display_name, args_str, status="running")
+
+        # Track start time for duration display (RFC-0020)
+        if tool_call_id:
+            self._state.tool_call_start_times[tool_call_id] = time.time()
+
         # Add double newline before tool for clear visual separation
-        sys.stderr.write(f"\n\n⚙ {display_name}{args_str}\n")
+        sys.stderr.write(f"\n\n{tool_block}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -135,12 +147,12 @@ class CliRenderer:
         self,
         name: str,  # noqa: ARG002
         result: str,
-        tool_call_id: str,  # noqa: ARG002
+        tool_call_id: str,
         *,
         is_error: bool,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool result to stderr in tree format.
+        """Write tool result to stderr in tree format with duration.
 
         Args:
             name: Tool name.
@@ -154,8 +166,19 @@ class CliRenderer:
 
         self._ensure_newline()
 
+        # Calculate duration (RFC-0020)
+        duration_ms = 0
+        if tool_call_id and tool_call_id in self._state.tool_call_start_times:
+            start_time = self._state.tool_call_start_times.pop(tool_call_id)
+            duration_ms = int((time.time() - start_time) * 1000)
+
+        # Format as child line with duration (RFC-0020 two-level tree)
         icon = "✗" if is_error else "✓"
-        sys.stderr.write(f"  └ {icon} {result}\n")
+        result_line = f"  └ {icon} {result}"
+        if duration_ms > 0:
+            result_line += f" ({duration_ms}ms)"
+
+        sys.stderr.write(result_line + "\n")
         sys.stderr.flush()
 
     def on_status_change(self, state: str) -> None:

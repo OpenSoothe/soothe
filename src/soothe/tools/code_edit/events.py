@@ -62,18 +62,22 @@ from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
     FileEditStartedEvent,
+    verbosity="tool_activity",
     summary_template="Editing: {path}",
 )
 register_event(
     FileEditCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Edited: +{lines_added}/-{lines_removed} lines",
 )
 register_event(
     FileEditFailedEvent,
+    verbosity="tool_activity",
     summary_template="Edit failed: {error}",
 )
 register_event(
     DiffAppliedEvent,
+    verbosity="tool_activity",
     summary_template="Applied diff to {path}",
 )
 

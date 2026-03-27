@@ -6,6 +6,15 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-27 | RFC-0002 | Implemented | Status updated to reflect complete implementation of all 8 core protocols |
+| 2026-03-27 | RFC-0003 | Implemented | Status updated to reflect full CLI/TUI implementation |
+| 2026-03-27 | RFC-0004 | Implemented | Status updated to reflect Skillify subagent implementation |
+| 2026-03-27 | RFC-0005 | Implemented | Status updated to reflect Weaver subagent implementation |
+| 2026-03-27 | RFC-0006 | Implemented | Status updated to reflect Context and Memory backends implementation |
+| 2026-03-27 | RFC-0013 | Implemented | Status updated to reflect multi-transport daemon implementation |
+| 2026-03-27 | RFC-0015 | Implemented | Status updated to reflect progress event system implementation |
+| 2026-03-27 | RFC-0018 | Implemented | Status updated to reflect plugin system with decorator API implementation |
+| 2026-03-27 | RFC-0021 | Implemented | Status updated to reflect research subagent implementation |
 | 2026-03-24 | RFC-0018 | Draft | Updated: Renamed to "Plugin Extension Specification", simplified scope to tools + subagents with decorator-based API |
 | 2026-03-23 | RFC-0018 | Draft | Initial Plugin Extension Specification |
 | 2026-03-12 | RFC-0001 | Draft | Initial Conceptual Design (Platonic Init) |

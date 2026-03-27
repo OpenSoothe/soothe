@@ -58,18 +58,22 @@ from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
     GoalCreatedEvent,
+    verbosity="tool_activity",
     summary_template="Goal created: {description}",
 )
 register_event(
     GoalCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Goal completed: {goal_id}",
 )
 register_event(
     GoalFailedEvent,
+    verbosity="tool_activity",
     summary_template="Goal failed: {reason}",
 )
 register_event(
     GoalListedEvent,
+    verbosity="tool_activity",
     summary_template="Listed {count} goals",
 )
 

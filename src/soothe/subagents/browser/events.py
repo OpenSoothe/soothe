@@ -13,6 +13,25 @@ from pydantic import ConfigDict
 from soothe.core.base_events import SubagentEvent
 
 
+class BrowserDispatchedEvent(SubagentEvent):
+    """Browser subagent dispatched event."""
+
+    type: Literal["soothe.subagent.browser.dispatched"] = "soothe.subagent.browser.dispatched"
+    task: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class BrowserCompletedEvent(SubagentEvent):
+    """Browser subagent completed event."""
+
+    type: Literal["soothe.subagent.browser.completed"] = "soothe.subagent.browser.completed"
+    duration_ms: int = 0
+    success: bool = True
+
+    model_config = ConfigDict(extra="allow")
+
+
 class BrowserStepEvent(SubagentEvent):
     """Browser automation step event."""
 
@@ -40,6 +59,16 @@ class BrowserCdpEvent(SubagentEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
+    BrowserDispatchedEvent,
+    verbosity="subagent_progress",
+    summary_template="Browser: {task}",
+)
+register_event(
+    BrowserCompletedEvent,
+    verbosity="subagent_progress",
+    summary_template="Completed in {duration_ms}ms",
+)
+register_event(
     BrowserStepEvent,
     verbosity="subagent_progress",
     summary_template="Step {step}",
@@ -51,12 +80,18 @@ register_event(
 )
 
 # Event type constants for convenient imports
+SUBAGENT_BROWSER_DISPATCHED = "soothe.subagent.browser.dispatched"
+SUBAGENT_BROWSER_COMPLETED = "soothe.subagent.browser.completed"
 SUBAGENT_BROWSER_STEP = "soothe.subagent.browser.step"
 SUBAGENT_BROWSER_CDP = "soothe.subagent.browser.cdp"
 
 __all__ = [
     "SUBAGENT_BROWSER_CDP",
+    "SUBAGENT_BROWSER_COMPLETED",
+    "SUBAGENT_BROWSER_DISPATCHED",
     "SUBAGENT_BROWSER_STEP",
     "BrowserCdpEvent",
+    "BrowserCompletedEvent",
+    "BrowserDispatchedEvent",
     "BrowserStepEvent",
 ]

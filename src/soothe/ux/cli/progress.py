@@ -2,10 +2,12 @@
 
 This module provides simple progress event rendering to stderr.
 Refactored for RFC-0019 unified event processing.
+Refactored for RFC-0020 registry-driven display.
 """
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +21,7 @@ from soothe.core.event_catalog import (
     PLAN_STEP_COMPLETED,
     PLAN_STEP_FAILED,
     PLAN_STEP_STARTED,
+    REGISTRY,
 )
 from soothe.subagents.research.events import (
     TOOL_RESEARCH_ANALYZE,
@@ -35,6 +38,8 @@ from soothe.subagents.research.events import (
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
+
+logger = logging.getLogger(__name__)
 
 # Event type to human-readable label mapping
 _EVENT_LABELS: dict[str, str] = {
@@ -72,7 +77,7 @@ def render_progress_event(
     prefix: str | None = None,
     current_plan: Plan | None = None,
 ) -> None:
-    """Render a soothe.* event as a structured progress line to stderr.
+    """Render a soothe.* event using registry template with fallback to hardcoded logic.
 
     Args:
         event_type: Event type string.
@@ -89,22 +94,63 @@ def render_progress_event(
     if event_type in _SKIP_EVENTS:
         return
 
-    # Get label for event type
-    label = _EVENT_LABELS.get(event_type, "event")
-    if not label:
+    # This is a simplified renderer - only handle whitelisted events
+    # Policy events and other events are handled elsewhere
+    if event_type not in _EVENT_LABELS:
         return
 
-    # Build summary based on event type
+    # Try registry first (RFC-0020 Principle 1: Registry-Driven Display)
+    meta = REGISTRY.get_meta(event_type)
+    if meta and meta.summary_template:
+        try:
+            summary = meta.summary_template.format(**data)
+        except (KeyError, ValueError) as e:
+            logger.debug("Failed to format template for %s: %s", event_type, e)
+            # Fall through to hardcoded logic
+        else:
+            prefix_str = f"[{prefix}] " if prefix else ""
+            label = _get_event_label(event_type)
+            line = f"{prefix_str}[{label}] {summary}\n"
+            sys.stderr.write(line)
+            sys.stderr.flush()
+            return
+
+    # Fallback to hardcoded summary for special cases (backward compatibility)
     summary = _build_summary(event_type, data, current_plan)
     if not summary:
         return
 
     # Format output line
     prefix_str = f"[{prefix}] " if prefix else ""
+    label = _get_event_label(event_type)
     line = f"{prefix_str}[{label}] {summary}\n"
 
     sys.stderr.write(line)
     sys.stderr.flush()
+
+
+def _get_event_label(event_type: str) -> str:
+    """Get human-readable label for event type.
+
+    Args:
+        event_type: Event type string.
+
+    Returns:
+        Human-readable label.
+    """
+    # Check hardcoded labels first
+    if event_type in _EVENT_LABELS:
+        return _EVENT_LABELS[event_type]
+
+    # Extract domain from event type
+    segments = event_type.split(".")
+    if len(segments) >= 2:  # noqa: PLR2004
+        domain = segments[1]
+        if domain == "subagent" and len(segments) >= 3:  # noqa: PLR2004
+            return segments[2]  # e.g., "browser", "claude"
+        return domain
+
+    return "event"
 
 
 def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | None = None) -> str:

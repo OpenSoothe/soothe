@@ -2,9 +2,10 @@
 
 **RFC**: 0015
 **Title**: Progress Event Protocol
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-20
+**Updated**: 2026-03-27
 **Dependencies**: RFC-0003, RFC-0013
 
 ## Abstract

@@ -2,9 +2,9 @@ nnn# RFC-0003: CLI TUI Architecture Design
 
 **RFC**: 0003
 **Title**: CLI TUI Architecture Design
-**Status**: Accepted
+**Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-03-26
+**Updated**: 2026-03-27
 **Related**: RFC-0001, RFC-0002, RFC-0006
 
 ## Abstract

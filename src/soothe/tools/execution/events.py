@@ -112,15 +112,51 @@ class ShellRecoveryEvent(ToolEvent):
 # Register all execution events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 
-register_event(CommandStartedEvent, summary_template="Running: {command}")
-register_event(CommandCompletedEvent, summary_template="Command completed (exit={exit_code})")
-register_event(CommandFailedEvent, summary_template="Command failed: {error}")
-register_event(CommandTimeoutEvent, summary_template="Command timed out after {timeout_seconds}s")
-register_event(PythonExecutionStartedEvent, summary_template="Running Python code (session={session_id})")
-register_event(PythonExecutionCompletedEvent, summary_template="Python execution: {success}")
-register_event(BackgroundProcessStartedEvent, summary_template="Background process: PID {pid}")
-register_event(ProcessKilledEvent, summary_template="Killed process {pid}")
-register_event(ShellRecoveryEvent, summary_template="Shell recovered: {reason}")
+register_event(
+    CommandStartedEvent,
+    verbosity="tool_activity",
+    summary_template="Running: {command}",
+)
+register_event(
+    CommandCompletedEvent,
+    verbosity="tool_activity",
+    summary_template="Command completed (exit={exit_code})",
+)
+register_event(
+    CommandFailedEvent,
+    verbosity="tool_activity",
+    summary_template="Command failed: {error}",
+)
+register_event(
+    CommandTimeoutEvent,
+    verbosity="tool_activity",
+    summary_template="Command timed out after {timeout_seconds}s",
+)
+register_event(
+    PythonExecutionStartedEvent,
+    verbosity="tool_activity",
+    summary_template="Running Python code (session={session_id})",
+)
+register_event(
+    PythonExecutionCompletedEvent,
+    verbosity="tool_activity",
+    summary_template="Python execution: {success}",
+)
+register_event(
+    BackgroundProcessStartedEvent,
+    verbosity="tool_activity",
+    summary_template="Background process: PID {pid}",
+)
+register_event(
+    ProcessKilledEvent,
+    verbosity="tool_activity",
+    summary_template="Killed process {pid}",
+)
+register_event(
+    ShellRecoveryEvent,
+    verbosity="tool_activity",
+    summary_template="Shell recovered: {reason}",
+)
 
 # Event type constants for convenient imports
 TOOL_EXECUTION_COMMAND_STARTED = "soothe.tool.execution.command_started"

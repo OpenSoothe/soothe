@@ -72,22 +72,27 @@ from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
     AudioTranscriptionStartedEvent,
+    verbosity="tool_activity",
     summary_template="Transcribing: {audio_path}",
 )
 register_event(
     AudioTranscriptionCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Transcribed ({duration}s, {language})",
 )
 register_event(
     AudioTranscriptionFailedEvent,
+    verbosity="tool_activity",
     summary_template="Transcription failed: {error}",
 )
 register_event(
     AudioCacheHitEvent,
+    verbosity="tool_activity",
     summary_template="Using cached transcription",
 )
 register_event(
     AudioDownloadEvent,
+    verbosity="tool_activity",
     summary_template="Downloading audio from URL",
 )
 

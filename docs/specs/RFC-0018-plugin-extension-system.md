@@ -2,10 +2,10 @@
 
 **RFC**: 0018
 **Title**: Plugin Extension Specification
-**Status**: Draft
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-23
-**Updated**: 2026-03-24
+**Updated**: 2026-03-27
 **Dependencies**: RFC-0001, RFC-0002, RFC-0008, RFC-0013
 **Related**: RFC-0015
 

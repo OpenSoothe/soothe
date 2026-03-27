@@ -83,26 +83,32 @@ from soothe.core.event_catalog import register_event  # noqa: E402
 
 register_event(
     VideoUploadStartedEvent,
+    verbosity="tool_activity",
     summary_template="Uploading video ({file_size_mb:.1f}MB)",
 )
 register_event(
     VideoUploadCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Video uploaded: {file_name}",
 )
 register_event(
     VideoProcessingEvent,
+    verbosity="tool_activity",
     summary_template="Processing video: {state}",
 )
 register_event(
     VideoAnalysisStartedEvent,
+    verbosity="tool_activity",
     summary_template="Analyzing video",
 )
 register_event(
     VideoAnalysisCompletedEvent,
+    verbosity="tool_activity",
     summary_template="Video analysis complete",
 )
 register_event(
     VideoAnalysisFailedEvent,
+    verbosity="tool_activity",
     summary_template="Analysis failed: {error}",
 )
 
