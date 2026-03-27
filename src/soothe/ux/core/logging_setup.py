@@ -43,8 +43,12 @@ class ThreadFormatter(logging.Formatter):
         Returns:
             The formatted log message string.
         """
-        # Add thread_id to the record
-        record.thread_id = get_thread_id() or ""
+        # Add thread_id to the record, but only if it's set
+        thread_id = get_thread_id()
+        if thread_id:
+            record.thread_id = f"[{thread_id}]"
+        else:
+            record.thread_id = ""
         return super().format(record)
 
 
@@ -82,7 +86,7 @@ def setup_logging(config: SootheConfig | None = None) -> None:
         file_handler = RotatingFileHandler(
             log_file, maxBytes=cfg.logging.file.max_bytes, backupCount=cfg.logging.file.backup_count, encoding="utf-8"
         )
-        file_handler.setFormatter(ThreadFormatter("%(asctime)s [%(thread_id)s] %(levelname)-8s %(name)s %(message)s"))
+        file_handler.setFormatter(ThreadFormatter("%(asctime)s %(thread_id)s %(levelname)-8s %(name)s %(message)s"))
         file_handler.setLevel(file_level)
         root_logger.addHandler(file_handler)
 
