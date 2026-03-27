@@ -548,6 +548,7 @@ class EventMeta:
 _DOMAIN_DEFAULT_VERBOSITY: dict[str, ProgressCategory] = {
     "lifecycle": "protocol",
     "protocol": "protocol",
+    "cognition": "protocol",
     "tool": "tool_activity",
     "subagent": "subagent_custom",
     "output": "assistant_text",

@@ -78,7 +78,7 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
         if etype.endswith((".text", ".response", ".result")):
             return "protocol"
         return "subagent_custom"
-    if domain in ("lifecycle", "protocol"):
+    if domain in ("lifecycle", "protocol", "cognition"):
         return "protocol"
 
     if "thinking" in etype or "heartbeat" in etype:
