@@ -102,7 +102,7 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
 
     async def _list() -> None:
         try:
-            manager = ThreadContextManager(runner._durability, cfg)
+            manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
             threads = await manager.list_threads(include_last_message=True)
             if status_filter:
                 threads = [t for t in threads if t.status == status_filter]
@@ -265,7 +265,10 @@ def thread_archive(
 
     async def _archive() -> None:
         try:
-            await runner._durability.archive_thread(thread_id)
+            from soothe.core.thread import ThreadContextManager
+
+            manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
+            await manager.archive_thread(thread_id)
             typer.echo(f"Archived thread {thread_id}.")
         finally:
             await runner.cleanup()
@@ -353,8 +356,11 @@ def thread_delete(
 
     async def _delete() -> None:
         try:
+            from soothe.core.thread import ThreadContextManager
+
+            manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
             with contextlib.suppress(Exception):
-                await runner._durability.archive_thread(thread_id)
+                await manager.archive_thread(thread_id)
             run_dir = await asyncio.to_thread(lambda: Path(SOOTHE_HOME).expanduser() / "runs" / thread_id)
             exists = await asyncio.to_thread(run_dir.exists)
             if exists:
@@ -432,7 +438,7 @@ def thread_stats(
 
     async def _show_stats() -> None:
         try:
-            manager = ThreadContextManager(runner._durability, cfg)
+            manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
             stats = await manager.get_thread_stats(thread_id)
 
             typer.echo(f"Thread: {thread_id}")
@@ -479,7 +485,7 @@ def thread_tag(
 
     async def _tag() -> None:
         try:
-            manager = ThreadContextManager(runner._durability, cfg)
+            manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
             thread = await manager.get_thread(thread_id)
 
             # Get current metadata

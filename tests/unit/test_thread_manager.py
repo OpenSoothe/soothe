@@ -49,6 +49,7 @@ def mock_config():
     config = MagicMock()
     config.persistence = MagicMock()
     config.persistence.persist_dir = "/tmp/test_soothe"
+    config.mcp_servers = []
     return config
 
 
@@ -189,6 +190,63 @@ async def test_archive_thread(mock_durability, mock_config):
     await manager.archive_thread("test123")
 
     mock_durability.archive_thread.assert_called_once_with("test123")
+
+
+@pytest.mark.asyncio
+async def test_archive_thread_persists_context_and_cleans_mcp(mock_durability, mock_config):
+    """Archive persists context and cleans up MCP sessions."""
+    context = MagicMock()
+    context.persist = AsyncMock()
+    manager = ThreadContextManager(mock_durability, mock_config, context)
+
+    mock_mcp_manager = MagicMock()
+    mock_mcp_manager.cleanup = AsyncMock()
+    ThreadContextManager._mcp_managers["test123"] = mock_mcp_manager
+
+    try:
+        await manager.archive_thread("test123")
+    finally:
+        ThreadContextManager._mcp_managers.pop("test123", None)
+
+    context.persist.assert_called_once_with("test123")
+    mock_mcp_manager.cleanup.assert_called_once()
+    mock_durability.archive_thread.assert_called_once_with("test123")
+
+
+@pytest.mark.asyncio
+async def test_suspend_thread_persists_context_and_cleans_mcp(mock_durability, mock_config):
+    """Suspend persists context and cleans up MCP sessions."""
+    context = MagicMock()
+    context.persist = AsyncMock()
+    mock_durability.suspend_thread = AsyncMock()
+    manager = ThreadContextManager(mock_durability, mock_config, context)
+
+    mock_mcp_manager = MagicMock()
+    mock_mcp_manager.cleanup = AsyncMock()
+    ThreadContextManager._mcp_managers["test123"] = mock_mcp_manager
+
+    try:
+        await manager.suspend_thread("test123")
+    finally:
+        ThreadContextManager._mcp_managers.pop("test123", None)
+
+    context.persist.assert_called_once_with("test123")
+    mock_mcp_manager.cleanup.assert_called_once()
+    mock_durability.suspend_thread.assert_called_once_with("test123")
+
+
+@pytest.mark.asyncio
+async def test_create_thread_loads_mcp_sessions(mock_durability, mock_config):
+    """Thread creation loads MCP sessions when configured."""
+    mock_config.mcp_servers = [MagicMock()]
+    manager = ThreadContextManager(mock_durability, mock_config)
+    mock_manager = MagicMock()
+
+    with patch("soothe.mcp.loader.load_mcp_tools", new=AsyncMock(return_value=([], mock_manager))):
+        await manager.create_thread()
+
+    assert ThreadContextManager._mcp_managers["test123"] is mock_manager
+    ThreadContextManager._mcp_managers.pop("test123", None)
 
 
 @pytest.mark.asyncio

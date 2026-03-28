@@ -107,7 +107,7 @@ class DaemonHandlersMixin:
                 from soothe.core.thread import ThreadContextManager
 
                 try:
-                    manager = ThreadContextManager(self._runner._durability, self._config)
+                    manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
                     # Capture thread_info to get the resolved full thread_id
                     # (supports partial prefix matching in durability layer)
                     thread_info = await manager.resume_thread(str(thread_id))
@@ -338,7 +338,7 @@ class DaemonHandlersMixin:
         include_last_message = msg.get("include_last_message", True)  # Default to True
 
         # Create ThreadContextManager
-        manager = ThreadContextManager(self._runner._durability, self._config)
+        manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
 
         threads = await manager.list_threads(
             thread_filter,
@@ -366,7 +366,7 @@ class DaemonHandlersMixin:
         metadata = msg.get("metadata")
 
         # Create ThreadContextManager
-        manager = ThreadContextManager(self._runner._durability, self._config)
+        manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
 
         thread_info = await manager.create_thread(
             initial_message=initial_message,
@@ -392,7 +392,7 @@ class DaemonHandlersMixin:
         thread_id = msg["thread_id"]
 
         try:
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             thread = await manager.get_thread(thread_id)
             await self._broadcast(
                 {
@@ -420,7 +420,7 @@ class DaemonHandlersMixin:
         thread_id = msg["thread_id"]
 
         try:
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             await manager.archive_thread(thread_id)
             await self._broadcast(
                 {
@@ -453,7 +453,7 @@ class DaemonHandlersMixin:
         thread_id = msg["thread_id"]
 
         try:
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             await manager.delete_thread(thread_id)
             await self._broadcast(
                 {
@@ -488,7 +488,7 @@ class DaemonHandlersMixin:
         offset = msg.get("offset", 0)
 
         try:
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             messages = await manager.get_thread_messages(
                 thread_id,
                 limit=limit,
@@ -523,7 +523,7 @@ class DaemonHandlersMixin:
         thread_id = msg["thread_id"]
 
         try:
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             artifacts = await manager.get_thread_artifacts(thread_id)
             await self._broadcast(
                 {
@@ -651,7 +651,7 @@ class DaemonHandlersMixin:
         if self._draft_thread_id and self._draft_thread_id == thread_id:
             from soothe.core.thread import ThreadContextManager
 
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             # Persist the draft thread with its existing ID (not a new UUID)
             thread_info = await manager.create_thread(thread_id=self._draft_thread_id)
             # The thread_id should remain the same since we passed it explicitly
@@ -805,7 +805,7 @@ class DaemonHandlersMixin:
         if self._draft_thread_id and self._draft_thread_id == thread_id:
             from soothe.core.thread import ThreadContextManager
 
-            manager = ThreadContextManager(self._runner._durability, self._config)
+            manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
             # Persist the draft thread with its existing ID (not a new UUID)
             thread_info = await manager.create_thread(thread_id=self._draft_thread_id)
             # The thread_id should remain the same since we passed it explicitly
@@ -1013,7 +1013,7 @@ class DaemonHandlersMixin:
 
         from soothe.core.thread import ThreadContextManager
 
-        manager = ThreadContextManager(self._runner._durability, self._config)
+        manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
         thread_info = await manager.create_thread()
         self._runner.set_current_thread_id(thread_info.thread_id)
         return thread_info.thread_id

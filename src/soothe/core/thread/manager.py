@@ -7,7 +7,7 @@ import contextlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from soothe.config import SOOTHE_HOME
 from soothe.core.thread.models import (
@@ -21,6 +21,8 @@ from soothe.daemon.thread_logger import ThreadLogger
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+    from soothe.mcp.loader import MCPSessionManager
+    from soothe.protocols.context import ContextProtocol
     from soothe.protocols.durability import DurabilityProtocol, ThreadInfo
 
 logger = logging.getLogger(__name__)
@@ -31,24 +33,31 @@ class ThreadContextManager:
 
     Coordinates:
     - DurabilityProtocol (metadata)
+    - ContextProtocol (context persistence)
+    - MCP session lifecycle
     - LangGraph checkpointer (chat history)
     - ThreadLogger (conversation logs)
     - RunArtifactStore (artifacts)
     """
 
+    _mcp_managers: ClassVar[dict[str, MCPSessionManager]] = {}
+
     def __init__(
         self,
         durability: DurabilityProtocol,
         config: SootheConfig,
+        context: ContextProtocol | None = None,
     ) -> None:
         """Initialize thread manager.
 
         Args:
             durability: Durability protocol instance for metadata
             config: Soothe configuration
+            context: Optional context protocol for suspend/archive persistence
         """
         self._durability = durability
         self._config = config
+        self._context = context
 
     async def create_thread(
         self,
@@ -79,6 +88,8 @@ class ThreadContextManager:
         )
 
         logger.info("Created thread %s", thread_info.thread_id)
+
+        await self._ensure_mcp_session(thread_info.thread_id)
 
         # Initialize ThreadLogger
         ThreadLogger(thread_id=thread_info.thread_id)
@@ -113,6 +124,8 @@ class ThreadContextManager:
             thread_info = await self._recover_missing_thread_metadata(thread_id)
 
         logger.info("Resumed thread %s", thread_id)
+
+        await self._ensure_mcp_session(thread_info.thread_id)
 
         # LangGraph checkpointer automatically loads history via thread_id config
         # ThreadLogger will continue appending to existing log
@@ -336,6 +349,17 @@ class ThreadContextManager:
 
         return enhanced_threads
 
+    async def suspend_thread(self, thread_id: str) -> None:
+        """Suspend a thread after persisting context and cleaning up MCP sessions.
+
+        Args:
+            thread_id: Thread ID to suspend
+        """
+        await self._persist_context(thread_id, operation="suspend")
+        await self._cleanup_mcp_session(thread_id)
+        await self._durability.suspend_thread(thread_id)
+        logger.info("Suspended thread %s", thread_id)
+
     async def archive_thread(self, thread_id: str) -> None:
         """Archive a thread, making it read-only.
 
@@ -345,6 +369,8 @@ class ThreadContextManager:
         Raises:
             KeyError: If thread not found
         """
+        await self._persist_context(thread_id, operation="archive")
+        await self._cleanup_mcp_session(thread_id)
         await self._durability.archive_thread(thread_id)
         logger.info("Archived thread %s", thread_id)
 
@@ -495,6 +521,43 @@ class ThreadContextManager:
             error_count=error_count,
             last_error=last_error,
         )
+
+    async def _ensure_mcp_session(self, thread_id: str) -> None:
+        """Ensure MCP sessions are loaded for a thread when configured."""
+        if thread_id in self._mcp_managers or not self._config.mcp_servers:
+            return
+
+        try:
+            from soothe.mcp.loader import load_mcp_tools
+
+            _, manager = await load_mcp_tools(self._config.mcp_servers)
+            self._mcp_managers[thread_id] = manager
+            logger.info("Loaded MCP sessions for thread %s", thread_id)
+        except Exception:
+            logger.warning("Failed to load MCP sessions for thread %s", thread_id, exc_info=True)
+
+    async def _cleanup_mcp_session(self, thread_id: str) -> None:
+        """Clean up MCP sessions associated with a thread."""
+        manager = self._mcp_managers.pop(thread_id, None)
+        if manager is None:
+            return
+
+        try:
+            await manager.cleanup()
+            logger.info("Cleaned up MCP sessions for thread %s", thread_id)
+        except Exception:
+            logger.warning("Failed to clean up MCP sessions for thread %s", thread_id, exc_info=True)
+
+    async def _persist_context(self, thread_id: str, *, operation: str) -> None:
+        """Persist context for a thread before lifecycle transitions."""
+        if self._context is None:
+            return
+
+        try:
+            await self._context.persist(thread_id)
+            logger.info("Context persisted before %s for thread %s", operation, thread_id)
+        except Exception:
+            logger.warning("Context persist failed before %s for thread %s", operation, thread_id, exc_info=True)
 
     async def _get_last_human_message(self, thread_id: str) -> str | None:
         """Get the last human message from thread conversation history.

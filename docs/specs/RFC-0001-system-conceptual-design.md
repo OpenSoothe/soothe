@@ -50,7 +50,7 @@ Soothe does not implement domain logic. It composes capabilities provided by oth
 
 5. **Durable by default** -- Agent state is persistable and resumable. Crashes recover from the last persisted state. The durability protocol abstracts over the persistence backend (could be LangGraph Checkpointer, a database, or a file).
 
-6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. Two planner tiers: `DirectPlanner` (single LLM call for simple tasks) and `SubagentPlanner` (multi-turn reasoning for complex tasks). Both satisfy `PlannerProtocol`. Simple queries bypass planning entirely.
+6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. Three planner tiers: `SimplePlanner` (single LLM call for simple tasks), `AutoPlanner` (complexity router that delegates), and `ClaudePlanner` (multi-turn reasoning for complex tasks). Architectural evolution: IG-036 removed `SubagentPlanner` indirection, routing directly from `AutoPlanner`. Simple queries bypass planning entirely.
 
 7. **Least-privilege delegation** -- Every tool invocation and subagent spawn passes through a policy protocol. Permissions are structured (category + action + scope), enabling fine-grained control down to individual shell commands or file paths. Subagents inherit a narrower permission set than their parent.
 
@@ -92,7 +92,7 @@ Persists and restores agent state including thread lifecycle management (create/
 
 ### Remote Agent (`RemoteAgentProtocol`)
 
-Invokes a remote agent and returns results. Implementations for ACP, A2A, and LangGraph RemoteGraph. Each is wrapped as a deepagents `CompiledSubAgent` for uniform access via the `task` tool.
+Invokes a remote agent and returns results. Implementations for ACP, A2A, and LangGraph RemoteGraph. Future: each will be wrapped as a deepagents `CompiledSubAgent` for uniform access via the `task` tool. Current: `LangGraphRemoteAgent` uses direct `RemoteAgentProtocol` access; wrapping will be implemented when ACP/A2A backends are added.
 
 ### Plan (data model)
 
@@ -131,7 +131,7 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 5. Every tool call and subagent spawn passes through `PolicyProtocol` before execution.
 6. Agent state (including context ledger) is persistable via `DurabilityProtocol`; production deployments MUST enable persistence.
 7. Subagents receive a permission set that is a subset of their parent's.
-8. Remote agents are indistinguishable from local subagents at the delegation interface.
+8. Remote agents are indistinguishable from local subagents at the delegation interface. Current deviation: remote agents are accessed via direct protocol. Planned: wrap as `CompiledSubAgent` when ACP/A2A implementations are added, preserving the uniform delegation envelope.
 9. `PlannerProtocol` is optional -- simple queries bypass it and use deepagents' standard agent loop.
 10. Conversation history compression is handled by deepagents' `SummarizationMiddleware`; cognitive context accumulation is handled by `ContextProtocol`. These are complementary, not overlapping.
 11. MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive).

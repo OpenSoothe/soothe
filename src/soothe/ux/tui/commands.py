@@ -369,7 +369,7 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
         from soothe.core.thread import ThreadContextManager
 
         try:
-            manager = ThreadContextManager(runner._durability, runner._config)
+            manager = ThreadContextManager(runner._durability, runner._config, getattr(runner, "_context", None))
             threads = await manager.list_threads(include_last_message=True)
             if not threads:
                 console.print("[dim]No threads.[/dim]")
@@ -422,7 +422,17 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
             return
 
         try:
-            await runner._durability.archive_thread(thread_id)
+            if hasattr(runner, "_config"):
+                from soothe.core.thread import ThreadContextManager
+
+                manager = ThreadContextManager(
+                    runner._durability,
+                    runner._config,
+                    getattr(runner, "_context", None),
+                )
+                await manager.archive_thread(thread_id)
+            else:
+                await runner._durability.archive_thread(thread_id)
             console.print(f"[green]Archived thread {thread_id}[/green]")
         except Exception as exc:
             import logging

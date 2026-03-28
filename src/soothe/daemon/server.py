@@ -136,7 +136,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # Create ThreadContextManager for HTTP REST transport (RFC-0017)
         from soothe.core.thread import ThreadContextManager, ThreadExecutor
 
-        thread_manager = ThreadContextManager(self._runner._durability, self._config)
+        thread_manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
 
         # Initialize ThreadExecutor for multi-threading support (RFC-0017)
         max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
@@ -313,7 +313,14 @@ class SootheDaemon(DaemonHandlersMixin):
 
             if updated_at < threshold_with_tz:
                 try:
-                    await self._runner._durability.suspend_thread(thread.thread_id)
+                    from soothe.core.thread import ThreadContextManager
+
+                    thread_manager = ThreadContextManager(
+                        self._runner._durability,
+                        self._config,
+                        getattr(self._runner, "_context", None),
+                    )
+                    await thread_manager.suspend_thread(thread.thread_id)
                     suspended_count += 1
                     logger.info(
                         "Suspended inactive thread %s (last updated: %s)",
