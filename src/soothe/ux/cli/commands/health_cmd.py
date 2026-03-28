@@ -101,12 +101,15 @@ def checkhealth(
             if not quiet:
                 typer.echo(f"\nReport saved to: {report_path}")
 
-        # Set exit code
-        if report.overall_status == CheckStatus.OK:
+        # Set exit code based on severity
+        # INFO/SKIPPED are non-critical (exit 0 if only INFO/SKIPPED)
+        # WARNING is caution (exit 1)
+        # ERROR is critical (exit 2)
+        if report.overall_status in (CheckStatus.OK, CheckStatus.INFO, CheckStatus.SKIPPED):
             exit_code = 0
         elif report.overall_status == CheckStatus.WARNING:
             exit_code = 1
-        else:
+        else:  # ERROR
             exit_code = 2
 
         sys.exit(exit_code)

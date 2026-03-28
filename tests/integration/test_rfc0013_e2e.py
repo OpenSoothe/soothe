@@ -469,6 +469,75 @@ async def test_session_cleanup_on_unexpected_disconnect(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+async def test_unix_socket_session_cleanup_on_abrupt_disconnect(tmp_path: Path) -> None:
+    """Test that Unix socket transport properly cleans up session on abrupt disconnect.
+
+    This test validates the fix for the daemon hanging issue where Unix socket
+    transport's _handle_client finally block must call remove_session() to cancel
+    orphaned sender_tasks and prevent daemon shutdown hanging.
+    """
+    force_isolated_home(tmp_path / "soothe-home")
+    socket_path = f"/tmp/soothe-session-cleanup-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
+    config = build_daemon_config(tmp_path, socket_path)
+
+    daemon = SootheDaemon(config)
+    await daemon.start()
+
+    try:
+        # Get initial session count
+        initial_count = daemon._session_manager.session_count
+
+        # Connect client via Unix socket
+        reader, writer = await asyncio.open_unix_connection(socket_path)
+
+        # Wait for session creation (transport creates session on connect)
+        await asyncio.sleep(0.2)
+
+        # Verify session was created
+        count_after_connect = daemon._session_manager.session_count
+        assert count_after_connect == initial_count + 1, "Session should be created on client connect"
+
+        # Abrupt disconnect (close socket without proper protocol shutdown)
+        writer.close()
+        await writer.wait_closed()
+
+        # Wait for cleanup (finally block should call remove_session)
+        await asyncio.sleep(0.3)
+
+        # CRITICAL: Verify session was removed by finally block
+        final_count = daemon._session_manager.session_count
+        assert final_count == initial_count, "Session must be removed on disconnect to prevent hanging"
+
+        # Verify no orphaned sender_tasks remain
+        # Check that all asyncio tasks in the session manager are properly cleaned up
+        # This prevents daemon hanging on shutdown
+        for session_id, session in daemon._session_manager._sessions.items():
+            if session.sender_task and not session.sender_task.done():
+                pytest.fail(f"Orphaned sender_task found for session {session_id}")
+
+        # Verify daemon can shutdown cleanly (no hanging)
+        shutdown_start = time.time()
+        await daemon.stop()
+        shutdown_duration = time.time() - shutdown_start
+
+        # Daemon should shutdown within 3 seconds if no orphaned tasks
+        assert shutdown_duration < 3.0, (
+            f"Daemon shutdown took {shutdown_duration}s (> 3s), likely hanging on orphaned tasks"
+        )
+
+        # Cleanup socket file
+        Path(socket_path).unlink(missing_ok=True)
+
+    except Exception as e:
+        # Cleanup on failure
+        with contextlib.suppress(Exception):
+            await daemon.stop()
+        Path(socket_path).unlink(missing_ok=True)
+        raise
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
 async def test_client_reconnect_after_disconnect(tmp_path: Path) -> None:
     """Test that client can reconnect after disconnect and create new session."""
     force_isolated_home(tmp_path / "soothe-home")

@@ -113,10 +113,13 @@ def _check_browser_runtime() -> CheckResult:
 
 
 async def check_external_apis(config: SootheConfig | None = None) -> CategoryResult:  # noqa: ARG001
-    """Check external API connectivity.
+    """Check external API connectivity (optional services).
 
     Tests reachability of external APIs used by Soothe for
     web search, research, and other capabilities.
+
+    These are OPTIONAL services - timeouts/unavailability should be INFO/WARNING,
+    not ERROR, as they don't affect core functionality.
 
     Args:
         config: SootheConfig instance (not used for external API checks)
@@ -139,10 +142,35 @@ async def check_external_apis(config: SootheConfig | None = None) -> CategoryRes
 
     checks = await asyncio.gather(*tasks)
 
-    overall_status = aggregate_status([check.status for check in checks])
+    # For optional services, downgrade ERROR to INFO (not critical)
+    # Only keep ERROR if it's a configuration issue
+    adjusted_checks = []
+    for check in checks:
+        if check.status == CheckStatus.ERROR and check.name in (
+            "OpenAI",
+            "Google",
+            "Tavily",
+            "Serper",
+            "Jina",
+        ):
+            # Downgrade unreachable external APIs from ERROR to INFO
+            msg = check.message.split(":")[1].strip() if ":" in check.message else check.message
+            adjusted_checks.append(
+                CheckResult(
+                    name=check.name,
+                    status=CheckStatus.INFO,
+                    message=f"{check.name} API: {msg}",
+                    details={"optional": True, **check.details},
+                )
+            )
+        else:
+            adjusted_checks.append(check)
+
+    overall_status = aggregate_status([check.status for check in adjusted_checks])
 
     return CategoryResult(
         category="external_apis",
         status=overall_status,
-        checks=list(checks),
+        checks=adjusted_checks,
+        message="(optional for basic usage)",
     )

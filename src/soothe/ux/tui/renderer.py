@@ -253,7 +253,7 @@ class TuiRenderer:
         result_line = Text()
         result_line.append("  └ ", style="dim")
         result_line.append(icon + " ", style=color)
-        result_line.append(result[:120], style="dim")
+        result_line.append(result[:80], style="dim")  # RFC-0020 compliance: 80 char limit
 
         # Add duration with appropriate styling
         if duration_ms > 0:
@@ -300,7 +300,7 @@ class TuiRenderer:
         if context:
             error_line.append(f"[{context}] ", style="dim red")
 
-        error_line.append(error[:120], style=color)
+        error_line.append(error[:80], style=color)  # RFC-0020 compliance: 80 char limit
 
         self._on_panel_write(error_line)
 
@@ -384,7 +384,7 @@ class TuiRenderer:
         # Claude text events: show text preview
         if "claude.text" in event_type:
             text = data.get("text", "")
-            return text[:120] if text else None
+            return text[:80] if text else None  # RFC-0020 compliance: 80 char limit
 
         # Claude tool use: no additional details
         if "claude.tool_use" in event_type:

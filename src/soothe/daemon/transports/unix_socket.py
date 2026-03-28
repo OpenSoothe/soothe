@@ -218,6 +218,11 @@ class UnixSocketTransport(TransportServer):
         except (asyncio.CancelledError, ConnectionError):
             pass
         finally:
+            # Remove session from session manager (CRITICAL FIX for daemon hanging)
+            if self._session_manager and client.client_id:
+                await self._session_manager.remove_session(client.client_id)
+                logger.info("Removed client session %s", client.client_id)
+
             # Safe removal in case client was already removed during broadcast
             with contextlib.suppress(ValueError):
                 self._clients.remove(client)

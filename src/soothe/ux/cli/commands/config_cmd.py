@@ -86,7 +86,8 @@ def config_show(
             general_table.add_column("Value", style="yellow")
             general_table.add_row("Debug Mode", "[green]Yes[/green]" if cfg.debug else "[red]No[/red]")
             general_table.add_row("Context Backend", cfg.protocols.context.backend.title())
-            general_table.add_row("Memory Backend", cfg.protocols.memory.database_provider.title())
+            # MemU is the memory backend type (no separate backend attribute)
+            general_table.add_row("Memory Backend", "MemU" if cfg.protocols.memory.enabled else "Disabled")
             general_table.add_row("Policy Profile", cfg.protocols.policy.profile)
             general_table.add_row("Progress Verbosity", cfg.logging.verbosity)
             # Show vector store providers count

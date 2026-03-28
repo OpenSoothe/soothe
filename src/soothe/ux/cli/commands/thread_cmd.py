@@ -28,12 +28,18 @@ def thread_list(
         str | None,
         typer.Option("--status", "-s", help="Filter by status (active, archived)."),
     ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", "-l", help="Limit number of threads shown."),
+    ] = None,
 ) -> None:
     """List all agent threads.
 
     Examples:
         soothe thread list
         soothe thread list --status active
+        soothe thread list --limit 10
+        soothe thread list --limit 20 --status idle
     """
     from soothe.daemon import SootheDaemon
     from soothe.ux.core import load_config
@@ -42,12 +48,12 @@ def thread_list(
 
     # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
     if SootheDaemon.is_running():
-        _thread_list_via_daemon(cfg, status_filter=status)
+        _thread_list_via_daemon(cfg, status_filter=status, limit=limit)
     else:
-        _thread_list_standalone(cfg, status_filter=status)
+        _thread_list_standalone(cfg, status_filter=status, limit=limit)
 
 
-def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = None) -> None:
+def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
     """List threads by connecting to a running daemon."""
     from soothe.daemon import DaemonClient
 
@@ -55,7 +61,10 @@ def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = N
         client = DaemonClient()
         try:
             await client.connect()
-            await client.send_command("/thread list")
+            command = "/thread list"
+            if limit:
+                command += f" --limit {limit}"
+            await client.send_command(command)
             # Read command response
             while True:
                 event = await client.read_event()
@@ -84,7 +93,7 @@ def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = N
     asyncio.run(_list())
 
 
-def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = None) -> None:
+def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
     """List threads in standalone mode (no daemon)."""
     from soothe.core.runner import SootheRunner
     from soothe.core.thread import ThreadContextManager
@@ -97,6 +106,9 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
             threads = await manager.list_threads(include_last_message=True)
             if status_filter:
                 threads = [t for t in threads if t.status == status_filter]
+            # Apply limit (show most recent N threads)
+            if limit:
+                threads = threads[:limit]
             if not threads:
                 typer.echo("No threads.")
                 return

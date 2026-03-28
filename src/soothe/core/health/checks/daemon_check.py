@@ -17,8 +17,8 @@ def _check_pid_file() -> CheckResult:
     if not pf.exists():
         return CheckResult(
             name="pid_file",
-            status=CheckStatus.ERROR,
-            message=f"PID file not found at {pf}",
+            status=CheckStatus.INFO,
+            message=f"PID file not found at {pf} (daemon not running)",
             details={"path": str(pf)},
         )
 
@@ -28,7 +28,7 @@ def _check_pid_file() -> CheckResult:
     except (ValueError, OSError) as e:
         return CheckResult(
             name="pid_file",
-            status=CheckStatus.ERROR,
+            status=CheckStatus.WARNING,
             message=f"Invalid PID file: {e}",
             details={"path": str(pf)},
         )
@@ -84,8 +84,8 @@ def _check_socket_connectivity() -> CheckResult:
     if not sock.exists():
         return CheckResult(
             name="socket_connectivity",
-            status=CheckStatus.ERROR,
-            message=f"Socket not found at {sock}",
+            status=CheckStatus.INFO,
+            message=f"Socket not found at {sock} (daemon not running)",
             details={"path": str(sock)},
         )
 
@@ -97,7 +97,7 @@ def _check_socket_connectivity() -> CheckResult:
     except (ConnectionRefusedError, FileNotFoundError, OSError) as e:
         return CheckResult(
             name="socket_connectivity",
-            status=CheckStatus.ERROR,
+            status=CheckStatus.WARNING,
             message=f"Socket connection failed: {e}",
             details={"path": str(sock)},
         )
@@ -122,8 +122,8 @@ def _check_socket_responsiveness() -> CheckResult:
     if not sock.exists():
         return CheckResult(
             name="socket_responsiveness",
-            status=CheckStatus.ERROR,
-            message=f"Socket not found at {sock}",
+            status=CheckStatus.INFO,
+            message=f"Socket not found at {sock} (daemon not running)",
             details={"path": str(sock)},
         )
 
@@ -146,7 +146,7 @@ def _check_socket_responsiveness() -> CheckResult:
         if not response_line:
             return CheckResult(
                 name="socket_responsiveness",
-                status=CheckStatus.ERROR,
+                status=CheckStatus.WARNING,
                 message="Daemon connected but sent no response",
                 details={"path": str(sock)},
             )
@@ -157,7 +157,7 @@ def _check_socket_responsiveness() -> CheckResult:
         except json.JSONDecodeError as e:
             return CheckResult(
                 name="socket_responsiveness",
-                status=CheckStatus.ERROR,
+                status=CheckStatus.WARNING,
                 message=f"Invalid daemon response: {e}",
                 details={"path": str(sock), "raw": response_line.decode(errors="replace")},
             )
@@ -190,14 +190,14 @@ def _check_socket_responsiveness() -> CheckResult:
     except TimeoutError:
         return CheckResult(
             name="socket_responsiveness",
-            status=CheckStatus.ERROR,
+            status=CheckStatus.WARNING,
             message="Daemon socket timeout (no response within 2s)",
             details={"path": str(sock)},
         )
     except (ConnectionRefusedError, FileNotFoundError, OSError) as e:
         return CheckResult(
             name="socket_responsiveness",
-            status=CheckStatus.ERROR,
+            status=CheckStatus.WARNING,
             message=f"Socket connection failed: {e}",
             details={"path": str(sock)},
         )
@@ -319,14 +319,14 @@ async def check_daemon(config: SootheConfig | None = None) -> CategoryResult:  #
             checks.append(
                 CheckResult(
                     name="stale_locks",
-                    status=CheckStatus.ERROR,
+                    status=CheckStatus.WARNING,
                     message="Stale PID file (process not running)",
                 )
             )
 
             return CategoryResult(
                 category="daemon",
-                status=CheckStatus.ERROR,
+                status=CheckStatus.WARNING,
                 checks=checks,
                 message="Daemon not running (stale PID file)",
             )
@@ -345,9 +345,9 @@ async def check_daemon(config: SootheConfig | None = None) -> CategoryResult:  #
 
         return CategoryResult(
             category="daemon",
-            status=CheckStatus.ERROR,
+            status=CheckStatus.INFO,
             checks=checks,
-            message="Daemon not running",
+            message="Daemon not running (optional for CLI usage)",
         )
 
     # Calculate overall status

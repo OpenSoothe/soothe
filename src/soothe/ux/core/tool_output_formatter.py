@@ -185,6 +185,7 @@ class ToolOutputFormatter:
                 GoalFormatter,
                 MediaFormatter,
                 StructuredFormatter,
+                WebFormatter,
             )
 
             # Handle ToolOutput first (highest priority)
@@ -204,6 +205,9 @@ class ToolOutputFormatter:
                 return formatter.format(tool_name, result)
             if category == "goals":
                 formatter = GoalFormatter()
+                return formatter.format(tool_name, result)
+            if category == "web":
+                formatter = WebFormatter()
                 return formatter.format(tool_name, result)
             # Unknown category - use fallback
             formatter = FallbackFormatter()

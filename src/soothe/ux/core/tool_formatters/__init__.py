@@ -13,6 +13,7 @@ from soothe.ux.core.tool_formatters.file_ops import FileOpsFormatter
 from soothe.ux.core.tool_formatters.goal_formatter import GoalFormatter
 from soothe.ux.core.tool_formatters.media import MediaFormatter
 from soothe.ux.core.tool_formatters.structured import StructuredFormatter
+from soothe.ux.core.tool_formatters.web import WebFormatter
 
 __all__ = [
     "BaseFormatter",
@@ -22,4 +23,5 @@ __all__ = [
     "GoalFormatter",
     "MediaFormatter",
     "StructuredFormatter",
+    "WebFormatter",
 ]

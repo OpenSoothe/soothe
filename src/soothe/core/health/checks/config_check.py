@@ -12,8 +12,8 @@ def _check_config_file(config: SootheConfig | None) -> CheckResult:
     if config is None:
         return CheckResult(
             name="config_file_valid",
-            status=CheckStatus.ERROR,
-            message="No configuration loaded",
+            status=CheckStatus.WARNING,
+            message="No configuration loaded (optional for basic usage)",
             details={"impact": "Cannot run config-driven checks", "remediation": "Run 'soothe config init'"},
         )
 

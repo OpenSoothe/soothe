@@ -51,6 +51,9 @@ def format_text(report: HealthReport, use_color: bool = True) -> str:  # noqa: F
     for category in report.categories:
         symbol = status_symbols[category.status]
         category_line = f"{symbol} {category.category.replace('_', ' ').title()}"
+        # Add category message if present (e.g., "(optional for basic usage)")
+        if category.message:
+            category_line += f" {category.message}"
         lines.append(colorize(category_line, category.status))
 
         # Format each check
@@ -73,13 +76,19 @@ def format_text(report: HealthReport, use_color: bool = True) -> str:  # noqa: F
     lines.append("━" * 60)
     summary = report.get_summary()
 
+    # Improved overall status message
     if report.overall_status == CheckStatus.OK:
         overall_msg = "All checks passed"
         overall_symbol = "✓"
+    elif report.overall_status in (CheckStatus.INFO, CheckStatus.SKIPPED):
+        # INFO/SKIPPED are non-critical
+        skipped_count = summary["skipped"] + summary["info"]
+        overall_msg = f"System healthy ({skipped_count} optional checks skipped)"
+        overall_symbol = "✓"
     elif report.overall_status == CheckStatus.WARNING:
-        overall_msg = f"WARNINGS ({summary['error']} critical, {summary['warning']} warnings)"
+        overall_msg = f"WARNINGS ({summary['warning']} warnings, {summary['error']} errors)"
         overall_symbol = "⚠"
-    else:
+    else:  # ERROR
         overall_msg = f"CRITICAL ({summary['error']} errors, {summary['warning']} warnings)"
         overall_symbol = "✗"
 
