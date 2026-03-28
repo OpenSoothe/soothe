@@ -19,6 +19,7 @@ import contextlib
 import logging
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -28,9 +29,10 @@ from textual.binding import Binding
 from textual.containers import Container
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon, socket_path
+from soothe.daemon import DaemonClient, SootheDaemon, resolve_socket_path
 from soothe.daemon.thread_logger import ThreadLogger
 from soothe.ux.core import EventProcessor
+from soothe.ux.core.display_policy import normalize_verbosity
 from soothe.ux.core.rendering import render_plan_tree
 from soothe.ux.tui.commands import parse_autonomous_command
 from soothe.ux.tui.modals import ThreadSelectionModal
@@ -151,7 +153,7 @@ class SootheApp(App):
         # Clean cut: removed _conversation_history and _message_history
         # Display is now via direct panel writes only
         self._history_loaded_thread_id: str | None = None
-        self._progress_verbosity = self._config.logging.verbosity
+        self._progress_verbosity = normalize_verbosity(self._config.logging.verbosity)
         self._thread_logger: ThreadLogger | None = None
         self._was_running = False
         self._typing_indicator_task: asyncio.Task | None = None
@@ -319,7 +321,8 @@ class SootheApp(App):
 
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events."""
-        self._client = DaemonClient()
+        sock = resolve_socket_path(self._config)
+        self._client = DaemonClient(sock=sock)
         max_retries = 40
         for attempt in range(max_retries):
             try:
@@ -333,7 +336,7 @@ class SootheApp(App):
                     self._on_panel_write(
                         make_dot_line(
                             DOT_COLORS["error"],
-                            f"Failed to connect to daemon after retries. Is the socket at {socket_path()} available?",
+                            f"Failed to connect to daemon after retries. Is the socket at {sock} available?",
                         )
                     )
                     return
@@ -398,9 +401,8 @@ class SootheApp(App):
             self._apply_thread_status(status_event, previous_thread_id=pre_status_thread_id)
             logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
 
-            # Subscribe to thread with verbosity preference (RFC-0013, RFC-0022)
-            # TUI uses 'normal' verbosity by default
-            verbosity = "normal"
+            # Subscribe to thread with configured verbosity preference
+            verbosity = self._progress_verbosity
             await self._client.subscribe_thread(thread_id, verbosity=verbosity)
             await self._client.wait_for_subscription_confirmed(thread_id, verbosity=verbosity)
             logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
@@ -935,10 +937,12 @@ class SootheApp(App):
 # ---------------------------------------------------------------------------
 
 
-def _start_daemon_in_background(_config: SootheConfig, *, config_path: str | None = None) -> None:
+def _start_daemon_in_background(config: SootheConfig, *, config_path: str | None = None) -> None:
     """Start daemon as an external process when not already running."""
     if SootheDaemon.is_running():
         return
+
+    sock = resolve_socket_path(config)
 
     cmd = [sys.executable, "-m", "soothe.daemon", "--detached"]
     if config_path:
@@ -955,11 +959,9 @@ def _start_daemon_in_background(_config: SootheConfig, *, config_path: str | Non
     )
     stderr_file.close()
 
-    import time
-
     for _ in range(40):
         time.sleep(0.25)
-        if socket_path().exists():
+        if sock.exists() and SootheDaemon._is_socket_live(sock):
             break
 
 

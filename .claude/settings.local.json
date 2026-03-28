@@ -15,7 +15,17 @@
       "Bash(soothe stop:*)",
       "Bash(git submodule:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pytest:*)",
+      "Bash(python:*)",
+      "Bash(source \"/Users/chenxm/Workspace/Soothe/.venv/bin/activate\")",
+      "Bash(soothe --no-tui --verbosity normal --prompt \"What is the capital of France?\")",
+      "Bash(soothe --no-tui --verbosity quiet --prompt \"Calculate 25 + 17\")",
+      "Bash(soothe daemon:*)",
+      "Bash(lsof:*)",
+      "Bash(kill:*)",
+      "Read(//Users/chenxm/.soothe/**)",
+      "Read(//Users/chenxm/.soothe/logs/**)"
     ]
   }
 }

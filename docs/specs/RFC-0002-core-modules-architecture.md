@@ -82,23 +82,27 @@ class MemoryProtocol(Protocol):
 
 | Name | Backend | Persistence | Description |
 |------|---------|-------------|-------------|
-| `StoreBackedMemory` | Keyword matching | JSON or RocksDB via `PersistStore` | Default for `memory_backend=keyword`. Loads all items at init. |
-| `VectorMemory` | VectorStoreProtocol + Embeddings | Delegated to VectorStore | Semantic recall. Requires `vector_store_provider` config. |
+| `MemUMemory` | MemU memory store + configured chat/embedding models | Files under `protocols.memory.persist_dir` (defaults to `$SOOTHE_HOME/memory/`) | Current default `MemoryProtocol` implementation resolved by `resolve_memory()`. Supports semantic recall, tags, and metadata. |
 
 ### Persistence Integration
 
-Memory persistence is automatic when `memory_persist_path` is configured (defaults to `$SOOTHE_HOME/memory/`). The `StoreBackedMemory` implementation:
-- Loads all items from the persist store at initialization
-- Saves items and manifest after each `remember()` call
-- The `SootheRunner` calls `memory.remember()` during post-stream for significant agent responses
+Memory persistence is automatic when `protocols.memory.persist_dir` is configured (defaults to `$SOOTHE_HOME/memory/`). The `MemUMemory` implementation:
+- Initializes a `MemuMemoryStore` rooted at the configured persist directory
+- Persists memory records through the MemU store on each `remember()` call
+- Serves `recall()` and `recall_by_tags()` through the MemU adapter
+- Is invoked by `SootheRunner` during post-stream for significant agent responses
 
 ### Configuration
 
 ```yaml
-memory_backend: keyword   # "keyword" | "vector" | "none" (default: "keyword")
-memory_persist_path: null  # defaults to $SOOTHE_HOME/memory/
-memory_persist_backend: json  # "json" | "rocksdb"
+protocols:
+  memory:
+    enabled: true
+    persist_dir: null      # defaults to $SOOTHE_HOME/memory/
+    llm_chat_role: fast
+    llm_embed_role: embedding
 ```
+
 
 ## Module 3: PlannerProtocol
 
@@ -122,8 +126,11 @@ class PlannerProtocol(Protocol):
 
 ### Implementations
 
-- `DirectPlanner` -- single LLM call with structured output for simple tasks
-- `SubagentPlanner` -- multi-turn subagent reasoning for complex tasks
+- `SimplePlanner` -- single LLM call with structured output for simple and medium tasks
+- `ClaudePlanner` -- deeper multi-turn planning for complex tasks when the Claude CLI planner is available
+- `AutoPlanner` -- complexity router that chooses between `SimplePlanner` and `ClaudePlanner`
+
+Architectural evolution: IG-028 renamed `DirectPlanner` to `SimplePlanner`, and IG-036 removed `SubagentPlanner` indirection in favor of direct routing through `AutoPlanner`.
 
 ## Module 4: PolicyProtocol
 
@@ -153,19 +160,20 @@ class PolicyProtocol(Protocol):
 
 ```python
 class DurabilityProtocol(Protocol):
-    async def create_thread(self, metadata: ThreadMetadata) -> ThreadInfo: ...
+    async def create_thread(self, metadata: ThreadMetadata, thread_id: str | None = None) -> ThreadInfo: ...
     async def resume_thread(self, thread_id: str) -> ThreadInfo: ...
     async def suspend_thread(self, thread_id: str) -> None: ...
     async def archive_thread(self, thread_id: str) -> None: ...
-    async def list_threads(self, filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
-    async def save_state(self, thread_id: str, state: Any) -> None: ...
-    async def load_state(self, thread_id: str) -> Any | None: ...
+    async def update_thread_metadata(self, thread_id: str, metadata: dict[str, Any] | ThreadMetadata) -> None: ...
+    async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
 ```
+
+State persistence for checkpoints, artifacts, and recovery data is handled by the RFC-0010 persistence components rather than by `DurabilityProtocol` directly.
 
 ### Data Models
 
 - `ThreadInfo(thread_id, status, created_at, updated_at, metadata)`
-- `ThreadMetadata(tags, plan_summary, policy_profile)`
+- `ThreadMetadata(tags, plan_summary, policy_profile, labels, priority, category)`
 - `ThreadFilter(status, tags, created_after, created_before)`
 
 ## Module 6: RemoteAgentProtocol
@@ -181,11 +189,11 @@ class RemoteAgentProtocol(Protocol):
 
 ### Implementations
 
-- `ACPRemoteAgent` -- wraps ACP endpoint
-- `A2ARemoteAgent` -- wraps A2A peer
-- `LangGraphRemoteAgent` -- wraps langgraph `RemoteGraph`
+- `ACPRemoteAgent` -- planned ACP endpoint adapter
+- `A2ARemoteAgent` -- planned A2A peer adapter
+- `LangGraphRemoteAgent` -- implemented adapter for langgraph `RemoteGraph`
 
-All wrapped as deepagents `CompiledSubAgent` for uniform `task` tool access.
+Future: remote backends will be wrapped as deepagents `CompiledSubAgent` instances for uniform `task`-tool access. Current state: `LangGraphRemoteAgent` is accessed through `RemoteAgentProtocol` directly; wrapper unification is deferred until the broader remote-agent surface is implemented.
 
 ## Module 7: ConcurrencyPolicy
 
@@ -234,7 +242,7 @@ class VectorStoreProtocol(Protocol):
 
 ## Module 9: PersistStore (Persistence Backend)
 
-Low-level key-value persistence used by `KeywordContext` and `StoreBackedMemory`.
+Low-level key-value persistence used by `KeywordContext` and other persistence-backed components. Memory persistence is currently handled by the MemU store rather than a `StoreBackedMemory` implementation.
 
 ### Protocol
 
@@ -268,31 +276,34 @@ Returns `None` if `persist_dir` is `None` (disabling persistence).
 1. Load `SootheConfig` with multi-provider model router
 2. Instantiate protocol implementations based on config
 3. Resolve models per role (`default`, `think`, `fast`, `embedding`)
-4. Wire context, policy as middleware; memory as tools; planner as middleware/nodes
-5. Wrap remote agents as `CompiledSubAgent`
-6. Call `create_deep_agent()` with assembled stack
-7. Return compiled agent with protocol instances attached
+4. Wire context and policy as middleware; resolve memory and planner as attached protocol components
+5. Assemble built-in and configured subagents, tools, skills, and middleware for `create_deep_agent()`
+6. Call `create_deep_agent()` with the assembled stack
+7. Return the compiled agent with protocol instances attached (`soothe_context`, `soothe_memory`, `soothe_planner`, `soothe_policy`, etc.)
 
 ### Context + Memory Flow
 
 ```
-[Thread start]
+[Thread start / resume]
   DurabilityProtocol.create_thread() or resume_thread()
-  ContextProtocol.restore(thread_id)   -- restore from $SOOTHE_HOME/context/
-  MemoryProtocol.recall(goal)          -- recall relevant cross-thread memories
-  ContextProtocol.ingest(recalled)     -- merge into current context
+  ContextProtocol.restore(thread_id)         -- restore persisted thread context when resuming
+  MemoryProtocol.recall(goal)                -- recall relevant cross-thread memories
+  ContextProtocol.ingest(recalled memories)  -- merge recalled memory into current thread context
 
 [Before LLM call]
-  ContextProtocol.project(goal, token_budget) -> inject into enriched input
+  ContextProtocol.project(goal, token_budget) -> inject bounded context into enriched input
 
 [After agent response]
   ContextProtocol.ingest(source="agent", content=response)
-  ContextProtocol.persist(thread_id)   -- persist to $SOOTHE_HOME/context/
-  MemoryProtocol.remember(response)    -- auto-store significant responses
+  ContextProtocol.persist(thread_id)         -- persist updated context ledger
+  MemoryProtocol.remember(response)          -- store significant responses in long-term memory
 
-[Thread suspend]
-  DurabilityProtocol.save_state()
+[Thread suspend / archive]
+  ThreadContextManager.persist_context()     -- persist context during lifecycle transitions
+  DurabilityProtocol.suspend_thread() / archive_thread()
 ```
+
+Current implementation detail: query-time context restore/persist happens in `SootheRunner`, while suspend/archive persistence is handled by `ThreadContextManager`.
 
 ### Persistence Directory Layout
 
@@ -301,7 +312,7 @@ All persistence is under `$SOOTHE_HOME` (default `~/.soothe`):
 ```
 $SOOTHE_HOME/
 ├── context/          # KeywordContext persistence (one JSON per thread)
-├── memory/           # StoreBackedMemory persistence (items + manifest)
+├── memory/           # MemUMemory persistence (MemU memory store files)
 ├── threads/          # Thread JSONL logs (one per thread)
 ├── logs/             # Application logs (soothe.log, rotating)
 ├── history.json      # Input history

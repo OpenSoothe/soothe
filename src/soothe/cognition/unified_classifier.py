@@ -105,7 +105,7 @@ class UnifiedClassification(BaseModel):
 # ---------------------------------------------------------------------------
 
 _ROUTING_PROMPT = """\
-You are {assistant_name}, created by Dr. Xiaming Chen. Classify this request.
+You are {assistant_name}. Classify this request.
 Current time: {current_time}
 
 Request: {query}
@@ -121,14 +121,14 @@ Required JSON shape:
 {{"task_complexity": "chitchat"|"medium"|"complex", "chitchat_response": string|null}}
 
 Classification rules:
-- chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response to a warm
-  reply in the user's language mentioning you are {assistant_name} created by Dr. Xiaming Chen.
+- chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response to a short,
+  direct reply in the user's language.
 - medium: Research, questions, tasks, debugging. DEFAULT when uncertain. chitchat_response=null.
 - complex: Architecture design, large migrations, major refactoring. chitchat_response=null.\
 """
 
 _ROUTING_RETRY_PROMPT = """\
-You are {assistant_name}, created by Dr. Xiaming Chen. Re-classify this request.
+You are {assistant_name}. Re-classify this request.
 Current time: {current_time}
 
 Request: {query}
@@ -296,8 +296,8 @@ class UnifiedClassifier:
         """
         name = self._assistant_name
         if _looks_chinese(query):
-            return f"你好! 我是 {name}, 由陈晓明博士创造。有什么可以帮你的吗?"
-        return f"Hello! I'm {name}, created by Dr. Xiaming Chen. How can I help you today?"
+            return f"你好! 我是 {name}。有什么可以帮你的吗?"
+        return f"Hello! I'm {name}. How can I help you today?"
 
     def _default_classification(self, reason: str = "Default") -> UnifiedClassification:
         """Safe default when everything fails."""

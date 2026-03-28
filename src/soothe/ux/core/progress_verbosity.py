@@ -12,6 +12,8 @@ from soothe.ux.core.display_policy import VerbosityLevel
 
 ProgressCategory = Literal[
     "assistant_text",
+    "plan_update",
+    "milestone",
     "protocol",
     "subagent_progress",
     "subagent_custom",
@@ -42,14 +44,23 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
             return "thinking"
         return "debug"
 
+    segments = etype.split(".")
+    domain = segments[1] if len(segments) >= 2 else "unknown"  # noqa: PLR2004
+
+    if domain == "cognition":
+        if etype == "soothe.cognition.plan.created":
+            return "plan_update"
+        if etype.endswith((".step_completed", ".step_failed")):
+            return "milestone"
+
     # Try registry first for soothe.* events (RFC-0015)
     from soothe.core.event_catalog import REGISTRY
 
     meta = REGISTRY.get_meta(etype)
     if meta and meta.verbosity:
-        # Map registry verbosity to ProgressCategory
         verbosity_map: dict[str, ProgressCategory] = {
             "minimal": "protocol",
+            "quiet": "protocol",
             "normal": "protocol",
             "detailed": "protocol",
             "subagent_progress": "subagent_progress",
@@ -59,13 +70,17 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
             "debug": "debug",
             "protocol": "protocol",
             "assistant_text": "assistant_text",
-            "internal": "internal",  # Internal events should never be shown
+            "internal": "internal",
         }
-        return verbosity_map.get(meta.verbosity, "protocol")
+        category = verbosity_map.get(meta.verbosity, "protocol")
+        if domain == "cognition" and category == "protocol":
+            if etype == "soothe.cognition.plan.created":
+                return "plan_update"
+            if etype.endswith((".step_completed", ".step_failed")):
+                return "milestone"
+        return category
 
     # Fallback to structural classification
-    segments = etype.split(".")
-    domain = segments[1] if len(segments) >= 2 else "unknown"  # noqa: PLR2004
 
     if domain == "error":
         return "error"
@@ -79,7 +94,13 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
         if etype.endswith((".text", ".response", ".result")):
             return "protocol"
         return "subagent_custom"
-    if domain in ("lifecycle", "protocol", "cognition"):
+    if domain == "cognition":
+        if etype == "soothe.cognition.plan.created":
+            return "plan_update"
+        if etype.endswith((".step_completed", ".step_failed")):
+            return "milestone"
+        return "protocol"
+    if domain in ("lifecycle", "protocol"):
         return "protocol"
 
     if "thinking" in etype or "heartbeat" in etype:
@@ -89,7 +110,6 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
 
 def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
     """Return whether a progress category is visible at the given verbosity."""
-    # Internal category is NEVER shown at any verbosity level
     if category == "internal":
         return False
     if verbosity == "debug":
@@ -97,6 +117,8 @@ def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
     if verbosity == "detailed":
         return category in {
             "assistant_text",
+            "plan_update",
+            "milestone",
             "protocol",
             "subagent_progress",
             "subagent_custom",
@@ -104,5 +126,5 @@ def should_show(category: ProgressCategory, verbosity: VerbosityLevel) -> bool:
             "error",
         }
     if verbosity == "normal":
-        return category in {"assistant_text", "protocol", "subagent_progress", "error"}
+        return category in {"assistant_text", "plan_update", "milestone", "subagent_progress", "error"}
     return category in {"assistant_text", "error"}

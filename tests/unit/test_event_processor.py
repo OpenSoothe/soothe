@@ -304,12 +304,12 @@ class TestEventProcessorMessageDeduplication:
 class TestEventProcessorVerbosityFiltering:
     """Tests for verbosity-based filtering."""
 
-    def test_minimal_verbosity_filters_tool_activity(self):
-        """Test minimal verbosity filters tool activity events."""
+    def test_quiet_verbosity_filters_tool_activity(self):
+        """Test quiet verbosity filters tool activity events."""
         renderer = MockRenderer()
-        processor = EventProcessor(renderer, verbosity="minimal")
+        processor = EventProcessor(renderer, verbosity="quiet")
 
-        # This should be filtered by minimal verbosity
+        # This should be filtered by quiet verbosity
         tool_event = {
             "type": "event",
             "mode": "messages",
@@ -329,3 +329,160 @@ class TestEventProcessorVerbosityFiltering:
 
         tool_result_calls = [c for c in renderer.calls if c[0] == "on_tool_result"]
         assert len(tool_result_calls) == 0
+
+    def test_quiet_cleans_and_extracts_answer(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="quiet")
+
+        msg_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "AIMessage",
+                    "id": "msg-quiet",
+                    "content": "Hello, I'm Claude. The capital of France is Paris. Let me know if you'd like more.",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(msg_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls
+        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+
+    def test_normal_removes_brand_and_creator_language_from_real_output(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        msg_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "AIMessage",
+                    "id": "msg-brand",
+                    "content": (
+                        "Bonjour! The capital of France is Paris. "
+                        "I'm Soothe, created by Dr. Xiaming Chen, "
+                        "and I'm happy to help you with any questions you have!"
+                    ),
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(msg_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls
+        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+
+    def test_quiet_extracts_bare_numeric_answer(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="quiet")
+
+        msg_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "AIMessage",
+                    "id": "msg-quiet-numeric",
+                    "content": "That's 42!",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(msg_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls
+        assert assistant_calls[0][1][0] == "42"
+
+    def test_quiet_extracts_numeric_result_from_equation(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="quiet")
+
+        msg_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "AIMessage",
+                    "id": "msg-quiet-equation",
+                    "content": "25 + 17 = 42",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(msg_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls
+        assert assistant_calls[0][1][0] == "42"
+
+    def test_normal_strips_light_embellishment_from_answer(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        msg_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "AIMessage",
+                    "id": "msg-normal-embellished",
+                    "content": "The capital of France is Paris, a beautiful and historic city! 🇫🇷",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(msg_event)
+
+        assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
+        assert assistant_calls
+        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+
+    def test_normal_filters_protocol_but_shows_plan_update(self) -> None:
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": "soothe.protocol.context.projected",
+                    "entries": 3,
+                },
+            }
+        )
+        processor.process_event(
+            {
+                "type": "event",
+                "mode": "custom",
+                "namespace": [],
+                "data": {
+                    "type": PLAN_CREATED,
+                    "goal": "Analyze codebase structure",
+                    "steps": [{"id": "1", "description": "Inspect files"}],
+                },
+            }
+        )
+
+        progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
+        assert progress_calls == []
+        plan_calls = [c for c in renderer.calls if c[0] == "on_plan_created"]
+        assert len(plan_calls) == 1

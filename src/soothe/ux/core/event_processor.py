@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
-from soothe.ux.core.display_policy import VerbosityLevel
+from soothe.ux.core.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe.ux.core.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
@@ -68,7 +68,8 @@ class EventProcessor:
             verbosity: Progress visibility level.
         """
         self._renderer = renderer
-        self._verbosity = verbosity
+        self._verbosity = normalize_verbosity(verbosity)
+        self._policy = DisplayPolicy(verbosity=self._verbosity)
         self._state = ProcessorState()
 
     @property
@@ -217,15 +218,15 @@ class EventProcessor:
                     # Suppress during internal context (research internal LLM responses)
                     if self._state.internal_context_active and not is_main:
                         continue
-                    if (
-                        text
-                        and should_show("assistant_text", self._verbosity)
-                        and not (is_main and self._state.multi_step_active)
+                    if text and self._policy.should_show_assistant_text(
+                        text,
+                        is_main=is_main,
+                        is_multi_step_active=self._state.multi_step_active,
                     ):
-                        cleaned = strip_internal_tags(text)
+                        cleaned = self._clean_assistant_text(text)
                         if cleaned:
                             self._renderer.on_assistant_text(
-                                cleaned,
+                                self._maybe_extract_quiet_answer(cleaned),
                                 is_main=is_main,
                                 is_streaming=is_chunk,
                             )
@@ -250,13 +251,16 @@ class EventProcessor:
             is_main
             and isinstance(msg.content, str)
             and msg.content
-            and should_show("assistant_text", self._verbosity)
-            and not self._state.multi_step_active
+            and self._policy.should_show_assistant_text(
+                msg.content,
+                is_main=is_main,
+                is_multi_step_active=self._state.multi_step_active,
+            )
         ):
-            cleaned = strip_internal_tags(msg.content)
+            cleaned = self._clean_assistant_text(msg.content)
             if cleaned:
                 self._renderer.on_assistant_text(
-                    cleaned,
+                    self._maybe_extract_quiet_answer(cleaned),
                     is_main=is_main,
                     is_streaming=is_chunk,
                 )
@@ -344,13 +348,16 @@ class EventProcessor:
                 is_main
                 and isinstance(content, str)
                 and content
-                and should_show("assistant_text", self._verbosity)
-                and not self._state.multi_step_active
+                and self._policy.should_show_assistant_text(
+                    content,
+                    is_main=is_main,
+                    is_multi_step_active=self._state.multi_step_active,
+                )
             ):
-                cleaned = strip_internal_tags(content)
+                cleaned = self._clean_assistant_text(content)
                 if cleaned:
                     self._renderer.on_assistant_text(
-                        cleaned,
+                        self._maybe_extract_quiet_answer(cleaned),
                         is_main=is_main,
                         is_streaming=is_chunk,
                     )
@@ -361,15 +368,15 @@ class EventProcessor:
             btype = block.get("type")
             if btype == "text":
                 text = block.get("text", "")
-                if (
-                    text
-                    and should_show("assistant_text", self._verbosity)
-                    and not (is_main and self._state.multi_step_active)
+                if text and self._policy.should_show_assistant_text(
+                    text,
+                    is_main=is_main,
+                    is_multi_step_active=self._state.multi_step_active,
                 ):
-                    cleaned = strip_internal_tags(text)
+                    cleaned = self._clean_assistant_text(text)
                     if cleaned:
                         self._renderer.on_assistant_text(
-                            cleaned,
+                            self._maybe_extract_quiet_answer(cleaned),
                             is_main=is_main,
                             is_streaming=is_chunk,
                         )
@@ -427,11 +434,17 @@ class EventProcessor:
         if etype.startswith("soothe.tool.") and not etype.startswith("soothe.subagent.research."):
             return
 
-        # Handle chitchat response as assistant text (not progress event)
-        if etype == "soothe.output.chitchat.response":
-            content = data.get("content", "")
+        # Handle chitchat/final responses through shared cleaner path
+        if etype in {"soothe.output.chitchat.response", "soothe.output.autonomous.final_report"}:
+            content = data.get("content", data.get("summary", ""))
             if content and should_show("assistant_text", self._verbosity):
-                self._renderer.on_assistant_text(content, is_main=True, is_streaming=False)
+                cleaned = self._clean_assistant_text(content)
+                if cleaned:
+                    self._renderer.on_assistant_text(
+                        self._maybe_extract_quiet_answer(cleaned),
+                        is_main=True,
+                        is_streaming=False,
+                    )
             return
 
         category = classify_custom_event(namespace, data)
@@ -501,3 +514,13 @@ class EventProcessor:
                     break
 
         self._renderer.on_plan_step_completed(step_id, success, duration_ms)
+
+    def _clean_assistant_text(self, text: str) -> str:
+        """Apply shared response cleaning for user-facing assistant text."""
+        return self._policy.filter_content(strip_internal_tags(text))
+
+    def _maybe_extract_quiet_answer(self, text: str) -> str:
+        """Apply quiet-mode answer extraction with fallback."""
+        if self._verbosity == "quiet":
+            return self._policy.extract_quiet_answer(text)
+        return text

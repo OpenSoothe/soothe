@@ -136,7 +136,9 @@ class SootheDaemon(DaemonHandlersMixin):
         # Create ThreadContextManager for HTTP REST transport (RFC-0017)
         from soothe.core.thread import ThreadContextManager, ThreadExecutor
 
-        thread_manager = ThreadContextManager(self._runner._durability, self._config, getattr(self._runner, "_context", None))
+        thread_manager = ThreadContextManager(
+            self._runner._durability, self._config, getattr(self._runner, "_context", None)
+        )
 
         # Initialize ThreadExecutor for multi-threading support (RFC-0017)
         max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)

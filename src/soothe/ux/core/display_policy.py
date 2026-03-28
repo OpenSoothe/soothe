@@ -39,13 +39,27 @@ from typing import Any, Literal
 # Type Definitions
 # =============================================================================
 
-VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
+VerbosityLevel = Literal["quiet", "normal", "detailed", "debug"]
+
+
+QUIET_ALIAS = "minimal"
+
+
+def normalize_verbosity(verbosity: str) -> VerbosityLevel:
+    """Normalize external verbosity values to canonical internal names."""
+    if verbosity == QUIET_ALIAS:
+        return "quiet"
+    if verbosity in {"quiet", "normal", "detailed", "debug"}:
+        return verbosity
+    return "normal"
 
 
 class EventCategory(Enum):
     """Categories for event filtering decisions."""
 
     ASSISTANT_TEXT = auto()  # Main assistant responses
+    PLAN_UPDATE = auto()  # User-facing plan summaries
+    MILESTONE = auto()  # User-facing completion milestones
     PROTOCOL = auto()  # Protocol/lifecycle events
     TOOL_ACTIVITY = auto()  # Tool calls and results
     SUBAGENT_PROGRESS = auto()  # Subagent progress updates
@@ -96,6 +110,63 @@ CONFUSED_RESPONSE_INDICATORS = [
     ("once you share them", ["json format"]),
 ]
 
+PLAN_EVENT_TYPES = frozenset(
+    {
+        "soothe.cognition.plan.created",
+        "soothe.cognition.plan.updated",
+        "soothe.cognition.plan.step_started",
+        "soothe.cognition.plan.step_completed",
+        "soothe.cognition.plan.step_failed",
+    }
+)
+
+MILESTONE_EVENT_TYPES = frozenset(
+    {
+        "soothe.cognition.plan.step_completed",
+        "soothe.cognition.plan.step_failed",
+    }
+)
+
+BRAND_PREFIX_PATTERNS = (
+    r"^\s*(?:Hi|Hello|Hey|Bonjour)(?:\s+there)?[!,]?\s+I(?:'m| am)\s+(?:Claude|Soothe|an AI assistant)[^.\n]*[.\n]+",
+    r"^\s*(?:I(?:'m| am)\s+(?:Claude|Soothe|an AI assistant)[^.\n]*[.\n]+)",
+)
+
+QUIET_SENTENCE_MAX_LEN = 120
+QUIET_FALLBACK_MAX_LEN = 160
+QUIET_TRUNCATED_MAX_LEN = 157
+TRAILING_EMBELLISHMENT_WORDS = frozenset(
+    {
+        "beautiful",
+        "historic",
+        "wonderful",
+        "amazing",
+        "great",
+        "lovely",
+        "fantastic",
+        "famous",
+        "vibrant",
+    }
+)
+
+CREATOR_ATTRIBUTION_PATTERNS = (
+    r"\b(?:created|built|developed)\s+by\s+Anthropic\b",
+    r"\b(?:created|built|developed)\s+by\s+Claude\b",
+    r"\b(?:created|built|developed)\s+by\s+Dr\.\s+Xiaming\s+Chen\b",
+    r"\b(?:created|built|developed)\s+by\s+Xiaming\s+Chen\b",
+    r"\bDr\.\s+Xiaming\s+Chen\b",
+    r"\bXiaming\s+Chen\b",
+    r"\bI(?:'m| am)\s+Claude(?:\s+Code)?\b",
+    r"\bI(?:'m| am)\s+Soothe\b",
+)
+
+DECORATIVE_FILLER_PATTERNS = (
+    r"\n?\s*Let me know if you(?:'d| would)? like .*?$",
+    r"\n?\s*If you(?:'d| would) like, I can .*?$",
+    r"\n?\s*Feel free to ask if .*?$",
+    r"\n?\s*I(?:'m| am) happy to help you with .*?$",
+)
+
 
 # =============================================================================
 # Display Policy Class
@@ -111,6 +182,10 @@ class DisplayPolicy:
     """
 
     verbosity: VerbosityLevel = "normal"
+
+    def __post_init__(self) -> None:
+        """Normalize compatibility aliases after initialization."""
+        self.verbosity = normalize_verbosity(self.verbosity)
 
     # Track internal context state
     internal_context_active: bool = field(default=False, repr=False)
@@ -154,6 +229,11 @@ class DisplayPolicy:
         namespace: tuple[str, ...] = (),
     ) -> EventCategory:
         """Classify an event into a category for filtering."""
+        if event_type in PLAN_EVENT_TYPES:
+            if event_type in MILESTONE_EVENT_TYPES:
+                return EventCategory.MILESTONE
+            return EventCategory.PLAN_UPDATE
+
         # Non-soothe events
         if not event_type.startswith("soothe."):
             if namespace:
@@ -173,22 +253,22 @@ class DisplayPolicy:
         if domain == "output":
             return EventCategory.ASSISTANT_TEXT
         if domain == "tool":
-            # Check if it's an internal research event
             if "internal" in event_type:
                 return EventCategory.INTERNAL
             return EventCategory.TOOL_ACTIVITY
         if domain == "subagent":
             if "thinking" in event_type or "heartbeat" in event_type:
                 return EventCategory.THINKING
+            if event_type.endswith((".step", ".completed", ".tool_use")):
+                return EventCategory.SUBAGENT_PROGRESS
             return EventCategory.SUBAGENT_CUSTOM
-        if domain in ("lifecycle", "protocol"):
+        if domain in ("lifecycle", "protocol", "cognition"):
             return EventCategory.PROTOCOL
 
         return EventCategory.PROTOCOL
 
     def _should_show_category(self, category: EventCategory) -> bool:
         """Check if a category should be shown at current verbosity."""
-        # Internal category is NEVER shown
         if category == EventCategory.INTERNAL:
             return False
 
@@ -198,6 +278,8 @@ class DisplayPolicy:
         if self.verbosity == "detailed":
             return category in {
                 EventCategory.ASSISTANT_TEXT,
+                EventCategory.PLAN_UPDATE,
+                EventCategory.MILESTONE,
                 EventCategory.PROTOCOL,
                 EventCategory.SUBAGENT_PROGRESS,
                 EventCategory.SUBAGENT_CUSTOM,
@@ -208,12 +290,12 @@ class DisplayPolicy:
         if self.verbosity == "normal":
             return category in {
                 EventCategory.ASSISTANT_TEXT,
-                EventCategory.PROTOCOL,
+                EventCategory.PLAN_UPDATE,
+                EventCategory.MILESTONE,
                 EventCategory.SUBAGENT_PROGRESS,
                 EventCategory.ERROR,
             }
 
-        # minimal
         return category in {
             EventCategory.ASSISTANT_TEXT,
             EventCategory.ERROR,
@@ -273,36 +355,17 @@ class DisplayPolicy:
         return self._should_show_category(EventCategory.ASSISTANT_TEXT)
 
     def filter_content(self, text: str) -> str:
-        """Filter internal content from text for display.
-
-        This method removes:
-        - Internal JSON responses (sub_questions, etc.)
-        - Search data tags
-        - Synthesis instructions
-        - Confused LLM meta-responses
-
-        Args:
-            text: Raw text content
-
-        Returns:
-            Filtered text safe for display
-        """
-        # Filter JSON code blocks with internal keys
+        """Filter internal content from text for display."""
         text = self._filter_json_code_blocks(text)
-
-        # Filter plain JSON objects with internal keys
         text = self._filter_plain_json(text)
-
-        # Filter confused LLM meta-responses
         text = self._filter_confused_responses(text)
-
-        # Filter search data tags
         text = self._filter_search_data_tags(text)
-
-        # Clean up whitespace
+        text = self._filter_brand_language(text)
+        text = self._filter_decorative_filler(text)
         text = self._normalize_whitespace(text)
-
-        return text.strip() if text.strip() == "" else text
+        text = self._strip_sentence_embellishment(text)
+        text = self._normalize_factual_ending(text)
+        return text.strip()
 
     def _filter_json_code_blocks(self, text: str) -> str:
         """Remove JSON code blocks containing internal keys."""
@@ -433,11 +496,104 @@ class DisplayPolicy:
 
         return text
 
+    def _filter_brand_language(self, text: str) -> str:
+        """Remove brand intros and creator attributions from responses."""
+        text = re.sub(
+            r"^\s*(?:Hi|Hello|Hey|Bonjour)(?:\s+there)?[!,]?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        for pattern in BRAND_PREFIX_PATTERNS:
+            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+        for pattern in CREATOR_ATTRIBUTION_PATTERNS:
+            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+        text = re.sub(
+            r"\bI(?:'m| am)\s+Soothe\s*,?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"\s*,?\s*(?:created|built|developed)\s+by\s+Dr\.\s+Xiaming\s+Chen\s*,?\s*",
+            " ",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(r"\s*(?:,\s*)?and\s+I(?:'m| am) happy to help you with .*?$", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s*,\s*,", ",", text)
+        return re.sub(r"\s+,", ",", text)
+
+    def _filter_decorative_filler(self, text: str) -> str:
+        """Remove polite trailing filler that adds no user value."""
+        for pattern in DECORATIVE_FILLER_PATTERNS:
+            text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.MULTILINE)
+        return text
+
+    def extract_quiet_answer(self, text: str) -> str:
+        """Extract a compact answer for quiet mode with safe fallback."""
+        cleaned = self.filter_content(text)
+        if not cleaned:
+            return ""
+
+        single_line = re.sub(r"\s+", " ", cleaned).strip()
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", single_line):
+            return single_line
+
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?\s*[+\-*/]\s*[-+]?\d+(?:\.\d+)?\s*=\s*([-+]?\d+(?:\.\d+)?)", single_line):
+            equation_match = re.search(r"=\s*([-+]?\d+(?:\.\d+)?)$", single_line)
+            if equation_match:
+                return equation_match.group(1)
+
+        numeric_match = re.search(
+            r"\b(?:that(?:'s| is)|it(?:'s| is)|answer(?: is)?|result(?: is)?)\s+([-+]?\d+(?:\.\d+)?)\b",
+            single_line,
+            re.IGNORECASE,
+        )
+        if numeric_match:
+            return numeric_match.group(1)
+
+        sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", single_line) if part.strip()]
+        if sentences:
+            first = self._strip_sentence_embellishment(sentences[0])
+            if len(first) <= QUIET_SENTENCE_MAX_LEN:
+                return first
+
+        if len(single_line) <= QUIET_FALLBACK_MAX_LEN:
+            return self._strip_sentence_embellishment(single_line)
+        return self._strip_sentence_embellishment(single_line[:QUIET_TRUNCATED_MAX_LEN].rsplit(" ", 1)[0]) + "..."
+
+    def _strip_sentence_embellishment(self, text: str) -> str:
+        """Remove lightweight trailing flourish from otherwise factual answers."""
+        text = re.sub(r"\s*[🇦-🇿✨🎉👍😊😄😃😀😉🙌]+$", "", text).strip()
+
+        inline_match = re.match(r"^(.*?),\s+(?:a|an)\s+(.+?)([.!?])$", text, flags=re.IGNORECASE)
+        if inline_match:
+            descriptor_words = re.findall(r"[A-Za-z']+", inline_match.group(2).lower())
+            if descriptor_words and any(word in TRAILING_EMBELLISHMENT_WORDS for word in descriptor_words):
+                return inline_match.group(1) + inline_match.group(3)
+
+        sentence_match = re.match(r"^(.*?\.)\s+(?:a|an)\s+(.+)$", text, flags=re.IGNORECASE)
+        if not sentence_match:
+            return text
+
+        descriptor_words = re.findall(r"[A-Za-z']+", sentence_match.group(2).lower())
+        if descriptor_words and any(word in TRAILING_EMBELLISHMENT_WORDS for word in descriptor_words):
+            return sentence_match.group(1)
+        return text
+
+    def _normalize_factual_ending(self, text: str) -> str:
+        """Convert lightweight factual exclamation endings to periods."""
+        if re.search(r"\b(?:capital|answer|result|sum|total|equals|is)\b", text, flags=re.IGNORECASE):
+            return re.sub(r"!$", ".", text)
+        return text
+
     def _normalize_whitespace(self, text: str) -> str:
         """Normalize excessive whitespace."""
-        # Normalize multiple spaces (2+ -> 1)
+        text = re.sub(r"[ \t]+[🇦-🇿✨🎉👍😊😄😃😀😉🙌]+(?=\s*$)", "", text)
+        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
+        text = re.sub(r"([.?!]),", r"\1", text)
         text = re.sub(r" {2,}", " ", text)
-        # Normalize multiple newlines
         return re.sub(r"\n{3,}", "\n\n", text)
 
     # ==========================================================================

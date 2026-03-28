@@ -418,9 +418,12 @@ def strip_internal_tags(text: str) -> str:
     """
     from soothe.ux.core.display_policy import DisplayPolicy
 
-    # Use unified display policy for content filtering
     policy = DisplayPolicy()
-    return policy.filter_content(text)
+    text = policy._filter_json_code_blocks(text)
+    text = policy._filter_plain_json(text)
+    text = policy._filter_confused_responses(text)
+    text = policy._filter_search_data_tags(text)
+    return policy._normalize_whitespace(text)
 
 
 def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: int = 120) -> str:

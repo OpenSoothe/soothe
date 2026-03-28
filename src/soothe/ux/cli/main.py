@@ -69,11 +69,11 @@ def main(
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
     verbosity: Annotated[
-        Literal["minimal", "normal", "detailed", "debug"] | None,
+        Literal["quiet", "minimal", "normal", "detailed", "debug"] | None,
         typer.Option(
             "--verbosity",
             "-v",
-            help="Verbosity level: minimal, normal, detailed, debug.",
+            help="Verbosity level: quiet, normal, detailed, debug. 'minimal' is accepted as an alias.",
         ),
     ] = None,
     show_help: Annotated[  # noqa: FBT002

@@ -29,7 +29,7 @@ Indexing runs as an autonomous background `asyncio.Task` on a configurable inter
 
 ### Hash-based change detection
 
-Each skill's content is SHA-256 hashed. On each indexing pass, only skills whose hash differs from the stored hash are re-embedded, minimizing embedding API calls and vector store writes.
+Each skill's content is SHA-256 hashed. On each indexing pass, only skills whose hash differs from the stored hash are re-embedded, minimizing embedding API calls and vector store writes. Skill identifiers are derived deterministically from the absolute path using a truncated SHA-256 hex digest.
 
 ### Protocol-first integration
 
@@ -44,7 +44,7 @@ Skill packages MUST comply with deepagents `SkillsMiddleware` format: a director
 ```python
 class SkillRecord(BaseModel):
     """Metadata for a single indexed skill."""
-    id: str                        # deterministic: SHA-256 of absolute path
+    id: str                        # deterministic: first 16 hex chars of SHA-256(path)
     name: str                      # from SKILL.md frontmatter
     description: str               # from SKILL.md frontmatter
     path: str                      # absolute filesystem path to skill directory
@@ -76,51 +76,56 @@ The `SkillIndexer` class manages a perpetual indexing loop as an `asyncio.Task`:
 │  SkillIndexer (asyncio.Task)                             │
 │                                                          │
 │  loop:                                                   │
-│    1. SkillWarehouse.scan() → list[SkillRecord]          │
-│    2. For each record:                                   │
-│       a. Compare content_hash with stored hash           │
+│    1. ensure_collection() / bootstrap_hash_cache()       │
+│    2. SkillWarehouse.scan() → list[SkillRecord]          │
+│    3. For each record:                                   │
+│       a. Compare content_hash with cached hash           │
 │       b. If changed or new: embed → upsert VectorStore   │
-│       c. If deleted from disk: delete from VectorStore   │
-│    3. Emit soothe.skillify.index.* events                │
-│    4. Sleep(index_interval_seconds)                      │
+│    4. Delete vector records no longer present on disk    │
+│    5. Emit soothe.subagent.skillify.* index events       │
+│    6. Sleep(index_interval_seconds)                      │
 │                                                          │
-│  Lifecycle: start() / stop()                             │
+│  Lifecycle: start() / stop() / run_once()                │
 └──────────────────────────────────────────────────────────┘
 ```
 
-The indexer holds an in-memory dict mapping `skill_id → content_hash` for fast diff. On first run, it bootstraps from VectorStore `list_records()`.
+The indexer holds an in-memory dict mapping `skill_id → content_hash` for fast diff. On startup it ensures the configured collection exists, bootstraps its hash cache from `VectorStoreProtocol.list_records()`, and marks readiness after the first successful pass.
 
 ### Retrieval CompiledSubAgent
 
-The retrieval graph is a simple linear pipeline exposed as a `CompiledSubAgent`:
+The retrieval graph is exposed as a `CompiledSubAgent`, but the compiled LangGraph currently contains a single `retrieve` node:
 
 ```
-[START] → parse_query → embed_query → search_index → format_results → [END]
+[START] → retrieve → [END]
 ```
 
-- **parse_query**: Extract the retrieval objective from the incoming message.
-- **embed_query**: Generate an embedding vector using the configured embedding model.
-- **search_index**: Call `VectorStoreProtocol.search()` with the query vector and optional metadata filters. Returns top-k `VectorRecord` results.
-- **format_results**: Map vector records back to `SkillSearchResult` objects, assemble a `SkillBundle`, and return as an `AIMessage`.
+That `retrieve` node performs the full retrieval path internally:
+
+- extracts the retrieval objective from the incoming message history
+- emits progress events
+- waits briefly for initial indexing readiness when needed
+- generates the query embedding with the configured embedding model
+- calls `VectorStoreProtocol.search()`
+- maps vector records back to `SkillSearchResult` objects
+- formats the returned `SkillBundle` as an `AIMessage`
 
 State schema:
 
 ```python
 class SkillifyState(dict):
     messages: Annotated[list, add_messages]
-    query: str
-    results: list[SkillSearchResult]
 ```
 
 ### Component Responsibilities
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| `SkillWarehouse` | `warehouse.py` | Scan directories, parse SKILL.md frontmatter, compute content hashes |
-| `SkillIndexer` | `indexer.py` | Background loop, change detection, embed + upsert/delete via VectorStoreProtocol |
-| `SkillRetriever` | `retriever.py` | Embed query, search VectorStore, rank and filter results |
-| `create_skillify_subagent` | `__init__.py` | Build retrieval LangGraph, start background indexer, return CompiledSubAgent |
+| `SkillWarehouse` | `warehouse.py` | Scan configured directories, parse SKILL.md frontmatter, compute content hashes and deterministic path IDs |
+| `SkillIndexer` | `indexer.py` | Background loop, collection/bootstrap readiness, change detection, embed + upsert/delete via VectorStoreProtocol |
+| `SkillRetriever` | `retriever.py` | Policy-check retrieval requests, wait for readiness, embed query, search VectorStore, and assemble results |
+| `create_skillify_subagent` | `__init__.py` | Build the single-node retrieval LangGraph, start background indexer when an event loop is running, return CompiledSubAgent |
 | Data models | `models.py` | `SkillRecord`, `SkillSearchResult`, `SkillBundle` |
+| Events | `events.py` | Skillify retrieval/index progress events under `soothe.subagent.skillify.*` |
 
 ## Filesystem Layout
 
@@ -149,7 +154,8 @@ Additional warehouse paths can be configured via `skillify.warehouse_paths[]`. T
 ### PolicyProtocol
 
 - Retrieval requests are checked with action type `skillify_retrieve`
-- Skills from paths outside configured warehouse directories are flagged for policy review
+- The current retriever passes the query through `PolicyProtocol` before search
+- Warehouse-path allowlisting is defined by configured scan roots, but the retriever/indexer does not perform a separate path-review policy pass beyond normal retrieval policy checks
 
 ### Embedding Model
 
@@ -174,12 +180,14 @@ Custom stream events emitted by Skillify:
 
 | Event Type | Fields | When |
 |------------|--------|------|
-| `soothe.skillify.index.started` | `total_skills` | Background pass begins |
-| `soothe.skillify.index.updated` | `new`, `changed`, `deleted` | Pass completes with changes |
-| `soothe.skillify.index.unchanged` | `total_skills` | Pass completes with no changes |
-| `soothe.skillify.index.error` | `error`, `skill_path` | Single skill indexing fails |
-| `soothe.skillify.retrieve.started` | `query` | Retrieval request received |
-| `soothe.skillify.retrieve.completed` | `query`, `result_count`, `top_score` | Results returned |
+| `soothe.subagent.skillify.index_started` | `collection` | Background indexing is started |
+| `soothe.subagent.skillify.index_updated` | `new`, `changed`, `deleted`, `total` | An indexing pass completes with changes |
+| `soothe.subagent.skillify.index_unchanged` | `total` | An indexing pass completes with no changes |
+| `soothe.subagent.skillify.index_failed` | standard event envelope only | Indexing startup or pass fails |
+| `soothe.subagent.skillify.indexing_pending` | `query` | Retrieval arrives before the first index pass is ready |
+| `soothe.subagent.skillify.retrieve_started` | `query` | Retrieval request received |
+| `soothe.subagent.skillify.retrieve_completed` | `query`, `result_count`, `top_score` | Results returned |
+| `soothe.subagent.skillify.retrieve_not_ready` | `message` | Retrieval returns an indexing-in-progress message after bounded wait |
 
 ## Architectural Constraints
 
@@ -188,7 +196,7 @@ Custom stream events emitted by Skillify:
 - Indexing MUST use Soothe vector store abstractions (`VectorStoreProtocol`).
 - Embedding MUST use the configured langchain `Embeddings` model.
 - The background loop MUST be stoppable for clean shutdown.
-- Retrieval SHOULD degrade gracefully (return empty bundle if index unavailable).
+- Retrieval SHOULD degrade gracefully by returning either an informative indexing-in-progress message or an empty bundle when embedding/search fails.
 
 ## Dependencies
 

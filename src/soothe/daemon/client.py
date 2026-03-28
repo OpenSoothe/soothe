@@ -12,7 +12,7 @@ from soothe.daemon.paths import socket_path
 from soothe.daemon.protocol import decode, encode
 
 # Type alias for verbosity levels (RFC-0015, RFC-0022)
-VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
+VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class DaemonClient:
 
         Args:
             thread_id: Thread identifier to subscribe to
-            verbosity: Verbosity preference (minimal|normal|detailed|debug)
+            verbosity: Verbosity preference (quiet|minimal|normal|detailed|debug)
 
         Raises:
             ConnectionError: If not connected

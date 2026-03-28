@@ -11,13 +11,58 @@ import sys
 import typer
 
 from soothe.config import SootheConfig
-from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
 from soothe.ux.cli.renderer import CliRenderer
 from soothe.ux.core import EventProcessor
 
 logger = logging.getLogger(__name__)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
+_CONNECT_RETRY_COUNT = 40
+_CONNECT_RETRY_DELAY_S = 0.25
+_CONNECT_TIMEOUT_S = 5.0
+
+
+async def _connect_with_retries(client: object) -> None:
+    """Connect to the daemon with bounded retries for cold-start races."""
+    last_error: OSError | ConnectionError | TimeoutError | None = None
+    for attempt in range(_CONNECT_RETRY_COUNT):
+        try:
+            await asyncio.wait_for(client.connect(), timeout=_CONNECT_TIMEOUT_S)
+        except (FileNotFoundError, ConnectionRefusedError, OSError, ConnectionError, TimeoutError) as exc:
+            last_error = exc
+            if attempt == _CONNECT_RETRY_COUNT - 1:
+                raise
+            await asyncio.sleep(_CONNECT_RETRY_DELAY_S)
+        else:
+            return
+
+    if last_error is not None:
+        raise last_error
+
+
+async def _wait_for_thread_status(client: object, *, timeout_s: float = 5.0) -> dict[str, object]:
+    """Wait for the post-bootstrap thread status, ignoring empty handshake status."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise TimeoutError("Timed out waiting for thread status from daemon")
+
+        event = await asyncio.wait_for(client.read_event(), timeout=remaining)
+        if not event:
+            raise ValueError("No event received")
+
+        if event.get("type") == "error":
+            return event
+
+        if event.get("type") != "status":
+            continue
+
+        thread_id = event.get("thread_id")
+        if thread_id:
+            return event
 
 
 async def run_headless_via_daemon(
@@ -33,15 +78,14 @@ async def run_headless_via_daemon(
 
     Refactored to use RFC-0019 EventProcessor with CliRenderer.
     """
-    from soothe.daemon import DaemonClient
+    from soothe.daemon import DaemonClient, resolve_socket_path
 
     _ = thread_id
     daemon_start_timeout_s = 20.0
-    daemon_inactivity_timeout_s = 180.0
-    client = DaemonClient()
+    client = DaemonClient(sock=resolve_socket_path(cfg))
 
     try:
-        await asyncio.wait_for(client.connect(), timeout=5.0)
+        await _connect_with_retries(client)
 
         # Request thread creation or resumption
         if thread_id:
@@ -49,10 +93,10 @@ async def run_headless_via_daemon(
         else:
             await client.send_new_thread()
 
-        # Wait for status message with thread_id
-        status_event = await asyncio.wait_for(client.read_event(), timeout=5.0)
-        if not status_event or status_event.get("type") != "status":
-            typer.echo("Error: Expected status message from daemon", err=True)
+        # Wait for actual thread status, skipping initial empty handshake status
+        status_event = await _wait_for_thread_status(client, timeout_s=5.0)
+        if status_event.get("type") == "error":
+            typer.echo(f"Daemon error: {status_event.get('message', 'unknown')}", err=True)
             return 1
 
         actual_thread_id = status_event.get("thread_id")
@@ -84,13 +128,12 @@ async def run_headless_via_daemon(
         query_started = False  # Track if we've seen the query start running
 
         while True:
-            timeout_s = daemon_inactivity_timeout_s if query_started else daemon_start_timeout_s
             try:
-                event = await asyncio.wait_for(client.read_event(), timeout=timeout_s)
-            except TimeoutError:
                 if query_started:
-                    typer.echo("Error: daemon stream timed out while waiting for events.", err=True)
-                    return 1
+                    event = await client.read_event()
+                else:
+                    event = await asyncio.wait_for(client.read_event(), timeout=daemon_start_timeout_s)
+            except TimeoutError:
                 return _DAEMON_FALLBACK_EXIT_CODE
             if not event:
                 break
@@ -127,27 +170,6 @@ async def run_headless_via_daemon(
                 sys.stdout.flush()
                 continue
 
-            # Handle special CLI-only events before processor
-            mode = event.get("mode", "")
-            data = event.get("data")
-            if mode == "custom" and isinstance(data, dict):
-                etype = str(data.get("type", ""))
-                if etype == FINAL_REPORT:
-                    report_text = data.get("summary", "")
-                    if report_text:
-                        sys.stdout.write("\n\n")
-                        sys.stdout.write(report_text)
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                    continue
-                if etype == CHITCHAT_RESPONSE:
-                    chitchat_content = data.get("content", "")
-                    if chitchat_content:
-                        sys.stdout.write(chitchat_content)
-                        sys.stdout.write("\n")
-                        sys.stdout.flush()
-                    continue
-
             # Delegate to unified event processor
             processor.process_event(event)
 
@@ -156,13 +178,7 @@ async def run_headless_via_daemon(
             sys.stdout.write("\n")
             sys.stdout.flush()
 
-        # Show daemon persistence message (RFC-0013 daemon lifecycle)
-        from soothe.daemon import pid_path
-
-        pf = pid_path()
-        if pf.exists():
-            pid = pf.read_text().strip()
-            typer.echo(f"[lifecycle] Request completed. Daemon running (PID: {pid}).", err=True)
+        # Daemon lifecycle remains silent in normal headless mode.
 
     except (ConnectionError, OSError, TimeoutError) as e:
         logger.exception("Daemon connection failed")

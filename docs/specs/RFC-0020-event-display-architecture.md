@@ -5,8 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-26
-**Updated**: 2026-03-27
-**Dependencies**: RFC-0001, RFC-0002, RFC-0013, RFC-0015, RFC-0019
+**Updated**: 2026-03-28
+**Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019
 
 ## Abstract
 
@@ -47,19 +47,25 @@ Level 2 (Details):    └ Additional context or results
 - Text events show content preview
 - Result events show metrics
 
-### Principle 3: Progressive Disclosure via Verbosity
+### Principle 3: Shared Presentation Policy Across Headless and TUI
 
-**Verbosity Categories**:
-- `assistant_text`: AI responses (normal mode)
-- `protocol`: Core agent activity (normal mode)
-- `subagent_progress`: Subagent steps (normal mode)
-- `tool_activity`: Granular tool execution (verbose mode)
-- `debug`: Internal details (debug mode)
+**Rule**: Verbosity semantics must be defined once and shared across both headless CLI and TUI surfaces.
 
-**Display Rules**:
-- Normal mode: `assistant_text`, `protocol`, `subagent_progress`, `error`
-- Verbose mode: Adds `tool_activity`
-- Debug mode: All categories
+**What This Means**:
+- A shared presentation policy decides which events are visible at each verbosity level.
+- Headless and TUI use the same semantic visibility rules, but render them differently.
+- Visibility decisions are not duplicated separately in headless and TUI renderers.
+
+**Surface Model**:
+- **Shared presentation policy**: classifies events, cleans text, decides visibility, emits presentation items
+- **Headless renderer**: prints presentation items as separated text blocks
+- **TUI renderer**: maps presentation items into conversation/activity/plan widgets
+
+**Verbosity Levels**:
+- `quiet`: automation-friendly extracted answer or compact fallback
+- `normal`: default user-facing mode with plan updates, milestones, concise result
+- `detailed`: richer progress and tool summaries
+- `debug`: full internal visibility
 
 ### Principle 4: Template Interpolation
 
@@ -70,12 +76,21 @@ Level 2 (Details):    └ Additional context or results
 - `"Tool: {tool}"` → "Tool: read_file"
 - `"Done (${cost_usd}, {duration_ms}ms)"` → "Done ($0.0023, 1234ms)"
 
-### Principle 5: Visual Consistency via Display Helpers
+### Principle 5: Surface-Aware Rendering with Shared Semantics
+
+**Rule**: Presentation semantics are shared, but final formatting is surface-aware.
 
 **Required Helpers**:
-- `make_dot_line(color, summary, details)` → Two-level tree output
-- `make_tool_block(name, args, result, status)` → Tool call display
-- `format_event_summary(event_type, data, registry)` → Registry-driven summary
+- `classify_display_event(namespace, mode, data)` → semantic classification
+- `build_presentation_item(event, registry, verbosity)` → shared presentation item creation
+- `clean_response_text(text)` → strip brand and embellishment
+- `extract_quiet_answer(text)` → answer extraction with fallback confidence
+- `render_headless_block(item)` → headless text block output
+- `render_tui_item(item)` → TUI widget mapping
+
+**Formatting Rule**:
+- Headless output prepends one empty line before every displayed block.
+- TUI preserves the same separation intent via layout spacing rather than literal blank-line messages.
 
 ## Event Display Patterns
 
@@ -261,35 +276,128 @@ Subagent step events:
 
 ## Verbosity Classification
 
-**Category Definitions**:
-- **assistant_text**: AI responses (normal mode)
-- **protocol**: Core lifecycle events (normal mode)
-- **subagent_progress**: Subagent activity (normal mode)
-- **tool_activity**: Granular tool execution (verbose mode)
-- **debug**: Internal details (debug mode)
+### Shared semantic event classes
 
-**Domain Defaults** (when verbosity not set):
-- **lifecycle** → `protocol`
-- **protocol** → `protocol`
-- **subagent** → `subagent_progress`
-- **tool** → `tool_activity`
-- **output** → `assistant_text`
-- **error** → `error` (always visible)
+The display system first classifies raw stream events into semantic classes:
+- `assistant_response`
+- `plan_update`
+- `milestone`
+- `tool_summary_candidate`
+- `error`
+- `lifecycle_internal`
+- `protocol_internal`
+- `debug_internal`
 
-## Terminal Formatting
+The classifier should be conservative: if uncertain, classify as internal to avoid leaking low-value internals into `normal`.
 
-**Width Constraints**:
+### Verbosity behavior
+
+#### `quiet`
+Show:
+- extracted final answer when confidence is high
+- compact structured fallback when extraction is uncertain
+- concise actionable errors
+
+Hide:
+- lifecycle events
+- protocol events
+- plan updates
+- milestones
+- raw tool activity
+
+#### `normal` (default)
+Show:
+- plan updates
+- brief progress milestones
+- concise tool summaries when they add clarity
+- cleaned final response
+- user-facing errors
+
+Hide:
+- lifecycle events
+- protocol counters
+- thread IDs
+- daemon state and PID details
+- plan reasoning
+- raw step states such as `[pending]`
+- raw tool invocation spam
+
+#### `detailed`
+Show:
+- plan updates
+- milestones
+- tool summaries
+- cleaned final response
+- richer operational detail than `normal`
+
+#### `debug`
+Show all categories, including internal events.
+
+## Presentation and Formatting Rules
+
+### Shared response cleaning
+
+Before final assistant text is shown in `quiet`, `normal`, and `detailed`, the system must:
+- remove greeting and brand intro text
+- remove creator attribution in response body
+- remove decorative filler such as `Let me know if...`
+- remove non-essential embellishment
+- preserve factual correctness and actionable guidance
+
+### Plan update rendering
+
+Plan updates must be rewritten into user-facing summaries.
+
+Allowed examples:
+- `Plan: Search arxiv for recent quantum computing papers`
+- `Plan: Analyze codebase structure`
+
+Not allowed in `normal`:
+- reasoning paragraphs
+- raw plan tree output
+- dependency markers
+- status markers like `[pending]`
+
+### Milestone rendering
+
+Milestones must be brief and outcome-oriented.
+
+Examples:
+- `Done: found 10 papers`
+- `Done: analyzed 15 modules`
+- `Done: generated report`
+
+### Headless formatting
+
+**Separator Rule**:
+Every displayed headless output block must begin with exactly one empty line.
+
+Examples:
+```text
+
+Plan: Search arxiv for recent quantum computing papers
+
+Done: found 10 papers
+
+I found 10 recent papers...
+```
+
+### TUI formatting
+
+TUI must preserve the same semantic separation intent using widget spacing, margins, or grouped rows rather than literal blank-line messages.
+
+### Width Constraints
 - Default terminal width: 80 characters
 - Maximum summary: 50 characters
 - Maximum detail: 80 characters
 - Indentation: 2 spaces + connector
 
-**Text Preservation**:
+### Text Preservation
 - Normalize whitespace to single spaces
 - Truncate at word boundaries when possible
 - Add ellipsis (...) for truncated text
 
-**Error Handling**:
+### Error Handling
 - Template errors → Log and skip (never crash)
 - Missing metadata → Skip display
 - Malformed data → Log warning and skip
@@ -315,12 +423,13 @@ Subagent step events:
 
 ## Success Criteria
 
-1. **Registry-Driven**: All summaries use templates (no hardcoded strings)
-2. **Consistent Display**: All events follow two-level tree pattern
-3. **Extensible**: New events display with zero renderer changes
-4. **Progressive Disclosure**: Verbosity filtering works correctly
-5. **Resilient**: Errors don't crash display system
-6. **Terminal-Optimized**: Respects width constraints
+1. **Registry-Driven**: All summaries use templates or shared presentation transforms rather than ad hoc renderer strings
+2. **Cross-Surface Consistency**: Headless and TUI share the same verbosity semantics
+3. **Normal-Mode Cleanliness**: `normal` hides lifecycle/protocol internals while showing plan updates and milestones
+4. **Quiet-Mode Usefulness**: `quiet` extracts answers when confidence is high and falls back safely otherwise
+5. **Extensible**: New events display with zero or minimal renderer changes
+6. **Resilient**: Errors don't crash display system
+7. **Readable Formatting**: Headless uses blank-line block separation; TUI preserves equivalent visual separation
 
 ## Dependencies
 

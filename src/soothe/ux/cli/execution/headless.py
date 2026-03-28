@@ -2,15 +2,32 @@
 
 import sys
 import time
+from pathlib import Path
 
 import typer
 
 from soothe.config import SootheConfig
-from soothe.daemon import SootheDaemon
+from soothe.daemon import SootheDaemon, resolve_socket_path
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _DAEMON_START_TIMEOUT_S = 10.0
 _DAEMON_START_CHECK_INTERVAL_S = 0.2
+
+
+def _wait_for_daemon_ready(cfg: SootheConfig, *, timeout_s: float = _DAEMON_START_TIMEOUT_S) -> bool:
+    """Wait until the daemon's effective Unix socket is accepting connections."""
+    sock = resolve_socket_path(cfg)
+    start_time = time.time()
+    while time.time() - start_time < timeout_s:
+        time.sleep(_DAEMON_START_CHECK_INTERVAL_S)
+        if _is_socket_ready(sock):
+            return True
+    return False
+
+
+def _is_socket_ready(sock: Path) -> bool:
+    """Return whether the Unix socket is connectable."""
+    return sock.exists() and SootheDaemon._is_socket_live(sock)
 
 
 def run_headless(
@@ -35,19 +52,13 @@ def run_headless(
     from soothe.ux.cli.execution.daemon import run_headless_via_daemon
 
     # Auto-start daemon if not running (RFC-0013)
-    if not SootheDaemon.is_running():
+    if not _is_socket_ready(resolve_socket_path(cfg)):
         typer.echo("[lifecycle] Starting daemon...", err=True)
         from soothe.ux.cli.commands.daemon_cmd import daemon_start
 
         daemon_start(config=None, foreground=False)
 
-        # Wait for daemon to initialize
-        start_time = time.time()
-        while time.time() - start_time < _DAEMON_START_TIMEOUT_S:
-            time.sleep(_DAEMON_START_CHECK_INTERVAL_S)
-            if SootheDaemon.is_running():
-                break
-        else:
+        if not _wait_for_daemon_ready(cfg):
             typer.echo("Error: Failed to start daemon within timeout", err=True)
             sys.exit(1)
 

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 # Type alias for verbosity levels (RFC-0015, RFC-0022)
 from typing import Literal
 
-VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
+VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 

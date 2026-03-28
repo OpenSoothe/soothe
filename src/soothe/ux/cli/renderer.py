@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.cli.utils import make_tool_block
-from soothe.ux.core.display_policy import VerbosityLevel
+from soothe.ux.core.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.core.progress_verbosity import should_show
 
@@ -64,7 +64,7 @@ class CliRenderer:
         Args:
             verbosity: Progress visibility level.
         """
-        self._verbosity = verbosity
+        self._verbosity = normalize_verbosity(verbosity)
         self._state = CliRendererState()
 
     @property
@@ -97,11 +97,10 @@ class CliRenderer:
         self._state.full_response.append(text)
 
         if not self._state.multi_step_active:
-            # Add spacing if this is the first text after stderr output
             if self._state.stderr_just_written:
-                sys.stdout.write("\n\n")
                 self._state.stderr_just_written = False
 
+            sys.stdout.write("\n\n")
             sys.stdout.write(text)
             sys.stdout.flush()
             self._state.needs_stdout_newline = True
@@ -137,8 +136,7 @@ class CliRenderer:
         if tool_call_id:
             self._state.tool_call_start_times[tool_call_id] = time.time()
 
-        # Add double newline before tool for clear visual separation
-        sys.stderr.write(f"\n\n{tool_block}\n")
+        sys.stderr.write(f"\n{tool_block}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -199,8 +197,7 @@ class CliRenderer:
         """
         self._ensure_newline()
         prefix = f"[{context}] " if context else ""
-        # Add double newline before error for clear visual separation
-        sys.stderr.write(f"\n\n{prefix}ERROR: {error}\n")
+        sys.stderr.write(f"\n{prefix}ERROR: {error}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -222,8 +219,7 @@ class CliRenderer:
         from soothe.ux.cli.progress import render_progress_event
 
         self._ensure_newline()
-        # Add double newline before progress event for clear separation
-        sys.stderr.write("\n\n")
+        sys.stderr.write("\n")
         render_progress_event(event_type, data, current_plan=self._state.current_plan)
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -237,13 +233,7 @@ class CliRenderer:
         self._ensure_newline()
         self._state.current_plan = plan
         self._state.multi_step_active = len(plan.steps) > 1
-        # Add double newline before plan for clear visual separation
-        sys.stderr.write(f"\n\n[plan] ● {plan.goal} ({len(plan.steps)} steps)\n")
-        if plan.reasoning:
-            sys.stderr.write(f"  Reasoning: {plan.reasoning}\n")
-        for step in plan.steps:
-            dep_str = f" (< {', '.join(step.depends_on)})" if step.depends_on else ""
-            sys.stderr.write(f"  ├ {step.id}: {step.description}{dep_str} [pending]\n")
+        sys.stderr.write(f"\nPlan: {plan.goal}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -294,20 +284,16 @@ class CliRenderer:
         self._ensure_newline()
         plan = self._state.current_plan
 
-        # Status indicators
-        status_icons = {
-            "pending": "○",
-            "in_progress": "◐",
-            "completed": "✓",
-            "failed": "✗",
-        }
+        active_step = next((step for step in plan.steps if step.status == "in_progress"), None)
+        completed_step = next((step for step in reversed(plan.steps) if step.status == "completed"), None)
+        failed_step = next((step for step in reversed(plan.steps) if step.status == "failed"), None)
 
-        # Add double newline before plan update for clear visual separation
-        sys.stderr.write(f"\n\n[plan] ● {plan.goal}\n")
-        for step in plan.steps:
-            icon = status_icons.get(step.status, "○")
-            dep_str = f" (< {', '.join(step.depends_on)})" if step.depends_on else ""
-            sys.stderr.write(f"  ├ {icon} {step.id}: {step.description}{dep_str}\n")
+        if failed_step:
+            sys.stderr.write(f"\nDone: {failed_step.description}\n")
+        elif active_step:
+            sys.stderr.write(f"\nPlan: {active_step.description}\n")
+        elif completed_step:
+            sys.stderr.write(f"\nDone: {completed_step.description}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True

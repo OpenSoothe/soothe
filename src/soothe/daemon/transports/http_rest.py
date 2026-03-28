@@ -390,7 +390,14 @@ class HttpRestTransport(TransportServer):
         # System shutdown
         @self._app.post("/api/v1/system/shutdown")
         async def shutdown_daemon() -> dict[str, Any]:
-            """Shutdown the daemon."""
+            """Request daemon shutdown.
+
+            Note:
+                The current transport command bridge routes through `/exit`, whose
+                runtime semantics are daemon-lifecycle dependent elsewhere in the
+                stack. This endpoint should be treated as a thin compatibility shim
+                until the HTTP transport gets a dedicated shutdown command path.
+            """
             if self._message_handler:
                 self._message_handler({"type": "command", "cmd": "/exit"})
             return {"status": "shutting_down"}

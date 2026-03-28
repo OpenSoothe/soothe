@@ -22,7 +22,7 @@ def run_impl(
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     output_format: str,
-    verbosity: Literal["minimal", "normal", "detailed", "debug"] | None,
+    verbosity: Literal["quiet", "minimal", "normal", "detailed", "debug"] | None,
 ) -> None:
     """Core implementation for running Soothe agent.
 

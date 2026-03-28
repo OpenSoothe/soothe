@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +12,17 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.daemon.server import _ClientConn
+from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
+
+
+class _SequencedClient:
+    def __init__(self, events: list[dict[str, Any] | None]) -> None:
+        self._events = list(events)
+
+    async def read_event(self) -> dict[str, Any] | None:
+        if not self._events:
+            return None
+        return self._events.pop(0)
 
 
 class _FakeRunner:
@@ -45,6 +58,19 @@ class _FakeRunnerWithMessages:
         # Yield an AI message with text content
         ai_msg = AIMessage(content="Hello from assistant", id="msg-1")
         yield ((), "messages", (ai_msg, {}))
+
+
+class _FakeRunnerThatSwapsThread:
+    """Runner stub that changes current_thread_id mid-query."""
+
+    def __init__(self) -> None:
+        self.current_thread_id = "thread-start"
+        self.calls: list[dict] = []
+
+    async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
+        self.calls.append({"text": text, **kwargs})
+        yield ((), "custom", {"type": "soothe.plan.created", "goal": text, "steps": []})
+        self.current_thread_id = "thread-final"
 
 
 @pytest.mark.asyncio
@@ -200,6 +226,72 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
 
 
 @pytest.mark.asyncio
+async def test_connect_with_retries_succeeds_after_transient_refusal(monkeypatch) -> None:
+    attempts = {"count": 0}
+
+    class _RetryClient:
+        async def connect(self) -> None:
+            attempts["count"] += 1
+            if attempts["count"] < 3:
+                raise ConnectionRefusedError("not ready")
+
+    async def _no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+
+    await daemon_exec._connect_with_retries(_RetryClient())
+
+    assert attempts["count"] == 3
+
+
+@pytest.mark.asyncio
+async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None:
+    class _FailingClient:
+        async def connect(self) -> None:
+            raise FileNotFoundError("missing socket")
+
+    async def _no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(daemon_exec, "_CONNECT_RETRY_COUNT", 2)
+
+    with pytest.raises(FileNotFoundError):
+        await daemon_exec._connect_with_retries(_FailingClient())
+
+
+def test_wait_for_daemon_ready_uses_configured_socket(monkeypatch, tmp_path: Path) -> None:
+    cfg = SootheConfig(daemon={"transports": {"unix_socket": {"path": str(tmp_path / "custom.sock")}}})
+    observed: list[Path] = []
+
+    monkeypatch.setattr(headless_exec.time, "sleep", lambda _delay: None)
+
+    def _fake_is_socket_ready(sock: Path) -> bool:
+        observed.append(sock)
+        return True
+
+    monkeypatch.setattr(headless_exec, "_is_socket_ready", _fake_is_socket_ready)
+
+    assert headless_exec._wait_for_daemon_ready(cfg, timeout_s=0.5) is True
+    assert observed == [tmp_path / "custom.sock"]
+
+
+@pytest.mark.asyncio
+async def test_wait_for_thread_status_skips_empty_handshake_status() -> None:
+    client = _SequencedClient(
+        events=[
+            {"type": "status", "state": "idle", "thread_id": ""},
+            {"type": "status", "state": "idle", "thread_id": "thread-123", "new_thread": True},
+        ]
+    )
+
+    event = await daemon_exec._wait_for_thread_status(client, timeout_s=0.5)
+
+    assert event["thread_id"] == "thread-123"
+
+
+@pytest.mark.asyncio
 async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     from asyncio import StreamWriter
@@ -252,3 +344,23 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     # Critical: thread_id should be empty, not "old-thread-123"
     assert initial_msg["thread_id"] == "", "Initial status should not leak cached thread_id"
     assert initial_msg["state"] in ("running", "idle", "stopped")
+
+
+@pytest.mark.asyncio
+async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
+    daemon = SootheDaemon(SootheConfig())
+    daemon._runner = _FakeRunnerThatSwapsThread()  # type: ignore[attr-defined]
+
+    sent: list[dict[str, Any]] = []
+
+    async def _fake_broadcast(msg: dict) -> None:
+        sent.append(msg)
+
+    daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
+    await daemon._run_query("analyze project structure")
+
+    status_messages = [msg for msg in sent if msg.get("type") == "status"]
+    assert status_messages[0]["state"] == "running"
+    assert status_messages[0]["thread_id"] == "thread-start"
+    assert status_messages[-1]["state"] == "idle"
+    assert status_messages[-1]["thread_id"] == "thread-start"

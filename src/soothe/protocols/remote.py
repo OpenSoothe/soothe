@@ -12,8 +12,9 @@ if TYPE_CHECKING:
 class RemoteAgentProtocol(Protocol):
     """Protocol for invoking remote agents via ACP, A2A, or LangGraph.
 
-    Each implementation is wrapped as a deepagents CompiledSubAgent
-    for uniform access via the task tool.
+    Current implementations are accessed through `RemoteAgentProtocol`
+    directly. Future remote backends may additionally be wrapped as
+    deepagents `CompiledSubAgent` instances for uniform task-tool access.
     """
 
     async def invoke(self, task: str, context: dict[str, Any] | None = None) -> str:

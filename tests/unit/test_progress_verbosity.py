@@ -7,18 +7,22 @@ from soothe.ux.core.progress_verbosity import (
 
 
 class TestProgressVerbosity:
-    def test_should_show_minimal(self) -> None:
-        assert should_show("assistant_text", "minimal")
-        assert should_show("error", "minimal")
-        assert not should_show("protocol", "minimal")
-        assert not should_show("tool_activity", "minimal")
-        assert not should_show("subagent_custom", "minimal")
+    def test_should_show_quiet(self) -> None:
+        assert should_show("assistant_text", "quiet")
+        assert should_show("error", "quiet")
+        assert not should_show("protocol", "quiet")
+        assert not should_show("tool_activity", "quiet")
+        assert not should_show("subagent_custom", "quiet")
+        assert not should_show("plan_update", "quiet")
+        assert not should_show("milestone", "quiet")
 
     def test_should_show_normal(self) -> None:
         assert should_show("assistant_text", "normal")
-        assert should_show("protocol", "normal")
+        assert should_show("plan_update", "normal")
+        assert should_show("milestone", "normal")
         assert should_show("error", "normal")
         assert should_show("subagent_progress", "normal")
+        assert not should_show("protocol", "normal")
         assert not should_show("tool_activity", "normal")
         assert not should_show("subagent_custom", "normal")
 
@@ -43,7 +47,7 @@ class TestProgressVerbosity:
             assert should_show(category, "debug")
 
     def test_classify_protocol_events(self) -> None:
-        assert classify_custom_event((), {"type": "soothe.cognition.plan.created"}) == "protocol"
+        assert classify_custom_event((), {"type": "soothe.cognition.plan.created"}) == "plan_update"
         assert classify_custom_event((), {"type": "soothe.protocol.context.projected"}) == "protocol"
         assert classify_custom_event((), {"type": "soothe.protocol.policy.checked"}) == "protocol"
 
@@ -62,7 +66,7 @@ class TestProgressVerbosity:
 
     def test_internal_events_never_shown(self) -> None:
         """Internal events should never be shown at any verbosity level."""
-        assert not should_show("internal", "minimal")
+        assert not should_show("internal", "quiet")
         assert not should_show("internal", "normal")
         assert not should_show("internal", "detailed")
         assert not should_show("internal", "debug")

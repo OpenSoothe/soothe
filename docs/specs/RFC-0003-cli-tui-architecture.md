@@ -50,29 +50,29 @@ A `SootheRunner` class sits between the TUI and the raw agent graph. It handles 
 
 ```
 +------------------------------------------------------------------+
-|  CLI (main.py, Typer)                                             |
+|  CLI (ux/cli/main.py, Typer)                                      |
 |  - Entry point, config loading, command routing                   |
-|  - soothe run | attach | init | server | thread                   |
+|  - soothe | daemon | thread | config | agent | autopilot         |
 +------------------------------------------------------------------+
-|  TUI Clients                                                      |
-|  - Textual TUI (tui_app.py): SootheApp, connects to daemon       |
-|  - Legacy TUI (tui.py): Rich Live fallback when Textual absent   |
-|  - Headless (_run_headless): stdout/stderr, --format jsonl        |
+|  Execution Surfaces                                               |
+|  - Textual TUI (ux/tui/app.py): SootheApp via run_textual_tui()  |
+|  - Headless CLI (ux/cli/execution/*): text or --format jsonl      |
+|  - Daemon-backed attach/detach/resume flows                       |
 +------------------------------------------------------------------+
-|  Daemon (daemon.py)                                               |
-|  - SootheDaemon: Unix socket, PID file, event broadcast           |
-|  - DaemonClient: TUI/headless connection to daemon                |
-|  - Socket: $SOOTHE_HOME/soothe.sock  PID: $SOOTHE_HOME/soothe.pid|
+|  Daemon (daemon/server.py + transports/*)                         |
+|  - SootheDaemon lifecycle and event routing                       |
+|  - DaemonClient for TUI/headless connections                      |
+|  - Unix socket default; optional WebSocket and HTTP REST          |
 +------------------------------------------------------------------+
-|  SootheRunner (runner.py)                                         |
-|  - Protocol orchestration (pre-stream / post-stream)               |
+|  SootheRunner (core/runner/*)                                     |
+|  - Protocol orchestration (pre-stream / post-stream)              |
 |  - LangGraph astream() pass-through                               |
 |  - HITL interrupt loop                                            |
-|  - Thread lifecycle via DurabilityProtocol                        |
+|  - Thread lifecycle coordination with ThreadContextManager        |
 +------------------------------------------------------------------+
 |  create_soothe_agent() -> CompiledStateGraph                      |
 |  - deepagents middleware stack                                    |
-|  - All subagents, tools, MCP                                      |
+|  - Subagents, tools, skills, protocol instances                   |
 +------------------------------------------------------------------+
 |  Protocols (context, memory, planner, policy, durability)         |
 +------------------------------------------------------------------+
@@ -150,7 +150,7 @@ Each user query is processed in three phases:
 2. Context persistence via `ContextProtocol.persist()`
 3. Memory storage for significant findings via `MemoryProtocol.remember()`
 4. Plan reflection via `PlannerProtocol.reflect()` (if plan active)
-5. State persistence via `DurabilityProtocol.save_state()`
+5. Thread-lifecycle persistence continues through `ThreadContextManager` during suspend/archive transitions rather than through a `DurabilityProtocol.save_state()` API
 
 ## IPC Protocol
 
@@ -158,27 +158,27 @@ The daemon communicates with clients over multiple transport protocols as define
 
 ### Supported Transports
 
-1. **Unix Domain Socket** (default, fully implemented)
+1. **Unix Domain Socket** (default local transport, fully implemented)
    - Path: `$SOOTHE_HOME/soothe.sock`
    - Protocol: Newline-delimited JSON
    - Use case: Local CLI and TUI clients
    - Authentication: None (filesystem permissions)
 
-2. **WebSocket** (planned, see RFC-0013)
-   - Default port: `8765` (localhost only)
+2. **WebSocket** (implemented transport module, see RFC-0013)
+   - Default port: `8765` (localhost by configuration)
    - Protocol: WebSocket text frames
    - Use case: Web and Desktop applications (real-time streaming)
-   - Authentication: Optional for localhost, mandatory for remote
+   - Authentication: Configurable; remote exposure depends on deployment hardening
 
-3. **HTTP REST API** (planned, see RFC-0013)
-   - Default port: `8766` (localhost only)
+3. **HTTP REST API** (implemented transport module, see RFC-0013)
+   - Default port: `8766` (localhost by configuration)
    - Protocol: HTTP/1.1 with JSON bodies
-   - Use case: Web and Desktop applications (CRUD operations, file transfers)
-   - Authentication: Optional for localhost, mandatory for remote
+   - Use case: Web and Desktop applications (status, thread operations, management endpoints)
+   - Authentication: Configurable; some routes remain thin wrappers/placeholders in current code
 
-### Unix Socket IPC (Current Implementation)
+### Unix Socket IPC (Current Default Path)
 
-The Unix socket transport uses newline-delimited JSON and is fully implemented.
+The Unix socket transport uses newline-delimited JSON and is the default local client path used by the Textual TUI and daemon-backed headless CLI.
 
 #### Server → Client Messages
 
@@ -208,8 +208,8 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | Command | Description |
 |---------|-------------|
 | `soothe` | Interactive TUI mode (default). |
-| `soothe -p "prompt"` | Headless single prompt; stream to stdout/stderr. |
-| `soothe -p "prompt" --format jsonl` | Headless with JSONL event output. |
+| `soothe -p "prompt" --no-tui` | Headless single prompt; stream to stdout/stderr via daemon-backed execution. |
+| `soothe -p "prompt" --no-tui --format jsonl` | Headless with JSONL event output. |
 | `soothe autopilot run "task"` | Autonomous execution mode. |
 | `soothe daemon start` | Start daemon in background. |
 | `soothe daemon start --foreground` | Start daemon in foreground. |
@@ -235,7 +235,7 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | Command | Description |
 |---------|-------------|
 | `/help` | Show commands |
-| `/exit`, `/quit` | Stop running thread (with confirmation), exit TUI client; daemon keeps running (updated 2026-03-28, see RFC-0013) |
+| `/exit`, `/quit` | Exit the TUI client while keeping daemon lifetime independent; in the Textual TUI, an active thread is stopped first after confirmation |
 | `/detach` | Detach TUI and leave thread running (with confirmation if thread running); daemon keeps running |
 | `/plan` | Show current plan tree |
 | `/memory` | Show memory stats |
@@ -246,46 +246,38 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | `/resume` | Resume a recent thread (interactive selection) |
 | `/clear` | Clear the screen |
 | `/config` | Show active configuration summary |
-| `/thread` | Show current thread log path |
+| `/thread` | Thread operations such as `list` and `archive <id>` |
 
-**Note**: `/exit` and `/quit` now stop the running thread (with user confirmation) before exiting the TUI client, while `/detach` leaves the thread running. Both leave the daemon running in the background. This enables clear distinction between "stop and exit" vs "detach and continue" workflows. The daemon can be explicitly stopped with `soothe daemon stop`. See RFC-0013 Daemon Lifecycle Semantics for complete behavior specification.
+**Note**: daemon lifetime is decoupled from client exit. `/detach` leaves work running. `/exit` and `/quit` exit the TUI client and preserve the daemon; the current Textual client stops an active thread first after confirmation, then detaches. Explicit daemon shutdown is handled by `soothe daemon stop`. See RFC-0013 for transport-level lifecycle semantics.
 
 ## TUI Widget Layout
 
-The Textual TUI (`SootheApp`) uses a vertical three-row layout with a cleaner, more focused design:
+The Textual TUI (`SootheApp`) uses a conversation-first layout with a docked footer stack:
 
 ```
 +--------------------------------------------------------------+
-|   Conversation Panel (4fr height, with border)               |
-|   [scrollable chat history with markdown rendering]          |
-|   [User and Assistant messages in bordered panels]           |
+| ConversationPanel                                            |
+| [scrollable conversation history]                            |
+| [user prompts and final assistant output]                    |
 |                                                              |
 +--------------------------------------------------------------+
-|   Activity Info (max 5 lines, no border)                     |
-|   . Context: 5 entries                                       |
-|   . Calling read_file                                        |
-|   [research] web search: "quantum computing"                |
-|   [browser] Step 3: click @ https://example.com             |
-|                                                              |
-|   Plan Tree (max 15 lines, no border, collapsible)          |
-|   [>] Step 1: Analyze...                                     |
-|   [ ] Step 2: Design...                                      |
-|                                                              |
+| PlanTree (toggleable, hidden when inactive)                  |
 +--------------------------------------------------------------+
-| Thread: abc123  Events: 15  Running  |  [research] analyzing |
+| > ChatInput                                                  |
+| [multi-line input with history navigation]                   |
 +--------------------------------------------------------------+
-| soothe> [UP/DOWN history navigation                         ] |
-|       [Taller input area for better usability               ] |
+| InfoBar: Thread / Events / Status                            |
 +--------------------------------------------------------------+
 ```
 
 ### Widgets
 
-- **ConversationPanel** — Top section (4fr height, with border); scrollable chat history for **final main-assistant responses only** (plus user turns). Shows user messages and assistant responses in bordered panels with distinct colors.
-- **ActivityInfo** — Compact borderless section showing the last 5 activity lines. Displays protocol events, tool activity, subagent custom events, and non-conversation stream activity with type-specific rendering.
-- **PlanTree** — Borderless plan tree display (max 15 lines), toggleable with `Ctrl+T`. Shows hierarchical plan with status markers (`[ ]` pending, `[>]` in_progress, `[+]` completed, `[x]` failed). Can be collapsed to save screen space.
-- **InfoBar** — Single row docked at bottom; thread ID, event count, state, and compact subagent status.
-- **ChatInput** — Bottom input area (height: 6) with UP/DOWN arrow key navigation for input history (reversed chronological order). Doubled height for improved usability.
+- **ConversationPanel** — Main scrollable conversation surface implemented with `RichLog`. Displays user turns, resumed history, and surfaced assistant output.
+- **PlanTree** — Toggleable plan display shown in the footer stack when relevant.
+- **InfoBar** — Bottom status row with thread, event, and runtime state information.
+- **ChatInput** — Multi-line `TextArea` input with UP/DOWN history navigation and auto-expanding height.
+
+Activity and event rendering are handled by the RFC-0019 event processor and TUI renderer rather than by a standalone `ActivityInfo` widget.
 
 ### Keyboard Shortcuts
 

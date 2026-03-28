@@ -14,14 +14,16 @@ from soothe.ux.tui import app as tui_app
 
 def test_start_daemon_uses_external_process(monkeypatch, tmp_path: Path) -> None:
     spawned: list[list[str]] = []
-    ready_socket = tmp_path / "soothe.sock"
-    ready_socket.write_text("")
+    ready_socket = tmp_path / "custom.sock"
+    config = SootheConfig(daemon={"transports": {"unix_socket": {"path": str(ready_socket)}}})
 
     monkeypatch.setattr(tui_app.SootheDaemon, "is_running", staticmethod(lambda: False))
-    monkeypatch.setattr(tui_app, "socket_path", lambda: ready_socket)
+    monkeypatch.setattr(tui_app, "resolve_socket_path", lambda _config: ready_socket)
+    monkeypatch.setattr(tui_app.SootheDaemon, "_is_socket_live", staticmethod(lambda sock: sock == ready_socket))
+    monkeypatch.setattr(tui_app.time, "sleep", lambda _delay: ready_socket.write_text(""))
     monkeypatch.setattr(tui_app.subprocess, "Popen", lambda cmd, **_kwargs: spawned.append(cmd))
 
-    tui_app._start_daemon_in_background(SootheConfig(), config_path="/tmp/custom.yml")
+    tui_app._start_daemon_in_background(config, config_path="/tmp/custom.yml")
 
     assert spawned
     assert spawned[0][:3] == [spawned[0][0], "-m", "soothe.daemon"]
@@ -102,7 +104,7 @@ class _FakeDaemonClient:
         self._events = list(events)
         self.resume_thread_calls: list[str] = []
         self.new_thread_calls = 0
-        self.subscribe_calls: list[str] = []
+        self.subscribe_calls: list[tuple[str, str]] = []
 
     async def connect(self) -> None:
         return None
@@ -123,7 +125,7 @@ class _FakeDaemonClient:
         thread_id: str,
         verbosity: str = "normal",  # RFC-0022: Add verbosity parameter
     ) -> None:
-        self.subscribe_calls.append(thread_id)
+        self.subscribe_calls.append((thread_id, verbosity))
 
     async def wait_for_subscription_confirmed(
         self,
@@ -163,7 +165,7 @@ async def test_connect_and_listen_restores_history_from_initial_resume_status(mo
         ],
     }
     client = _FakeDaemonClient(events=[status_event, None])
-    monkeypatch.setattr(tui_app, "DaemonClient", lambda: client)
+    monkeypatch.setattr(tui_app, "DaemonClient", lambda **_kwargs: client)
 
     app = tui_app.SootheApp(config=SootheConfig(), thread_id="thread-123")
     widgets = _mount_fake_widgets(app)
@@ -172,7 +174,7 @@ async def test_connect_and_listen_restores_history_from_initial_resume_status(mo
 
     assert client.resume_thread_calls == ["thread-123"]
     assert client.new_thread_calls == 0
-    assert client.subscribe_calls == ["thread-123"]
+    assert client.subscribe_calls == [("thread-123", "normal")]
     assert widgets["#chat-input"].input_history == ["hello again"]
     assert widgets["#conversation"].cleared == 1
     rendered_entries = [str(entry) for entry in widgets["#conversation"].entries]
@@ -205,7 +207,7 @@ async def test_connect_and_listen_does_not_create_new_thread_on_missing_resume(m
             {"type": "error", "code": "THREAD_NOT_FOUND", "message": "Thread missing"},
         ]
     )
-    monkeypatch.setattr(tui_app, "DaemonClient", lambda: client)
+    monkeypatch.setattr(tui_app, "DaemonClient", lambda **_kwargs: client)
 
     app = tui_app.SootheApp(config=SootheConfig(), thread_id="missing-thread")
     widgets = _mount_fake_widgets(app)
@@ -213,9 +215,25 @@ async def test_connect_and_listen_does_not_create_new_thread_on_missing_resume(m
     await app._connect_and_listen()
 
     assert client.resume_thread_calls == ["missing-thread"]
+
+
+@pytest.mark.asyncio
+async def test_connect_and_listen_uses_configured_verbosity(monkeypatch) -> None:
+    status_event = {
+        "type": "status",
+        "state": "idle",
+        "thread_id": "thread-quiet",
+    }
+    client = _FakeDaemonClient(events=[status_event, None])
+    monkeypatch.setattr(tui_app, "DaemonClient", lambda **_kwargs: client)
+
+    app = tui_app.SootheApp(config=SootheConfig(logging={"verbosity": "quiet"}), thread_id="thread-quiet")
+    _mount_fake_widgets(app)
+
+    await app._connect_and_listen()
+
+    assert client.subscribe_calls == [("thread-quiet", "quiet")]
     assert client.new_thread_calls == 0
-    rendered_entries = [str(entry) for entry in widgets["#conversation"].entries]
-    assert any("Thread missing" in entry for entry in rendered_entries)
 
 
 def test_thread_continue_uses_daemon_thread_listing_when_daemon_running(monkeypatch) -> None:

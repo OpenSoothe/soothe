@@ -656,7 +656,7 @@ class LoggingConfig(BaseModel):
 
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
-    verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
+    verbosity: Literal["quiet", "minimal", "normal", "detailed", "debug"] = "normal"
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
     report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
 
