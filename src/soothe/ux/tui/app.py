@@ -160,6 +160,9 @@ class SootheApp(App):
         # RFC-0019: Unified event processor with TUI renderer
         self._renderer: TuiRenderer | None = None
         self._processor: EventProcessor | None = None
+        # IG-053: Ctrl+C double-press tracking
+        self._ctrl_c_pressed_time: float | None = None
+        self._CTRL_C_TIMEOUT = 3.0  # Seconds to wait for second Ctrl+C
 
     def compose(self) -> ComposeResult:
         """Build the widget tree: simplified layout with footer stack."""
@@ -712,9 +715,36 @@ class SootheApp(App):
         self.exit()
 
     async def action_cancel_job(self) -> None:
-        """Cancel the currently running job."""
-        if self._client and self._connected:
-            await self._client.send_command("/cancel")
+        """Handle Ctrl+C with double-press exit behavior.
+
+        - If query running: cancel it
+        - If no query running: show brief message, wait for second Ctrl+C within 3s to exit
+        """
+        import time
+
+        current_time = time.time()
+
+        # Check if we're waiting for second Ctrl+C
+        if self._ctrl_c_pressed_time is not None:
+            time_diff = current_time - self._ctrl_c_pressed_time
+            if time_diff < self._CTRL_C_TIMEOUT:
+                # Second Ctrl+C within timeout - exit TUI
+                self._ctrl_c_pressed_time = None
+                await self.action_quit_app()
+                return
+            # Timeout expired - reset state
+            self._ctrl_c_pressed_time = None
+
+        # First Ctrl+C or timeout expired
+        if self._is_running:
+            # Query is running - cancel it
+            self._ctrl_c_pressed_time = None
+            if self._client and self._connected:
+                await self._client.send_command("/cancel")
+        else:
+            # No query running - show brief message and start timeout
+            self._ctrl_c_pressed_time = current_time
+            self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Press Ctrl+C again within 3s to exit"))
 
     async def action_copy_last(self) -> None:
         """Copy the last streamed text to clipboard."""

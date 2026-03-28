@@ -59,6 +59,7 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
             "debug": "debug",
             "protocol": "protocol",
             "assistant_text": "assistant_text",
+            "internal": "internal",  # Internal events should never be shown
         }
         return verbosity_map.get(meta.verbosity, "protocol")
 

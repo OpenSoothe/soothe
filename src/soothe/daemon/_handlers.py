@@ -584,14 +584,13 @@ class DaemonHandlersMixin:
                 self._stop_event.set()
 
     async def _cancel_current_query(self) -> None:
-        """Cancel the currently running query if any."""
+        """Cancel the currently running query if any.
+
+        Silently ignores cancellation requests when no query is running.
+        The TUI handles the UX for this case (IG-053).
+        """
         if not self._query_running:
-            await self._broadcast(
-                {
-                    "type": "command_response",
-                    "content": "[yellow]No running query to cancel.[/yellow]",
-                }
-            )
+            # Silently ignore - TUI will handle the UX
             return
 
         if self._current_query_task and not self._current_query_task.done():
@@ -608,18 +607,11 @@ class DaemonHandlersMixin:
             await self._broadcast(
                 {
                     "type": "command_response",
-                    "content": "[green]Query cancelled successfully.[/green]",
+                    "content": "[green]Query cancelled.[/green]",
                 }
             )
             await self._broadcast(
                 {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
-            )
-        else:
-            await self._broadcast(
-                {
-                    "type": "command_response",
-                    "content": "[yellow]No active query task found.[/yellow]",
-                }
             )
 
     async def _run_query(
