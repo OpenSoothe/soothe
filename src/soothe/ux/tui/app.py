@@ -118,8 +118,8 @@ class SootheApp(App):
     """
 
     BINDINGS: ClassVar[list[Binding]] = [
-        Binding("ctrl+d", "detach", "Detach"),
         Binding("ctrl+q", "quit_app", "Quit"),
+        Binding("ctrl+d", "detach", "Detach"),
         Binding("ctrl+c", "cancel_job", "Cancel Job"),
         Binding("ctrl+e", "focus_input", "Focus Input"),
         Binding("ctrl+y", "copy_last", "Copy Last Message"),
@@ -637,8 +637,8 @@ class SootheApp(App):
 
         if text.startswith("/"):
             if text.strip() in ("/exit", "/quit"):
-                await self._client.send_command(text.strip())
-                self.exit()
+                # Exit TUI client; daemon keeps running (RFC-0013)
+                await self.action_quit_app()  # Uses new detach behavior
                 return
             if text.strip() == "/detach":
                 await self.action_detach()
@@ -693,44 +693,98 @@ class SootheApp(App):
             await self._client.send_resume_thread(selected_thread_id)
 
     async def action_detach(self) -> None:
-        """Detach from daemon, keep it running."""
-        self._stop_typing_indicator()
-        if self._client:
-            await self._client.send_detach()
-            await self._client.close()
-        self._connected = False
-        self.exit(message="Detached from Soothe daemon. Use 'soothe thread continue --daemon' to reconnect.")
+        """Detach from thread, leave it running, exit TUI client (RFC-0013 daemon lifecycle).
 
-    async def action_quit_app(self) -> None:
-        """Stop daemon and quit."""
+        Behavior:
+        - If thread running: Show confirmation, detach on confirm
+        - If thread idle: Detach immediately
+        - Daemon keeps running
+        """
+        # Check if thread is running
+        if self._is_running:
+            # Show confirmation dialog
+            confirmed = await self._show_detach_confirmation()
+            if not confirmed:
+                return  # Stay in TUI
+
+        # Detach from daemon
         self._stop_typing_indicator()
         if self._client:
             try:
-                await self._client.send_command("/exit")
+                await self._client.send_detach()
                 await self._client.close()
             except (ConnectionResetError, ConnectionError, BrokenPipeError):
-                # Connection already closed or lost, just exit gracefully
                 pass
         self._connected = False
-        self.exit()
+
+        # Show daemon PID in exit message (RFC-0013)
+        from soothe.daemon import pid_path
+
+        pf = pid_path()
+        pid = pf.read_text().strip() if pf.exists() else "?"
+        thread_msg = "Thread still running. " if self._is_running else ""
+        self.exit(
+            message=f"{thread_msg}Detached from TUI. Daemon running (PID: {pid}).\n"
+            f"Use 'soothe thread continue' to reconnect or 'soothe daemon stop' to shutdown."
+        )
+
+    async def action_quit_app(self) -> None:
+        """Stop running thread and exit TUI client (RFC-0013 daemon lifecycle update 2026-03-28).
+
+        Behavior:
+        - If thread running: Show confirmation, stop thread on confirm
+        - If thread idle: Exit immediately
+        - Daemon keeps running
+        """
+        # Check if thread is running
+        if self._is_running:
+            # Show confirmation dialog
+            confirmed = await self._show_quit_confirmation()
+            if not confirmed:
+                return  # Stay in TUI
+            # Stop the running thread
+            await self._stop_current_thread()
+
+        # Quit and exit TUI
+        self._stop_typing_indicator()
+        if self._client:
+            try:
+                await self._client.send_detach()
+                await self._client.close()
+            except (ConnectionResetError, ConnectionError, BrokenPipeError):
+                pass
+        self._connected = False
+
+        # Show daemon PID in exit message (RFC-0013)
+        from soothe.daemon import pid_path
+
+        pf = pid_path()
+        pid = pf.read_text().strip() if pf.exists() else "?"
+        self.exit(
+            message=f"Thread stopped. TUI exited. Daemon running (PID: {pid}).\nUse 'soothe daemon stop' to shutdown."
+        )
 
     async def action_cancel_job(self) -> None:
-        """Handle Ctrl+C with double-press exit behavior.
+        """Handle Ctrl+C with double-press quit behavior (RFC-0013 daemon lifecycle).
 
         - If query running: cancel it
-        - If no query running: show brief message, wait for second Ctrl+C within 3s to exit
+        - If no query running: show brief message, wait for second Ctrl+C within 1s to quit
+        - Quit stops thread and exits TUI
         """
         import time
 
         current_time = time.time()
 
+        # Update timeout to 1s per RFC-0013 (changed from 3s)
+        ctrl_c_timeout = 1.0
+
         # Check if we're waiting for second Ctrl+C
         if self._ctrl_c_pressed_time is not None:
             time_diff = current_time - self._ctrl_c_pressed_time
-            if time_diff < self._CTRL_C_TIMEOUT:
-                # Second Ctrl+C within timeout - exit TUI
+            if time_diff < ctrl_c_timeout:
+                # Second Ctrl+C within 1s timeout - trigger quit behavior (stop thread + exit)
                 self._ctrl_c_pressed_time = None
-                await self.action_quit_app()
+                await self.action_quit_app()  # Triggers confirmation if thread running
                 return
             # Timeout expired - reset state
             self._ctrl_c_pressed_time = None
@@ -741,10 +795,31 @@ class SootheApp(App):
             self._ctrl_c_pressed_time = None
             if self._client and self._connected:
                 await self._client.send_command("/cancel")
+                # Show cancel message with daemon PID (RFC-0013)
+                from soothe.daemon import pid_path
+
+                pf = pid_path()
+                pid = pf.read_text().strip() if pf.exists() else "?"
+                self._on_panel_write(
+                    make_dot_line(
+                        DOT_COLORS["protocol"],
+                        f"Job cancelled. Press Ctrl+C again within 1s to quit. Daemon running (PID: {pid})",
+                    )
+                )
         else:
             # No query running - show brief message and start timeout
             self._ctrl_c_pressed_time = current_time
-            self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Press Ctrl+C again within 3s to exit"))
+            # Show daemon PID in message (RFC-0013)
+            from soothe.daemon import pid_path
+
+            pf = pid_path()
+            pid = pf.read_text().strip() if pf.exists() else "?"
+            self._on_panel_write(
+                make_dot_line(
+                    DOT_COLORS["protocol"],
+                    f"Press Ctrl+C again within 1s to quit. Daemon running (PID: {pid})",
+                )
+            )
 
     async def action_copy_last(self) -> None:
         """Copy the last streamed text to clipboard."""
@@ -790,6 +865,69 @@ class SootheApp(App):
             self._state.plan_visible = not self._state.plan_visible
         except Exception:
             logger.debug("Failed to toggle plan tree", exc_info=True)
+
+    async def _show_quit_confirmation(self) -> bool:
+        """Show confirmation dialog for quit (stop thread + exit).
+
+        Returns:
+            True if user confirms, False if user cancels.
+        """
+        from textual.screen import ModalScreen
+        from textual.widgets import Button, Label
+
+        class QuitConfirmModal(ModalScreen[bool]):
+            """Modal for quit confirmation."""
+
+            def compose(self) -> ComposeResult:
+                yield Label("Thread is running. Stop thread and exit?", classes="dialog-label")
+                with Container(classes="dialog-buttons"):
+                    yield Button("Yes, stop and exit", variant="error", id="yes")
+                    yield Button("No, stay in TUI", variant="primary", id="no")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                self.dismiss(event.button.id == "yes")
+
+        return await self.push_screen(QuitConfirmModal())
+
+    async def _show_detach_confirmation(self) -> bool:
+        """Show confirmation dialog for detach (leave thread running + exit).
+
+        Returns:
+            True if user confirms, False if user cancels.
+        """
+        from textual.screen import ModalScreen
+        from textual.widgets import Button, Label
+
+        class DetachConfirmModal(ModalScreen[bool]):
+            """Modal for detach confirmation."""
+
+            def compose(self) -> ComposeResult:
+                yield Label("Thread is running. Detach and leave it running?", classes="dialog-label")
+                with Container(classes="dialog-buttons"):
+                    yield Button("Yes, detach", variant="primary", id="yes")
+                    yield Button("No, stay in TUI", variant="primary", id="no")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                self.dismiss(event.button.id == "yes")
+
+        return await self.push_screen(DetachConfirmModal())
+
+    async def _stop_current_thread(self) -> None:
+        """Stop the currently running thread.
+
+        Sends cancel command to daemon and waits briefly for thread to stop.
+        """
+        if not self._client or not self._connected:
+            return
+
+        try:
+            # Send cancel command
+            await self._client.send_command("/cancel")
+            # Brief wait for cancellation to take effect
+            await asyncio.sleep(0.5)
+            logger.info("Sent cancel command to running thread")
+        except Exception:
+            logger.exception("Failed to stop thread")
 
 
 # ---------------------------------------------------------------------------

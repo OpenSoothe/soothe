@@ -156,6 +156,14 @@ async def run_headless_via_daemon(
             sys.stdout.write("\n")
             sys.stdout.flush()
 
+        # Show daemon persistence message (RFC-0013 daemon lifecycle)
+        from soothe.daemon import pid_path
+
+        pf = pid_path()
+        if pf.exists():
+            pid = pf.read_text().strip()
+            typer.echo(f"[lifecycle] Request completed. Daemon running (PID: {pid}).", err=True)
+
     except (ConnectionError, OSError, TimeoutError) as e:
         logger.exception("Daemon connection failed")
         from soothe.utils.error_format import format_cli_error

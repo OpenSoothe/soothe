@@ -1,7 +1,6 @@
 """Unix domain socket transport implementation (RFC-0013).
 
-This transport wraps the existing Unix socket functionality to provide
-backward-compatible IPC for local clients.
+This transport provides Unix socket IPC for local clients.
 """
 
 from __future__ import annotations

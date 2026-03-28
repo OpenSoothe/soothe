@@ -90,14 +90,14 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.workspace_dir == "."
 
-    def test_progress_verbosity_default(self) -> None:
+    def test_verbosity_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.logging.progress_verbosity == "normal"
+        assert cfg.logging.verbosity == "normal"
 
-    def test_progress_verbosity_options(self) -> None:
+    def test_verbosity_options(self) -> None:
         for level in ("minimal", "normal", "detailed", "debug"):
-            cfg = SootheConfig(logging={"progress_verbosity": level})
-            assert cfg.logging.progress_verbosity == level
+            cfg = SootheConfig(logging={"verbosity": level})
+            assert cfg.logging.verbosity == level
 
 
 class TestLoggingConfig:

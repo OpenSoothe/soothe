@@ -1,7 +1,4 @@
-"""Soothe daemon subpackage - background agent runner with Unix socket IPC.
-
-Public API re-exports for backward compatibility.
-"""
+"""Soothe daemon subpackage - background agent runner with Unix socket IPC."""
 
 from soothe.daemon.client import DaemonClient
 from soothe.daemon.entrypoint import run_daemon

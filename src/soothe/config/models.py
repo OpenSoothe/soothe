@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
@@ -189,44 +189,12 @@ class ComplexityThresholds(BaseModel):
         simple_tokens: Maximum tokens for simple queries (default: 30).
         medium_tokens: Maximum tokens for medium queries (default: 60).
         use_tiktoken: Use tiktoken for token counting if available.
-
-    Legacy (for backward compatibility):
-        trivial_words: Maximum words (converted to tokens x 2).
-        simple_words: Maximum words (converted to tokens x 2).
-        medium_words: Maximum words (converted to tokens x 2).
     """
 
     trivial_tokens: int = 10
     simple_tokens: int = 30
     medium_tokens: int = 60
-
     use_tiktoken: bool = False
-
-    trivial_words: int | None = None
-    simple_words: int | None = None
-    medium_words: int | None = None
-
-    def get_trivial_threshold(self) -> int:
-        """Get trivial threshold in tokens.
-
-        Priority: word-based thresholds > token-based thresholds
-        (for backward compatibility with existing configs that only set words)
-        """
-        if self.trivial_words is not None:
-            return self.trivial_words * 2
-        return self.trivial_tokens
-
-    def get_simple_threshold(self) -> int:
-        """Get simple threshold in tokens."""
-        if self.simple_words is not None:
-            return self.simple_words * 2
-        return self.simple_tokens
-
-    def get_medium_threshold(self) -> int:
-        """Get medium threshold in tokens."""
-        if self.medium_words is not None:
-            return self.medium_words * 2
-        return self.medium_tokens
 
 
 class PerformanceConfig(BaseModel):
@@ -268,17 +236,6 @@ class PerformanceConfig(BaseModel):
     log_timing: bool = False
     slow_query_threshold_ms: int = 3000
     thresholds: ComplexityThresholds = Field(default_factory=ComplexityThresholds)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _migrate_lazy_load_fields(cls, data: Any) -> Any:
-        """Accept deprecated ``lazy_load_*`` names from old config files."""
-        if isinstance(data, dict):
-            if "lazy_load_tools" in data and "parallel_tool_loading" not in data:
-                data["parallel_tool_loading"] = data.pop("lazy_load_tools")
-            if "lazy_load_subagents" in data and "parallel_subagent_loading" not in data:
-                data["parallel_subagent_loading"] = data.pop("lazy_load_subagents")
-        return data
 
 
 class BrowserSubagentConfig(BaseModel):
@@ -699,20 +656,9 @@ class LoggingConfig(BaseModel):
 
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
-    verbosity: Literal["minimal", "normal", "detailed", "debug"] = Field(
-        default="normal",
-        alias="progress_verbosity",
-        validation_alias="progress_verbosity",
-    )
+    verbosity: Literal["minimal", "normal", "detailed", "debug"] = "normal"
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
     report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
-
-    model_config = {"populate_by_name": True}
-
-    @property
-    def progress_verbosity(self) -> Literal["minimal", "normal", "detailed", "debug"]:
-        """Backward compatibility alias for verbosity."""
-        return self.verbosity
 
 
 class RecoveryConfig(BaseModel):

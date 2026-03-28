@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 SLASH_COMMANDS: dict[str, str] = {
-    "/exit": "Stop daemon and exit",
-    "/quit": "Stop daemon and exit",
-    "/detach": "Detach TUI; daemon keeps running (reconnect with 'soothe attach')",
+    "/exit": "Stop running thread (confirm) and exit TUI; daemon keeps running (RFC-0013)",
+    "/quit": "Stop running thread (confirm) and exit TUI; daemon keeps running (RFC-0013)",
+    "/detach": "Leave thread running (confirm) and exit TUI; daemon keeps running (RFC-0013)",
     "/autopilot <prompt>": "Run prompt in autonomous mode",
     "/cancel": "Cancel the current running job",
     "/plan": "Show current task plan",
@@ -45,9 +45,9 @@ SLASH_COMMANDS: dict[str, str] = {
 }
 
 KEYBOARD_SHORTCUTS: dict[str, str] = {
-    "Ctrl+Q": "Quit Soothe (stops daemon)",
-    "Ctrl+D": "Detach TUI (daemon keeps running)",
-    "Ctrl+C": "Cancel running job",
+    "Ctrl+Q": "Quit TUI: Stop thread (confirm) and exit client",
+    "Ctrl+D": "Detach TUI: Leave thread running (confirm) and exit client",
+    "Ctrl+C": "Cancel running job, press twice within 1s to quit",
     "Ctrl+E": "Focus chat input",
     "Ctrl+Y": "Copy last message to clipboard",
 }
@@ -128,7 +128,7 @@ async def handle_slash_command(
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     if command in ("/exit", "/quit"):
-        console.print("[dim]Goodbye.[/dim]")
+        console.print("[dim]Stopping thread and exiting TUI. Daemon keeps running.[/dim]")
         return True
 
     if command == "/help":

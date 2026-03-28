@@ -104,7 +104,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._pid_lock_fd is None:
             raise RuntimeError("Another Soothe daemon is already running (PID lock held)")
 
-        # Check for existing socket (backward compatibility)
+        # Check for existing socket
         sock = socket_path()
         sock.parent.mkdir(parents=True, exist_ok=True)
 
@@ -374,7 +374,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._transport_manager:
             await self._transport_manager.stop_all()
 
-        # Legacy client cleanup (for backward compatibility)
+        # Cleanup clients
         for client in self._clients:
             with contextlib.suppress(Exception):
                 client.writer.close()
@@ -406,7 +406,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Route event to appropriate subscribers via event bus.
 
         Events with thread_id are routed to thread-specific topics.
-        Events without thread_id are broadcast to all clients (legacy behavior).
+        Events without thread_id are broadcast to all clients.
 
         Args:
             msg: Message dict to route. Must contain 'type' field.
@@ -433,7 +433,6 @@ class SootheDaemon(DaemonHandlersMixin):
             await self._event_bus.publish(topic, msg, event_meta=event_meta)
         else:
             # Event without thread_id - broadcast to all transports
-            # This maintains backward compatibility for non-thread-specific messages
             logger.debug("Event has no thread_id, broadcasting to all: %s", msg_type)
             if self._transport_manager:
                 await self._transport_manager.broadcast(msg)

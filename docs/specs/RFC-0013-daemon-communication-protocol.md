@@ -5,12 +5,14 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-19
-**Updated**: 2026-03-27
+**Updated**: 2026-03-28
 **Dependencies**: RFC-0001, RFC-0002, RFC-0003
 
 ## Abstract
 
 This RFC defines a transport-agnostic daemon communication protocol that supports Unix domain sockets, WebSockets, and HTTP REST. The protocol specifies a common JSON-based message format, security requirements, and implementation interface. This architecture enables the Soothe daemon to serve both local CLI/TUI clients (via Unix socket) and remote/web clients (via WebSocket/HTTP) using the same protocol layer, while maintaining backward compatibility with existing clients.
+
+**Update (2026-03-28)**: Added Daemon Lifecycle Semantics section clarifying daemon persistence, client detachment, and shutdown behavior across all interaction modes.
 
 ## Motivation
 
@@ -133,6 +135,122 @@ The daemon uses a pub/sub event bus to route events to connected clients based o
 4. **No built-in authentication**: Security handled by external services
 5. **Thread subscription required**: All clients MUST subscribe to threads to receive events (BREAKING CHANGE)
 6. **Client isolation enforced**: Events routed to subscribed clients only
+7. **Daemon persistence**: Daemon remains running across client sessions; only explicit shutdown stops it
+
+### Daemon Lifecycle Semantics
+
+The daemon follows a persistent lifecycle model where it remains running across multiple client sessions. This design provides seamless user experience without requiring manual daemon management.
+
+#### Daemon Persistence Behavior
+
+**Daemon Startup Triggers**:
+- **Auto-start (Non-TUI)**: When running `soothe -p "prompt"` and daemon not running, daemon auto-starts
+- **Auto-start (TUI)**: When launching TUI and daemon not running, daemon auto-starts
+- **Manual start**: `soothe daemon start` explicitly starts daemon (foreground or background mode)
+
+**Daemon Shutdown Triggers**:
+- **Explicit stop**: Only `soothe daemon stop` command shuts down daemon
+- **SIGTERM/SIGKILL**: System signals to daemon process (manual intervention)
+- **Foreground Ctrl+C**: When daemon runs with `--foreground`, Ctrl+C shuts it down
+
+**NOT Shutdown Triggers**:
+- Client exit (TUI `/exit`, `/quit`, `/detach`, double Ctrl+C)
+- Client disconnect (non-TUI request completion)
+- Thread completion
+- Client connection loss
+
+#### Client-Server Interaction Patterns
+
+**Non-TUI Mode (Headless Single-Prompt)**:
+```
+Client → Check daemon status
+  → If running: Connect, create thread, execute request, thread finishes, client disconnects
+  → If not running: Start daemon, connect, create thread, execute request, thread finishes, client disconnects
+Daemon → Remains running in background after client disconnect
+```
+
+**TUI Mode (Interactive)**:
+```
+Client → Check daemon status
+  → If running: Connect, create/resume thread, interactive session
+  → If not running: Start daemon, connect, create thread, interactive session
+Interactive session:
+  → /exit or /quit → Client exits, daemon keeps running
+  → /detach → Client detaches, daemon keeps running
+  → Ctrl+C once → Cancel current job, stay in TUI
+  → Ctrl+C twice (within 1s) → Client exits, daemon keeps running
+Daemon → Remains running after TUI exits
+```
+
+#### Daemon State Transitions
+
+| Trigger | Previous State | New State | Notes |
+|---------|---------------|-----------|-------|
+| `soothe daemon start` | None | `running` | Daemon initialized, serving requests |
+| Client connects | `running` | `running` | No state change, client attached |
+| Client disconnects | `running` | `running` | No state change, client detached |
+| Thread finishes | `running` | `running` | No state change, thread complete |
+| `soothe daemon stop` | `running` | `stopped` | Explicit shutdown |
+| SIGTERM | `running` | `stopping` → `stopped` | Graceful shutdown |
+| SIGKILL | `running` | `stopped` | Immediate termination |
+
+#### Client Exit Semantics
+
+**`/exit` and `/quit` Commands** (Stop Thread + Exit Client):
+- **Behavior**: Stop running thread (if any), exit TUI client, daemon remains running
+- **Confirmation Required**: YES - Must prompt user for confirmation before stopping thread
+- **Protocol**:
+  1. Check if thread is running
+  2. If running: Show confirmation dialog "Thread {id} is running. Stop thread and exit? (y/n)"
+  3. If user confirms: Send stop/cancel to daemon, wait for thread to stop, then detach
+  4. If user declines: Stay in TUI
+  5. If thread idle: Exit immediately without confirmation
+- **Thread State**: Thread transitions to `suspended` (if was running) or stays `idle`
+- **User Message**: "Thread stopped. TUI exited. Daemon running (PID: XXX). Use 'soothe daemon stop' to shutdown."
+- **Keymap**: `Ctrl+Q` (same as `/quit`)
+
+**`/detach` Command** (Keep Thread Running + Exit Client):
+- **Behavior**: Detach TUI client, thread keeps running, daemon remains running
+- **Confirmation Required**: YES - Must prompt user for confirmation if thread is running
+- **Protocol**:
+  1. Check if thread is running
+  2. If running: Show confirmation dialog "Thread {id} is running. Detach and leave it running? (y/n)"
+  3. If user confirms: Send `detach` message, close connection immediately
+  4. If user declines: Stay in TUI
+  5. If thread idle: Exit immediately without confirmation
+- **Thread State**: Thread continues running (no state change)
+- **User Message**: "Detached from thread. Thread still running. Daemon running (PID: XXX). Reconnect with 'soothe thread continue'."
+- **Keymap**: `Ctrl+D` (same as `/detach`)
+
+**Double Ctrl+C (TUI Mode)**:
+- **Behavior**: First Ctrl+C cancels current job; second Ctrl+C within 1s triggers `/quit` behavior (stop thread + exit)
+- **Protocol**:
+  1. First Ctrl+C: Cancel current job
+  2. Second Ctrl+C (within 1s): Trigger `/quit` behavior with confirmation
+  3. If user confirms: Stop thread and exit
+  4. If user declines: Stay in TUI
+- **User Message** (after first Ctrl+C): "Job cancelled. Press Ctrl+C again within 1s to quit."
+- **User Message** (after second Ctrl+C): Show confirmation: "Thread {id} is running. Stop thread and exit? (y/n)"
+- **Timing**: 1 second window between Ctrl+C presses to prevent accidental exit
+- **Keymap**: `Ctrl+C` (twice)
+
+#### Thread Warning on Exit
+
+**For `/exit` and `/quit`** (Stop Thread + Exit):
+When TUI client executes `/exit` or `/quit` while thread is in `running` state:
+- **Warning Prompt**: "Thread {id} is running. Stop thread and exit? (y/n)"
+- **User Response 'y'**: Stop thread (cancel query), exit TUI, daemon keeps running, thread transitions to `suspended`
+- **User Response 'n'**: Stay in TUI, thread continues running
+- **Idle Thread**: No warning, exit immediately
+
+**For `/detach`** (Keep Thread Running + Exit):
+When TUI client executes `/detach` while thread is in `running` state:
+- **Warning Prompt**: "Thread {id} is running. Detach and leave it running? (y/n)"
+- **User Response 'y'**: Exit TUI, daemon keeps running, thread continues running
+- **User Response 'n'**: Stay in TUI, thread continues running
+- **Idle Thread**: No warning, exit immediately
+
+This prevents accidental exit during active execution while respecting user intent and providing clear distinction between stop-and-exit vs detach-and-continue.
 
 ### Abstract Schemas
 

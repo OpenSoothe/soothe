@@ -645,7 +645,7 @@ class DaemonHandlersMixin:
             )
             return
 
-        # Legacy single-threaded execution (backward compatible)
+        # Single-threaded execution
         thread_id = await self._ensure_active_thread_id()
 
         # Persist draft thread on first message

@@ -23,6 +23,10 @@ def run_headless(
 
     Connects to running daemon if available to avoid RocksDB lock conflicts.
     Falls back to standalone mode if no daemon is running.
+
+    Note (RFC-0013): Daemon persists after request completion. Use 'soothe daemon stop'
+    to explicitly shutdown the daemon. Auto-start behavior: if daemon not running,
+    request runs in standalone mode (no daemon auto-start for headless).
     """
     import asyncio
 
@@ -46,6 +50,7 @@ def run_headless(
         typer.echo("Daemon is unresponsive, stopping it and running standalone...", err=True)
         SootheDaemon.stop_running(timeout=5.0)
 
+    # Run standalone (no daemon)
     exit_code = asyncio.run(
         run_headless_standalone(
             cfg,

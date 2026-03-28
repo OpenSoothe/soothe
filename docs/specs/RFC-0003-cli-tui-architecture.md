@@ -4,7 +4,7 @@ nnn# RFC-0003: CLI TUI Architecture Design
 **Title**: CLI TUI Architecture Design
 **Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-03-27
+**Updated**: 2026-03-28
 **Related**: RFC-0001, RFC-0002, RFC-0006
 
 ## Abstract
@@ -235,8 +235,8 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | Command | Description |
 |---------|-------------|
 | `/help` | Show commands |
-| `/exit`, `/quit` | Exit TUI and stop daemon |
-| `/detach` | Detach TUI; daemon keeps running (reconnect with `soothe attach`) |
+| `/exit`, `/quit` | Stop running thread (with confirmation), exit TUI client; daemon keeps running (updated 2026-03-28, see RFC-0013) |
+| `/detach` | Detach TUI and leave thread running (with confirmation if thread running); daemon keeps running |
 | `/plan` | Show current plan tree |
 | `/memory` | Show memory stats |
 | `/context` | Show context stats |
@@ -247,6 +247,8 @@ All commands follow the pattern: `soothe <subcommand> <action> [options]`
 | `/clear` | Clear the screen |
 | `/config` | Show active configuration summary |
 | `/thread` | Show current thread log path |
+
+**Note**: `/exit` and `/quit` now stop the running thread (with user confirmation) before exiting the TUI client, while `/detach` leaves the thread running. Both leave the daemon running in the background. This enables clear distinction between "stop and exit" vs "detach and continue" workflows. The daemon can be explicitly stopped with `soothe daemon stop`. See RFC-0013 Daemon Lifecycle Semantics for complete behavior specification.
 
 ## TUI Widget Layout
 
@@ -287,12 +289,23 @@ The Textual TUI (`SootheApp`) uses a vertical three-row layout with a cleaner, m
 
 ### Keyboard Shortcuts
 
-- `Ctrl+Q` — Quit TUI and stop daemon
-- `Ctrl+D` — Detach TUI (daemon keeps running)
-- `Ctrl+C` — Cancel currently running job
+- `Ctrl+Q` — Quit TUI: Stop running thread and exit client (daemon keeps running, same as `/quit`)
+- `Ctrl+D` — Detach TUI: Leave thread running and exit client (daemon keeps running, same as `/detach`)
+- `Ctrl+C` (once) — Cancel currently running job
+- `Ctrl+C` (twice within 1s) — Trigger `/quit` behavior (stop thread + exit with confirmation)
 - `Ctrl+E` — Focus input field
 - `Ctrl+Y` — Copy last message to clipboard
 - `Ctrl+T` — Toggle plan tree visibility
+
+**Key Behaviors**:
+- **`Ctrl+Q` (`/quit`)**: Stops running thread (with confirmation), exits TUI, daemon keeps running
+- **`Ctrl+D` (`/detach`)**: Leaves thread running (with confirmation), exits TUI, daemon keeps running
+- **Double Ctrl+C**: First press cancels job; second press (within 1s) triggers quit behavior with confirmation
+
+**Confirmation Dialogs**:
+- If thread running and user presses `Ctrl+Q` or types `/quit`: "Thread {id} is running. Stop thread and exit? (y/n)"
+- If thread running and user presses `Ctrl+D` or types `/detach`: "Thread {id} is running. Detach and leave it running? (y/n)"
+- If thread idle: Exit immediately without confirmation
 
 ### Message Surfacing Rules
 
