@@ -174,8 +174,13 @@ async def test_daemon_handles_slash_commands() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_command_exit_stops_daemon() -> None:
-    """Test that /exit and /quit commands stop the daemon."""
+async def test_daemon_command_exit_does_not_stop_daemon() -> None:
+    """Test that /exit and /quit commands do NOT stop the daemon (IG-085, RFC-0013).
+
+    Per RFC-0013 daemon lifecycle semantics:
+    - /exit and /quit should detach client, not stop daemon
+    - Only explicit 'soothe daemon stop' should shutdown daemon
+    """
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
@@ -190,11 +195,8 @@ async def test_daemon_command_exit_stops_daemon() -> None:
     # Test /exit command
     await daemon._handle_command("/exit")
 
-    # Should have set running to False
-    assert daemon._running is False
-    # Should have sent stopping status
-    status_msgs = [msg for msg in sent if msg.get("type") == "status"]
-    assert any(msg.get("state") == "stopping" for msg in status_msgs)
+    # IG-085: Daemon should KEEP RUNNING (not stop)
+    assert daemon._running is True
 
 
 @pytest.mark.asyncio

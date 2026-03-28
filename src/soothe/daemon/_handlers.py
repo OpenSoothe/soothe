@@ -284,11 +284,13 @@ class DaemonHandlersMixin:
                 if msg_type == "command":
                     cmd = msg.get("cmd", "")
                     if cmd in ("/exit", "/quit"):
-                        await self._broadcast({"type": "status", "state": "stopping"})
-                        self._running = False
-                        if self._stop_event:
-                            self._stop_event.set()
-                        break
+                        # IG-085 (RFC-0013): Treat /exit and /quit as client detach
+                        # Daemon should NOT stop - only explicit 'soothe daemon stop' shuts down daemon
+                        logger.info("Received %s command - treating as client detach (daemon keeps running)", cmd)
+                        await self._broadcast({"type": "status", "state": "detached"})
+                        # Do NOT set self._running = False
+                        # Do NOT break - daemon continues running
+                        continue
                     if cmd.strip().lower() == "/cancel":
                         await self._cancel_current_query()
                         continue
@@ -559,7 +561,10 @@ class DaemonHandlersMixin:
         output = StringIO()
         console = Console(file=output, force_terminal=False, width=120)
 
-        should_exit = await handle_slash_command(
+        # IG-085: Return value no longer used to stop daemon
+        # /exit and /quit commands now just detach client, not stop daemon
+        # Daemon should only stop via explicit 'soothe daemon stop'
+        await handle_slash_command(
             cmd,
             self._runner,
             console,
@@ -576,12 +581,6 @@ class DaemonHandlersMixin:
                     "content": response_text,
                 }
             )
-
-        if should_exit:
-            await self._broadcast({"type": "status", "state": "stopping"})
-            self._running = False
-            if self._stop_event:
-                self._stop_event.set()
 
     async def _cancel_current_query(self) -> None:
         """Cancel the currently running query if any.

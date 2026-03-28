@@ -129,7 +129,8 @@ async def handle_slash_command(
 
     if command in ("/exit", "/quit"):
         console.print("[dim]Stopping thread and exiting TUI. Daemon keeps running.[/dim]")
-        return True
+        # IG-085: Return False - don't stop daemon, just detach client
+        return False
 
     if command == "/help":
         _show_help(console)
