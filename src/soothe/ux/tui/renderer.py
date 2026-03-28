@@ -17,6 +17,7 @@ from rich.text import Text
 
 from soothe.core.event_catalog import REGISTRY
 from soothe.tools.display_names import get_tool_display_name
+from soothe.ux.core.event_filter import should_skip_event
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.tui.utils import (
     DOT_COLORS,
@@ -329,6 +330,10 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
+        # Check skip filter (unified with CLI)
+        if should_skip_event(event_type):
+            return
+
         # Build top-level summary from registry template
         summary = self._build_event_summary(event_type, data)
         if not summary:
@@ -337,14 +342,8 @@ class TuiRenderer:
         # Determine color based on namespace
         color = DOT_COLORS.get("subagent", "magenta") if namespace else DOT_COLORS.get("protocol", "dim")
 
-        # Get details for second level
-        details = self._format_event_details(event_type, data)
-
-        # Create two-level tree display
-        if details:
-            self._on_panel_write(make_dot_line(color, summary, details))
-        else:
-            self._on_panel_write(make_dot_line(color, summary))
+        # Create simple one-level display (consistent with CLI)
+        self._on_panel_write(make_dot_line(color, summary))
 
     def _build_event_summary(self, event_type: str, data: dict[str, Any]) -> str:
         """Build human-readable summary for event using registry template.

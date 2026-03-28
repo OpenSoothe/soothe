@@ -148,6 +148,15 @@ class ChatInput(TextArea):
         if old_height != new_height:
             self.styles.height = new_height
 
+    @property
+    def history(self) -> list[str]:
+        """Get input history (oldest first).
+
+        Returns:
+            List of history entries.
+        """
+        return list(self._history)
+
     def set_history(self, history: list[str]) -> None:
         """Load input history (oldest first)."""
         self._history = list(history)

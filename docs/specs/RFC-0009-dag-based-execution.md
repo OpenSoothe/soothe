@@ -181,14 +181,20 @@ Persist final state
 
 Central concurrency coordinator using `asyncio.Semaphore`. Created once in `SootheRunner.__init__` from `SootheConfig.execution.concurrency`.
 
+**Unlimited Mode**: When a policy limit is set to 0, no semaphore is created for that layer. Acquisition becomes a no-op pass-through, allowing unbounded parallel execution.
+
 **Interface**:
 
 ```python
 class ConcurrencyController:
-    def __init__(self, policy: ConcurrencyPolicy) -> None: ...
+    def __init__(self, policy: ConcurrencyPolicy) -> None:
+        # Create semaphores only for positive limits
+        # 0 = unlimited (no semaphore, no blocking)
 
     @asynccontextmanager
-    async def acquire_goal(self) -> AsyncGenerator[None, None]: ...
+    async def acquire_goal(self) -> AsyncGenerator[None, None]:
+        # Unlimited (limit=0): passes through immediately
+        # Limited: acquires semaphore
 
     @asynccontextmanager
     async def acquire_step(self) -> AsyncGenerator[None, None]: ...
@@ -201,6 +207,15 @@ class ConcurrencyController:
 
     @property
     def max_parallel_goals(self) -> int: ...
+
+    @property
+    def has_goal_limit(self) -> bool: ...  # True if semaphore exists
+
+    @property
+    def has_step_limit(self) -> bool: ...  # True if semaphore exists
+
+    @property
+    def has_llm_limit(self) -> bool: ...  # True if semaphore exists
 ```
 
 ### 2. StepScheduler (`core/step_scheduler.py`)
@@ -252,13 +267,15 @@ def is_complete(self) -> bool: ...
 
 ```python
 class ConcurrencyPolicy(BaseModel):
-    max_parallel_goals: int = 1
-    max_parallel_steps: int = 1
-    max_parallel_subagents: int = 1      # Reserved for future middleware
-    max_parallel_tools: int = 3          # Reserved for future middleware
-    global_max_llm_calls: int = 5        # Cross-level circuit breaker
+    max_parallel_goals: int = 1           # 0 = unlimited
+    max_parallel_steps: int = 1           # 0 = unlimited
+    max_parallel_subagents: int = 1       # 0 = unlimited (reserved for future middleware)
+    max_parallel_tools: int = 3           # 0 = unlimited (reserved for future middleware)
+    global_max_llm_calls: int = 5         # 0 = unlimited (cross-level circuit breaker)
     step_parallelism: Literal["sequential", "dependency", "max"] = "dependency"
 ```
+
+All limits support `0` as a special value meaning "unlimited". When set to 0, `ConcurrencyController` skips semaphore creation for that layer, allowing unbounded parallelism.
 
 ### 5. Result Recording Models
 
@@ -328,6 +345,48 @@ execution:
     step_parallelism: dependency # sequential | dependency | max
 ```
 
+### Unlimited Concurrency (Special Value: 0)
+
+All concurrency limits support `0` as a special value meaning "unlimited":
+
+- `max_parallel_goals: 0` → No limit on concurrent goals (autonomous mode)
+- `max_parallel_steps: 0` → No limit on concurrent plan steps
+- `max_parallel_tools: 0` → No limit on concurrent tool calls
+- `max_parallel_subagents: 0` → No limit on concurrent subagents
+- `global_max_llm_calls: 0` → Disable LLM call circuit breaker
+
+**Implementation**: When a limit is set to 0, `ConcurrencyController` does not create a semaphore for that layer. Acquisition becomes a no-op pass-through, allowing unbounded parallel execution.
+
+**Helper Properties**: The controller provides boolean properties to check if limits are active:
+- `has_goal_limit` → True if goal semaphore exists (limited)
+- `has_step_limit` → True if step semaphore exists (limited)
+- `has_llm_limit` → True if LLM semaphore exists (limited)
+- `has_tool_limit` → True if tool semaphore exists (limited)
+
+**Safety Considerations**:
+- Unlimited `global_max_llm_calls` disables the cross-level circuit breaker, which may cause API rate-limit exhaustion in high-parallelism scenarios.
+- Recommended: Keep at least one layer limited (e.g., global LLM calls) as a safety net against resource exhaustion.
+- Unlimited mode is intended for high-capacity deployments with robust API rate limits and sufficient compute resources.
+
+**Example Configuration** (high-capacity deployment):
+```yaml
+execution:
+  concurrency:
+    max_parallel_goals: 0      # Unlimited goals
+    max_parallel_steps: 0      # Unlimited steps
+    max_parallel_tools: 0      # Unlimited tools
+    global_max_llm_calls: 10   # Keep circuit breaker active (10 concurrent LLM calls)
+```
+
+**Example Configuration** (conservative deployment):
+```yaml
+execution:
+  concurrency:
+    max_parallel_goals: 1      # Serial goals (safe)
+    max_parallel_steps: 3      # Moderate step parallelism
+    global_max_llm_calls: 5    # Conservative circuit breaker
+```
+
 ## Backward Compatibility
 
 - When `max_parallel_steps=1` and `step_parallelism="sequential"`, the step loop degrades to executing one step at a time on the main thread -- functionally equivalent to the current single-pass but now iterating through all steps.
@@ -352,8 +411,9 @@ execution:
 
 ## Related Documents
 
-- [RFC-0001](./RFC-0001.md) - System Conceptual Design
-- [RFC-0002](./RFC-0002.md) - Core Modules Architecture Design
-- [RFC-0007](./RFC-0007.md) - Autonomous Iteration Loop
-- [RFC-0008](./RFC-0008.md) - Request Processing Workflow
-- [IG-021](../impl/021-dag-execution-unified-concurrency.md) - Implementation Guide
+- [RFC-0001](./RFC-0001-system-conceptual-design.md) - System Conceptual Design
+- [RFC-0002](./RFC-0002-core-modules-architecture.md) - Core Modules Architecture Design
+- [RFC-0007](./RFC-0007-autonomous-iteration-loop.md) - Autonomous Iteration Loop
+- [RFC-0008](./RFC-0008-agentic-loop-execution.md) - Request Processing Workflow
+- [IG-021](../impl/IG-021-dag-execution-unified-concurrency.md) - DAG Execution Implementation Guide
+- [IG-077](../impl/IG-077-unlimited-concurrency-support.md) - Unlimited Concurrency Support

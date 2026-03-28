@@ -15,16 +15,11 @@ from soothe.core.event_catalog import (
     GOAL_BATCH_STARTED,
     ITERATION_COMPLETED,
     ITERATION_STARTED,
-    PLAN_BATCH_STARTED,
     PLAN_CREATED,
     PLAN_REFLECTED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_FAILED,
-    PLAN_STEP_STARTED,
-    POLICY_CHECKED,
-    POLICY_DENIED,
     REGISTRY,
 )
+from soothe.ux.core.event_filter import should_skip_event
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -38,16 +33,6 @@ _EVENT_LABELS: dict[str, str] = {
     GOAL_BATCH_STARTED: "goals",
     ITERATION_STARTED: "iteration",
     ITERATION_COMPLETED: "iteration",
-}
-
-# Events to skip (handled by renderer's plan update mechanism, or not rendered by CLI)
-_SKIP_EVENTS = {
-    PLAN_BATCH_STARTED,
-    PLAN_STEP_STARTED,
-    PLAN_STEP_COMPLETED,
-    PLAN_STEP_FAILED,
-    POLICY_CHECKED,  # Policy events not rendered by simplified CLI (RFC-0019)
-    POLICY_DENIED,  # Policy events not rendered by simplified CLI (RFC-0019)
 }
 
 
@@ -71,8 +56,8 @@ def render_progress_event(
     if not event_type:
         return
 
-    # Skip batch/step events (handled by renderer's plan update mechanism)
-    if event_type in _SKIP_EVENTS:
+    # Skip batch/step/policy events (handled by renderer's plan update mechanism, or not rendered)
+    if should_skip_event(event_type):
         return
 
     # Try registry first (RFC-0020 Principle 1: Registry-Driven Display)

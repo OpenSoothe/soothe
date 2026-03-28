@@ -372,14 +372,15 @@ performance:
 # Execution Limits
 # =============================================================================
 # Concurrency and resource limits for safe operation.
+# All limits support 0 = unlimited (disable that layer's semaphore).
 
 execution:
   concurrency:
-    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode)
-    max_parallel_steps: 1         # Max parallel plan steps (DAG-aware)
-    max_parallel_subagents: 1     # Max subagents running simultaneously (reserved)
-    max_parallel_tools: 3         # Max tools in parallel per step (reserved)
-    global_max_llm_calls: 5       # Cross-level LLM call circuit breaker
+    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode, 0 = unlimited)
+    max_parallel_steps: 3         # Max parallel plan steps (DAG-aware, 0 = unlimited)
+    max_parallel_subagents: 3     # Max subagents running simultaneously (0 = unlimited, reserved)
+    max_parallel_tools: 9         # Max tools in parallel per step (0 = unlimited, reserved)
+    global_max_llm_calls: 9       # Cross-level LLM call circuit breaker (0 = unlimited)
     step_parallelism: dependency  # sequential | dependency | max
   recovery:
     progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)

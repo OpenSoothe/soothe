@@ -12,7 +12,10 @@
       "Bash(SOOTHE_LOG_LEVEL=DEBUG uv run soothe --no-tui \"analyze this project code structure\")",
       "Bash(/tmp/check_tool_event_types.py:*)",
       "Bash(/tmp/test_fix.py:*)",
-      "Bash(soothe stop:*)"
+      "Bash(soothe stop:*)",
+      "Bash(git submodule:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
