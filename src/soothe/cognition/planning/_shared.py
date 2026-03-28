@@ -60,17 +60,17 @@ def parse_plan_from_text(goal: str, text: str) -> Plan:
     steps: list[PlanStep] = []
     matches = _PLAN_STEP_RE.findall(text)
     for i, (_num, title) in enumerate(matches, 1):
-        steps.append(PlanStep(id=f"step_{i}", description=title.strip()))
+        steps.append(PlanStep(id=f"S_{i}", description=title.strip()))
 
     if not steps:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         for i, line in enumerate(lines[:10], 1):
             cleaned = re.sub(r"^[\d\-\*\.]+\s*", "", line)
             if cleaned and len(cleaned) > _MIN_STEP_DESCRIPTION_LENGTH:
-                steps.append(PlanStep(id=f"step_{i}", description=cleaned))
+                steps.append(PlanStep(id=f"S_{i}", description=cleaned))
 
     if not steps:
-        steps = [PlanStep(id="step_1", description=goal)]
+        steps = [PlanStep(id="S_1", description=goal)]
 
     return Plan(goal=goal, steps=steps)
 
@@ -178,7 +178,7 @@ def _generate_prerequisite_directives(
                     priority=min(current_priority + 10, 100),
                     parent_id=None,
                     depends_on=[],
-                    rationale=f"Step {step_id} failed due to missing prerequisite",
+                    rationale=f"S_{step_id} failed due to missing prerequisite",
                 )
             )
             break

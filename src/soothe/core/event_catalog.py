@@ -289,6 +289,7 @@ class MemoryStoredEvent(ProtocolEvent):
 
 class PlanCreatedEvent(ProtocolEvent):
     type: Literal["soothe.cognition.plan.created"] = "soothe.cognition.plan.created"
+    plan_id: str = ""
     goal: str = ""
     steps: list[dict[str, Any]] = []  # noqa: RUF012
     reasoning: str | None = None

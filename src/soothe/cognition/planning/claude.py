@@ -112,7 +112,7 @@ class ClaudePlanner:
             return parse_plan_from_text(goal, text)
         except Exception:
             logger.warning("ClaudePlanner create_plan failed", exc_info=True)
-            return Plan(goal=goal, steps=[PlanStep(id="step_1", description=goal)])
+            return Plan(goal=goal, steps=[PlanStep(id="S_1", description=goal)])
 
     async def revise_plan(self, plan: Plan, reflection: str) -> Plan:
         """Revise a plan via Claude."""

@@ -425,10 +425,20 @@ class PhasesMixin:
 
                 plan = await self._planner.create_plan(user_input, context)
 
+                # Assign plan ID (P_1, P_2, etc.)
+                # For agentic mode without goal engine, use thread-based counter
+                if hasattr(state, "thread_id") and state.thread_id:
+                    # Use a simple counter stored in state
+                    if not hasattr(state, "_plan_count"):
+                        state._plan_count = 0
+                    state._plan_count += 1
+                    plan.id = f"P_{state._plan_count}"
+
                 state.plan = plan
                 self._current_plan = plan
                 yield _custom(
                     PlanCreatedEvent(
+                        plan_id=plan.id,
                         goal=_validate_goal(plan.goal, user_input),
                         steps=[
                             {

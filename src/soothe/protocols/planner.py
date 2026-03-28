@@ -35,6 +35,7 @@ class Plan(BaseModel):
     """A structured decomposition of a goal into executable steps.
 
     Args:
+        id: Unique plan identifier (P_1, P_2, etc.).
         goal: The original goal text.
         steps: Ordered list of plan steps.
         current_index: Index of the current/next step to execute.
@@ -43,6 +44,7 @@ class Plan(BaseModel):
         general_activity: Latest non-step activity (for TUI rendering).
     """
 
+    id: str = ""
     goal: str
     steps: list[PlanStep]
     current_index: int = 0

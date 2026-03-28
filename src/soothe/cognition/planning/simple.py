@@ -130,7 +130,7 @@ class SimplePlanner:
             logger.warning("Fallback parsing failed: %s", e)
             return Plan(
                 goal=goal or "Unnamed goal",
-                steps=[{"id": "step_1", "description": goal or "Execute task"}],
+                steps=[{"id": "S_1", "description": goal or "Execute task"}],
             )
 
     def _parse_json_from_response(self, content: str, fallback_goal: str) -> Plan:
@@ -156,7 +156,7 @@ class SimplePlanner:
             logger.warning("JSON parsing failed: %s", e)
             return Plan(
                 goal=fallback_goal or "Unnamed goal",
-                steps=[{"id": "step_1", "description": fallback_goal or "Execute task"}],
+                steps=[{"id": "S_1", "description": fallback_goal or "Execute task"}],
             )
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
@@ -188,15 +188,15 @@ class SimplePlanner:
                 '  "reasoning": "<brief intent classification>",\n',
                 '  "steps": [\n',
                 "    {\n",
-                '      "id": "step_1",\n',
+                '      "id": "S_1",\n',
                 '      "description": "<concrete action>",\n',
                 '      "execution_hint": "auto"\n',
                 "    },\n",
                 "    {\n",
-                '      "id": "step_2",\n',
+                '      "id": "S_2",\n',
                 '      "description": "Using the browser subagent, navigate to...",\n',
                 '      "execution_hint": "subagent",\n',
-                '      "depends_on": ["step_1"]\n',
+                '      "depends_on": ["S_1"]\n',
                 "    }\n",
                 "  ]\n",
                 "}\n\n",

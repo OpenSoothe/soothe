@@ -31,6 +31,7 @@ class Goal(BaseModel):
         priority: Scheduling priority (0-100, higher = first).
         parent_id: Optional parent goal for hierarchical decomposition.
         depends_on: IDs of goals that must complete before this one (DAG edges).
+        plan_count: Number of plans created for this goal (for P_N ID generation).
         retry_count: Number of retries attempted so far.
         max_retries: Maximum retries before permanent failure.
         report: JSON-serialized GoalReport from execution (set on completion).
@@ -44,6 +45,7 @@ class Goal(BaseModel):
     priority: int = 50
     parent_id: str | None = None
     depends_on: list[str] = Field(default_factory=list)
+    plan_count: int = 0
     retry_count: int = 0
     max_retries: int = 2
     report: GoalReport | None = None  # RFC-0009: structured report (was str | None)

@@ -445,12 +445,19 @@ class AgenticMixin:
                     context,
                 )
 
+                # Assign plan ID (P_1, P_2, etc.)
+                if not hasattr(state, "_plan_count"):
+                    state._plan_count = 0
+                state._plan_count += 1
+                plan.id = f"P_{state._plan_count}"
+
                 state.plan = plan
                 self._current_plan = plan
 
                 # Emit plan created event
                 yield _custom(
                     PlanCreatedEvent(
+                        plan_id=plan.id,
                         goal=_validate_goal(plan.goal, user_input),
                         steps=[{"id": s.id, "description": s.description} for s in plan.steps],
                         reasoning=plan.reasoning,
@@ -546,6 +553,10 @@ class AgenticMixin:
                     # Revise plan if continuing
                     if should_continue and reflection.should_revise:
                         revised = await self._planner.revise_plan(state.plan, reflection.feedback)
+                        # Assign new plan ID for revision
+                        state._plan_count += 1
+                        revised.id = f"P_{state._plan_count}"
+
                         self._current_plan = revised
                         state.plan = revised
             except Exception:

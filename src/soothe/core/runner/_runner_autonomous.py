@@ -289,10 +289,15 @@ class AutonomousMixin(GoalDirectivesMixin):
                         unified_classification=parent_state.unified_classification,
                     )
                     plan = await self._planner.create_plan(current_input, context)
+                    # Assign plan ID from goal counter
+                    goal.plan_count += 1
+                    plan.id = f"P_{goal.plan_count}"
+
                     iter_state.plan = plan
                     self._current_plan = plan
                     yield _custom(
                         PlanCreatedEvent(
+                            plan_id=plan.id,
                             goal=_validate_goal(plan.goal, current_input),
                             steps=[
                                 {
@@ -547,6 +552,10 @@ class AutonomousMixin(GoalDirectivesMixin):
             elif self._planner and iter_state.plan and reflection:
                 try:
                     revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
+                    # Assign new plan ID for revision
+                    goal.plan_count += 1
+                    revised.id = f"P_{goal.plan_count}"
+
                     self._current_plan = revised
                     parent_state.plan = revised
                 except Exception:
