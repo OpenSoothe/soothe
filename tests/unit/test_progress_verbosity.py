@@ -58,7 +58,14 @@ class TestProgressVerbosity:
     def test_classify_output_events(self) -> None:
         assert classify_custom_event((), {"type": "soothe.output.chitchat.response"}) == "assistant_text"
         assert classify_custom_event((), {"type": "soothe.output.autonomous.final_report"}) == "assistant_text"
-        assert classify_custom_event((), {"type": "soothe.output.chitchat.started"}) == "assistant_text"
+        assert classify_custom_event((), {"type": "soothe.output.chitchat.started"}) == "internal"
+
+    def test_internal_events_never_shown(self) -> None:
+        """Internal events should never be shown at any verbosity level."""
+        assert not should_show("internal", "minimal")
+        assert not should_show("internal", "normal")
+        assert not should_show("internal", "detailed")
+        assert not should_show("internal", "debug")
 
     def test_classify_tool_events(self) -> None:
         # Registered tool events get tool_activity from registry

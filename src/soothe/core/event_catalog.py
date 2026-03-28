@@ -839,7 +839,7 @@ _reg(
 )
 
 # -- Output ------------------------------------------------------------------
-_reg(CHITCHAT_STARTED, ChitchatStartedEvent, summary_template="Chitchat: {query}")
+_reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity="internal")
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity="assistant_text")
 _reg(FINAL_REPORT, FinalReportEvent, verbosity="assistant_text")
 
