@@ -57,7 +57,8 @@ def run_impl(
 
         run_start = time.perf_counter()
 
-        if prompt or no_tui:
+        if no_tui:
+            # Headless mode (force no TUI)
             run_headless(
                 cfg,
                 prompt or "",
@@ -67,7 +68,8 @@ def run_impl(
                 max_iterations=max_iterations,
             )
         else:
-            run_tui(cfg, thread_id=thread_id, config_path=config)
+            # TUI mode (with optional initial prompt)
+            run_tui(cfg, thread_id=thread_id, config_path=config, initial_prompt=prompt)
 
         run_elapsed_s = time.perf_counter() - run_start
         typer.echo(f"[lifecycle] Total running time: {run_elapsed_s:.2f}s", err=True)

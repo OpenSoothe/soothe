@@ -12,14 +12,11 @@ import typer
 
 from soothe.config import SootheConfig
 
-# Maximum characters to show for last human message in thread list
-_TOPIC_DISPLAY_LIMIT = 30
-# Characters to keep when truncating (leave room for "...")
-_TOPIC_TRUNCATE_KEEP = 27
-# Maximum display width for thread IDs (accommodates 12-char new IDs and truncated UUIDs)
-_THREAD_ID_DISPLAY_WIDTH = 20
-# Characters to keep when truncating thread IDs (leave room for "...")
-_THREAD_ID_TRUNCATE_KEEP = 17
+# Display limits for thread list
+_TOPIC_DISPLAY_LIMIT = 30  # Max chars for last human message
+_TOPIC_TRUNCATE_KEEP = 27  # Leave room for "..."
+_THREAD_ID_DISPLAY_WIDTH = 20  # Max width for thread IDs
+_THREAD_ID_TRUNCATE_KEEP = 17  # Leave room for "..."
 
 
 def thread_list(
@@ -109,7 +106,7 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
             typer.echo(f"{'ID':<20}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
             typer.echo("─" * 104)
             for t in threads:
-                # Truncate long thread IDs (old UUIDs) to display width with ellipsis
+                # Truncate thread IDs
                 tid = (
                     t.thread_id
                     if len(t.thread_id) <= _THREAD_ID_DISPLAY_WIDTH
@@ -118,7 +115,7 @@ def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = No
                 t_status = t.status
                 created = str(t.created_at)[:19]
                 last_msg = str(t.updated_at)[:19]
-                # Truncate last human message to fit display limit
+                # Truncate last human message
                 topic = (
                     (t.last_human_message or "")[:_TOPIC_TRUNCATE_KEEP] + "..."
                     if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT

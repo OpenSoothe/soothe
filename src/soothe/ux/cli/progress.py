@@ -17,9 +17,9 @@ from soothe.core.event_catalog import (
     ITERATION_STARTED,
     PLAN_CREATED,
     PLAN_REFLECTED,
-    REGISTRY,
 )
 from soothe.ux.core.event_filter import should_skip_event
+from soothe.ux.core.event_formatter import build_event_summary, truncate_summary
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -61,24 +61,15 @@ def render_progress_event(
         return
 
     # Try registry first (RFC-0020 Principle 1: Registry-Driven Display)
-    meta = REGISTRY.get_meta(event_type)
-    if meta and meta.summary_template:
-        try:
-            summary = meta.summary_template.format(**data)
-        except (KeyError, ValueError) as e:
-            logger.debug("Failed to format template for %s: %s", event_type, e)
-            # Fall through to hardcoded logic
-        else:
-            # Truncate long text per RFC-0020 (max ~80 chars for terminal width)
-            # Preserve word boundaries when possible
-            if len(summary) > 80:  # noqa: PLR2004
-                summary = summary[:77].rsplit(" ", 1)[0] + "..."
-            prefix_str = f"[{prefix}] " if prefix else ""
-            label = _get_event_label(event_type)
-            line = f"{prefix_str}[{label}] {summary}\n"
-            sys.stderr.write(line)
-            sys.stderr.flush()
-            return
+    summary = build_event_summary(event_type, data)
+    if summary:
+        summary = truncate_summary(summary)
+        prefix_str = f"[{prefix}] " if prefix else ""
+        label = _get_event_label(event_type)
+        line = f"{prefix_str}[{label}] {summary}\n"
+        sys.stderr.write(line)
+        sys.stderr.flush()
+        return
 
     # Fallback to hardcoded summary for special cases (backward compatibility)
     summary = _build_summary(event_type, data, current_plan)
@@ -145,19 +136,8 @@ def _build_summary(event_type: str, data: dict[str, Any], _current_plan: Plan | 
             lines.append(f"  ├ {step_id}: {desc}")
         return "\n".join(lines)
 
-    # Batch and step events are now skipped (handled by renderer)
-    # Keeping this for backwards compatibility if called directly
-    if event_type == PLAN_BATCH_STARTED:
-        return ""
-
-    if event_type == PLAN_STEP_STARTED:
-        return ""
-
-    if event_type == PLAN_STEP_COMPLETED:
-        return ""
-
-    if event_type == PLAN_STEP_FAILED:
-        return ""
+    # Batch/step/policy events are skipped via should_skip_event() above
+    # No hardcoded fallback needed - handled by renderer or not rendered
 
     if event_type == PLAN_REFLECTED:
         assessment = data.get("assessment", "")

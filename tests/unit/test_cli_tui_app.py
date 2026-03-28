@@ -60,10 +60,15 @@ class _FakeConversationPanel:
 
 class _FakeChatInput:
     def __init__(self) -> None:
-        self.history: list[str] = []
+        self._history: list[str] = []
+
+    @property
+    def input_history(self) -> list[str]:
+        """Get input history."""
+        return list(self._history)
 
     def set_history(self, history: list[str]) -> None:
-        self.history = history
+        self._history = history
 
     def focus(self) -> None:
         return None
@@ -168,7 +173,7 @@ async def test_connect_and_listen_restores_history_from_initial_resume_status(mo
     assert client.resume_thread_calls == ["thread-123"]
     assert client.new_thread_calls == 0
     assert client.subscribe_calls == ["thread-123"]
-    assert widgets["#chat-input"].history == ["hello again"]
+    assert widgets["#chat-input"].input_history == ["hello again"]
     assert widgets["#conversation"].cleared == 1
     rendered_entries = [str(entry) for entry in widgets["#conversation"].entries]
     assert any("Resuming conversation" in entry for entry in rendered_entries)

@@ -130,6 +130,7 @@ class SootheApp(App):
         self,
         config: SootheConfig | None = None,
         thread_id: str | None = None,
+        initial_prompt: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Soothe TUI application.
@@ -137,11 +138,13 @@ class SootheApp(App):
         Args:
             config: Soothe configuration.
             thread_id: Optional thread ID to resume.
+            initial_prompt: Optional initial prompt to send automatically.
             **kwargs: Additional keyword arguments passed to App.
         """
         super().__init__(**kwargs)
         self._config = config or SootheConfig()
         self._requested_thread_id = thread_id
+        self._initial_prompt = initial_prompt
         self._client: DaemonClient | None = None
         self._state = TuiState()
         self._connected = False
@@ -198,6 +201,12 @@ class SootheApp(App):
         )
         self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
         self.run_worker(self._connect_and_listen(), exclusive=True)
+
+        # Send initial prompt if provided
+        if self._initial_prompt:
+            # Wait a brief moment for connection to establish
+            await asyncio.sleep(0.5)
+            await self.submit_chat_input_with_text(self._initial_prompt)
 
     def _on_panel_write(self, renderable: Any) -> None:
         """Append a renderable to the conversation panel.
@@ -559,14 +568,9 @@ class SootheApp(App):
         """Update the info bar with current status."""
         with contextlib.suppress(Exception):
             bar = self.query_one("#info-bar", InfoBar)
-            # Ensure thread_id is a proper string and truncate for display (Bug #1)
+            # Ensure thread_id is a proper string for display
             raw_tid = self._state.thread_id
-            if raw_tid:
-                tid_str = str(raw_tid)
-                # Truncate long UUIDs for display (show first 8 chars)
-                tid = tid_str[:_THREAD_ID_DISPLAY_LEN] if len(tid_str) > _THREAD_ID_DISPLAY_LEN else tid_str
-            else:
-                tid = "-"
+            tid = str(raw_tid) if raw_tid else "-"
             events = len(self._state.activity_lines)
             subagent_lines = self._state.subagent_tracker.render()
             sub_summary = ""
@@ -576,6 +580,28 @@ class SootheApp(App):
             bar.update(f"Thread: {tid}  Events: {events}  {status_text}{sub_summary}")
 
     # -- input handling -----------------------------------------------------
+
+    async def submit_chat_input_with_text(self, text: str) -> None:
+        """Submit input programmatically (for initial prompt).
+
+        Similar to submit_chat_input() but sets text directly instead of reading from input widget.
+
+        Args:
+            text: The text to submit.
+        """
+        if not text or not text.strip():
+            return
+
+        # Set text in input widget
+        try:
+            chat_input = self.query_one("#chat-input", ChatInput)
+            chat_input.text = text.strip()
+        except Exception:
+            logger.debug("Failed to set chat input text", exc_info=True)
+            return
+
+        # Use existing submission logic
+        await self.submit_chat_input()
 
     async def submit_chat_input(self) -> None:
         """Handle chat input submission."""
@@ -784,6 +810,7 @@ def run_textual_tui(
     *,
     thread_id: str | None = None,
     config_path: str | None = None,
+    initial_prompt: str | None = None,
 ) -> None:
     """Launch the Textual-based TUI.
 
@@ -791,11 +818,12 @@ def run_textual_tui(
         config: Soothe configuration.
         thread_id: Optional thread ID to resume.
         config_path: Optional config file path passed to daemon process.
+        initial_prompt: Optional initial prompt to send automatically.
     """
     cfg = config or SootheConfig()
     _start_daemon_in_background(cfg, config_path=config_path)
     try:
-        app = SootheApp(config=cfg, thread_id=thread_id)
+        app = SootheApp(config=cfg, thread_id=thread_id, initial_prompt=initial_prompt)
         app.run()
     finally:
         _stop_background_daemon()

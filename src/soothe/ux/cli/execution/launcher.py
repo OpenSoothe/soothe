@@ -12,12 +12,13 @@ def run_tui(
     *,
     thread_id: str | None = None,
     config_path: str | None = None,
+    initial_prompt: str | None = None,
 ) -> None:
     """Launch the Textual TUI (with daemon auto-start)."""
     try:
         from soothe.ux.tui import run_textual_tui
 
-        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config_path)
+        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config_path, initial_prompt=initial_prompt)
     except ImportError:
         typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
         sys.exit(1)

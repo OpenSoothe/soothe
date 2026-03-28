@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any
 from rich.console import RenderableType
 from rich.text import Text
 
-from soothe.core.event_catalog import REGISTRY
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.core.event_filter import should_skip_event
+from soothe.ux.core.event_formatter import build_event_summary
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.tui.utils import (
     DOT_COLORS,
@@ -355,18 +355,8 @@ class TuiRenderer:
         Returns:
             Human-readable summary or empty string.
         """
-        # Query event registry for template
-        meta = REGISTRY.get_meta(event_type)
-        if meta and meta.summary_template:
-            try:
-                # Format template with event data
-                return meta.summary_template.format(**data)
-            except (KeyError, ValueError) as e:
-                logger.debug("Failed to format template for %s: %s", event_type, e)
-                return ""
-
-        # Fallback: Return empty string (no display)
-        return ""
+        # Delegate to shared logic
+        return build_event_summary(event_type, data)
 
     def _format_event_details(self, event_type: str, data: dict[str, Any]) -> str | None:
         """Extract additional details for second-level display.
