@@ -394,6 +394,10 @@ logging:
 # - HTTP REST: CRUD operations and file uploads (opt-in, auth optional/required)
 
 daemon:
+  # Multi-threading (RFC-0017) - Enable parallel query execution
+  multi_threading_enabled: true
+  max_concurrent_threads: 4
+
   # Transport Layer Configuration
   transports:
     # Unix Domain Socket - Default transport for local CLI/TUI
