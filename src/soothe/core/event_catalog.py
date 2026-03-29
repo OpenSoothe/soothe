@@ -211,17 +211,16 @@ class DaemonHeartbeatEvent(LifecycleEvent):
 class AgenticLoopStartedEvent(LifecycleEvent):
     type: Literal["soothe.agentic.loop.started"] = "soothe.agentic.loop.started"
     thread_id: str
-    query: str
+    goal: str
     max_iterations: int
-    observation_strategy: str
-    verification_strictness: str
 
 
 class AgenticLoopCompletedEvent(LifecycleEvent):
     type: Literal["soothe.agentic.loop.completed"] = "soothe.agentic.loop.completed"
     thread_id: str
-    total_iterations: int
-    outcome: str  # "completed" | "failed" | "escalated"
+    status: str
+    goal_progress: float
+    evidence_summary: str
 
 
 class AgenticIterationStartedEvent(LifecycleEvent):

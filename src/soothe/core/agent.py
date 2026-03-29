@@ -1,4 +1,11 @@
-"""Soothe agent factory -- wraps deepagents' `create_deep_agent`."""
+"""Soothe CoreAgent -- Layer 1 runtime (RFC-0023).
+
+This module defines CoreAgent, a self-contained Layer 1 module with a clear
+exposed interface for executing tools/subagents via LangGraph's
+Model → Tools → Model loop.
+
+Reference: RFC-0023 Layer 1 CoreAgent Runtime Architecture
+"""
 
 from __future__ import annotations
 
@@ -12,8 +19,6 @@ from soothe.config import SootheConfig
 from soothe.core.resolver import (
     SUBAGENT_FACTORIES,
     resolve_context,
-    resolve_goal_engine,
-    resolve_goal_tools,
     resolve_memory,
     resolve_planner,
     resolve_policy,
@@ -54,12 +59,13 @@ def _patch_summarization_overwrite_handling() -> None:
 _patch_summarization_overwrite_handling()
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import AsyncIterator, Callable, Sequence
 
     from deepagents.backends.protocol import BackendFactory, BackendProtocol
     from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain.agents.middleware import InterruptOnConfig
     from langchain.agents.middleware.types import AgentMiddleware
+    from langchain_core.runnables import RunnableConfig
     from langchain_core.tools import BaseTool
     from langgraph.graph.state import CompiledStateGraph
     from langgraph.store.base import BaseStore
@@ -73,6 +79,157 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SUBAGENT_FACTORIES = SUBAGENT_FACTORIES
+
+
+class CoreAgent:
+    """Layer 1 CoreAgent runtime (RFC-0023).
+
+    Self-contained module wrapping CompiledStateGraph with explicit typed
+    protocol properties. Pure execution runtime for tools, subagents, and
+    middlewares - NO goal infrastructure (Layer 3 responsibility).
+
+    Attributes:
+        graph: Underlying CompiledStateGraph for advanced LangGraph operations.
+        config: SootheConfig used to create this agent.
+        context: ContextProtocol instance for context injection/persistence.
+        memory: MemoryProtocol instance for memory recall/persistence.
+        planner: PlannerProtocol instance for planning decisions.
+        policy: PolicyProtocol instance for action policy checking.
+        subagents: List of configured subagents available for delegation.
+
+    Execution Interface:
+        Use `astream(input, config)` for Layer 1 streaming execution.
+
+        config.configurable may include Layer 2 hints (advisory):
+            - soothe_step_tools: suggested tools for this step
+            - soothe_step_subagent: suggested subagent for this step
+            - soothe_step_expected_output: expected result description
+
+    Example:
+        config = SootheConfig.from_file("config.yml")
+        agent = create_soothe_agent(config)
+
+        # Layer 1 execution
+        async for chunk in agent.astream("query", {"thread_id": "123"}):
+            print(chunk)
+
+        # Access protocols via typed properties
+        context = agent.context
+        memory = agent.memory
+
+        # Advanced LangGraph operations via graph
+        result = agent.graph.invoke({"messages": [...]})
+    """
+
+    def __init__(
+        self,
+        graph: CompiledStateGraph,
+        config: SootheConfig,
+        context: ContextProtocol | None = None,
+        memory: MemoryProtocol | None = None,
+        planner: PlannerProtocol | None = None,
+        policy: PolicyProtocol | None = None,
+        subagents: list[SubAgent | CompiledSubAgent] | None = None,
+    ) -> None:
+        """Initialize CoreAgent with graph and protocol instances.
+
+        Args:
+            graph: CompiledStateGraph from deepagents create_deep_agent().
+            config: SootheConfig used for agent creation.
+            context: ContextProtocol instance (or None if disabled).
+            memory: MemoryProtocol instance (or None if disabled).
+            planner: PlannerProtocol instance (or None if disabled).
+            policy: PolicyProtocol instance (or None if disabled).
+            subagents: List of configured subagents.
+        """
+        self._graph = graph
+        self._config = config
+        self._context = context
+        self._memory = memory
+        self._planner = planner
+        self._policy = policy
+        self._subagents = list(subagents) if subagents else []
+
+    # --- Explicit typed properties ---
+    @property
+    def graph(self) -> CompiledStateGraph:
+        """Underlying CompiledStateGraph for advanced LangGraph operations."""
+        return self._graph
+
+    @property
+    def config(self) -> SootheConfig:
+        """SootheConfig used to create this agent."""
+        return self._config
+
+    @property
+    def context(self) -> ContextProtocol | None:
+        """ContextProtocol instance for context injection/persistence."""
+        return self._context
+
+    @property
+    def memory(self) -> MemoryProtocol | None:
+        """MemoryProtocol instance for memory recall/persistence."""
+        return self._memory
+
+    @property
+    def planner(self) -> PlannerProtocol | None:
+        """PlannerProtocol instance for planning decisions."""
+        return self._planner
+
+    @property
+    def policy(self) -> PolicyProtocol | None:
+        """PolicyProtocol instance for action policy checking."""
+        return self._policy
+
+    @property
+    def subagents(self) -> list[SubAgent | CompiledSubAgent]:
+        """List of configured subagents available for delegation."""
+        return self._subagents
+
+    # --- Execution interface ---
+    def astream(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+    ) -> AsyncIterator[Any]:
+        """Execute with Layer 1 streaming interface.
+
+        Delegates to underlying CompiledStateGraph.astream(). Use this
+        for standard Layer 1 execution from Layer 2 ACT phase or CLI/daemon.
+
+        Args:
+            input_arg: User query or execution instruction (str or dict with
+                "messages" key for LangGraph format).
+            config: RunnableConfig with thread_id and optional Layer 2 hints.
+                Layer 2 hints in config.configurable (advisory):
+                - soothe_step_tools: suggested tools for this step
+                - soothe_step_subagent: suggested subagent
+                - soothe_step_expected_output: expected result
+
+        Returns:
+            AsyncIterator of StreamChunk events from LangGraph execution.
+
+        Example:
+            async for chunk in agent.astream(
+                "Execute: Find config files",
+                {"configurable": {"thread_id": "t-123"}}
+            ):
+                process(chunk)
+        """
+        return self._graph.astream(input_arg, config or {})
+
+    @classmethod
+    def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:
+        """Factory method - delegates to create_soothe_agent().
+
+        Args:
+            config: Soothe configuration. If None, uses defaults.
+            **kwargs: Additional arguments passed to create_soothe_agent().
+
+        Returns:
+            CoreAgent instance.
+        """
+        return create_soothe_agent(config, **kwargs)
 
 
 def create_soothe_agent(
@@ -90,7 +247,7 @@ def create_soothe_agent(
     memory_store: MemoryProtocol | None = None,
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
-) -> CompiledStateGraph:
+) -> CoreAgent:
     """Factory that creates Soothe's Layer 1 CoreAgent runtime.
 
     Layer 1 Responsibilities:
@@ -105,14 +262,14 @@ def create_soothe_agent(
         - MCP servers: loaded via configuration
         - Middlewares: policy, system prompt optimization, hints, context, memory, parallel tools
 
-    Protocol Attachments (attached to returned graph):
-        - soothe_context: ContextProtocol instance
-        - soothe_memory: MemoryProtocol instance
-        - soothe_planner: PlannerProtocol instance
-        - soothe_policy: PolicyProtocol instance
-        - soothe_durability: DurabilityProtocol instance
-        - soothe_config: SootheConfig instance
-        - soothe_subagents: list of configured subagents
+    Returns CoreAgent instance with typed protocol properties:
+        - agent.context: ContextProtocol instance
+        - agent.memory: MemoryProtocol instance
+        - agent.planner: PlannerProtocol instance
+        - agent.policy: PolicyProtocol instance
+        - agent.config: SootheConfig instance
+        - agent.subagents: list of configured subagents
+        - agent.graph: underlying CompiledStateGraph
 
     Execution Interface:
         agent.astream(input, config) → AsyncIterator[StreamChunk]
@@ -122,8 +279,8 @@ def create_soothe_agent(
             - soothe_step_subagent: suggested subagent (advisory)
             - soothe_step_expected_output: expected result (advisory)
 
-    Wraps ``create_deep_agent()`` and wires up Soothe-specific protocols,
-    subagents, tools, MCP servers, and skills from ``SootheConfig``.
+    Note: Goal management (GoalEngine, goal_tools) is NOT included.
+    That is Layer 3 responsibility - resolve separately in SootheRunner.
 
     Args:
         config: Soothe configuration. If ``None``, uses defaults.
@@ -141,7 +298,7 @@ def create_soothe_agent(
         policy: Override PolicyProtocol implementation. None uses config.
 
     Returns:
-        Compiled LangGraph agent.
+        CoreAgent instance wrapping CompiledStateGraph with typed properties.
     """
     import time
 
@@ -188,7 +345,7 @@ def create_soothe_agent(
                 results = asyncio.run(resolve_protocols_parallel())
                 resolved_context, resolved_memory, resolved_planner, resolved_policy = [
                     r if not isinstance(r, Exception) else None for r in results
-                ]
+        ]
         except RuntimeError:
             # Fallback to sequential
             logger.debug("Parallel protocol resolution failed, using sequential")
@@ -215,8 +372,6 @@ def create_soothe_agent(
     if resolved_policy:
         logger.info("Policy: %s", type(resolved_policy).__name__)
 
-    goal_engine = resolve_goal_engine(config)
-
     # Load plugins
     import asyncio
 
@@ -238,10 +393,10 @@ def create_soothe_agent(
     plugins_ms = (time.perf_counter() - plugins_start) * 1000
     logger.info("Plugins loaded in %.1fms", plugins_ms)
 
+    # Resolve tools (NO goal_tools - Layer 3 responsibility)
     tools_start = time.perf_counter()
     config_tools = resolve_tools(config.tools, lazy=config.performance.parallel_tool_loading, config=config)
-    goal_tools = resolve_goal_tools(goal_engine)
-    all_tools: list[BaseTool | Callable | dict[str, Any]] = [*config_tools, *goal_tools]
+    all_tools: list[BaseTool | Callable | dict[str, Any]] = list(config_tools)
     if tools:
         all_tools.extend(tools)
     tools_ms = (time.perf_counter() - tools_start) * 1000
@@ -251,7 +406,7 @@ def create_soothe_agent(
     config_subagents = resolve_subagents(
         config, default_model=default_model_instance, lazy=config.performance.parallel_subagent_loading
     )
-    all_subagents: list[SubAgent | CompiledSubAgent] = [*config_subagents]
+    all_subagents: list[SubAgent | CompiledSubAgent] = list(config_subagents)
     if subagents:
         all_subagents.extend(subagents)
     subagents_ms = (time.perf_counter() - subagents_start) * 1000
@@ -307,7 +462,7 @@ def create_soothe_agent(
         all_skills.extend(config.skills)
 
     deep_agent_start = time.perf_counter()
-    agent = create_deep_agent(
+    graph = create_deep_agent(
         model=resolved_model,
         tools=all_tools or None,
         system_prompt=config.resolve_system_prompt(),
@@ -322,17 +477,20 @@ def create_soothe_agent(
         debug=config.debug,
     )
     deep_agent_ms = (time.perf_counter() - deep_agent_start) * 1000
-    logger.info("Deep agent created in %.1fms", deep_agent_ms)
+    logger.info("Deep agent graph created in %.1fms", deep_agent_ms)
 
-    agent.soothe_context = resolved_context  # type: ignore[attr-defined]
-    agent.soothe_memory = resolved_memory  # type: ignore[attr-defined]
-    agent.soothe_planner = resolved_planner  # type: ignore[attr-defined]
-    agent.soothe_policy = resolved_policy  # type: ignore[attr-defined]
-    agent.soothe_goal_engine = goal_engine  # type: ignore[attr-defined]
-    agent.soothe_config = config  # type: ignore[attr-defined]
-    agent.soothe_subagents = all_subagents  # type: ignore[attr-defined]
+    # Wrap graph in CoreAgent with typed protocol properties
+    agent = CoreAgent(
+        graph=graph,
+        config=config,
+        context=resolved_context,
+        memory=resolved_memory,
+        planner=resolved_planner,
+        policy=resolved_policy,
+        subagents=all_subagents,
+    )
 
     total_ms = (time.perf_counter() - create_start) * 1000
-    logger.info("Soothe agent created in %.1fms", total_ms)
+    logger.info("CoreAgent created in %.1fms", total_ms)
 
     return agent

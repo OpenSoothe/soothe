@@ -93,7 +93,9 @@ Return your evaluation as JSON:
 """
 
         try:
-            response = await self.model.ainvoke(prompt)
+            from langchain_core.messages import HumanMessage
+
+            response = await self.model.ainvoke([HumanMessage(content=prompt)])
             return self._parse_judge_result(response.content)
         except Exception:
             logger.exception("Judge evaluation failed")

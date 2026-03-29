@@ -13,9 +13,8 @@ from soothe.cognition.loop_agent.schemas import JudgeResult, LoopState
 from soothe.protocols.planner import PlanContext
 
 if TYPE_CHECKING:
-    from langgraph.pregel import CompiledStateGraph
-
     from soothe.config import SootheConfig
+    from soothe.core.agent import CoreAgent
     from soothe.protocols.judge import JudgeProtocol
     from soothe.protocols.planner import PlannerProtocol
 
@@ -37,7 +36,7 @@ class LoopAgent:
 
     def __init__(
         self,
-        core_agent: CompiledStateGraph,
+        core_agent: CoreAgent,
         planner: PlannerProtocol,
         judge: JudgeProtocol,
         config: SootheConfig,

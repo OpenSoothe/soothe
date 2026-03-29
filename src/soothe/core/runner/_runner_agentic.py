@@ -52,6 +52,16 @@ class AgenticMixin:
         tid = str(thread_id or self._current_thread_id or "")
         self._current_thread_id = tid or None
 
+        # First, classify the query to check for chitchat
+        if self._unified_classifier:
+            classification = await self._unified_classifier.classify_routing(user_input)
+            if classification.task_complexity == "chitchat":
+                # Use chitchat fast path
+                logger.info("Chitchat detected, using fast path")
+                async for chunk in self._run_chitchat(user_input, classification):
+                    yield chunk
+                return
+
         # Emit loop started event
         yield _custom(
             AgenticLoopStartedEvent(
@@ -66,10 +76,10 @@ class AgenticMixin:
 
         # Create LoopAgent
         loop_agent = LoopAgent(
-            core_agent=self.agent,
+            core_agent=self._agent,
             planner=self._planner,
             judge=judge,
-            config=self.config,
+            config=self._config,
         )
 
         # Run PLAN → ACT → JUDGE loop
@@ -108,5 +118,5 @@ class AgenticMixin:
             LLMJudgeEngine instance
         """
         # Use 'fast' model for judgment (can be configured)
-        model = self.config.create_chat_model("fast")
+        model = self._config.create_chat_model("fast")
         return LLMJudgeEngine(model)

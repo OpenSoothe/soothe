@@ -18,6 +18,83 @@ from soothe.protocols.planner import (
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_step_decision_text(response: str, goal: str) -> Any:
+    """Parse LLM response into AgentDecision.
+
+    Shared helper function for parsing step decisions.
+
+    Args:
+        response: LLM response text
+        goal: Goal description for fallback
+
+    Returns:
+        AgentDecision with steps to execute
+    """
+    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+
+    try:
+        # Try to extract JSON from markdown code blocks first
+        json_str = response.strip()
+
+        # Handle ```json ... ``` blocks
+        if "```json" in json_str:
+            start = json_str.find("```json") + 7
+            end = json_str.find("```", start)
+            if end > start:
+                json_str = json_str[start:end].strip()
+        elif "```" in json_str:
+            # Try generic code block
+            start = json_str.find("```") + 3
+            # Skip language identifier if present
+            newline_pos = json_str.find("\n", start)
+            if newline_pos > start:
+                start = newline_pos + 1
+            end = json_str.find("```", start)
+            if end > start:
+                json_str = json_str[start:end].strip()
+
+        data = json.loads(json_str)
+
+        # Build StepAction objects
+        steps = []
+        for i, step_data in enumerate(data.get("steps", [])):
+            step = StepAction(
+                id=f"step_{i}",
+                description=step_data.get("description", ""),
+                tools=step_data.get("tools"),
+                subagent=step_data.get("subagent"),
+                expected_output=step_data.get("expected_output", ""),
+                dependencies=step_data.get("dependencies"),
+            )
+            steps.append(step)
+
+        # Build AgentDecision
+        return AgentDecision(
+            type=data.get("type", "execute_steps"),
+            steps=steps,
+            execution_mode=data.get("execution_mode", "sequential"),
+            reasoning=data.get("reasoning", ""),
+            adaptive_granularity=data.get("adaptive_granularity"),
+        )
+
+    except Exception:
+        logger.exception("Failed to parse step decision")
+        # Return minimal default decision
+        return AgentDecision(
+            type="execute_steps",
+            steps=[
+                StepAction(
+                    id="step_0",
+                    description=goal,
+                    expected_output="Task completion",
+                )
+            ],
+            execution_mode="sequential",
+            reasoning="Default decision due to parse error",
+        )
+
+
 _SIMPLE_PLANNER_HINT_MAP = {
     "browser": "subagent",
     "weaver": "subagent",
@@ -100,8 +177,10 @@ class SimplePlanner:
         Returns:
             The LLM's response as a string.
         """
+        from langchain_core.messages import HumanMessage
+
         try:
-            response = await self._model.ainvoke(prompt)
+            response = await self._model.ainvoke([HumanMessage(content=prompt)])
             content = getattr(response, "content", str(response))
             return content if isinstance(content, str) else str(content)
         except Exception as e:
@@ -360,46 +439,4 @@ class SimplePlanner:
 
     def _parse_step_decision(self, response: str, goal: str) -> Any:
         """Parse LLM response into AgentDecision."""
-        from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
-
-        try:
-            # Try to parse JSON
-            data = json.loads(response)
-
-            # Build StepAction objects
-            steps = []
-            for i, step_data in enumerate(data.get("steps", [])):
-                step = StepAction(
-                    id=f"step_{i}",
-                    description=step_data.get("description", ""),
-                    tools=step_data.get("tools"),
-                    subagent=step_data.get("subagent"),
-                    expected_output=step_data.get("expected_output", ""),
-                    dependencies=step_data.get("dependencies"),
-                )
-                steps.append(step)
-
-            # Build AgentDecision
-            return AgentDecision(
-                type=data.get("type", "execute_steps"),
-                steps=steps,
-                execution_mode=data.get("execution_mode", "sequential"),
-                reasoning=data.get("reasoning", ""),
-                adaptive_granularity=data.get("adaptive_granularity"),
-            )
-
-        except Exception:
-            logger.exception("Failed to parse step decision")
-            # Return minimal default decision
-            return AgentDecision(
-                type="execute_steps",
-                steps=[
-                    StepAction(
-                        id="step_0",
-                        description=goal,
-                        expected_output="Task completion",
-                    )
-                ],
-                execution_mode="sequential",
-                reasoning="Default decision due to parse error",
-            )
+        return _parse_step_decision_text(response, goal)

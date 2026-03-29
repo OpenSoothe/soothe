@@ -26,7 +26,7 @@ class JudgePhase:
         Args:
             judge: Judge protocol implementation
         """
-        self.judge = judge
+        self._judge_impl = judge  # Renamed to avoid collision with method
 
     async def judge(
         self,
@@ -66,7 +66,7 @@ class JudgePhase:
         )
 
         # Call judge protocol
-        judgment = await self.judge.judge(
+        judgment = await self._judge_impl.judge(
             goal=goal,
             evidence=state.step_results,
             steps=steps,

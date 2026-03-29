@@ -54,9 +54,8 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from langgraph.graph.state import CompiledStateGraph
-
     from soothe.cognition import GoalEngine
+    from soothe.core.agent import CoreAgent
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -84,7 +83,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         from soothe.core.agent import create_soothe_agent
         from soothe.core.concurrency import ConcurrencyController
-        from soothe.core.resolver import resolve_checkpointer, resolve_durability
+        from soothe.core.resolver import resolve_checkpointer, resolve_durability, resolve_goal_engine
         from soothe.core.unified_classifier import UnifiedClassifier
 
         init_start = time.perf_counter()
@@ -131,18 +130,21 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         logger.debug("Checkpointer resolved in %.1fms", checkpointer_ms)
 
         agent_start = time.perf_counter()
-        self._agent: CompiledStateGraph = create_soothe_agent(
+        self._agent: CoreAgent = create_soothe_agent(
             self._config,
             checkpointer=self._checkpointer,
         )
         agent_ms = (time.perf_counter() - agent_start) * 1000
-        logger.info("Agent created in %.1fms", agent_ms)
+        logger.info("CoreAgent created in %.1fms", agent_ms)
 
-        self._context: ContextProtocol | None = getattr(self._agent, "soothe_context", None)
-        self._memory: MemoryProtocol | None = getattr(self._agent, "soothe_memory", None)
-        self._planner: PlannerProtocol | None = getattr(self._agent, "soothe_planner", None)
-        self._policy: PolicyProtocol | None = getattr(self._agent, "soothe_policy", None)
-        self._goal_engine: GoalEngine | None = getattr(self._agent, "soothe_goal_engine", None)
+        # Access protocols via CoreAgent typed properties
+        self._context: ContextProtocol | None = self._agent.context
+        self._memory: MemoryProtocol | None = self._agent.memory
+        self._planner: PlannerProtocol | None = self._agent.planner
+        self._policy: PolicyProtocol | None = self._agent.policy
+
+        # GoalEngine resolved in Layer 3 (separate from CoreAgent Layer 1)
+        self._goal_engine: GoalEngine | None = resolve_goal_engine(self._config)
 
         durability_start = time.perf_counter()
         self._durability = resolve_durability(self._config)
@@ -386,7 +388,5 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             user_input,
             thread_id=thread_id,
             max_iterations=max_iterations or self._config.agentic.max_iterations,
-            observation_strategy=self._config.agentic.observation_strategy,
-            verification_strictness=self._config.agentic.verification_strictness,
         ):
             yield chunk

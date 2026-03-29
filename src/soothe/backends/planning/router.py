@@ -94,6 +94,16 @@ class AutoPlanner:
         planner = self._best_available()
         return await planner.reflect(plan, step_results, goal_context)
 
+    async def decide_steps(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: Any | None = None,
+    ) -> Any:
+        """Delegate step decision to the best available planner (RFC-0008)."""
+        planner = self._best_available()
+        return await planner.decide_steps(goal, context, previous_judgment)
+
     async def _invoke(self, prompt: str) -> str:
         """Delegate a free-form LLM call (e.g. synthesis) to a lightweight planner.
 

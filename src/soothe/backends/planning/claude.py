@@ -145,6 +145,69 @@ class ClaudePlanner:
             return await reflect_with_llm(self._reflection_model, plan, step_results, goal_context)
         return reflect_heuristic(plan, step_results, goal_context)
 
+    async def decide_steps(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: object | None = None,
+    ) -> object:
+        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
+
+        Uses Claude CLI to determine step execution strategy.
+
+        Args:
+            goal: Goal description
+            context: Planning context
+            previous_judgment: Previous JudgeResult if replanning
+
+        Returns:
+            AgentDecision with steps to execute
+        """
+        # Build prompt for step decision
+        prompt = self._build_step_decision_prompt(goal, context, previous_judgment)
+
+        try:
+            text = await self._invoke(prompt)
+            # Import here to avoid circular imports
+            from soothe.backends.planning.simple import _parse_step_decision_text
+
+            return _parse_step_decision_text(text, goal)
+        except Exception:
+            logger.warning("ClaudePlanner decide_steps failed", exc_info=True)
+            # Fallback to single-step decision
+            from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+
+            return AgentDecision(
+                steps=[StepAction(id="S_1", description=goal, expected_output="complete goal")],
+                execution_mode="sequential",
+                reasoning="Claude planner failed, fallback to single step",
+            )
+
+    def _build_step_decision_prompt(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: object | None,
+    ) -> str:
+        """Build prompt for step decision."""
+        parts = [f"Goal: {goal}\n"]
+
+        if previous_judgment:
+            parts.append("\nPrevious judgment:")
+            parts.append(f"- Status: {getattr(previous_judgment, 'status', 'unknown')}")
+            parts.append(f"- Progress: {getattr(previous_judgment, 'goal_progress', 0):.0%}")
+            parts.append(f"- Evidence: {getattr(previous_judgment, 'evidence_summary', 'none')[:200]}")
+
+        if context.available_capabilities:
+            parts.append(f"\nAvailable capabilities: {', '.join(context.available_capabilities)}")
+
+        parts.append(
+            "\nDecide what steps to execute next. Output JSON format:\n"
+            '{"steps": [{"id": "S_1", "description": "...", "execution_hint": "auto"}], '
+            '"execution_mode": "sequential", "reasoning": "..."}'
+        )
+        return "\n".join(parts)
+
     async def _invoke(self, prompt: str) -> str:
         """Run the compiled Claude graph and extract final response."""
         self._call_count += 1

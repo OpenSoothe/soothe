@@ -12,9 +12,12 @@ from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAc
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from langgraph.pregel import CompiledStateGraph
+    from soothe.core.agent import CoreAgent
 
 logger = logging.getLogger(__name__)
+
+_TUPLE_LEN = 3
+_LIST_MIN_LEN = 2
 
 
 class Executor:
@@ -26,7 +29,7 @@ class Executor:
     - dependency: Execute steps respecting dependency DAG
     """
 
-    def __init__(self, core_agent: CompiledStateGraph) -> None:
+    def __init__(self, core_agent: CoreAgent) -> None:
         """Initialize ACT phase.
 
         Args:
@@ -127,12 +130,16 @@ class Executor:
         Returns:
             List of step results (single combined result)
         """
-        combined_input = self._build_sequential_input(steps)
+        from langchain_core.messages import HumanMessage
+
+        combined_description = self._build_sequential_input(steps)
 
         start = time.perf_counter()
         try:
-            stream = await self.core_agent.astream(
-                input=combined_input,
+            # astream returns an async generator, don't await it
+            # Input must be a dict with "messages" key for LangGraph agents
+            stream = self.core_agent.astream(
+                input={"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": {"thread_id": state.thread_id}},
             )
 
@@ -205,6 +212,8 @@ class Executor:
         Returns:
             StepResult with success/error
         """
+        from langchain_core.messages import HumanMessage
+
         start = time.perf_counter()
 
         try:
@@ -227,8 +236,10 @@ class Executor:
                 }
             }
 
-            stream = await self.core_agent.astream(
-                input=f"Execute: {step.description}",
+            # astream returns an async generator, don't await it
+            # Input must be a dict with "messages" key for LangGraph agents
+            stream = self.core_agent.astream(
+                input={"messages": [HumanMessage(content=f"Execute: {step.description}")]},
                 config=config,  # Hints passed via config
             )
 
@@ -280,7 +291,23 @@ class Executor:
         """
         chunks = []
         async for chunk in stream:
-            if isinstance(chunk, dict):
+            # Handle LangGraph tuple format: (namespace, mode, data)
+            if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
+                namespace, mode, data = chunk
+                # Only collect messages from the root namespace
+                if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
+                    msg_chunk = data[0]
+                    if hasattr(msg_chunk, "content"):
+                        content = msg_chunk.content
+                        if isinstance(content, str):
+                            chunks.append(content)
+                        elif isinstance(content, list):
+                            for c in content:
+                                if isinstance(c, str):
+                                    chunks.append(c)
+                                elif isinstance(c, dict) and "text" in c:
+                                    chunks.append(c["text"])
+            elif isinstance(chunk, dict):
                 # Handle different chunk formats
                 if "content" in chunk:
                     chunks.append(str(chunk["content"]))
