@@ -168,15 +168,16 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
 
 # Register all weaver events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     WeaverDispatchedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Weaver: {task}",
 )
 register_event(
     WeaverCompletedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
 register_event(WeaverAnalysisStartedEvent)

@@ -69,30 +69,31 @@ class AudioDownloadEvent(ToolEvent):
 
 # Register all audio events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     AudioTranscriptionStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Transcribing: {audio_path}",
 )
 register_event(
     AudioTranscriptionCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Transcribed ({duration}s, {language})",
 )
 register_event(
     AudioTranscriptionFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Transcription failed: {error}",
 )
 register_event(
     AudioCacheHitEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Using cached transcription",
 )
 register_event(
     AudioDownloadEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Downloading audio from URL",
 )
 

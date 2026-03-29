@@ -5,8 +5,8 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-20
-**Updated**: 2026-03-27
-**Dependencies**: RFC-0003, RFC-0013
+**Updated**: 2026-03-29
+**Dependencies**: RFC-0003, RFC-0013, RFC-0024
 
 ## Abstract
 
@@ -119,14 +119,16 @@ soothe.<domain>.<component>.<action>
 
 #### Domain definitions
 
-| Domain | Purpose | Default Verbosity |
-|--------|---------|-------------------|
-| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `normal` |
-| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `normal` |
-| `tool` | Main agent tool execution lifecycle | `normal` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, planner tool calls, scout tool calls | `detailed` (promoted key events at `normal`) |
-| `output` | Content destined for user display: chitchat responses, final reports, subagent text/response | `normal` |
-| `error` | Error events | always shown |
+| Domain | Purpose | Default VerbosityTier |
+|--------|---------|----------------------|
+| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `DETAILED` |
+| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `DETAILED` |
+| `tool` | Main agent tool execution lifecycle | `DETAILED` |
+| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, planner tool calls, scout tool calls | `DETAILED` (promoted key events at `NORMAL`) |
+| `output` | Content destined for user display: chitchat responses, final reports, subagent text/response | `QUIET` |
+| `error` | Error events | `QUIET` (always shown) |
+
+See [RFC-0024](./RFC-0024-verbosity-tier-unification.md) for the complete VerbosityTier specification.
 
 #### Classification rule
 
@@ -251,7 +253,7 @@ class EventMeta:
     domain: str
     component: str
     action: str
-    verbosity: ProgressCategory
+    verbosity: VerbosityTier  # Unified visibility tier (RFC-0024)
     summary_template: str
 
 class EventRegistry:
@@ -260,14 +262,14 @@ class EventRegistry:
     def register(self, meta: EventMeta) -> None: ...
     def get_meta(self, event_type: str) -> EventMeta | None: ...
     def classify(self, event_type: str) -> str: ...
-    def get_verbosity(self, event_type: str) -> ProgressCategory: ...
+    def get_verbosity(self, event_type: str) -> VerbosityTier: ...
     def on(self, event_type: str, handler: EventHandler) -> None: ...
     def dispatch(self, event: dict[str, Any]) -> None: ...
 
 REGISTRY = EventRegistry()
 ```
 
-The registry provides O(1) dispatch via `dict[str, EventMeta]` lookup, replacing if-elif chains. Domain default verbosity is configured in `_DOMAIN_DEFAULT_VERBOSITY`.
+The registry provides O(1) dispatch via `dict[str, EventMeta]` lookup, replacing if-elif chains. Domain default verbosity is configured in `_DOMAIN_DEFAULT_TIER` (see RFC-0024).
 
 ### Event emission
 
@@ -299,7 +301,7 @@ class EventRenderer(Protocol):
     """Protocol for rendering progress events."""
 
     def render(self, event: dict[str, Any], *, verbosity: VerbosityLevel = "normal") -> None:
-        ...
+        """Render event with verbosity filtering via VerbosityTier comparison."""
 ```
 
 Three implementations:
@@ -320,7 +322,7 @@ class CliEventRenderer:
     def render(self, event: dict[str, Any], *, verbosity: VerbosityLevel = "normal") -> None:
         etype = event.get("type", "")
         meta = self._registry.get_meta(etype)
-        if meta and not should_show(meta.verbosity, verbosity):
+        if meta and not should_show(meta.verbosity, verbosity):  # RFC-0024 integer comparison
             return
         handler = self._handlers.get(etype, self._default_handler)
         handler(event)
@@ -342,10 +344,10 @@ Each event registration includes a `summary_template` that defines how to extrac
 EventMeta(
     type_string="soothe.cognition.plan.step_started",
     model=PlanStepStartedEvent,
-    domain="protocol",
+    domain="cognition",
     component="plan",
     action="step_started",
-    verbosity="protocol",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Step {step_id}: {description}",
 )
 ```
@@ -367,15 +369,17 @@ PlanStepStartedEvent(            REGISTRY.get_meta(          CliEventRenderer.re
 
 ### Verbosity integration
 
-The registry replaces `classify_custom_event()` entirely:
+The registry replaces `classify_custom_event()` entirely. Visibility is determined by integer comparison:
 
 ```python
 def should_render(event_type: str, verbosity: VerbosityLevel) -> bool:
-    category = REGISTRY.get_verbosity(event_type)
-    return should_show(category, verbosity)
+    tier = REGISTRY.get_verbosity(event_type)
+    return should_show(tier, verbosity)  # tier <= verbosity via integer comparison
 ```
 
-Promoted subagent events (visible at `normal` verbosity) are registered with `verbosity="subagent_progress"` instead of the domain default `"subagent_custom"`.
+See RFC-0024 for the `VerbosityTier` enum and `should_show()` implementation.
+
+Promoted subagent events (visible at `normal` verbosity) are registered with `verbosity=VerbosityTier.NORMAL` instead of the domain default `VerbosityTier.DETAILED`.
 
 ## Event Catalog
 
@@ -383,14 +387,14 @@ The complete event catalog with all event types, fields, and verbosity classific
 
 ### Event domains
 
-| Domain | Purpose | Default Verbosity |
-|--------|---------|-------------------|
-| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `protocol` |
-| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `protocol` |
-| `tool` | Main agent tool execution lifecycle | `tool_activity` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver | `subagent_custom` (promoted key events at `subagent_progress`) |
-| `output` | Content destined for user display: chitchat responses, final reports | `assistant_text` |
-| `error` | Error events | `error` (always shown) |
+| Domain | Purpose | Default VerbosityTier |
+|--------|---------|----------------------|
+| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `DETAILED` |
+| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `DETAILED` |
+| `tool` | Main agent tool execution lifecycle | `DETAILED` |
+| `subagent` | All subagent activity: browser, research, claude, skillify, weaver | `DETAILED` (promoted key events at `NORMAL`) |
+| `output` | Content destined for user display: chitchat responses, final reports | `QUIET` |
+| `error` | Error events | `QUIET` (always shown) |
 
 ## Event Access
 
@@ -464,11 +468,13 @@ Event models support forward compatibility via `extra="allow"` in the Pydantic c
 
 - RFC-0003 (CLI TUI Architecture Design — current event taxonomy)
 - RFC-0013 (Unified Daemon Communication Protocol — IPC message wrapping)
+- RFC-0024 (VerbosityTier Unification — unified verbosity classification)
 
 ## Related Documents
 
 - [RFC-0003](./RFC-0003.md) — CLI TUI Architecture Design (superseded for event schema; retains TUI layout, daemon architecture)
 - [RFC-0013](./RFC-0013.md) — Unified Daemon Communication Protocol
+- [RFC-0024](./RFC-0024-verbosity-tier-unification.md) — VerbosityTier Unification
 - [RFC Index](./rfc-index.md) — All RFCs
 
 ---

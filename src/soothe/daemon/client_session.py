@@ -266,8 +266,8 @@ class ClientSessionManager:
                             is_heartbeat = ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat"
 
                     if not is_heartbeat:
-                        # Import should_show from RFC-0015's progress_verbosity
-                        from soothe.ux.core.progress_verbosity import should_show
+                        # Import should_show from RFC-0024's verbosity_tier
+                        from soothe.core.verbosity_tier import should_show
 
                         # Check if event should be shown at client's verbosity level
                         if not should_show(event_meta.verbosity, session.verbosity):

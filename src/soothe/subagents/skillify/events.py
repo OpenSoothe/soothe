@@ -110,15 +110,16 @@ class SkillifyIndexFailedEvent(SubagentEvent):
 
 # Register all skillify events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     SkillifyDispatchedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Skillify: {task}",
 )
 register_event(
     SkillifyCompletedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms ({result_count} results)",
 )
 register_event(SkillifyIndexingPendingEvent)

@@ -57,25 +57,26 @@ class BrowserCdpEvent(SubagentEvent):
 
 # Register all browser events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     BrowserDispatchedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Browser: {task}",
 )
 register_event(
     BrowserCompletedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
 register_event(
     BrowserStepEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Step {step}",
 )
 register_event(
     BrowserCdpEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Browser CDP: {status}",
 )
 

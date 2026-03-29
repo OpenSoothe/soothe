@@ -55,25 +55,26 @@ class GoalListedEvent(ToolEvent):
 
 # Register all goals events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     GoalCreatedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Goal created: {description}",
 )
 register_event(
     GoalCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Goal completed: {goal_id}",
 )
 register_event(
     GoalFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Goal failed: {reason}",
 )
 register_event(
     GoalListedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Listed {count} goals",
 )
 

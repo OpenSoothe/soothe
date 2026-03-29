@@ -81,35 +81,36 @@ class BackupCreatedEvent(ToolEvent):
 
 # Register all file_ops events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     FileReadEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Read: {path} ({bytes_read} bytes)",
 )
 register_event(
     FileWriteEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Wrote: {path} ({bytes_written} bytes, {mode})",
 )
 register_event(
     FileDeleteEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Deleted: {path} (backup={backup_created})",
 )
 register_event(
     FileSearchStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Searching: {pattern} in {path}",
 )
 register_event(
     FileSearchCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Search found {matches_count} matches",
 )
 register_event(
     BackupCreatedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Backup: {backup_path}",
 )
 

@@ -80,35 +80,36 @@ class VideoAnalysisFailedEvent(ToolEvent):
 
 # Register all video events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     VideoUploadStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Uploading video ({file_size_mb:.1f}MB)",
 )
 register_event(
     VideoUploadCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Video uploaded: {file_name}",
 )
 register_event(
     VideoProcessingEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Processing video: {state}",
 )
 register_event(
     VideoAnalysisStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Analyzing video",
 )
 register_event(
     VideoAnalysisCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Video analysis complete",
 )
 register_event(
     VideoAnalysisFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Analysis failed: {error}",
 )
 

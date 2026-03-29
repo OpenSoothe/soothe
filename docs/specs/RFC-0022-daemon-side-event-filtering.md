@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-28
 **Updated**: 2026-03-28
-**Dependencies**: RFC-0013, RFC-0015
+**Dependencies**: RFC-0013, RFC-0015, RFC-0024
 
 ## Abstract
 
@@ -61,9 +61,9 @@ The daemon has **no knowledge** of client verbosity preferences. RFC-0013's `sub
 
 Event filtering occurs at the **latest possible stage** (sender_loop) to preserve EventBus routing simplicity. Filtering is **per-client** to support different clients having different verbosity preferences.
 
-### Principle 2: Reuse RFC-0015 Classification
+### Principle 2: Reuse RFC-0024 VerbosityTier
 
-Use RFC-0015's existing `EventRegistry.get_verbosity()` for event classification. No new categorization logic introduced. Verbosity categories (assistant_text, protocol, tool_activity, subagent_progress, subagent_custom, error) map directly to RFC-0015's definitions.
+Use RFC-0024's unified `VerbosityTier` enum for event classification. No new categorization logic introduced. Verbosity tiers (`QUIET`, `NORMAL`, `DETAILED`, `DEBUG`, `INTERNAL`) map directly to RFC-0024's definitions. Visibility is determined by integer comparison: `tier <= verbosity`.
 
 ### Principle 3: Backward Compatibility via Defaults
 
@@ -77,40 +77,34 @@ Daemon filtering is **coarse-grained** (verbosity-based). Client-side `DisplayPo
 
 ### Event Classification Mapping
 
-RFC-0015 defines six verbosity categories mapped to domain defaults:
+RFC-0024 defines five VerbosityTier values mapped to domain defaults:
 
-| Domain | Default Verbosity Category | Visible at Verbosity Levels |
-|--------|----------------------------|-----------------------------|
-| `lifecycle` | protocol | normal, detailed, debug |
-| `protocol` | protocol | normal, detailed, debug |
-| `tool` | tool_activity | normal, detailed, debug |
-| `subagent` | subagent_custom | detailed, debug (promoted: subagent_progress at normal) |
-| `output` | assistant_text | minimal, normal, detailed, debug |
-| `error` | error | always shown |
+| Domain | Default VerbosityTier | Visible at Verbosity Levels |
+|--------|----------------------|-----------------------------|
+| `lifecycle` | DETAILED (2) | detailed, debug |
+| `protocol` | DETAILED (2) | detailed, debug |
+| `tool` | DETAILED (2) | detailed, debug |
+| `subagent` | DETAILED (2) | detailed, debug (promoted: NORMAL at normal) |
+| `output` | QUIET (0) | quiet, normal, detailed, debug |
+| `error` | QUIET (0) | always shown |
 
-**Visibility Function** (from RFC-0015):
+**Visibility Function** (from RFC-0024):
 ```python
-def should_show(category: str, verbosity: VerbosityLevel) -> bool:
-    """Check if category should be shown at given verbosity."""
-    if category == "error":
-        return True  # Always show errors
+def should_show(tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
+    """Check if tier should be shown at given verbosity via integer comparison."""
+    if tier == VerbosityTier.INTERNAL:
+        return False  # Never show internal events
+    return tier <= _VERBOSITY_LEVEL_VALUES[verbosity]  # Integer comparison
+```
 
-    if verbosity == "debug":
-        return True  # Show all categories at debug
-
-    if verbosity == "detailed":
-        return category in {
-            "assistant_text", "protocol", "tool_activity",
-            "subagent_progress", "subagent_custom", "error"
-        }
-
-    if verbosity == "normal":
-        return category in {
-            "assistant_text", "protocol", "subagent_progress", "error"
-        }
-
-    # minimal
-    return category in {"assistant_text", "error"}
+**VerbosityLevel Mapping**:
+```python
+_VERBOSITY_LEVEL_VALUES: dict[VerbosityLevel, int] = {
+    "quiet": 0,     # Shows QUIET (0) only
+    "normal": 1,    # Shows QUIET (0) + NORMAL (1)
+    "detailed": 2,  # Shows QUIET (0) + NORMAL (1) + DETAILED (2)
+    "debug": 3,     # Shows QUIET (0) + NORMAL (1) + DETAILED (2) + DEBUG (3)
+}
 ```
 
 ### Protocol Extension
@@ -120,7 +114,7 @@ def should_show(category: str, verbosity: VerbosityLevel) -> bool:
 {
   "type": "subscribe_thread",
   "thread_id": "string (required)",
-  "verbosity": "string (optional, values: minimal|normal|detailed|debug, default: normal)"
+  "verbosity": "string (optional, values: quiet|normal|detailed|debug, default: normal)"
 }
 ```
 
@@ -153,9 +147,9 @@ class ClientSession:
     verbosity: VerbosityLevel = "normal"  # NEW: client verbosity preference
 ```
 
-**VerbosityLevel Type** (from RFC-0015):
+**VerbosityLevel Type** (from RFC-0024):
 ```python
-VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
+VerbosityLevel = Literal["quiet", "normal", "detailed", "debug"]
 ```
 
 ### Event Filtering Flow
@@ -200,13 +194,13 @@ class EventBus:
             queue.put_nowait((event, event_meta))  # NEW: tuple (event, metadata)
 ```
 
-**EventMeta Structure** (from RFC-0015):
+**EventMeta Structure** (from RFC-0015, updated by RFC-0024):
 ```python
 @dataclass(frozen=True)
 class EventMeta:
     """Metadata for event filtering and display."""
     type_string: str
-    verbosity: str  # Verbosity category (assistant_text, protocol, etc.)
+    verbosity: VerbosityTier  # Unified visibility tier (RFC-0024)
     # ... other fields (domain, component, action, summary_template)
 ```
 
@@ -231,8 +225,8 @@ async def _sender_loop(self, session: ClientSession) -> None:
 
             # Daemon-side filtering
             if event_meta:
-                # Use RFC-0015's should_show logic
-                from soothe.ux.core.progress_verbosity import should_show
+                # Use RFC-0024's should_show logic (integer comparison)
+                from soothe.ux.core.verbosity_tier import should_show
 
                 if not should_show(event_meta.verbosity, session.verbosity):
                     # Filter out - do not send to client
@@ -300,7 +294,7 @@ async def handle_subscribe_thread(self, client_id: str, message: dict[str, Any])
         return
 
     # Validate verbosity
-    valid_verbosity = {"minimal", "normal", "detailed", "debug"}
+    valid_verbosity = {"quiet", "normal", "detailed", "debug"}
     if verbosity not in valid_verbosity:
         await self._send_error(client_id, "INVALID_MESSAGE", f"Invalid verbosity: {verbosity}")
         return
@@ -334,7 +328,7 @@ async def subscribe_thread(
     Args:
         client_id: Client identifier
         thread_id: Thread identifier
-        verbosity: Verbosity preference (minimal|normal|detailed|debug)
+        verbosity: Verbosity preference (quiet|normal|detailed|debug)
 
     Raises:
         ValueError: If client_id not found
@@ -416,7 +410,7 @@ async def publish(
 **Imports Required**:
 ```python
 from soothe.core.event_catalog import EventMeta
-from soothe.ux.core.progress_verbosity import should_show
+from soothe.ux.core.verbosity_tier import should_show, VerbosityTier
 ```
 
 ### Requirement 5: Event Emission Sites
@@ -477,10 +471,10 @@ async def subscribe_thread(
 ### Event Reduction Ratios
 
 **Estimated by Verbosity**:
-- `minimal`: ~90% reduction (only assistant_text + error events)
-- `normal`: ~60-70% reduction (assistant_text + protocol + subagent_progress + error)
-- `detailed`: ~30-40% reduction (all except subagent_custom)
-- `debug`: ~0% reduction (all events sent, but still filtered for consistency)
+- `quiet`: ~90% reduction (only QUIET tier events: errors, assistant text, final reports)
+- `normal`: ~60-70% reduction (QUIET + NORMAL tier events)
+- `detailed`: ~30-40% reduction (QUIET + NORMAL + DETAILED tier events)
+- `debug`: ~0% reduction (all events sent except INTERNAL tier)
 
 **Note**: Debug mode still applies filtering logic (no passthrough), ensuring consistent behavior.
 
@@ -602,15 +596,16 @@ async def subscribe_thread(
 ## Dependencies
 
 - RFC-0013 (Unified Daemon Communication Protocol — subscription protocol)
-- RFC-0015 (Progress Event Protocol — event classification and verbosity categories)
+- RFC-0015 (Progress Event Protocol — event classification)
+- RFC-0024 (VerbosityTier Unification — unified verbosity classification)
 - RFC-0019 (Unified Event Processing — client-side DisplayPolicy)
 
 ## Related Documents
 
 - [RFC-0013](./RFC-0013-daemon-communication-protocol.md) — Daemon communication protocol
 - [RFC-0015](./RFC-0015-progress-event-protocol.md) — Event classification system
+- [RFC-0024](./RFC-0024-verbosity-tier-unification.md) — VerbosityTier unification
 - [RFC-0019](./RFC-0019-unified-event-processing.md) — Event processing architecture
-- [Design Draft](../drafts/daemon-event-filtering-optimization-design.md) — Original design exploration
 - [RFC Index](./rfc-index.md) — All RFCs
 
 ---

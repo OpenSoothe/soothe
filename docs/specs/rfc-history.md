@@ -6,6 +6,12 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-29 | RFC-0024 | Draft | VerbosityTier Unification - replaces two-layer classification with unified enum |
+| 2026-03-29 | RFC-0022 | Implemented | Updated to use VerbosityTier, changed VerbosityLevel from `minimal` to `quiet` |
+| 2026-03-29 | RFC-0020 | Draft | Updated to use VerbosityTier classification throughout |
+| 2026-03-29 | RFC-0019 | Implemented | Added RFC-0024 reference for VerbosityTier |
+| 2026-03-29 | RFC-0015 | Implemented | Updated EventMeta.verbosity to use VerbosityTier enum |
+| 2026-03-29 | event-catalog.md | Reference | Updated all verbosity columns to use VerbosityTier |
 | 2026-03-29 | RFC-0023 | Draft | Added Layer 2 integration contract with execution hints specification |
 | 2026-03-29 | RFC-0008 | Revised | Updated ACT phase with execution hints propagation, fixed RFC-0023 dependency |
 | 2026-03-29 | RFC-0023 | Deleted | Content merged into RFC-0013 (daemon readiness) and RFC-0008 (observation reuse, planning strategy) |

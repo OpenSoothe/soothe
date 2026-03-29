@@ -62,30 +62,31 @@ class ClaudeResultEvent(SubagentEvent):
 
 # Register all Claude events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     ClaudeDispatchedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Claude: {task}",
 )
 register_event(
     ClaudeCompletedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Completed (${cost_usd}, {duration_ms}ms)",
 )
 register_event(
     ClaudeTextEvent,
-    verbosity="protocol",
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Text: {text}",
 )
 register_event(
     ClaudeToolUseEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Tool: {tool}",
 )
 register_event(
     ClaudeResultEvent,
-    verbosity="protocol",
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Done (${cost_usd}, {duration_ms}ms)",
 )
 

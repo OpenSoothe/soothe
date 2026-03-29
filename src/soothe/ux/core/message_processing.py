@@ -219,7 +219,7 @@ class MessageProcessor:
         """
         from langchain_core.messages import AIMessageChunk
 
-        from soothe.ux.core.progress_verbosity import should_show
+        from soothe.core.verbosity_tier import VerbosityTier, should_show
         from soothe.ux.core.rendering import update_name_map_from_tool_calls
 
         # Update name_map from tool calls
@@ -248,7 +248,7 @@ class MessageProcessor:
             if pending["emitted"]:
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and should_show("protocol", verbosity):
+            if parsed_args is not None and should_show(VerbosityTier.NORMAL, verbosity):
                 tc_display = {"args": parsed_args}
                 self.formatter.emit_tool_call(
                     pending["name"],
@@ -268,7 +268,7 @@ class MessageProcessor:
                 btype = block.get("type")
                 if btype == "text":
                     text = block.get("text", "")
-                    if text and should_show("assistant_text", verbosity):
+                    if text and should_show(VerbosityTier.QUIET, verbosity):
                         self._process_text_block(text, is_main=is_main)
                 elif btype in ("tool_call", "tool_call_chunk"):
                     # When tool_calls already have args, use that path only (see IG-053).
@@ -276,7 +276,7 @@ class MessageProcessor:
                         continue
                     name = block.get("name", "")
                     block_tc_id = block.get("id")
-                    if name and should_show("protocol", verbosity):
+                    if name and should_show(VerbosityTier.NORMAL, verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         # Chunks often have empty/partial args before merge; prefer msg.tool_calls when present.
                         if not coerced and raw_tcs:
@@ -291,7 +291,7 @@ class MessageProcessor:
                         )
                         if coerced:
                             tool_call_emitted_from_blocks = True
-        elif is_main and isinstance(msg.content, str) and msg.content and should_show("assistant_text", verbosity):
+        elif is_main and isinstance(msg.content, str) and msg.content and should_show(VerbosityTier.QUIET, verbosity):
             # Handle simple string content
             self._process_text_block(msg.content, is_main=is_main)
 
@@ -302,7 +302,7 @@ class MessageProcessor:
             for tc in tcs:
                 name = tc.get("name", "")
                 tc_id = tc.get("id")
-                if not name or not should_show("protocol", verbosity):
+                if not name or not should_show(VerbosityTier.NORMAL, verbosity):
                     continue
                 tc_display = dict(tc)
                 tc_display["args"] = coerce_tool_call_args_to_dict(tc.get("args"))
@@ -361,9 +361,9 @@ class MessageProcessor:
             prefix: Optional namespace prefix for subagents.
             verbosity: Verbosity level for filtering.
         """
-        from soothe.ux.core.progress_verbosity import should_show
+        from soothe.core.verbosity_tier import VerbosityTier, should_show
 
-        if not should_show("protocol", verbosity):
+        if not should_show(VerbosityTier.NORMAL, verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")

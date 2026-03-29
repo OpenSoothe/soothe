@@ -30,7 +30,7 @@ For event type string constants:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from soothe.core.base_events import (
     ErrorEvent,
@@ -40,6 +40,7 @@ from soothe.core.base_events import (
     SootheEvent,
     ToolEvent,
 )
+from soothe.core.verbosity_tier import VerbosityTier
 
 # ---------------------------------------------------------------------------
 # Type aliases and helpers
@@ -123,9 +124,6 @@ PLUGIN_HEALTH_CHECKED = "soothe.plugin.health_checked"
 # ---------------------------------------------------------------------------
 # Core event class definitions
 # ---------------------------------------------------------------------------
-
-if TYPE_CHECKING:
-    from soothe.ux.core.progress_verbosity import ProgressCategory
 
 # ---------------------------------------------------------------------------
 # Lifecycle events
@@ -593,18 +591,19 @@ class EventMeta:
     domain: str
     component: str
     action: str
-    verbosity: ProgressCategory
+    verbosity: VerbosityTier
     summary_template: str = ""
 
 
-_DOMAIN_DEFAULT_VERBOSITY: dict[str, ProgressCategory] = {
-    "lifecycle": "protocol",
-    "protocol": "protocol",
-    "cognition": "protocol",
-    "tool": "protocol",  # Changed from "tool_activity" - tool progress should be visible at normal verbosity
-    "subagent": "subagent_custom",
-    "output": "assistant_text",
-    "error": "error",
+_DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
+    "lifecycle": VerbosityTier.DETAILED,
+    "protocol": VerbosityTier.DETAILED,
+    "cognition": VerbosityTier.NORMAL,
+    "tool": VerbosityTier.NORMAL,  # RFC-0020: tool activity visible at normal
+    "subagent": VerbosityTier.NORMAL,  # RFC-0020: subagent activity visible at normal
+    "output": VerbosityTier.QUIET,
+    "error": VerbosityTier.QUIET,
+    "agentic": VerbosityTier.NORMAL,
 }
 
 
@@ -633,13 +632,13 @@ class EventRegistry:
         _min_segments = 2
         return segments[1] if len(segments) >= _min_segments else "unknown"
 
-    def get_verbosity(self, event_type: str) -> str:
-        """Return the verbosity category for an event type."""
+    def get_verbosity(self, event_type: str) -> VerbosityTier:
+        """Return the VerbosityTier for an event type."""
         meta = self._by_type.get(event_type)
         if meta:
             return meta.verbosity
         domain = self.classify(event_type)
-        return _DOMAIN_DEFAULT_VERBOSITY.get(domain, "debug")
+        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
 
     def on(self, event_type: str, handler: EventHandler) -> None:
         """Register a handler for an event type (or ``*`` for fallback)."""
@@ -663,7 +662,7 @@ REGISTRY = EventRegistry()
 def _reg(
     type_string: str,
     model: type[SootheEvent],
-    verbosity: ProgressCategory | None = None,
+    verbosity: VerbosityTier | None = None,
     summary_template: str = "",
 ) -> None:
     """Internal helper for registering core events.
@@ -671,14 +670,15 @@ def _reg(
     Args:
         type_string: Event type string (e.g., "soothe.lifecycle.thread.created").
         model: Event model class.
-        verbosity: Optional verbosity category override.
+        verbosity: Optional VerbosityTier override.
         summary_template: Optional template for event summaries.
     """
     parts = type_string.split(".")
     domain = parts[1] if len(parts) >= 2 else "unknown"
     component = parts[2] if len(parts) >= 3 else ""
     action = parts[3] if len(parts) >= 4 else ""
-    v = verbosity or _DOMAIN_DEFAULT_VERBOSITY.get(domain, "debug")
+    # Use explicit verbosity if provided (including QUIET=0), otherwise domain default
+    v = verbosity if verbosity is not None else _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
     REGISTRY.register(
         EventMeta(
             type_string=type_string,
@@ -694,7 +694,7 @@ def _reg(
 
 def register_event(
     event_class: type[SootheEvent],
-    verbosity: ProgressCategory | None = None,
+    verbosity: VerbosityTier | None = None,
     summary_template: str = "",
 ) -> None:
     """Register an event class with the global event registry.
@@ -776,7 +776,7 @@ _reg(
 _reg(
     DAEMON_HEARTBEAT,
     DaemonHeartbeatEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Daemon heartbeat: state={state}",
 )
 
@@ -784,61 +784,61 @@ _reg(
 _reg(
     "soothe.agentic.loop.started",
     AgenticLoopStartedEvent,
-    verbosity="normal",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
 )
 _reg(
     "soothe.agentic.loop.completed",
     AgenticLoopCompletedEvent,
-    verbosity="quiet",
+    verbosity=VerbosityTier.QUIET,
     summary_template="Done: {evidence_summary}",
 )
 _reg(
     "soothe.agentic.step.started",
     AgenticStepStartedEvent,
-    verbosity="detailed",
+    verbosity=VerbosityTier.DETAILED,
     summary_template="{description}",
 )
 _reg(
     "soothe.agentic.step.completed",
     AgenticStepCompletedEvent,
-    verbosity="normal",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="{summary} ({duration_ms}ms)",
 )
 _reg(
     "soothe.agentic.iteration.started",
     AgenticIterationStartedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Iteration {iteration} ({planning_strategy} planning)",
 )
 _reg(
     "soothe.agentic.iteration.completed",
     AgenticIterationCompletedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Iteration {iteration}: {outcome} ({duration_ms}ms)",
 )
 _reg(
     "soothe.agentic.observation.started",
     AgenticObservationStartedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Observation started (strategy={strategy})",
 )
 _reg(
     "soothe.agentic.observation.completed",
     AgenticObservationCompletedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Observed: {context_entries} context, {memories_recalled} memories → {planning_strategy}",
 )
 _reg(
     "soothe.agentic.verification.started",
     AgenticVerificationStartedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Verification started (strictness={strictness})",
 )
 _reg(
     "soothe.agentic.verification.completed",
     AgenticVerificationCompletedEvent,
-    verbosity="debug",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Verified: {'continue' if should_continue else 'stop'}",
 )
 _reg(
@@ -863,7 +863,7 @@ _reg(PLAN_STEP_COMPLETED, PlanStepCompletedEvent, summary_template="Step {step_i
 _reg(PLAN_STEP_FAILED, PlanStepFailedEvent, summary_template="Step {step_id}: FAILED - {error}")
 _reg(PLAN_BATCH_STARTED, PlanBatchStartedEvent, summary_template="Batch: {parallel_count} steps in parallel")
 _reg(PLAN_REFLECTED, PlanReflectedEvent, summary_template="Reflected: {assessment}")
-_reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity="debug")
+_reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.DEBUG)
 _reg(PLAN_ONLY, PlanOnlyEvent, summary_template="Plan only: {step_count} steps")
 
 # -- Protocol: policy --------------------------------------------------------
@@ -887,17 +887,17 @@ _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred
 _reg(
     "soothe.tool.execution.result",
     ToolResultEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,  # RFC-0020: visible at normal
     summary_template="{tool_name}: {display_content}",
 )
 
 # -- Output ------------------------------------------------------------------
-_reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity="internal")
-_reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity="assistant_text")
-_reg(FINAL_REPORT, FinalReportEvent, verbosity="assistant_text")
+_reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
+_reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
+_reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Error -------------------------------------------------------------------
-_reg(ERROR, GeneralErrorEvent, verbosity="error", summary_template="{error}")
+_reg(ERROR, GeneralErrorEvent, verbosity=VerbosityTier.QUIET, summary_template="{error}")
 
 
 # ---------------------------------------------------------------------------

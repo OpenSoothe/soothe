@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-26
 **Updated**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019
+**Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019, RFC-0024
 
 ## Abstract
 
@@ -30,7 +30,7 @@ This RFC establishes the architectural foundation for displaying agent activity 
 Event: BrowserStepEvent
   - type: "soothe.subagent.browser.step"
   - summary_template: "Step {step}"
-  - verbosity: "subagent_progress"
+  - verbosity: VerbosityTier.NORMAL  # RFC-0024
 ```
 
 ### Principle 2: Three-Level Tree Structure
@@ -123,7 +123,7 @@ Level 3 (Result):        └ ✓ Result metrics
 **Registration**:
 - Type: `soothe.tool.<tool_name>.call_started`
 - Template: `<tool_name>({args_summary})`
-- Verbosity: `tool_activity`
+- Verbosity: `VerbosityTier.DETAILED`
 
 **Display**:
 ```
@@ -131,7 +131,7 @@ Level 3 (Result):        └ ✓ Result metrics
   └ ✓ Result summary (duration)
 ```
 
-**Note**: Tool activity filtered at normal verbosity. Only subagent tools with `subagent_progress` appear in normal mode.
+**Note**: Tool activity filtered at normal verbosity. Only subagent tools with `VerbosityTier.NORMAL` appear in normal mode.
 
 #### Tool Output Formatting (RFC-0020 Enhancement)
 
@@ -227,7 +227,7 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 - **Each step** gets its own line with ✓ indicator
 - **Final line** shows completion summary
 
-**Verbosity**: `subagent_progress` (visible in normal mode)
+**Verbosity**: `VerbosityTier.NORMAL` (visible in normal mode)
 
 ### Pattern: Agentic Loop Progress
 
@@ -255,12 +255,12 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 
 **Events**:
 
-| Event | Level | Verbosity | Template |
-|-------|-------|-----------|----------|
-| `AgenticLoopStartedEvent` | 1 | `normal` | `{goal}` |
-| `AgenticStepStartedEvent` | 2 | `detailed` | `{description}` |
-| `AgenticStepCompletedEvent` | 3 | `normal` | `{summary} ({duration_ms}ms)` |
-| `AgenticLoopCompletedEvent` | 1 | `quiet` | `Done: {evidence_summary}` |
+| Event | Level | VerbosityTier | Template |
+|-------|-------|---------------|----------|
+| `AgenticLoopStartedEvent` | 1 | `NORMAL` | `{goal}` |
+| `AgenticStepStartedEvent` | 2 | `DETAILED` | `{description}` |
+| `AgenticStepCompletedEvent` | 3 | `NORMAL` | `{summary} ({duration_ms}ms)` |
+| `AgenticLoopCompletedEvent` | 1 | `QUIET` | `Done: {evidence_summary}` |
 
 **Verbosity Behavior**:
 
@@ -283,7 +283,7 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 **Registration**:
 - Type: `soothe.protocol.<component>.<action>`
 - Template: Concise status message
-- Verbosity: `protocol`
+- Verbosity: `VerbosityTier.DETAILED`
 
 **Display**:
 ```
@@ -297,7 +297,7 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 
 **Registration**:
 - Type: `soothe.error.<component>.<type>`
-- Verbosity: `error` (always visible)
+- Verbosity: `VerbosityTier.QUIET` (always visible)
 
 **Display**:
 ```
@@ -357,62 +357,77 @@ Subagent step events:
 
 ## Verbosity Classification
 
-### Shared semantic event classes
+### VerbosityTier Mapping (RFC-0024)
 
-The display system first classifies raw stream events into semantic classes:
-- `assistant_response`
-- `plan_update`
-- `milestone`
-- `tool_summary_candidate`
-- `error`
-- `lifecycle_internal`
-- `protocol_internal`
-- `debug_internal`
+The display system uses RFC-0024's unified `VerbosityTier` for visibility classification:
 
-The classifier should be conservative: if uncertain, classify as internal to avoid leaking low-value internals into `normal`.
+| VerbosityTier | Integer | Description |
+|---------------|---------|-------------|
+| `QUIET` | 0 | Always visible (errors, assistant text, final reports) |
+| `NORMAL` | 1 | Standard progress (plan updates, milestones, agentic loop) |
+| `DETAILED` | 2 | Detailed internals (protocol events, tool calls, subagent activity) |
+| `DEBUG` | 3 | Everything including internals (thinking, heartbeats) |
+| `INTERNAL` | 99 | Never shown at any verbosity level |
+
+Visibility check: `tier <= verbosity` (integer comparison).
+
+The classifier should be conservative: if uncertain, classify as `DETAILED` or `INTERNAL` to avoid leaking low-value internals into `normal`.
 
 ### Verbosity behavior
 
 #### `quiet`
-Show:
+Show (VerbosityTier `QUIET` = 0):
 - extracted final answer when confidence is high
 - compact structured fallback when extraction is uncertain
 - concise actionable errors
+- assistant text
+- final reports
 
-Hide:
-- lifecycle events
-- protocol events
-- plan updates
-- milestones
-- raw tool activity
+Hide (VerbosityTier > 0):
+- lifecycle events (`DETAILED`)
+- protocol events (`DETAILED`)
+- plan updates (`NORMAL`)
+- milestones (`NORMAL`)
+- raw tool activity (`DETAILED`)
 
 #### `normal` (default)
-Show:
-- plan updates
-- brief progress milestones
-- concise tool summaries when they add clarity
-- cleaned final response
-- user-facing errors
+Show (VerbosityTier ≤ 1):
+- plan updates (`NORMAL`)
+- brief progress milestones (`NORMAL` or `QUIET`)
+- concise tool summaries when they add clarity (`NORMAL` for subagent tools)
+- cleaned final response (`QUIET`)
+- user-facing errors (`QUIET`)
+- agentic loop events (`NORMAL`)
 
-Hide:
-- lifecycle events
-- protocol counters
-- thread IDs
-- daemon state and PID details
-- plan reasoning
-- raw step states such as `[pending]`
-- raw tool invocation spam
+Hide (VerbosityTier > 1):
+- lifecycle events (`DETAILED`)
+- protocol counters (`DETAILED`)
+- thread IDs (`DETAILED`)
+- daemon state and PID details (`DETAILED`)
+- plan reasoning (`DETAILED`)
+- raw step states such as `[pending]` (`DETAILED`)
+- raw tool invocation spam (`DETAILED`)
+- subagent internals (`DETAILED`)
 
 #### `detailed`
-Show:
-- plan updates
-- milestones
-- tool summaries
-- cleaned final response
-- richer operational detail than `normal`
+Show (VerbosityTier ≤ 2):
+- plan updates (`NORMAL`)
+- milestones (`NORMAL` or `QUIET`)
+- tool summaries (`DETAILED`)
+- cleaned final response (`QUIET`)
+- richer operational detail than `normal` (`DETAILED`)
+- subagent activity (`DETAILED`)
+
+Hide (VerbosityTier > 2):
+- thinking events (`DEBUG`)
+- heartbeats (`DEBUG`)
+- internal events (`INTERNAL`)
 
 #### `debug`
-Show all categories, including internal events.
+Show all VerbosityTier values except `INTERNAL`:
+- All above categories
+- thinking events (`DEBUG`)
+- heartbeats (`DEBUG`)
 
 ## Presentation and Formatting Rules
 
@@ -489,17 +504,17 @@ TUI must preserve the same semantic separation intent using widget spacing, marg
 **Adding New Events**:
 ```
 1. Define event model
-2. Register with template and verbosity
+2. Register with template and VerbosityTier
 3. Emit event
 → Automatically displays without renderer changes
 ```
 
-**Adding New Categories**:
+**Adding New VerbosityTier Values** (rare):
 ```
-1. Add to ProgressCategory type
-2. Update should_show() logic
+1. Add to VerbosityTier enum in verbosity_tier.py (RFC-0024)
+2. Update _VERBOSITY_LEVEL_VALUES mapping
 3. Use in register_event() calls
-→ Renderers need no changes
+→ Renderers need no changes (integer comparison handles new values)
 ```
 
 ## Success Criteria
@@ -519,12 +534,14 @@ TUI must preserve the same semantic separation intent using widget spacing, marg
 - **RFC-0013**: Unified Daemon Communication Protocol
 - **RFC-0015**: Event System Design
 - **RFC-0019**: Unified Event Processing
+- **RFC-0024**: VerbosityTier Unification
 
 ## Related Documents
 
 - [RFC-0013](./RFC-0013-daemon-communication-protocol.md) - Daemon protocol
 - [RFC-0015](./RFC-0015-progress-event-protocol.md) - Event system
 - [RFC-0019](./RFC-0019-unified-event-processing.md) - Event processing
+- [RFC-0024](./RFC-0024-verbosity-tier-unification.md) - VerbosityTier unification
 - [IG-066](../impl/IG-066-subagent-event-display-fix.md) - Implementation example
 
 ---

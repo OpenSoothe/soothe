@@ -53,25 +53,26 @@ class ImageOCRCompletedEvent(ToolEvent):
 
 # Register all image events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     ImageAnalysisStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Analyzing image: {image_path}",
 )
 register_event(
     ImageAnalysisCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Image analysis complete",
 )
 register_event(
     ImageOCREvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Extracting text from image: {image_path}",
 )
 register_event(
     ImageOCRCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="OCR complete: {text_length} characters extracted",
 )
 

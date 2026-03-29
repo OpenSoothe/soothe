@@ -13,6 +13,11 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
+from soothe.core.verbosity_tier import (
+    VerbosityTier,
+    classify_event_to_tier,
+    should_show,
+)
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
 from soothe.ux.core.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe.ux.core.message_processing import (
@@ -26,10 +31,6 @@ from soothe.ux.core.message_processing import (
     try_parse_pending_tool_call_args,
 )
 from soothe.ux.core.processor_state import ProcessorState
-from soothe.ux.core.progress_verbosity import (
-    classify_custom_event,
-    should_show,
-)
 from soothe.ux.core.rendering import update_name_map_from_tool_calls
 
 if TYPE_CHECKING:
@@ -234,7 +235,7 @@ class EventProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
-                    if name and should_show("protocol", self._verbosity):
+                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         if not coerced and raw_tcs:
                             continue
@@ -269,7 +270,7 @@ class EventProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
-                if not name or not should_show("protocol", self._verbosity):
+                if not name or not should_show(VerbosityTier.DETAILED, self._verbosity):
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
 
@@ -289,7 +290,7 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle ToolMessage objects."""
-        if not should_show("protocol", self._verbosity):
+        if not should_show(VerbosityTier.DETAILED, self._verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -382,7 +383,7 @@ class EventProcessor:
                         )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
-                if name and should_show("protocol", self._verbosity):
+                if name and should_show(VerbosityTier.DETAILED, self._verbosity):
                     args = coerce_tool_call_args_to_dict(block.get("args", {}))
                     tool_call_id = block.get("id", "")
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
@@ -393,7 +394,7 @@ class EventProcessor:
             for tc in tool_call_chunks:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
-                    if name and should_show("protocol", self._verbosity):
+                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
@@ -404,7 +405,7 @@ class EventProcessor:
             if pending["emitted"]:
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and should_show("protocol", self._verbosity):
+            if parsed_args is not None and should_show(VerbosityTier.DETAILED, self._verbosity):
                 self._renderer.on_tool_call(
                     pending["name"],
                     parsed_args,
@@ -437,7 +438,7 @@ class EventProcessor:
         # Handle chitchat/final responses through shared cleaner path
         if etype in {"soothe.output.chitchat.response", "soothe.output.autonomous.final_report"}:
             content = data.get("content", data.get("summary", ""))
-            if content and should_show("assistant_text", self._verbosity):
+            if content and should_show(VerbosityTier.QUIET, self._verbosity):
                 cleaned = self._clean_assistant_text(content)
                 if cleaned:
                     self._renderer.on_assistant_text(
@@ -447,7 +448,7 @@ class EventProcessor:
                     )
             return
 
-        category = classify_custom_event(namespace, data)
+        category = classify_event_to_tier(etype, namespace)
 
         # Check for multi-step plan
         if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
@@ -460,7 +461,7 @@ class EventProcessor:
             self._handle_plan_step_started(data)
         elif etype == PLAN_STEP_COMPLETED:
             self._handle_plan_step_completed(data)
-        elif category == "error" and should_show("error", self._verbosity):
+        elif category == VerbosityTier.QUIET and "error" in etype:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
         elif should_show(category, self._verbosity):

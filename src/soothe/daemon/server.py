@@ -545,17 +545,78 @@ class SootheDaemon(DaemonHandlersMixin):
 
     @staticmethod
     def is_running() -> bool:
-        """Check if a daemon is already running."""
+        """Check if a daemon is already running.
+
+        Checks multiple indicators:
+        1. PID file with valid process
+        2. Unix socket accepting connections
+        3. WebSocket port bound (if enabled)
+
+        This handles orphaned daemons where PID file was deleted but process still runs.
+        """
+        import socket as sock_mod
+
+        from soothe.config import SootheConfig
+
+        # 1. Check PID file first (fastest)
         pf = pid_path()
-        if not pf.exists():
-            return False
+        if pf.exists():
+            try:
+                pid = int(pf.read_text().strip())
+                os.kill(pid, 0)
+                return True
+            except (ValueError, ProcessLookupError, PermissionError):
+                cleanup_pid()
+                # Continue to check other indicators
+
+        # 2. Check Unix socket connectivity
+        sock = socket_path()
+        if sock.exists() and SootheDaemon._is_socket_live(sock):
+            return True
+
+        # 3. Check WebSocket port (if enabled in default config)
+        with contextlib.suppress(Exception):
+            cfg = SootheConfig()
+            if cfg.daemon.transports.websocket.enabled:
+                ws_port = cfg.daemon.transports.websocket.port
+                ws_host = cfg.daemon.transports.websocket.host
+                with contextlib.suppress(ConnectionRefusedError, OSError):
+                    s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
+                    s.settimeout(1.0)
+                    s.connect((ws_host, ws_port))
+                    s.close()
+                    return True
+
+        return False
+
+    @staticmethod
+    def _find_port_process(port: int, host: str = "127.0.0.1") -> int | None:
+        """Find PID of process listening on a TCP port using lsof.
+
+        Args:
+            port: TCP port number.
+            host: Bind address (used for logging, lsof checks all).
+
+        Returns:
+            PID if found, None otherwise.
+        """
+        import subprocess
+
         try:
-            pid = int(pf.read_text().strip())
-            os.kill(pid, 0)
-        except (ValueError, ProcessLookupError, PermissionError):
-            cleanup_pid()
-            return False
-        return True
+            result = subprocess.run(
+                ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                # lsof -t returns PIDs, one per line
+                pids = result.stdout.strip().split("\n")
+                if pids:
+                    return int(pids[0])
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            pass
+        return None
 
     @staticmethod
     def stop_running(timeout: float = _STOP_TIMEOUT_S) -> bool:
@@ -564,24 +625,80 @@ class SootheDaemon(DaemonHandlersMixin):
         Escalates to SIGKILL if the daemon does not exit within *timeout*
         seconds.
 
+        Handles zombie daemons where PID file is missing but process still runs:
+        1. First tries to stop via PID file
+        2. If no PID file, checks ports and kills process holding them
+
         Args:
             timeout: Maximum seconds to wait before SIGKILL escalation.
 
         Returns:
             True if a signal was sent and daemon stopped, False if no daemon found.
         """
-        import time
+        from soothe.config import SootheConfig
 
+        stopped = False
+        pid: int | None = None
+
+        # 1. Try to stop via PID file first
         pf = pid_path()
-        if not pf.exists():
-            return False
-        try:
-            pid = int(pf.read_text().strip())
-            os.kill(pid, signal.SIGTERM)
-        except (ValueError, ProcessLookupError, PermissionError):
-            cleanup_pid()
-            cleanup_socket()
-            return False
+        if pf.exists():
+            try:
+                pid = int(pf.read_text().strip())
+                os.kill(pid, signal.SIGTERM)
+                stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
+            except (ValueError, ProcessLookupError, PermissionError):
+                cleanup_pid()
+                # Continue to check ports
+
+        # 2. If PID file approach failed, check for zombie on ports
+        if not stopped:
+            with contextlib.suppress(Exception):
+                cfg = SootheConfig()
+                # Check WebSocket port
+                if cfg.daemon.transports.websocket.enabled:
+                    ws_port = cfg.daemon.transports.websocket.port
+                    pid = SootheDaemon._find_port_process(ws_port)
+                    if pid:
+                        os.kill(pid, signal.SIGTERM)
+                        stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
+
+                # Check Unix socket - find via lsof on macOS/Linux
+                if not stopped:
+                    sock = socket_path()
+                    if sock.exists():
+                        # Try to find process holding the socket file
+                        import subprocess
+
+                        with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+                            result = subprocess.run(
+                                ["lsof", "-t", str(sock)],
+                                capture_output=True,
+                                text=True,
+                                timeout=2.0,
+                            )
+                            if result.returncode == 0 and result.stdout.strip():
+                                pid = int(result.stdout.strip().split("\n")[0])
+                                os.kill(pid, signal.SIGTERM)
+                                stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
+
+        # 3. Cleanup regardless of outcome
+        cleanup_pid()
+        cleanup_socket()
+        return stopped
+
+    @staticmethod
+    def _wait_for_pid_exit(pid: int, timeout: float) -> bool:
+        """Wait for a process to exit, escalating to SIGKILL if needed.
+
+        Args:
+            pid: Process ID to wait for.
+            timeout: Maximum seconds before SIGKILL escalation.
+
+        Returns:
+            True if process exited, False if still running.
+        """
+        import time
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -589,8 +706,6 @@ class SootheDaemon(DaemonHandlersMixin):
                 os.kill(pid, 0)
                 time.sleep(0.2)
             except ProcessLookupError:
-                cleanup_pid()
-                cleanup_socket()
                 return True
             except PermissionError:
                 time.sleep(0.2)
@@ -606,8 +721,6 @@ class SootheDaemon(DaemonHandlersMixin):
                 os.kill(pid, 0)
                 time.sleep(0.1)
             except ProcessLookupError:
-                break
+                return True
 
-        cleanup_pid()
-        cleanup_socket()
-        return True
+        return False

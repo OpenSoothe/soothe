@@ -2,9 +2,9 @@
 
 **Purpose**: Complete catalog of Soothe progress event types (RFC-0015)
 **Status**: Reference Document
-**Last Updated**: 2026-03-27
+**Last Updated**: 2026-03-29
 
-This document provides the complete catalog of all Soothe progress event types. For event naming conventions, architecture, and design principles, see [RFC-0015](RFC-0015.md).
+This document provides the complete catalog of all Soothe progress event types. For event naming conventions, architecture, and design principles, see [RFC-0015](RFC-0015.md). For verbosity classification, see [RFC-0024](RFC-0024-verbosity-tier-unification.md).
 
 ## Event Naming Pattern
 
@@ -19,17 +19,17 @@ Domains: `lifecycle`, `protocol`, `cognition`, `tool`, `subagent`, `output`, `er
 
 ## Lifecycle Events
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.lifecycle.thread.created` | `thread_id: str` | protocol |
-| `soothe.lifecycle.thread.started` | `thread_id: str`, `protocols: dict` | protocol |
-| `soothe.lifecycle.thread.resumed` | `thread_id: str` | protocol |
-| `soothe.lifecycle.thread.saved` | `thread_id: str` | protocol |
-| `soothe.lifecycle.thread.ended` | `thread_id: str` | protocol |
-| `soothe.lifecycle.iteration.started` | `iteration: int`, `goal_id: str`, `goal_description: str`, `parallel_goals: int` | protocol |
-| `soothe.lifecycle.iteration.completed` | `iteration: int`, `goal_id: str`, `outcome: str`, `duration_ms: int` | protocol |
-| `soothe.lifecycle.checkpoint.saved` | `thread_id: str`, `completed_steps: int`, `completed_goals: int` | protocol |
-| `soothe.lifecycle.recovery.resumed` | `thread_id: str`, `completed_steps: list[str]`, `completed_goals: list[str]`, `mode: str` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.lifecycle.thread.created` | `thread_id: str` | DETAILED |
+| `soothe.lifecycle.thread.started` | `thread_id: str`, `protocols: dict` | DETAILED |
+| `soothe.lifecycle.thread.resumed` | `thread_id: str` | DETAILED |
+| `soothe.lifecycle.thread.saved` | `thread_id: str` | DETAILED |
+| `soothe.lifecycle.thread.ended` | `thread_id: str` | DETAILED |
+| `soothe.lifecycle.iteration.started` | `iteration: int`, `goal_id: str`, `goal_description: str`, `parallel_goals: int` | DETAILED |
+| `soothe.lifecycle.iteration.completed` | `iteration: int`, `goal_id: str`, `outcome: str`, `duration_ms: int` | DETAILED |
+| `soothe.lifecycle.checkpoint.saved` | `thread_id: str`, `completed_steps: int`, `completed_goals: int` | DETAILED |
+| `soothe.lifecycle.recovery.resumed` | `thread_id: str`, `completed_steps: list[str]`, `completed_goals: list[str]`, `mode: str` | DETAILED |
 
 ---
 
@@ -37,49 +37,49 @@ Domains: `lifecycle`, `protocol`, `cognition`, `tool`, `subagent`, `output`, `er
 
 ### Context Protocol
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.protocol.context.projected` | `entries: int`, `tokens: int` | protocol |
-| `soothe.protocol.context.ingested` | `source: str`, `content_preview: str` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.protocol.context.projected` | `entries: int`, `tokens: int` | DETAILED |
+| `soothe.protocol.context.ingested` | `source: str`, `content_preview: str` | DETAILED |
 
 ### Memory Protocol
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.protocol.memory.recalled` | `count: int`, `query: str` | protocol |
-| `soothe.protocol.memory.stored` | `id: str`, `source_thread: str` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.protocol.memory.recalled` | `count: int`, `query: str` | DETAILED |
+| `soothe.protocol.memory.stored` | `id: str`, `source_thread: str` | DETAILED |
 
 ### Plan Cognition
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.cognition.plan.created` | `goal: str`, `steps: list[StepDict]` | protocol |
-| `soothe.cognition.plan.step_started` | `step_id: str`, `description: str`, `depends_on: list[str]`, `batch_index: int?` | protocol |
-| `soothe.cognition.plan.step_completed` | `step_id: str`, `success: bool`, `result_preview: str?`, `duration_ms: int?` | protocol |
-| `soothe.cognition.plan.step_failed` | `step_id: str`, `error: str`, `blocked_steps: list[str]?`, `duration_ms: int?` | protocol |
-| `soothe.cognition.plan.batch_started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | protocol |
-| `soothe.cognition.plan.reflected` | `should_revise: bool`, `assessment: str` | protocol |
-| `soothe.cognition.plan.dag_snapshot` | `steps: list[StepDepDict]` | debug |
-| `soothe.cognition.plan.plan_only` | `thread_id: str`, `goal: str`, `step_count: int` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.cognition.plan.created` | `goal: str`, `steps: list[StepDict]` | NORMAL |
+| `soothe.cognition.plan.step_started` | `step_id: str`, `description: str`, `depends_on: list[str]`, `batch_index: int?` | NORMAL |
+| `soothe.cognition.plan.step_completed` | `step_id: str`, `success: bool`, `result_preview: str?`, `duration_ms: int?` | NORMAL |
+| `soothe.cognition.plan.step_failed` | `step_id: str`, `error: str`, `blocked_steps: list[str]?`, `duration_ms: int?` | NORMAL |
+| `soothe.cognition.plan.batch_started` | `batch_index: int`, `step_ids: list[str]`, `parallel_count: int` | NORMAL |
+| `soothe.cognition.plan.reflected` | `should_revise: bool`, `assessment: str` | DETAILED |
+| `soothe.cognition.plan.dag_snapshot` | `steps: list[StepDepDict]` | DEBUG |
+| `soothe.cognition.plan.plan_only` | `thread_id: str`, `goal: str`, `step_count: int` | NORMAL |
 
 ### Policy Protocol
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.protocol.policy.checked` | `action: str`, `verdict: str`, `profile: str` | protocol |
-| `soothe.protocol.policy.denied` | `action: str`, `reason: str`, `profile: str` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.protocol.policy.checked` | `action: str`, `verdict: str`, `profile: str` | DETAILED |
+| `soothe.protocol.policy.denied` | `action: str`, `reason: str`, `profile: str` | QUIET |
 
 ### Goal Cognition
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.cognition.goal.created` | `goal_id: str`, `description: str`, `priority: int\|str` | protocol |
-| `soothe.cognition.goal.completed` | `goal_id: str` | protocol |
-| `soothe.cognition.goal.failed` | `goal_id: str`, `error: str`, `retry_count: int` | protocol |
-| `soothe.cognition.goal.batch_started` | `goal_ids: list[str]`, `parallel_count: int` | protocol |
-| `soothe.cognition.goal.report` | `goal_id: str`, `step_count: int`, `completed: int`, `failed: int`, `summary: str` | protocol |
-| `soothe.cognition.goal.directives_applied` | `goal_id: str`, `directives_count: int`, `changes: list` | protocol |
-| `soothe.cognition.goal.deferred` | `goal_id: str`, `reason: str`, `plan_preserved: bool` | protocol |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.cognition.goal.created` | `goal_id: str`, `description: str`, `priority: int\|str` | NORMAL |
+| `soothe.cognition.goal.completed` | `goal_id: str` | QUIET |
+| `soothe.cognition.goal.failed` | `goal_id: str`, `error: str`, `retry_count: int` | QUIET |
+| `soothe.cognition.goal.batch_started` | `goal_ids: list[str]`, `parallel_count: int` | NORMAL |
+| `soothe.cognition.goal.report` | `goal_id: str`, `step_count: int`, `completed: int`, `failed: int`, `summary: str` | NORMAL |
+| `soothe.cognition.goal.directives_applied` | `goal_id: str`, `directives_count: int`, `changes: list` | DETAILED |
+| `soothe.cognition.goal.deferred` | `goal_id: str`, `reason: str`, `plan_preserved: bool` | DETAILED |
 
 ---
 
@@ -87,11 +87,11 @@ Domains: `lifecycle`, `protocol`, `cognition`, `tool`, `subagent`, `output`, `er
 
 ### Generic Tool Events
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.tool.{name}.started` | `tool: str`, `args: str?`, `kwargs: str?` | tool_activity |
-| `soothe.tool.{name}.completed` | `tool: str`, `result_preview: str?` | tool_activity |
-| `soothe.tool.{name}.failed` | `tool: str`, `error: str` | tool_activity |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.tool.{name}.started` | `tool: str`, `args: str?`, `kwargs: str?` | DETAILED |
+| `soothe.tool.{name}.completed` | `tool: str`, `result_preview: str?` | DETAILED |
+| `soothe.tool.{name}.failed` | `tool: str`, `error: str` | QUIET |
 
 Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, `execute`).
 
@@ -112,110 +112,111 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 ### Browser Subagent
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.browser.step` | `step: int\|str`, `url: str`, `action: str`, `title: str`, `is_done: bool` | subagent_progress |
-| `soothe.subagent.browser.cdp` | `status: str`, `cdp_url: str?` | subagent_progress |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.browser.step` | `step: int\|str`, `url: str`, `action: str`, `title: str`, `is_done: bool` | NORMAL |
+| `soothe.subagent.browser.cdp` | `status: str`, `cdp_url: str?` | NORMAL |
 
 ### Claude Subagent
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.claude.text` | `text: str` | subagent_custom |
-| `soothe.subagent.claude.tool_use` | `tool: str` | subagent_custom |
-| `soothe.subagent.claude.result` | `cost_usd: float`, `duration_ms: int` | subagent_custom |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.claude.text` | `text: str` | DETAILED |
+| `soothe.subagent.claude.tool_use` | `tool: str` | DETAILED |
+| `soothe.subagent.claude.result` | `cost_usd: float`, `duration_ms: int` | DETAILED |
 
 ### Research Subagent
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.research.analyze` | `topic: str` | subagent_custom |
-| `soothe.subagent.research.sub_questions` | `count: int`, `sub_questions: list[dict]` | subagent_custom |
-| `soothe.subagent.research.queries_generated` | `queries: list[str]` | subagent_custom |
-| `soothe.subagent.research.gather` | `query: str`, `domain: str` | subagent_custom |
-| `soothe.subagent.research.gather_done` | `query: str`, `result_count: int`, `sources_used: list[str]` | subagent_custom |
-| `soothe.subagent.research.summarize` | `total_summaries: int` | subagent_custom |
-| `soothe.subagent.research.reflect` | `loop: int` | subagent_custom |
-| `soothe.subagent.research.reflection_done` | `loop: int`, `is_sufficient: bool`, `follow_up_count: int` | subagent_custom |
-| `soothe.subagent.research.synthesize` | `topic: str`, `total_sources: int` | subagent_custom |
-| `soothe.subagent.research.completed` | `answer_length: int` | subagent_custom |
-| `soothe.subagent.research.internal_llm` | `response_type: str` | internal |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.research.analyze` | `topic: str` | DETAILED |
+| `soothe.subagent.research.sub_questions` | `count: int`, `sub_questions: list[dict]` | DETAILED |
+| `soothe.subagent.research.queries_generated` | `queries: list[str]` | DETAILED |
+| `soothe.subagent.research.gather` | `query: str`, `domain: str` | DETAILED |
+| `soothe.subagent.research.gather_done` | `query: str`, `result_count: int`, `sources_used: list[str]` | DETAILED |
+| `soothe.subagent.research.summarize` | `total_summaries: int` | DETAILED |
+| `soothe.subagent.research.reflect` | `loop: int` | DETAILED |
+| `soothe.subagent.research.reflection_done` | `loop: int`, `is_sufficient: bool`, `follow_up_count: int` | DETAILED |
+| `soothe.subagent.research.synthesize` | `topic: str`, `total_sources: int` | DETAILED |
+| `soothe.subagent.research.completed` | `answer_length: int` | DETAILED |
+| `soothe.subagent.research.internal_llm` | `response_type: str` | INTERNAL |
 
 ### Skillify Subagent
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.skillify.indexing_pending` | `query: str` | subagent_custom |
-| `soothe.subagent.skillify.retrieve_started` | `query: str` | subagent_custom |
-| `soothe.subagent.skillify.retrieve_completed` | `query: str`, `result_count: int`, `top_score: float` | subagent_custom |
-| `soothe.subagent.skillify.retrieve_not_ready` | `message: str` | subagent_custom |
-| `soothe.subagent.skillify.index_started` | `collection: str` | subagent_custom |
-| `soothe.subagent.skillify.index_updated` | `new: int`, `changed: int`, `deleted: int`, `total: int` | subagent_custom |
-| `soothe.subagent.skillify.index_unchanged` | `total: int` | subagent_custom |
-| `soothe.subagent.skillify.index_failed` | *(none)* | subagent_custom |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.skillify.indexing_pending` | `query: str` | DETAILED |
+| `soothe.subagent.skillify.retrieve_started` | `query: str` | DETAILED |
+| `soothe.subagent.skillify.retrieve_completed` | `query: str`, `result_count: int`, `top_score: float` | DETAILED |
+| `soothe.subagent.skillify.retrieve_not_ready` | `message: str` | DETAILED |
+| `soothe.subagent.skillify.index_started` | `collection: str` | DETAILED |
+| `soothe.subagent.skillify.index_updated` | `new: int`, `changed: int`, `deleted: int`, `total: int` | DETAILED |
+| `soothe.subagent.skillify.index_unchanged` | `total: int` | DETAILED |
+| `soothe.subagent.skillify.index_failed` | *(none)* | QUIET |
 
 ### Weaver Subagent
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.weaver.analysis_started` | `task_preview: str` | subagent_custom |
-| `soothe.subagent.weaver.analysis_completed` | `capabilities: list`, `constraints: list` | subagent_custom |
-| `soothe.subagent.weaver.reuse_hit` | `agent_name: str`, `confidence: float` | subagent_custom |
-| `soothe.subagent.weaver.reuse_miss` | `best_confidence: float` | subagent_custom |
-| `soothe.subagent.weaver.skillify_pending` | *(none)* | subagent_custom |
-| `soothe.subagent.weaver.harmonize_started` | `skill_count: int` | subagent_custom |
-| `soothe.subagent.weaver.harmonize_completed` | `retained: int`, `dropped: int`, `bridge_length: int` | subagent_custom |
-| `soothe.subagent.weaver.generate_started` | `agent_name: str` | subagent_custom |
-| `soothe.subagent.weaver.generate_completed` | `agent_name: str`, `path: str` | subagent_custom |
-| `soothe.subagent.weaver.validate_started` | `agent_name: str` | subagent_custom |
-| `soothe.subagent.weaver.validate_completed` | `agent_name: str` | subagent_custom |
-| `soothe.subagent.weaver.registry_updated` | `agent_name: str`, `version: str` | subagent_custom |
-| `soothe.subagent.weaver.execute_started` | `agent_name: str`, `task_preview: str` | subagent_custom |
-| `soothe.subagent.weaver.execute_completed` | `agent_name: str`, `result_length: int` | subagent_custom |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.weaver.analysis_started` | `task_preview: str` | DETAILED |
+| `soothe.subagent.weaver.analysis_completed` | `capabilities: list`, `constraints: list` | DETAILED |
+| `soothe.subagent.weaver.reuse_hit` | `agent_name: str`, `confidence: float` | DETAILED |
+| `soothe.subagent.weaver.reuse_miss` | `best_confidence: float` | DETAILED |
+| `soothe.subagent.weaver.skillify_pending` | *(none)* | DETAILED |
+| `soothe.subagent.weaver.harmonize_started` | `skill_count: int` | DETAILED |
+| `soothe.subagent.weaver.harmonize_completed` | `retained: int`, `dropped: int`, `bridge_length: int` | DETAILED |
+| `soothe.subagent.weaver.generate_started` | `agent_name: str` | DETAILED |
+| `soothe.subagent.weaver.generate_completed` | `agent_name: str`, `path: str` | DETAILED |
+| `soothe.subagent.weaver.validate_started` | `agent_name: str` | DETAILED |
+| `soothe.subagent.weaver.validate_completed` | `agent_name: str` | DETAILED |
+| `soothe.subagent.weaver.registry_updated` | `agent_name: str`, `version: str` | DETAILED |
+| `soothe.subagent.weaver.execute_started` | `agent_name: str`, `task_preview: str` | DETAILED |
+| `soothe.subagent.weaver.execute_completed` | `agent_name: str`, `result_length: int` | DETAILED |
 
 ### Generic Subagent Tool Events
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.subagent.{agent}.tool_started` | `tool: str`, `args: str?`, `kwargs: str?` | subagent_custom |
-| `soothe.subagent.{agent}.tool_completed` | `tool: str`, `result_preview: str?` | subagent_custom |
-| `soothe.subagent.{agent}.tool_failed` | `tool: str`, `error: str` | subagent_custom |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.subagent.{agent}.tool_started` | `tool: str`, `args: str?`, `kwargs: str?` | DETAILED |
+| `soothe.subagent.{agent}.tool_completed` | `tool: str`, `result_preview: str?` | DETAILED |
+| `soothe.subagent.{agent}.tool_failed` | `tool: str`, `error: str` | QUIET |
 
 ---
 
 ## Output Events
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.output.chitchat.started` | `query: str` | protocol |
-| `soothe.output.chitchat.response` | `content: str` | assistant_text |
-| `soothe.output.autonomous.final_report` | `goal_id: str`, `description: str`, `status: str`, `summary: str` | assistant_text |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.output.chitchat.started` | `query: str` | DETAILED |
+| `soothe.output.chitchat.response` | `content: str` | QUIET |
+| `soothe.output.autonomous.final_report` | `goal_id: str`, `description: str`, `status: str`, `summary: str` | QUIET |
 
 ---
 
 ## Error Events
 
-| Type | Fields | Verbosity |
-|------|--------|-----------|
-| `soothe.error.general` | `error: str` | error |
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.error.general` | `error: str` | QUIET |
 
 ---
 
 ## Verbosity Classification
 
-Events are classified into verbosity categories that determine visibility:
+Events are classified into VerbosityTier values (RFC-0024) that determine visibility:
 
-| Domain | Default Verbosity | Description |
-|--------|-------------------|-------------|
-| `lifecycle` | protocol | Thread and session lifecycle events |
-| `protocol` | protocol | Core protocol activity events |
-| `tool` | tool_activity | Main agent tool execution events |
-| `subagent` | subagent_custom | Subagent activity (promoted events use `subagent_progress`) |
-| `output` | assistant_text | Content destined for user display |
-| `error` | error | Error events (always shown) |
+| Domain | Default VerbosityTier | Description |
+|--------|----------------------|-------------|
+| `lifecycle` | DETAILED | Thread and session lifecycle events |
+| `protocol` | DETAILED | Core protocol activity events |
+| `cognition` | NORMAL | Plan and goal cognition events |
+| `tool` | DETAILED | Main agent tool execution events |
+| `subagent` | DETAILED | Subagent activity (promoted events use `NORMAL`) |
+| `output` | QUIET | Content destined for user display |
+| `error` | QUIET | Error events (always shown) |
 
-**Note**: Some subagent events (e.g., browser step events) are promoted to `subagent_progress` verbosity for visibility at normal verbosity level.
+**Note**: Some subagent events (e.g., browser step events) are promoted to `NORMAL` verbosity for visibility at normal verbosity level.
 
 ---
 
-**See Also**: [RFC-0015](RFC-0015.md) for event architecture and design principles.
+**See Also**: [RFC-0015](RFC-0015.md) for event architecture, [RFC-0024](RFC-0024-verbosity-tier-unification.md) for VerbosityTier specification.

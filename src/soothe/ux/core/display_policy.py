@@ -32,14 +32,18 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Literal
+from typing import Any
+
+from soothe.core.verbosity_tier import (
+    VerbosityLevel,
+    VerbosityTier,
+    classify_event_to_tier,
+    should_show,
+)
 
 # =============================================================================
 # Type Definitions
 # =============================================================================
-
-VerbosityLevel = Literal["quiet", "normal", "detailed", "debug"]
 
 
 QUIET_ALIAS = "minimal"
@@ -52,22 +56,6 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
     if verbosity in {"quiet", "normal", "detailed", "debug"}:
         return verbosity
     return "normal"
-
-
-class EventCategory(Enum):
-    """Categories for event filtering decisions."""
-
-    ASSISTANT_TEXT = auto()  # Main assistant responses
-    PLAN_UPDATE = auto()  # User-facing plan summaries
-    MILESTONE = auto()  # User-facing completion milestones
-    PROTOCOL = auto()  # Protocol/lifecycle events
-    TOOL_ACTIVITY = auto()  # Tool calls and results
-    SUBAGENT_PROGRESS = auto()  # Subagent progress updates
-    SUBAGENT_CUSTOM = auto()  # Custom subagent events
-    THINKING = auto()  # Internal thinking/heartbeat
-    ERROR = auto()  # Error events
-    DEBUG = auto()  # Debug-level events
-    INTERNAL = auto()  # Internal events - NEVER shown
 
 
 # =============================================================================
@@ -220,86 +208,20 @@ class DisplayPolicy:
             return False
 
         # Classify and check verbosity
-        category = self._classify_event(event_type, namespace)
-        return self._should_show_category(category)
+        tier = self._classify_event(event_type, namespace)
+        return self._should_show_tier(tier)
 
     def _classify_event(
         self,
         event_type: str,
         namespace: tuple[str, ...] = (),
-    ) -> EventCategory:
-        """Classify an event into a category for filtering."""
-        if event_type in PLAN_EVENT_TYPES:
-            if event_type in MILESTONE_EVENT_TYPES:
-                return EventCategory.MILESTONE
-            return EventCategory.PLAN_UPDATE
+    ) -> VerbosityTier:
+        """Classify an event directly to a VerbosityTier."""
+        return classify_event_to_tier(event_type, namespace)
 
-        # Non-soothe events
-        if not event_type.startswith("soothe."):
-            if namespace:
-                if "thinking" in event_type or "heartbeat" in event_type:
-                    return EventCategory.THINKING
-                return EventCategory.SUBAGENT_CUSTOM
-            if "thinking" in event_type or "heartbeat" in event_type:
-                return EventCategory.THINKING
-            return EventCategory.DEBUG
-
-        # Extract domain from event type
-        segments = event_type.split(".")
-        domain = segments[1] if len(segments) >= 2 else "unknown"  # noqa: PLR2004
-
-        if domain == "error":
-            return EventCategory.ERROR
-        if domain == "output":
-            return EventCategory.ASSISTANT_TEXT
-        if domain == "tool":
-            if "internal" in event_type:
-                return EventCategory.INTERNAL
-            return EventCategory.TOOL_ACTIVITY
-        if domain == "subagent":
-            if "thinking" in event_type or "heartbeat" in event_type:
-                return EventCategory.THINKING
-            if event_type.endswith((".step", ".completed", ".tool_use")):
-                return EventCategory.SUBAGENT_PROGRESS
-            return EventCategory.SUBAGENT_CUSTOM
-        if domain in ("lifecycle", "protocol", "cognition"):
-            return EventCategory.PROTOCOL
-
-        return EventCategory.PROTOCOL
-
-    def _should_show_category(self, category: EventCategory) -> bool:
-        """Check if a category should be shown at current verbosity."""
-        if category == EventCategory.INTERNAL:
-            return False
-
-        if self.verbosity == "debug":
-            return True
-
-        if self.verbosity == "detailed":
-            return category in {
-                EventCategory.ASSISTANT_TEXT,
-                EventCategory.PLAN_UPDATE,
-                EventCategory.MILESTONE,
-                EventCategory.PROTOCOL,
-                EventCategory.SUBAGENT_PROGRESS,
-                EventCategory.SUBAGENT_CUSTOM,
-                EventCategory.TOOL_ACTIVITY,
-                EventCategory.ERROR,
-            }
-
-        if self.verbosity == "normal":
-            return category in {
-                EventCategory.ASSISTANT_TEXT,
-                EventCategory.PLAN_UPDATE,
-                EventCategory.MILESTONE,
-                EventCategory.SUBAGENT_PROGRESS,
-                EventCategory.ERROR,
-            }
-
-        return category in {
-            EventCategory.ASSISTANT_TEXT,
-            EventCategory.ERROR,
-        }
+    def _should_show_tier(self, tier: VerbosityTier) -> bool:
+        """Check if a tier should be shown at current verbosity."""
+        return should_show(tier, self.verbosity)
 
     # ==========================================================================
     # Internal Context Tracking
@@ -352,7 +274,7 @@ class DisplayPolicy:
             return False
 
         # Check verbosity
-        return self._should_show_category(EventCategory.ASSISTANT_TEXT)
+        return self._should_show_tier(VerbosityTier.QUIET)
 
     def filter_content(self, text: str) -> str:
         """Filter internal content from text for display."""
@@ -641,7 +563,7 @@ __all__ = [
     "INTERNAL_JSON_KEYS",
     "SKIP_EVENT_TYPES",
     "DisplayPolicy",
-    "EventCategory",
     "VerbosityLevel",
+    "VerbosityTier",
     "create_display_policy",
 ]

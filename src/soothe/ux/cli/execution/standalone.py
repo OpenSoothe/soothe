@@ -272,10 +272,10 @@ async def run_headless_standalone(
     from langchain_core.messages import AIMessage, ToolMessage
 
     from soothe.core.runner import SootheRunner
+    from soothe.core.verbosity_tier import VerbosityTier, classify_event_to_tier, should_show
     from soothe.daemon.thread_logger import ThreadLogger
     from soothe.utils import expand_path, set_workspace_root
     from soothe.ux.cli.progress import render_progress_event
-    from soothe.ux.core.progress_verbosity import classify_custom_event, should_show
     from soothe.ux.core.rendering import resolve_namespace_label
 
     # Set workspace root for path display conversion
@@ -380,8 +380,8 @@ async def run_headless_standalone(
                     # Check for multi-step plan creation
                     if is_multi_step_plan(data):
                         state.multi_step_active = True
-                    category = classify_custom_event(namespace, data)
-                    if should_show(category, verbosity):
+                    tier = classify_event_to_tier(etype, namespace)
+                    if should_show(tier, verbosity):
                         # Add newline before stderr output if needed
                         if formatter.needs_stdout_newline:
                             sys.stdout.write("\n")
@@ -389,7 +389,7 @@ async def run_headless_standalone(
                             formatter.needs_stdout_newline = False
                         prefix = resolve_namespace_label(namespace, state.name_map) if namespace else None
                         render_progress_event(etype, data, prefix=prefix)
-                    if category == "error":
+                    if tier == VerbosityTier.QUIET and "error" in etype:
                         state.has_error = True
 
             if mode == "messages":

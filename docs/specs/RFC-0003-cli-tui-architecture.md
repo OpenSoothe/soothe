@@ -306,7 +306,7 @@ Activity and event rendering are handled by the RFC-0019 event processor and TUI
   - Does not show streamed partial tokens, protocol events, tool activity, or subagent text.
 - ActivityInfo is the progress surface:
   - Shows the last 5 lines of activity (protocol `soothe.*` events, tool call/result lines, subagent custom events, and subagent text summaries).
-  - Applies `progress_verbosity` filtering (`minimal`, `normal`, `detailed`, `debug`) for both TUI and headless text output.
+  - Applies `VerbosityTier` filtering (`quiet`, `normal`, `detailed`, `debug`) for both TUI and headless text output (RFC-0024).
   - Browser progress is surfaced via structured `soothe.browser.step` events like other subagents.
   - Compact borderless display maximizes screen space for conversation.
 

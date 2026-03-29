@@ -96,13 +96,13 @@ class ThreadLogger:
             data: Stream data payload.
         """
         if mode == "custom" and isinstance(data, dict):
-            from soothe.ux.core.progress_verbosity import classify_custom_event
+            from soothe.core.verbosity_tier import classify_event_to_tier
 
             record: dict[str, Any] = {
                 "timestamp": datetime.now(UTC).isoformat(),
                 "kind": "event",
                 "namespace": list(namespace),
-                "classification": classify_custom_event(namespace, data),
+                "classification": classify_event_to_tier(data.get("type", ""), namespace),
                 "data": data,
             }
             self._write_record(record)

@@ -4,9 +4,10 @@
 |-------|-------|
 | **Status** | Implemented |
 | **Created** | 2026-03-26 |
+| **Updated** | 2026-03-29 |
 | **Author** | Soothe Team |
 | **Supersedes** | - |
-| **Related** | RFC-0003 (TUI), RFC-0015 (Event Rendering) |
+| **Related** | RFC-0003 (TUI), RFC-0015 (Event Rendering), RFC-0024 (VerbosityTier) |
 
 ## Summary
 
@@ -35,7 +36,7 @@ This resulted in:
 │                    EventProcessor                        │
 │  - Unified event routing                                │
 │  - State management (deduplication, streaming)          │
-│  - Verbosity filtering                                  │
+│  - Verbosity filtering (RFC-0024 VerbosityTier)        │
 │  - Plan state tracking                                  │
 └─────────────────────┬───────────────────────────────────┘
                       │
@@ -161,7 +162,7 @@ Unit tests verify:
 - Event routing to correct callbacks
 - State management (deduplication, streaming accumulation)
 - Plan event handling
-- Verbosity-based filtering
+- Verbosity-based filtering (see RFC-0024 for VerbosityTier specification)
 - Thread change session clearing
 
 See `tests/unit/test_event_processor.py`.

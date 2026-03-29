@@ -85,6 +85,7 @@ class PluginHealthCheckedEvent(SootheEvent):
 # Register all plugin events with the global registry
 # This happens at module load time
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     PluginLoadedEvent,
@@ -92,7 +93,7 @@ register_event(
 )
 register_event(
     PluginFailedEvent,
-    verbosity="error",
+    verbosity=VerbosityTier.QUIET,
     summary_template="Plugin {name} failed during {phase}: {error}",
 )
 register_event(

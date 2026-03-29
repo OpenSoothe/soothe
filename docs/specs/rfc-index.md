@@ -31,6 +31,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | Foundation | RFC-0018, RFC-0019 |
 | [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | Foundation | RFC-0013, RFC-0015 |
 | [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Draft | **Layer 1** | RFC-0001, RFC-0002 |
+| [RFC-0024](./RFC-0024-verbosity-tier-unification.md) | VerbosityTier Unification | Draft | Foundation | RFC-0015 |
 
 ### Implementation Interface Design
 
@@ -43,7 +44,7 @@ This document provides an index of all RFCs in this project.
 
 | Document | Purpose | Lines |
 |----------|---------|-------|
-| [event-catalog.md](./event-catalog.md) | Complete event type registry extracted from RFC-0015 | 228 |
+| [event-catalog.md](./event-catalog.md) | Complete event type registry with VerbosityTier classification | 228 |
 | [rest-api-spec.md](./rest-api-spec.md) | HTTP REST API specification extracted from RFC-0013 | 453 |
 
 ## Dependency Graph
@@ -58,7 +59,8 @@ RFC-0001 (System Conceptual Design)
 │   │   ├── RFC-0013 (Unified Daemon Protocol)
 │   │   └── RFC-0019 (Unified Event Processing) [depends on RFC-0015]
 │   ├── RFC-0015 (Progress Event Protocol) [depends on RFC-0003, RFC-0013]
-│   │   └── RFC-0020 (Event Display Architecture) [depends on RFC-0013]
+│   │   ├── RFC-0020 (Event Display Architecture) [depends on RFC-0013]
+│   │   └── RFC-0024 (VerbosityTier Unification)
 │   ├── RFC-0016 (Tool Interface Optimization)
 │   ├── RFC-0007 (Layer 3: Autonomous Goal Management) [Layer 3 foundation]
 │   │   ├── RFC-0008 (Layer 2: Agentic Goal Execution) [Layer 2 foundation]
@@ -85,10 +87,10 @@ RFC-0001 (System Conceptual Design)
 
 ## RFC Status Summary
 
-- **Total RFCs**: 21
+- **Total RFCs**: 22
 - **Implemented**: 16
 - **Revised**: 2 (RFC-0007, RFC-0008)
-- **Draft**: 4 (RFC-0009, RFC-0010, RFC-0020, RFC-0023)
+- **Draft**: 5 (RFC-0009, RFC-0010, RFC-0020, RFC-0023, RFC-0024)
 - **Deprecated**: 0 (RFC-0011 merged into RFC-0007 and removed)
 
 ## Line Count Summary (After Compaction)
@@ -108,6 +110,21 @@ All RFCs are now under the target limits:
 
 ## Recent Changes (2026-03-29)
 
+- Created RFC-0024 (VerbosityTier Unification)
+  - Replaces two-layer classification with unified VerbosityTier enum
+  - Eliminates ProgressCategory and EventCategory duplicate enums
+  - Simplifies classification from ~117 lines to ~25 lines
+  - Uses integer comparison (`tier <= verbosity`) instead of set membership
+- Updated RFC-0015 to reference RFC-0024 VerbosityTier
+  - EventMeta.verbosity now uses VerbosityTier enum
+  - Domain defaults use tier values (QUIET, NORMAL, DETAILED, DEBUG, INTERNAL)
+- Updated RFC-0020 to use VerbosityTier classification
+  - Event registration examples now use VerbosityTier values
+  - Verbosity behavior tables updated to tier-based visibility
+- Updated RFC-0022 daemon-side filtering to use VerbosityTier
+  - VerbosityLevel values changed: `minimal` → `quiet`
+  - Import paths updated to verbosity_tier.py
+- Updated event-catalog.md to use VerbosityTier column headers
 - Established three-layer architecture foundation
 - Revised RFC-0007 (Layer 3: Autonomous Goal Management Loop)
 - Revised RFC-0008 (Layer 2: Agentic Goal Execution Loop)

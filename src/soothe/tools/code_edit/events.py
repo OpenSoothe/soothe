@@ -59,25 +59,26 @@ class DiffAppliedEvent(ToolEvent):
 
 # Register all code_edit events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     FileEditStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Editing: {path}",
 )
 register_event(
     FileEditCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Edited: +{lines_added}/-{lines_removed} lines",
 )
 register_event(
     FileEditFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Edit failed: {error}",
 )
 register_event(
     DiffAppliedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Applied diff to {path}",
 )
 

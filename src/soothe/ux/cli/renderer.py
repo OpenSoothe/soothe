@@ -11,11 +11,11 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from soothe.core.verbosity_tier import VerbosityTier, should_show
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.cli.utils import make_tool_block
 from soothe.ux.core.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.core.message_processing import format_tool_call_args
-from soothe.ux.core.progress_verbosity import should_show
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -121,7 +121,7 @@ class CliRenderer:
             tool_call_id: Tool call identifier.
             is_main: True if from main agent.
         """
-        if not should_show("protocol", self._verbosity):
+        if not should_show(VerbosityTier.NORMAL, self._verbosity):
             return
 
         self._ensure_newline()
@@ -159,7 +159,7 @@ class CliRenderer:
             is_error: True if result indicates error.
             is_main: True if from main agent.
         """
-        if not should_show("protocol", self._verbosity):
+        if not should_show(VerbosityTier.NORMAL, self._verbosity):
             return
 
         self._ensure_newline()

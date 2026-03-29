@@ -79,35 +79,36 @@ class WebsearchCrawlFailedEvent(ToolEvent):
 
 # Register all websearch events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     WebsearchSearchStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Searching: {query}",
 )
 register_event(
     WebsearchSearchCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Found {result_count} results",
 )
 register_event(
     WebsearchSearchFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Search failed: {error}",
 )
 register_event(
     WebsearchCrawlStartedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Crawling: {url}",
 )
 register_event(
     WebsearchCrawlCompletedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Crawl complete: {content_length} bytes",
 )
 register_event(
     WebsearchCrawlFailedEvent,
-    verbosity="tool_activity",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Crawl failed: {error}",
 )
 

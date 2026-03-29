@@ -138,15 +138,16 @@ class ResearchInternalLLMResponseEvent(SootheEvent):
 
 # Register all research events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
+from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
 register_event(
     ResearchDispatchedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Research: {topic}",
 )
 register_event(
     ResearchCompletedEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
 register_event(ResearchAnalyzeEvent, summary_template="Analyzing: {topic}")
@@ -163,7 +164,7 @@ register_event(
 register_event(ResearchSynthesizeEvent, summary_template="Synthesizing findings")
 register_event(
     ResearchInternalLLMResponseEvent,
-    verbosity="internal",
+    verbosity=VerbosityTier.INTERNAL,
     summary_template="Internal: {response_type}",
 )
 
