@@ -9,7 +9,7 @@
 
 ## Abstract
 
-This RFC defines the architecture for autonomous iterative execution in Soothe. It introduces a runner-level outer loop that enables multi-iteration, self-driven agent operation -- where the agent executes a plan, reflects on results, revises the plan, and continues without requiring human input at each step. A lightweight GoalEngine manages goal lifecycle, and the agent can self-create new goals during execution.
+This RFC defines the architecture for autonomous iterative execution in Soothe. The implementation now combines the original runner-level outer loop with later DAG-aware goal scheduling, step-loop execution, checkpoint-backed recovery, and dynamic goal directives. In current Soothe, autonomous mode executes batches of ready goals, reflects on results, may revise plans or mutate the goal graph, and continues without requiring human input at each step.
 
 ## Motivation
 
@@ -49,73 +49,84 @@ Failed iterations retry with exponential backoff before marking a goal as failed
 
 ### Execution Flow
 
-```
+```text
 User Input
     |
     v
 GoalEngine.create_goal(user_input)
     |
     v
-while goal = GoalEngine.next_goal():
+while total_iterations < max_iterations and not GoalEngine.is_complete():
     |
     v
-    PlannerProtocol.create_plan(goal)
+    ready_goals = GoalEngine.ready_goals(limit=max_parallel_goals)
     |
-    v
-    for iteration in range(max_iterations):
-        |
-        +-- Pre-Stream (context, memory, policy)
-        |
-        +-- deepagents Graph Stream (unchanged)
-        |
-        +-- Post-Stream (ingest, persist)
-        |
-        +-- Store IterationRecord in ContextProtocol
-        |
-        +-- PlannerProtocol.reflect()
-        |
-        +-- if should_revise:
-        |       PlannerProtocol.revise_plan()
-        |       Synthesize continuation prompt (LLM call)
-        |       Continue loop
-        |
-        +-- else:
-                GoalEngine.complete_goal()
-                Break to next goal
+    +-- if multiple ready goals:
+    |      execute goals in parallel batches
+    |
+    +-- for each executing goal:
+           |
+           +-- Pre-goal recall/projection
+           |
+           +-- PlannerProtocol.create_plan(...) if needed
+           |
+           +-- if plan has multiple steps:
+           |      StepScheduler / step loop executes the plan DAG
+           |   else:
+           |      deepagents Graph Stream (unchanged)
+           |
+           +-- Post-goal ingest / memory store
+           |
+           +-- PlannerProtocol.reflect(..., goal_context)
+           |
+           +-- Apply goal directives if present
+           |
+           +-- Store IterationRecord in ContextProtocol
+           |
+           +-- if should_revise:
+           |      PlannerProtocol.revise_plan()
+           |      continue on next autonomous iteration
+           |
+           +-- else:
+                  synthesize goal report
+                  GoalEngine.complete_goal()
 ```
+
+Current implementation note: autonomous execution is no longer purely serial. Goal batching, goal dependencies, step scheduling, and progressive checkpoints from later RFCs are part of the implemented runtime.
 
 ### Components
 
-#### 1. GoalEngine (`core/goal_engine.py`)
+#### 1. GoalEngine (`cognition/goal_engine.py`)
 
-Lightweight goal lifecycle manager. No separate scheduling thread -- the runner drives it synchronously.
+Goal lifecycle manager driven synchronously by the runner.
 
-**Goal Model**:
+**Current Goal Model**:
 - `id`: 8-char hex identifier
 - `description`: human-readable goal text
 - `status`: pending | active | completed | failed
 - `priority`: 0-100, higher = first
 - `parent_id`: optional parent for hierarchical goals
+- `depends_on`: prerequisite goal IDs for DAG scheduling
+- `plan_count`: counter used for revised plan IDs
 - `retry_count` / `max_retries`: retry policy
+- `report`: optional structured `GoalReport`
 - `created_at` / `updated_at`: timestamps
 
-**GoalEngine Interface**:
+**Current GoalEngine Interface**:
 - `create_goal(description, priority, parent_id)` -- create a new goal
-- `next_goal()` -- return highest-priority pending/active goal
+- `next_goal()` -- backward-compatible single-goal helper
+- `ready_goals(limit)` -- return dependency-satisfied goals, activating them for execution
 - `complete_goal(goal_id)` -- mark goal completed
-- `fail_goal(goal_id, error, allow_retry)` -- fail with optional retry
-- `list_goals(status)` -- list goals filtered by status
-- `persist(thread_id)` / `restore(thread_id)` -- save/load via DurabilityProtocol
+- `fail_goal(goal_id, error, allow_retry)` -- fail with optional retry/reset
+- `list_goals(status)` / `get_goal(goal_id)` -- inspect goal state
+- `snapshot()` / `restore_from_snapshot()` -- checkpoint-oriented persistence
+- dependency helpers such as `add_dependencies()` and `validate_dependency()`
 
-**Note**: RFC-0009 extends `GoalEngine` with `depends_on` field and `ready_goals()` method for DAG-based goal scheduling with parallel execution of independent goals.
+Persistence: current autonomous persistence is checkpoint-backed. The runner stores `GoalEngine.snapshot()` inside checkpoint state and restores via `restore_from_snapshot()` rather than calling RFC-0007's older `persist(thread_id)` / `restore(thread_id)` methods.
 
-**Note**: RFC-0011 extends reflection with dynamic goal management capabilities, enabling planners to spawn new goals, adjust priorities, and restructure the goal DAG during execution.
+#### 2. Runner Iteration Loop (`core/runner/*`)
 
-Persistence: goals serialized as JSON and saved via `DurabilityProtocol.save_state()`. In-memory dict + priority-sorted list for O(1) next-goal selection.
-
-#### 2. Runner Iteration Loop (`core/runner.py`)
-
-Enhanced `SootheRunner.astream()` with two new parameters:
+`SootheRunner.astream()` still accepts autonomous execution parameters:
 
 ```python
 async def astream(
@@ -128,18 +139,18 @@ async def astream(
 ) -> AsyncGenerator[StreamChunk, None]:
 ```
 
-When `autonomous=False` (default), behavior is unchanged -- full backward compatibility.
+When `autonomous=False` (default), behavior is unchanged.
 
-When `autonomous=True`:
-1. Creates initial goal from user_input via GoalEngine
-2. Outer loop: `while goal := goal_engine.next_goal()`
-3. Inner loop: per-goal iteration up to `max_iterations`
-4. Each iteration: pre-stream -> stream -> post-stream -> journal -> reflect
-5. On `should_revise=True`: revise plan, synthesize continuation, loop
-6. On `should_revise=False`: complete goal, break to outer loop
-7. On error: retry with backoff, then fail goal and continue
+When `autonomous=True`, the current runner:
+1. Creates the initial root goal from `user_input`
+2. Repeatedly fetches dependency-satisfied goal batches via `ready_goals(limit=max_parallel_goals)`
+3. Executes one goal or a parallel batch of goals until total autonomous iterations are exhausted
+4. For each goal: performs recall/projection, creates or reuses a plan, executes either a step loop or a single stream pass, stores iteration records, reflects, and possibly revises the plan
+5. On `should_revise=True`: keeps the goal active for a later autonomous iteration and stores the revised plan
+6. On completion: synthesizes a structured goal report, marks the goal completed, and checkpoints state
+7. On error: retries with exponential backoff, then permanently fails the goal when retries are exhausted
 
-**Note**: RFC-0009 introduces `StepScheduler` for DAG-based step execution, replacing the single-pass approach. Multiple plan steps are now iterated via a step loop, with independent steps executing in parallel.
+Current implementation note: the helper for continuation prompt synthesis still exists, but the active autonomous loop does not currently feed a synthesized continuation prompt back into `current_input` between iterations.
 
 #### 3. IterationRecord (journal)
 
@@ -159,40 +170,58 @@ Stored as a `ContextEntry` with tag `"iteration_record"` and high importance (0.
 
 #### 4. Continuation Synthesizer
 
-Between iterations, a lightweight LLM call generates the next "user input" for the agent:
+A helper still exists for generating a concise next-iteration instruction using `SootheConfig.create_chat_model("fast")` (falling back to `default`). It uses the original goal, iteration history, and revised plan. However, in the current autonomous runner this synthesizer is not actively wired into iteration input updates between revisions.
 
-Uses `SootheConfig.create_chat_model("fast")` with the prompt: "Given the original goal, iteration history, and revised plan, generate a concise instruction for the next iteration."
+#### 5. Goal Management Tools
 
-#### 5. `manage_goals` Tool
+The current implementation exposes separate langchain tools rather than a single `manage_goals` tool:
+- `create_goal`
+- `list_goals`
+- `complete_goal`
+- `fail_goal`
 
-A langchain `BaseTool` that enables the agent to self-create, list, and complete goals during execution. This is how the agent becomes truly self-driven -- it can decompose its work into sub-goals mid-execution.
+These tools are bound to the active `GoalEngine` and allow autonomous execution to manage goal state explicitly.
 
 ## Stream Events
 
-New custom events for observability:
+Current autonomous-mode observability uses RFC-0015-style event names:
 
 | Type | Fields | Description |
 |------|--------|-------------|
-| `soothe.iteration.started` | `iteration`, `goal_id`, `goal_description` | Iteration began |
-| `soothe.iteration.completed` | `iteration`, `goal_id`, `outcome`, `duration_ms` | Iteration finished |
-| `soothe.goal.created` | `goal_id`, `description`, `priority` | Goal created |
-| `soothe.goal.completed` | `goal_id` | Goal completed |
-| `soothe.goal.failed` | `goal_id`, `error`, `retry_count` | Goal failed |
+| `soothe.lifecycle.iteration.started` | `iteration`, `goal_id`, `goal_description`, `parallel_goals` | Autonomous goal iteration began |
+| `soothe.lifecycle.iteration.completed` | `iteration`, `goal_id`, `outcome`, `duration_ms` | Autonomous goal iteration finished |
+| `soothe.cognition.goal.created` | `goal_id`, `description`, `priority` | Goal created |
+| `soothe.cognition.goal.batch_started` | `goal_ids`, `parallel_count` | Parallel batch of ready goals began |
+| `soothe.cognition.goal.completed` | `goal_id` | Goal completed |
+| `soothe.cognition.goal.failed` | `goal_id`, `error`, `retry_count` | Goal failed |
+| `soothe.cognition.goal.directives_applied` | `goal_id`, `directives_count`, `changes` | Reflection directives mutated the goal graph |
+| `soothe.cognition.goal.deferred` | `goal_id`, `reason`, `plan_preserved` | Current goal was deferred after DAG changes |
+| `soothe.cognition.goal.report` | `goal_id`, `step_count`, `completed`, `failed`, `summary` | Structured goal report emitted |
+| `soothe.output.autonomous.final_report` | `goal_id`, `description`, `status`, `summary` | Final autonomous report for the root goal |
 
 ## Configuration
 
-Two new fields on `SootheConfig`:
+Current autonomous configuration lives under the nested `autonomous` section:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `autonomous_max_iterations` | `int` | `10` | Max iterations per autonomous session |
-| `autonomous_max_retries` | `int` | `2` | Max retries per goal before permanent failure |
+| `autonomous.enabled_by_default` | `bool` | `false` | Whether new threads default to autonomous mode |
+| `autonomous.max_iterations` | `int` | `10` | Max autonomous iterations per thread |
+| `autonomous.max_retries` | `int` | `2` | Max retries per goal before permanent failure |
+| `autonomous.max_total_goals` | `int` | `50` | Max goals allowed during dynamic goal management |
+| `autonomous.max_goal_depth` | `int` | `5` | Max hierarchical goal depth |
+| `autonomous.enable_dynamic_goals` | `bool` | `true` | Enable/disable dynamic goal directives |
+
+Autonomous execution also depends on execution-level concurrency and recovery settings such as `execution.concurrency.max_parallel_goals`, `execution.concurrency.max_parallel_steps`, and `execution.recovery.progressive_checkpoints`.
 
 ## CLI Integration
 
-New flags on `soothe run`:
-- `--autonomous` / `-a`: Enable autonomous iteration mode
-- `--max-iterations`: Override `autonomous_max_iterations`
+Current CLI/autonomous entry surfaces are:
+- `soothe autopilot run <prompt>`
+- `--max-iterations` on the autopilot command
+- TUI `/autopilot` command parsing for autonomous execution
+
+The runner and daemon protocol still accept `autonomous=True` and `max_iterations`, but the primary CLI surface is now the dedicated `autopilot` command group rather than `soothe run --autonomous`.
 
 ## Constraints
 

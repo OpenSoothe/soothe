@@ -4,34 +4,33 @@
 **Title**: Agentic Loop Execution Architecture
 **Status**: Draft
 **Created**: 2026-03-16
-**Updated**: 2026-03-27
-**Related**: RFC-0001, RFC-0002, RFC-0003, RFC-0007, RFC-0009, RFC-0012
+**Updated**: 2026-03-29
+**Related**: RFC-0001, RFC-0002, RFC-0003, RFC-0007, RFC-0009, RFC-0010, RFC-0012, RFC-0015
 
 ## Abstract
 
-This RFC defines Soothe's default execution architecture based on the **Claude-CLI-style Agentic Loop** (LoopAgent): **PLAN → ACT → JUDGE**. This iterative loop replaces the previous observe-act-verify model with explicit LLM-based judgment using structured outputs, enabling reliable evaluation of tool success, goal completion, and strategy adjustment. The architecture maintains sub-second responses for simple queries through a chitchat fast path while providing intelligent iteration for complex tasks without the overhead of explicit goal management required in Autonomous mode (RFC-0007).
+This RFC documents Soothe's current default non-autonomous execution architecture. Today, Soothe routes non-chitchat queries into an **agentic loop** in `SootheRunner`, but the active runtime is still primarily an **observe → act → verify** loop backed by planning, step execution, planner reflection, and heuristic continuation checks. In parallel, the codebase now contains partial scaffolding for the intended **PLAN → ACT → JUDGE** architecture: structured loop schemas, cognition-scoped loop events, a judge engine, and integration adapters. Those pieces are not yet the primary execution path.
+
+The result is a transitional implementation: the runtime already has adaptive planning, iterative execution, and a chitchat fast path, but RFC-0008's fuller Layer-2 `LoopAgent` design is only partially wired.
 
 ## Motivation
 
 ### Problem Statement
 
-Before this RFC, Soothe used an **OBSERVE → ACT → VERIFY** execution model with text pattern matching for verification:
+Soothe originally executed most work in a single pass. As the runtime evolved, it needed a lighter-weight iterative mode than RFC-0007 autonomous goal management:
 
-**Limitations**:
-1. **Unreliable verification**: Text patterns ("done", "complete") can appear in any context
-2. **No tool success evaluation**: Cannot reliably determine if tools succeeded or failed
-3. **No strategy adjustment**: Can only continue or stop, not "retry" or "replan"
-4. **No failure mode detection**: Missing repeated action detection, hallucination checks, silent failure detection
-5. **No structured tool outputs**: Tools return plain strings, making judgment unreliable
+1. **Standard tasks still need iteration**: many non-autonomous requests benefit from plan creation, execution, reflection, and possible revision.
+2. **Chitchat should stay fast**: greetings and other trivial requests should bypass the heavier loop.
+3. **Default mode should remain lighter than autonomous mode**: standard requests should not pay for goal DAG management, retries, and goal persistence.
+4. **Longer-term direction needed**: the codebase began introducing a more explicit PLAN → ACT → JUDGE architecture with structured schemas and dedicated loop modules.
 
 ### Design Goals
 
-1. **Explicit PLAN phase**: LLM decides next action (tool call or final answer)
-2. **Structured ACT phase**: Execute tools with required structured output
-3. **LLM-based JUDGE phase**: Evaluate results with structured output, not text patterns
-4. **Robust guardrails**: Detect and handle failure modes (repeated actions, hallucinations, silent failures)
-5. **Sub-second chitchat**: Simple queries remain fast (direct LLM, no overhead)
-6. **Lighter than autonomous**: No goal engine overhead for standard tasks
+1. **Default iterative execution** for non-chitchat queries
+2. **Sub-second chitchat** through direct fast-path routing
+3. **Adaptive planning** based on task complexity
+4. **Lighter than autonomous mode** while still supporting iteration
+5. **A migration path** from observe → act → verify toward the fuller PLAN → ACT → JUDGE architecture
 
 ### Relationship to RFC-0007 (Autonomous Mode)
 
@@ -39,1301 +38,537 @@ Before this RFC, Soothe used an **OBSERVE → ACT → VERIFY** execution model w
 
 | Aspect | Agentic Loop (This RFC) | Autonomous Mode (RFC-0007) |
 |--------|-------------------------|----------------------------|
-| **Trigger** | Default for all non-chitchat queries | Explicit `--autonomous` flag |
-| **Loop Sequence** | PLAN → ACT → JUDGE | Goal → Plan → Reflect |
-| **Goal Management** | Implicit (thread-scoped) | Explicit GoalEngine with DAG |
-| **Iteration Control** | Judge-based continuation | Reflection-based goal completion |
-| **Planning** | Adaptive (complexity-driven) | Always comprehensive |
-| **Overhead** | Minimal (stateless) | Goal lifecycle, persistence |
-| **Use Case** | Standard tasks (90%) | Complex multi-goal workflows (10%) |
+| **Trigger** | Default for non-chitchat queries | Explicit autonomous mode |
+| **Current loop sequence** | Observe → Act → Verify | Goal → Plan → Reflect |
+| **Goal management** | Implicit thread-scoped execution | Explicit GoalEngine with DAG |
+| **Planning** | Adaptive, complexity-driven | Goal-driven, comprehensive |
+| **Iteration control** | Verification-based continuation | Reflection-based goal completion |
+| **Use case** | Standard tasks | Multi-goal autonomous workflows |
 
-**Refer to RFC-0007 for**: Goal DAG scheduling, hierarchical goals, goal directives, multi-threaded parallel execution.
+Current implementation note: RFC-0008 also describes a more explicit Layer-2 PLAN → ACT → JUDGE design. Parts of that design exist in the codebase, but the active default runner still uses observe → act → verify.
 
-### Three-Layer Loop Architecture
+## Current Runtime Architecture
 
-**Soothe implements THREE nested loops**:
+### Three-layer model
 
-```
+Soothe currently operates with three conceptual layers:
+
+```text
 Layer 3: Autonomous Loop (runner, RFC-0007)
-  └─> Goal-driven iteration with GoalEngine, max 10 iterations
+  └─ Goal-driven iteration with GoalEngine
 
 Layer 2: Agentic Loop (runner, this RFC)
-  └─> PLAN → ACT → JUDGE reflection loop, max 3 iterations
+  └─ Observe → Act → Verify loop for default non-autonomous execution
 
 Layer 1: deepagents Tool Loop (graph, langchain)
-  └─> Model → Tools → Model tool-calling loop, recursion_limit=1000
+  └─ Model → Tools → Model tool-calling loop
 ```
 
-**Key insight**: deepagents **provides a tool-calling loop** (Layer 1). Soothe adds **reflection** (Layer 2) and **goal management** (Layer 3) on top.
+deepagents provides the underlying tool-calling loop. Soothe adds higher-level planning, reflection, and optional autonomous goal management on top.
 
-### Layer Integration Architecture
+### Default execution flow
 
-**Layer Boundaries**:
+Current default non-autonomous execution in `SootheRunner.astream()`:
 
-Each layer has distinct ownership and responsibilities:
-
-| Layer | Owns | Borrows | Delegates | Escalates |
-|-------|------|---------|-----------|-----------|
-| **Layer 3** (Goal Management) | Goal DAG, goal lifecycle, dependencies | N/A (top layer) | Sub-goals to Layer 2 | N/A |
-| **Layer 2** (Reflection Loop) | LoopState, PLAN→ACT→JUDGE cycle | Current sub-goal from Layer 3 | Tool execution to Layer 1 | Scope expansion to Layer 3 |
-| **Layer 1** (Tool Loop) | Tool state, Model↔Tools cycle | Previous iteration summaries from Layer 2 | N/A (bottom layer) | N/A |
-
-**Context Borrowing Model**:
-
-**Unidirectional context flow**: Layer 3 → Layer 2 → Layer 1
-
-**Layer 2 borrows from Layer 3**:
-- Receives current sub-goal description
-- Tracks parent goal ID for escalation
-- Read-only injection (not shared mutation)
-
-**Layer 1 borrows from Layer 2**:
-- Receives iteration summaries (not full history)
-- Prevents context explosion while maintaining continuity
-- Summary format: recent tool calls, success/failure, plan progress
-
-**State Isolation**:
-- Each layer owns its state independently
-- Borrowing is read-only (injection, not shared mutation)
-- No cross-layer state mutation
-
-**Execution Flow**:
-
-**Default Mode (No `--autonomous`)**:
-```
+```text
 User Request
-    ↓
-UnifiedClassifier (RFC-0012) → complexity, planning_strategy
-    ↓
-LoopAgent (Layer 2)
-    ↓
-PlannerProtocol.create_plan() → Plan (if needed)
-    ↓
-Loop: PLAN → ACT → JUDGE
-    ├─→ PLAN: AgentDecision(tool or final)
-    ├─→ ACT: ToolLoopAdapter.execute_tool() → ToolOutput
-    │       └─> DeepAgents graph (Layer 1)
-    │           └─> Borrows iteration summary from Layer 2
-    └─→ JUDGE: LLM judgment → JudgeResult
-        └─> status: "continue" | "retry" | "replan" | "done"
-    ↓
-Final Answer
+    |
+    v
+If subagent was specified:
+    direct subagent routing
+else:
+    UnifiedClassifier routing
+        |
+        +-- if chitchat:
+        |      _run_chitchat()
+        |
+        +-- else:
+               _run_agentic_loop()
+                    |
+                    +-- pre-stream independent work
+                    |      (thread, policy, memory, context)
+                    |
+                    +-- determine planning strategy
+                    |
+                    +-- loop while iteration < max_iterations:
+                           |
+                           +-- Observe
+                           |      optional context/memory recall
+                           |      reuse cached routing classification
+                           |
+                           +-- Act
+                           |      optional PlannerProtocol.create_plan()
+                           |      if multi-step plan: step loop
+                           |      else: direct stream phase
+                           |
+                           +-- Verify
+                                  PlannerProtocol.reflect()
+                                  continuation heuristics
+                                  optional revise_plan()
 ```
 
-**Autonomous Mode (`--autonomous`)**:
-```
-User Request (--autonomous)
-    ↓
-GoalManager (Layer 3)
-    ↓
-Create root goal → decompose into sub-goals (DAG)
-    ↓
-Loop: Goal scheduling
-    ├─→ GoalManager.next_goal() → Goal
-    ├─→ LoopAgent (Layer 2) processes Goal
-    │       └─> Borrows current sub-goal from Layer 3
-    │   Loop: PLAN → ACT → JUDGE
-    │       └─> On scope expansion: escalate to Layer 3
-    │           └─> GoalAdapter.request_goal_revision()
-    │               └─> Layer 3 creates new goal
-    └─→ GoalManager.complete_goal()
-    ↓
-All goals complete
-```
+### Chitchat fast path
 
-**Goal Delegation Protocol**:
+The chitchat fast path is implemented and active. When tier-1 routing classifies a request as `chitchat`, the runner bypasses the agentic loop and routes directly into `_run_chitchat()`.
 
-**Layer 3 → Layer 2** (Sub-goal delegation):
-```python
-# In goal_adapter.py
-def inject_goal_context(loop_state: LoopState, goal: Goal) -> None:
-    """Inject Layer 3 goal into Layer 2 state."""
-    loop_state.goal = goal.description
-    loop_state.parent_goal_id = goal.parent_id
-    loop_state.current_goal_id = goal.id
-```
+### Agentic loop behavior
 
-**Layer 2 → Layer 1** (Tool context borrowing):
-```python
-# In context_borrower.py
-def generate_tool_context(loop_state: LoopState, decision: AgentDecision) -> str:
-    """Generate summary for Layer 1 (DeepAgents graph).
+The live `_run_agentic_loop()` path currently performs:
 
-    Returns iteration summary, not full history.
-    Prevents context explosion while maintaining continuity.
-    """
-    parts = []
+1. Tier-1 routing classification
+2. Chitchat bypass when appropriate
+3. Pre-stream protocol work
+4. Planning-strategy selection: `none`, `lightweight`, or `comprehensive`
+5. Iterative **observe → act → verify** execution
+6. Optional plan revision when reflection indicates more work is needed
+7. Post-stream persistence and checkpointing
+8. Final loop-completed event emission
 
-    # Current goal
-    parts.append(f"Current goal: {loop_state.goal}")
+## Current Components
 
-    # Plan progress (if planning enabled)
-    if loop_state.plan:
-        completed = sum(1 for s in loop_state.plan.steps if s.status == "completed")
-        total = len(loop_state.plan.steps)
-        parts.append(f"Plan progress: {completed}/{total} steps")
+### 1. Runner agentic loop (`core/runner/_runner_agentic.py`)
 
-    # Recent iterations (max 3)
-    if loop_state.history:
-        parts.append("\nRecent iterations:")
-        for record in loop_state.history[-3:]:
-            tool = record.decision.tool
-            success = record.result.success
-            status = "✓" if success else "✗"
-            if success:
-                parts.append(f"  {status} {tool}: {record.judgment.reason[:50]}")
-            else:
-                parts.append(f"  {status} {tool}: {record.result.error[:80]}")
+The live default loop is implemented in `AgenticMixin._run_agentic_loop()`.
 
-    # Current action
-    parts.append(f"\nNow executing: {decision.tool}")
+**Current behavior**:
+- emits `soothe.agentic.*` lifecycle and observation/verification events
+- stores lightweight `AgenticIterationRecord` entries on runner state
+- uses planning strategy selection before each iteration
+- uses planner-created plans during ACT
+- uses planner reflection plus `_evaluate_continuation()` during VERIFY
 
-    return "\n".join(parts)
-```
+Current implementation note: the active loop does **not** call `_agentic_plan()` or `_agentic_judge()` as its main path.
 
-**Layer 2 → Layer 3** (Scope escalation):
-```python
-# In goal_adapter.py
-async def request_goal_revision(
-    loop_state: LoopState,
-    escalation_reason: str
-) -> Optional[Goal]:
-    """Escalate scope expansion from Layer 2 to Layer 3.
+### 2. Planning integration (`PlannerProtocol` + step loop)
 
-    Triggered when judgment detects scope expansion.
-    Only works if autonomous mode enabled (--autonomous flag).
-    """
-    if not goal_manager:
-        return None  # Layer 3 not active
+Planning is fully integrated into the current agentic loop, but not in the RFC's original AgentDecision-centric form.
 
-    new_goal = await goal_manager.create_goal(
-        description=escalation_reason,
-        parent_id=loop_state.current_goal_id,
-        priority=60,  # Higher priority for escalated goals
-    )
+**Current behavior**:
+- strategy `none` → direct stream execution
+- strategy `lightweight` / `comprehensive` → `PlannerProtocol.create_plan()`
+- multi-step plans → `StepLoopMixin._run_step_loop()`
+- single-step or no plan → `_stream_phase()`
+- post-execution verification → `PlannerProtocol.reflect()`
+- if continuation is needed and reflection requests revision → `PlannerProtocol.revise_plan()`
 
-    return new_goal
-```
+### 3. Verification path
 
-**Planning Integration**:
+The current VERIFY phase is planner/reflection driven.
 
-Planning is integrated across layers:
-- **Layer 3**: Creates high-level goal decomposition
-- **Layer 2**: Creates execution plans via `PlannerProtocol`
-- **Layer 1**: Executes tool calls from plan steps
+**Current behavior**:
+- build `StepResult` objects from completed/failed plan steps
+- call `PlannerProtocol.reflect(plan, step_results)`
+- emit `soothe.cognition.plan.reflected`
+- use `_evaluate_continuation()` to decide whether to continue
+- continuation logic is heuristic and considers:
+  - `reflection.should_revise`
+  - configured completion signals
+  - response-text indicators like `missing`, `incomplete`, `need to verify`
+  - response length thresholds
 
-**Separation of Concerns**:
-- **`PlannerProtocol`** (in `protocols/planner.py`): Creates immutable plan outputs
-- **`LoopState`** (in `loop_agent/core/state.py`): Manages mutable plan execution state
-- **Planning module** (in `cognition/planning/`): Implements `PlannerProtocol`
+Current implementation note: this is not yet the RFC's intended JudgeEngine-driven `JudgeResult` runtime.
 
-**Module Organization**:
+### 4. LoopAgent scaffolding (`cognition/loop_agent/*`)
 
-See [Module Structure](#module-structure) section for the hierarchical organization of:
-- `cognition/loop_agent/` - Layer 2 implementation
-- `cognition/goal_manager/` - Layer 3 implementation
-- `cognition/planning/` - PlannerProtocol implementations
+The codebase now contains partial scaffolding for the intended PLAN → ACT → JUDGE architecture.
 
-## Architecture Overview
+**Implemented modules**:
+- `core/schemas.py` — `AgentDecision`, `JudgeResult`, `ToolOutput`
+- `core/state.py` — `LoopState`, `StepRecord`
+- `core/events.py` — `soothe.cognition.loop.*` event models
+- `execution/judge.py` — `JudgeEngine`
+- `execution/failure_detector.py` — guardrail helpers
+- `integration/context_borrower.py` — borrowed-context summarization
+- `integration/tool_loop_adapter.py` — Layer-1 execution adapter skeleton
+- `integration/goal_adapter.py` — autonomous/goal integration scaffolding
 
-### Two Execution Modes
+Current implementation note: these modules are only partially integrated. In particular, `ToolLoopAdapter.execute_tool()` still returns a permanent "not fully implemented yet" failure, and the live runner does not currently route through `ContextBorrower`, `GoalAdapter`, or `FailureDetector`.
 
-```mermaid
-flowchart TD
-    Start([User Request]) --> Classify{Unified Classification<br/>RFC-0012}
+### 5. PLAN/JUDGE helper path
 
-    %% Chitchat Fast Path
-    Classify -->|chitchat| Fast[Chitchat Fast Path]
-    Fast --> DirectLLM[Direct LLM Call<br/>< 1s]
-    DirectLLM --> End1([End])
+`_runner_agentic.py` also contains `_agentic_plan()` and `_agentic_judge()` helpers that use:
+- `AgentDecision`
+- `JudgeEngine`
+- `soothe.cognition.loop.phase.*` events
 
-    %% Agentic Loop (Default)
-    Classify -->|non-chitchat| Agentic[Agentic Loop<br/>PLAN → ACT → JUDGE]
-
-    Agentic --> Plan[PLAN Phase<br/>LLM Decides Action]
-    Plan --> Act[ACT Phase<br/>Execute Tool]
-    Act --> Judge[JUDGE Phase<br/>Evaluate Result]
-    Judge --> Decision{Decision?}
-
-    Decision -->|continue| Plan
-    Decision -->|retry| Act
-    Decision -->|replan| Plan
-    Decision -->|done| PostStream[Post-Stream<br/>Persist & Checkpoint]
-    PostStream --> End2([End])
-
-    %% Autonomous Mode (Explicit)
-    Classify -.->|explicit --autonomous| Autonomous[Autonomous Mode<br/>RFC-0007]
-    Autonomous --> GoalEngine[GoalEngine<br/>DAG Scheduling]
-    GoalEngine --> End3([End])
-
-    classDef fastPath fill:#90EE90,stroke:#333,stroke-width:3px
-    classDef agentic fill:#87CEEB,stroke:#333,stroke-width:2px
-    classDef autonomous fill:#DDA0DD,stroke:#333,stroke-width:2px
-
-    class Fast,DirectLLM fastPath
-    class Plan,Act,Judge,Decision,PostStream agentic
-    class Autonomous,GoalEngine autonomous
-```
+Current implementation note: these helpers are present but are not yet the active default execution path.
 
 ## Interfaces & Data Models
 
-### AgentDecision Schema
+### Active runtime state: `RunnerState` + `AgenticIterationRecord`
 
-The LLM's decision on next action:
-
-```python
-from typing import Literal, Optional, Dict, Any
-from pydantic import BaseModel, Field
-
-class AgentDecision(BaseModel):
-    """LLM's decision on next action in the agentic loop."""
-
-    type: Literal["tool", "final"]
-    tool: Optional[str] = Field(None, description="Tool name if type='tool'")
-    args: Optional[Dict[str, Any]] = Field(None, description="Tool arguments if type='tool'")
-    reasoning: str = Field(..., description="LLM's rationale for this decision")
-    answer: Optional[str] = Field(None, description="Final answer if type='final'")
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `type` | `"tool"` or `"final"` | If `"tool"`, call a tool; if `"final"`, finish with answer |
-| `tool` | String | Tool name to invoke (if type="tool") |
-| `args` | Object | Arguments for the tool (if type="tool") |
-| `reasoning` | String | LLM's rationale for this decision |
-| `answer` | String | Final answer (if type="final") |
-
-### JudgeResult Schema
-
-The LLM's judgment after evaluating tool execution:
+The live loop primarily tracks state through `RunnerState` and a lightweight `AgenticIterationRecord` journal.
 
 ```python
-class JudgeResult(BaseModel):
-    """LLM's judgment after evaluating tool execution result."""
-
-    status: Literal["continue", "retry", "replan", "done"]
-    reason: str = Field(..., description="Explanation for the judgment")
-    next_hint: Optional[str] = Field(None, description="Hint for retry if status='retry'")
-    final_answer: Optional[str] = Field(None, description="Final answer if status='done'")
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="Judge's confidence (0.0-1.0)")
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | `"continue"` \| `"retry"` \| `"replan"` \| `"done"` | Next action to take |
-| `reason` | String | Explanation for the judgment |
-| `next_hint` | String | Hint for retry (if status="retry") |
-| `final_answer` | String | Final answer (if status="done") |
-| `confidence` | Float | Judge's confidence score (0.0-1.0) |
-
-**Status Meanings**:
-- `"continue"`: Keep going with next iteration
-- `"retry"`: Retry current step with adjustments (use `next_hint`)
-- `"replan"`: Trigger higher-level plan revision
-- `"done"`: Task complete, return `final_answer`
-
-### ToolOutput Schema
-
-Structured return value from tool execution:
-
-```python
-class ToolOutput(BaseModel):
-    """Structured return value from tool execution."""
-
-    success: bool = Field(..., description="Whether tool execution succeeded")
-    data: Optional[Any] = Field(None, description="Result data")
-    error: Optional[str] = Field(None, description="Error message if failed")
-    error_type: Optional[Literal["transient", "permanent", "user_error"]] = Field(
-        None, description="Error classification"
-    )
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `success` | Boolean | Whether tool execution succeeded |
-| `data` | Any | Result data (structure depends on tool) |
-| `error` | String | Error message (if success=False) |
-| `error_type` | String | Error classification: "transient", "permanent", or "user_error" |
-
-**Error Types**:
-- `"transient"`: Temporary error (network timeout, rate limit) → retry recommended
-- `"permanent"`: Permanent error (file not found, permission denied) → no retry
-- `"user_error"`: Invalid user input → abort with error message
-
-### LoopState Schema
-
-State maintained across agentic loop iterations:
-
-```python
-class LoopState(BaseModel):
-    """State maintained across agentic loop iterations."""
-
-    goal: str = Field(..., description="Task description")
-    iteration: int = Field(0, ge=0, description="Current iteration count")
-    history: list[StepRecord] = Field(default_factory=list, description="Step records")
-    plan: Optional[Any] = Field(None, description="High-level plan (from PlanAgent)")
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `goal` | String | Task description |
-| `iteration` | Integer | Current iteration count (starts at 0) |
-| `history` | List[StepRecord] | Full history of decisions/results/judgments |
-| `plan` | Any | Optional high-level plan (if using PlanAgent) |
-
-### StepRecord Schema
-
-Record of a single iteration:
-
-```python
-class StepRecord(BaseModel):
-    """Record of a single iteration in the agentic loop."""
-
-    step: int = Field(..., ge=0, description="Iteration number")
-    decision: AgentDecision = Field(..., description="LLM's decision")
-    result: ToolOutput = Field(..., description="Tool execution result")
-    judgment: JudgeResult = Field(..., description="LLM's judgment")
-```
-
-## Control Flow & State Machine
-
-### Loop Execution Pseudocode
-
-```python
-state = LoopState(goal=user_goal, iteration=0, history=[])
-
-while state.iteration < max_iterations:
-    # PLAN: LLM decides next action
-    decision = await llm.plan(state)
-    emit_event("soothe.cognition.loop.phase.plan.completed", decision=decision)
-
-    if decision.type == "final":
-        return decision.answer
-
-    # ACT: Execute tool
-    result = await execute_tool(decision.tool, decision.args)
-    emit_event("soothe.cognition.loop.phase.act.completed", result=result)
-
-    # JUDGE: Evaluate result
-    judgment = await llm.judge(state.goal, decision, result)
-    emit_event("soothe.cognition.loop.phase.judge.completed", judgment=judgment)
-
-    # Update state
-    state.add_step(decision, result, judgment)
-
-    # Decide next action based on judgment
-    if judgment.status == "done":
-        return judgment.final_answer
-    elif judgment.status == "retry":
-        # Retry with adjustment (use next_hint)
-        continue
-    elif judgment.status == "replan":
-        # Trigger higher-level replan
-        continue
-    # else: status == "continue", loop to next iteration
-```
-
-### State Machine Diagram
-
-```mermaid
-stateDiagram-v2
-    [*] --> Plan: Start Loop
-
-    Plan --> Act: tool call
-    Plan --> [*]: final answer
-
-    Act --> Judge: result ready
-
-    Judge --> Plan: continue
-    Judge --> Act: retry
-    Judge --> Plan: replan
-    Judge --> [*]: done
-
-    note right of Plan
-        LLM decides:
-        - tool call?
-        - final answer?
-    end note
-
-    note right of Judge
-        LLM evaluates:
-        - tool success?
-        - goal achieved?
-        - next action?
-    end note
-```
-
-### Phase Details
-
-#### Phase 1: PLAN
-
-**Purpose**: LLM decides the next action.
-
-**Process**:
-1. Build planning context from `LoopState`:
-   - Goal
-   - Current iteration
-   - History of previous steps
-   - Available tools and their schemas
-2. Invoke LLM with structured output request
-3. Parse response as `AgentDecision`
-4. Emit `soothe.cognition.loop.phase.plan.completed` event
-
-**Planning Context Example**:
-```
-Goal: Count the lines in /tmp/test.txt
-
-Available tools:
-- read_file(path: str) -> ToolOutput
-- write_file(path: str, content: str) -> ToolOutput
-- search(query: str) -> ToolOutput
-
-History: (empty)
-
-What action should you take next?
-```
-
-**Decision Output**:
-```json
-{
-  "type": "tool",
-  "tool": "read_file",
-  "args": {"path": "/tmp/test.txt"},
-  "reasoning": "Need to read the file to count lines"
-}
-```
-
-#### Phase 2: ACT
-
-**Purpose**: Execute the tool with validation.
-
-**Process**:
-1. Validate tool exists in registry (prevent hallucination)
-2. Validate tool arguments against schema
-3. Execute tool with timeout
-4. Validate result is `ToolOutput` structure
-5. Detect silent failures (success=True but data=None)
-6. Emit `soothe.cognition.loop.phase.act.completed` event
-
-**Tool Execution**:
-```python
-async def execute_tool(tool_name: str, args: dict) -> ToolOutput:
-    # Validate tool exists
-    if tool_name not in tool_registry:
-        return ToolOutput.fail(
-            error=f"Tool '{tool_name}' not found",
-            error_type="permanent"
-        )
-
-    # Execute with timeout
-    try:
-        result = await asyncio.wait_for(
-            tool_registry[tool_name].run(**args),
-            timeout=30.0
-        )
-        return result
-    except asyncio.TimeoutError:
-        return ToolOutput.fail(
-            error="Tool execution timeout",
-            error_type="transient"
-        )
-    except Exception as e:
-        return ToolOutput.fail(
-            error=str(e),
-            error_type="permanent"
-        )
-```
-
-#### Phase 3: JUDGE
-
-**Purpose**: LLM evaluates result and decides next action.
-
-**Process**:
-1. Build judgment context:
-   - Goal
-   - Decision made
-   - Tool result
-   - Previous history
-2. Invoke LLM with structured output request
-3. Parse response as `JudgeResult`
-4. Emit `soothe.cognition.loop.phase.judge.completed` event
-5. Apply judgment decision
-
-**Judgment Context Example**:
-```
-Goal: Count the lines in /tmp/test.txt
-
-Action taken: read_file(path="/tmp/test.txt")
-
-Result:
-{
-  "success": true,
-  "data": {"lines": 42, "content": "..."},
-  "error": null
-}
-
-Evaluate:
-1. Did the tool succeed?
-2. Is the goal achieved?
-3. What action is needed? (continue/retry/replan/done)
-```
-
-**Judgment Output**:
-```json
-{
-  "status": "done",
-  "reason": "Successfully read file and counted 42 lines",
-  "final_answer": "The file /tmp/test.txt has 42 lines",
-  "confidence": 0.95
-}
-```
-
-## Guardrails & Failure Modes
-
-### Constraints
-
-| Constraint | Default | Description |
-|------------|---------|-------------|
-| `max_iterations` | 3 | Maximum loop iterations |
-| `max_retries` | 3 | Maximum consecutive retries per step |
-| `tool_timeout` | 30s | Timeout for each tool execution |
-| `repeated_action_threshold` | 3 | Abort if same action repeated N times |
-
-### Failure Mode Detection
-
-#### 1. Repeated Action Detection
-
-Detect when the same tool+args is executed repeatedly:
-
-```python
-def detect_degenerate_retry(history: list[StepRecord]) -> bool:
-    """Detect same action repeated 3+ times."""
-    if len(history) < 3:
-        return False
-
-    last_3 = history[-3:]
-    # Check if all three have same tool and args
-    return (
-        last_3[0].decision.tool == last_3[1].decision.tool == last_3[2].decision.tool
-        and last_3[0].decision.args == last_3[1].decision.args == last_3[2].decision.args
-    )
-```
-
-**Action**: Abort loop with error event.
-
-#### 2. Tool Hallucination Prevention
-
-Validate tool exists before execution:
-
-```python
-def validate_tool(tool_name: str, tool_registry: set[str]) -> bool:
-    """Check if tool exists in registry."""
-    return tool_name in tool_registry
-```
-
-**Action**: Return `ToolOutput.fail(error_type="permanent")`.
-
-#### 3. Silent Failure Detection
-
-Detect tools that return success but empty/invalid data:
-
-```python
-def detect_silent_failure(result: ToolOutput) -> bool:
-    """Detect tool that returned success but no data."""
-    return result.success and result.data is None
-```
-
-**Action**: Judge should flag this and recommend retry.
-
-#### 4. Error Classification
-
-Classify errors to enable retry logic:
-
-| Error Type | Example | Retry? |
-|------------|---------|--------|
-| `"transient"` | Network timeout, rate limit | ✅ Yes |
-| `"permanent"` | File not found, permission denied | ❌ No |
-| `"user_error"` | Invalid input, missing argument | ❌ No |
-
-### Guardrail Enforcement
-
-```python
-class FailureDetector:
-    """Detect and handle failure modes in agentic loop."""
-
-    def check_failures(self, state: LoopState, decision: AgentDecision, result: ToolOutput) -> Optional[str]:
-        """Check for failure modes and return error message if detected."""
-
-        # Check repeated actions
-        if detect_degenerate_retry(state.history):
-            return "Degenerate retry detected: same action repeated 3 times"
-
-        # Check tool hallucination
-        if decision.is_tool_call() and decision.tool not in self.tool_registry:
-            return f"Tool hallucination: tool '{decision.tool}' not found"
-
-        # Check silent failure
-        if detect_silent_failure(result):
-            return f"Silent failure: tool returned success but no data"
-
-        # Check max iterations
-        if state.iteration >= self.max_iterations:
-            return f"Max iterations reached: {self.max_iterations}"
-
-        return None
-```
-
-## Tool Interface Requirements
-
-### Mandatory Structured Output
-
-**All tools must return `ToolOutput` structure**:
-
-```python
-from soothe.core.loop_state import ToolOutput
-
-def read_file(path: str) -> ToolOutput:
-    """Read a file and return structured output."""
-    try:
-        with open(path) as f:
-            content = f.read()
-        return ToolOutput.ok(
-            data={"content": content, "lines": len(content.splitlines())}
-        )
-    except FileNotFoundError:
-        return ToolOutput.fail(
-            error=f"File not found: {path}",
-            error_type="user_error"
-        )
-    except PermissionError:
-        return ToolOutput.fail(
-            error=f"Permission denied: {path}",
-            error_type="permanent"
-        )
-    except Exception as e:
-        return ToolOutput.fail(
-            error=str(e),
-            error_type="permanent"
-        )
-```
-
-### Input Validation
-
-Tools must validate inputs and return appropriate error types:
-
-```python
-def search(query: str) -> ToolOutput:
-    """Search for information."""
-    # Validate input
-    if not query or len(query.strip()) == 0:
-        return ToolOutput.fail(
-            error="Query cannot be empty",
-            error_type="user_error"
-        )
-
-    # Execute search
-    try:
-        results = external_search(query)
-        return ToolOutput.ok(data={"results": results})
-    except RateLimitError:
-        return ToolOutput.fail(
-            error="Rate limit exceeded, please retry later",
-            error_type="transient"
-        )
-```
-
-### Backward Compatibility Wrapper
-
-For legacy tools that return plain strings:
-
-```python
-def wrap_legacy_tool(result: Any) -> ToolOutput:
-    """Wrap legacy tool output in ToolOutput structure."""
-    if isinstance(result, ToolOutput):
-        return result
-    elif isinstance(result, str):
-        return ToolOutput.ok(data={"result": result}, legacy=True)
-    elif isinstance(result, dict):
-        return ToolOutput.ok(data=result)
-    else:
-        return ToolOutput.fail(
-            error=f"Unexpected tool output type: {type(result)}",
-            error_type="permanent"
-        )
-```
-
-## Memory Architecture
-
-### Three-Layer Memory Model
-
-**Short-term memory** (current loop):
-- `LoopState.history`: List of `StepRecord` objects
-- Tracks decisions, results, and judgments
-- In-memory only, not persisted
-
-**Episodic memory** (past attempts):
-- Stored in `IterationRecord` (enhanced version)
-- Tracks failed tools, error patterns, retry counts
-- Persisted via `ContextProtocol`
-
-**Semantic memory** (extracted facts):
-- Extracted from iterations by separate MemAgent
-- Out of scope for this RFC
-
-### Enhanced IterationRecord
-
-```python
-class IterationRecord(BaseModel):
-    """Enhanced iteration record with episodic memory."""
-
+class AgenticIterationRecord(BaseModel):
     iteration: int
-    planning_strategy: str
-
-    # What happened
+    planning_strategy: Literal["none", "lightweight", "comprehensive"]
     observation_summary: str
-    actions_taken: list[str]  # Tool calls made
-
-    # What failed (episodic memory)
-    failed_tools: list[str]
-    error_patterns: list[str]
-    retry_count: int
-
-    # What was learned (semantic memory)
-    extracted_facts: list[str]
-    avoided_actions: list[str]  # What not to retry
-
-    # Decision
+    actions_taken: str
     verification_result: str
     should_continue: bool
     duration_ms: int
 ```
 
-### Memory Integration
+This lightweight record is currently runner-local state, not a richer persisted LoopState history model.
 
-Memory is handled by separate `MemAgent` (out of scope). The `LoopAgent` provides hooks for memory integration:
+### Partial structured-loop schemas
+
+The following schemas exist in `cognition/loop_agent/core/schemas.py` and represent the intended fuller architecture:
+- `AgentDecision`
+- `JudgeResult`
+- `ToolOutput`
+- `LoopState`
+- `StepRecord`
+
+Current implementation note: these schemas are not yet the primary contract for the live default loop.
+
+## Control Flow
+
+### Active loop pseudocode
 
 ```python
-# In runner, before PLAN phase:
-context = await memory.recall(state.goal)
-state.context = context
+state = RunnerState()
+planning_strategy = determine_planning_strategy(complexity, user_input)
 
-# In runner, after JUDGE phase:
-await memory.extract_facts(state.history[-1])
+while iteration < max_iterations and should_continue:
+    observe()
 
-# In runner, on failure:
-await memory.record_failure(
-    tool=decision.tool,
-    args=decision.args,
-    error=result.error,
-    error_type=result.error_type
-)
+    if planning_strategy != "none":
+        plan = planner.create_plan(user_input, context)
+
+    if plan has multiple steps:
+        run_step_loop(plan)
+    else:
+        stream_phase(user_input)
+
+    reflection = planner.reflect(plan, completed_step_results)
+    should_continue = evaluate_continuation(reflection, response_text, strictness)
+
+    if should_continue and reflection.should_revise:
+        plan = planner.revise_plan(plan, reflection.feedback)
 ```
+
+### Intended future helper path
+
+The codebase also contains a partial PLAN → ACT → JUDGE helper flow:
+
+```python
+decision = await _agentic_plan(...)
+result = await tool_loop_adapter.execute_tool(...)
+judgment = await _agentic_judge(...)
+```
+
+Current implementation note: this path is not yet wired into `_run_agentic_loop()`.
+
+## Guardrails & Failure Modes
+
+### Currently active behavior
+
+The active runtime does **not** yet fully enforce the RFC's richer structured guardrail model.
+
+What is currently active:
+- `max_iterations`
+- planner reflection and plan revision
+- heuristic completion/continuation detection via `_evaluate_continuation()`
+- chitchat bypass
+
+What currently exists mostly as scaffolding:
+- repeated-action detection via `FailureDetector`
+- tool hallucination enforcement in the Layer-2 loop
+- silent-failure detection in the Layer-2 loop
+- structured retry/replan/done judgment as the primary runtime contract
+
+## Tool Interface Status
+
+RFC-0008's intended direction is for tool execution to flow through structured `ToolOutput` values. The current codebase includes `ToolOutput` and tool-output formatting support, but the default runner does not yet require all tools to execute through the Layer-2 `ToolLoopAdapter` contract.
+
+Current implementation note: `ToolLoopAdapter` exists but is not fully implemented or used as the active ACT path.
+
+## Memory and Persistence
+
+### Current memory behavior
+
+Memory and context handling in agentic mode currently reuse the runner's standard pre-stream and post-stream protocol flows:
+- pre-stream memory recall and context projection
+- optional extra observation-phase context/memory gathering in later iterations
+- post-stream response/context persistence
+
+This is lighter and more generic than the richer loop-native episodic/semantic memory model originally described in this RFC.
+
+### Current persistence behavior
+
+Agentic mode currently runs through the same post-stream checkpoint path used by non-autonomous execution, and checkpoint state is still recorded with `mode="single_pass"` rather than a distinct `agentic` mode.
 
 ## Event System
 
-### Event Namespace Taxonomy
+### Active runtime event taxonomy
 
-**Migration**: `soothe.agentic.*` → `soothe.cognition.loop.*`
+The live runner currently emits **`soothe.agentic.*`** events for agentic-loop lifecycle and observation/verification progress.
 
-**Rationale**: Events belong to the cognition domain, which encompasses:
-- Loop execution (`soothe.cognition.loop.*`)
-- Goal management (`soothe.cognition.goal.*`)
-- Planning (`soothe.cognition.planning.*`)
-- Classification (`soothe.cognition.classification.*`)
+**Lifecycle events**:
+- `soothe.agentic.loop.started`
+- `soothe.agentic.loop.completed`
+- `soothe.agentic.iteration.started` *(defined, but not currently emitted by the main loop)*
+- `soothe.agentic.iteration.completed`
 
-### Loop Events (`soothe.cognition.loop.*`)
+**Observation / verification events**:
+- `soothe.agentic.observation.started`
+- `soothe.agentic.observation.completed`
+- `soothe.agentic.verification.started`
+- `soothe.agentic.verification.completed`
+- `soothe.agentic.planning.strategy_determined`
 
-**Lifecycle Events**:
-- `soothe.cognition.loop.started` - Agentic loop begins
-- `soothe.cognition.loop.completed` - Agentic loop finishes
-- `soothe.cognition.loop.iteration.started` - Iteration begins
-- `soothe.cognition.loop.iteration.completed` - Iteration finishes
+**Related plan events used by the live loop**:
+- `soothe.cognition.plan.created`
+- `soothe.cognition.plan.reflected`
+- standard step-loop events from RFC-0009
+- `soothe.output.final_report` when a multi-step final report is synthesized
 
-**Phase Events**:
-- `soothe.cognition.loop.phase.plan.started` - PLAN phase starts
-- `soothe.cognition.loop.phase.plan.completed` - PLAN phase ends (includes `AgentDecision`)
-- `soothe.cognition.loop.phase.act.started` - ACT phase starts
-- `soothe.cognition.loop.phase.act.completed` - ACT phase ends (includes `ToolOutput`)
-- `soothe.cognition.loop.phase.judge.started` - JUDGE phase starts
-- `soothe.cognition.loop.phase.judge.completed` - JUDGE phase ends (includes `JudgeResult`)
+### Partial cognition-loop event surface
 
-**Decision Events**:
-- `soothe.cognition.loop.judgment.decision` - Judge decision made
-- `soothe.cognition.loop.retry.triggered` - Retry triggered
-- `soothe.cognition.loop.replan.triggered` - Replan triggered
+`cognition/loop_agent/core/events.py` defines a richer `soothe.cognition.loop.*` taxonomy including PLAN/ACT/JUDGE phase events, retry/replan events, and error events.
 
-**Error Events**:
-- `soothe.cognition.loop.error` - Guardrail triggered or failure detected
-- `soothe.cognition.loop.error.max_iterations` - Max iterations limit hit
-- `soothe.cognition.loop.error.degenerate_retry` - Same action repeated
-
-### Event Flow Example
-
-```
-soothe.cognition.loop.started
-  soothe.cognition.loop.iteration.started (iteration=0)
-    soothe.cognition.loop.phase.plan.started
-    soothe.cognition.loop.phase.plan.completed (decision=AgentDecision(...))
-    soothe.cognition.loop.phase.act.started (tool="read_file")
-    soothe.cognition.loop.phase.act.completed (result=ToolOutput(...))
-    soothe.cognition.loop.phase.judge.started
-    soothe.cognition.loop.phase.judge.completed (judgment=JudgeResult(status="done"))
-    soothe.cognition.loop.judgment.decision (status="done")
-  soothe.cognition.loop.iteration.completed (iteration=0)
-soothe.cognition.loop.completed
-```
-
-### Event Fields
-
-**`soothe.cognition.loop.phase.plan.completed`**:
-```json
-{
-  "iteration": 0,
-  "decision": {
-    "type": "tool",
-    "tool": "read_file",
-    "args": {"path": "/tmp/test.txt"},
-    "reasoning": "Need to read the file"
-  }
-}
-```
-
-**`soothe.cognition.loop.phase.judge.completed`**:
-```json
-{
-  "iteration": 0,
-  "judgment": {
-    "status": "done",
-    "reason": "Successfully read file",
-    "final_answer": "The file has 42 lines",
-    "confidence": 0.95
-  }
-}
-```
-
-**`soothe.cognition.loop.error`**:
-```json
-{
-  "iteration": 2,
-  "error_type": "degenerate_retry",
-  "error_message": "Same action repeated 3 times: read_file(path='/tmp/test.txt')",
-  "action": "abort"
-}
-```
-
-### Goal Events (`soothe.cognition.goal.*`)
-
-For Layer 3 goal management events, see RFC-0007. Key events:
-- `soothe.cognition.goal.created` - Goal created
-- `soothe.cognition.goal.activated` - Goal activated for execution
-- `soothe.cognition.goal.completed` - Goal completed successfully
-- `soothe.cognition.goal.failed` - Goal failed
+Current implementation note: these cognition-loop events represent partial/future architecture and are not yet the main event surface emitted by `_run_agentic_loop()`.
 
 ## Module Structure
 
-### Hierarchical Module Organization
+### Implemented module layout
 
-**Cognition modules** follow a consistent hierarchical structure:
+The following pieces exist today:
 
-```
-cognition/
-├── planning/                    # EXISTING: PlannerProtocol implementations
-│   ├── simple.py               # SimplePlanner
-│   ├── claude.py               # ClaudePlanner
-│   ├── router.py               # Planner selection
-│   └── _shared.py              # Utilities
-│
-├── loop_agent/                  # NEW: Layer 2 state management
-│   ├── __init__.py
-│   ├── README.md
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── state.py            # LoopState, StepRecord
-│   │   ├── schemas.py          # AgentDecision, JudgeResult, ToolOutput
-│   │   └── events.py           # cognition.loop.* events
-│   ├── integration/
-│   │   ├── __init__.py
-│   │   ├── tool_loop_adapter.py    # DeepAgents integration
-│   │   ├── goal_adapter.py         # Autonomous goal delegation
-│   │   └── context_borrower.py     # Summary injection
-│   └── execution/
-│       ├── __init__.py
-│       ├── judge.py            # LLM-based judgment
-│       └── failure_detector.py # Guardrails
-│
-├── goal_manager/                # NEW: Restructured goal_engine
-│   ├── __init__.py
-│   ├── README.md
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── goal.py             # Goal model (move from goal_engine.py)
-│   │   ├── state.py            # GoalStatus enum
-│   │   └── events.py           # cognition.goal.* events
-│   ├── dag/
-│   │   ├── __init__.py
-│   │   ├── dependency_resolver.py  # Cycle detection
-│   │   └── scheduler.py            # Priority scheduling
-│   └── manager/
-│       ├── __init__.py
-│       ├── engine.py           # GoalEngine (refactored)
-│       └── persistence.py      # Snapshot/restore
-│
-└── unified_classifier.py        # EXISTING: Keep as-is
+```text
+core/runner/
+├── _runner_agentic.py      # active default non-autonomous loop
+├── _runner_autonomous.py   # autonomous goal loop
+├── _runner_steps.py        # DAG step execution
+└── _runner_phases.py       # pre/post-stream orchestration
+
+cognition/loop_agent/
+├── core/                   # schemas, state, cognition-loop events
+├── execution/              # judge engine, failure detector
+└── integration/            # context borrower, goal adapter, tool adapter
 ```
 
-### Module Responsibilities
+### Responsibility split today
 
-**`planning/`** - PlannerProtocol implementations:
-- Implements `PlannerProtocol` interface
-- Creates immutable `Plan` objects
-- No execution state management
-- Existing module, keep as-is
-
-**`loop_agent/`** - Layer 2 state management:
-- **`core/`**: Domain models (state, schemas, events)
-- **`integration/`**: Cross-layer communication (adapters, context borrowing)
-- **`execution/`**: Loop logic (judge, failure detection)
-
-**`goal_manager/`** - Layer 3 goal management:
-- **`core/`**: Goal model and state enums
-- **`dag/`**: Dependency resolution and scheduling
-- **`manager/`**: GoalEngine orchestration
-
-### Integration with Protocols
-
-**Protocol Layer** (`src/soothe/protocols/`):
-- `planner.py`: `PlannerProtocol`, `Plan`, `PlanStep` (unchanged)
-- `context.py`: `ContextProtocol`, `ContextEntry` (unchanged)
-
-**Implementation Layer** (`src/soothe/cognition/`):
-- `planning/`: Implements `PlannerProtocol`
-- `loop_agent/`: Uses `PlannerProtocol`, manages `LoopState`
-- `goal_manager/`: Independent goal management
-
-**Key Separation**:
-- **PlannerProtocol** creates plans (immutable output)
-- **LoopAgent** manages plan state during execution (mutable tracking)
-- No duplication - clear separation of concerns
+- `core/runner/_runner_agentic.py` owns the live default loop
+- `PlannerProtocol` and planning backends own plan creation/reflection/revision
+- `StepLoopMixin` owns multi-step execution
+- `cognition/loop_agent/*` provides partial scaffolding for a more explicit future Layer-2 loop architecture
 
 ## Performance Optimization
 
-### Chitchat Fast Path
+### Chitchat fast path
 
-**Preserved**: Sub-second responses for simple queries.
+This is active and implemented:
+- chitchat requests bypass the default loop
+- direct `_run_chitchat()` execution keeps trivial responses fast
 
-**Optimization**: Skip all protocols and planning, direct LLM call.
+### Adaptive planning
 
-**Characteristics**:
-- Token count < 30
-- Greetings, simple questions, acknowledgments
-- No state persistence
-- No memory/context operations
-- Single LLM call with minimal prompt
+This is active and implemented:
+- `simple` → `none`
+- `medium` → `lightweight`
+- `complex` → `comprehensive`
+- configured force-keywords can escalate directly to `comprehensive`
 
-**Latency Target**: < 500ms (P90), < 800ms (P99)
+Current implementation note: adaptive escalation is based on planner feedback text, not the RFC's intended JudgeResult-driven loop decisions.
 
-### Adaptive Planning
+### Query execution tiers
 
-**Planning strategies based on complexity**:
+Daemon-served queries are routed into one of three execution tiers:
 
-| Complexity | Planning Strategy | Use Case |
-|------------|-------------------|----------|
-| **Simple** | None | Direct execution, single tool call |
-| **Medium** | Lightweight | 2-3 steps, simple sequence |
-| **Complex** | Comprehensive | Full DAG, parallel execution |
+| Tier | Use Case | Properties |
+|------|----------|------------|
+| **Fast Path** | No tool use, multi-step, or iterative verification needed | Single-pass, minimal observation, no multi-iteration loop |
+| **Light-Agentic** | One PLAN → ACT → JUDGE cycle likely sufficient | One iteration default, minimal refresh, smaller evidence budget |
+| **Full-Agentic** | Complex tasks, failure recovery, replan conditions | Multiple iterations, broader refresh when justified |
 
-**Decision logic**:
-```python
-def determine_planning_strategy(complexity: str, user_input: str) -> str:
-    if complexity == "simple":
-        return "none"
-    elif complexity == "medium":
-        # Check for user intent
-        if any(kw in user_input for kw in ["plan for", "steps to"]):
-            return "comprehensive"
-        elif any(kw in user_input for kw in ["just", "quick"]):
-            return "none"
-        else:
-            return "lightweight"
-    else:  # complex
-        return "comprehensive"
-```
+**Routing Principle**: Prefer the cheapest path that can still produce a reliable answer. Escalation requires evidence; early completion does not.
 
-### Judge Optimization
+### Query-scoped observation reuse
 
-**Cache judge results** for identical tool results:
+Observation work (classification, memory recall, context projection) should not be repeated across iterations or steps unless the active problem meaning changes.
 
-```python
-judge_cache = {}
+**Snapshot Contents**:
+- normalized query key
+- classification result
+- recalled memories
+- context projection
+- version/freshness metadata
+- invalidation reason when refreshed
 
-async def judge_with_cache(goal: str, decision: AgentDecision, result: ToolOutput) -> JudgeResult:
-    cache_key = (goal, decision.tool, str(decision.args), result.success)
+**Reuse Semantics**: Reuse observation snapshot across:
+- subsequent iterations for the same query
+- retries that keep the same intent
+- plan steps semantically close to parent query
 
-    if cache_key in judge_cache:
-        return judge_cache[cache_key]
+**Refresh Triggers** (MUST refresh when):
+1. judge returns `replan`
+2. active step or query meaning materially changes
+3. tool results introduce new retrieval target not covered by current snapshot
+4. observation mode explicitly escalated
+5. no valid snapshot exists
 
-    judgment = await llm.judge(goal, decision, result)
-    judge_cache[cache_key] = judgment
-    return judgment
-```
+**Step-Level Inheritance**: Step execution inherits parent query snapshot by default. If a step introduces distinct retrieval target, create small step-local delta rather than full recomputation.
+
+### Token-count planning strategy
+
+Planning strategy is determined by token-count heuristics:
+
+| Token Count | Strategy | Behavior |
+|-------------|----------|----------|
+| ≤ threshold (default ~50) | `none` | Direct stream, no plan creation |
+| > threshold | `lightweight`/`comprehensive` | Create plan, execute step loop |
+
+**Threshold Configuration**: `agentic.planning.simple_max_tokens` in config.
+
+**Fast-verifiable step bias**: Plans should prefer steps that:
+1. target one concrete subproblem
+2. produce one strong completion signal when successful
+3. are easy to classify as `done`, `retry`, or `replan`
+4. limit evidence ambiguity during judgment
+
+**Why this improves loops**: Small fast-verifiable steps make PLAN → ACT → JUDGE cheaper:
+- PLAN emits narrower actions
+- ACT produces clearer evidence
+- JUDGE needs less context to decide status
+- retries and replans become more targeted
+
+### Early termination optimization
+
+First-iteration completion should be default for light-agentic requests when evidence is sufficient:
+- judgment input smaller for first-pass evaluation than full-agentic
+- escalate only when evidence is weak, contradictory, or indicates scope change
+- do not pay full verification overhead when first action already produced strong completion evidence
+
+### Query timing instrumentation
+
+The query execution path SHOULD record timings for:
+- classification
+- memory recall
+- context projection
+- plan creation
+- act execution
+- judge/verification
+- total latency
+- iteration count
+- observation snapshot cache hit/miss
 
 ## Configuration
 
-Key configuration parameters:
+Current agentic configuration surface:
 
 ```yaml
 agentic:
   enabled: true
+  use_judge_engine: true
   max_iterations: 3
-  max_retries: 3
-  repeated_action_threshold: 3
-  tool_timeout: 30s
+  observation_strategy: "adaptive"
+  verification_strictness: "moderate"
   planning:
     simple_max_tokens: 50
     medium_max_steps: 3
     complexity_threshold: 160
     force_keywords: ["plan for", "create a plan", "steps to"]
-  judge:
-    model: "fast"  # Use fast model for judgment
-    cache_enabled: true
-    confidence_threshold: 0.8
-  guardrails:
-    degenerate_retry_detection: true
-    tool_hallucination_detection: true
-    silent_failure_detection: true
+    adaptive_escalation: true
+  early_termination:
+    enabled: true
+    completion_signals: ["task complete", "done", "finished successfully"]
+    error_threshold: 3
 ```
 
-## Example Execution Trace
+Current implementation note:
+- `use_judge_engine` exists on the config surface but is not yet wired into the live `_run_agentic_loop()` path
+- earlier RFC drafts described extra judge/guardrail/retry/tool-timeout settings that are not part of the current runtime config
 
-**Goal**: *"What's the capital of Norway, in uppercase?"*
+## Example of Current Runtime Behavior
 
-### Iteration 1
+For a non-chitchat debugging request, the current path is typically:
 
-**PLAN**:
-```json
-{
-  "type": "tool",
-  "tool": "search",
-  "args": {"query": "capital of Norway"},
-  "reasoning": "Need to find the capital of Norway"
-}
-```
+1. classify as non-chitchat
+2. run pre-stream memory/context/policy work
+3. choose a planning strategy
+4. create a plan if needed
+5. execute either a step loop or a direct stream pass
+6. reflect on results
+7. continue or revise if reflection and heuristics indicate more work
+8. persist and emit loop-completed event
 
-**ACT**:
-```json
-{
-  "success": true,
-  "data": {"results": ["Oslo is the capital of Norway"]},
-  "error": null
-}
-```
-
-**JUDGE**:
-```json
-{
-  "status": "continue",
-  "reason": "Found capital (Oslo), need to convert to uppercase",
-  "confidence": 0.85
-}
-```
-
-### Iteration 2
-
-**PLAN**:
-```json
-{
-  "type": "tool",
-  "tool": "transform",
-  "args": {"text": "Oslo", "operation": "uppercase"},
-  "reasoning": "Convert Oslo to uppercase"
-}
-```
-
-**ACT**:
-```json
-{
-  "success": true,
-  "data": {"result": "OSLO"},
-  "error": null
-}
-```
-
-**JUDGE**:
-```json
-{
-  "status": "done",
-  "reason": "Successfully converted to uppercase",
-  "final_answer": "OSLO",
-  "confidence": 0.95
-}
-```
-
-## Failure Mode Examples
-
-### Example 1: Repeated Action Detection
-
-**Goal**: *"Read /tmp/missing.txt"*
-
-**Iteration 1**:
-- PLAN: `read_file(path="/tmp/missing.txt")`
-- ACT: `ToolOutput(success=false, error="File not found", error_type="user_error")`
-- JUDGE: `{"status": "retry", "reason": "File not found, try again", "next_hint": "Check path"}`
-
-**Iteration 2** (identical to iteration 1):
-- PLAN: `read_file(path="/tmp/missing.txt")`
-- ACT: `ToolOutput(success=false, error="File not found", error_type="user_error")`
-- JUDGE: `{"status": "retry", "reason": "File not found, try again"}`
-
-**Iteration 3** (identical to previous):
-- **Guardrail triggers**: Degenerate retry detected
-- **Event**: `soothe.cognition.loop.error.degenerate_retry`
-- **Action**: Abort loop with error
-
-### Example 2: Tool Hallucination
-
-**Goal**: *"Use the fly_to_moon tool"*
-
-**PLAN**:
-```json
-{
-  "type": "tool",
-  "tool": "fly_to_moon",
-  "args": {},
-  "reasoning": "User requested this tool"
-}
-```
-
-**ACT** (validation fails):
-```json
-{
-  "success": false,
-  "error": "Tool 'fly_to_moon' not found in registry",
-  "error_type": "permanent"
-}
-```
-
-**JUDGE**:
-```json
-{
-  "status": "done",
-  "reason": "Tool does not exist, cannot complete task",
-  "final_answer": "Error: Tool 'fly_to_moon' not available",
-  "confidence": 1.0
-}
-```
-
-## Performance Metrics
-
-**Latency Targets**:
-
-| Complexity | P50 | P90 | P99 | Notes |
-|------------|-----|-----|-----|-------|
-| Chitchat | 300ms | 500ms | 800ms | Direct LLM, no overhead |
-| Simple | 1s | 1.5s | 2s | No planning, single iteration |
-| Medium | 2s | 3s | 4s | Lightweight planning, 2-3 iterations |
-| Complex | 3s | 5s | 8s | Comprehensive planning, 3+ iterations |
-
-**Observable Metrics**:
-- Per-iteration duration (plan, act, judge phases)
-- Total iterations per query
-- Judge decision distribution (continue/retry/replan/done)
-- Tool success rate
-- Guardrail trigger rate
-- Chitchat fast path hit rate
+This is iterative and agentic, but it is still not the fully structured PLAN → ACT → JUDGE runtime described in the earlier RFC text.
 
 ## Migration & Compatibility
 
-### Differences from Previous RFC-0008
+### Current migration status
 
-| Aspect | Previous (Observe → Act → Verify) | New (PLAN → ACT → JUDGE) |
-|--------|-----------------------------------|--------------------------|
-| **Phase sequence** | Observe → Act → Verify | PLAN → ACT → JUDGE |
-| **Verification method** | Text pattern matching | LLM with structured output |
-| **Tool outputs** | Plain strings | Required `ToolOutput` structure |
-| **Failure detection** | None | Explicit detection (repeated actions, hallucinations, silent failures) |
-| **Decision types** | Continue/stop only | Continue/retry/replan/done |
-| **Memory integration** | Basic | Enhanced with episodic/semantic layers |
+RFC-0008 is in a transitional state:
 
-### Backward Compatibility
+| Area | Current Status |
+|------|----------------|
+| Default iterative execution | Implemented |
+| Chitchat fast path | Implemented |
+| Adaptive planning | Implemented |
+| Planner reflection-based verification | Implemented |
+| PLAN → ACT → JUDGE helper scaffolding | Partial |
+| Structured LoopAgent integration | Partial |
+| `soothe.cognition.loop.*` as active runtime namespace | Not yet primary |
+| Structured judge engine as active runtime verifier | Not yet primary |
 
-**Tools**:
-- Legacy tools returning strings wrapped automatically
-- No changes required to existing tool implementations
-- Gradual migration to structured outputs recommended
+### Backward compatibility
 
-**Events**:
-- New events don't conflict with old events
-- Old events preserved for compatibility
-- Migration guide provided for event consumers
-
-**API**:
-- Same `runner.astream()` interface
-- New schemas are internal
-- Final answers still delivered as text
+The external `runner.astream()` interface is unchanged. The main differences are internal execution semantics, observability, and the gradual introduction of LoopAgent-specific modules and schemas.
 
 ## Future Enhancements
 
-1. **Predictive iteration**: Estimate required iterations before execution
-2. **Adaptive thresholds**: Learn optimal complexity thresholds from usage
-3. **Streaming judgment**: Evaluate quality during execution, not just after
-4. **Cost optimization**: Balance iteration count vs. quality metrics
-5. **Learning from iteration history**: Improve planning accuracy over time
-6. **Parallel judgment**: Judge multiple independent tool results concurrently
+1. Wire `use_judge_engine` into the live loop
+2. Promote `_agentic_plan()` / `_agentic_judge()` from scaffolding to active path
+3. Integrate `ToolLoopAdapter` into ACT execution
+4. Integrate `FailureDetector` into the main loop
+5. Decide whether to migrate the live event namespace from `soothe.agentic.*` to `soothe.cognition.loop.*`
+6. Give agentic mode a first-class checkpoint mode distinct from `single_pass`
+7. Revisit richer loop-native episodic memory integration
 
 ## References
 
 - RFC-0001: System Conceptual Design
-- RFC-0007: Autonomous Iteration Loop (explicit goal-driven mode)
+- RFC-0007: Autonomous Iteration Loop
 - RFC-0009: DAG-Based Execution and Unified Concurrency
+- RFC-0010: Failure Recovery Persistence
 - RFC-0012: Unified LLM-Based Classification System
 - RFC-0015: Progress Event Protocol
-- Claude Design Principles: `claude_design.md`
+- IG-045: Agentic Loop Implementation Guide
 - Draft Document: `docs/drafts/004-rfc-0008-polish-agentic-loop.md`
 
 ## Changelog
 
+### 2026-03-29
+- Merged RFC-0023 query execution performance content
+- Added query execution tiers (fast, light-agentic, full-agentic)
+- Added query-scoped observation reuse semantics
+- Added token-count planning strategy heuristics
+- Added early termination optimization and timing instrumentation
+
+### 2026-03-28
+- Aligned RFC-0008 with the current runtime instead of the intended end state
+- Documented the active default loop as observe → act → verify
+- Clarified that PLAN → ACT → JUDGE modules and helpers exist but are only partially wired
+- Updated event taxonomy to match the currently emitted `soothe.agentic.*` surface
+- Updated configuration to match the real `agentic.*` settings
+- Corrected memory, persistence, and autonomous-integration wording to reflect current implementation
+
 ### 2026-03-27
-- **Major update**: Added Layer Integration Architecture section
-  - Documented layer boundaries, ownership, and responsibilities
-  - Specified context borrowing model (unidirectional: Layer 3 → Layer 2 → Layer 1)
-  - Added execution flow diagrams for default and autonomous modes
-  - Defined goal delegation and escalation protocols
-  - Clarified planning integration across layers
-- **Event namespace migration**: `soothe.agentic.*` → `soothe.cognition.loop.*`
-  - Rationale: Events belong to cognition domain (loops, goals, planning, classification)
-  - Updated all event names and examples throughout RFC
-  - Added event taxonomy: `soothe.cognition.loop.*`, `soothe.cognition.goal.*`
-- **Added Module Structure section**:
-  - Hierarchical organization for `loop_agent/` and `goal_manager/`
-  - Consistent structure: `core/`, `integration/` (or `dag/`), `execution/` (or `manager/`)
-  - Clarified separation from existing `planning/` module
-  - Documented integration with protocol layer
-- **Clarified planning separation**:
-  - PlannerProtocol creates immutable plans
-  - LoopAgent manages mutable plan execution state
-  - No duplication, clear separation of concerns
-- Rewrote RFC-0008 with PLAN → ACT → JUDGE sequence
-- Rewrote RFC-0008 with PLAN → ACT → JUDGE sequence
-- Added structured schemas (AgentDecision, JudgeResult, ToolOutput, LoopState)
-- Added LLM-based judgment with structured output
-- Added guardrails & failure modes section
-- Added tool interface requirements
-- Enhanced memory architecture with episodic/semantic layers
-- Updated event system with new phase events
-- Added control layer architecture
-- Added three-layer loop architecture diagram
-- Added example execution traces
-- Added failure mode examples
+- Major rewrite toward a fuller PLAN → ACT → JUDGE architecture
+- Added Layer Integration Architecture section
+- Added cognition-loop event taxonomy
+- Added LoopAgent module structure and structured schemas
 
 ### 2026-03-22
 - Rewrote RFC-0008 to focus on Agentic Loop architecture
 - Replaced single-pass execution model with agentic loop as default
 - Added observe → act → verify three-phase loop
-- Introduced adaptive planning strategies (none/lightweight/comprehensive)
-- Preserved chitchat fast path for simple queries
-- Referenced RFC-0007 for Autonomous mode without duplication
-- Added iteration control, verification strictness, and early termination
-- Maintained core performance optimizations from original RFC-0008
+- Introduced adaptive planning strategies
+- Preserved chitchat fast path
 
 ### 2026-03-19 (Original RFC-0008)
 - Initial draft with unified classification system

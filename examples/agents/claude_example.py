@@ -13,10 +13,10 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from _config_helper import load_example_config
+
+from _shared.streaming import run_with_streaming
 
 from soothe.subagents.claude import create_claude_subagent
-from _shared.streaming import run_with_streaming
 
 load_dotenv()
 
@@ -33,10 +33,12 @@ async def main() -> None:
 
     await run_with_streaming(
         runnable,
-        [HumanMessage(
-            content="Analyze the src/soothe/ directory and provide a summary of the project "
-            "architecture, listing all modules and their responsibilities."
-        )],
+        [
+            HumanMessage(
+                content="Analyze the src/soothe/ directory and provide a summary of the project "
+                "architecture, listing all modules and their responsibilities."
+            )
+        ],
         show_subagents=True,
     )
 

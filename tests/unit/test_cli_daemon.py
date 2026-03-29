@@ -6,12 +6,15 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import typer
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.daemon.server import _ClientConn
+from soothe.daemon.transports.unix_socket import _ClientConn as UnixTransportClientConn
 from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
 
 
@@ -99,6 +102,7 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
 async def test_daemon_input_message_enqueues_options() -> None:
     daemon = SootheDaemon(SootheConfig())
     client = _ClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    daemon._query_running = False
 
     await daemon._handle_client_message(
         client,
@@ -110,6 +114,36 @@ async def test_daemon_input_message_enqueues_options() -> None:
     assert queued["text"] == "crawl"
     assert queued["autonomous"] is True
     assert queued["max_iterations"] == 12
+
+
+@pytest.mark.asyncio
+async def test_daemon_input_message_returns_busy_error_while_query_running() -> None:
+    daemon = SootheDaemon(SootheConfig())
+    daemon._query_running = True
+    daemon._runner = SimpleNamespace(current_thread_id="thread-busy")
+
+    transport = SimpleNamespace(send=AsyncMock())
+    transport_client = UnixTransportClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    session = SimpleNamespace(transport=transport, transport_client=transport_client)
+    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
+
+    await daemon._handle_client_message(
+        "client-1",
+        {"type": "input", "text": "crawl", "autonomous": True, "max_iterations": 12},
+    )
+
+    transport.send.assert_awaited_once_with(
+        transport_client,
+        {
+            "type": "error",
+            "code": "DAEMON_BUSY",
+            "message": (
+                "Daemon is already processing another query. "
+                "Wait for it to finish or cancel it before starting a new one."
+            ),
+            "thread_id": "thread-busy",
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -261,20 +295,26 @@ async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None
         await daemon_exec._connect_with_retries(_FailingClient())
 
 
-def test_wait_for_daemon_ready_uses_configured_socket(monkeypatch, tmp_path: Path) -> None:
-    cfg = SootheConfig(daemon={"transports": {"unix_socket": {"path": str(tmp_path / "custom.sock")}}})
-    observed: list[Path] = []
+@pytest.mark.asyncio
+async def test_daemon_client_wait_for_daemon_ready_returns_ready_event() -> None:
+    client = _SequencedClient(
+        events=[
+            {"type": "status", "state": "idle", "thread_id": ""},
+            {"type": "daemon_ready", "state": "ready"},
+        ]
+    )
 
-    monkeypatch.setattr(headless_exec.time, "sleep", lambda _delay: None)
+    event = await DaemonClient.wait_for_daemon_ready(client, ready_timeout_s=0.5)
 
-    def _fake_is_socket_ready(sock: Path) -> bool:
-        observed.append(sock)
-        return True
+    assert event == {"type": "daemon_ready", "state": "ready"}
 
-    monkeypatch.setattr(headless_exec, "_is_socket_ready", _fake_is_socket_ready)
 
-    assert headless_exec._wait_for_daemon_ready(cfg, timeout_s=0.5) is True
-    assert observed == [tmp_path / "custom.sock"]
+@pytest.mark.asyncio
+async def test_daemon_client_wait_for_daemon_ready_raises_on_error_state() -> None:
+    client = _SequencedClient(events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}])
+
+    with pytest.raises(RuntimeError, match="startup failed"):
+        await DaemonClient.wait_for_daemon_ready(client, ready_timeout_s=0.5)
 
 
 @pytest.mark.asyncio
@@ -364,3 +404,127 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
     assert status_messages[0]["thread_id"] == "thread-start"
     assert status_messages[-1]["state"] == "idle"
     assert status_messages[-1]["thread_id"] == "thread-start"
+
+
+@pytest.mark.asyncio
+async def test_run_headless_via_daemon_returns_direct_error_before_query_start(monkeypatch) -> None:
+    events = iter(
+        [
+            {"type": "status", "state": "idle", "thread_id": ""},
+            {"type": "daemon_ready", "state": "ready"},
+            {"type": "status", "state": "idle", "thread_id": "thread-123", "new_thread": True},
+            {"type": "subscription_confirmed", "thread_id": "thread-123", "client_id": "c1", "verbosity": "normal"},
+            {"type": "error", "code": "DAEMON_BUSY", "message": "busy"},
+        ]
+    )
+
+    class _BusyClient:
+        async def connect(self) -> None:
+            return None
+
+        async def request_daemon_ready(self) -> None:
+            return None
+
+        async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
+            return {"type": "daemon_ready", "state": "ready"}
+
+        async def send_new_thread(self) -> None:
+            return None
+
+        async def send_resume_thread(self, thread_id: str) -> None:
+            return None
+
+        async def subscribe_thread(self, thread_id: str, verbosity: str = "normal") -> None:
+            return None
+
+        async def wait_for_subscription_confirmed(
+            self, thread_id: str, verbosity: str = "normal", timeout: float = 5.0
+        ) -> None:
+            return None
+
+        async def send_input(
+            self,
+            text: str,
+            autonomous: bool = False,  # noqa: FBT001, FBT002
+            max_iterations: int | None = None,
+            subagent: str | None = None,
+        ) -> None:
+            return None
+
+        async def read_event(self) -> dict[str, Any] | None:
+            return next(events, None)
+
+        async def close(self) -> None:
+            return None
+
+    stderr: list[str] = []
+
+    monkeypatch.setattr("soothe.daemon.DaemonClient", lambda sock=None: _BusyClient())
+    monkeypatch.setattr(typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None)
+
+    code = await daemon_exec.run_headless_via_daemon(SootheConfig(), "analyze project structure")
+
+    assert code == 1
+    assert stderr == ["Daemon error: busy"]
+
+
+def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
+    cfg = SootheConfig()
+    stop_running = MagicMock()
+    daemon_start = MagicMock()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(headless_exec.SootheDaemon, "_is_socket_live", staticmethod(lambda _sock: False))
+    monkeypatch.setattr(headless_exec.SootheDaemon, "is_running", staticmethod(lambda: True))
+    monkeypatch.setattr(headless_exec.SootheDaemon, "stop_running", staticmethod(stop_running))
+    monkeypatch.setattr("soothe.ux.cli.commands.daemon_cmd.daemon_start", daemon_start)
+
+    def _fake_asyncio_run(coro: object) -> int:
+        captured["coro"] = coro
+        return 0
+
+    monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
+    monkeypatch.setattr(headless_exec.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code)))
+
+    with pytest.raises(SystemExit) as exc:
+        headless_exec.run_headless(cfg, "analyze project structure")
+
+    assert exc.value.code == 0
+    stop_running.assert_called_once()
+    daemon_start.assert_called_once()
+    assert captured["coro"].cr_code.co_name == "run_headless_via_daemon"
+    captured["coro"].close()
+
+
+@pytest.mark.asyncio
+async def test_daemon_ready_request_replies_without_session() -> None:
+    daemon = SootheDaemon(SootheConfig())
+    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=None))  # type: ignore[attr-defined]
+
+    sent: list[dict[str, Any]] = []
+
+    async def _fake_send(client: Any, msg: dict[str, Any]) -> None:
+        assert isinstance(client, _ClientConn)
+        sent.append(msg)
+
+    daemon._send = _fake_send  # type: ignore[method-assign]
+    daemon._readiness_state = "ready"
+    daemon._readiness_message = None
+
+    client = _ClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    await daemon._handle_client_message(client, {"type": "daemon_ready"})
+
+    assert sent == [{"type": "daemon_ready", "state": "ready", "message": None}]
+
+
+@pytest.mark.asyncio
+async def test_detach_ignores_connection_loss_for_transport_session() -> None:
+    daemon = SootheDaemon(SootheConfig())
+    transport = SimpleNamespace(send=AsyncMock(side_effect=ConnectionError("Connection lost")))
+    transport_client = UnixTransportClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    session = SimpleNamespace(transport=transport, transport_client=transport_client)
+    daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
+
+    await daemon._handle_client_message("client-1", {"type": "detach"})
+
+    transport.send.assert_awaited_once()

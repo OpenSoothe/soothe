@@ -221,6 +221,9 @@ class TestSimplePlanner:
 
         assert "test goal" in prompt
         assert "plan" in prompt.lower()
+        assert "Prefer the fewest useful steps" in prompt
+        assert "use 1 step when planning is unnecessary" in prompt
+        assert "small, fast-verifiable steps" in prompt
 
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""

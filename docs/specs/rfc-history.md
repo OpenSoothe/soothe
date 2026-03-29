@@ -6,6 +6,9 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-29 | RFC-0023 | Deleted | Content merged into RFC-0013 (daemon readiness) and RFC-0008 (observation reuse, planning strategy) |
+| 2026-03-29 | RFC-0013 | Implemented | Merged RFC-0023 daemon readiness architecture (lifecycle phases, handshake protocol) |
+| 2026-03-29 | RFC-0008 | Draft | Merged RFC-0023 agentic loop performance (execution tiers, observation reuse, planning strategy) |
 | 2026-03-27 | RFC-0002 | Implemented | Status updated to reflect complete implementation of all 8 core protocols |
 | 2026-03-27 | RFC-0003 | Implemented | Status updated to reflect full CLI/TUI implementation |
 | 2026-03-27 | RFC-0004 | Implemented | Status updated to reflect Skillify subagent implementation |
@@ -23,6 +26,7 @@ This document tracks the change history of all RFCs in this project.
 | 2026-03-13 | RFC-0005 | Draft | Weaver Agent Architecture Design |
 | 2026-03-18 | RFC-0009 | Draft | DAG-Based Execution and Unified Concurrency |
 | 2026-03-18 | RFC-0010 | Draft | Failure Recovery, Progressive Persistence, and Artifact Storage |
+| 2026-03-28 | RFC-0023 | Draft | Daemon query performance and readiness architecture |
 | 2026-03-20 | RFC-0015 | Draft | Progress Event Protocol |
 
 ## Notes

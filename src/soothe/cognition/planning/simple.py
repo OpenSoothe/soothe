@@ -201,8 +201,11 @@ class SimplePlanner:
                 "  ]\n",
                 "}\n\n",
                 "Rules:",
-                "- Break into 2-5 concrete, actionable steps",
-                "- Use depends_on for sequential dependencies (optional)",
+                "- Prefer the fewest useful steps; use 1 step when planning is unnecessary",
+                "- Usually return 1-3 concrete, actionable steps; only use 4-5 if strictly necessary",
+                "- Prefer small, fast-verifiable steps that gather evidence before broad synthesis",
+                "- Make each step independently checkable and avoid redundant setup/research steps",
+                "- Use depends_on only when a later step truly requires an earlier result",
                 "- execution_hint: 'tool' for tool calls, 'subagent' when delegating, 'auto' for LLM reasoning",
                 "- Return ONLY valid JSON, no markdown code blocks\n",
             ]

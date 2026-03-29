@@ -62,6 +62,7 @@ def check_backend_functionality(backend_type: str) -> None:
 def check_configuration() -> None:
     """Validate configuration file in detail."""
     import yaml
+
     from soothe.config import SootheConfig
 
     config_path = Path.home() / ".soothe" / "config" / "config.yml"
@@ -70,7 +71,7 @@ def check_configuration() -> None:
     try:
         with open(config_path) as f:
             raw_config = yaml.safe_load(f)
-        print(f"✓ YAML syntax valid")
+        print("✓ YAML syntax valid")
     except Exception as e:
         print(f"✗ YAML parsing failed: {e}")
         return
@@ -117,7 +118,7 @@ def check_daemon_socket() -> None:
         print(f"✓ Daemon socket responsive: {result}")
         sock.close()
 
-    except socket.timeout:
+    except TimeoutError:
         print("✗ Daemon socket timeout (daemon may be hung)")
     except Exception as e:
         print(f"✗ Daemon socket communication failed: {e}")

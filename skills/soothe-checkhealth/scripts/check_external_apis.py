@@ -65,7 +65,7 @@ def check_api_connectivity(
                 "status": "warning",
                 "message": f"API reachable but authentication failed (check {api_key_env})",
             }
-        elif resp.status_code >= 500:
+        if resp.status_code >= 500:
             return {
                 "name": name,
                 "status": "warning",
@@ -156,9 +156,7 @@ def check_mcp_servers() -> dict[str, Any]:
 def check_browser_runtime() -> dict[str, Any]:
     """Check Chrome/chromedriver availability and version match."""
     # Try to run the check_chrome.sh script
-    script_path = (
-        Path(__file__).parent.parent.parent.parent / "scripts" / "check_chrome.sh"
-    )
+    script_path = Path(__file__).parent.parent.parent.parent / "scripts" / "check_chrome.sh"
 
     if not script_path.exists():
         return {
@@ -181,12 +179,11 @@ def check_browser_runtime() -> dict[str, Any]:
                 "status": "ok",
                 "message": "Chrome and chromedriver versions match",
             }
-        else:
-            return {
-                "name": "browser_runtime",
-                "status": "warning",
-                "message": f"Chrome/chromedriver issue: {result.stderr.strip()}",
-            }
+        return {
+            "name": "browser_runtime",
+            "status": "warning",
+            "message": f"Chrome/chromedriver issue: {result.stderr.strip()}",
+        }
     except subprocess.TimeoutExpired:
         return {
             "name": "browser_runtime",
@@ -237,8 +234,7 @@ def main() -> int:
     # Never critical (exit 2)
     if result["status"] == "healthy":
         return 0
-    else:
-        return 1
+    return 1
 
 
 if __name__ == "__main__":

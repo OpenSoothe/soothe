@@ -71,8 +71,8 @@ RFC-0001 (System Conceptual Design)
 
 ## RFC Status Summary
 
-- **Total RFCs**: 22
-- **Implemented**: 20
+- **Total RFCs**: 21
+- **Implemented**: 19
 - **Draft**: 2
 
 ## Line Count Summary (After Compaction)

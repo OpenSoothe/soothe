@@ -27,7 +27,6 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
 from soothe.daemon import pid_path, socket_path
-from soothe.config import SOOTHE_HOME
 
 # Track if we started a test daemon
 _test_daemon_pid: int | None = None
@@ -205,7 +204,7 @@ def check_socket_responsiveness() -> dict[str, Any]:
             },
         }
 
-    except socket.timeout:
+    except TimeoutError:
         return {
             "name": "socket_responsiveness",
             "status": "error",
@@ -412,11 +411,13 @@ def check_daemon_comprehensive() -> dict[str, Any]:
                 process_result["status"] = "warning"
                 process_result["message"] = f"{process_result['message']} (daemon healthy via socket)"
         else:
-            checks.append({
-                "name": "process_alive",
-                "status": "warning",
-                "message": "No valid PID to check (daemon healthy via socket)",
-            })
+            checks.append(
+                {
+                    "name": "process_alive",
+                    "status": "warning",
+                    "message": "No valid PID to check (daemon healthy via socket)",
+                }
+            )
 
         # Check for stale locks
         stale_result = check_stale_locks()
@@ -448,38 +449,40 @@ def check_daemon_comprehensive() -> dict[str, Any]:
                 "checks": checks,
                 "message": "Daemon process running but socket not responsive",
             }
-        else:
-            # Stale PID - process dead
-            checks.append({
+        # Stale PID - process dead
+        checks.append(
+            {
                 "name": "stale_locks",
                 "status": "error",
                 "message": "Stale PID file (process not running)",
-            })
-
-            return {
-                "category": "daemon",
-                "status": "critical",
-                "checks": checks,
-                "message": "Daemon not running (stale PID file)",
             }
-    else:
-        # No valid PID file
-        checks.append({
-            "name": "process_alive",
-            "status": "skipped",
-            "message": "Skipped (no valid PID)",
-        })
-
-        # Check for stale locks
-        stale_result = check_stale_locks()
-        checks.append(stale_result)
+        )
 
         return {
             "category": "daemon",
             "status": "critical",
             "checks": checks,
-            "message": "Daemon not running",
+            "message": "Daemon not running (stale PID file)",
         }
+    # No valid PID file
+    checks.append(
+        {
+            "name": "process_alive",
+            "status": "skipped",
+            "message": "Skipped (no valid PID)",
+        }
+    )
+
+    # Check for stale locks
+    stale_result = check_stale_locks()
+    checks.append(stale_result)
+
+    return {
+        "category": "daemon",
+        "status": "critical",
+        "checks": checks,
+        "message": "Daemon not running",
+    }
 
 
 def run_checks() -> dict[str, Any]:
@@ -551,10 +554,9 @@ def main() -> int:
         # Return exit code
         if result["status"] == "healthy":
             return 0
-        elif result["status"] == "warning":
+        if result["status"] == "warning":
             return 1
-        else:
-            return 2
+        return 2
     finally:
         # Always cleanup test daemon if we started one
         stop_test_daemon()

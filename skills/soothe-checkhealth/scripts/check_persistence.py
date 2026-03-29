@@ -10,7 +10,6 @@ Validates:
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -154,7 +153,7 @@ def run_checks() -> dict[str, Any]:
         if check["status"] == "error":
             status = "critical"
             break
-        elif check["status"] in ("warning", "info") and status != "critical":
+        if check["status"] in ("warning", "info") and status != "critical":
             status = "warning"
 
     return {
@@ -172,10 +171,9 @@ def main() -> int:
     # Return exit code
     if result["status"] == "healthy":
         return 0
-    elif result["status"] == "warning":
+    if result["status"] == "warning":
         return 1
-    else:
-        return 2
+    return 2
 
 
 if __name__ == "__main__":

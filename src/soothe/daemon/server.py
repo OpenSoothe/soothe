@@ -90,6 +90,9 @@ class SootheDaemon(DaemonHandlersMixin):
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
         # Draft thread tracking for lazy creation
         self._draft_thread_id: str | None = None  # Thread ID created but not yet persisted
+        # Daemon readiness state for explicit startup handshake (RFC-0023)
+        self._readiness_state: str = "starting"
+        self._readiness_message: str | None = None
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -116,6 +119,9 @@ class SootheDaemon(DaemonHandlersMixin):
             self._pid_lock_fd = None
             raise RuntimeError("Another daemon still owns the socket")
 
+        self._readiness_state = "warming"
+        self._readiness_message = None
+
         # Configure custom default executor for asyncio.to_thread() calls
         # This prevents "couldn't stop thread" errors on daemon shutdown
         loop = asyncio.get_running_loop()
@@ -123,7 +129,12 @@ class SootheDaemon(DaemonHandlersMixin):
         loop.set_default_executor(self._default_executor)
 
         # Run heavy SootheRunner init off the event loop
-        self._runner = await asyncio.to_thread(SootheRunner, self._config)
+        try:
+            self._runner = await asyncio.to_thread(SootheRunner, self._config)
+        except Exception as exc:
+            self._readiness_state = "error"
+            self._readiness_message = str(exc)
+            raise
 
         # Initialize persistent input history
         self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
@@ -164,6 +175,17 @@ class SootheDaemon(DaemonHandlersMixin):
         await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
         if self._input_loop_task is None or self._input_loop_task.done():
             self._input_loop_task = asyncio.create_task(self._input_loop())
+
+        self._readiness_state = "ready"
+        self._readiness_message = None
+
+    def daemon_ready_message(self) -> dict[str, Any]:
+        """Return the current daemon readiness message for client handshakes."""
+        return {
+            "type": "daemon_ready",
+            "state": self._readiness_state,
+            "message": self._readiness_message,
+        }
 
     @staticmethod
     def _is_socket_live(sock: Path) -> bool:
@@ -341,6 +363,8 @@ class SootheDaemon(DaemonHandlersMixin):
 
     async def stop(self) -> None:
         """Shut down the daemon gracefully."""
+        self._readiness_state = "stopped"
+        self._readiness_message = None
         self._running = False
         self._query_running = False
 

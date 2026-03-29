@@ -24,6 +24,18 @@ class DaemonHandlersMixin:
     on the concrete class.
     """
 
+    async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Send a direct response to a specific client when possible."""
+        try:
+            session = await self._session_manager.get_session(client_id) if isinstance(client_id, str) else None
+            if session is not None:
+                await session.transport.send(session.transport_client, msg)
+                return
+            if hasattr(client_id, "writer"):
+                await self._send(client_id, msg)
+        except Exception:
+            logger.debug("Failed to send direct response to client %r", client_id, exc_info=True)
+
     async def _handle_client(
         self,
         reader: asyncio.StreamReader,
@@ -45,6 +57,7 @@ class DaemonHandlersMixin:
             }
 
             client.writer.write(encode(initial_msg))
+            client.writer.write(encode(self.daemon_ready_message()))
             await client.writer.drain()
         except Exception:
             logger.exception("Failed to send initial status to client")
@@ -82,6 +95,22 @@ class DaemonHandlersMixin:
         if msg_type == "input":
             text = msg.get("text", "").strip()
             if text:
+                multi_threading_enabled = getattr(self._config.daemon, "multi_threading_enabled", False)
+                if self._query_running and not multi_threading_enabled:
+                    await self._send_client_message(
+                        client_id,
+                        {
+                            "type": "error",
+                            "code": "DAEMON_BUSY",
+                            "message": (
+                                "Daemon is already processing another query. "
+                                "Wait for it to finish or cancel it before starting a new one."
+                            ),
+                            "thread_id": self._runner.current_thread_id if self._runner else "",
+                        },
+                    )
+                    return
+
                 max_iterations = msg.get("max_iterations")
                 parsed_max: int | None = (
                     max_iterations if isinstance(max_iterations, int) and max_iterations > 0 else None
@@ -158,6 +187,8 @@ class DaemonHandlersMixin:
                                 "message": f"Thread {thread_id} not found",
                             },
                         )
+        elif msg_type == "daemon_ready":
+            await self._send_client_message(client_id, self.daemon_ready_message())
         elif msg_type == "new_thread":
             # Start a fresh thread - create draft thread ID without persisting yet
             from soothe.core.runner._types import _generate_thread_id
@@ -202,9 +233,7 @@ class DaemonHandlersMixin:
         elif msg_type == "thread_artifacts":
             await self._handle_thread_artifacts(msg)
         elif msg_type == "detach":
-            session = await self._session_manager.get_session(client_id)
-            if session:
-                await session.transport.send(session.transport_client, {"type": "status", "state": "detached"})
+            await self._send_client_message(client_id, {"type": "status", "state": "detached"})
         elif msg_type == "subscribe_thread":
             thread_id = msg.get("thread_id", "").strip()
             verbosity = msg.get("verbosity", "normal")  # RFC-0022: optional, default='normal'

@@ -1,7 +1,8 @@
 """Tests for type definitions."""
 
 import pytest
-from soothe_sdk.types import PluginManifest, PluginHealth
+
+from soothe_sdk.types import PluginHealth, PluginManifest
 
 
 def test_plugin_manifest():
@@ -26,9 +27,7 @@ def test_plugin_health():
     assert health.status == "healthy"
     assert health.details is None
 
-    health_with_details = PluginHealth(
-        status="degraded", details={"error": "API unavailable"}
-    )
+    health_with_details = PluginHealth(status="degraded", details={"error": "API unavailable"})
 
     assert health_with_details.status == "degraded"
     assert health_with_details.details == {"error": "API unavailable"}

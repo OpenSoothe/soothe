@@ -76,3 +76,5 @@ class RunnerState:
     unified_classification: Any = None  # Type: UnifiedClassification
     cached_routing: Any = None  # Cached classification result for reuse
     iteration_records: list[Any] = field(default_factory=list)  # AgenticIterationRecord list
+    observation_refresh_needed: bool = False
+    observation_scope_key: str = ""

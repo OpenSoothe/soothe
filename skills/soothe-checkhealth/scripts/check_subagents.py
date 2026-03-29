@@ -380,7 +380,7 @@ def main() -> int:
     # Return exit code
     if errors > 0:
         return 2
-    elif warnings > 0:
+    if warnings > 0:
         return 1
     return 0
 

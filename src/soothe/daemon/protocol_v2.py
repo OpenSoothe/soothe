@@ -87,6 +87,10 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         elif not isinstance(msg.get("thread_id"), str):
             errors.append("Resume thread thread_id must be a string")
 
+    elif msg_type == "daemon_ready":
+        # No additional fields required
+        pass
+
     # Thread management messages (RFC-0017)
     elif msg_type == "thread_list":
         # filter is optional

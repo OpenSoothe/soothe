@@ -8,7 +8,6 @@ Usage:
 """
 
 import subprocess
-import sys
 
 TASKS = [
     "Create a plan to implement a REST API for user management with authentication.",

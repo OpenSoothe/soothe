@@ -1,7 +1,8 @@
 """Test configuration for soothe-sdk tests."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture

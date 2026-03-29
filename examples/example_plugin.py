@@ -1,6 +1,6 @@
 """Example plugin demonstrating the Soothe SDK."""
 
-from soothe_sdk import plugin, tool, tool_group, subagent
+from soothe_sdk import plugin, subagent, tool, tool_group
 from soothe_sdk.types import PluginHealth
 
 

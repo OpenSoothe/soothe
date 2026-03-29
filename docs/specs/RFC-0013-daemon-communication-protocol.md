@@ -12,6 +12,8 @@
 
 This RFC defines a transport-agnostic daemon communication protocol that supports Unix domain sockets, WebSockets, and HTTP REST. The protocol specifies a common JSON-based message format, security requirements, and implementation interface. This architecture enables the Soothe daemon to serve both local CLI/TUI clients (via Unix socket) and remote/web clients (via WebSocket/HTTP) using the same protocol layer, while maintaining backward compatibility with existing clients.
 
+**Update (2026-03-29)**: Merged RFC-0023 daemon readiness architecture. Added explicit lifecycle phases, staged startup, and readiness handshake protocol.
+
 **Update (2026-03-28)**: Added Daemon Lifecycle Semantics section clarifying daemon persistence, client detachment, and shutdown behavior across all interaction modes.
 
 ## Motivation
@@ -251,6 +253,81 @@ When TUI client executes `/detach` while thread is in `running` state:
 - **Idle Thread**: No warning, exit immediately
 
 This prevents accidental exit during active execution while respecting user intent and providing clear distinction between stop-and-exit vs detach-and-continue.
+
+### Daemon Startup Readiness
+
+The daemon startup follows explicit lifecycle phases to avoid false readiness signals.
+
+#### Lifecycle States
+
+The daemon SHALL expose the following lifecycle states:
+
+| State | Meaning | Client Behavior |
+|-------|---------|-----------------|
+| `starting` | Process exists, startup begun | No request-serving assumed |
+| `warming` | Transports/core initializing, not query-ready | Boundedly retry |
+| `ready` | Runner warmup complete, query execution safe | Proceed with thread/input |
+| `degraded` | Reachable but subsystem unhealthy | May reject or limit requests |
+| `error` | Startup/runtime failure prevents servicing | Surface explicit error |
+
+#### Startup Phases
+
+1. **Bind phase**: Establish minimal control transport early, expose state as `starting` or `warming`
+2. **Warm phase**: Initialize `SootheRunner`, thread/session support, request-serving dependencies
+3. **Readiness validation**: Perform trivial internal control-path validation, transition to `ready` only on success
+
+#### Readiness Handshake Protocol
+
+The handshake replaces implicit socket-based readiness with explicit lifecycle query:
+
+1. Client connects to daemon control transport
+2. Client requests lifecycle/readiness state
+3. Daemon returns one of: `starting`, `warming`, `ready`, `degraded`, `error`
+4. Client proceeds only after `ready`
+5. If `degraded` or `error`, client surfaces specific failure (not generic timeout)
+
+**Behavioral Rules**:
+- Headless execution must wait on readiness state, not raw socket liveness
+- Clients may retry boundedly while daemon reports `starting` or `warming`
+- Clients must not send normal query execution requests before `ready`
+- If readiness never arrives, error must reflect lifecycle state where known
+
+#### Stale Daemon Cleanup
+
+Before daemon restart, stale daemon processes must be cleaned:
+- Check for existing PID file and socket file
+- If PID file exists but process is dead, remove stale files
+- If daemon is truly running, client connects to existing daemon
+- If daemon restart needed, ensure clean socket/PID state before spawning
+
+#### DAEMON_BUSY Rejection
+
+When a daemon is already processing a request for a thread:
+- New requests for that thread return `DAEMON_BUSY` error code
+- Client should surface "thread is busy" message, not retry blindly
+- This prevents request queueing and overlap on single-thread execution
+
+#### Readiness Error Codes
+
+Error codes related to daemon lifecycle:
+
+| Code | Meaning |
+|------|---------|
+| `DAEMON_STARTING` | Daemon is warming up, not yet ready |
+| `DAEMON_BUSY` | Thread already processing a request |
+| `DAEMON_DEGRADED` | Daemon reachable but subsystem unhealthy |
+| `DAEMON_ERROR` | Startup or runtime failure |
+
+#### Startup Instrumentation
+
+The daemon SHOULD record timings for:
+- bind start/end
+- runner warmup
+- transport readiness
+- readiness validation
+- lifecycle transition reason for `degraded` or `error`
+
+This supports startup timeout diagnosis and regression detection.
 
 ### Abstract Schemas
 
@@ -700,6 +777,20 @@ ws.onmessage = (event) => {
 - RFC-0001 (System Conceptual Design)
 - RFC-0002 (Core Modules Architecture Design)
 - RFC-0003 (CLI TUI Architecture Design - daemon IPC specification)
+
+## Changelog
+
+### 2026-03-29
+- Merged RFC-0023 daemon readiness content
+- Added explicit lifecycle states (starting, warming, ready, degraded, error)
+- Added staged startup architecture and readiness handshake protocol
+- Added stale daemon cleanup and DAEMON_BUSY rejection
+- Added readiness error codes and startup instrumentation
+
+### 2026-03-28
+- Added Daemon Lifecycle Semantics section
+- Clarified daemon persistence and client detachment behavior
+- Documented /exit, /quit, /detach semantics with thread warnings
 
 ## Related Documents
 

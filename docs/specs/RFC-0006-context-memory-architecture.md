@@ -15,11 +15,11 @@ This RFC provides a detailed architecture design for Soothe's context and memory
 
 RFC-0002 defined the protocol interfaces for Context and Memory but left several design decisions implicit. As the implementation matured, the following gaps emerged:
 
-1. **Naming consistency** — `KeywordContext` and `KeywordMemory` names now clearly communicate their approach (keyword matching) to users configuring the system.
-2. **Persistence lifecycle gaps** — Context persistence (`persist()`/`restore()`) was implemented but never wired into the execution flow.
-3. **Memory backend default** — `memory_backend` defaulted to `"none"`, meaning memory was silently disabled for most users.
-4. **SOOTHE_HOME integration** — Persistence paths had no sensible defaults, requiring explicit configuration.
-5. **No design rationale** — The architectural choices behind the two-tier (keyword/vector) approach and the PersistStore abstraction were undocumented.
+1. **Context backend naming** — `KeywordContext` and `VectorContext` now clearly communicate their retrieval approach to users configuring the system.
+2. **Persistence lifecycle wiring** — context persistence and memory recall/remember are now wired into the execution flow, but the RFC still describes older sequencing and backend assumptions.
+3. **Memory architecture evolution** — the codebase converged on a MemU-backed `MemoryProtocol` implementation rather than the older keyword/vector memory split described here.
+4. **Configuration surface drift** — context, memory, persistence, and vector-store settings moved from flat top-level fields to nested protocol and router configuration.
+5. **No updated rationale** — the current relationship between ContextProtocol, MemU memory, PersistStore, and vector-store routing was underdocumented in the spec.
 
 ## Core Concepts
 
@@ -82,69 +82,57 @@ Semantic implementation using embeddings for projection. Entries are embedded on
 
 ### MemoryProtocol Implementations
 
-#### KeywordMemory (default)
+#### MemUMemory (current implementation)
 
-**Config**: `memory_backend: keyword`
+**Config**: `protocols.memory.enabled: true`
 
-Keyword-based memory with `PersistStore` backend. Loads all items at initialization, making recall fast for moderate item counts.
+The current memory backend is `MemUMemory`, an adapter over the internal MemU memory store. It uses configured chat and embedding model roles for memory operations and persists data inside the MemU storage layout rather than through `PersistStore`.
 
-- **Persistence**: Via `PersistStore` (JSON, RocksDB, or PostgreSQL), items stored individually with a manifest
-- **Data location**: `$SOOTHE_HOME/memory/memory_{item_id}.json` + `memory__manifest.json`
-- **Recall**: Keyword overlap + importance weighting
-- **Strengths**: Simple, no external dependencies, auto-loads at startup
+- **Persistence**: Managed by `MemuMemoryStore` under the configured memory directory
+- **Data location**: `protocols.memory.persist_dir` if set; otherwise the current implementation falls back to `~/.soothe/memory`
+- **Recall**: `MemoryProtocol.recall()` delegates to MemU search; embeddings can be enabled, but the store currently reconstructs and searches its file-backed mappings internally rather than using the RFC's older VectorMemory design
+- **Strengths**: Richer long-term memory model, configurable categorization/summaries, integrated LLM-assisted memory operations
 
-#### VectorMemory
-
-**Config**: `memory_backend: vector` (requires `vector_store_provider`)
-
-Semantic memory using embeddings. All data lives in the vector store.
-
-- **Persistence**: Delegated to VectorStore
-- **Recall**: Embedding similarity search
-- **Strengths**: Semantic recall, scales to large memory sets
+Historical note: earlier RFC drafts described `KeywordMemory` and `VectorMemory` families. The current codebase no longer resolves memory through that keyword/vector split.
 
 ## Persistence Lifecycle
 
 ### Context Lifecycle
 
+```text
+Resumed thread start:
+  1. DurabilityProtocol resumes/creates thread lifecycle state elsewhere in the runner stack
+  2. ContextProtocol.restore(thread_id) runs for resumed threads
+  3. MemoryProtocol.recall(query) may run before the stream
+  4. Recalled memories are ingested into context when available
+  5. ContextProtocol.project(query, budget) produces a bounded projection
+  6. Build enriched input
+
+Thread end:
+  1. ContextProtocol.ingest(response) appends the final agent response
+  2. ContextProtocol.persist(thread_id) saves thread-scoped context
+  3. MemoryProtocol.remember(response) stores cross-thread memory when the response is large enough
 ```
-┌─────────────────────────────────────────────┐
-│ Thread Start (SootheRunner._pre_stream)     │
-│                                             │
-│ 1. DurabilityProtocol.create/resume_thread()│
-│ 2. ContextProtocol.restore(thread_id)       │  ← Load from disk
-│ 3. MemoryProtocol.recall(query)             │
-│ 4. ContextProtocol.project(query, budget)   │  ← Score & select
-│ 5. Build enriched input                     │
-└─────────────────────────────────────────────┘
-                    ↓
-┌─────────────────────────────────────────────┐
-│ Thread End (SootheRunner._post_stream)      │
-│                                             │
-│ 1. ContextProtocol.ingest(response)         │  ← Append to ledger
-│ 2. ContextProtocol.persist(thread_id)       │  ← Save to disk
-│ 3. MemoryProtocol.remember(response)        │  ← Cross-thread store
-│ 4. DurabilityProtocol.save_state()          │
-└─────────────────────────────────────────────┘
-```
+
+Current implementation nuance: when `performance.parallel_pre_stream` is enabled, memory recall and context projection can run concurrently. In that path, recalled memories are ingested into context after the projection result has already been produced, so the same pre-stream projection may not yet reflect those newly recalled items.
 
 ### Memory Lifecycle
 
-```
+```text
 Thread A (past):
   ... work ...
   → memory.remember(findings)    ← Stored with source_thread="A"
 
-Thread B (new):
+Thread B (new or resumed):
   → memory.recall("related topic")  ← Retrieves findings from A
-  → context.ingest(recalled_items)   ← Merged into B's context
+  → context.ingest(recalled_items)   ← Merged into current context when available
   ... work using recalled knowledge ...
   → memory.remember(new_findings)    ← Stored with source_thread="B"
 ```
 
 ## PersistStore Abstraction
 
-The `PersistStore` protocol provides a simple key-value interface that decouples context/memory logic from storage backends.
+The `PersistStore` protocol provides a simple key-value interface that decouples context and durability logic from storage backends. It remains the persistence abstraction for `KeywordContext` and several durability backends, but the current MemU memory implementation does not persist through `PersistStore`.
 
 ```python
 class PersistStore(Protocol):
@@ -165,43 +153,60 @@ class PersistStore(Protocol):
 
 | Backend | Module | Use Case |
 |---------|--------|----------|
-| `JsonPersistStore` | `persistence/json_store.py` | Development, small datasets, portability |
-| `RocksDBPersistStore` | `persistence/rocksdb_store.py` | Production, large datasets, high throughput |
-| `PostgreSQLPersistStore` | `persistence/postgres_store.py` | Production, distributed deployments, ACID guarantees |
+| `JsonPersistStore` | `backends/persistence/json_store.py` | Development, small datasets, portability |
+| `RocksDBPersistStore` | `backends/persistence/rocksdb_store.py` | Production, large datasets, high throughput |
+| `PostgreSQLPersistStore` | `backends/persistence/postgres_store.py` | Production, distributed deployments, ACID guarantees |
 
 ## Configuration Reference
 
 ```yaml
-# PostgreSQL DSN (unified for all persistence backends and checkpointer)
-persistence_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
+protocols:
+  context:
+    enabled: true
+    backend: vector-postgresql   # keyword-json | keyword-rocksdb | keyword-postgresql | vector-postgresql | none
+    persist_dir: ""
 
-# Context configuration
-context_backend: keyword     # "keyword" | "vector" | "none"
-context_persist_dir: null    # defaults to $SOOTHE_HOME/context/
-context_persist_backend: postgresql  # "json" | "rocksdb" | "postgresql"
+  memory:
+    enabled: true
+    persist_dir: ""
+    llm_chat_role: fast
+    llm_embed_role: embedding
+    enable_embeddings: true
+    enable_auto_categorization: true
+    enable_category_summaries: true
 
-# Memory configuration
-memory_backend: keyword      # "keyword" | "vector" | "none"
-memory_persist_path: null    # defaults to $SOOTHE_HOME/memory/
-memory_persist_backend: postgresql # "json" | "rocksdb" | "postgresql"
+  durability:
+    backend: postgresql
+    persist_dir: ""
+    checkpointer: postgresql
 
-# Durability configuration
-durability_backend: postgresql  # "json" | "rocksdb" | "postgresql"
+persistence:
+  default_backend: postgresql
+  soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 
-# Vector store (required for vector backends)
-vector_store_provider: none  # "pgvector" | "weaviate" | "none"
-vector_store_collection: soothe_default
-vector_store_config: {}      # Provider-specific config
+vector_stores:
+  - name: pgvector_default
+    provider_type: pgvector
+    dsn: "postgresql://postgres:postgres@localhost:5432/vectordb"
+    pool_size: 5
+    index_type: hnsw
+
+vector_store_router:
+  default: pgvector_default:soothe_default
+  context: pgvector_default:soothe_context
+  skillify: pgvector_default:soothe_skillify
+  weaver_reuse: pgvector_default:soothe_weaver_reuse
 ```
 
 ### Defaults and SOOTHE_HOME
 
-When persistence paths are not explicitly set, they default to subdirectories of `$SOOTHE_HOME`:
+Current defaults are split between model defaults, shipped config, and runtime fallback code:
 
-| Config Field | Default |
-|-------------|---------|
-| `context_persist_dir` | `$SOOTHE_HOME/context/` |
-| `memory_persist_path` | `$SOOTHE_HOME/memory/` |
+| Surface | Current behavior |
+|--------|------------------|
+| `protocols.context.backend` | Model default is `keyword-postgresql`; shipped config sets `vector-postgresql` |
+| `protocols.context.persist_dir` | Empty config is documented as `SOOTHE_HOME/context/`; current resolver fallback uses `SOOTHE_HOME/context/data` for keyword context |
+| `protocols.memory.persist_dir` | Empty config currently falls back to `~/.soothe/memory` in `MemUMemory` |
 | Thread logs | `$SOOTHE_HOME/threads/` |
 | Application log | `$SOOTHE_HOME/logs/soothe.log` |
 | Input history | `$SOOTHE_HOME/history.json` |
@@ -210,16 +215,15 @@ When persistence paths are not explicitly set, they default to subdirectories of
 
 ### Implementation Names
 
-The current names reflect the retrieval method used:
+The current names reflect the retrieval/storage method used:
 
-| Current Name | Backend Type | Config Value |
-|-------------|-------------|-------------|
-| `KeywordContext` | Keyword/tag matching | `context_backend: keyword` |
-| `VectorContext` | Embedding + VectorStore | `context_backend: vector` |
-| `KeywordMemory` | Keyword + PersistStore | `memory_backend: keyword` |
-| `VectorMemory` | Embedding + VectorStore | `memory_backend: vector` |
+| Current Name | Backend Type | Config Surface |
+|-------------|-------------|----------------|
+| `KeywordContext` | Keyword/tag matching + PersistStore | `protocols.context.backend: keyword-*` |
+| `VectorContext` | Embedding + VectorStore | `protocols.context.backend: vector-postgresql` |
+| `MemUMemory` | MemU-backed long-term memory | `protocols.memory.*` |
 
-The config values (`keyword`, `vector`) are the user-facing names. Class names follow the pattern `{Method}{Protocol}` to clearly indicate the approach.
+For context, the backend string is user-facing and follows a `{behavior}-{storage}` pattern. Memory no longer follows the older `memory_backend: keyword|vector` split described in earlier drafts.
 
 ### Guideline for New Implementations
 

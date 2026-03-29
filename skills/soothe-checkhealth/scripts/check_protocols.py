@@ -50,19 +50,23 @@ def check_context_protocols() -> dict[str, Any]:
 
     # Check vector context backend
     result = check_import("soothe.backends.context.vector", "VectorContext")
-    checks.append({
-        "name": "context_vector",
-        "status": result["status"],
-        "message": "Vector context backend: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "context_vector",
+            "status": result["status"],
+            "message": "Vector context backend: " + result["message"],
+        }
+    )
 
     # Check keyword context backend
     result = check_import("soothe.backends.context.keyword", "KeywordContext")
-    checks.append({
-        "name": "context_keyword",
-        "status": result["status"],
-        "message": "Keyword context backend: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "context_keyword",
+            "status": result["status"],
+            "message": "Keyword context backend: " + result["message"],
+        }
+    )
 
     return {
         "name": "context_protocols",
@@ -77,11 +81,13 @@ def check_memory_protocols() -> dict[str, Any]:
 
     # Check MemU memory backend
     result = check_import("soothe.backends.memory.memu", "MemUMemory")
-    checks.append({
-        "name": "memory_memu",
-        "status": result["status"],
-        "message": "MemU memory backend: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "memory_memu",
+            "status": result["status"],
+            "message": "MemU memory backend: " + result["message"],
+        }
+    )
 
     return {
         "name": "memory_protocols",
@@ -96,27 +102,33 @@ def check_planning_protocols() -> dict[str, Any]:
 
     # Check simple planner
     result = check_import("soothe.backends.planning.simple", "SimplePlanner")
-    checks.append({
-        "name": "planning_simple",
-        "status": result["status"],
-        "message": "Simple planner: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "planning_simple",
+            "status": result["status"],
+            "message": "Simple planner: " + result["message"],
+        }
+    )
 
     # Check auto planner
     result = check_import("soothe.backends.planning.router", "AutoPlanner")
-    checks.append({
-        "name": "planning_auto",
-        "status": result["status"],
-        "message": "Auto planner: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "planning_auto",
+            "status": result["status"],
+            "message": "Auto planner: " + result["message"],
+        }
+    )
 
     # Check claude planner
     result = check_import("soothe.backends.planning.claude", "ClaudePlanner")
-    checks.append({
-        "name": "planning_claude",
-        "status": result["status"],
-        "message": "Claude planner: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "planning_claude",
+            "status": result["status"],
+            "message": "Claude planner: " + result["message"],
+        }
+    )
 
     return {
         "name": "planning_protocols",
@@ -141,27 +153,33 @@ def check_durability_protocols() -> dict[str, Any]:
 
     # Check JSON durability
     result = check_import("soothe.backends.durability.json", "JsonDurability")
-    checks.append({
-        "name": "durability_json",
-        "status": result["status"],
-        "message": "JSON durability: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "durability_json",
+            "status": result["status"],
+            "message": "JSON durability: " + result["message"],
+        }
+    )
 
     # Check RocksDB durability
     result = check_import("soothe.backends.durability.rocksdb", "RocksDBDurability")
-    checks.append({
-        "name": "durability_rocksdb",
-        "status": result["status"],
-        "message": "RocksDB durability: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "durability_rocksdb",
+            "status": result["status"],
+            "message": "RocksDB durability: " + result["message"],
+        }
+    )
 
     # Check PostgreSQL durability
     result = check_import("soothe.backends.durability.postgresql", "PostgreSQLDurability")
-    checks.append({
-        "name": "durability_postgresql",
-        "status": result["status"],
-        "message": "PostgreSQL durability: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "durability_postgresql",
+            "status": result["status"],
+            "message": "PostgreSQL durability: " + result["message"],
+        }
+    )
 
     return {
         "name": "durability_protocols",
@@ -176,27 +194,33 @@ def check_vector_store_protocols() -> dict[str, Any]:
 
     # Check in-memory vector store
     result = check_import("soothe.backends.vector_store.in_memory", "InMemoryVectorStore")
-    checks.append({
-        "name": "vectorstore_inmemory",
-        "status": result["status"],
-        "message": "In-memory vector store: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "vectorstore_inmemory",
+            "status": result["status"],
+            "message": "In-memory vector store: " + result["message"],
+        }
+    )
 
     # Check pgvector
     result = check_import("soothe.backends.vector_store.pgvector", "PGVectorStore")
-    checks.append({
-        "name": "vectorstore_pgvector",
-        "status": result["status"],
-        "message": "PgVector store: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "vectorstore_pgvector",
+            "status": result["status"],
+            "message": "PgVector store: " + result["message"],
+        }
+    )
 
     # Check weaviate
     result = check_import("soothe.backends.vector_store.weaviate", "WeaviateVectorStore")
-    checks.append({
-        "name": "vectorstore_weaviate",
-        "status": result["status"],
-        "message": "Weaviate store: " + result["message"],
-    })
+    checks.append(
+        {
+            "name": "vectorstore_weaviate",
+            "status": result["status"],
+            "message": "Weaviate store: " + result["message"],
+        }
+    )
 
     return {
         "name": "vector_store_protocols",
@@ -243,7 +267,7 @@ def run_checks() -> dict[str, Any]:
         if check["status"] == "error":
             status = "critical"
             break
-        elif check["status"] == "warning":
+        if check["status"] == "warning":
             has_warning = True
 
     if status != "critical" and has_warning:
@@ -264,10 +288,9 @@ def main() -> int:
     # Return exit code
     if result["status"] == "healthy":
         return 0
-    elif result["status"] == "warning":
+    if result["status"] == "warning":
         return 1
-    else:
-        return 2
+    return 2
 
 
 if __name__ == "__main__":

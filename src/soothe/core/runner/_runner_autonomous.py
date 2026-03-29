@@ -254,20 +254,33 @@ class AutonomousMixin(GoalDirectivesMixin):
             iter_state = RunnerState()
             iter_state.thread_id = thread_id
             iter_state.unified_classification = parent_state.unified_classification
+            iter_state.context_projection = getattr(parent_state, "context_projection", None)
+            iter_state.recalled_memories = list(getattr(parent_state, "recalled_memories", []) or [])
+            iter_state.observation_scope_key = getattr(parent_state, "observation_scope_key", "")
 
-            if self._memory:
+            should_refresh_observation = getattr(parent_state, "observation_refresh_needed", False) or not (
+                iter_state.context_projection is not None or iter_state.recalled_memories
+            )
+
+            if should_refresh_observation and self._memory:
                 try:
                     items = await self._memory.recall(current_input, limit=5)
                     iter_state.recalled_memories = items
                 except Exception:
                     logger.debug("Memory recall failed", exc_info=True)
 
-            if self._context:
+            if should_refresh_observation and self._context:
                 try:
                     projection = await self._context.project(current_input, token_budget=4000)
                     iter_state.context_projection = projection
+                    iter_state.observation_scope_key = current_input
                 except Exception:
                     logger.debug("Context projection failed", exc_info=True)
+
+            parent_state.context_projection = iter_state.context_projection
+            parent_state.recalled_memories = list(iter_state.recalled_memories)
+            parent_state.observation_scope_key = iter_state.observation_scope_key
+            parent_state.observation_refresh_needed = False
 
             # Reuse existing plan from parent_state if available (avoids duplicate plan creation)
             if parent_state and hasattr(parent_state, "plan") and parent_state.plan:
@@ -558,6 +571,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
                     self._current_plan = revised
                     parent_state.plan = revised
+                    parent_state.observation_refresh_needed = True
                 except Exception:
                     logger.debug("Plan revision failed", exc_info=True)
 

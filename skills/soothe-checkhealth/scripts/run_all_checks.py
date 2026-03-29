@@ -10,7 +10,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +48,7 @@ def run_script(script_name: str) -> dict[str, Any]:
 
     # Set PYTHONPATH to include the source directory
     import os
+
     repo_root = Path(__file__).parent.parent.parent.parent
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo_root / "src") + ":" + env.get("PYTHONPATH", "")
@@ -72,33 +73,39 @@ def run_script(script_name: str) -> dict[str, Any]:
         return {
             "category": script_name.replace("check_", "").replace(".py", ""),
             "status": "error",
-            "checks": [{
-                "name": "script_timeout",
-                "status": "error",
-                "message": f"Script {script_name} timed out",
-            }],
+            "checks": [
+                {
+                    "name": "script_timeout",
+                    "status": "error",
+                    "message": f"Script {script_name} timed out",
+                }
+            ],
         }
     except json.JSONDecodeError as e:
         echo_err(f"{script_name} produced invalid JSON: {e}")
         return {
             "category": script_name.replace("check_", "").replace(".py", ""),
             "status": "error",
-            "checks": [{
-                "name": "json_error",
-                "status": "error",
-                "message": f"Invalid JSON from {script_name}: {e}",
-            }],
+            "checks": [
+                {
+                    "name": "json_error",
+                    "status": "error",
+                    "message": f"Invalid JSON from {script_name}: {e}",
+                }
+            ],
         }
     except Exception as e:
         echo_err(f"Failed to run {script_name}: {e}")
         return {
             "category": script_name.replace("check_", "").replace(".py", ""),
             "status": "error",
-            "checks": [{
-                "name": "script_error",
-                "status": "error",
-                "message": f"Failed to run {script_name}: {e}",
-            }],
+            "checks": [
+                {
+                    "name": "script_error",
+                    "status": "error",
+                    "message": f"Failed to run {script_name}: {e}",
+                }
+            ],
         }
 
 
@@ -120,7 +127,7 @@ def flatten_checks(categories: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
     """Generate markdown health report."""
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # Count checks
     flat_checks = flatten_checks(results)
@@ -145,7 +152,7 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
         "# Soothe Health Report",
         "",
         f"**Generated**: {timestamp}",
-        f"**Soothe Version**: 1.0.0",
+        "**Soothe Version**: 1.0.0",
         f"**Configuration**: {config_path}",
         f"**Overall Status**: {overall_icon} {overall}",
         "",
@@ -174,13 +181,15 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
 
         lines.append(f"| {cat_name} | {icon} {status} | {cat_passed}/{cat_total} | {cat_total} |")
 
-    lines.extend([
-        "",
-        f"**Total**: {passed}/{total} checks passed ({100*passed//total if total > 0 else 0}%)",
-        "",
-        "## Detailed Results",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            f"**Total**: {passed}/{total} checks passed ({100 * passed // total if total > 0 else 0}%)",
+            "",
+            "## Detailed Results",
+            "",
+        ]
+    )
 
     # Detailed results per category
     for cat in results:
@@ -212,10 +221,12 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
             lines.append("")
 
     # Issues section
-    lines.extend([
-        "## Issues Found",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Issues Found",
+            "",
+        ]
+    )
 
     critical_issues = [c for c in flat_checks if c["status"] == "error"]
     warning_issues = [c for c in flat_checks if c["status"] == "warning"]
@@ -230,15 +241,17 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
             message = issue.get("message", "No message")
             lines.append(f"{i}. **{name}**")
             lines.append(f"   - **Message**: {message}")
-            lines.append(f"   - **Impact**: This may prevent core functionality")
-            lines.append(f"   - **Remediation**: Check logs and configuration")
+            lines.append("   - **Impact**: This may prevent core functionality")
+            lines.append("   - **Remediation**: Check logs and configuration")
             lines.append("")
     else:
-        lines.extend([
-            "### Critical Issues",
-            "None",
-            "",
-        ])
+        lines.extend(
+            [
+                "### Critical Issues",
+                "None",
+                "",
+            ]
+        )
 
     # Warnings
     if warning_issues:
@@ -249,15 +262,17 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
             message = issue.get("message", "No message")
             lines.append(f"{i}. **{name}**")
             lines.append(f"   - **Message**: {message}")
-            lines.append(f"   - **Impact**: May affect optional features")
-            lines.append(f"   - **Remediation**: Check configuration or install missing dependencies")
+            lines.append("   - **Impact**: May affect optional features")
+            lines.append("   - **Remediation**: Check configuration or install missing dependencies")
             lines.append("")
     else:
-        lines.extend([
-            "### Warnings",
-            "None",
-            "",
-        ])
+        lines.extend(
+            [
+                "### Warnings",
+                "None",
+                "",
+            ]
+        )
 
     # Info
     if info_issues:
@@ -270,17 +285,21 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
             lines.append(f"   - **Message**: {message}")
             lines.append("")
     else:
-        lines.extend([
-            "### Informational",
-            "None",
-            "",
-        ])
+        lines.extend(
+            [
+                "### Informational",
+                "None",
+                "",
+            ]
+        )
 
     # Recommendations
-    lines.extend([
-        "## Recommendations",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Recommendations",
+            "",
+        ]
+    )
 
     if critical_issues or warning_issues:
         recs = []
@@ -300,15 +319,19 @@ def generate_report(results: list[dict[str, Any]], config_path: str) -> str:
             lines.append(f"{i}. {rec}")
         lines.append("")
     else:
-        lines.extend([
-            "All checks passed. No recommendations at this time.",
-            "",
-        ])
+        lines.extend(
+            [
+                "All checks passed. No recommendations at this time.",
+                "",
+            ]
+        )
 
-    lines.extend([
-        "---",
-        "*Generated by Soothe Health Check Skill*",
-    ])
+    lines.extend(
+        [
+            "---",
+            "*Generated by Soothe Health Check Skill*",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -389,12 +412,11 @@ def main() -> int:
     if errors > 0:
         echo_err(f"Health check complete: {errors} critical issues, {warnings} warnings")
         return 2
-    elif warnings > 0:
+    if warnings > 0:
         echo_warn(f"Health check complete: {warnings} warnings")
         return 1
-    else:
-        echo_ok("Health check complete: All systems healthy")
-        return 0
+    echo_ok("Health check complete: All systems healthy")
+    return 0
 
 
 if __name__ == "__main__":

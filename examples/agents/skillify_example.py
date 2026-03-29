@@ -12,9 +12,9 @@ from langchain_core.messages import HumanMessage
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
+from _shared.streaming import run_with_streaming
 
 from soothe.subagents.skillify import create_skillify_subagent
-from _shared.streaming import run_with_streaming
 
 load_dotenv()
 
@@ -30,9 +30,7 @@ async def main() -> None:
 
     await run_with_streaming(
         runnable,
-        [HumanMessage(
-            content="Find skills related to web scraping, data extraction, and API integration."
-        )],
+        [HumanMessage(content="Find skills related to web scraping, data extraction, and API integration.")],
         show_subagents=True,
     )
 

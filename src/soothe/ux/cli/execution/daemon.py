@@ -20,6 +20,9 @@ _DAEMON_FALLBACK_EXIT_CODE = 42
 _CONNECT_RETRY_COUNT = 40
 _CONNECT_RETRY_DELAY_S = 0.25
 _CONNECT_TIMEOUT_S = 5.0
+_DAEMON_READY_TIMEOUT_S = 20.0
+_SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
+_QUERY_START_TIMEOUT_S = 20.0
 
 
 async def _connect_with_retries(client: object) -> None:
@@ -81,11 +84,12 @@ async def run_headless_via_daemon(
     from soothe.daemon import DaemonClient, resolve_socket_path
 
     _ = thread_id
-    daemon_start_timeout_s = 20.0
     client = DaemonClient(sock=resolve_socket_path(cfg))
 
     try:
         await _connect_with_retries(client)
+        await client.request_daemon_ready()
+        await client.wait_for_daemon_ready(ready_timeout_s=_DAEMON_READY_TIMEOUT_S)
 
         # Request thread creation or resumption
         if thread_id:
@@ -94,7 +98,7 @@ async def run_headless_via_daemon(
             await client.send_new_thread()
 
         # Wait for actual thread status, skipping initial empty handshake status
-        status_event = await _wait_for_thread_status(client, timeout_s=5.0)
+        status_event = await _wait_for_thread_status(client, timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S)
         if status_event.get("type") == "error":
             typer.echo(f"Daemon error: {status_event.get('message', 'unknown')}", err=True)
             return 1
@@ -107,7 +111,9 @@ async def run_headless_via_daemon(
         # Subscribe to the thread with verbosity preference (RFC-0013, RFC-0022)
         verbosity = cfg.logging.verbosity
         await client.subscribe_thread(actual_thread_id, verbosity=verbosity)
-        await client.wait_for_subscription_confirmed(actual_thread_id, verbosity=verbosity)
+        await client.wait_for_subscription_confirmed(
+            actual_thread_id, verbosity=verbosity, timeout=_SESSION_BOOTSTRAP_TIMEOUT_S
+        )
 
         # Send the input
         await asyncio.wait_for(
@@ -116,7 +122,7 @@ async def run_headless_via_daemon(
                 autonomous=autonomous,
                 max_iterations=max_iterations,
             ),
-            timeout=5.0,
+            timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
 
         # Initialize RFC-0019 unified event processor
@@ -132,7 +138,7 @@ async def run_headless_via_daemon(
                 if query_started:
                     event = await client.read_event()
                 else:
-                    event = await asyncio.wait_for(client.read_event(), timeout=daemon_start_timeout_s)
+                    event = await asyncio.wait_for(client.read_event(), timeout=_QUERY_START_TIMEOUT_S)
             except TimeoutError:
                 return _DAEMON_FALLBACK_EXIT_CODE
             if not event:
@@ -151,6 +157,10 @@ async def run_headless_via_daemon(
 
             # Detect errors before query started as a hard failure
             ev_data = event.get("data")
+            if event_type == "error":
+                typer.echo(f"Daemon error: {event.get('message', 'unknown')}", err=True)
+                return 1
+
             if (
                 not query_started
                 and isinstance(ev_data, dict)

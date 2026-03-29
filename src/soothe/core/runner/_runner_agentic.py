@@ -109,6 +109,8 @@ class AgenticMixin:
         async for chunk in self._pre_stream_independent(user_input, state, complexity=complexity):
             yield chunk
 
+        state.observation_scope_key = user_input
+
         iteration = 0
         should_continue = True
         cumulative_context = []
@@ -262,10 +264,17 @@ class AgenticMixin:
         if any(kw in user_lower for kw in force_keywords):
             return "comprehensive"
 
+        from soothe.utils import count_tokens
+
         # Adaptive based on complexity
         if complexity == "simple":
             return "none"
         if complexity == "medium":
+            token_count = count_tokens(user_input)
+            # Threshold: short queries bypass plan creation
+            medium_no_plan_threshold = 8
+            if token_count <= medium_no_plan_threshold:
+                return "none"
             return "lightweight"
         # complex
         return "comprehensive"
@@ -348,23 +357,31 @@ class AgenticMixin:
         else:  # adaptive
             should_gather = iteration > 0
 
+        should_refresh = state.observation_refresh_needed or state.observation_scope_key != user_input
+        can_reuse = bool(state.context_projection or state.recalled_memories) and not should_refresh
+
         # Context (conditional, skip if already done in pre-stream)
-        if not skip_io and should_gather and self._context:
+        if not skip_io and should_gather and self._context and not can_reuse:
             try:
                 projection = await self._context.project(user_input, token_budget=4000)
                 observations["context"] = projection
                 state.context_projection = projection
+                state.observation_scope_key = user_input
             except Exception:
                 logger.debug("Context projection failed", exc_info=True)
+        elif state.context_projection is not None:
+            observations["context"] = state.context_projection
 
         # Memory (conditional, skip if already done in pre-stream)
-        if not skip_io and should_gather and self._memory:
+        if not skip_io and should_gather and self._memory and not can_reuse:
             try:
                 memories = await self._memory.recall(user_input, limit=5)
                 observations["memories"] = memories
                 state.recalled_memories = memories
             except Exception:
                 logger.debug("Memory recall failed", exc_info=True)
+        elif state.recalled_memories:
+            observations["memories"] = state.recalled_memories
 
         # Classification: use cached result if available
         if hasattr(state, "cached_routing") and state.cached_routing:
@@ -376,6 +393,7 @@ class AgenticMixin:
             except Exception:
                 logger.debug("Classification failed", exc_info=True)
 
+        state.observation_refresh_needed = False
         cumulative_context.append(observations)
 
         # Determine planning strategy for this iteration
@@ -426,7 +444,7 @@ class AgenticMixin:
             planning_strategy: "none", "lightweight", or "comprehensive"
         """
         # Create plan if strategy requires it
-        if planning_strategy != "none" and self._planner:
+        if planning_strategy != "none" and self._planner and state.plan is None:
             try:
                 from soothe.core.event_catalog import PlanCreatedEvent
                 from soothe.protocols.planner import PlanContext

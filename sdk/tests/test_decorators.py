@@ -1,7 +1,8 @@
 """Tests for decorator functionality."""
 
 import pytest
-from soothe_sdk import plugin, tool, subagent, PluginError
+
+from soothe_sdk import PluginError, plugin, subagent, tool
 
 
 def test_plugin_decorator():

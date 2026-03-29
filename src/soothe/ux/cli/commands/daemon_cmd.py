@@ -1,5 +1,6 @@
 """Daemon commands for Soothe CLI."""
 
+import asyncio
 import subprocess
 import sys
 import time
@@ -10,6 +11,26 @@ import typer
 
 from soothe.config import SOOTHE_HOME
 from soothe.ux.core import load_config, setup_logging
+
+
+def _wait_for_daemon_ready(cfg: object, timeout: float = 20.0) -> bool:
+    """Wait for protocol-level daemon readiness."""
+    from soothe.daemon import DaemonClient, resolve_socket_path
+    from soothe.ux.cli.execution.daemon import _connect_with_retries
+
+    async def _wait() -> bool:
+        client = DaemonClient(sock=resolve_socket_path(cfg))
+        try:
+            await _connect_with_retries(client)
+            await client.request_daemon_ready()
+            await client.wait_for_daemon_ready(ready_timeout_s=timeout)
+        except Exception:
+            return False
+        finally:
+            await client.close()
+        return True
+
+    return asyncio.run(_wait())
 
 
 def daemon_start(
@@ -54,9 +75,11 @@ def daemon_start(
             if pid_path().exists():
                 break
             time.sleep(0.2)
-        if SootheDaemon.is_running():
+        if SootheDaemon.is_running() and _wait_for_daemon_ready(cfg):
             pid = pid_path().read_text().strip()
             typer.echo(f"Soothe daemon started in background (PID: {pid}).")
+        elif SootheDaemon.is_running():
+            typer.echo("Soothe daemon process started but did not become ready.")
         else:
             typer.echo("Soothe daemon started in background.")
 

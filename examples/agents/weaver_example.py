@@ -12,9 +12,9 @@ from langchain_core.messages import HumanMessage
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from _config_helper import load_example_config
+from _shared.streaming import run_with_streaming
 
 from soothe.subagents.weaver import create_weaver_subagent
-from _shared.streaming import run_with_streaming
 
 load_dotenv()
 
@@ -30,10 +30,12 @@ async def main() -> None:
 
     await run_with_streaming(
         runnable,
-        [HumanMessage(
-            content="Generate a specialized agent that can perform comprehensive code review "
-            "with security analysis, focusing on Python projects."
-        )],
+        [
+            HumanMessage(
+                content="Generate a specialized agent that can perform comprehensive code review "
+                "with security analysis, focusing on Python projects."
+            )
+        ],
         show_subagents=True,
     )
 

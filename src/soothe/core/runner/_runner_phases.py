@@ -338,20 +338,6 @@ class PhasesMixin:
                 state.recalled_memories = memory_items
                 state.context_projection = context_projection
 
-                if self._context and memory_items:
-                    for item in memory_items:
-                        try:
-                            await self._context.ingest(
-                                ContextEntry(
-                                    source="memory",
-                                    content=item.content[:2000],
-                                    tags=["recalled_memory", *item.tags],
-                                    importance=item.importance,
-                                )
-                            )
-                        except Exception:
-                            logger.debug("Memory ingestion failed", exc_info=True)
-
                 if memory_items:
                     yield _custom(
                         MemoryRecalledEvent(
@@ -360,6 +346,7 @@ class PhasesMixin:
                         ).to_dict()
                     )
                 if context_projection:
+                    state.observation_scope_key = user_input
                     yield _custom(
                         ContextProjectedEvent(
                             entries=context_projection.total_entries,
@@ -371,16 +358,6 @@ class PhasesMixin:
                     try:
                         items = await self._memory.recall(user_input, limit=5)
                         state.recalled_memories = items
-                        if self._context and items:
-                            for item in items:
-                                await self._context.ingest(
-                                    ContextEntry(
-                                        source="memory",
-                                        content=item.content[:2000],
-                                        tags=["recalled_memory", *item.tags],
-                                        importance=item.importance,
-                                    )
-                                )
                         yield _custom(
                             MemoryRecalledEvent(
                                 count=len(items),
@@ -394,6 +371,7 @@ class PhasesMixin:
                     try:
                         projection = await self._context.project(user_input, token_budget=4000)
                         state.context_projection = projection
+                        state.observation_scope_key = user_input
                         yield _custom(
                             ContextProjectedEvent(
                                 entries=projection.total_entries,

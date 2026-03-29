@@ -1,7 +1,8 @@
 """Integration tests for plugin lifecycle."""
 
 import pytest
-from soothe_sdk import plugin, tool, subagent
+
+from soothe_sdk import plugin, subagent, tool
 from soothe_sdk.types import PluginContext
 
 
@@ -58,9 +59,7 @@ async def test_plugin_with_subagent(mock_plugin_context):
     plugin_instance = TestPlugin()
 
     # Create subagent
-    result = await plugin_instance.create_agent(
-        model=None, config={}, context=mock_plugin_context
-    )
+    result = await plugin_instance.create_agent(model=None, config={}, context=mock_plugin_context)
 
     assert result["name"] == "test-agent"
     assert result["description"] == "Test agent"

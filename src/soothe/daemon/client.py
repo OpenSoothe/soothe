@@ -93,6 +93,25 @@ class DaemonClient:
         """Request the daemon to start a new thread."""
         await self._send({"type": "new_thread"})
 
+    async def request_daemon_ready(self) -> None:
+        """Request the daemon's readiness state."""
+        await self._send({"type": "daemon_ready"})
+
+    async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
+        """Wait for a daemon readiness message and require ready state."""
+        async with asyncio.timeout(ready_timeout_s):
+            while True:
+                event = await self.read_event()
+                if not event:
+                    raise ValueError("No event received")
+                if event.get("type") != "daemon_ready":
+                    continue
+                state = event.get("state")
+                if state == "ready":
+                    return event
+                message = event.get("message") or f"Daemon state is {state}"
+                raise RuntimeError(str(message))
+
     async def subscribe_thread(
         self,
         thread_id: str,

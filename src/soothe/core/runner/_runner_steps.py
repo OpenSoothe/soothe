@@ -238,20 +238,13 @@ class StepLoopMixin:
 
             step_state = RunnerState()
             step_state.thread_id = thread_id
+            step_state.unified_classification = getattr(state, "unified_classification", None)
 
-            if self._memory:
-                try:
-                    items = await self._memory.recall(step.description, limit=3)
-                    step_state.recalled_memories = items
-                except Exception:
-                    logger.debug("Memory recall failed for step %s", step.id, exc_info=True)
-
-            if self._context:
-                try:
-                    projection = await self._context.project(step.description, token_budget=3000)
-                    step_state.context_projection = projection
-                except Exception:
-                    logger.debug("Context projection failed for step %s", step.id, exc_info=True)
+            inherited_projection = getattr(state, "context_projection", None)
+            inherited_memories = list(getattr(state, "recalled_memories", []) or [])
+            step_state.context_projection = inherited_projection
+            step_state.recalled_memories = inherited_memories
+            step_state.observation_scope_key = getattr(state, "observation_scope_key", "")
 
             async with self._concurrency.acquire_llm_call():
                 async for chunk in self._stream_phase(step_input, step_state):
