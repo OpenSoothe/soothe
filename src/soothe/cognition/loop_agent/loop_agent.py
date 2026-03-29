@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.judge import JudgePhase
@@ -13,6 +13,8 @@ from soothe.cognition.loop_agent.schemas import JudgeResult, LoopState
 from soothe.protocols.planner import PlanContext
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
     from soothe.protocols.judge import JudgeProtocol
@@ -75,6 +77,37 @@ class LoopAgent:
         Returns:
             JudgeResult with final status and evidence
         """
+        # Collect all events and return final result
+        final_result = None
+        async for event_type, event_data in self.run_with_progress(goal, thread_id, max_iterations):
+            if event_type == "completed":
+                final_result = event_data
+        return final_result or JudgeResult(
+            status="replan",
+            evidence_summary="",
+            goal_progress=0.0,
+            confidence=0.0,
+            reasoning="No result produced",
+        )
+
+    async def run_with_progress(
+        self,
+        goal: str,
+        thread_id: str,
+        max_iterations: int = 8,
+    ) -> AsyncGenerator[tuple[str, Any], None]:
+        """Run loop with progress events (RFC-0020 compliant).
+
+        Yields progress events during execution for display.
+
+        Args:
+            goal: Goal description to execute
+            thread_id: Thread context for execution
+            max_iterations: Maximum loop iterations (default: 8)
+
+        Yields:
+            Tuples of (event_type, event_data) for progress updates
+        """
         state = LoopState(
             goal=goal,
             thread_id=thread_id,
@@ -90,6 +123,15 @@ class LoopAgent:
         while state.iteration < state.max_iterations:
             iteration_start = time.perf_counter()
 
+            # Yield iteration started event
+            yield (
+                "iteration_started",
+                {
+                    "iteration": state.iteration,
+                    "max_iterations": max_iterations,
+                },
+            )
+
             logger.info("=== Iteration %d ===", state.iteration)
 
             # PLAN Phase
@@ -99,7 +141,27 @@ class LoopAgent:
                 context=self._build_plan_context(),
             )
 
-            # ACT Phase
+            # Yield plan decision
+            yield (
+                "plan_decision",
+                {
+                    "iteration": state.iteration,
+                    "steps": [{"id": s.id, "description": s.description[:80]} for s in decision.steps],
+                    "execution_mode": decision.execution_mode,
+                },
+            )
+
+            # ACT Phase - yield step_started before execution
+            ready_steps = decision.get_ready_steps(state.completed_step_ids)
+
+            # Yield step_started for each ready step (Level 2)
+            for step in ready_steps:
+                yield (
+                    "step_started",
+                    {"description": step.description},
+                )
+
+            # Execute steps
             step_results = await self.executor.execute(
                 decision=decision,
                 state=state,
@@ -108,6 +170,17 @@ class LoopAgent:
             # Update state with results
             for result in step_results:
                 state.add_step_result(result)
+                # Yield step result event (Level 3)
+                yield (
+                    "step_completed",
+                    {
+                        "step_id": result.step_id,
+                        "success": result.success,
+                        "output_preview": result.output[:100] if result.output else None,
+                        "error": result.error or None,
+                        "duration_ms": result.duration_ms,
+                    },
+                )
 
             # JUDGE Phase
             judgment = await self.judge_phase.judge(
@@ -119,6 +192,17 @@ class LoopAgent:
             state.iteration += 1
             state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
+            # Yield iteration completed event
+            yield (
+                "iteration_completed",
+                {
+                    "iteration": state.iteration,
+                    "status": judgment.status,
+                    "progress": judgment.goal_progress,
+                    "reasoning": judgment.reasoning[:200] if judgment.reasoning else "",
+                },
+            )
+
             # Decision logic
             if judgment.is_done():
                 logger.info(
@@ -126,7 +210,8 @@ class LoopAgent:
                     state.iteration,
                     state.total_duration_ms,
                 )
-                return judgment
+                yield ("completed", judgment)
+                return
 
             if judgment.should_replan():
                 logger.info(
@@ -155,13 +240,14 @@ class LoopAgent:
             state.previous_judgment.goal_progress * 100 if state.previous_judgment else 0,
         )
 
-        return state.previous_judgment or JudgeResult(
+        result = state.previous_judgment or JudgeResult(
             status="replan",
             evidence_summary=state.evidence_summary,
             goal_progress=0.0,
             confidence=0.0,
             reasoning="Max iterations reached without completion",
         )
+        yield ("completed", result)
 
     def _build_plan_context(self) -> PlanContext:
         """Build planning context with available capabilities.

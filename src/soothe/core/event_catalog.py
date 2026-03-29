@@ -223,6 +223,22 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     evidence_summary: str
 
 
+class AgenticStepStartedEvent(LifecycleEvent):
+    """Level 2: Step description in three-level tree (RFC-0020)."""
+
+    type: Literal["soothe.agentic.step.started"] = "soothe.agentic.step.started"
+    description: str
+
+
+class AgenticStepCompletedEvent(LifecycleEvent):
+    """Level 3: Step result in three-level tree (RFC-0020)."""
+
+    type: Literal["soothe.agentic.step.completed"] = "soothe.agentic.step.completed"
+    success: bool
+    summary: str
+    duration_ms: int
+
+
 class AgenticIterationStartedEvent(LifecycleEvent):
     type: Literal["soothe.agentic.iteration.started"] = "soothe.agentic.iteration.started"
     iteration: int
@@ -768,21 +784,37 @@ _reg(
 _reg(
     "soothe.agentic.loop.started",
     AgenticLoopStartedEvent,
-    summary_template="Agentic loop started (max {max_iterations} iterations)",
+    verbosity="normal",
+    summary_template="{goal}",
 )
 _reg(
     "soothe.agentic.loop.completed",
     AgenticLoopCompletedEvent,
-    summary_template="Agentic loop completed: {total_iterations} iterations, {outcome}",
+    verbosity="quiet",
+    summary_template="Done: {evidence_summary}",
+)
+_reg(
+    "soothe.agentic.step.started",
+    AgenticStepStartedEvent,
+    verbosity="detailed",
+    summary_template="{description}",
+)
+_reg(
+    "soothe.agentic.step.completed",
+    AgenticStepCompletedEvent,
+    verbosity="normal",
+    summary_template="{summary} ({duration_ms}ms)",
 )
 _reg(
     "soothe.agentic.iteration.started",
     AgenticIterationStartedEvent,
+    verbosity="debug",
     summary_template="Iteration {iteration} ({planning_strategy} planning)",
 )
 _reg(
     "soothe.agentic.iteration.completed",
     AgenticIterationCompletedEvent,
+    verbosity="debug",
     summary_template="Iteration {iteration}: {outcome} ({duration_ms}ms)",
 )
 _reg(

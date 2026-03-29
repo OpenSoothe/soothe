@@ -5,12 +5,14 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-26
-**Updated**: 2026-03-28
+**Updated**: 2026-03-29
 **Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019
 
 ## Abstract
 
-This RFC establishes the architectural foundation for displaying agent activity events across CLI and TUI interfaces using a **registry-driven, two-level tree display system**. Events register their display metadata (templates, verbosity) at definition time, enabling automatic integration without renderer modifications.
+This RFC establishes the architectural foundation for displaying agent activity events across CLI and TUI interfaces using a **registry-driven, three-level tree display system**. Events register their display metadata (templates, verbosity) at definition time, enabling automatic integration without renderer modifications.
+
+**Maximum Three Levels**: The display hierarchy is strictly limited to 3 levels (goal → step → result) to maintain user experience and terminal readability.
 
 ## Design Principles
 
@@ -31,21 +33,43 @@ Event: BrowserStepEvent
   - verbosity: "subagent_progress"
 ```
 
-### Principle 2: Two-Level Tree Structure
+### Principle 2: Three-Level Tree Structure
 
-**Rule**: All activity events display as a two-level tree: summary + details.
+**Rule**: All activity events display as a three-level tree: summary → step → result.
 
 **Display Pattern**:
 ```
 Level 1 (Summary):  ● EventSummary
-Level 2 (Details):    └ Additional context or results
+Level 2 (Step):       └ Step description
+Level 3 (Result):        └ ✓ Result metrics
 ```
 
-**When Details Appear**:
-- Tool results show completion status
-- Subagent steps show progress events
-- Text events show content preview
-- Result events show metrics
+**Maximum Three Levels**: Deeper nesting degrades user experience and terminal readability. The hierarchy is strictly limited to 3 levels.
+
+**Level Definitions**:
+
+| Level | Name | Content | Icon |
+|-------|------|---------|------|
+| 1 | Summary | Goal or phase description | `●` |
+| 2 | Step | Individual action description | `└` |
+| 3 | Result | Outcome, metrics, status | `└ ✓/✗` |
+
+**Example Display**:
+```
+● Listing all README.md files
+  └ Find files using glob
+     └ ✓ Found 42 files in 1.2s
+  └ Count and summarize
+     └ ✓ 42 total, 8 directories
+● Done: listed all README.md files
+```
+
+**What Gets Hidden**: Internal details not shown to end users:
+- Iteration count (Iteration 1/3)
+- Step IDs (step_0, s1)
+- DAG dependency details
+- Planning decisions
+- Judge confidence scores
 
 ### Principle 3: Shared Presentation Policy Across Headless and TUI
 
@@ -205,6 +229,55 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 
 **Verbosity**: `subagent_progress` (visible in normal mode)
 
+### Pattern: Agentic Loop Progress
+
+**Registration**:
+- Loop started: `soothe.agentic.loop.started`
+- Step started: `soothe.agentic.step.started`
+- Step completed: `soothe.agentic.step.completed`
+- Loop completed: `soothe.agentic.loop.completed`
+
+**Display**:
+```
+● Listing all README.md files
+  └ Find files using glob
+     └ ✓ Found 42 files in 1.2s
+  └ Count and summarize
+     └ ✓ 42 total, 8 directories
+● Done: listed all README.md files
+```
+
+**Key Principles**:
+- **Goal-level** events appear at Level 1
+- **Step** descriptions appear at Level 2
+- **Result** metrics appear at Level 3
+- **Iteration boundaries** are hidden from users (internal detail)
+
+**Events**:
+
+| Event | Level | Verbosity | Template |
+|-------|-------|-----------|----------|
+| `AgenticLoopStartedEvent` | 1 | `normal` | `{goal}` |
+| `AgenticStepStartedEvent` | 2 | `detailed` | `{description}` |
+| `AgenticStepCompletedEvent` | 3 | `normal` | `{summary} ({duration_ms}ms)` |
+| `AgenticLoopCompletedEvent` | 1 | `quiet` | `Done: {evidence_summary}` |
+
+**Verbosity Behavior**:
+
+| Event | quiet | normal | detailed |
+|-------|-------|--------|----------|
+| Loop started | ✗ | ✓ | ✓ |
+| Step started | ✗ | ✗ | ✓ |
+| Step completed | ✗ | ✓ | ✓ |
+| Loop completed | ✓ | ✓ | ✓ |
+
+**Hidden Internal Details**:
+- Iteration count (e.g., "Iteration 1/3")
+- Step IDs (e.g., "step_0")
+- DAG dependency information
+- Planning decision reasoning
+- Judge confidence scores
+
 ### Pattern: Protocol Events
 
 **Registration**:
@@ -270,9 +343,17 @@ Subagent step events:
 ```
 
 **Visual Consistency**:
-- Use `make_dot_line()` for two-level trees
+- Use `make_dot_line()` for tree indentation
 - Colors: blue (assistant), green (success), red (error), yellow (progress), magenta (subagent)
 - Icons: ● (in progress), ✓ (success), ✗ (error), ⚙ (tool/agent)
+- Indentation: 2 spaces per level (Level 1 = 0 spaces, Level 2 = 2 spaces, Level 3 = 5 spaces)
+
+**Three-Level Tree Formatting**:
+```
+● Level 1: Goal/Summary
+  └ Level 2: Step description
+     └ ✓ Level 3: Result metrics
+```
 
 ## Verbosity Classification
 
