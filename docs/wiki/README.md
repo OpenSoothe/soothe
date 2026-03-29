@@ -44,6 +44,7 @@ Welcome to the Soothe end-user wiki. This directory contains comprehensive guide
 | Guide | What You'll Learn |
 |-------|-------------------|
 | **[Troubleshooting](troubleshooting.md)** | Common issues, error messages, and solutions |
+| **[Query Processing Flow](query-processing-flow.md)** | How user queries flow through the system architecture |
 
 ---
 
