@@ -888,8 +888,8 @@ class DaemonHandlersMixin:
         full_response: list[str] = []
 
         try:
-            # Execute using ThreadExecutor with isolation
-            stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
+            # Build kwargs for runner.astream (excluding thread_id which is positional)
+            stream_kwargs: dict[str, Any] = {}
             if autonomous:
                 stream_kwargs["autonomous"] = True
                 if max_iterations is not None:
@@ -898,9 +898,10 @@ class DaemonHandlersMixin:
                 stream_kwargs["subagent"] = subagent
 
             # Use ThreadExecutor for concurrent execution with rate limiting
+            # execute_thread signature: execute_thread(thread_id, user_input, **kwargs)
             stream_tuple_length = 3
             msg_pair_length = 2
-            async for chunk in self._thread_executor.execute_thread(text, **stream_kwargs):
+            async for chunk in self._thread_executor.execute_thread(thread_id, text, **stream_kwargs):
                 if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
                     continue
                 namespace, mode, data = chunk
