@@ -132,19 +132,31 @@ async def run_headless_via_daemon(
 
         has_error = False
         query_started = False  # Track if we've seen the query start running
+        last_heartbeat = asyncio.get_event_loop().time()  # Track last heartbeat for timeout extension
 
         while True:
             try:
                 if query_started:
                     event = await client.read_event()
                 else:
-                    event = await asyncio.wait_for(client.read_event(), timeout=_QUERY_START_TIMEOUT_S)
+                    # Extend timeout if heartbeat received recently
+                    time_since_heartbeat = asyncio.get_event_loop().time() - last_heartbeat
+                    effective_timeout = max(1.0, _QUERY_START_TIMEOUT_S - time_since_heartbeat)
+                    event = await asyncio.wait_for(client.read_event(), timeout=effective_timeout)
             except TimeoutError:
                 return _DAEMON_FALLBACK_EXIT_CODE
             if not event:
                 break
 
             event_type = event.get("type", "")
+
+            # Handle heartbeat events - reset timeout tracking
+            if event_type == "event":
+                ev_data = event.get("data")
+                if isinstance(ev_data, dict) and ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat":
+                    last_heartbeat = asyncio.get_event_loop().time()
+                    logger.info("Received heartbeat, extending timeout")
+                    continue  # Don't process heartbeat as regular event
 
             # Handle status changes (need to track query_started for timeout)
             if event_type == "status":

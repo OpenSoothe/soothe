@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 _CLEANUP_TIMEOUT_S = 3.0
 _STOP_TIMEOUT_S = 8.0
+_HEARTBEAT_INTERVAL_S = 5.0  # Broadcast heartbeat every 5 seconds
 
 
 @dataclass
@@ -77,6 +78,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._cleanup_task: asyncio.Task[None] | None = None
         self._inactivity_check_task: asyncio.Task[None] | None = None
         self._input_loop_task: asyncio.Task[None] | None = None
+        self._heartbeat_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
         self._input_history: InputHistory | None = None
         self._pid_lock_fd: int | None = None
@@ -168,6 +170,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
         self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
+        self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
 
         # Detect incomplete threads from previous daemon run (RFC-0010)
         await self._detect_incomplete_threads()
@@ -303,6 +306,50 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning("Periodic inactivity check failed", exc_info=True)
 
+    async def _periodic_heartbeat(self) -> None:
+        """Broadcast heartbeat events to all subscribed clients.
+
+        This prevents headless clients from timing out while the LLM is processing
+        long requests. The heartbeat is only broadcast when a query is running.
+
+        RFC-0013: Heartbeat is broadcast every 5 seconds.
+        """
+        from datetime import UTC, datetime
+
+        from soothe.core.event_catalog import DaemonHeartbeatEvent
+
+        while self._running:
+            await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
+
+            # Only send heartbeat when query is running (clients need it most)
+            if not self._query_running:
+                continue
+
+            try:
+                thread_id = self._runner.current_thread_id if self._runner else ""
+                state = "running" if self._query_running else "idle"
+
+                heartbeat = DaemonHeartbeatEvent(
+                    thread_id=thread_id or "",
+                    timestamp=datetime.now(UTC).isoformat(),
+                    state=state,
+                )
+
+                # Broadcast to all subscribed clients via _broadcast
+                if thread_id:
+                    await self._broadcast(
+                        {
+                            "type": "event",
+                            "thread_id": thread_id,
+                            "namespace": [],
+                            "mode": "custom",
+                            "data": heartbeat.to_dict(),
+                        }
+                    )
+                    logger.info("Heartbeat sent to thread %s", thread_id)
+            except Exception:
+                logger.debug("Heartbeat failed", exc_info=True)
+
     async def _suspend_inactive_threads(self) -> None:
         """Suspend threads that have been inactive for longer than the configured timeout."""
         if not self._runner or not hasattr(self._runner, "_durability"):
@@ -384,6 +431,11 @@ class SootheDaemon(DaemonHandlersMixin):
             self._inactivity_check_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._inactivity_check_task
+
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_task
 
         # Cancel any running query task
         if self._current_query_task and not self._current_query_task.done():

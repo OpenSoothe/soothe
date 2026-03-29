@@ -256,20 +256,30 @@ class ClientSessionManager:
 
                 # Daemon-side filtering (RFC-0022)
                 if event_meta:
-                    # Import should_show from RFC-0015's progress_verbosity
-                    from soothe.ux.core.progress_verbosity import should_show
+                    # Heartbeat events always pass through (RFC-0013)
+                    # They're needed to prevent client timeout during long LLM calls
+                    # Check if this is a heartbeat event (wrapped in "event" message type)
+                    is_heartbeat = False
+                    if isinstance(event, dict) and event.get("type") == "event":
+                        ev_data = event.get("data")
+                        if isinstance(ev_data, dict):
+                            is_heartbeat = ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat"
 
-                    # Check if event should be shown at client's verbosity level
-                    if not should_show(event_meta.verbosity, session.verbosity):
-                        # Filter out - do not send to client
-                        logger.debug(
-                            "Filtered event %s for client %s (event_verbosity=%s, client_verbosity=%s)",
-                            event.get("type"),
-                            session.client_id,
-                            event_meta.verbosity,
-                            session.verbosity,
-                        )
-                        continue  # Skip this event
+                    if not is_heartbeat:
+                        # Import should_show from RFC-0015's progress_verbosity
+                        from soothe.ux.core.progress_verbosity import should_show
+
+                        # Check if event should be shown at client's verbosity level
+                        if not should_show(event_meta.verbosity, session.verbosity):
+                            # Filter out - do not send to client
+                            logger.debug(
+                                "Filtered event %s for client %s (event_verbosity=%s, client_verbosity=%s)",
+                                event.get("type"),
+                                session.client_id,
+                                event_meta.verbosity,
+                                session.verbosity,
+                            )
+                            continue  # Skip this event
 
                 # Send filtered event to client
                 try:

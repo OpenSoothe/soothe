@@ -80,6 +80,7 @@ ITERATION_STARTED = "soothe.lifecycle.iteration.started"
 ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
 CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saved"
 RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
+DAEMON_HEARTBEAT = "soothe.lifecycle.daemon.heartbeat"
 
 # -- Protocol events ---------------------------------------------------------
 CONTEXT_PROJECTED = "soothe.protocol.context.projected"
@@ -186,6 +187,20 @@ class RecoveryResumedEvent(LifecycleEvent):
     completed_steps: list[str] = []  # noqa: RUF012
     completed_goals: list[str] = []  # noqa: RUF012
     mode: str = ""
+
+
+class DaemonHeartbeatEvent(LifecycleEvent):
+    """Heartbeat event broadcast by daemon to keep clients alive during long operations.
+
+    RFC-0013: Daemon broadcasts heartbeat every 5 seconds to subscribed clients.
+    This prevents client timeout when LLM operations take longer than the client's
+    query start timeout (default 20 seconds).
+    """
+
+    type: Literal["soothe.lifecycle.daemon.heartbeat"] = "soothe.lifecycle.daemon.heartbeat"
+    thread_id: str = ""
+    timestamp: str = ""  # ISO format timestamp
+    state: str = "running"  # "running" | "idle"
 
 
 # ---------------------------------------------------------------------------
@@ -742,6 +757,12 @@ _reg(
     RECOVERY_RESUMED,
     RecoveryResumedEvent,
     summary_template="Recovery resumed: mode={mode}",
+)
+_reg(
+    DAEMON_HEARTBEAT,
+    DaemonHeartbeatEvent,
+    verbosity="debug",
+    summary_template="Daemon heartbeat: state={state}",
 )
 
 # -- Agentic Loop (RFC-0008) -------------------------------------------------
