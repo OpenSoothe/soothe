@@ -4,7 +4,6 @@ import contextvars
 import logging
 import os
 import sys
-import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -44,17 +43,14 @@ class ThreadFormatter(logging.Formatter):
         Returns:
             The formatted log message string.
         """
-        # Get OS thread ID (always available)
-        os_thread_id = threading.current_thread().ident
-
         # Get Soothe conversation thread ID (optional)
         soothe_thread_id = get_thread_id()
 
         # Format both IDs: [os:id] [soothe:id]
         if soothe_thread_id:
-            record.thread_id = f"[os:{os_thread_id}] [soothe:{soothe_thread_id}]"
+            record.thread_id = f"[T:{soothe_thread_id}]"
         else:
-            record.thread_id = f"[os:{os_thread_id}]"
+            record.thread_id = ""
 
         return super().format(record)
 

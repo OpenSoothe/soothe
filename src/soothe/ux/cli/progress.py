@@ -60,6 +60,11 @@ def render_progress_event(
     if should_skip_event(event_type):
         return
 
+    # RFC-0020 three-level tree for agentic events
+    if event_type.startswith("soothe.agentic."):
+        _render_agentic_event(event_type, data)
+        return
+
     # Try registry first (RFC-0020 Principle 1: Registry-Driven Display)
     summary = build_event_summary(event_type, data)
     if summary:
@@ -83,6 +88,57 @@ def render_progress_event(
 
     sys.stderr.write(line)
     sys.stderr.flush()
+
+
+def _render_agentic_event(event_type: str, data: dict[str, Any]) -> None:
+    """Render agentic loop events as three-level tree (RFC-0020).
+
+    Level 1: Goal summary (●)
+    Level 2: Step description (└)
+    Level 3: Step result (└ ✓)
+
+    Args:
+        event_type: Event type string.
+        data: Event payload.
+    """
+    if "loop.started" in event_type:
+        # Level 1: Goal summary
+        goal = data.get("goal", "")
+        if goal:
+            sys.stderr.write(f"\n● {goal}\n")
+            sys.stderr.flush()
+
+    elif "step.started" in event_type:
+        # Level 2: Step description
+        description = data.get("description", "")
+        if description:
+            sys.stderr.write(f"  └ {description}\n")
+            sys.stderr.flush()
+
+    elif "step.completed" in event_type:
+        # Level 3: Step result
+        success = data.get("success", False)
+        summary = data.get("summary", "Done")
+        duration_ms = data.get("duration_ms", 0)
+        icon = "✓" if success else "✗"
+        result_line = f"     └ {icon} {summary}"
+        if duration_ms > 0:
+            # Format duration nicely
+            if duration_ms >= 1000:  # noqa: PLR2004
+                result_line += f" ({duration_ms / 1000:.1f}s)"
+            else:
+                result_line += f" ({duration_ms}ms)"
+        sys.stderr.write(result_line + "\n")
+        sys.stderr.flush()
+
+    elif "loop.completed" in event_type:
+        # Level 1: Goal conclusion
+        evidence = data.get("evidence_summary", "")
+        if evidence:
+            # Truncate evidence for clean display
+            evidence = truncate_summary(evidence, max_len=80)
+            sys.stderr.write(f"\n● Done: {evidence}\n")
+            sys.stderr.flush()
 
 
 def _get_event_label(event_type: str) -> str:

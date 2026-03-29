@@ -143,6 +143,15 @@ class AgenticMixin:
             elif event_type == "completed":
                 # Final result
                 judge_result = event_data
+
+                # Emit final assistant response if goal is done with full output
+                if judge_result.is_done() and hasattr(judge_result, "full_output") and judge_result.full_output:
+                    # Emit the full output as assistant text using proper format
+                    # Format: (namespace: tuple, mode: str, data)
+                    from langchain_core.messages import AIMessage
+
+                    yield ((), "messages", [AIMessage(content=judge_result.full_output), {}])
+
                 # Emit loop completed event (Level 1)
                 yield _custom(
                     AgenticLoopCompletedEvent(

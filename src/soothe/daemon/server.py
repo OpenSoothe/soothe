@@ -346,7 +346,7 @@ class SootheDaemon(DaemonHandlersMixin):
                             "data": heartbeat.to_dict(),
                         }
                     )
-                    logger.info("Heartbeat sent to thread %s", thread_id)
+                    logger.debug("Heartbeat sent to thread %s", thread_id)
             except Exception:
                 logger.debug("Heartbeat failed", exc_info=True)
 

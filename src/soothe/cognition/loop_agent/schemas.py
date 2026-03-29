@@ -95,6 +95,7 @@ class JudgeResult(BaseModel):
         confidence: Judge's confidence (0.0-1.0)
         reasoning: Why this judgment was made
         next_steps_hint: Hint for next iteration (optional)
+        full_output: Full output for final response (when goal is done)
     """
 
     status: Literal["continue", "replan", "done"]
@@ -103,6 +104,7 @@ class JudgeResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
     reasoning: str
     next_steps_hint: str | None = None
+    full_output: str | None = None
 
     def should_continue(self) -> bool:
         """Check if loop should continue with current strategy."""
@@ -138,14 +140,20 @@ class StepResult(BaseModel):
     duration_ms: int
     thread_id: str
 
-    def to_evidence_string(self) -> str:
+    def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.
+
+        Args:
+            truncate: If True, truncate output for concise display.
+                     If False, return full output for final response.
 
         Returns:
             Human-readable evidence string
         """
         if self.success:
             output_preview = self.output[:200] if self.output else "no output"
+            if not truncate and self.output:
+                return self.output
             return f"Step {self.step_id}: ✓ {output_preview}"
         return f"Step {self.step_id}: ✗ Error: {self.error}"
 

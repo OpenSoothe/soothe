@@ -60,8 +60,8 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
     if meta and meta.verbosity:
         verbosity_map: dict[str, ProgressCategory] = {
             "minimal": "protocol",
-            "quiet": "protocol",
-            "normal": "protocol",
+            "quiet": "milestone",  # Quiet only shows milestones (e.g., loop completed)
+            "normal": "plan_update",  # Normal shows plan updates (e.g., loop started, step completed)
             "detailed": "protocol",
             "subagent_progress": "subagent_progress",
             "subagent_custom": "subagent_custom",
@@ -73,6 +73,14 @@ def classify_custom_event(namespace: tuple[Any, ...], data: dict[str, Any]) -> P
             "internal": "internal",
         }
         category = verbosity_map.get(meta.verbosity, "protocol")
+        # Agentic events (RFC-0020 three-level tree) map to plan_update/milestone
+        if domain == "agentic":
+            if "loop.started" in etype or "step.completed" in etype:
+                return "plan_update"  # Visible at normal
+            if "loop.completed" in etype:
+                return "milestone"  # Visible at quiet
+            if "step.started" in etype:
+                return "protocol"  # Only visible at detailed/debug
         if domain == "cognition" and category == "protocol":
             if etype == "soothe.cognition.plan.created":
                 return "plan_update"

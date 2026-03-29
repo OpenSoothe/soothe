@@ -47,9 +47,16 @@ class JudgePhase:
         Returns:
             JudgeResult with status, progress, and reasoning
         """
-        # Build evidence summary
+        # Build evidence summary (truncated for logging)
         evidence_lines = [result.to_evidence_string() for result in state.step_results]
         evidence_summary = "\n".join(evidence_lines)
+
+        # Build full output for final response (not truncated)
+        full_outputs = [
+            result.to_evidence_string(truncate=False)
+            for result in state.step_results
+            if result.success and result.output
+        ]
 
         # Get executed steps
         steps = state.current_decision.steps if state.current_decision else []
@@ -74,6 +81,11 @@ class JudgePhase:
 
         # Update state with evidence
         state.evidence_summary = evidence_summary
+
+        # Attach full output to judgment for display
+        if full_outputs and judgment.is_done():
+            # Use the most recent substantial output as the final response
+            judgment.full_output = "\n\n".join(full_outputs)
 
         # Log judgment result
         logger.info(

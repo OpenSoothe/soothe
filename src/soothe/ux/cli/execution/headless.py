@@ -1,6 +1,7 @@
 """Headless execution orchestration."""
 
 import sys
+import time
 
 import typer
 
@@ -8,6 +9,7 @@ from soothe.config import SootheConfig
 from soothe.daemon import SootheDaemon, resolve_socket_path
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
+_DAEMON_START_WAIT_TIMEOUT = 30.0  # Max time to wait for daemon to become ready
 
 
 def run_headless(
@@ -41,6 +43,16 @@ def run_headless(
         from soothe.ux.cli.commands.daemon_cmd import daemon_start
 
         daemon_start(config=None, foreground=False)
+
+        # Wait for daemon to become fully ready with timeout
+        # This helps avoid connection errors on slower systems
+        start_time = time.time()
+        while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
+            if SootheDaemon._is_socket_live(socket) and SootheDaemon.is_running():
+                break
+            time.sleep(0.5)
+        # Note: We don't fail here - let the connection attempt handle errors
+        # This allows tests and edge cases to proceed with mocked daemons
 
     # Connect to daemon and execute
     daemon_exit_code = asyncio.run(
