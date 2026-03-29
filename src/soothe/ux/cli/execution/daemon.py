@@ -1,6 +1,7 @@
 """Daemon-based execution for headless mode.
 
 Refactored to use RFC-0019 EventProcessor with CliRenderer.
+Uses WebSocket transport (RFC-0013).
 """
 
 import asyncio
@@ -25,13 +26,27 @@ _SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
 _QUERY_START_TIMEOUT_S = 20.0
 
 
+def _get_websocket_url(cfg: SootheConfig) -> str:
+    """Get WebSocket URL from configuration.
+
+    Args:
+        cfg: Soothe configuration.
+
+    Returns:
+        WebSocket URL string.
+    """
+    host = cfg.daemon.transports.websocket.host
+    port = cfg.daemon.transports.websocket.port
+    return f"ws://{host}:{port}"
+
+
 async def _connect_with_retries(client: object) -> None:
     """Connect to the daemon with bounded retries for cold-start races."""
     last_error: OSError | ConnectionError | TimeoutError | None = None
     for attempt in range(_CONNECT_RETRY_COUNT):
         try:
             await asyncio.wait_for(client.connect(), timeout=_CONNECT_TIMEOUT_S)
-        except (FileNotFoundError, ConnectionRefusedError, OSError, ConnectionError, TimeoutError) as exc:
+        except (ConnectionRefusedError, OSError, ConnectionError, TimeoutError) as exc:
             last_error = exc
             if attempt == _CONNECT_RETRY_COUNT - 1:
                 raise
@@ -79,12 +94,14 @@ async def run_headless_via_daemon(
 ) -> int:
     """Run a single prompt by connecting to a running daemon.
 
+    Uses WebSocket transport for all connections (RFC-0013).
     Refactored to use RFC-0019 EventProcessor with CliRenderer.
     """
-    from soothe.daemon import DaemonClient, resolve_socket_path
+    from soothe.daemon.websocket_client import WebSocketClient
 
     _ = thread_id
-    client = DaemonClient(sock=resolve_socket_path(cfg))
+    ws_url = _get_websocket_url(cfg)
+    client = WebSocketClient(url=ws_url)
 
     try:
         await _connect_with_retries(client)

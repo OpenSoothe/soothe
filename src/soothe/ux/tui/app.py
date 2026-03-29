@@ -29,7 +29,7 @@ from textual.binding import Binding
 from textual.containers import Container
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon, resolve_socket_path
+from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.thread_logger import ThreadLogger
 from soothe.ux.core import EventProcessor
 from soothe.ux.core.display_policy import normalize_verbosity
@@ -147,7 +147,7 @@ class SootheApp(App):
         self._config = config or SootheConfig()
         self._requested_thread_id = thread_id
         self._initial_prompt = initial_prompt
-        self._client: DaemonClient | None = None
+        self._client: WebSocketClient | None = None
         self._state = TuiState()
         self._connected = False
         # Clean cut: removed _conversation_history and _message_history
@@ -320,23 +320,25 @@ class SootheApp(App):
             self._was_running = False
 
     async def _connect_and_listen(self) -> None:
-        """Connect to daemon and process events."""
-        sock = resolve_socket_path(self._config)
-        self._client = DaemonClient(sock=sock)
+        """Connect to daemon and process events via WebSocket."""
+        host = self._config.daemon.transports.websocket.host
+        port = self._config.daemon.transports.websocket.port
+        ws_url = f"ws://{host}:{port}"
+        self._client = WebSocketClient(url=ws_url)
         max_retries = 40
         for attempt in range(max_retries):
             try:
                 await self._client.connect()
                 self._connected = True
-                logger.info("Connected to daemon")
+                logger.info("Connected to daemon via WebSocket at %s", ws_url)
                 self._update_status("Connected")
                 break
-            except (OSError, ConnectionRefusedError):
+            except (OSError, ConnectionRefusedError, ConnectionError):
                 if attempt == max_retries - 1:
                     self._on_panel_write(
                         make_dot_line(
                             DOT_COLORS["error"],
-                            f"Failed to connect to daemon after retries. Is the socket at {sock} available?",
+                            f"Failed to connect to daemon after retries. Is the daemon running at {ws_url}?",
                         )
                     )
                     return
@@ -942,8 +944,6 @@ def _start_daemon_in_background(config: SootheConfig, *, config_path: str | None
     if SootheDaemon.is_running():
         return
 
-    sock = resolve_socket_path(config)
-
     cmd = [sys.executable, "-m", "soothe.daemon", "--detached"]
     if config_path:
         cmd.extend(["--config", config_path])
@@ -959,9 +959,12 @@ def _start_daemon_in_background(config: SootheConfig, *, config_path: str | None
     )
     stderr_file.close()
 
+    # Wait for daemon to become ready via WebSocket
+    host = config.daemon.transports.websocket.host
+    port = config.daemon.transports.websocket.port
     for _ in range(40):
         time.sleep(0.25)
-        if sock.exists() and SootheDaemon._is_socket_live(sock):
+        if SootheDaemon._is_port_live(host, port):
             break
 
 

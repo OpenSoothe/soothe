@@ -1,7 +1,7 @@
 """Transport manager for coordinating multiple transports (RFC-0013).
 
-The transport manager coordinates multiple transport servers (Unix socket,
-WebSocket, HTTP REST) and provides unified message handling and broadcasting.
+The transport manager coordinates multiple transport servers (WebSocket, HTTP REST)
+and provides unified message handling and broadcasting.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from typing import Any
 
 from soothe.config.daemon_config import DaemonConfig
 from soothe.daemon.transports.base import TransportServer
-from soothe.daemon.transports.unix_socket import UnixSocketTransport
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +56,7 @@ class TransportManager:
         self._session_manager = session_manager
         self._transports: list[TransportServer] = []
         self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
+        self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
         self._started = False
 
     def set_message_handler(self, handler: Callable[[str, dict[str, Any]], None]) -> None:
@@ -68,25 +68,30 @@ class TransportManager:
         """
         self._message_handler = handler
 
+    def set_handshake_callback(self, callback: Callable[[Any], list[dict[str, Any]]]) -> None:
+        """Set the handshake callback for initial client messages.
+
+        Args:
+            callback: Callback to generate initial handshake messages.
+                Takes transport client object, returns list of messages to send.
+        """
+        self._handshake_callback = callback
+
     def _build_transports(self) -> None:
         """Build transport instances based on configuration."""
-        # Unix socket transport
-        if self._config.transports.unix_socket.enabled:
-            unix_transport = UnixSocketTransport(self._config.transports.unix_socket)
-            if self._session_manager:
-                unix_transport._session_manager = self._session_manager
-            self._transports.append(unix_transport)
-            logger.debug("Configured Unix socket transport")
+        # WebSocket transport (required for bidirectional streaming)
+        if not self._config.transports.websocket.enabled:
+            raise RuntimeError("WebSocket transport is required - enable it in configuration")
 
-        # WebSocket transport (Phase 2)
-        if self._config.transports.websocket.enabled:
-            from soothe.daemon.transports.websocket import WebSocketTransport
+        from soothe.daemon.transports.websocket import WebSocketTransport
 
-            ws_transport = WebSocketTransport(self._config.transports.websocket)
-            self._transports.append(ws_transport)
-            logger.debug("Configured WebSocket transport")
+        ws_transport = WebSocketTransport(self._config.transports.websocket)
+        if self._session_manager:
+            ws_transport._session_manager = self._session_manager
+        self._transports.append(ws_transport)
+        logger.debug("Configured WebSocket transport")
 
-        # HTTP REST transport (Phase 3)
+        # HTTP REST transport (optional, for health checks and CRUD)
         if self._config.transports.http_rest.enabled:
             from soothe.daemon.transports.http_rest import HttpRestTransport
 
@@ -99,14 +104,11 @@ class TransportManager:
             self._transports.append(http_transport)
             logger.debug("Configured HTTP REST transport")
 
-        if not self._transports:
-            logger.warning("No transports enabled in configuration")
-
     async def start_all(self) -> None:
         """Start all enabled transports.
 
         Raises:
-            RuntimeError: If no message handler is set or if no transports are enabled.
+            RuntimeError: If no message handler is set or if WebSocket is not enabled.
         """
         if self._started:
             logger.warning("Transport manager already started")
@@ -117,11 +119,10 @@ class TransportManager:
 
         self._build_transports()
 
-        if not self._transports:
-            raise RuntimeError("No transports enabled in configuration")
-
-        # Start all transports
-        start_tasks = [transport.start(self._message_handler) for transport in self._transports]
+        # Start all transports with message handler and handshake callback
+        start_tasks = [
+            transport.start(self._message_handler, self._handshake_callback) for transport in self._transports
+        ]
 
         try:
             await asyncio.gather(*start_tasks)

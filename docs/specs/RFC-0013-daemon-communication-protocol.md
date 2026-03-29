@@ -1,16 +1,18 @@
 # RFC-0013: Unified Daemon Communication Protocol
 
 **RFC**: 0013
-**Title**: Unified Daemon Communication Protocol for Multi-Transport IPC
+**Title**: Unified Daemon Communication Protocol for WebSocket IPC
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-19
-**Updated**: 2026-03-28
+**Updated**: 2026-03-29
 **Dependencies**: RFC-0001, RFC-0002, RFC-0003
 
 ## Abstract
 
-This RFC defines a transport-agnostic daemon communication protocol that supports Unix domain sockets, WebSockets, and HTTP REST. The protocol specifies a common JSON-based message format, security requirements, and implementation interface. This architecture enables the Soothe daemon to serve both local CLI/TUI clients (via Unix socket) and remote/web clients (via WebSocket/HTTP) using the same protocol layer, while maintaining backward compatibility with existing clients.
+This RFC defines a WebSocket-based daemon communication protocol that serves all clients (local CLI/TUI and remote/web) through a unified transport. The protocol specifies a JSON-based message format, security requirements, and implementation interface. HTTP REST is retained for health checks and stateless CRUD operations. This architecture eliminates Unix domain socket complexity while enabling both local and remote client connectivity.
+
+**Update (2026-03-29)**: Simplified transport architecture to WebSocket-only bidirectional streaming. Removed Unix domain socket transport due to stability issues (stale socket files, large payload disconnects). HTTP REST retained for health checks.
 
 **Update (2026-03-29)**: Merged RFC-0023 daemon readiness architecture. Added explicit lifecycle phases, staged startup, and readiness handshake protocol.
 
@@ -18,29 +20,29 @@ This RFC defines a transport-agnostic daemon communication protocol that support
 
 ## Motivation
 
-### Problem: Single Transport Limitation
+### Problem: Multi-Transport Complexity
 
-RFC-0003 defines the daemon IPC architecture using Unix domain sockets exclusively. This design has limitations:
+The previous architecture supported both Unix domain sockets and WebSockets, creating:
+1. **Stale socket files** - After daemon crashes, socket files remained and blocked new connections
+2. **Large payload disconnects** - Unix socket streaming failed during large event payloads
+3. **Maintenance burden** - Two transports required dual debugging, testing, and code paths
+4. **Inconsistent behavior** - Different failure modes between transports confused users
 
-1. **Browser incompatibility**: Web browsers cannot connect to Unix sockets, preventing web-based UI development
-2. **Remote access**: Unix sockets are local-only, requiring SSH tunneling or local presence for remote access
-3. **Mobile clients**: Mobile applications cannot connect to Unix sockets
-4. **Infrastructure constraints**: Cloud deployments and containerized environments may prefer HTTP-based protocols
+### Solution: WebSocket-Only Transport
 
-### Problem: No Protocol Specification
-
-The current implementation in `src/soothe/cli/daemon/protocol.py` provides encoding/decoding utilities but lacks:
-- Formal message schema definitions
-- Transport abstraction layer
-- Security requirements for different transport modes
-- Versioning and compatibility guidelines
+WebSocket provides:
+1. **No stale files** - Port-based binding, no filesystem cleanup required
+2. **Proven stability** - WebSocket handles large payloads reliably
+3. **Single code path** - One transport for all clients (local and remote)
+4. **Browser compatible** - Web browsers connect directly
+5. **Remote access** - Network-accessible for remote CLI/web clients
 
 ### Design Goals
 
-1. **Transport independence**: Same message protocol over Unix socket, WebSocket, and HTTP REST
-2. **Backward compatibility**: Existing Unix socket clients continue working unchanged
-3. **Simplicity by default**: No built-in authentication - handled by external services
-4. **Protocol evolution**: Versioning and extension mechanisms
+1. **Transport simplicity**: Single bidirectional transport (WebSocket) for all streaming
+2. **Local performance**: localhost WebSocket has negligible overhead vs Unix socket
+3. **Remote capability**: Same transport works for local and remote clients
+4. **Backward compatibility**: Message protocol unchanged, only transport differs
 5. **Clear specification**: Formal message schemas and implementation requirements
 
 ### Non-Goals
@@ -53,18 +55,17 @@ The current implementation in `src/soothe/cli/daemon/protocol.py` provides encod
 
 ### Principle 1: Protocol-Transport Separation
 
-The message protocol (what we send) is independent of the transport mechanism (how we send it). Unix socket, WebSocket, and HTTP REST all use the same JSON message format, with transport-specific framing.
+The message protocol (what we send) is independent of the transport mechanism (how we send it). WebSocket and HTTP REST use the same JSON message format, with transport-specific framing.
 
 ### Principle 2: Minimal Wire Overhead
 
-The protocol uses JSON for simplicity and debuggability, not binary formats. Message framing is minimal:
-- Unix socket: newline-delimited JSON lines
-- WebSocket: native text frames (no newline needed)
-- HTTP REST: standard HTTP request/response
+The protocol uses JSON for simplicity and debuggability, not binary formats. Message framing:
+- **WebSocket**: Native text frames (no delimiter needed)
+- **HTTP REST**: Standard HTTP request/response
 
 ### Principle 3: Streaming-First Design
 
-The protocol is designed for bidirectional streaming (Unix socket, WebSocket), not request-response. HTTP REST provides stateless CRUD operations. Clients and servers exchange asynchronous messages over persistent connections.
+WebSocket is designed for bidirectional streaming. HTTP REST provides stateless CRUD operations. Clients and servers exchange asynchronous messages over persistent WebSocket connections.
 
 ## Architecture
 
@@ -75,8 +76,8 @@ The protocol is designed for bidirectional streaming (Unix socket, WebSocket), n
 │                    SootheDaemon                         │
 │                                                         │
 │  ┌─────────────────┐       ┌─────────────────┐        │
-│  │  Unix Socket    │       │   WebSocket     │        │
-│  │  Server         │       │   Server        │        │
+│  │   WebSocket     │       │   HTTP REST     │        │
+│  │   Server        │       │   Server        │        │
 │  └────────┬────────┘       └────────┬────────┘        │
 │           └────────┬────────────────┘                  │
 │           ┌────────▼────────┐                          │
@@ -94,9 +95,9 @@ The protocol is designed for bidirectional streaming (Unix socket, WebSocket), n
 
 ### Component Responsibilities
 
-**Unix Socket Server**: Serve local CLI/TUI clients. Path: `$SOOTHE_HOME/soothe.sock`. Security: OS-level file permissions. Performance: ~0.1ms latency, ~1GB/s throughput. Backward compatible with RFC-0003.
+**WebSocket Server**: Serve all clients (CLI, TUI, browser, remote). Default: `127.0.0.1:8765`. Security: CORS validation, connection limits. Performance: ~0.5ms latency (localhost), ~10-50ms (remote). For production, use reverse proxy for auth/TLS.
 
-**WebSocket Server**: Serve web/remote clients. Default: `127.0.0.1:8765`. Security: CORS validation, connection limits. Performance: ~0.5ms latency (localhost), ~10-50ms (remote). For production, use reverse proxy for auth/TLS.
+**HTTP REST Server**: Health checks, daemon status, CRUD operations. Default: `127.0.0.1:8766`. Stateless request/response. For production, use reverse proxy for auth/TLS.
 
 **Protocol Handler**: Transport-agnostic message processing, validation, routing, broadcast, client lifecycle.
 
@@ -104,14 +105,19 @@ The protocol is designed for bidirectional streaming (Unix socket, WebSocket), n
 
 ### Data Flow
 
-**Client → Server**:
+**Client → Server (WebSocket)**:
 ```
-Client → Transport Layer → Protocol Handler → Message Router → SootheRunner
+Client → WebSocket Transport → Protocol Handler → Message Router → SootheRunner
 ```
 
-**Server → Client**:
+**Server → Client (WebSocket)**:
 ```
-SootheRunner → Event Stream → Protocol Handler → Transport Layer → Client(s)
+SootheRunner → Event Stream → Protocol Handler → WebSocket Transport → Client(s)
+```
+
+**Client → Server (HTTP REST)**:
+```
+Client → HTTP REST → Protocol Handler → Response
 ```
 
 ### Event Bus Architecture
@@ -166,16 +172,16 @@ The daemon follows a persistent lifecycle model where it remains running across 
 **Non-TUI Mode (Headless Single-Prompt)**:
 ```
 Client → Check daemon status
-  → If running: Connect, create thread, execute request, thread finishes, client disconnects
-  → If not running: Start daemon, connect, create thread, execute request, thread finishes, client disconnects
+  → If running: Connect via WebSocket, create thread, execute request, thread finishes, client disconnects
+  → If not running: Start daemon, connect via WebSocket, create thread, execute request, thread finishes, client disconnects
 Daemon → Remains running in background after client disconnect
 ```
 
 **TUI Mode (Interactive)**:
 ```
 Client → Check daemon status
-  → If running: Connect, create/resume thread, interactive session
-  → If not running: Start daemon, connect, create thread, interactive session
+  → If running: Connect via WebSocket, create/resume thread, interactive session
+  → If not running: Start daemon, connect via WebSocket, create thread, interactive session
 Interactive session:
   → /exit or /quit → Client exits, daemon keeps running
   → /detach → Client detaches, daemon keeps running
@@ -322,22 +328,22 @@ The daemon SHALL expose the following lifecycle states:
 
 #### Startup Phases
 
-1. **Bind phase**: Establish minimal control transport early, expose state as `starting` or `warming`
+1. **Bind phase**: Establish WebSocket transport early, expose state as `starting` or `warming`
 2. **Warm phase**: Initialize `SootheRunner`, thread/session support, request-serving dependencies
 3. **Readiness validation**: Perform trivial internal control-path validation, transition to `ready` only on success
 
 #### Readiness Handshake Protocol
 
-The handshake replaces implicit socket-based readiness with explicit lifecycle query:
+The handshake replaces implicit readiness with explicit lifecycle query:
 
-1. Client connects to daemon control transport
+1. Client connects to daemon WebSocket transport
 2. Client requests lifecycle/readiness state
 3. Daemon returns one of: `starting`, `warming`, `ready`, `degraded`, `error`
 4. Client proceeds only after `ready`
 5. If `degraded` or `error`, client surfaces specific failure (not generic timeout)
 
 **Behavioral Rules**:
-- Headless execution must wait on readiness state, not raw socket liveness
+- Headless execution must wait on readiness state, not raw connection liveness
 - Clients may retry boundedly while daemon reports `starting` or `warming`
 - Clients must not send normal query execution requests before `ready`
 - If readiness never arrives, error must reflect lifecycle state where known
@@ -345,10 +351,12 @@ The handshake replaces implicit socket-based readiness with explicit lifecycle q
 #### Stale Daemon Cleanup
 
 Before daemon restart, stale daemon processes must be cleaned:
-- Check for existing PID file and socket file
-- If PID file exists but process is dead, remove stale files
+- Check for existing PID file
+- If PID file exists but process is dead, remove stale PID file
 - If daemon is truly running, client connects to existing daemon
-- If daemon restart needed, ensure clean socket/PID state before spawning
+- If daemon restart needed, ensure clean PID state before spawning
+
+No socket file cleanup required (WebSocket uses port binding, not filesystem).
 
 #### DAEMON_BUSY Rejection
 
@@ -381,9 +389,7 @@ This supports startup timeout diagnosis and regression detection.
 
 ### Abstract Schemas
 
-**TransportMode**: Enumeration - `UNIX_SOCKET`, `WEBSOCKET`, `HTTP_REST`
-
-**UnixSocketConfig**: `enabled`, `path` (default: `~/.soothe/soothe.sock`)
+**TransportMode**: Enumeration - `WEBSOCKET`, `HTTP_REST`
 
 **WebSocketConfig**: `enabled`, `host` (default: `127.0.0.1`), `port` (default: `8765`), `tls_enabled`, `tls_cert`, `tls_key`, `cors_origins`
 
@@ -532,26 +538,25 @@ Error codes: `INVALID_MESSAGE`, `RATE_LIMITED`, `INTERNAL_ERROR`.
 
 ## Transport Layer Specification
 
-### Unix Domain Socket
-**Wire Format**: Newline-delimited JSON lines (JSONL)
+### WebSocket (Bidirectional Streaming)
 
-**Connection**: Client connects to `$SOOTHE_HOME/soothe.sock` → Server sends initial `status` → Exchange messages (each terminated with `\n`) → Close on EOF/error.
-
-**Status**: ✅ Fully Implemented (see `src/soothe/cli/daemon/server.py`, `client.py`, `protocol.py`)
-
-### WebSocket
 **Wire Format**: WebSocket text frames (RFC 6455)
 
 **Connection**: Client initiates handshake at `ws://host:port` → Server validates CORS → Exchange JSON messages in text frames → Close with WebSocket close frame.
 
-**Status**: ❌ Not Implemented (Phase 2, est. 3-5 days)
+**Default URL**: `ws://127.0.0.1:8765` (localhost), configurable via `SOOTHE_TRANSPORTS__WEBSOCKET__PORT`
 
-### HTTP REST Server
+**Status**: ✅ Fully Implemented (see `src/soothe/daemon/transports/websocket.py`, `websocket_client.py`)
+
+### HTTP REST (Stateless CRUD)
+
 **Wire Format**: HTTP/1.1 with JSON request/response bodies
 
 **Connection**: Stateless HTTP request/response cycle. Base URL: `http://localhost:8766/api/v1`.
 
-**Status**: ❌ Not Implemented (Phase 1, FastAPI + Uvicorn, est. 5-7 days). See [rest-api-spec.md](./rest-api-spec.md) for complete API specification.
+**Use Cases**: Health checks, daemon status, thread listing, configuration CRUD, historical data retrieval.
+
+**Status**: ✅ Implemented (see `src/soothe/daemon/transports/http_rest.py`)
 
 ## WebSocket + REST Integration
 
@@ -567,8 +572,6 @@ Error codes: `INVALID_MESSAGE`, `RATE_LIMITED`, `INTERNAL_ERROR`.
 
 ### Transport Security
 
-**Unix Socket**: Default permissions `0o600` (owner-only), location `$SOOTHE_HOME/soothe.sock`. Filesystem permissions + PID lock prevent local privilege escalation.
-
 **WebSocket Localhost**: Default bind `127.0.0.1:8765` (not externally accessible). CORS validation prevents malicious local websites.
 
 **Production (WebSocket/HTTP)**: Use reverse proxy (nginx, Caddy, Traefik) for TLS termination, authentication (API keys, JWT, OAuth), rate limiting, CORS validation, IP whitelisting, request logging. Soothe focuses on orchestration, reverse proxy handles security.
@@ -578,7 +581,7 @@ Pattern matching for allowed origins (e.g., `http://localhost:*`, `http://127.0.
 
 ### Deployment Patterns
 
-**Local Development**: No authentication. Unix Socket/WebSocket → Soothe Daemon. Filesystem permissions provide security.
+**Local Development**: No authentication. WebSocket → Soothe Daemon. localhost binding provides security.
 
 **Production**: Client → Reverse Proxy (Auth + TLS) → Soothe Daemon. Reverse proxy handles all security, clear separation of concerns.
 
@@ -589,13 +592,13 @@ Message size limit: 10MB. Schema validation checks required fields based on mess
 
 ## Implementation Status
 
-### Current (Unix Socket)
-- ✅ Unix socket server, client, and protocol handlers implemented in `src/soothe/cli/daemon/`
-- ✅ Message serialization, broadcast mechanism, singleton lock, and socket cleanup implemented
+### Current (WebSocket)
+- ✅ WebSocket server and client implemented in `src/soothe/daemon/transports/websocket.py`, `websocket_client.py`
+- ✅ Message serialization, broadcast mechanism, singleton lock
+- ✅ CORS validation, connection limits
 
-### Planned (WebSocket)
-- ❌ WebSocket server, client, protocol abstraction, CORS validation (Est. 6.5 days)
-- Authentication handled by external services (not in scope)
+### HTTP REST
+- ✅ HTTP REST server for health checks and CRUD operations
 
 ## Naming Conventions
 
@@ -612,8 +615,7 @@ Message size limit: 10MB. Schema validation checks required fields based on mess
 
 ### Transport Identifiers
 
-- **Unix socket**: Referenced as `"unix_socket"` in logs and metrics
-- **WebSocket**: Referenced as `"websocket"` with connection metadata (remote_addr, origin)
+- **WebSocket**: Referenced as `"websocket"` in logs and metrics with connection metadata (remote_addr, origin)
 
 ## Error Handling
 
@@ -627,19 +629,23 @@ Message size limit: 10MB. Schema validation checks required fields based on mess
 
 ## Examples
 
-### Unix Socket
+### WebSocket Connection (Local CLI/TUI)
 ```
-Client → ~/.soothe/soothe.sock
-Server: {"type":"status","state":"idle","thread_id":"","input_history":[]}
+Client → ws://127.0.0.1:8765
+Server: {"type":"status","state":"idle","thread_id":"","client_id":"uuid-123"}
+Client: {"type":"new_thread"}
+Server: {"type":"status","state":"idle","thread_id":"abc123"}
+Client: {"type":"subscribe_thread","thread_id":"abc123"}
+Server: {"type":"subscription_confirmed","thread_id":"abc123"}
 Client: {"type":"input","text":"hello"}
 Server: {"type":"status","state":"running","thread_id":"abc123"}
-Server: {"type":"event","namespace":[],"mode":"messages","data":[...]}
+Server: {"type":"event","thread_id":"abc123","namespace":[],"mode":"messages","data":[...]}
 Server: {"type":"status","state":"idle","thread_id":"abc123"}
 ```
 
-### WebSocket
+### WebSocket Connection (Remote/Web)
 ```
-Client → ws://localhost:8765
+Client → wss://soothe.example.com (via reverse proxy with TLS/auth)
 Server: {"type":"status","state":"idle",...}
 Client: {"type":"input","text":"analyze code"}
 Server: {"type":"event",...}
@@ -774,53 +780,46 @@ ws.onmessage = (event) => {
 
 ## Migration Path
 
-### Phase 1: Core Infrastructure (Week 1)
-**Goal**: Implement event bus and client session management.
+### Phase 1: WebSocket Client Update
+**Goal**: Update CLI/TUI to use WebSocket client.
 
 **Key Changes**:
-- Create `src/soothe/daemon/event_bus.py` - EventBus class with pub/sub
-- Create `src/soothe/daemon/client_session.py` - ClientSession and ClientSessionManager
-- Create `src/soothe/daemon/transports/base.py` - Transport protocol with `send()` method
-- Add unit tests for EventBus and ClientSessionManager (>90% coverage)
+- Modify `src/soothe/ux/cli/execution/daemon.py`: Use WebSocket client for all connections
+- Remove Unix socket client references
+- Ensure WebSocket client handles localhost connections correctly
 
-### Phase 2: Daemon Server Integration (Week 2)
-**Goal**: Integrate event bus into daemon server.
-
-**Key Changes**:
-- Modify `src/soothe/daemon/server.py`: Initialize EventBus/ClientSessionManager, replace `_broadcast()` with event bus publish
-- Modify `src/soothe/daemon/_handlers.py`: Add `subscribe_thread` handler, pass client_id to all handlers
-- Update message routing to use topics
-
-### Phase 3: Transport Layer Updates (Week 3)
-**Goal**: Update all transports to use client sessions.
+### Phase 2: Transport Manager Simplification
+**Goal**: Remove Unix socket from transport building.
 
 **Key Changes**:
-- Modify Unix socket transport: Call `session_manager.create_session()`, track client_id, implement `send()` method
-- Modify WebSocket transport: Same changes as Unix socket
-- Modify HTTP REST transport: Session management, event streaming endpoint
+- Modify `src/soothe/daemon/transport_manager.py`: Remove Unix socket transport, WebSocket required
+- Modify `src/soothe/daemon/server.py`: Remove Unix socket references
+- Update error handling for WebSocket-only configuration
 
-### Phase 4: Client Updates - BREAKING CHANGE (Week 4)
-**Goal**: Update all clients to use thread subscriptions.
-
-**Key Changes**:
-- Modify `src/soothe/daemon/client.py`: Add `subscribe_thread()` and `receive_subscription_confirmed()`
-- Modify TUI (`src/soothe/ux/tui/app.py`): Call `subscribe_thread()` after connection
-- Modify CLI headless (`src/soothe/ux/cli/execution/daemon_runner.py`): Subscribe to thread
-- Update WebSocket client examples
-- Remove legacy broadcast code
-
-**Migration**: Hard-cut migration with no backward compatibility. All clients updated atomically in single PR.
-
-### Phase 5: Testing & Documentation (Week 5)
-**Goal**: Comprehensive testing and documentation.
+### Phase 3: Configuration Cleanup
+**Goal**: Remove Unix socket configuration.
 
 **Key Changes**:
-- Integration tests: Multiple clients, thread isolation, event routing
-- Stress tests: Concurrent clients, high event throughput, queue overflow
-- Documentation: Protocol changes, migration guide, event bus architecture
-- Observability: Client tracking, subscription status, event routing metrics
+- Modify `src/soothe/config.py`: Remove `UnixSocketConfig` section
+- Update `config/config.yml`: Remove `transports.unix_socket` section
+- Update `config/env.example`: Remove Unix socket environment variables
+- Add deprecation warnings for old Unix socket env vars
 
-**Deliverables**: Test coverage >90%, performance benchmarks, complete migration documentation.
+### Phase 4: File Removal
+**Goal**: Remove Unix socket implementation files.
+
+**Key Changes**:
+- Delete `src/soothe/daemon/transports/unix_socket.py`
+- Delete `src/soothe/daemon/client.py` (Unix socket client)
+- Remove stale socket cleanup logic from singleton.py
+
+### Phase 5: Documentation Update
+**Goal**: Update all documentation.
+
+**Key Changes**:
+- Update RFC-0013 (this document): Reflect WebSocket-only transport
+- Update user guide: Daemon connection instructions
+- Update changelog: Transport simplification entry
 
 ## Dependencies
 
@@ -831,11 +830,16 @@ ws.onmessage = (event) => {
 ## Changelog
 
 ### 2026-03-29
+- **BREAKING**: Removed Unix domain socket transport
+- Simplified to WebSocket-only bidirectional streaming
+- Removed stale socket file cleanup (no longer applicable)
+- Removed UnixSocketConfig from abstract schemas
+- Updated architecture diagram to single WebSocket transport
+- Updated all examples to WebSocket-only
 - Merged RFC-0023 daemon readiness content
 - Added explicit lifecycle states (starting, warming, ready, degraded, error)
 - Added staged startup architecture and readiness handshake protocol
-- Added stale daemon cleanup and DAEMON_BUSY rejection
-- Added readiness error codes and startup instrumentation
+- Added DAEMON_BUSY rejection and readiness error codes
 
 ### 2026-03-28
 - Added Daemon Lifecycle Semantics section
@@ -846,8 +850,8 @@ ws.onmessage = (event) => {
 
 - [RFC-0003](./RFC-0003.md) - CLI TUI Architecture Design (original daemon IPC)
 - [RFC Index](./rfc-index.md) - All RFCs
-- Implementation Guide (TBD) - WebSocket implementation guide
+- [Design Draft](../drafts/2026-03-29-websocket-only-transport-design.md) - WebSocket-only design rationale
 
 ---
 
-*This RFC establishes the foundation for multi-transport daemon communication while maintaining complete backward compatibility with RFC-0003's Unix socket design.*
+*This RFC establishes WebSocket as the sole bidirectional transport for daemon communication, eliminating Unix socket complexity while enabling local and remote client connectivity.*

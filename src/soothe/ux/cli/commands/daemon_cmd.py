@@ -13,13 +13,21 @@ from soothe.config import SOOTHE_HOME
 from soothe.ux.core import load_config, setup_logging
 
 
+def _get_websocket_url(cfg: object) -> str:
+    """Get WebSocket URL from configuration."""
+    host = cfg.daemon.transports.websocket.host
+    port = cfg.daemon.transports.websocket.port
+    return f"ws://{host}:{port}"
+
+
 def _wait_for_daemon_ready(cfg: object, timeout: float = 20.0) -> bool:
-    """Wait for protocol-level daemon readiness."""
-    from soothe.daemon import DaemonClient, resolve_socket_path
+    """Wait for protocol-level daemon readiness via WebSocket."""
+    from soothe.daemon import WebSocketClient
     from soothe.ux.cli.execution.daemon import _connect_with_retries
 
     async def _wait() -> bool:
-        client = DaemonClient(sock=resolve_socket_path(cfg))
+        ws_url = _get_websocket_url(cfg)
+        client = WebSocketClient(url=ws_url)
         try:
             await _connect_with_retries(client)
             await client.request_daemon_ready()

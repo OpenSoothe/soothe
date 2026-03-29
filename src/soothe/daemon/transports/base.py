@@ -13,17 +13,23 @@ class TransportServer(ABC):
     A transport server handles incoming connections from clients and
     broadcasts messages to all connected clients.
 
-    Each transport implementation (Unix socket, WebSocket, HTTP REST)
+    Each transport implementation (WebSocket, HTTP REST)
     must implement this interface.
     """
 
     @abstractmethod
-    async def start(self, message_handler: Callable[[dict[str, Any]], None]) -> None:
+    async def start(
+        self,
+        message_handler: Callable[[str, dict[str, Any]], None],
+        handshake_callback: Callable[[Any], dict[str, Any]] | None = None,
+    ) -> None:
         """Start the transport server and begin accepting connections.
 
         Args:
             message_handler: Callback function to handle incoming messages
-                from clients. The handler receives a decoded message dict.
+                from clients. Takes (client_id, message_dict) as arguments.
+            handshake_callback: Optional callback to get initial handshake messages.
+                Called with transport client object, returns list of messages to send.
         """
 
     @abstractmethod

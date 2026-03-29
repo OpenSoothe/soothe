@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, Literal
 
 import websockets.asyncio.client
 import websockets.exceptions
 
 from soothe.daemon.protocol import decode, encode
+
+# Type alias for verbosity levels (RFC-0015, RFC-0022)
+VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +22,8 @@ logger = logging.getLogger(__name__)
 class WebSocketClient:
     """WebSocket client for connecting to the daemon.
 
-    This client connects to the daemon via WebSocket and supports
-    the same interface as the Unix socket client.
+    This client connects to the daemon via WebSocket and provides
+    the same interface as the legacy Unix socket client.
 
     Args:
         url: WebSocket URL (e.g., "ws://localhost:8765").
@@ -189,6 +193,102 @@ class WebSocketClient:
     async def send_new_thread(self) -> None:
         """Request the daemon to start a new thread."""
         await self.send({"type": "new_thread"})
+
+    async def request_daemon_ready(self) -> None:
+        """Request the daemon's readiness state."""
+        await self.send({"type": "daemon_ready"})
+
+    async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
+        """Wait for a daemon readiness message and require ready state.
+
+        Args:
+            ready_timeout_s: Maximum seconds to wait.
+
+        Returns:
+            The daemon_ready event on success.
+
+        Raises:
+            RuntimeError: If daemon is not in ready state.
+            TimeoutError: If timeout expires.
+        """
+        async with asyncio.timeout(ready_timeout_s):
+            while True:
+                event = await self.read_event()
+                if not event:
+                    raise ValueError("No event received")
+                if event.get("type") != "daemon_ready":
+                    continue
+                state = event.get("state")
+                if state == "ready":
+                    return event
+                message = event.get("message") or f"Daemon state is {state}"
+                raise RuntimeError(str(message))
+
+    async def subscribe_thread(
+        self,
+        thread_id: str,
+        verbosity: VerbosityLevel = "normal",
+    ) -> None:
+        """Subscribe to receive events for a thread.
+
+        Args:
+            thread_id: Thread identifier to subscribe to
+            verbosity: Verbosity preference (quiet|minimal|normal|detailed|debug)
+
+        Raises:
+            ConnectionError: If not connected
+        """
+        if not self._ws:
+            raise ConnectionError("Not connected to daemon")
+
+        msg = {
+            "type": "subscribe_thread",
+            "thread_id": thread_id,
+            "verbosity": verbosity,
+        }
+        await self.send(msg)
+        logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
+
+    async def wait_for_subscription_confirmed(
+        self,
+        thread_id: str,
+        verbosity: VerbosityLevel = "normal",
+        timeout: float = 5.0,  # noqa: ASYNC109
+    ) -> None:
+        """Wait for subscription confirmation message.
+
+        Args:
+            thread_id: Expected thread ID
+            verbosity: Expected verbosity level
+            timeout: Maximum seconds to wait
+
+        Raises:
+            TimeoutError: If confirmation not received
+            ValueError: If confirmation has different thread_id or verbosity
+        """
+        async with asyncio.timeout(timeout):
+            event = await self.read_event()
+
+        if not event:
+            raise ValueError("No event received")
+
+        if event.get("type") != "subscription_confirmed":
+            msg = f"Expected subscription_confirmed, got {event.get('type')}"
+            raise ValueError(msg)
+
+        if event.get("thread_id") != thread_id:
+            msg = f"Subscription thread_id mismatch: expected {thread_id}, got {event.get('thread_id')}"
+            raise ValueError(msg)
+
+        echoed_verbosity = event.get("verbosity", "normal")
+        if echoed_verbosity != verbosity:
+            logger.warning(
+                "Verbosity mismatch: requested=%s, received=%s",
+                verbosity,
+                echoed_verbosity,
+            )
+
+        logger.debug("Subscription confirmed for thread %s with verbosity=%s", thread_id, echoed_verbosity)
 
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.

@@ -1,4 +1,4 @@
-"""Soothe daemon server - background agent runner with Unix socket IPC."""
+"""Soothe daemon server - background agent runner with WebSocket IPC."""
 
 from __future__ import annotations
 
@@ -17,12 +17,11 @@ from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
-from soothe.daemon.paths import pid_path, socket_path
+from soothe.daemon.paths import pid_path
 from soothe.daemon.protocol import encode
 from soothe.daemon.singleton import (
     acquire_pid_lock,
     cleanup_pid,
-    cleanup_socket,
     release_pid_lock,
 )
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
@@ -112,18 +111,6 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._pid_lock_fd is None:
             raise RuntimeError("Another Soothe daemon is already running (PID lock held)")
 
-        # Check for existing socket
-        sock = socket_path()
-        sock.parent.mkdir(parents=True, exist_ok=True)
-
-        # Only unlink socket if no live daemon owns it
-        if sock.exists() and not self._is_socket_live(sock):
-            sock.unlink()
-        elif sock.exists():
-            release_pid_lock(self._pid_lock_fd)
-            self._pid_lock_fd = None
-            raise RuntimeError("Another daemon still owns the socket")
-
         self._readiness_state = "warming"
         self._readiness_message = None
 
@@ -170,6 +157,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 session_manager=self._session_manager,
             )
             self._transport_manager.set_message_handler(self._handle_transport_message)
+            self._transport_manager.set_handshake_callback(self._get_handshake_messages)
             await self._transport_manager.start_all()
 
             self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
@@ -206,7 +194,6 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._pid_lock_fd = None
             else:
                 cleanup_pid()
-            cleanup_socket()
 
             raise
 
@@ -218,17 +205,43 @@ class SootheDaemon(DaemonHandlersMixin):
             "message": self._readiness_message,
         }
 
+    def _get_handshake_messages(self, _transport_client: Any) -> list[dict[str, Any]]:
+        """Get initial handshake messages for a new client connection.
+
+        Args:
+            _transport_client: Transport-specific client object (unused).
+
+        Returns:
+            List of initial messages to send to the client.
+        """
+        initial_state = "running" if self._query_running else ("idle" if self._running else "stopped")
+        initial_msg = {
+            "type": "status",
+            "state": initial_state,
+            "thread_id": "",  # Don't leak cached thread ID - client will request new/resume explicitly
+            "input_history": [],  # Don't send history on initial connect - only when resuming
+        }
+        return [initial_msg, self.daemon_ready_message()]
+
     @staticmethod
-    def _is_socket_live(sock: Path) -> bool:
-        """Check if a Unix socket is accepting connections."""
+    def _is_port_live(host: str, port: int) -> bool:
+        """Check if a TCP port is accepting connections.
+
+        Args:
+            host: Host address to check.
+            port: TCP port number.
+
+        Returns:
+            True if port is accepting connections, False otherwise.
+        """
         import socket as sock_mod
 
         try:
-            s = sock_mod.socket(sock_mod.AF_UNIX, sock_mod.SOCK_STREAM)
+            s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
             s.settimeout(1.0)
-            s.connect(str(sock))
+            s.connect((host, port))
             s.close()
-        except (ConnectionRefusedError, FileNotFoundError, OSError):
+        except (ConnectionRefusedError, OSError):
             return False
         else:
             return True
@@ -509,7 +522,6 @@ class SootheDaemon(DaemonHandlersMixin):
             self._pid_lock_fd = None
         else:
             cleanup_pid()
-        cleanup_socket()
         logger.info("Soothe daemon stopped")
 
     # -- broadcast ----------------------------------------------------------
@@ -574,17 +586,22 @@ class SootheDaemon(DaemonHandlersMixin):
     def is_running() -> bool:
         """Check if a daemon is already running.
 
-        A properly running daemon must have a Unix socket accepting connections.
-        If only WebSocket/port is bound but no Unix socket, that indicates a
-        broken/zombie daemon that needs to be cleaned up.
-
         Checks:
-        1. PID file with valid process AND Unix socket is live
-        2. Unix socket accepting connections (even without PID file)
+        1. PID file with valid process AND WebSocket port is live
+        2. WebSocket port accepting connections (even without PID file)
         """
-        sock = socket_path()
+        from soothe.config import SootheConfig
 
-        # 1. Check PID file + verify Unix socket is live
+        # Get WebSocket port from config
+        try:
+            cfg = SootheConfig()
+            ws_host = cfg.daemon.transports.websocket.host
+            ws_port = cfg.daemon.transports.websocket.port
+        except Exception:
+            ws_host = "127.0.0.1"
+            ws_port = 8765
+
+        # 1. Check PID file + verify WebSocket is live
         pf = pid_path()
         if pf.exists():
             try:
@@ -592,21 +609,17 @@ class SootheDaemon(DaemonHandlersMixin):
                 os.kill(pid, 0)
             except (ValueError, ProcessLookupError, PermissionError):
                 cleanup_pid()
-                # PID file stale, check socket below
+                # PID file stale, check port below
             else:
-                # PID valid - but daemon must also have live socket
-                if sock.exists() and SootheDaemon._is_socket_live(sock):
+                # PID valid - but daemon must also have live WebSocket
+                if SootheDaemon._is_port_live(ws_host, ws_port):
                     return True
-                # PID valid but socket dead - zombie daemon, cleanup needed
+                # PID valid but port dead - zombie daemon, cleanup needed
                 cleanup_pid()
                 return False
 
-        # 2. Check Unix socket connectivity (primary indicator)
-        # No live socket means daemon is not properly running
-        # Note: We don't check WebSocket/pgrep here because those could be
-        # zombie processes from failed startup attempts. stop_running() will
-        # clean those up.
-        return sock.exists() and SootheDaemon._is_socket_live(sock)
+        # 2. Check WebSocket connectivity (primary indicator)
+        return SootheDaemon._is_port_live(ws_host, ws_port)
 
     @staticmethod
     def find_pid() -> int | None:
@@ -736,26 +749,6 @@ class SootheDaemon(DaemonHandlersMixin):
                         os.kill(pid, signal.SIGTERM)
                         stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
 
-                # Check Unix socket - find via lsof on macOS/Linux
-                if not stopped:
-                    sock = socket_path()
-                    if sock.exists():
-                        # Try to find process holding the socket file
-                        import subprocess
-
-                        with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-                            result = subprocess.run(
-                                ["/usr/sbin/lsof", "-t", str(sock)],
-                                capture_output=True,
-                                text=True,
-                                timeout=2.0,
-                                check=False,
-                            )
-                            if result.returncode == 0 and result.stdout.strip():
-                                pid = int(result.stdout.strip().split("\n")[0])
-                                os.kill(pid, signal.SIGTERM)
-                                stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
-
         # 3. Fallback: scan by process name for zombie daemons
         if not stopped:
             import subprocess
@@ -784,7 +777,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
         # 4. Cleanup regardless of outcome
         cleanup_pid()
-        cleanup_socket()
         return stopped
 
     @staticmethod

@@ -23,7 +23,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) | Layer 2: Agentic Goal Execution Loop | Revised | **Layer 2** | RFC-0001, RFC-0002, RFC-0007, RFC-0023 |
 | [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007 |
 | [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
-| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for WebSocket IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | Foundation | RFC-0003, RFC-0013 |
 | [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
 | [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | Foundation | RFC-0003, RFC-0015 |
@@ -110,6 +110,12 @@ All RFCs are now under the target limits:
 
 ## Recent Changes (2026-03-29)
 
+- Updated RFC-0013 (Daemon Communication Protocol)
+  - **BREAKING**: Removed Unix domain socket transport
+  - Simplified to WebSocket-only bidirectional streaming
+  - HTTP REST retained for health checks and CRUD operations
+  - Eliminated stale socket file cleanup logic
+  - Updated architecture diagram and all examples
 - Created RFC-0024 (VerbosityTier Unification)
   - Replaces two-layer classification with unified VerbosityTier enum
   - Eliminates ProgressCategory and EventCategory duplicate enums

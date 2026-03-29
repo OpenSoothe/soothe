@@ -419,21 +419,14 @@ logging:
 # =============================================================================
 # Daemon Multi-Transport Configuration (RFC-0013)
 # =============================================================================
-# Configure daemon communication protocols for local CLI, web UIs, and remote access.
-# The daemon supports three transport types simultaneously:
-# - Unix socket: Local CLI/TUI clients (default, no auth required)
-# - WebSocket: Web UIs and remote clients (opt-in, auth optional/required)
-# - HTTP REST: CRUD operations and file uploads (opt-in, auth optional/required)
+# Configure daemon communication protocols for CLI, web UIs, and remote access.
+# WebSocket is the required bidirectional transport for all clients.
+# HTTP REST provides optional health checks and CRUD operations.
 
 daemon:
   # Transport Layer Configuration
   transports:
-    # Unix Domain Socket - Default transport for local CLI/TUI
-    unix_socket:
-      enabled: true          # Enable Unix socket server (recommended: true)
-      path: "~/.soothe/soothe.sock"  # Socket file path
-
-    # WebSocket - For web UIs and remote clients
+    # WebSocket - Required bidirectional transport for all clients
     websocket:
       enabled: true         # Enable WebSocket server (default: false)
       host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)

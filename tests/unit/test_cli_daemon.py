@@ -14,7 +14,6 @@ import typer
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.daemon.server import _ClientConn
-from soothe.daemon.transports.unix_socket import _ClientConn as UnixTransportClientConn
 from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
 
 
@@ -154,7 +153,9 @@ async def test_daemon_client_send_input_includes_options() -> None:
     async def _fake_send(payload: dict) -> None:
         captured.append(payload)
 
-    client._send = _fake_send  # type: ignore[method-assign]
+    # Set connected state for WebSocketClient
+    client._connected = True
+    client.send = _fake_send  # type: ignore[method-assign]
     await client.send_input("run task", autonomous=True, max_iterations=9)
 
     assert captured == [
@@ -474,7 +475,7 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     daemon_start = MagicMock()
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(headless_exec.SootheDaemon, "_is_socket_live", staticmethod(lambda _sock: False))
+    monkeypatch.setattr(headless_exec.SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False))
     monkeypatch.setattr(headless_exec.SootheDaemon, "is_running", staticmethod(lambda: True))
     monkeypatch.setattr(headless_exec.SootheDaemon, "stop_running", staticmethod(stop_running))
     monkeypatch.setattr("soothe.ux.cli.commands.daemon_cmd.daemon_start", daemon_start)

@@ -53,12 +53,16 @@ def thread_list(
         _thread_list_standalone(cfg, status_filter=status, limit=limit)
 
 
-def _thread_list_via_daemon(_cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
-    """List threads by connecting to a running daemon."""
-    from soothe.daemon import DaemonClient
+def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
+    """List threads by connecting to a running daemon via WebSocket."""
+    from soothe.daemon import WebSocketClient
+
+    host = cfg.daemon.transports.websocket.host
+    port = cfg.daemon.transports.websocket.port
+    ws_url = f"ws://{host}:{port}"
 
     async def _list() -> None:
-        client = DaemonClient()
+        client = WebSocketClient(url=ws_url)
         try:
             await client.connect()
             command = "/thread list"
@@ -184,10 +188,12 @@ def thread_continue(
     elif not thread_id:
 
         async def get_last_thread_via_daemon() -> str | None:
-            """Find the most recently updated active thread through the daemon."""
-            from soothe.daemon import DaemonClient
+            """Find the most recently updated active thread through the daemon via WebSocket."""
+            from soothe.daemon import WebSocketClient
 
-            client = DaemonClient()
+            host = cfg.daemon.transports.websocket.host
+            port = cfg.daemon.transports.websocket.port
+            client = WebSocketClient(url=f"ws://{host}:{port}")
             try:
                 await client.connect()
                 await client.send_thread_list()

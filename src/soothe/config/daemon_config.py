@@ -1,27 +1,17 @@
-"""Daemon configuration models for multi-transport support (RFC-0013)."""
+"""Daemon configuration models for WebSocket transport (RFC-0013)."""
 
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 
-class UnixSocketConfig(BaseModel):
-    """Unix domain socket configuration.
-
-    Args:
-        enabled: Enable Unix socket server.
-        path: Socket file path.
-    """
-
-    enabled: bool = True
-    path: str = "~/.soothe/soothe.sock"
-
-
 class WebSocketConfig(BaseModel):
     """WebSocket server configuration.
 
+    WebSocket is the required bidirectional transport for all clients.
+
     Args:
-        enabled: Enable WebSocket server.
+        enabled: Enable WebSocket server (required).
         host: Bind address.
         port: Listen port.
         tls_enabled: Enable TLS encryption.
@@ -30,7 +20,7 @@ class WebSocketConfig(BaseModel):
         cors_origins: Allowed CORS origins.
     """
 
-    enabled: bool = False
+    enabled: bool = True
     host: str = "127.0.0.1"
     port: int = 8765
     tls_enabled: bool = False
@@ -41,6 +31,8 @@ class WebSocketConfig(BaseModel):
 
 class HttpRestConfig(BaseModel):
     """HTTP REST API configuration.
+
+    HTTP REST provides stateless CRUD operations and health checks.
 
     Args:
         enabled: Enable HTTP REST server.
@@ -64,19 +56,24 @@ class HttpRestConfig(BaseModel):
 class TransportConfig(BaseModel):
     """Transport layer configuration.
 
+    WebSocket is required for bidirectional streaming.
+    HTTP REST is optional for health checks and CRUD operations.
+
     Args:
-        unix_socket: Unix socket configuration.
-        websocket: WebSocket configuration.
+        websocket: WebSocket configuration (required).
         http_rest: HTTP REST configuration.
     """
 
-    unix_socket: UnixSocketConfig = Field(default_factory=UnixSocketConfig)
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
     http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
 
 
+# Backward compatibility alias (deprecated - WebSocket is the only transport now)
+UnixSocketConfig = WebSocketConfig
+
+
 class DaemonConfig(BaseModel):
-    """Daemon configuration for multi-transport support (RFC-0013).
+    """Daemon configuration for WebSocket transport (RFC-0013).
 
     Args:
         transports: Transport layer configuration.

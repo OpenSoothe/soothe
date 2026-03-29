@@ -45,19 +45,26 @@ class WebSocketTransport(TransportServer):
         self._config = config
         self._server: websockets.asyncio.server.Server | None = None
         self._clients: dict[ServerConnection, dict[str, Any]] = {}
-        self._message_handler: Callable[[dict[str, Any]], None] | None = None
+        self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
+        self._handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None
 
-    async def start(self, message_handler: Callable[[dict[str, Any]], None]) -> None:
+    async def start(
+        self,
+        message_handler: Callable[[str, dict[str, Any]], None],
+        handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None,
+    ) -> None:
         """Start the WebSocket server.
 
         Args:
-            message_handler: Callback to handle incoming messages.
+            message_handler: Callback to handle incoming messages. Takes (client_id, message).
+            handshake_callback: Optional callback for initial handshake messages.
         """
         if not self._config.enabled:
             logger.info("WebSocket transport disabled by configuration")
             return
 
         self._message_handler = message_handler
+        self._handshake_callback = handshake_callback
 
         # Determine SSL context
         ssl_context = None
@@ -204,6 +211,15 @@ class WebSocketTransport(TransportServer):
         )
 
         try:
+            # Send initial handshake messages
+            if self._handshake_callback:
+                try:
+                    handshake_msgs = self._handshake_callback(websocket)
+                    for msg in handshake_msgs:
+                        await websocket.send(encode(msg).decode("utf-8").strip())
+                except Exception:
+                    logger.exception("Failed to send initial handshake to WebSocket client")
+
             # Message loop
             async for message in websocket:
                 try:
@@ -224,10 +240,11 @@ class WebSocketTransport(TransportServer):
                         await websocket.send(encode(error_msg).decode("utf-8").strip())
                         continue
 
-                    # Pass message to handler
+                    # Pass message to handler with client_id
                     if self._message_handler:
                         try:
-                            self._message_handler(msg_dict)
+                            client_id = f"ws:{websocket.remote_address}"
+                            self._message_handler(client_id, msg_dict)
                         except Exception:
                             logger.exception("Error handling WebSocket message")
 

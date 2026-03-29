@@ -18,6 +18,12 @@ from pydantic import BaseModel
 from soothe.config.daemon_config import HttpRestConfig
 from soothe.daemon.transports.base import TransportServer
 
+
+def _get_client_id(request: Request) -> str:
+    """Generate client ID from request."""
+    client_host = request.client.host if request.client else "unknown"
+    return f"http:{client_host}"
+
 logger = logging.getLogger(__name__)
 
 # Pydantic models for request/response validation
@@ -80,7 +86,7 @@ class HttpRestTransport(TransportServer):
             redoc_url="/redoc",
         )
         self._server: Any = None
-        self._message_handler: Callable[[dict[str, Any]], None] | None = None
+        self._message_handler: Callable[[str, dict[str, Any]], None] | None = None
         self._client_count = 0
 
         self._setup_middleware()
@@ -258,6 +264,7 @@ class HttpRestTransport(TransportServer):
         async def resume_thread(
             thread_id: str,
             request: ThreadResumeRequest,
+            http_request: Request,
         ) -> dict[str, Any]:
             """Resume thread with new message.
 
@@ -274,17 +281,20 @@ class HttpRestTransport(TransportServer):
 
             # Send message to daemon for execution
             if self._message_handler:
+                client_id = _get_client_id(http_request)
                 self._message_handler(
+                    client_id,
                     {
                         "type": "resume_thread",
                         "thread_id": thread_id,
-                    }
+                    },
                 )
                 self._message_handler(
+                    client_id,
                     {
                         "type": "input",
                         "text": request.message,
-                    }
+                    },
                 )
 
             return {
@@ -389,7 +399,7 @@ class HttpRestTransport(TransportServer):
 
         # System shutdown
         @self._app.post("/api/v1/system/shutdown")
-        async def shutdown_daemon() -> dict[str, Any]:
+        async def shutdown_daemon(http_request: Request) -> dict[str, Any]:
             """Request daemon shutdown.
 
             Note:
@@ -399,20 +409,27 @@ class HttpRestTransport(TransportServer):
                 until the HTTP transport gets a dedicated shutdown command path.
             """
             if self._message_handler:
-                self._message_handler({"type": "command", "cmd": "/exit"})
+                client_id = _get_client_id(http_request)
+                self._message_handler(client_id, {"type": "command", "cmd": "/exit"})
             return {"status": "shutting_down"}
 
-    async def start(self, message_handler: Callable[[dict[str, Any]], None]) -> None:
+    async def start(
+        self,
+        message_handler: Callable[[str, dict[str, Any]], None],
+        _handshake_callback: Callable[[Any], list[dict[str, Any]]] | None = None,
+    ) -> None:
         """Start the HTTP REST server.
 
         Args:
-            message_handler: Callback to handle incoming messages.
+            message_handler: Callback to handle incoming messages. Takes (client_id, message).
+            _handshake_callback: Optional callback for initial handshake messages (not used for HTTP).
         """
         if not self._config.enabled:
             logger.info("HTTP REST transport disabled by configuration")
             return
 
         self._message_handler = message_handler
+        # HTTP REST doesn't need handshake callback - each request is independent
 
         # Import uvicorn here to avoid import errors if not installed
         import uvicorn

@@ -256,7 +256,9 @@ async def test_daemon_client_send_resume_thread() -> None:
     async def _fake_send(payload: dict) -> None:
         captured.append(payload)
 
-    client._send = _fake_send  # type: ignore[method-assign]
+    # Set connected state for WebSocketClient
+    client._connected = True
+    client.send = _fake_send  # type: ignore[method-assign]
     await client.send_resume_thread("thread-789")
 
     assert captured == [{"type": "resume_thread", "thread_id": "thread-789"}]

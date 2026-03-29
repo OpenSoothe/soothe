@@ -109,6 +109,7 @@ def resolve_tools(
     import time
 
     # Get list of enabled tool group names
+    # Note: "research" is a subagent, not a tool group - handled in resolve_subagents()
     enabled_tools = [
         name
         for name in [
@@ -118,7 +119,6 @@ def resolve_tools(
             "datetime",
             "data",
             "web_search",
-            "research",
             "image",
             "audio",
             "video",

@@ -6,7 +6,7 @@ import time
 import typer
 
 from soothe.config import SootheConfig
-from soothe.daemon import SootheDaemon, resolve_socket_path
+from soothe.daemon import SootheDaemon
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _DAEMON_START_WAIT_TIMEOUT = 30.0  # Max time to wait for daemon to become ready
@@ -23,7 +23,7 @@ def run_headless(
 ) -> None:
     """Run a single prompt with streaming output and progress events.
 
-    Connects to running daemon if available to avoid RocksDB lock conflicts.
+    Connects to running daemon via WebSocket if available to avoid RocksDB lock conflicts.
     Auto-starts daemon if not running (RFC-0013 daemon lifecycle).
 
     Note (RFC-0013): Daemon persists after request completion. Use 'soothe daemon stop'
@@ -33,9 +33,12 @@ def run_headless(
 
     from soothe.ux.cli.execution.daemon import run_headless_via_daemon
 
+    # Get WebSocket host/port for readiness checks
+    ws_host = cfg.daemon.transports.websocket.host
+    ws_port = cfg.daemon.transports.websocket.port
+
     # Auto-start daemon if not running (RFC-0013)
-    socket = resolve_socket_path(cfg)
-    if not SootheDaemon._is_socket_live(socket):
+    if not SootheDaemon._is_port_live(ws_host, ws_port):
         if SootheDaemon.is_running():
             SootheDaemon.stop_running()
         from soothe.ux.cli.commands.daemon_cmd import daemon_start
@@ -46,7 +49,7 @@ def run_headless(
         # This helps avoid connection errors on slower systems
         start_time = time.time()
         while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
-            if SootheDaemon._is_socket_live(socket) and SootheDaemon.is_running():
+            if SootheDaemon._is_port_live(ws_host, ws_port) and SootheDaemon.is_running():
                 break
             time.sleep(0.5)
         # Note: We don't fail here - let the connection attempt handle errors

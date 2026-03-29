@@ -6,7 +6,7 @@ import contextlib
 import fcntl
 import os
 
-from soothe.daemon.paths import pid_path, socket_path
+from soothe.daemon.paths import pid_path
 
 
 def write_pid() -> None:
@@ -32,14 +32,6 @@ def cleanup_pid() -> None:
     if pf.exists():
         with contextlib.suppress(OSError):
             pf.unlink()
-
-
-def cleanup_socket() -> None:
-    """Remove the socket file if it exists."""
-    sock = socket_path()
-    if sock.exists():
-        with contextlib.suppress(OSError):
-            sock.unlink()
 
 
 def acquire_pid_lock() -> int | None:
