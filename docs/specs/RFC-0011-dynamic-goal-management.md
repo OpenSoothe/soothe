@@ -2,10 +2,29 @@
 
 **RFC**: 0011
 **Title**: Dynamic Goal Management During Reflection
-**Status**: Draft
+**Status**: **DEPRECATED - Merged into RFC-0007**
 **Created**: 2026-03-18
-**Updated**: 2026-03-18
+**Updated**: 2026-03-29
 **Related**: RFC-0007, RFC-0009, RFC-0010
+
+## Deprecation Notice
+
+**This RFC has been merged into RFC-0007 (Layer 3: Autonomous Goal Management Loop).**
+
+All content from this RFC is now part of RFC-0007 §5 "Dynamic Goal Management" and §5.6 "Safety Mechanisms".
+
+**Migration Guide**:
+- `GoalDirective` model → RFC-0007 §5.4
+- `GoalContext` model → RFC-0007 §5.4
+- Enhanced `PlannerProtocol.reflect()` → RFC-0007 §5.4
+- DAG consistency handling → RFC-0007 §5.5
+- Safety mechanisms → RFC-0007 §5.6
+
+**Rationale for Merge**: Both RFC-0011 and RFC-0007 address Layer 3 goal management concerns. Dynamic goal restructuring is inherent to autonomous goal orchestration, making separation unnecessary and creating complexity. The merged RFC-0007 establishes a unified Layer 3 foundation.
+
+---
+
+## Original Abstract (Historical)
 
 ## Abstract
 

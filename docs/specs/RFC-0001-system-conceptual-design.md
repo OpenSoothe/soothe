@@ -19,13 +19,48 @@ Soothe does not implement domain logic. It composes capabilities provided by oth
 
 ## Architectural Level
 
+### Three-Layer Execution Architecture
+
+Soothe operates through a hierarchical execution model with three distinct layers:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 3: Autonomous Goal Management (RFC-0007)               │
+│ • Scope: Long-running complex workflows, multi-goal DAGs      │
+│ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update       │
+│ • Delegation: PERFORM invokes Layer 2's full loop             │
+└─────────────────────────────────────────────────────────────┘
+                          ↓ PERFORM (full delegation)
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 2: Agentic Goal Execution (RFC-0008)                   │
+│ • Scope: Single-goal execution through iterative refinement   │
+│ • Loop: PLAN → ACT → JUDGE (max iterations: ~8)              │
+│ • Delegation: ACT invokes Layer 1 CoreAgent for execution    │
+└─────────────────────────────────────────────────────────────┘
+                          ↓ ACT (step execution)
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1: CoreAgent Runtime (RFC-0023)                        │
+│ • Foundation: create_soothe_agent() → CompiledStateGraph     │
+│ • Execution: Model → Tools → Model loop (LangGraph native)   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Layer Relationships**:
+- **Layer 3** manages goal DAGs, delegates single-goal execution to Layer 2
+- **Layer 2** executes single goals through iterative PLAN → ACT → JUDGE, delegates steps to Layer 1
+- **Layer 1** provides CoreAgent runtime for tool/subagent execution
+
+### Framework Stack
+
 ```
 +------------------------------------------------------+
 |  Soothe (orchestration framework)                    |
+|  - Layer 3: Autonomous Goal Management               |
+|  - Layer 2: Agentic Goal Execution                   |
+|  - Layer 1: CoreAgent Runtime                        |
 |  - ContextProtocol, MemoryProtocol,                  |
 |    PlannerProtocol, PolicyProtocol,                  |
 |    DurabilityProtocol, RemoteAgentProtocol           |
-|  - create_soothe_agent() wires everything together   |
 +------------------------------------------------------+
 |  deepagents (agent framework)                        |
 |  - BackendProtocol, AgentMiddleware,                 |
@@ -59,6 +94,8 @@ Soothe does not implement domain logic. It composes capabilities provided by oth
 9. **Uniform delegation envelope** -- Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graphs are all accessed through the same deepagents `SubAgent`/`CompiledSubAgent` interface. The caller does not know or care where the work happens.
 
 10. **Graceful degradation** -- Step-level failure handling (mark failed, try next, revise plan), LLM content-policy fallbacks, and configurable retry. Partial results over hard failure.
+
+11. **Three-layer execution architecture** -- Soothe operates through three distinct layers: Layer 3 (autonomous goal management), Layer 2 (agentic goal execution), and Layer 1 (CoreAgent runtime). Each layer has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher layers delegate to lower layers through well-defined interfaces.
 
 ## Core Abstractions
 

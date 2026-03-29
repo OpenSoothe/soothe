@@ -6,38 +6,39 @@ This document provides an index of all RFCs in this project.
 
 ### Conceptual Design
 
-| RFC | Title | Status | Dependencies |
-|-----|-------|--------|--------------|
-| [RFC-0001](./RFC-0001-system-conceptual-design.md) | System Conceptual Design | Draft | - |
+| RFC | Title | Status | Layer | Dependencies |
+|-----|-------|--------|-------|--------------|
+| [RFC-0001](./RFC-0001-system-conceptual-design.md) | System Conceptual Design | Draft | Foundation | - |
 
 ### Architecture Design
 
-| RFC | Title | Status | Dependencies |
-|-----|-------|--------|--------------|
-| [RFC-0002](./RFC-0002-core-modules-architecture.md) | Core Modules Architecture Design | Implemented | RFC-0001 |
-| [RFC-0003](./RFC-0003-cli-tui-architecture.md) | CLI TUI Architecture Design | Implemented | RFC-0001, RFC-0002 |
-| [RFC-0004](./RFC-0004-skillify-agent-architecture.md) | Skillify Agent Architecture Design | Implemented | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0005](./RFC-0005-weaver-agent-architecture.md) | Weaver Agent Architecture Design | Implemented | RFC-0001, RFC-0002, RFC-0003, RFC-0004 |
-| [RFC-0006](./RFC-0006-context-memory-architecture.md) | Context and Memory Architecture Design | Implemented | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0007](./RFC-0007-autonomous-iteration-loop.md) | Autonomous Iteration Loop | Implemented | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0008](./RFC-0008-agentic-loop-execution.md) | Agentic Loop Execution Architecture | Draft | RFC-0001, RFC-0002, RFC-0003, RFC-0007, RFC-0009 |
-| [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | RFC-0001, RFC-0002, RFC-0007 |
-| [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
-| [RFC-0011](./RFC-0011-dynamic-goal-management.md) | Dynamic Goal Management During Reflection | Draft | RFC-0007, RFC-0009, RFC-0010 |
-| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Implemented | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | RFC-0003, RFC-0013 |
-| [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
-| [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | RFC-0003, RFC-0015 |
-| [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
-| [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | RFC-0018, RFC-0019 |
-| [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | RFC-0013, RFC-0015 |
+| RFC | Title | Status | Layer | Dependencies |
+|-----|-------|--------|-------|--------------|
+| [RFC-0002](./RFC-0002-core-modules-architecture.md) | Core Modules Architecture Design | Implemented | Foundation | RFC-0001 |
+| [RFC-0003](./RFC-0003-cli-tui-architecture.md) | CLI TUI Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002 |
+| [RFC-0004](./RFC-0004-skillify-agent-architecture.md) | Skillify Agent Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0005](./RFC-0005-weaver-agent-architecture.md) | Weaver Agent Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003, RFC-0004 |
+| [RFC-0006](./RFC-0006-context-memory-architecture.md) | Context and Memory Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0007](./RFC-0007-autonomous-goal-management-loop.md) | Layer 3: Autonomous Goal Management Loop | Revised | **Layer 3** | RFC-0001, RFC-0002, RFC-0003, RFC-0008 |
+| [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) | Layer 2: Agentic Goal Execution Loop | Revised | **Layer 2** | RFC-0001, RFC-0002, RFC-0007, RFC-0023 |
+| [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007 |
+| [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
+| [RFC-0011](./RFC-0011-dynamic-goal-management.md) | Dynamic Goal Management During Reflection | **DEPRECATED** | N/A | Merged into RFC-0007 |
+| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
+| [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | Foundation | RFC-0003, RFC-0013 |
+| [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
+| [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | Foundation | RFC-0003, RFC-0015 |
+| [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | Foundation | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
+| [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | Foundation | RFC-0018, RFC-0019 |
+| [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | Foundation | RFC-0013, RFC-0015 |
+| [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Draft | **Layer 1** | RFC-0001, RFC-0002 |
 
 ### Implementation Interface Design
 
-| RFC | Title | Status | Dependencies |
-|-----|-------|--------|--------------|
-| [RFC-0012](./RFC-0012-secure-filesystem-policy.md) | Secure Filesystem Path Handling and Security Policy | Implemented | RFC-0002 |
-| [RFC-0016](./RFC-0016-tool-interface-optimization.md) | Tool Interface Optimization Implementation Guide | Implemented | RFC-0001, RFC-0002, RFC-0008 |
+| RFC | Title | Status | Layer | Dependencies |
+|-----|-------|--------|-------|--------------|
+| [RFC-0012](./RFC-0012-secure-filesystem-policy.md) | Secure Filesystem Path Handling and Security Policy | Implemented | Foundation | RFC-0002 |
+| [RFC-0016](./RFC-0016-tool-interface-optimization.md) | Tool Interface Optimization Implementation Guide | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008 |
 
 ## Reference Documents
 
@@ -60,20 +61,37 @@ RFC-0001 (System Conceptual Design)
 │   ├── RFC-0015 (Progress Event Protocol) [depends on RFC-0003, RFC-0013]
 │   │   └── RFC-0020 (Event Display Architecture) [depends on RFC-0013]
 │   ├── RFC-0016 (Tool Interface Optimization)
-│   ├── RFC-0007 (Autonomous Iteration)
-│   │   ├── RFC-0008 (Agentic Loop Execution)
+│   ├── RFC-0007 (Layer 3: Autonomous Goal Management) [Layer 3 foundation]
+│   │   ├── RFC-0008 (Layer 2: Agentic Goal Execution) [Layer 2 foundation]
+│   │   │   └── RFC-0023 (Layer 1: CoreAgent Runtime) [Layer 1 foundation]
 │   │   ├── RFC-0009 (DAG Execution)
 │   │   │   └── RFC-0010 (Failure Recovery)
-│   │   └── RFC-0011 (Dynamic Goals)
+│   │   └── RFC-0011 (Dynamic Goals) [DEPRECATED - merged into RFC-0007]
 │   └── RFC-0012 (Secure Filesystem) [Policy System]
-└── RFC-0008 (Agentic Loop Execution) [depends on RFC-0009]
+└── RFC-0018 (Plugin Extension System) [depends on RFC-0008]
 ```
+
+## Three-Layer Architecture Foundation
+
+**Layer 3: Autonomous Goal Management** (RFC-0007)
+- Manages goal DAGs for long-running complex workflows
+- Delegates to Layer 2 for single-goal execution
+
+**Layer 2: Agentic Goal Execution** (RFC-0008)
+- Executes single goals through PLAN → ACT → JUDGE loop
+- Delegates to Layer 1 for step execution
+
+**Layer 1: CoreAgent Runtime** (RFC-0023)
+- Provides execution runtime for tools/subagents
+- Built on `create_soothe_agent()` → CompiledStateGraph
 
 ## RFC Status Summary
 
-- **Total RFCs**: 21
-- **Implemented**: 19
-- **Draft**: 2
+- **Total RFCs**: 22
+- **Implemented**: 16
+- **Revised**: 2 (RFC-0007, RFC-0008)
+- **Draft**: 3 (RFC-0009, RFC-0010, RFC-0020, RFC-0023)
+- **Deprecated**: 1 (RFC-0011)
 
 ## Line Count Summary (After Compaction)
 
@@ -89,3 +107,12 @@ All RFCs are now under the target limits:
 - [RFC History](./rfc-history.md) - Change history
 - [Terminology](./rfc-namings.md) - Naming conventions
 - [RFC Optimization Strategies](/.claude/skills/platonic-coding/references/SPECS/rfc-optimization-strategies.md) - Compaction patterns
+
+## Recent Changes (2026-03-29)
+
+- Established three-layer architecture foundation
+- Revised RFC-0007 (Layer 3: Autonomous Goal Management Loop)
+- Revised RFC-0008 (Layer 2: Agentic Goal Execution Loop)
+- Created RFC-0023 (Layer 1: CoreAgent Runtime Architecture)
+- Deprecated RFC-0011 (merged into RFC-0007)
+- Updated RFC-0001 with three-layer principle
