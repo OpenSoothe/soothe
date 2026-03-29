@@ -50,9 +50,9 @@ class ThreadFormatter(logging.Formatter):
         # Get Soothe conversation thread ID (optional)
         soothe_thread_id = get_thread_id()
 
-        # Format both IDs: [soothe:id] [os:id]
+        # Format both IDs: [os:id] [soothe:id]
         if soothe_thread_id:
-            record.thread_id = f"[soothe:{soothe_thread_id}] [os:{os_thread_id}]"
+            record.thread_id = f"[os:{os_thread_id}] [soothe:{soothe_thread_id}]"
         else:
             record.thread_id = f"[os:{os_thread_id}]"
 
