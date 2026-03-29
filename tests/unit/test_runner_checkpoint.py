@@ -249,34 +249,6 @@ class TestAutonomousObservationReuse:
         runner._context.project.assert_not_called()
 
 
-class TestPlanningStrategySelection:
-    """Test planning strategy heuristics for fast paths."""
-
-    def test_short_medium_query_uses_no_plan(self) -> None:
-        runner = object.__new__(SootheRunner)
-        runner._config = SimpleNamespace(agentic=SimpleNamespace(planning=SimpleNamespace(force_keywords=[])))
-
-        strategy = runner._determine_planning_strategy(
-            "medium",
-            "analyze project structure",
-            RunnerState(),
-        )
-
-        assert strategy == "none"
-
-    def test_longer_medium_query_uses_lightweight_plan(self) -> None:
-        runner = object.__new__(SootheRunner)
-        runner._config = SimpleNamespace(agentic=SimpleNamespace(planning=SimpleNamespace(force_keywords=[])))
-
-        strategy = runner._determine_planning_strategy(
-            "medium",
-            "analyze the project structure, identify major components, and explain architecture boundaries",
-            RunnerState(),
-        )
-
-        assert strategy == "lightweight"
-
-
 class _NoopAsyncContext:
     async def __aenter__(self) -> None:
         return None

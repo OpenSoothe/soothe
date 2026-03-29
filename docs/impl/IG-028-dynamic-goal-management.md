@@ -1,8 +1,10 @@
 # IG-028: Dynamic Goal Management During Reflection
 
+**Status**: ✅ Completed - RFC-0011 merged into RFC-0007 (2026-03-29)
+
 ## Objective
 
-Implement dynamic goal management during autonomous reflection (RFC-0011),
+Implement dynamic goal management during autonomous reflection (RFC-0007 §5.4),
 enabling the planner to create new goals, adjust priorities, and restructure
 the goal DAG based on execution insights.
 

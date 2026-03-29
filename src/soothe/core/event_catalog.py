@@ -874,7 +874,6 @@ _reg(ERROR, GeneralErrorEvent, verbosity="error", summary_template="{error}")
 # These modules call register_event() at import time
 # Must be at the end after all core events are registered
 # ---------------------------------------------------------------------------
-import soothe.cognition.loop_agent.core.events  # noqa: E402
 import soothe.plugin.events  # noqa: E402
 import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402

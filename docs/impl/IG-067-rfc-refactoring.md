@@ -23,7 +23,6 @@ Refactor all RFCs to be self-contained, properly scoped, and correctly cross-ref
    - RFC-0007: References RFC-0009 without context
    - RFC-0003: References RFC-0013 for message formats
    - RFC-0010: Uses undefined models from RFC-0009
-   - RFC-0011: Missing GoalEngine context
 
 3. **Dependency Issues**:
    - Circular dependencies between RFC-0003 ↔ RFC-0015
@@ -134,7 +133,7 @@ After splitting, renumber RFCs to maintain clarity:
 4. ⏳ Refactor RFC-0015 (move catalog)
 5. ⏳ Refactor RFC-0016 (move implementation)
 6. ⏳ Refactor RFC-0017 (move REST API to RFC-0023)
-7. ⏳ Make RFCs self-contained (RFC-0007, RFC-0003, RFC-0010, RFC-0011)
+7. ⏳ Make RFCs self-contained (RFC-0007, RFC-0003, RFC-0010)
 8. ⏳ Fix dependencies in all RFCs
 9. ⏳ Update cross-references in docs/
 10. ⏳ Update cross-references in codebase

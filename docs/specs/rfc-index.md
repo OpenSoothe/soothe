@@ -23,7 +23,6 @@ This document provides an index of all RFCs in this project.
 | [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) | Layer 2: Agentic Goal Execution Loop | Revised | **Layer 2** | RFC-0001, RFC-0002, RFC-0007, RFC-0023 |
 | [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007 |
 | [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
-| [RFC-0011](./RFC-0011-dynamic-goal-management.md) | Dynamic Goal Management During Reflection | **DEPRECATED** | N/A | Merged into RFC-0007 |
 | [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for Multi-Transport IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | Foundation | RFC-0003, RFC-0013 |
 | [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
@@ -66,7 +65,6 @@ RFC-0001 (System Conceptual Design)
 │   │   │   └── RFC-0023 (Layer 1: CoreAgent Runtime) [Layer 1 foundation]
 │   │   ├── RFC-0009 (DAG Execution)
 │   │   │   └── RFC-0010 (Failure Recovery)
-│   │   └── RFC-0011 (Dynamic Goals) [DEPRECATED - merged into RFC-0007]
 │   └── RFC-0012 (Secure Filesystem) [Policy System]
 └── RFC-0018 (Plugin Extension System) [depends on RFC-0008]
 ```
@@ -87,11 +85,11 @@ RFC-0001 (System Conceptual Design)
 
 ## RFC Status Summary
 
-- **Total RFCs**: 22
+- **Total RFCs**: 21
 - **Implemented**: 16
 - **Revised**: 2 (RFC-0007, RFC-0008)
-- **Draft**: 3 (RFC-0009, RFC-0010, RFC-0020, RFC-0023)
-- **Deprecated**: 1 (RFC-0011)
+- **Draft**: 4 (RFC-0009, RFC-0010, RFC-0020, RFC-0023)
+- **Deprecated**: 0 (RFC-0011 merged into RFC-0007 and removed)
 
 ## Line Count Summary (After Compaction)
 
@@ -113,6 +111,10 @@ All RFCs are now under the target limits:
 - Established three-layer architecture foundation
 - Revised RFC-0007 (Layer 3: Autonomous Goal Management Loop)
 - Revised RFC-0008 (Layer 2: Agentic Goal Execution Loop)
+  - Added execution hints integration with Layer 1 (§3.2)
+  - Fixed RFC-0023 dependency reference
 - Created RFC-0023 (Layer 1: CoreAgent Runtime Architecture)
-- Deprecated RFC-0011 (merged into RFC-0007)
+  - Added Layer 2 integration contract with execution hints specification (§4)
+  - Added ExecutionHintsMiddleware documentation (§3)
+- Removed RFC-0011 (merged into RFC-0007, content in §5.4-5.6)
 - Updated RFC-0001 with three-layer principle

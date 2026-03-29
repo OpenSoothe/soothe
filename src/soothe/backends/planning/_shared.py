@@ -80,7 +80,7 @@ def reflect_heuristic(
     step_results: list[StepResult],
     goal_context: GoalContext | None = None,
 ) -> Reflection:
-    """Dependency-aware heuristic reflection (RFC-0010, RFC-0011).
+    """Dependency-aware heuristic reflection (RFC-0010, RFC-0007 §5.4).
 
     Categorises failures into direct failures and blocked-by-dependency,
     and optionally generates goal directives for prerequisite issues.
@@ -148,7 +148,7 @@ def _generate_prerequisite_directives(
     direct_failed: list[str],
     goal_context: GoalContext | None,
 ) -> list[GoalDirective]:
-    """Generate goal directives for prerequisite failures (RFC-0011).
+    """Generate goal directives for prerequisite failures (RFC-0007 §5.4).
 
     Scans the first direct failure for patterns that indicate a missing
     prerequisite and emits a ``create`` directive to spawn a prerequisite goal.
@@ -192,7 +192,7 @@ async def reflect_with_llm(
     step_results: list[StepResult],
     goal_context: GoalContext | None = None,
 ) -> Reflection:
-    """LLM-assisted reflection for deeper failure analysis (RFC-0011).
+    """LLM-assisted reflection for deeper failure analysis (RFC-0007 §5.4).
 
     Uses the heuristic as a fast path for all-success cases. When failures
     exist, invokes the LLM to analyse step results and generate structured

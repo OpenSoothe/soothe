@@ -82,10 +82,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """Initialize the runner with optional config."""
         import time
 
-        from soothe.cognition import UnifiedClassifier
         from soothe.core.agent import create_soothe_agent
         from soothe.core.concurrency import ConcurrencyController
         from soothe.core.resolver import resolve_checkpointer, resolve_durability
+        from soothe.core.unified_classifier import UnifiedClassifier
 
         init_start = time.perf_counter()
 

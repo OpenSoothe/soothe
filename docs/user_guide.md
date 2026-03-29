@@ -75,7 +75,6 @@ Technical documentation for developers and system architects.
 | [RFC-0008](specs/RFC-0008.md) | Protocol Specification |
 | [RFC-0009](specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
 | [RFC-0010](specs/RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
-| [RFC-0011](specs/RFC-0011.md) | Unified Planning Architecture |
 | [RFC-0012](specs/RFC-0012.md) | Unified Complexity Classification |
 | [RFC-0013](specs/RFC-0013.md) | Unified Daemon Communication Protocol |
 | [RFC-0015](specs/RFC-0015.md) | Progress Event Protocol |

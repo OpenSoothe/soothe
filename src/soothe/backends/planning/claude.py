@@ -8,7 +8,7 @@ import shutil
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.cognition.planning._shared import (
+from soothe.backends.planning._shared import (
     parse_plan_from_text,
     reflect_heuristic,
     reflect_with_llm,
@@ -139,7 +139,7 @@ class ClaudePlanner:
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
     ) -> Reflection:
-        """Reflection with LLM-assisted analysis when failures exist (RFC-0010, RFC-0011)."""
+        """Reflection with LLM-assisted analysis when failures exist (RFC-0010, RFC-0007 §5.4)."""
         failed_list = [r for r in step_results if not r.success]
         if failed_list and self._reflection_model:
             return await reflect_with_llm(self._reflection_model, plan, step_results, goal_context)

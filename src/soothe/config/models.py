@@ -459,9 +459,9 @@ class AutonomousConfig(BaseModel):
         enabled_by_default: Whether new runs default to autonomous mode.
         max_iterations: Maximum iterations per autonomous thread.
         max_retries: Maximum retries per goal on failure.
-        max_total_goals: Maximum goals allowed (RFC-0011).
-        max_goal_depth: Maximum hierarchy depth (RFC-0011).
-        enable_dynamic_goals: Enable/disable dynamic creation (RFC-0011).
+        max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
+        max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
+        enable_dynamic_goals: Enable/disable dynamic creation (RFC-0007 §5.4).
     """
 
     enabled_by_default: bool = False

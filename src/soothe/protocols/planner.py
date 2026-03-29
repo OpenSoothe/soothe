@@ -134,7 +134,7 @@ class GoalReport(BaseModel):
 
 
 class GoalDirective(BaseModel):
-    """A single goal management directive from reflection (RFC-0011).
+    """A single goal management directive from reflection (RFC-0007 §5.4).
 
     Args:
         action: 'create' | 'decompose' | 'adjust_priority' | 'add_dependency' | 'fail' | 'complete'
@@ -156,7 +156,7 @@ class GoalDirective(BaseModel):
 
 
 class GoalContext(BaseModel):
-    """Context about goal state for reflection (RFC-0011).
+    """Context about goal state for reflection (RFC-0007 §5.4).
 
     Args:
         current_goal_id: ID of the goal being executed.
@@ -176,7 +176,7 @@ class GoalContext(BaseModel):
 
 
 class Reflection(BaseModel):
-    """Planner's assessment of plan progress (RFC-0010 enhanced, RFC-0011 extended).
+    """Planner's assessment of plan progress (RFC-0010 enhanced, RFC-0007 §5.4).
 
     Args:
         assessment: Description of current progress.
@@ -271,5 +271,31 @@ class PlannerProtocol(Protocol):
 
         Returns:
             A reflection with assessment, revision recommendation, and goal directives.
+        """
+        ...
+
+    async def decide_steps(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: Any | None = None,
+    ) -> Any:
+        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
+
+        This method is used by Layer 2 (Agentic Goal Execution Loop) to determine
+        what steps to execute in the upcoming ACT phase. It supports hybrid
+        multi-step decisions (1 or N steps) with adaptive granularity.
+
+        Args:
+            goal: Goal description to execute.
+            context: Planning context (available tools, subagents, etc.).
+            previous_judgment: Previous JudgeResult if replanning.
+
+        Returns:
+            AgentDecision with steps to execute.
+
+        Note:
+            AgentDecision and JudgeResult types are imported from
+            cognition.loop_agent.schemas to avoid circular imports.
         """
         ...

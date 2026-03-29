@@ -1,4 +1,4 @@
-"""Unit tests for dynamic goal management (RFC-0011)."""
+"""Unit tests for dynamic goal management (RFC-0007 §5.4-5.6)."""
 
 import pytest
 

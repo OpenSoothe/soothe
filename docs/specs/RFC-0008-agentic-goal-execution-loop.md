@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-16
 **Updated**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002, RFC-0007, RFC-00XX
+**Dependencies**: RFC-0001, RFC-0002, RFC-0007, RFC-0023
 
 ## Abstract
 
@@ -26,7 +26,7 @@ Layer 2: Agentic Goal Execution (this RFC)
   ├─ Delegates to Layer 1 (ACT phase) for step execution
   └─ Returns: JudgeResult to Layer 3
 
-Layer 1: CoreAgent Runtime (RFC-00XX)
+Layer 1: CoreAgent Runtime (RFC-0023)
   └─ Executes tools/subagents via LangGraph runtime
 ```
 
@@ -304,24 +304,39 @@ async def execute_step_via_core_agent(
     step: StepAction,
     thread_id: str
 ) -> StepResult:
-    """Execute single step through Layer 1 CoreAgent."""
+    """Execute single step through Layer 1 CoreAgent with hints."""
+
+    # Build config with Layer 2 → Layer 1 hints (advisory)
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "soothe_step_tools": step.tools,           # Suggested tools
+            "soothe_step_subagent": step.subagent,     # Suggested subagent
+            "soothe_step_expected_output": step.expected_output,  # Expected result
+        }
+    }
+
     stream = await agent.astream(
         input=f"Execute: {step.description}",
-        config={"configurable": {"thread_id": thread_id}}
+        config=config  # Hints passed via config
     )
     # Collect evidence from stream
     result = await collect_stream_evidence(stream)
     return result
 ```
 
+**Hint Integration**: Layer 1's `ExecutionHintsMiddleware` injects hints into system prompt, allowing LLM to consider Layer 2's planning suggestions during execution. See RFC-0023 for integration contract details.
+
 **CoreAgent Responsibilities** (Layer 1):
 - Execute tools/subagents as requested by input context
-- Apply middlewares (context injection, policy checking, memory recall/persist)
+- Consider execution hints from Layer 2 (advisory suggestions)
+- Apply middlewares (context injection, policy checking, memory recall/persist, hints)
 - Manage thread state and LangGraph turn loop
 - Return streaming results for evidence collection
 
 **Layer 2 Controls**:
 - What to execute (step content)
+- What to suggest (tool/subagent hints, optional)
 - When to execute (iteration timing)
 - How to sequence (parallel vs sequential vs dependency)
 - Thread isolation strategy

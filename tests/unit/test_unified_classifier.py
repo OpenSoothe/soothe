@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.cognition import (
+from soothe.core.unified_classifier import (
     RoutingResult,
     UnifiedClassification,
     UnifiedClassifier,

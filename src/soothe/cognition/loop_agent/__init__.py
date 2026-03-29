@@ -1,31 +1,19 @@
-"""LoopAgent - Layer 2 reflection loop with PLAN → ACT → JUDGE.
+"""Layer 2: Agentic Goal Execution Loop (RFC-0008)."""
 
-This module implements the agentic loop (RFC-0008):
-- Core: State management and schemas
-- Integration: Cross-layer communication (goal delegation, context borrowing)
-- Execution: Judge logic and failure detection
-
-Public API:
-- LoopState, StepRecord: State models
-- AgentDecision, JudgeResult, ToolOutput: Schemas
-- JudgeEngine: LLM-based judgment
-- FailureDetector: Guardrails and failure modes
-"""
-
-from soothe.cognition.loop_agent.core.schemas import (
+from .loop_agent import LoopAgent
+from .schemas import (
     AgentDecision,
     JudgeResult,
-    ToolOutput,
-)
-from soothe.cognition.loop_agent.core.state import (
     LoopState,
-    StepRecord,
+    StepAction,
+    StepResult,
 )
 
 __all__ = [
     "AgentDecision",
     "JudgeResult",
+    "LoopAgent",
     "LoopState",
-    "StepRecord",
-    "ToolOutput",
+    "StepAction",
+    "StepResult",
 ]

@@ -1,4 +1,4 @@
-"""Goal directive processing mixin for autonomous runner (RFC-0011).
+"""Goal directive processing mixin for autonomous runner (RFC-0007 §5.4).
 
 Handles goal DAG mutations, directive application, iteration record
 storage, and continuation synthesis.  Mixed into ``AutonomousMixin``.
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class GoalDirectivesMixin:
-    """Goal directive processing and helpers for autonomous execution (RFC-0011).
+    """Goal directive processing and helpers for autonomous execution (RFC-0007 §5.4).
 
     Mixed into ``AutonomousMixin`` -- all ``self.*`` attributes are defined
     on the concrete ``SootheRunner`` class.
@@ -77,7 +77,7 @@ class GoalDirectivesMixin:
             return original_goal
 
     async def _check_goal_dag_consistency(self, goal: Any) -> bool:
-        """Check if goal's dependencies are still met after DAG mutations (RFC-0011).
+        """Check if goal's dependencies are still met after DAG mutations (RFC-0007 §5.5).
 
         Returns:
             True if goal should be aborted (dependencies now unmet), False otherwise.
@@ -103,7 +103,7 @@ class GoalDirectivesMixin:
         directives: list[Any],
         current_goal: Any,
     ) -> dict[str, Any]:
-        """Process goal management directives from reflection (RFC-0011)."""
+        """Process goal management directives from reflection (RFC-0007 §5.4)."""
         if not self._goal_engine:
             logger.warning("Goal engine not available, skipping directives")
             return {"error": "goal_engine_unavailable"}
@@ -159,7 +159,7 @@ class GoalDirectivesMixin:
         directive: Any,
         current_goal: Any,
     ) -> dict[str, Any]:
-        """Apply a single goal directive with validation (RFC-0011)."""
+        """Apply a single goal directive with validation (RFC-0007 §5.4)."""
         if directive.action == "create":
             return await self._apply_create_directive(directive)
 

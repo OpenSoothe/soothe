@@ -1,9 +1,11 @@
-# IG-029: Planner Refactoring and RFC-0011 Gap Closure
+# IG-029: Planner Refactoring and RFC-0007 Goal Context Support
+
+**Status**: ✅ Completed - RFC-0011 merged into RFC-0007 (2026-03-29)
 
 ## Objective
 
 Refactor the planner subsystem to:
-1. Fix RFC-0011 `goal_context` propagation across all planner modes
+1. Fix RFC-0007 §5.4 `goal_context` propagation across all planner modes
 2. Enhance multilingual routing with hybrid heuristic + fast-model classification
 3. Add LLM-assisted reflection for failure analysis and directive generation
 4. Consolidate duplicate code into a shared module

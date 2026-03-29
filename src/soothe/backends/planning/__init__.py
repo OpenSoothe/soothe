@@ -1,6 +1,6 @@
 """Planner protocol implementations."""
 
-from soothe.cognition.planning.simple import SimplePlanner
+from soothe.backends.planning.simple import SimplePlanner
 
 __all__ = ["SimplePlanner"]
 

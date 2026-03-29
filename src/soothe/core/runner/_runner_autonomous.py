@@ -1,4 +1,4 @@
-"""Autonomous iteration loop mixin for SootheRunner (RFC-0007, RFC-0009, RFC-0011).
+"""Autonomous iteration loop mixin for SootheRunner (RFC-0007, RFC-0009).
 
 Extracted from ``runner.py`` to isolate the autonomous goal-driven
 execution logic from the main runner orchestration.
@@ -75,7 +75,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # Two-tier classification for proper routing
         if self._unified_classifier:
-            from soothe.cognition import UnifiedClassification
+            from soothe.core.unified_classifier import UnifiedClassification
 
             routing = await self._unified_classifier.classify_routing(user_input)
             logger.info(
@@ -369,7 +369,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         if s.status in ("completed", "failed")
                     ]
                     if step_results:
-                        # Build goal context for reflection (RFC-0011)
+                        # Build goal context for reflection (RFC-0007 §5.4)
                         goal_context = None
                         if self._goal_engine:
                             from soothe.protocols.planner import GoalContext
@@ -392,7 +392,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                             ).to_dict()
                         )
 
-                        # Process goal directives from reflection (RFC-0011)
+                        # Process goal directives from reflection (RFC-0007 §5.4)
                         if reflection.goal_directives:
                             goal_changes = await self._process_goal_directives(
                                 reflection.goal_directives,

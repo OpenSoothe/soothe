@@ -281,6 +281,7 @@ results = await asyncio.gather(*[
 - `FilesystemMiddleware`: File operations
 
 **Soothe Protocol Middlewares** (wrapped):
+- `ExecutionHintsMiddleware`: Process Layer 2 execution hints, inject into system prompt
 - `ContextMiddleware`: Context injection and persistence
 - `MemoryMiddleware`: Memory recall and persistence
 - `PolicyMiddleware`: Policy checking for actions
@@ -324,15 +325,82 @@ async def execute_step_via_agent(
     step: StepAction,
     thread_id: str
 ) -> StepResult:
-    """Execute single step through Layer 1 CoreAgent."""
+    """Execute single step through Layer 1 CoreAgent with hints."""
+
+    # Build config with Layer 2 → Layer 1 hints (advisory)
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "soothe_step_tools": step.tools,           # Suggested tools
+            "soothe_step_subagent": step.subagent,     # Suggested subagent
+            "soothe_step_expected_output": step.expected_output,  # Expected result
+        }
+    }
+
     stream = await agent.astream(
         input=f"Execute: {step.description}",
-        config={"configurable": {"thread_id": thread_id}}
+        config=config  # Hints passed via config
     )
     # Collect evidence from stream
     result = await collect_stream_evidence(stream)
     return result
 ```
+
+### Execution Hints
+
+Layer 2's ACT phase passes advisory execution hints to Layer 1 CoreAgent via `config.configurable`:
+
+| Hint Field | Purpose | Example |
+|------------|---------|---------|
+| `soothe_step_tools` | Suggested tools for execution | `["read_file", "grep"]` |
+| `soothe_step_subagent` | Suggested subagent to invoke | `"browser"` |
+| `soothe_step_expected_output` | Expected result description | `"File contents matching pattern"` |
+
+**Hint Behavior**:
+- **Advisory, not mandatory**: Layer 1 LLM considers hints but may choose different approach
+- **ExecutionHintsMiddleware**: Injects hints into system prompt for LLM consideration
+- **Natural integration**: LLM sees hints in decision-making context, decides final execution
+- **Backward compatible**: Steps without hints work unchanged (middleware skips processing)
+
+**Example Integration**:
+
+```python
+# Layer 2 Planner decision
+decision = AgentDecision(
+    steps=[
+        StepAction(
+            description="Find configuration files",
+            tools=["glob", "grep"],
+            expected_output="List of config files"
+        )
+    ],
+    execution_mode="sequential"
+)
+
+# Executor passes hints to Layer 1
+await core_agent.astream(
+    input="Execute: Find configuration files",
+    config={
+        "configurable": {
+            "thread_id": "thread-123",
+            "soothe_step_tools": ["glob", "grep"],
+            "soothe_step_expected_output": "List of config files"
+        }
+    }
+)
+
+# CoreAgent LLM receives enhanced system prompt:
+# "You are Soothe agent...
+#
+# Execution hints: Suggested tools: glob, grep. Expected output: List of config files.
+# Consider using the suggested approach first, but decide based on what works best."
+#
+# → LLM decides to use glob first, then grep for filtering
+```
+
+**Architecture Principle**: This integration honors the three-layer separation:
+- Layer 2 controls **what to execute** (step content + tool/subagent suggestions)
+- Layer 1 handles **how to execute** (runtime decisions with hints as context)
 
 ### Responsibilities Split
 

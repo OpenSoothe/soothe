@@ -6,6 +6,8 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-29 | RFC-0023 | Draft | Added Layer 2 integration contract with execution hints specification |
+| 2026-03-29 | RFC-0008 | Revised | Updated ACT phase with execution hints propagation, fixed RFC-0023 dependency |
 | 2026-03-29 | RFC-0023 | Deleted | Content merged into RFC-0013 (daemon readiness) and RFC-0008 (observation reuse, planning strategy) |
 | 2026-03-29 | RFC-0013 | Implemented | Merged RFC-0023 daemon readiness architecture (lifecycle phases, handshake protocol) |
 | 2026-03-29 | RFC-0008 | Draft | Merged RFC-0023 agentic loop performance (execution tiers, observation reuse, planning strategy) |

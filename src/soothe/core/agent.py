@@ -20,6 +20,7 @@ from soothe.core.resolver import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.middleware.execution_hints import ExecutionHintsMiddleware
 from soothe.middleware.parallel_tools import ParallelToolsMiddleware
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
@@ -90,7 +91,36 @@ def create_soothe_agent(
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
 ) -> CompiledStateGraph:
-    """Create a Soothe agent.
+    """Factory that creates Soothe's Layer 1 CoreAgent runtime.
+
+    Layer 1 Responsibilities:
+        - Execute tools/subagents via LangGraph Model → Tools → Model loop
+        - Apply middlewares (context, memory, policy, planner, hints)
+        - Manage thread state (sequential vs parallel execution)
+        - Consider execution hints from Layer 2 (advisory suggestions)
+
+    Built-in Capabilities:
+        - Tools: execution, websearch, research, etc.
+        - Subagents: Browser, Claude, Skillify, Weaver
+        - MCP servers: loaded via configuration
+        - Middlewares: policy, system prompt optimization, hints, context, memory, parallel tools
+
+    Protocol Attachments (attached to returned graph):
+        - soothe_context: ContextProtocol instance
+        - soothe_memory: MemoryProtocol instance
+        - soothe_planner: PlannerProtocol instance
+        - soothe_policy: PolicyProtocol instance
+        - soothe_durability: DurabilityProtocol instance
+        - soothe_config: SootheConfig instance
+        - soothe_subagents: list of configured subagents
+
+    Execution Interface:
+        agent.astream(input, config) → AsyncIterator[StreamChunk]
+
+        config.configurable may include Layer 2 hints:
+            - soothe_step_tools: suggested tools (advisory)
+            - soothe_step_subagent: suggested subagent (advisory)
+            - soothe_step_expected_output: expected result (advisory)
 
     Wraps ``create_deep_agent()`` and wires up Soothe-specific protocols,
     subagents, tools, MCP servers, and skills from ``SootheConfig``.
@@ -256,6 +286,10 @@ def create_soothe_agent(
     ):
         default_middleware.append(SystemPromptOptimizationMiddleware(config=config))
         logger.info("System prompt optimization middleware enabled")
+
+    # Add execution hints middleware for Layer 2 → Layer 1 integration (RFC-0023)
+    default_middleware.append(ExecutionHintsMiddleware())
+    logger.debug("Execution hints middleware enabled")
 
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))

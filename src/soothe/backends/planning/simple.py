@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from soothe.cognition.planning._shared import reflect_heuristic
+from soothe.backends.planning._shared import reflect_heuristic
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -273,3 +273,133 @@ class SimplePlanner:
                     if hint not in ("tool", "subagent", "remote", "auto"):
                         step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
         return data
+
+    async def decide_steps(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: Any | None = None,
+    ) -> Any:
+        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
+
+        Uses LLM to determine:
+        - How many steps to execute (1 or N)
+        - Execution mode (parallel, sequential, dependency)
+        - Step granularity (atomic vs semantic)
+
+        Args:
+            goal: Goal description
+            context: Planning context
+            previous_judgment: Previous JudgeResult if replanning
+
+        Returns:
+            AgentDecision with steps to execute
+        """
+        # Build prompt for step decision
+        prompt = self._build_step_decision_prompt(goal, context, previous_judgment)
+
+        # Get LLM response
+        response = await self._invoke(prompt)
+
+        # Parse structured output
+        return self._parse_step_decision(response, goal)
+
+    def _build_step_decision_prompt(
+        self,
+        goal: str,
+        context: PlanContext,
+        previous_judgment: Any | None,
+    ) -> str:
+        """Build prompt for step decision."""
+        parts = [f"Goal: {goal}\n"]
+
+        if previous_judgment:
+            parts.append("\nPrevious judgment:")
+            parts.append(f"- Status: {previous_judgment.status}")
+            parts.append(f"- Progress: {previous_judgment.goal_progress:.0%}")
+            parts.append(f"- Reasoning: {previous_judgment.reasoning}")
+            if previous_judgment.next_steps_hint:
+                parts.append(f"- Hint: {previous_judgment.next_steps_hint}")
+
+        if context.available_capabilities:
+            parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
+
+        parts.extend(
+            [
+                "\n\nDecide what steps to execute next:",
+                "\n1. Choose granularity: 'atomic' (many small steps) or 'semantic' (fewer large steps)",
+                "   - Use 'atomic' for uncertain/exploratory goals",
+                "   - Use 'semantic' for clear goals with well-known procedures",
+                "\n2. Choose execution mode:",
+                "   - 'parallel': Execute steps concurrently (faster, independent steps)",
+                "   - 'sequential': Execute steps one-by-one (safer, dependent steps)",
+                "   - 'dependency': Use step dependencies for DAG execution",
+                "\n3. Decide how many steps to execute now (1 or more):",
+                "   - Single step: Focused execution, clear feedback",
+                "   - Multiple steps: Efficient batching, parallel work",
+                "\nReturn JSON:",
+                "{",
+                '  "type": "execute_steps",',
+                '  "steps": [',
+                "    {",
+                '      "description": "What this step does",',
+                '      "tools": ["optional", "list"],',
+                '      "subagent": "optional subagent name",',
+                '      "expected_output": "What we expect",',
+                '      "dependencies": []',
+                "    }",
+                "  ],",
+                '  "execution_mode": "parallel" | "sequential" | "dependency",',
+                '  "adaptive_granularity": "atomic" | "semantic",',
+                '  "reasoning": "Why these steps now"',
+                "}",
+            ]
+        )
+
+        return "\n".join(parts)
+
+    def _parse_step_decision(self, response: str, goal: str) -> Any:
+        """Parse LLM response into AgentDecision."""
+        from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+
+        try:
+            # Try to parse JSON
+            data = json.loads(response)
+
+            # Build StepAction objects
+            steps = []
+            for i, step_data in enumerate(data.get("steps", [])):
+                step = StepAction(
+                    id=f"step_{i}",
+                    description=step_data.get("description", ""),
+                    tools=step_data.get("tools"),
+                    subagent=step_data.get("subagent"),
+                    expected_output=step_data.get("expected_output", ""),
+                    dependencies=step_data.get("dependencies"),
+                )
+                steps.append(step)
+
+            # Build AgentDecision
+            return AgentDecision(
+                type=data.get("type", "execute_steps"),
+                steps=steps,
+                execution_mode=data.get("execution_mode", "sequential"),
+                reasoning=data.get("reasoning", ""),
+                adaptive_granularity=data.get("adaptive_granularity"),
+            )
+
+        except Exception:
+            logger.exception("Failed to parse step decision")
+            # Return minimal default decision
+            return AgentDecision(
+                type="execute_steps",
+                steps=[
+                    StepAction(
+                        id="step_0",
+                        description=goal,
+                        expected_output="Task completion",
+                    )
+                ],
+                execution_mode="sequential",
+                reasoning="Default decision due to parse error",
+            )

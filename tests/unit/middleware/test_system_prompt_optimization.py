@@ -4,8 +4,8 @@ import pytest
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.messages import SystemMessage
 
-from soothe.cognition import UnifiedClassification
 from soothe.config import SootheConfig
+from soothe.core.unified_classifier import UnifiedClassification
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 
 

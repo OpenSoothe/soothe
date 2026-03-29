@@ -79,7 +79,7 @@ class PhasesMixin:
         # Safety net: should not be reached if classifier post-processing works.
         logger.warning("Chitchat classification missing piggybacked response, using canned reply")
         name = self._config.assistant_name
-        from soothe.cognition import _looks_chinese
+        from soothe.core.unified_classifier import _looks_chinese
 
         if _looks_chinese(user_input):
             fallback = f"你好! 我是 {name}, 有什么可以帮你的吗?"
@@ -103,7 +103,7 @@ class PhasesMixin:
             subagent_name: Name of the subagent to route to.
             state: Runner state (for thread_id tracking).
         """
-        from soothe.cognition import RoutingResult, UnifiedClassification
+        from soothe.core.unified_classifier import RoutingResult, UnifiedClassification
 
         logger.debug("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
 

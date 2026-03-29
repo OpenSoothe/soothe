@@ -14,8 +14,8 @@ from typing_extensions import TypedDict
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from soothe.cognition import UnifiedClassification
     from soothe.config import SootheConfig
+    from soothe.core.unified_classifier import UnifiedClassification
 
 logger = logging.getLogger(__name__)
 
