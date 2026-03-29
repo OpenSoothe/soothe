@@ -196,10 +196,24 @@ class WebSocketTransport(TransportServer):
             await websocket.close(code=1008, reason="Origin not allowed")
             return
 
+        # Create a session for this client if session manager is available
+        client_id: str | None = None
+        if hasattr(self, "_session_manager") and self._session_manager:
+            try:
+                client_id = await self._session_manager.create_session(self, websocket)
+            except Exception:
+                logger.exception("Failed to create session for WebSocket client")
+                await websocket.close(code=1011, reason="Internal error")
+                return
+        else:
+            # Fallback to generated client ID
+            client_id = f"ws:{websocket.remote_address}"
+
         # Initialize client state
         client_info: dict[str, Any] = {
             "remote_addr": websocket.remote_address,
             "origin": origin,
+            "client_id": client_id,
         }
 
         # Register client
@@ -243,7 +257,6 @@ class WebSocketTransport(TransportServer):
                     # Pass message to handler with client_id
                     if self._message_handler:
                         try:
-                            client_id = f"ws:{websocket.remote_address}"
                             self._message_handler(client_id, msg_dict)
                         except Exception:
                             logger.exception("Error handling WebSocket message")
@@ -257,6 +270,9 @@ class WebSocketTransport(TransportServer):
         except Exception:
             logger.exception("WebSocket client error")
         finally:
+            # Remove session if we created one
+            if hasattr(self, "_session_manager") and self._session_manager and client_id:
+                await self._session_manager.remove_session(client_id)
             # Unregister client
             self._clients.pop(websocket, None)
             logger.info(

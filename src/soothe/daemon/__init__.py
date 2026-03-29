@@ -8,4 +8,4 @@ from soothe.daemon.websocket_client import WebSocketClient
 # Backward compatibility alias (deprecated)
 DaemonClient = WebSocketClient
 
-__all__ = ["SootheDaemon", "WebSocketClient", "DaemonClient", "pid_path", "run_daemon"]
+__all__ = ["DaemonClient", "SootheDaemon", "WebSocketClient", "pid_path", "run_daemon"]

@@ -24,6 +24,7 @@ def _get_client_id(request: Request) -> str:
     client_host = request.client.host if request.client else "unknown"
     return f"http:{client_host}"
 
+
 logger = logging.getLogger(__name__)
 
 # Pydantic models for request/response validation

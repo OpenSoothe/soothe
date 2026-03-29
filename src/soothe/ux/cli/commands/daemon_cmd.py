@@ -1,6 +1,7 @@
 """Daemon commands for Soothe CLI."""
 
 import asyncio
+import logging
 import subprocess
 import sys
 import time
@@ -33,6 +34,8 @@ def _wait_for_daemon_ready(cfg: object, timeout: float = 20.0) -> bool:
             await client.request_daemon_ready()
             await client.wait_for_daemon_ready(ready_timeout_s=timeout)
         except Exception:
+            logger = logging.getLogger(__name__)
+            logger.debug("Daemon readiness check failed", exc_info=True)
             return False
         finally:
             await client.close()
@@ -83,6 +86,8 @@ def daemon_start(
             if pid_path().exists():
                 break
             time.sleep(0.2)
+        # Additional wait for WebSocket server to be fully ready
+        time.sleep(0.5)
         if SootheDaemon.is_running() and _wait_for_daemon_ready(cfg):
             pass  # Daemon started successfully
         elif SootheDaemon.is_running():

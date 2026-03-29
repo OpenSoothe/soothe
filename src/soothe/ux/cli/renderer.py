@@ -228,7 +228,6 @@ class CliRenderer:
         from soothe.ux.cli.progress import render_progress_event
 
         self._ensure_newline()
-        sys.stderr.write("\n")
         render_progress_event(event_type, data, current_plan=self._state.current_plan)
         # Mark that stderr was just written
         self._state.stderr_just_written = True

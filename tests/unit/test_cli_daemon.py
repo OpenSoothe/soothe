@@ -122,7 +122,7 @@ async def test_daemon_input_message_returns_busy_error_while_query_running() -> 
     daemon._runner = SimpleNamespace(current_thread_id="thread-busy")
 
     transport = SimpleNamespace(send=AsyncMock())
-    transport_client = UnixTransportClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    transport_client = SimpleNamespace()  # Mock transport client
     session = SimpleNamespace(transport=transport, transport_client=transport_client)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
@@ -460,7 +460,7 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
     stderr: list[str] = []
 
-    monkeypatch.setattr("soothe.daemon.DaemonClient", lambda sock=None: _BusyClient())
+    monkeypatch.setattr("soothe.daemon.websocket_client.WebSocketClient", lambda url=None: _BusyClient())
     monkeypatch.setattr(typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None)
 
     code = await daemon_exec.run_headless_via_daemon(SootheConfig(), "analyze project structure")
@@ -522,7 +522,7 @@ async def test_daemon_ready_request_replies_without_session() -> None:
 async def test_detach_ignores_connection_loss_for_transport_session() -> None:
     daemon = SootheDaemon(SootheConfig())
     transport = SimpleNamespace(send=AsyncMock(side_effect=ConnectionError("Connection lost")))
-    transport_client = UnixTransportClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
+    transport_client = SimpleNamespace()  # Mock transport client
     session = SimpleNamespace(transport=transport, transport_client=transport_client)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
