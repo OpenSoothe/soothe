@@ -35,13 +35,26 @@ class ParallelToolsMiddleware(AgentMiddleware):
     """
 
     def __init__(self, max_parallel_tools: int = 10) -> None:
-        """Initialize parallel tools middleware with semaphore."""
+        """Initialize parallel tools middleware with semaphore.
+
+        Args:
+            max_parallel_tools: Maximum concurrent tool executions.
+                0 or negative means unlimited (no semaphore).
+        """
         self.max_parallel_tools = max_parallel_tools
-        self._semaphore = asyncio.Semaphore(max_parallel_tools)
-        logger.info(
-            "ParallelToolsMiddleware initialized: max_parallel_tools=%d (LangGraph default: unlimited)",
-            max_parallel_tools,
-        )
+        # 0 or negative means unlimited (no semaphore)
+        if max_parallel_tools > 0:
+            self._semaphore = asyncio.Semaphore(max_parallel_tools)
+            logger.info(
+                "ParallelToolsMiddleware initialized: max_parallel_tools=%d",
+                max_parallel_tools,
+            )
+        else:
+            self._semaphore = None
+            logger.info(
+                "ParallelToolsMiddleware initialized: unlimited parallelism (max_parallel_tools=%d)",
+                max_parallel_tools,
+            )
 
     async def awrap_tool_call(
         self,
@@ -62,6 +75,11 @@ class ParallelToolsMiddleware(AgentMiddleware):
             ToolMessage or Command from tool execution.
         """
         tool_name = request.tool_call.get("name", "unknown")
+
+        # If no semaphore (unlimited mode), execute directly
+        if self._semaphore is None:
+            logger.debug("Tool %s: executing (unlimited parallelism)", tool_name)
+            return await handler(request)
 
         # Calculate active slots for logging
         active_count = self.max_parallel_tools - self._semaphore._value

@@ -59,13 +59,17 @@ def _parse_step_decision_text(response: str, goal: str) -> Any:
         # Build StepAction objects
         steps = []
         for i, step_data in enumerate(data.get("steps", [])):
+            # Handle dependencies - ensure it's a list of strings
+            deps = step_data.get("dependencies")
+            deps = [] if deps is None or not isinstance(deps, list) else [str(d) for d in deps if d is not None]
+
             step = StepAction(
                 id=f"step_{i}",
                 description=step_data.get("description", ""),
                 tools=step_data.get("tools"),
                 subagent=step_data.get("subagent"),
                 expected_output=step_data.get("expected_output", ""),
-                dependencies=step_data.get("dependencies"),
+                dependencies=deps,
             )
             steps.append(step)
 

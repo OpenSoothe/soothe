@@ -90,9 +90,7 @@ class TestCoreAgentClass:
         result = agent.astream("test input", {"thread_id": "123"})
 
         # Consume the generator to trigger the call
-        chunks = []
-        async for chunk in result:
-            chunks.append(chunk)
+        chunks = [chunk async for chunk in result]
 
         assert chunks == ["chunk1", "chunk2"]
 

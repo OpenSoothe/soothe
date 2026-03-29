@@ -345,7 +345,7 @@ def create_soothe_agent(
                 results = asyncio.run(resolve_protocols_parallel())
                 resolved_context, resolved_memory, resolved_planner, resolved_policy = [
                     r if not isinstance(r, Exception) else None for r in results
-        ]
+                ]
         except RuntimeError:
             # Fallback to sequential
             logger.debug("Parallel protocol resolution failed, using sequential")

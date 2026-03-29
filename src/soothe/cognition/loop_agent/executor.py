@@ -139,7 +139,7 @@ class Executor:
             # astream returns an async generator, don't await it
             # Input must be a dict with "messages" key for LangGraph agents
             stream = self.core_agent.astream(
-                input={"messages": [HumanMessage(content=combined_description)]},
+                {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": {"thread_id": state.thread_id}},
             )
 
@@ -239,7 +239,7 @@ class Executor:
             # astream returns an async generator, don't await it
             # Input must be a dict with "messages" key for LangGraph agents
             stream = self.core_agent.astream(
-                input={"messages": [HumanMessage(content=f"Execute: {step.description}")]},
+                {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
                 config=config,  # Hints passed via config
             )
 
@@ -291,10 +291,33 @@ class Executor:
         """
         chunks = []
         async for chunk in stream:
-            # Handle LangGraph tuple format: (namespace, mode, data)
-            if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
+            # Handle dict chunks (standard LangGraph format)
+            if isinstance(chunk, dict):
+                # Look for 'model' key which contains AI messages
+                if "model" in chunk:
+                    model_data = chunk["model"]
+                    if isinstance(model_data, dict) and "messages" in model_data:
+                        for msg in model_data["messages"]:
+                            if hasattr(msg, "content"):
+                                content = msg.content
+                                if isinstance(content, str) and content:
+                                    chunks.append(content)
+                                elif isinstance(content, list):
+                                    for c in content:
+                                        if isinstance(c, str):
+                                            chunks.append(c)
+                                        elif isinstance(c, dict) and "text" in c:
+                                            chunks.append(c["text"])
+                # Handle other chunk formats
+                elif "content" in chunk:
+                    chunks.append(str(chunk["content"]))
+                elif "output" in chunk:
+                    chunks.append(str(chunk["output"]))
+                elif "text" in chunk:
+                    chunks.append(str(chunk["text"]))
+            # Handle tuple format (namespace, mode, data)
+            elif isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 namespace, mode, data = chunk
-                # Only collect messages from the root namespace
                 if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
                     msg_chunk = data[0]
                     if hasattr(msg_chunk, "content"):
@@ -307,14 +330,6 @@ class Executor:
                                     chunks.append(c)
                                 elif isinstance(c, dict) and "text" in c:
                                     chunks.append(c["text"])
-            elif isinstance(chunk, dict):
-                # Handle different chunk formats
-                if "content" in chunk:
-                    chunks.append(str(chunk["content"]))
-                elif "output" in chunk:
-                    chunks.append(str(chunk["output"]))
-                elif "text" in chunk:
-                    chunks.append(str(chunk["text"]))
             elif hasattr(chunk, "content"):
                 chunks.append(str(chunk.content))
 

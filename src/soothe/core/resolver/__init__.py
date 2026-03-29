@@ -202,13 +202,21 @@ def resolve_planner(
     if config.protocols.planner.routing == "always_direct":
         return simple or SimplePlanner(model=planner_model)
 
-    claude_planner = None
-    try:
-        from soothe.backends.planning.claude import ClaudePlanner
+    # Check if we're running inside Claude Code (nested session not allowed)
+    import os
 
-        claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model)
-    except Exception:
-        logger.info("Claude CLI not available for planning")
+    inside_claude_code = os.environ.get("CLAUDECODE") is not None
+
+    claude_planner = None
+    if not inside_claude_code:
+        try:
+            from soothe.backends.planning.claude import ClaudePlanner
+
+            claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model)
+        except Exception:
+            logger.info("Claude CLI not available for planning")
+    else:
+        logger.info("Running inside Claude Code, skipping ClaudePlanner (nested session not allowed)")
 
     if config.protocols.planner.routing == "always_claude":
         return claude_planner or simple  # type: ignore[return-value]
