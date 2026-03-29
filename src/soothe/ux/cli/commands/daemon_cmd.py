@@ -76,12 +76,11 @@ def daemon_start(
                 break
             time.sleep(0.2)
         if SootheDaemon.is_running() and _wait_for_daemon_ready(cfg):
-            pid = pid_path().read_text().strip()
-            typer.echo(f"Soothe daemon started in background (PID: {pid}).")
+            pass  # Daemon started successfully
         elif SootheDaemon.is_running():
-            typer.echo("Soothe daemon process started but did not become ready.")
+            typer.echo("Soothe daemon process started but did not become ready.", err=True)
         else:
-            typer.echo("Soothe daemon started in background.")
+            typer.echo("Soothe daemon failed to start.", err=True)
 
 
 def daemon_stop() -> None:
@@ -100,7 +99,7 @@ def daemon_status() -> None:
 
     if SootheDaemon.is_running():
         pf = pid_path()
-        pid = pf.read_text().strip() if pf.exists() else "?"
+        pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
         typer.echo(f"Soothe daemon is running (PID: {pid})")
     else:
         typer.echo("Soothe daemon is not running.")

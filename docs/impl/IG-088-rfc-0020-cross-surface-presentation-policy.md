@@ -17,9 +17,8 @@ Goals:
 3. Share verbosity semantics across headless and TUI
 4. Show plan updates and brief milestones in `normal`
 5. Hide internal lifecycle/protocol/debug leakage from `normal`
-6. Remove brand messaging and embellishment from user-facing output
-7. Add one blank line before every headless output block
-8. Preserve equivalent visual separation in TUI via layout/spacing
+6. Add one blank line before every headless output block
+7. Preserve equivalent visual separation in TUI via layout/spacing
 
 ---
 
@@ -47,7 +46,7 @@ Headless and TUI renderers should consume shared presentation decisions rather t
 - Keep `normal` as default
 
 ### Phase 2: Shared response cleaning and extraction
-- Add response cleaner for brand/filler stripping
+- Add response cleaner for internal tags/filler stripping
 - Add quiet answer extraction with safe fallback
 - Route special daemon output through shared cleaner path
 

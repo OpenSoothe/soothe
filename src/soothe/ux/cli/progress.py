@@ -105,7 +105,7 @@ def _render_agentic_event(event_type: str, data: dict[str, Any]) -> None:
         # Level 1: Goal summary
         goal = data.get("goal", "")
         if goal:
-            sys.stderr.write(f"\n● {goal}\n")
+            sys.stderr.write(f"● {goal}\n")
             sys.stderr.flush()
 
     elif "step.started" in event_type:
@@ -137,7 +137,7 @@ def _render_agentic_event(event_type: str, data: dict[str, Any]) -> None:
         if evidence:
             # Truncate evidence for clean display
             evidence = truncate_summary(evidence, max_len=80)
-            sys.stderr.write(f"\n● Done: {evidence}\n")
+            sys.stderr.write(f"● Done: {evidence}\n")
             sys.stderr.flush()
 
 

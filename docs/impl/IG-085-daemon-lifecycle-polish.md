@@ -327,7 +327,43 @@ Use this helper in:
 - `daemon.py` (headless exit)
 - `app.py` (TUI exit messages)
 
-### Phase 7: Documentation Updates
+### Phase 7: Client Disconnect Query Cancellation
+
+**Related Design**: `docs/drafts/2026-03-29-client-disconnect-cancel-design.md`
+
+**Current Behavior**: When client disconnects (Ctrl+C, crash), active query continues running.
+
+**Required Changes**:
+
+1. **Add `detach_requested` flag to ClientSession**:
+   - Tracks whether client explicitly requested detach (vs. unexpected disconnect)
+   - Default: `False`
+
+2. **Add client→thread ownership tracking**:
+   - Track which client "owns" the running query
+   - On query start: `claim_thread_ownership(client_id, thread_id)`
+   - On query end: ownership released
+
+3. **Handle `detach` message**:
+   - Set `session.detach_requested = True`
+   - Send acknowledgment to client
+
+4. **Auto-cancel on disconnect**:
+   - In `remove_session()`: if `not detach_requested` and client owns a thread, cancel it
+   - Covers: Ctrl+C, client crash, network failure
+   - Does NOT cancel: explicit `/detach` or `Ctrl+D`
+
+**Implementation Files**:
+- `src/soothe/daemon/client_session.py` - Add flag, ownership tracking, cancel callback
+- `src/soothe/daemon/_handlers.py` - Handle `detach` message, pass client_id through input queue
+- `src/soothe/daemon/server.py` - Pass cancel callback to ClientSessionManager
+
+**Testing**:
+- Ctrl+C → query cancelled (verify in daemon logs)
+- `/detach` → query continues
+- Client crash simulation → auto-cancel
+
+### Phase 8: Documentation Updates
 
 **Update CLI help text and examples**:
 

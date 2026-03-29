@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAction, StepResult
 
@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 _TUPLE_LEN = 3
 _LIST_MIN_LEN = 2
 
+# Type for stream events yielded during execution
+StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
+
 
 class Executor:
     """ACT phase: Execute steps via Layer 1 CoreAgent.
@@ -27,6 +30,8 @@ class Executor:
     - parallel: Execute all ready steps concurrently with isolated threads
     - sequential: Execute steps one at a time in one agent turn
     - dependency: Execute steps respecting dependency DAG
+
+    Events from CoreAgent are propagated through for upstream consumption.
     """
 
     def __init__(self, core_agent: CoreAgent) -> None:
@@ -41,21 +46,24 @@ class Executor:
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> list[StepResult]:
-        """Execute steps based on execution mode.
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+        """Execute steps based on execution mode, yielding events and results.
+
+        This method yields stream events (custom events from tool execution)
+        during execution, then yields final StepResult objects.
 
         Args:
             decision: AgentDecision with steps to execute
             state: Current loop state
 
-        Returns:
-            List of StepResult (includes errors as failed results)
+        Yields:
+            StreamEvent during execution, then StepResult for each step.
         """
         ready_steps = decision.get_ready_steps(state.completed_step_ids)
 
         if not ready_steps:
             logger.warning("No ready steps to execute (all completed or blocked)")
-            return []
+            return
 
         logger.info(
             "Executing %d steps in mode: %s",
@@ -64,35 +72,45 @@ class Executor:
         )
 
         if decision.execution_mode == "parallel":
-            return await self._execute_parallel(ready_steps, state)
-        if decision.execution_mode == "sequential":
-            return await self._execute_sequential(ready_steps, state)
-        if decision.execution_mode == "dependency":
-            return await self._execute_dependency(decision, state)
-        msg = f"Unknown execution mode: {decision.execution_mode}"
-        raise ValueError(msg)
+            async for item in self._execute_parallel(ready_steps, state):
+                yield item
+        elif decision.execution_mode == "sequential":
+            async for item in self._execute_sequential(ready_steps, state):
+                yield item
+        elif decision.execution_mode == "dependency":
+            async for item in self._execute_dependency(decision, state):
+                yield item
+        else:
+            msg = f"Unknown execution mode: {decision.execution_mode}"
+            raise ValueError(msg)
 
     async def _execute_parallel(
         self,
         steps: list,
         state: LoopState,
-    ) -> list[StepResult]:
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
         """Execute steps in parallel with isolated threads.
+
+        Note: For parallel execution, we cannot yield events in real-time
+        because asyncio.gather runs all tasks concurrently. We collect
+        events from each task and yield them after all complete.
 
         Args:
             steps: Steps to execute
             state: Loop state
 
-        Returns:
-            List of step results
+        Yields:
+            StepResult for each completed step.
         """
-        tasks = [self._execute_step(step, f"{state.thread_id}__step_{i}") for i, step in enumerate(steps)]
+        # Create tasks that collect events
+        tasks = [
+            self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}") for i, step in enumerate(steps)
+        ]
 
-        # Execute concurrently, catching exceptions
+        # Execute concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Convert exceptions to error results
-        step_results = []
+        # Process results
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(
@@ -101,34 +119,35 @@ class Executor:
                     result,
                     exc_info=result,
                 )
-                step_results.append(
-                    StepResult(
-                        step_id=steps[i].id,
-                        success=False,
-                        error=str(result),
-                        error_type="execution",
-                        duration_ms=0,
-                        thread_id=f"{state.thread_id}__step_{i}",
-                    )
+                yield StepResult(
+                    step_id=steps[i].id,
+                    success=False,
+                    error=str(result),
+                    error_type="execution",
+                    duration_ms=0,
+                    thread_id=f"{state.thread_id}__step_{i}",
                 )
             else:
-                step_results.append(result)
-
-        return step_results
+                events, step_result = result
+                # Yield collected events first
+                for event in events:
+                    yield event
+                # Then yield the result
+                yield step_result
 
     async def _execute_sequential(
         self,
         steps: list,
         state: LoopState,
-    ) -> list[StepResult]:
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
         """Execute steps sequentially in one agent turn.
 
         Args:
             steps: Steps to execute
             state: Loop state
 
-        Returns:
-            List of step results (single combined result)
+        Yields:
+            StreamEvent during execution, then StepResult.
         """
         from langchain_core.messages import HumanMessage
 
@@ -136,15 +155,17 @@ class Executor:
 
         start = time.perf_counter()
         try:
-            # astream returns an async generator, don't await it
-            # Input must be a dict with "messages" key for LangGraph agents
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": {"thread_id": state.thread_id}},
             )
 
-            # Collect results from stream
-            output = await self._collect_stream(stream)
+            # Collect results and yield events
+            output, events = await self._collect_stream_with_events(stream)
+
+            # Yield collected events
+            for event in events:
+                yield event
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -154,67 +175,67 @@ class Executor:
                 len(output),
             )
 
-            # Return single result for all steps
-            return [
-                StepResult(
-                    step_id=steps[0].id,  # Primary step
-                    success=True,
-                    output=output,
-                    duration_ms=duration_ms,
-                    thread_id=state.thread_id,
-                )
-            ]
+            yield StepResult(
+                step_id=steps[0].id,
+                success=True,
+                output=output,
+                duration_ms=duration_ms,
+                thread_id=state.thread_id,
+            )
 
-        except Exception:
+        except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception("Sequential execution failed")
 
-            return [
-                StepResult(
-                    step_id=steps[0].id,
-                    success=False,
-                    error="Sequential execution failed",
-                    error_type="execution",
-                    duration_ms=duration_ms,
-                    thread_id=state.thread_id,
-                )
-            ]
+            error_msg = self._extract_error_message(e, "Sequential execution failed")
+
+            yield StepResult(
+                step_id=steps[0].id,
+                success=False,
+                error=error_msg,
+                error_type="execution",
+                duration_ms=duration_ms,
+                thread_id=state.thread_id,
+            )
 
     async def _execute_dependency(
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> list[StepResult]:
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
         """Execute steps respecting dependency DAG.
 
         Args:
             decision: AgentDecision with dependency information
             state: Loop state
 
-        Returns:
-            List of step results
+        Yields:
+            StreamEvent during execution, then StepResult.
         """
-        # For now, execute ready steps in parallel
         ready_steps = decision.get_ready_steps(state.completed_step_ids)
-        return await self._execute_parallel(ready_steps, state)
+        async for item in self._execute_parallel(ready_steps, state):
+            yield item
 
-    async def _execute_step(
+    async def _execute_step_collecting_events(
         self,
         step: StepAction,
         thread_id: str,
-    ) -> StepResult:
-        """Execute single step through CoreAgent with Layer 2 hints.
+    ) -> tuple[list[StreamEvent], StepResult]:
+        """Execute single step, collecting events for later yielding.
+
+        Used for parallel execution where we can't yield in real-time.
 
         Args:
             step: StepAction with description and optional hints
             thread_id: Thread ID for execution
 
         Returns:
-            StepResult with success/error
+            Tuple of (collected events, StepResult)
         """
         from langchain_core.messages import HumanMessage
 
         start = time.perf_counter()
+        events: list[StreamEvent] = []
 
         try:
             logger.debug(
@@ -225,25 +246,21 @@ class Executor:
                 step.subagent,
             )
 
-            # Build config with Layer 2 → Layer 1 hints (advisory)
             config = {
                 "configurable": {
                     "thread_id": thread_id,
-                    # Layer 2 execution hints
                     "soothe_step_tools": step.tools,
                     "soothe_step_subagent": step.subagent,
                     "soothe_step_expected_output": step.expected_output,
                 }
             }
 
-            # astream returns an async generator, don't await it
-            # Input must be a dict with "messages" key for LangGraph agents
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
-                config=config,  # Hints passed via config
+                config=config,
             )
 
-            output = await self._collect_stream(stream)
+            output, events = await self._collect_stream_with_events(stream)
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
@@ -253,7 +270,7 @@ class Executor:
                 step.tools or "none",
             )
 
-            return StepResult(
+            return events, StepResult(
                 step_id=step.id,
                 success=True,
                 output=output,
@@ -261,7 +278,7 @@ class Executor:
                 thread_id=thread_id,
             )
 
-        except Exception:
+        except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception(
                 "Step %s failed after %dms [hints: tools=%s, subagent=%s]",
@@ -271,29 +288,51 @@ class Executor:
                 step.subagent,
             )
 
-            return StepResult(
+            error_msg = self._extract_error_message(e, "Step execution failed")
+
+            return events, StepResult(
                 step_id=step.id,
                 success=False,
-                error="Step execution failed",
+                error=error_msg,
                 error_type="execution",
                 duration_ms=duration_ms,
                 thread_id=thread_id,
             )
 
-    async def _collect_stream(self, stream: AsyncGenerator) -> str:
-        """Collect output from agent stream.
+    async def _collect_stream_with_events(self, stream: AsyncGenerator) -> tuple[str, list[StreamEvent]]:
+        """Collect output from agent stream while preserving custom events.
 
         Args:
             stream: Async iterator from agent.astream()
 
         Returns:
-            Combined output string
+            Tuple of (combined output string, list of custom events)
         """
-        chunks = []
+        chunks: list[str] = []
+        events: list[StreamEvent] = []
+
         async for chunk in stream:
+            # Handle tuple format (namespace, mode, data) - deepagents canonical
+            if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
+                namespace, mode, data = chunk
+
+                # Collect custom events for upstream propagation
+                if mode == "custom":
+                    events.append(chunk)
+                elif mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
+                    msg_chunk = data[0]
+                    if hasattr(msg_chunk, "content"):
+                        content = msg_chunk.content
+                        if isinstance(content, str):
+                            chunks.append(content)
+                        elif isinstance(content, list):
+                            for c in content:
+                                if isinstance(c, str):
+                                    chunks.append(c)
+                                elif isinstance(c, dict) and "text" in c:
+                                    chunks.append(c["text"])
             # Handle dict chunks (standard LangGraph format)
-            if isinstance(chunk, dict):
-                # Look for 'model' key which contains AI messages
+            elif isinstance(chunk, dict):
                 if "model" in chunk:
                     model_data = chunk["model"]
                     if isinstance(model_data, dict) and "messages" in model_data:
@@ -308,32 +347,16 @@ class Executor:
                                             chunks.append(c)
                                         elif isinstance(c, dict) and "text" in c:
                                             chunks.append(c["text"])
-                # Handle other chunk formats
                 elif "content" in chunk:
                     chunks.append(str(chunk["content"]))
                 elif "output" in chunk:
                     chunks.append(str(chunk["output"]))
                 elif "text" in chunk:
                     chunks.append(str(chunk["text"]))
-            # Handle tuple format (namespace, mode, data)
-            elif isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
-                namespace, mode, data = chunk
-                if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
-                    msg_chunk = data[0]
-                    if hasattr(msg_chunk, "content"):
-                        content = msg_chunk.content
-                        if isinstance(content, str):
-                            chunks.append(content)
-                        elif isinstance(content, list):
-                            for c in content:
-                                if isinstance(c, str):
-                                    chunks.append(c)
-                                elif isinstance(c, dict) and "text" in c:
-                                    chunks.append(c["text"])
             elif hasattr(chunk, "content"):
                 chunks.append(str(chunk.content))
 
-        return "".join(chunks)
+        return "".join(chunks), events
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.
@@ -346,3 +369,46 @@ class Executor:
         """
         descriptions = [f"{i + 1}. {step.description}" for i, step in enumerate(steps)]
         return "Execute these steps sequentially:\n" + "\n".join(descriptions)
+
+    def _extract_error_message(self, exc: Exception, fallback: str) -> str:
+        """Extract meaningful error message from exception.
+
+        Parses common error types (especially OpenAI API errors) to extract
+        actionable information for the judge to understand failures.
+
+        Args:
+            exc: The exception that occurred
+            fallback: Fallback message if no specific info found
+
+        Returns:
+            Meaningful error message string
+        """
+        error_str = str(exc)
+
+        # Check for OpenAIBadRequestError with context length issues
+        if "invalid_parameter_error" in error_str or "Range of input length should be" in error_str:
+            return "Input exceeded model context limit (too large)"
+
+        # Check for rate limiting
+        if "rate_limit" in error_str.lower() or "429" in error_str:
+            return "Rate limited - too many requests"
+
+        # Check for authentication/permission errors
+        if "401" in error_str or "403" in error_str or "permission" in error_str.lower():
+            return "Permission/authentication error"
+
+        # Check for timeout
+        if "timeout" in error_str.lower():
+            return "Request timed out"
+
+        # Check for connection errors
+        if "connection" in error_str.lower() or "network" in error_str.lower():
+            return "Network/connection error"
+
+        # For other errors, try to extract the error type but keep it concise
+        exc_type = type(exc).__name__
+        if exc_type != "Exception":
+            # Include exception type but truncate long messages
+            return f"{exc_type}: {error_str[:200]}"
+
+        return fallback

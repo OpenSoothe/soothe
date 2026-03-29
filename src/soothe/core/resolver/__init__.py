@@ -208,7 +208,11 @@ def resolve_planner(
     inside_claude_code = os.environ.get("CLAUDECODE") is not None
 
     claude_planner = None
-    if not inside_claude_code:
+    # Check if claude subagent is enabled in config before creating ClaudePlanner
+    claude_enabled = config.subagents.get("claude", None)
+    if claude_enabled is not None and not claude_enabled.enabled:
+        logger.info("Claude subagent disabled in config, skipping ClaudePlanner")
+    elif not inside_claude_code:
         try:
             from soothe.backends.planning.claude import ClaudePlanner
 

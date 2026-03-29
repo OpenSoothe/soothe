@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -36,6 +37,8 @@ class ClientSession:
         subscriptions: Set of thread_ids this client is subscribed to
         event_queue: Queue for delivering events to this client
         sender_task: Background task that sends events to the client
+        verbosity: Client verbosity preference (RFC-0022)
+        detach_requested: Whether client explicitly requested detach (RFC-0013)
     """
 
     client_id: str
@@ -45,6 +48,7 @@ class ClientSession:
     event_queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue(maxsize=100))
     sender_task: asyncio.Task[None] | None = None
     verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
+    detach_requested: bool = False  # RFC-0013: client explicitly requested detach
 
 
 class ClientSessionManager:
@@ -56,17 +60,26 @@ class ClientSessionManager:
 
     Args:
         event_bus: EventBus instance for routing events
+        cancel_callback: Optional async callback to cancel a thread by ID.
+            Called when client disconnects without explicit detach.
     """
 
-    def __init__(self, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus,
+        cancel_callback: Callable[[str], Coroutine[None, None, None]] | None = None,
+    ) -> None:
         """Initialize session manager.
 
         Args:
             event_bus: EventBus instance for routing events
+            cancel_callback: Optional async callback to cancel a thread by ID.
         """
         self._event_bus = event_bus
         self._sessions: dict[str, ClientSession] = {}
         self._lock = asyncio.Lock()
+        self._client_thread_ownership: dict[str, str] = {}  # client_id → thread_id
+        self._cancel_callback = cancel_callback
 
     async def create_session(
         self,
@@ -196,14 +209,40 @@ class ClientSessionManager:
     async def remove_session(self, client_id: str) -> None:
         """Remove client session and cleanup.
 
+        If client did not explicitly request detach and owns a running thread,
+        the thread will be cancelled via the cancel_callback.
+
         Args:
             client_id: Client identifier to remove
         """
         async with self._lock:
             session = self._sessions.pop(client_id, None)
+            owned_thread_id = self._client_thread_ownership.pop(client_id, None)
 
         if not session:
             return
+
+        # RFC-0013: Cancel query unless detach was explicitly requested
+        if not session.detach_requested and owned_thread_id:
+            if self._cancel_callback:
+                try:
+                    await self._cancel_callback(owned_thread_id)
+                    logger.info(
+                        "Auto-cancelled thread %s on client %s disconnect (no detach requested)",
+                        owned_thread_id,
+                        client_id,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to cancel thread %s on client %s disconnect",
+                        owned_thread_id,
+                        client_id,
+                    )
+            else:
+                logger.debug(
+                    "No cancel_callback set, skipping auto-cancel for thread %s",
+                    owned_thread_id,
+                )
 
         # Cancel sender task
         if session.sender_task:
@@ -227,6 +266,47 @@ class ClientSessionManager:
         """
         async with self._lock:
             return self._sessions.get(client_id)
+
+    async def claim_thread_ownership(self, client_id: str, thread_id: str) -> None:
+        """Claim that client_id owns the running query for thread_id.
+
+        Used to track which client initiated a query, so we can cancel
+        it if the client disconnects without explicit detach.
+
+        Args:
+            client_id: Client identifier claiming ownership
+            thread_id: Thread identifier being claimed
+        """
+        async with self._lock:
+            self._client_thread_ownership[client_id] = thread_id
+            logger.debug("Client %s claimed ownership of thread %s", client_id, thread_id)
+
+    async def release_thread_ownership(self, client_id: str) -> str | None:
+        """Release thread ownership for a client.
+
+        Args:
+            client_id: Client identifier releasing ownership
+
+        Returns:
+            The thread_id that was owned, or None if client owned no thread.
+        """
+        async with self._lock:
+            thread_id = self._client_thread_ownership.pop(client_id, None)
+            if thread_id:
+                logger.debug("Client %s released ownership of thread %s", client_id, thread_id)
+            return thread_id
+
+    async def get_owned_thread(self, client_id: str) -> str | None:
+        """Get thread_id owned by client (without releasing).
+
+        Args:
+            client_id: Client identifier to check
+
+        Returns:
+            Thread_id owned by client, or None if no ownership.
+        """
+        async with self._lock:
+            return self._client_thread_ownership.get(client_id)
 
     async def _sender_loop(self, session: ClientSession) -> None:
         """Send events from queue with daemon-side filtering (RFC-0022).

@@ -131,6 +131,11 @@ class AgenticMixin:
                     ).to_dict()
                 )
 
+            elif event_type == "stream_event":
+                # Propagate stream events from tool execution (namespace, mode, data)
+                # event_data is a StreamChunk tuple
+                yield event_data
+
             elif event_type == "iteration_completed":
                 # Internal - used for debugging only
                 logger.debug(

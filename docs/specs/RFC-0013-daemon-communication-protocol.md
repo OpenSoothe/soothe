@@ -254,6 +254,56 @@ When TUI client executes `/detach` while thread is in `running` state:
 
 This prevents accidental exit during active execution while respecting user intent and providing clear distinction between stop-and-exit vs detach-and-continue.
 
+#### Client Disconnect Query Cancellation
+
+When a client disconnects from the daemon, the daemon must decide whether to cancel the active query or let it continue running.
+
+**Cancellation Behavior**:
+
+| Disconnect Type | Query Behavior | Rationale |
+|-----------------|----------------|-----------|
+| Ctrl+C (no detach) | Cancel immediately | User intent: "stop and exit" |
+| Client crash | Cancel immediately | Safe default, prevent orphan queries |
+| Network failure | Cancel immediately | Safe default, avoid API waste |
+| `/detach` or Ctrl+D | Continue running | User intent: "leave it running" |
+
+**Protocol Implementation**:
+
+1. **ClientSession** tracks `detach_requested: bool` flag (default: `False`)
+2. **ClientSessionManager** tracks `_client_thread_ownership: dict[str, str]` (client_id → thread_id)
+3. On `detach` message: set `session.detach_requested = True`, send acknowledgment
+4. On query start: `claim_thread_ownership(client_id, thread_id)`
+5. On session removal: if `not detach_requested` and client owns thread, cancel it
+
+**Cancel Flow**:
+```
+Client disconnects (no detach)
+  → remove_session(client_id)
+  → Check: detach_requested?
+     → False
+  → Get owned thread_id
+  → _cancel_thread(thread_id)
+  → Query cancelled (asyncio.Task.cancel)
+  → Thread transitions to "idle" or "suspended"
+```
+
+**Detach Flow**:
+```
+Client sends "detach" message
+  → session.detach_requested = True
+  → Send acknowledgment
+  → Client closes connection
+  → remove_session(client_id)
+  → Check: detach_requested?
+     → True
+  → Skip cancel, query continues
+```
+
+This ensures that:
+- Accidental disconnects (Ctrl+C, crashes) don't waste API credits
+- Intentional detachment (`/detach`) preserves long-running queries
+- Daemon persistence is maintained (IG-085 compliance)
+
 ### Daemon Startup Readiness
 
 The daemon startup follows explicit lifecycle phases to avoid false readiness signals.

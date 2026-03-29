@@ -9,7 +9,6 @@ Requires the optional `claude` extra: `pip install soothe[claude]`
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -133,23 +132,9 @@ def _build_claude_graph(
 
         return {"messages": [AIMessage(content=result)]}
 
-    def run_claude(state: dict[str, Any]) -> dict[str, Any]:
-        """Synchronous wrapper for the async Claude function."""
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if loop.is_running():
-            # If we're already in an async context, create a new loop
-            new_loop = asyncio.new_event_loop()
-            try:
-                return new_loop.run_until_complete(_run_claude_async(state))
-            finally:
-                new_loop.close()
-        else:
-            return loop.run_until_complete(_run_claude_async(state))
+    async def run_claude(state: dict[str, Any]) -> dict[str, Any]:
+        """Async node that preserves LangGraph stream writer context."""
+        return await _run_claude_async(state)
 
     graph = StateGraph(_ClaudeState)
     graph.add_node("run_claude", run_claude)

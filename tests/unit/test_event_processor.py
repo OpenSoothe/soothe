@@ -342,7 +342,7 @@ class TestEventProcessorVerbosityFiltering:
                 {
                     "type": "AIMessage",
                     "id": "msg-quiet",
-                    "content": "Hello, I'm Claude. The capital of France is Paris. Let me know if you'd like more.",
+                    "content": "The capital of France is Paris. Let me know if you'd like more.",
                 },
                 {},
             ],
@@ -352,9 +352,10 @@ class TestEventProcessorVerbosityFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
+        # Decorative filler is removed, first sentence extracted
         assert assistant_calls[0][1][0] == "The capital of France is Paris."
 
-    def test_normal_removes_brand_and_creator_language_from_real_output(self) -> None:
+    def test_normal_removes_decorative_filler_preserves_identity(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="normal")
 
@@ -380,7 +381,10 @@ class TestEventProcessorVerbosityFiltering:
 
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls
-        assert assistant_calls[0][1][0] == "The capital of France is Paris."
+        # Brand/creator language is preserved (no longer filtered)
+        # Decorative filler ("I'm happy to help...") is still removed
+        assert "The capital of France is Paris" in assistant_calls[0][1][0]
+        assert "I'm Soothe" in assistant_calls[0][1][0]
 
     def test_quiet_extracts_bare_numeric_answer(self) -> None:
         renderer = MockRenderer()

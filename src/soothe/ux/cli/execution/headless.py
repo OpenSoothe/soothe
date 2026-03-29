@@ -37,9 +37,7 @@ def run_headless(
     socket = resolve_socket_path(cfg)
     if not SootheDaemon._is_socket_live(socket):
         if SootheDaemon.is_running():
-            typer.echo("[lifecycle] Cleaning stale daemon before restart...", err=True)
             SootheDaemon.stop_running()
-        typer.echo("[lifecycle] Starting daemon...", err=True)
         from soothe.ux.cli.commands.daemon_cmd import daemon_start
 
         daemon_start(config=None, foreground=False)

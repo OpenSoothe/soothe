@@ -124,6 +124,7 @@ class DaemonHandlersMixin:
                         "autonomous": bool(msg.get("autonomous", False)),
                         "max_iterations": parsed_max,
                         "subagent": subagent,
+                        "client_id": client_id,  # RFC-0013: track query ownership
                     }
                 )
         elif msg_type == "command":
@@ -233,7 +234,12 @@ class DaemonHandlersMixin:
         elif msg_type == "thread_artifacts":
             await self._handle_thread_artifacts(msg)
         elif msg_type == "detach":
+            # RFC-0013: Set detach_requested flag so remove_session doesn't auto-cancel
+            session = await self._session_manager.get_session(client_id)
+            if session:
+                session.detach_requested = True
             await self._send_client_message(client_id, {"type": "status", "state": "detached"})
+            logger.info("Client %s requested detach - query will continue after disconnect", client_id)
         elif msg_type == "subscribe_thread":
             thread_id = msg.get("thread_id", "").strip()
             verbosity = msg.get("verbosity", "normal")  # RFC-0022: optional, default='normal'
@@ -333,6 +339,7 @@ class DaemonHandlersMixin:
                         autonomous=bool(msg.get("autonomous", False)),
                         max_iterations=msg.get("max_iterations"),
                         subagent=msg.get("subagent"),
+                        client_id=msg.get("client_id"),  # RFC-0013: pass for ownership tracking
                     )
             except asyncio.CancelledError:
                 break
@@ -661,6 +668,7 @@ class DaemonHandlersMixin:
         autonomous: bool = False,
         max_iterations: int | None = None,
         subagent: str | None = None,
+        client_id: str | None = None,
     ) -> None:
         """Stream a query through SootheRunner and broadcast events.
 
@@ -671,6 +679,7 @@ class DaemonHandlersMixin:
             autonomous: Whether to run in autonomous mode.
             max_iterations: Maximum iterations for autonomous mode.
             subagent: Optional subagent name to route the query to.
+            client_id: Optional client ID for thread ownership tracking (RFC-0013).
         """
         # Check if multi-threading is enabled (RFC-0017)
         multi_threading_enabled = getattr(self._config.daemon, "multi_threading_enabled", False)
@@ -682,6 +691,7 @@ class DaemonHandlersMixin:
                 autonomous=autonomous,
                 max_iterations=max_iterations,
                 subagent=subagent,
+                client_id=client_id,
             )
             return
 
@@ -723,6 +733,10 @@ class DaemonHandlersMixin:
 
         self._query_running = True
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+
+        # RFC-0013: Claim thread ownership for cancel-on-disconnect
+        if client_id:
+            await self._session_manager.claim_thread_ownership(client_id, thread_id)
 
         full_response: list[str] = []
 
@@ -807,6 +821,9 @@ class DaemonHandlersMixin:
             logger.info("Query task cancelled")
         finally:
             self._current_query_task = None
+            # RFC-0013: Release thread ownership on query completion
+            if client_id:
+                await self._session_manager.release_thread_ownership(client_id)
 
         final_thread_id = self._runner.current_thread_id or ""
         if final_thread_id and final_thread_id != thread_id:
@@ -834,6 +851,7 @@ class DaemonHandlersMixin:
         autonomous: bool = False,
         max_iterations: int | None = None,
         subagent: str | None = None,
+        client_id: str | None = None,
     ) -> None:
         """Execute query using ThreadExecutor for concurrent thread execution.
 
@@ -842,6 +860,7 @@ class DaemonHandlersMixin:
             autonomous: Whether to run in autonomous mode.
             max_iterations: Maximum iterations for autonomous mode.
             subagent: Optional subagent name to route the query to.
+            client_id: Optional client ID for thread ownership tracking (RFC-0013).
         """
         thread_id = await self._ensure_active_thread_id()
 
@@ -884,6 +903,10 @@ class DaemonHandlersMixin:
         if hasattr(self, "_active_threads"):
             self._active_threads[thread_id] = asyncio.current_task()
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
+
+        # RFC-0013: Claim thread ownership for cancel-on-disconnect
+        if client_id:
+            await self._session_manager.claim_thread_ownership(client_id, thread_id)
 
         full_response: list[str] = []
 
@@ -964,6 +987,9 @@ class DaemonHandlersMixin:
             self._query_running = False
             if hasattr(self, "_active_threads"):
                 self._active_threads.pop(thread_id, None)
+            # RFC-0013: Release thread ownership on query completion
+            if client_id:
+                await self._session_manager.release_thread_ownership(client_id)
 
         # Log final response
         final_thread_id = self._runner.current_thread_id or ""
@@ -988,13 +1014,16 @@ class DaemonHandlersMixin:
     async def _cancel_thread(self, thread_id: str) -> None:
         """Cancel a specific thread's execution.
 
+        Handles both single-threaded and multi-threaded execution modes.
+
         Args:
             thread_id: Thread ID to cancel.
         """
+        # Multi-threaded mode: cancel via _active_threads
         if hasattr(self, "_active_threads") and thread_id in self._active_threads:
             task = self._active_threads[thread_id]
             task.cancel()
-            logger.info("Cancelled thread %s", thread_id)
+            logger.info("Cancelled thread %s (multi-threaded mode)", thread_id)
             await self._broadcast(
                 {
                     "type": "status",
@@ -1003,8 +1032,18 @@ class DaemonHandlersMixin:
                     "cancelled": True,
                 }
             )
-        else:
-            logger.warning("Thread %s not found in active threads", thread_id)
+            return
+
+        # Single-threaded mode: cancel _current_query_task if thread_id matches
+        if self._current_query_task and not self._current_query_task.done():
+            current_thread = self._runner.current_thread_id if self._runner else None
+            if current_thread == thread_id:
+                self._current_query_task.cancel()
+                logger.info("Cancelled thread %s (single-threaded mode)", thread_id)
+                # The _run_query() finally block handles cleanup and broadcast
+                return
+
+        logger.debug("Thread %s not found or already complete", thread_id)
 
     def _get_active_threads(self) -> list[str]:
         """Get list of currently active thread IDs.

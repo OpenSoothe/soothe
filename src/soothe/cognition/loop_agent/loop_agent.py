@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Stream chunk format: (namespace: tuple, mode: str, data: Any)
+_STREAM_CHUNK_LEN = 3
+
 
 class LoopAgent:
     """Layer 2: Agentic Goal Execution Loop.
@@ -161,11 +164,19 @@ class LoopAgent:
                     {"description": step.description},
                 )
 
-            # Execute steps
-            step_results = await self.executor.execute(
+            # Execute steps - executor now yields events during execution
+            step_results = []
+            async for item in self.executor.execute(
                 decision=decision,
                 state=state,
-            )
+            ):
+                # Check if it's a stream event (tuple with 3 elements) or StepResult
+                if isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
+                    # It's a stream event - yield it upstream
+                    yield ("stream_event", item)
+                else:
+                    # It's a StepResult
+                    step_results.append(item)
 
             # Update state with results
             for result in step_results:
@@ -260,8 +271,8 @@ class LoopAgent:
         if hasattr(self.core_agent, "tools") and isinstance(self.core_agent.tools, dict):
             available_tools = list(self.core_agent.tools.keys())
 
-        # Standard available subagents
-        available_subagents = ["browser", "claude", "skillify", "weaver"]
+        # Get enabled subagents from config
+        available_subagents = [name for name, cfg in self.config.subagents.items() if cfg.enabled]
 
         return PlanContext(
             available_capabilities=available_tools + available_subagents,

@@ -86,7 +86,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._transport_manager: TransportManager | None = None
         # Event bus architecture (RFC-0013, IG-047)
         self._event_bus: EventBus = EventBus()
-        self._session_manager: ClientSessionManager = ClientSessionManager(self._event_bus)
+        self._session_manager: ClientSessionManager = ClientSessionManager(
+            self._event_bus,
+            cancel_callback=self._cancel_thread,  # RFC-0013: auto-cancel on disconnect
+        )
         # Multi-threading support (RFC-0017)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
@@ -124,63 +127,88 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_state = "warming"
         self._readiness_message = None
 
-        # Configure custom default executor for asyncio.to_thread() calls
-        # This prevents "couldn't stop thread" errors on daemon shutdown
-        loop = asyncio.get_running_loop()
-        self._default_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="daemon-async")
-        loop.set_default_executor(self._default_executor)
-
-        # Run heavy SootheRunner init off the event loop
         try:
-            self._runner = await asyncio.to_thread(SootheRunner, self._config)
+            # Configure custom default executor for asyncio.to_thread() calls
+            # This prevents "couldn't stop thread" errors on daemon shutdown
+            loop = asyncio.get_running_loop()
+            self._default_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="daemon-async")
+            loop.set_default_executor(self._default_executor)
+
+            # Run heavy SootheRunner init off the event loop
+            try:
+                self._runner = await asyncio.to_thread(SootheRunner, self._config)
+            except Exception as exc:
+                self._readiness_state = "error"
+                self._readiness_message = str(exc)
+                raise
+
+            # Initialize persistent input history
+            self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
+            logger.info("Input history initialized with %d entries", len(self._input_history.history))
+
+            self._stop_event = asyncio.Event()
+            self._running = True
+
+            # Initialize transport manager (RFC-0013)
+            # Create ThreadContextManager for HTTP REST transport (RFC-0017)
+            from soothe.core.thread import ThreadContextManager, ThreadExecutor
+
+            thread_manager = ThreadContextManager(
+                self._runner._durability, self._config, getattr(self._runner, "_context", None)
+            )
+
+            # Initialize ThreadExecutor for multi-threading support (RFC-0017)
+            max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
+            self._thread_executor = ThreadExecutor(self._runner, max_concurrent_threads=max_concurrent)
+            logger.info("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)
+
+            self._transport_manager = TransportManager(
+                self._config.daemon,
+                thread_manager=thread_manager,
+                runner=self._runner,
+                soothe_config=self._config,
+                session_manager=self._session_manager,
+            )
+            self._transport_manager.set_message_handler(self._handle_transport_message)
+            await self._transport_manager.start_all()
+
+            self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+            self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
+            self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
+
+            # Detect incomplete threads from previous daemon run (RFC-0010)
+            await self._detect_incomplete_threads()
+
+            await self._broadcast(
+                {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
+            )
+            if self._input_loop_task is None or self._input_loop_task.done():
+                self._input_loop_task = asyncio.create_task(self._input_loop())
+
+            self._readiness_state = "ready"
+            self._readiness_message = None
         except Exception as exc:
+            # Startup failed - cleanup and release PID lock
             self._readiness_state = "error"
             self._readiness_message = str(exc)
+            logger.exception("Daemon startup failed")
+
+            # Stop any partially initialized resources
+            if self._transport_manager:
+                await self._transport_manager.stop_all()
+            if self._runner and hasattr(self._runner, "cleanup"):
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(self._runner.cleanup(), timeout=_CLEANUP_TIMEOUT_S)
+
+            # Release PID lock
+            if self._pid_lock_fd is not None:
+                release_pid_lock(self._pid_lock_fd)
+                self._pid_lock_fd = None
+            else:
+                cleanup_pid()
+            cleanup_socket()
+
             raise
-
-        # Initialize persistent input history
-        self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
-        logger.info("Input history initialized with %d entries", len(self._input_history.history))
-
-        self._stop_event = asyncio.Event()
-        self._running = True
-
-        # Initialize transport manager (RFC-0013)
-        # Create ThreadContextManager for HTTP REST transport (RFC-0017)
-        from soothe.core.thread import ThreadContextManager, ThreadExecutor
-
-        thread_manager = ThreadContextManager(
-            self._runner._durability, self._config, getattr(self._runner, "_context", None)
-        )
-
-        # Initialize ThreadExecutor for multi-threading support (RFC-0017)
-        max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
-        self._thread_executor = ThreadExecutor(self._runner, max_concurrent_threads=max_concurrent)
-        logger.info("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)
-
-        self._transport_manager = TransportManager(
-            self._config.daemon,
-            thread_manager=thread_manager,
-            runner=self._runner,
-            soothe_config=self._config,
-            session_manager=self._session_manager,
-        )
-        self._transport_manager.set_message_handler(self._handle_transport_message)
-        await self._transport_manager.start_all()
-
-        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
-        self._inactivity_check_task = asyncio.create_task(self._periodic_inactivity_check())
-        self._heartbeat_task = asyncio.create_task(self._periodic_heartbeat())
-
-        # Detect incomplete threads from previous daemon run (RFC-0010)
-        await self._detect_incomplete_threads()
-
-        await self._broadcast({"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""})
-        if self._input_loop_task is None or self._input_loop_task.done():
-            self._input_loop_task = asyncio.create_task(self._input_loop())
-
-        self._readiness_state = "ready"
-        self._readiness_message = None
 
     def daemon_ready_message(self) -> dict[str, Any]:
         """Return the current daemon readiness message for client handshakes."""
@@ -346,9 +374,8 @@ class SootheDaemon(DaemonHandlersMixin):
                             "data": heartbeat.to_dict(),
                         }
                     )
-                    logger.debug("Heartbeat sent to thread %s", thread_id)
             except Exception:
-                logger.debug("Heartbeat failed", exc_info=True)
+                logger.debug("Heartbeat broadcast failed (client disconnected)")
 
     async def _suspend_inactive_threads(self) -> None:
         """Suspend threads that have been inactive for longer than the configured timeout."""
@@ -547,15 +574,52 @@ class SootheDaemon(DaemonHandlersMixin):
     def is_running() -> bool:
         """Check if a daemon is already running.
 
+        A properly running daemon must have a Unix socket accepting connections.
+        If only WebSocket/port is bound but no Unix socket, that indicates a
+        broken/zombie daemon that needs to be cleaned up.
+
+        Checks:
+        1. PID file with valid process AND Unix socket is live
+        2. Unix socket accepting connections (even without PID file)
+        """
+        sock = socket_path()
+
+        # 1. Check PID file + verify Unix socket is live
+        pf = pid_path()
+        if pf.exists():
+            try:
+                pid = int(pf.read_text().strip())
+                os.kill(pid, 0)
+            except (ValueError, ProcessLookupError, PermissionError):
+                cleanup_pid()
+                # PID file stale, check socket below
+            else:
+                # PID valid - but daemon must also have live socket
+                if sock.exists() and SootheDaemon._is_socket_live(sock):
+                    return True
+                # PID valid but socket dead - zombie daemon, cleanup needed
+                cleanup_pid()
+                return False
+
+        # 2. Check Unix socket connectivity (primary indicator)
+        # No live socket means daemon is not properly running
+        # Note: We don't check WebSocket/pgrep here because those could be
+        # zombie processes from failed startup attempts. stop_running() will
+        # clean those up.
+        return sock.exists() and SootheDaemon._is_socket_live(sock)
+
+    @staticmethod
+    def find_pid() -> int | None:
+        """Find the PID of a running daemon.
+
         Checks multiple indicators:
         1. PID file with valid process
-        2. Unix socket accepting connections
-        3. WebSocket port bound (if enabled)
+        2. WebSocket port bound (if enabled)
+        3. Process name scan for zombie daemons (fallback)
 
-        This handles orphaned daemons where PID file was deleted but process still runs.
+        Returns:
+            PID if daemon is running, None otherwise.
         """
-        import socket as sock_mod
-
         from soothe.config import SootheConfig
 
         # 1. Check PID file first (fastest)
@@ -564,38 +628,46 @@ class SootheDaemon(DaemonHandlersMixin):
             try:
                 pid = int(pf.read_text().strip())
                 os.kill(pid, 0)
-                return True
             except (ValueError, ProcessLookupError, PermissionError):
                 cleanup_pid()
                 # Continue to check other indicators
+            else:
+                return pid
 
-        # 2. Check Unix socket connectivity
-        sock = socket_path()
-        if sock.exists() and SootheDaemon._is_socket_live(sock):
-            return True
-
-        # 3. Check WebSocket port (if enabled in default config)
+        # 2. Check WebSocket port (if enabled in default config)
         with contextlib.suppress(Exception):
             cfg = SootheConfig()
             if cfg.daemon.transports.websocket.enabled:
                 ws_port = cfg.daemon.transports.websocket.port
-                ws_host = cfg.daemon.transports.websocket.host
-                with contextlib.suppress(ConnectionRefusedError, OSError):
-                    s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
-                    s.settimeout(1.0)
-                    s.connect((ws_host, ws_port))
-                    s.close()
-                    return True
+                pid = SootheDaemon._find_port_process(ws_port)
+                if pid:
+                    return pid
 
-        return False
+        # 3. Fallback: check for daemon processes by name
+        import subprocess
+
+        pgrep_path = "/usr/bin/pgrep"
+        with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            result = subprocess.run(
+                [pgrep_path, "-f", "soothe.daemon"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split("\n")
+                if pids:
+                    return int(pids[0])
+
+        return None
 
     @staticmethod
-    def _find_port_process(port: int, host: str = "127.0.0.1") -> int | None:
+    def _find_port_process(port: int) -> int | None:
         """Find PID of process listening on a TCP port using lsof.
 
         Args:
             port: TCP port number.
-            host: Bind address (used for logging, lsof checks all).
 
         Returns:
             PID if found, None otherwise.
@@ -604,10 +676,11 @@ class SootheDaemon(DaemonHandlersMixin):
 
         try:
             result = subprocess.run(
-                ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
+                ["/usr/sbin/lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
                 capture_output=True,
                 text=True,
                 timeout=2.0,
+                check=False,
             )
             if result.returncode == 0 and result.stdout.strip():
                 # lsof -t returns PIDs, one per line
@@ -672,17 +745,44 @@ class SootheDaemon(DaemonHandlersMixin):
 
                         with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
                             result = subprocess.run(
-                                ["lsof", "-t", str(sock)],
+                                ["/usr/sbin/lsof", "-t", str(sock)],
                                 capture_output=True,
                                 text=True,
                                 timeout=2.0,
+                                check=False,
                             )
                             if result.returncode == 0 and result.stdout.strip():
                                 pid = int(result.stdout.strip().split("\n")[0])
                                 os.kill(pid, signal.SIGTERM)
                                 stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
 
-        # 3. Cleanup regardless of outcome
+        # 3. Fallback: scan by process name for zombie daemons
+        if not stopped:
+            import subprocess
+
+            pgrep_path = "/usr/bin/pgrep"
+            with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+                # Find processes running soothe.daemon module
+                result = subprocess.run(
+                    [pgrep_path, "-f", "soothe.daemon"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2.0,
+                    check=False,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    for pid_str in result.stdout.strip().split("\n"):
+                        try:
+                            pid = int(pid_str)
+                            if pid != os.getpid():  # Don't kill ourselves
+                                os.kill(pid, signal.SIGTERM)
+                                stopped = SootheDaemon._wait_for_pid_exit(pid, timeout)
+                                if stopped:
+                                    break
+                        except (ValueError, ProcessLookupError, PermissionError):
+                            continue
+
+        # 4. Cleanup regardless of outcome
         cleanup_pid()
         cleanup_socket()
         return stopped

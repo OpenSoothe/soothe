@@ -155,7 +155,6 @@ async def run_headless_via_daemon(
                 ev_data = event.get("data")
                 if isinstance(ev_data, dict) and ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat":
                     last_heartbeat = asyncio.get_event_loop().time()
-                    logger.info("Received heartbeat, extending timeout")
                     continue  # Don't process heartbeat as regular event
 
             # Handle status changes (need to track query_started for timeout)
@@ -195,11 +194,8 @@ async def run_headless_via_daemon(
             # Delegate to unified event processor
             processor.process_event(event)
 
-        # Final newline after response
-        if renderer.full_response:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-
+        # Note: Final newline is handled by renderer.on_turn_end() called
+        # when status changes to idle/stopped in _handle_status().
         # Daemon lifecycle remains silent in normal headless mode.
 
     except (ConnectionError, OSError, TimeoutError) as e:

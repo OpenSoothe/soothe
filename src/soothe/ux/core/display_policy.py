@@ -115,11 +115,6 @@ MILESTONE_EVENT_TYPES = frozenset(
     }
 )
 
-BRAND_PREFIX_PATTERNS = (
-    r"^\s*(?:Hi|Hello|Hey|Bonjour)(?:\s+there)?[!,]?\s+I(?:'m| am)\s+(?:Claude|Soothe|an AI assistant)[^.\n]*[.\n]+",
-    r"^\s*(?:I(?:'m| am)\s+(?:Claude|Soothe|an AI assistant)[^.\n]*[.\n]+)",
-)
-
 QUIET_SENTENCE_MAX_LEN = 120
 QUIET_FALLBACK_MAX_LEN = 160
 QUIET_TRUNCATED_MAX_LEN = 157
@@ -135,17 +130,6 @@ TRAILING_EMBELLISHMENT_WORDS = frozenset(
         "famous",
         "vibrant",
     }
-)
-
-CREATOR_ATTRIBUTION_PATTERNS = (
-    r"\b(?:created|built|developed)\s+by\s+Anthropic\b",
-    r"\b(?:created|built|developed)\s+by\s+Claude\b",
-    r"\b(?:created|built|developed)\s+by\s+Dr\.\s+Xiaming\s+Chen\b",
-    r"\b(?:created|built|developed)\s+by\s+Xiaming\s+Chen\b",
-    r"\bDr\.\s+Xiaming\s+Chen\b",
-    r"\bXiaming\s+Chen\b",
-    r"\bI(?:'m| am)\s+Claude(?:\s+Code)?\b",
-    r"\bI(?:'m| am)\s+Soothe\b",
 )
 
 DECORATIVE_FILLER_PATTERNS = (
@@ -282,7 +266,6 @@ class DisplayPolicy:
         text = self._filter_plain_json(text)
         text = self._filter_confused_responses(text)
         text = self._filter_search_data_tags(text)
-        text = self._filter_brand_language(text)
         text = self._filter_decorative_filler(text)
         text = self._normalize_whitespace(text)
         text = self._strip_sentence_embellishment(text)
@@ -417,34 +400,6 @@ class DisplayPolicy:
             text = text.replace(marker, "")
 
         return text
-
-    def _filter_brand_language(self, text: str) -> str:
-        """Remove brand intros and creator attributions from responses."""
-        text = re.sub(
-            r"^\s*(?:Hi|Hello|Hey|Bonjour)(?:\s+there)?[!,]?\s*",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        )
-        for pattern in BRAND_PREFIX_PATTERNS:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-        for pattern in CREATOR_ATTRIBUTION_PATTERNS:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-        text = re.sub(
-            r"\bI(?:'m| am)\s+Soothe\s*,?\s*",
-            "",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(
-            r"\s*,?\s*(?:created|built|developed)\s+by\s+Dr\.\s+Xiaming\s+Chen\s*,?\s*",
-            " ",
-            text,
-            flags=re.IGNORECASE,
-        )
-        text = re.sub(r"\s*(?:,\s*)?and\s+I(?:'m| am) happy to help you with .*?$", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*,\s*,", ",", text)
-        return re.sub(r"\s+,", ",", text)
 
     def _filter_decorative_filler(self, text: str) -> str:
         """Remove polite trailing filler that adds no user value."""

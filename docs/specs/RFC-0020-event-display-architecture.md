@@ -107,7 +107,7 @@ Level 3 (Result):        └ ✓ Result metrics
 **Required Helpers**:
 - `classify_display_event(namespace, mode, data)` → semantic classification
 - `build_presentation_item(event, registry, verbosity)` → shared presentation item creation
-- `clean_response_text(text)` → strip brand and embellishment
+- `clean_response_text(text)` → strip internal tags and embellishment
 - `extract_quiet_answer(text)` → answer extraction with fallback confidence
 - `render_headless_block(item)` → headless text block output
 - `render_tui_item(item)` → TUI widget mapping
@@ -434,10 +434,10 @@ Show all VerbosityTier values except `INTERNAL`:
 ### Shared response cleaning
 
 Before final assistant text is shown in `quiet`, `normal`, and `detailed`, the system must:
-- remove greeting and brand intro text
-- remove creator attribution in response body
+- remove internal JSON blocks and search data tags
 - remove decorative filler such as `Let me know if...`
 - remove non-essential embellishment
+- normalize whitespace
 - preserve factual correctness and actionable guidance
 
 ### Plan update rendering

@@ -76,7 +76,7 @@ register_event(
 )
 register_event(
     ClaudeTextEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Text: {text}",
 )
 register_event(
@@ -86,7 +86,7 @@ register_event(
 )
 register_event(
     ClaudeResultEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Done (${cost_usd}, {duration_ms}ms)",
 )
 

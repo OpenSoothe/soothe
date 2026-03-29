@@ -30,7 +30,7 @@ class TestExecutorHints:
         )
 
         # Execute step
-        await executor._execute_step(step, "thread-123")
+        await executor._execute_step_collecting_events(step, "thread-123")
 
         # Verify agent.astream was called with hints in config
         mock_agent.astream.assert_called_once()
@@ -60,7 +60,7 @@ class TestExecutorHints:
             expected_output="Page content",
         )
 
-        await executor._execute_step(step, "thread-456")
+        await executor._execute_step_collecting_events(step, "thread-456")
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
@@ -81,7 +81,7 @@ class TestExecutorHints:
             expected_output="Config contents",
         )
 
-        await executor._execute_step(step, "thread-789")
+        await executor._execute_step_collecting_events(step, "thread-789")
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
@@ -103,7 +103,7 @@ class TestExecutorHints:
         )
         # tools and subagent are None
 
-        await executor._execute_step(step, "thread-000")
+        await executor._execute_step_collecting_events(step, "thread-000")
 
         call_args = mock_agent.astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
@@ -128,7 +128,7 @@ class TestExecutorHints:
             expected_output="File list",
         )
 
-        await executor._execute_step(step, "thread-123")
+        await executor._execute_step_collecting_events(step, "thread-123")
 
         # Check debug log contains hints
         assert "tools=['glob', 'grep']" in caplog.text
