@@ -219,12 +219,9 @@ class EventProcessor:
                     # Suppress during internal context (research internal LLM responses)
                     if self._state.internal_context_active and not is_main:
                         continue
-                    if text and self._policy.should_show_assistant_text(
-                        text,
-                        is_main=is_main,
-                        is_multi_step_active=self._state.multi_step_active,
-                    ):
-                        cleaned = self._clean_assistant_text(text)
+                    # Always pass to renderer for accumulation, let renderer decide display
+                    if text:
+                        cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
                         if cleaned:
                             self._renderer.on_assistant_text(
                                 self._maybe_extract_quiet_answer(cleaned),
@@ -252,13 +249,9 @@ class EventProcessor:
             is_main
             and isinstance(msg.content, str)
             and msg.content
-            and self._policy.should_show_assistant_text(
-                msg.content,
-                is_main=is_main,
-                is_multi_step_active=self._state.multi_step_active,
-            )
         ):
-            cleaned = self._clean_assistant_text(msg.content)
+            # Always pass to renderer for accumulation, let renderer decide display
+            cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
             if cleaned:
                 self._renderer.on_assistant_text(
                     self._maybe_extract_quiet_answer(cleaned),
@@ -280,6 +273,11 @@ class EventProcessor:
 
                 if has_tc_args or (not tc_args and not tool_call_emitted_from_blocks):
                     tool_call_id = tc.get("id", "")
+                    # Deduplicate tool calls by ID
+                    if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
+                        continue
+                    if tool_call_id:
+                        self._state.emitted_tool_call_ids.add(tool_call_id)
                     self._renderer.on_tool_call(name, tc_args, tool_call_id, is_main=is_main)
 
     def _handle_tool_message(
@@ -295,6 +293,13 @@ class EventProcessor:
 
         tool_name = getattr(msg, "name", "tool")
         tool_call_id = getattr(msg, "tool_call_id", None) or ""
+
+        # Deduplicate tool results by ID
+        if tool_call_id and tool_call_id in self._state.emitted_tool_result_ids:
+            return
+        if tool_call_id:
+            self._state.emitted_tool_result_ids.add(tool_call_id)
+
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         brief = extract_tool_brief(tool_name, content)
 
@@ -355,13 +360,9 @@ class EventProcessor:
                 is_main
                 and isinstance(content, str)
                 and content
-                and self._policy.should_show_assistant_text(
-                    content,
-                    is_main=is_main,
-                    is_multi_step_active=self._state.multi_step_active,
-                )
             ):
-                cleaned = self._clean_assistant_text(content)
+                # Always pass to renderer for accumulation, let renderer decide display
+                cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
                 if cleaned:
                     self._renderer.on_assistant_text(
                         self._maybe_extract_quiet_answer(cleaned),
@@ -375,12 +376,9 @@ class EventProcessor:
             btype = block.get("type")
             if btype == "text":
                 text = block.get("text", "")
-                if text and self._policy.should_show_assistant_text(
-                    text,
-                    is_main=is_main,
-                    is_multi_step_active=self._state.multi_step_active,
-                ):
-                    cleaned = self._clean_assistant_text(text)
+                # Always pass to renderer for accumulation, let renderer decide display
+                if text:
+                    cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
                     if cleaned:
                         self._renderer.on_assistant_text(
                             self._maybe_extract_quiet_answer(cleaned),
@@ -392,6 +390,11 @@ class EventProcessor:
                 if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                     args = coerce_tool_call_args_to_dict(block.get("args", {}))
                     tool_call_id = block.get("id", "")
+                    # Deduplicate tool calls
+                    if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
+                        continue
+                    if tool_call_id:
+                        self._state.emitted_tool_call_ids.add(tool_call_id)
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
         # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
@@ -403,6 +406,11 @@ class EventProcessor:
                     if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
+                        # Deduplicate tool calls
+                        if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
+                            continue
+                        if tool_call_id:
+                            self._state.emitted_tool_call_ids.add(tool_call_id)
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
         # Handle tool_call_chunks (streaming)
@@ -414,6 +422,11 @@ class EventProcessor:
                     if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
+                        # Deduplicate tool calls
+                        if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
+                            continue
+                        if tool_call_id:
+                            self._state.emitted_tool_call_ids.add(tool_call_id)
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
     def _handle_tool_message_dict(
@@ -433,6 +446,13 @@ class EventProcessor:
 
         tool_name = msg.get("name", "tool")
         tool_call_id = msg.get("tool_call_id", "")
+
+        # Deduplicate tool results by ID
+        if tool_call_id and tool_call_id in self._state.emitted_tool_result_ids:
+            return
+        if tool_call_id:
+            self._state.emitted_tool_result_ids.add(tool_call_id)
+
         content = msg.get("content", "")
         if not isinstance(content, str):
             content = str(content)
@@ -470,8 +490,13 @@ class EventProcessor:
         for tc_id, pending in list(self._state.pending_tool_calls.items()):
             if pending["emitted"]:
                 continue
+            # Deduplicate
+            if tc_id in self._state.emitted_tool_call_ids:
+                pending["emitted"] = True
+                continue
             parsed_args = try_parse_pending_tool_call_args(pending)
             if parsed_args is not None and should_show(VerbosityTier.NORMAL, self._verbosity):
+                self._state.emitted_tool_call_ids.add(tc_id)
                 self._renderer.on_tool_call(
                     pending["name"],
                     parsed_args,
@@ -515,8 +540,13 @@ class EventProcessor:
 
         category = classify_event_to_tier(etype, namespace)
 
-        # Check for multi-step plan
+        # Check for multi-step plan from PLAN_CREATED event
         if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
+            self._state.multi_step_active = True
+
+        # Also check for agentic loop start with multiple iterations
+        # The agentic loop uses step events instead of plan events
+        if etype == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
             self._state.multi_step_active = True
 
         # Update plan state and call specific hooks
@@ -581,9 +611,18 @@ class EventProcessor:
 
         self._renderer.on_plan_step_completed(step_id, success, duration_ms)
 
-    def _clean_assistant_text(self, text: str) -> str:
-        """Apply shared response cleaning for user-facing assistant text."""
-        return self._policy.filter_content(strip_internal_tags(text))
+    def _clean_assistant_text(self, text: str, *, is_streaming: bool = False) -> str:
+        """Apply shared response cleaning for user-facing assistant text.
+        
+        Args:
+            text: Text to clean.
+            is_streaming: If True, preserve boundary whitespace for proper
+                streaming chunk concatenation.
+        """
+        return self._policy.filter_content(
+            strip_internal_tags(text),
+            preserve_boundary_whitespace=is_streaming,
+        )
 
     def _maybe_extract_quiet_answer(self, text: str) -> str:
         """Apply quiet-mode answer extraction with fallback."""

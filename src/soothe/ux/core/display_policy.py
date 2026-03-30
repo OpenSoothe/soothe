@@ -260,8 +260,21 @@ class DisplayPolicy:
         # Check verbosity
         return self._should_show_tier(VerbosityTier.QUIET)
 
-    def filter_content(self, text: str) -> str:
-        """Filter internal content from text for display."""
+    def filter_content(self, text: str, *, preserve_boundary_whitespace: bool = False) -> str:
+        """Filter internal content from text for display.
+
+        Args:
+            text: Text to filter.
+            preserve_boundary_whitespace: If True, preserve leading/trailing whitespace
+                for proper streaming chunk concatenation.
+        """
+        # Preserve leading/trailing whitespace for streaming chunks
+        if preserve_boundary_whitespace:
+            leading_ws = len(text) - len(text.lstrip())
+            trailing_ws = len(text) - len(text.rstrip())
+            lead = text[:leading_ws]
+            trail = text[len(text) - trailing_ws:] if trailing_ws > 0 else ""
+
         text = self._filter_json_code_blocks(text)
         text = self._filter_plain_json(text)
         text = self._filter_confused_responses(text)
@@ -270,6 +283,10 @@ class DisplayPolicy:
         text = self._normalize_whitespace(text)
         text = self._strip_sentence_embellishment(text)
         text = self._normalize_factual_ending(text)
+
+        if preserve_boundary_whitespace:
+            # Restore boundary whitespace for streaming concatenation
+            return lead + text.strip() + trail
         return text.strip()
 
     def _filter_json_code_blocks(self, text: str) -> str:

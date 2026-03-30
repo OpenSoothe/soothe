@@ -45,7 +45,7 @@ class ClientSession:
     transport: TransportServer
     transport_client: Any  # Transport-specific client object
     subscriptions: set[str] = field(default_factory=set)
-    event_queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue(maxsize=100))
+    event_queue: asyncio.Queue[dict[str, Any]] = field(default_factory=lambda: asyncio.Queue(maxsize=10000))
     sender_task: asyncio.Task[None] | None = None
     verbosity: VerbosityLevel = "normal"  # RFC-0022: client verbosity preference
     detach_requested: bool = False  # RFC-0013: client explicitly requested detach

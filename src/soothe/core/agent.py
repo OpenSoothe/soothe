@@ -193,6 +193,7 @@ class CoreAgent:
         config: RunnableConfig | None = None,
         *,
         stream_mode: list[str] | None = None,
+        subgraphs: bool = False,
     ) -> AsyncIterator[Any]:
         """Execute with Layer 1 streaming interface.
 
@@ -209,6 +210,7 @@ class CoreAgent:
                 - soothe_step_expected_output: expected result
             stream_mode: Optional list of stream modes (e.g., ["messages", "updates", "custom"]).
                 If None, uses LangGraph defaults.
+            subgraphs: Whether to include subgraph events in stream (default: False).
 
         Returns:
             AsyncIterator of StreamChunk events from LangGraph execution.
@@ -221,8 +223,8 @@ class CoreAgent:
                 process(chunk)
         """
         if stream_mode:
-            return self._graph.astream(input_arg, config or {}, stream_mode=stream_mode)
-        return self._graph.astream(input_arg, config or {})
+            return self._graph.astream(input_arg, config or {}, stream_mode=stream_mode, subgraphs=subgraphs)
+        return self._graph.astream(input_arg, config or {}, subgraphs=subgraphs)
 
     @classmethod
     def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:

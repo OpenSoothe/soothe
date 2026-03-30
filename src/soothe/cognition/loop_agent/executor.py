@@ -159,6 +159,7 @@ class Executor:
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": {"thread_id": state.thread_id}},
                 stream_mode=["messages", "updates", "custom"],
+                subgraphs=True,
             )
 
             # Collect results and yield events
@@ -260,6 +261,7 @@ class Executor:
                 {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
+                subgraphs=True,
             )
 
             output, events = await self._collect_stream_with_events(stream)

@@ -48,6 +48,12 @@ class ProcessorState:
     # Maps tool_call_id -> start_timestamp
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
+    # Deduplication for tool calls (prevents duplicate display)
+    emitted_tool_call_ids: set[str] = field(default_factory=set)
+
+    # Deduplication for tool results (prevents duplicate display)
+    emitted_tool_result_ids: set[str] = field(default_factory=set)
+
     def reset_turn(self) -> None:
         """Reset per-turn state.
 
@@ -56,6 +62,8 @@ class ProcessorState:
         """
         self.pending_tool_calls.clear()
         self.tool_call_start_times.clear()
+        self.emitted_tool_call_ids.clear()
+        self.emitted_tool_result_ids.clear()
 
     def clear_session(self) -> None:
         """Clear all session state.
@@ -68,3 +76,5 @@ class ProcessorState:
         self.multi_step_active = False
         self.internal_context_active = False
         self.tool_call_start_times.clear()
+        self.emitted_tool_call_ids.clear()
+        self.emitted_tool_result_ids.clear()

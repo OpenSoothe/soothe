@@ -292,6 +292,14 @@ vector_store_router:
   weaver_reuse: pgvector_default:soothe_weaver_reuse
 
 # =============================================================================
+# Agentic Loop Configuration (RFC-0008)
+# =============================================================================
+# Configure the default PLAN → ACT → JUDGE loop for normal queries.
+
+agentic:
+  max_iterations: 10         # Maximum agentic loop iterations
+
+# =============================================================================
 # Autonomous Operation
 # =============================================================================
 # Configure autonomous iteration for long-running tasks. By default, requires

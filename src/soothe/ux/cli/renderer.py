@@ -200,8 +200,14 @@ class CliRenderer:
             duration_ms = int((time.time() - start_time) * 1000)
 
         # Format as child line with duration (RFC-0020 two-level tree)
-        icon = "✗" if is_error else "✓"
-        result_line = f"  └ {icon} {result}"
+        # Note: extract_tool_brief() may already include ✓/✗ icon
+        result_stripped = result.lstrip()
+        if result_stripped.startswith("✓") or result_stripped.startswith("✗"):
+            # Result already has icon, don't add another
+            result_line = f"  └ {result}"
+        else:
+            icon = "✗" if is_error else "✓"
+            result_line = f"  └ {icon} {result}"
         if duration_ms > 0:
             result_line += f" ({duration_ms}ms)"
 
@@ -245,6 +251,10 @@ class CliRenderer:
             data: Event payload.
             namespace: Subagent namespace.
         """
+        # Track multi-step state from agentic loop start
+        if event_type == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
+            self._state.multi_step_active = True
+
         # Build event dict for pipeline
         event = {"type": event_type, **data}
         lines = self._pipeline.process(event)
