@@ -68,10 +68,10 @@ class FileSearchCompletedEvent(ToolEvent):
     model_config = ConfigDict(extra="allow")
 
 
-class BackupCreatedEvent(ToolEvent):
-    """Backup created event."""
+class BackupEvent(ToolEvent):
+    """Backup event."""
 
-    type: Literal["soothe.tool.file_ops.backup_created"] = "soothe.tool.file_ops.backup_created"
+    type: Literal["soothe.tool.file_ops.backup"] = "soothe.tool.file_ops.backup"
     tool: str = "create_backup"
     original_path: str = ""
     backup_path: str = ""
@@ -109,13 +109,13 @@ register_event(
     summary_template="Search found {matches_count} matches",
 )
 register_event(
-    BackupCreatedEvent,
+    BackupEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Backup: {backup_path}",
+    summary_template="Backup: {original_path} → {backup_path}",
 )
 
 # Event type constants for convenient imports
-TOOL_FILE_OPS_BACKUP_CREATED = "soothe.tool.file_ops.backup_created"
+TOOL_FILE_OPS_BACKUP = "soothe.tool.file_ops.backup"
 TOOL_FILE_OPS_DELETE = "soothe.tool.file_ops.delete"
 TOOL_FILE_OPS_READ = "soothe.tool.file_ops.read"
 TOOL_FILE_OPS_SEARCH_COMPLETED = "soothe.tool.file_ops.search_completed"
@@ -124,14 +124,14 @@ TOOL_FILE_OPS_WRITE = "soothe.tool.file_ops.write"
 
 __all__ = [
     # Constants first (alphabetically)
-    "TOOL_FILE_OPS_BACKUP_CREATED",
+    "TOOL_FILE_OPS_BACKUP",
     "TOOL_FILE_OPS_DELETE",
     "TOOL_FILE_OPS_READ",
     "TOOL_FILE_OPS_SEARCH_COMPLETED",
     "TOOL_FILE_OPS_SEARCH_STARTED",
     "TOOL_FILE_OPS_WRITE",
     # Event classes (alphabetically)
-    "BackupCreatedEvent",
+    "BackupEvent",
     "FileDeleteEvent",
     "FileReadEvent",
     "FileSearchCompletedEvent",

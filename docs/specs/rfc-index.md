@@ -32,6 +32,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | Foundation | RFC-0013, RFC-0015 |
 | [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Draft | **Layer 1** | RFC-0001, RFC-0002 |
 | [RFC-0024](./RFC-0024-verbosity-tier-unification.md) | VerbosityTier Unification | Draft | Foundation | RFC-0015 |
+| [RFC-0025](./RFC-0025-tool-event-naming-unification.md) | Tool Event Naming Unification | Draft | Foundation | RFC-0015 |
 
 ### Implementation Interface Design
 
@@ -60,7 +61,8 @@ RFC-0001 (System Conceptual Design)
 │   │   └── RFC-0019 (Unified Event Processing) [depends on RFC-0015]
 │   ├── RFC-0015 (Progress Event Protocol) [depends on RFC-0003, RFC-0013]
 │   │   ├── RFC-0020 (Event Display Architecture) [depends on RFC-0013]
-│   │   └── RFC-0024 (VerbosityTier Unification)
+│   │   ├── RFC-0024 (VerbosityTier Unification)
+│   │   └── RFC-0025 (Tool Event Naming Unification)
 │   ├── RFC-0016 (Tool Interface Optimization)
 │   ├── RFC-0007 (Layer 3: Autonomous Goal Management) [Layer 3 foundation]
 │   │   ├── RFC-0008 (Layer 2: Agentic Goal Execution) [Layer 2 foundation]
@@ -87,10 +89,10 @@ RFC-0001 (System Conceptual Design)
 
 ## RFC Status Summary
 
-- **Total RFCs**: 22
+- **Total RFCs**: 23
 - **Implemented**: 16
 - **Revised**: 2 (RFC-0007, RFC-0008)
-- **Draft**: 5 (RFC-0009, RFC-0010, RFC-0020, RFC-0023, RFC-0024)
+- **Draft**: 6 (RFC-0009, RFC-0010, RFC-0020, RFC-0023, RFC-0024, RFC-0025)
 - **Deprecated**: 0 (RFC-0011 merged into RFC-0007 and removed)
 
 ## Line Count Summary (After Compaction)
@@ -107,6 +109,13 @@ All RFCs are now under the target limits:
 - [RFC History](./rfc-history.md) - Change history
 - [Terminology](./rfc-namings.md) - Naming conventions
 - [RFC Optimization Strategies](/.claude/skills/platonic-coding/references/SPECS/rfc-optimization-strategies.md) - Compaction patterns
+
+## Recent Changes (2026-03-30)
+
+- Created RFC-0025 (Tool Event Naming Unification)
+  - Establishes naming convention: atomic ops use simple verbs, async ops use started/completed/failed triplets
+  - Renames `backup_created` → `backup` in file_ops tool
+  - Aligns event naming with atomic verb pattern
 
 ## Recent Changes (2026-03-29)
 

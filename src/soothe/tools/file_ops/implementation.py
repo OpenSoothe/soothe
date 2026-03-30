@@ -25,7 +25,7 @@ from pydantic import Field
 
 from soothe.tools._internal.file_edit import _display_path, _normalize_workspace_relative_input
 from soothe.tools.file_ops.events import (
-    BackupCreatedEvent,
+    BackupEvent,
     FileDeleteEvent,
     FileReadEvent,
     FileWriteEvent,
@@ -280,7 +280,7 @@ class WriteFileTool(BaseTool):
         logger.info("Created backup: %s", backup_path)
 
         emit_progress(
-            BackupCreatedEvent(original_path=str(file_path), backup_path=str(backup_path)).to_dict(),
+            BackupEvent(original_path=str(file_path), backup_path=str(backup_path)).to_dict(),
             logger,
         )
 
