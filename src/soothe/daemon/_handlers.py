@@ -783,7 +783,6 @@ class DaemonHandlersMixin:
                         "mode": mode,
                         "data": data,
                     }
-                    logger.debug("Broadcasting event #%d: type=%s, mode=%s", chunk_count, event_msg["type"], mode)
                     await self._broadcast(event_msg)
                 logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
             except asyncio.CancelledError:

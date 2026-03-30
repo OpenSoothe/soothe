@@ -28,6 +28,7 @@ from langgraph.types import Send
 from .events import (
     ResearchAnalyzeEvent,
     ResearchCompletedEvent,
+    ResearchDispatchedEvent,
     ResearchGatherDoneEvent,
     ResearchGatherEvent,
     ResearchInternalLLMResponseEvent,
@@ -232,6 +233,8 @@ def build_research_engine(
 
     def analyze_topic_node(state: dict[str, Any]) -> dict[str, Any]:
         topic = _extract_topic(state)
+        # Emit dispatch event (RFC-0020)
+        _emit_progress(ResearchDispatchedEvent(topic=topic[:200]).to_dict())
         _emit_progress(ResearchAnalyzeEvent(topic=topic[:200]).to_dict())
 
         prompt = _ANALYZE_TOPIC.format(

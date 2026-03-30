@@ -158,6 +158,7 @@ class Executor:
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": {"thread_id": state.thread_id}},
+                stream_mode=["messages", "updates", "custom"],
             )
 
             # Collect results and yield events
@@ -258,6 +259,7 @@ class Executor:
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
                 config=config,
+                stream_mode=["messages", "updates", "custom"],
             )
 
             output, events = await self._collect_stream_with_events(stream)

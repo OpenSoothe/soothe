@@ -548,7 +548,12 @@ class SootheDaemon(DaemonHandlersMixin):
         # Get event metadata for filtering (RFC-0022)
         from soothe.core.event_catalog import REGISTRY
 
-        event_meta = REGISTRY.get_meta(msg_type) if msg_type else None
+        # For custom events, the actual event type is inside data["type"]
+        event_type_for_meta = msg_type
+        if msg_type == "event" and isinstance(msg.get("data"), dict):
+            event_type_for_meta = msg["data"].get("type", msg_type)
+
+        event_meta = REGISTRY.get_meta(event_type_for_meta) if event_type_for_meta else None
 
         if thread_id:
             # Route to thread-specific topic

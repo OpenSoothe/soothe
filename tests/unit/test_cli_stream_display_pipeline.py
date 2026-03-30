@@ -307,24 +307,48 @@ class TestStreamDisplayPipeline:
         assert "complete" in lines[0].content
         assert "3 steps" in lines[0].content
 
-    def test_tool_events_not_handled_by_pipeline(self) -> None:
-        """Tool events should not be handled by the pipeline.
+    def test_tool_events_handled_by_pipeline(self) -> None:
+        """Tool events ARE handled by the pipeline at NORMAL verbosity.
 
-        Tool display is handled by CliRenderer.on_tool_call/on_tool_result
-        via EventProcessor processing LangChain tool_calls.
+        Two parallel display paths exist:
+        1. LangChain tool_calls → CliRenderer.on_tool_call via EventProcessor
+        2. Custom tool events (soothe.tool.*) → pipeline via on_progress_event
+
+        Both paths display tool activity. Custom events provide fine-grained
+        progress tracking (started/completed) while LangChain tool_calls
+        provide the primary tool call display.
         """
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
-        # These tool event types should not produce output from pipeline
-        # They are handled by CliRenderer directly
+        # Tool started events now show at NORMAL verbosity
+        event = {
+            "type": "soothe.tool.file_ops.read_file_started",
+            "tool": "read_file",
+            "args": {"path": "config.yml"},
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+        assert "read_file" in lines[0].content
+        assert lines[0].icon == "⚙"
+
+        # Tool completed events also show
+        event = {
+            "type": "soothe.tool.file_ops.read_file_completed",
+            "tool": "read_file",
+            "result_preview": "42 lines read",
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+
+        # Atomic tool events (read, write, backup) also show
         event = {
             "type": "soothe.tool.file_ops.read",
             "tool": "read_file",
             "path": "config.yml",
         }
         lines = pipeline.process(event)
-        # Tool events are classified as DETAILED, hidden at normal
-        assert len(lines) == 0
+        assert len(lines) == 1
+        assert "read_file" in lines[0].content
 
     def test_subagent_completed(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")

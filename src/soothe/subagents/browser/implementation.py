@@ -17,7 +17,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.config import BrowserSubagentConfig
-from soothe.subagents.browser.events import BrowserCdpEvent, BrowserStepEvent
+from soothe.subagents.browser.events import (
+    BrowserCdpEvent,
+    BrowserCompletedEvent,
+    BrowserDispatchedEvent,
+    BrowserStepEvent,
+)
 
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
@@ -193,6 +198,14 @@ def _build_browser_graph(
         from soothe.utils.output_capture import capture_subagent_output
         from soothe.utils.progress import emit_progress as _emit
 
+        # Emit dispatch event (RFC-0020)
+        messages = state.get("messages", [])
+        task = messages[-1].content if messages else ""
+        _emit(
+            BrowserDispatchedEvent(task=task[:200]).to_dict(),
+            logger,
+        )
+
         try:
             with capture_subagent_output("browser", suppress=True):
                 from browser_use import Agent as BrowserAgent, Browser
@@ -305,6 +318,12 @@ def _build_browser_graph(
                 history = agent.history
                 result = history.final_result() or "Browser task completed (no extracted content)."
 
+                # Emit completed event (RFC-0020)
+                _emit(
+                    BrowserCompletedEvent(duration_ms=0, success=True).to_dict(),
+                    logger,
+                )
+
                 # Stop the browser session
                 try:
                     await agent.browser_session.stop()
@@ -321,6 +340,12 @@ def _build_browser_graph(
 
             error_msg = format_cli_error(e, context="Browser agent")
             result = error_msg
+
+            # Emit completed event with failure (RFC-0020)
+            _emit(
+                BrowserCompletedEvent(duration_ms=0, success=False).to_dict(),
+                logger,
+            )
         finally:
             if ephemeral_profile_dir:
                 import shutil

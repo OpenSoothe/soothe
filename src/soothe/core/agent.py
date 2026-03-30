@@ -191,6 +191,8 @@ class CoreAgent:
         self,
         input_arg: str | dict,
         config: RunnableConfig | None = None,
+        *,
+        stream_mode: list[str] | None = None,
     ) -> AsyncIterator[Any]:
         """Execute with Layer 1 streaming interface.
 
@@ -205,6 +207,8 @@ class CoreAgent:
                 - soothe_step_tools: suggested tools for this step
                 - soothe_step_subagent: suggested subagent
                 - soothe_step_expected_output: expected result
+            stream_mode: Optional list of stream modes (e.g., ["messages", "updates", "custom"]).
+                If None, uses LangGraph defaults.
 
         Returns:
             AsyncIterator of StreamChunk events from LangGraph execution.
@@ -216,6 +220,8 @@ class CoreAgent:
             ):
                 process(chunk)
         """
+        if stream_mode:
+            return self._graph.astream(input_arg, config or {}, stream_mode=stream_mode)
         return self._graph.astream(input_arg, config or {})
 
     @classmethod

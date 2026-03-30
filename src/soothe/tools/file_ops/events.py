@@ -83,37 +83,37 @@ class BackupEvent(ToolEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
-# Note: Tool events are DETAILED (internal progress tracking).
-# User-facing tool display is handled by CliRenderer.on_tool_call/on_tool_result
-# via EventProcessor processing LangChain tool_calls.
+# Tool events are NORMAL so they're visible at normal verbosity (RFC-0020).
+# LangChain tool_calls are handled separately by CliRenderer.on_tool_call/on_tool_result.
+# These custom events are emitted via emit_progress() for fine-grained progress tracking.
 register_event(
     FileReadEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Read: {path} ({bytes_read} bytes)",
 )
 register_event(
     FileWriteEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Wrote: {path} ({bytes_written} bytes, {mode})",
 )
 register_event(
     FileDeleteEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Deleted: {path} (backup={backup_created})",
 )
 register_event(
     FileSearchStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Searching: {pattern} in {path}",
 )
 register_event(
     FileSearchCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Search found {matches_count} matches",
 )
 register_event(
     BackupEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Backup: {original_path} → {backup_path}",
 )
 

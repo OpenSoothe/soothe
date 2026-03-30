@@ -19,6 +19,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
 from soothe.subagents.skillify.events import (
+    SkillifyCompletedEvent,
+    SkillifyDispatchedEvent,
     SkillifyIndexingPendingEvent,
     SkillifyRetrieveCompletedEvent,
     SkillifyRetrieveNotReadyEvent,
@@ -92,6 +94,9 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             last = messages[-1]
             query = last.content if hasattr(last, "content") else str(last)
 
+        # Emit dispatch event (RFC-0020)
+        _emit_progress(SkillifyDispatchedEvent(task=query[:200]).to_dict())
+
         if not retriever.is_ready:
             _emit_progress(SkillifyIndexingPendingEvent(query=query[:200]).to_dict())
 
@@ -101,6 +106,7 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
 
         if bundle.query.startswith("[Indexing in progress]"):
             _emit_progress(SkillifyRetrieveNotReadyEvent(message=bundle.query).to_dict())
+            _emit_progress(SkillifyCompletedEvent(duration_ms=0, result_count=0).to_dict())
             return {"messages": [AIMessage(content=bundle.query)]}
 
         top_score = bundle.results[0].score if bundle.results else 0.0
@@ -122,6 +128,13 @@ def _build_skillify_graph(retriever: SkillRetriever) -> Any:
             )
 
         result_text = "\n".join(result_lines)
+        # Emit completed event (RFC-0020)
+        _emit_progress(
+            SkillifyCompletedEvent(
+                duration_ms=0,
+                result_count=len(bundle.results),
+            ).to_dict()
+        )
         return {"messages": [AIMessage(content=result_text)]}
 
     def retrieve_sync(state: dict[str, Any]) -> dict[str, Any]:

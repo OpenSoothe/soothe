@@ -21,6 +21,8 @@ from soothe.subagents.weaver.composer import AgentComposer
 from soothe.subagents.weaver.events import (
     WeaverAnalysisCompletedEvent,
     WeaverAnalysisStartedEvent,
+    WeaverCompletedEvent,
+    WeaverDispatchedEvent,
     WeaverExecuteCompletedEvent,
     WeaverExecuteStartedEvent,
     WeaverGenerateCompletedEvent,
@@ -163,6 +165,9 @@ def _build_weaver_graph(
         if not task_text and messages:
             last = messages[-1]
             task_text = last.content if hasattr(last, "content") else str(last)
+
+        # Emit dispatch event (RFC-0020)
+        _emit_progress(WeaverDispatchedEvent(task=task_text[:200]).to_dict())
 
         # Step 1: Analyse
         _emit_progress(WeaverAnalysisStartedEvent(task_preview=task_text[:200]).to_dict())
@@ -318,6 +323,14 @@ def _build_weaver_graph(
             WeaverExecuteCompletedEvent(
                 agent_name=manifest.name,
                 result_length=len(result_text),
+            ).to_dict()
+        )
+
+        # Emit completed event (RFC-0020)
+        _emit_progress(
+            WeaverCompletedEvent(
+                duration_ms=0,
+                agent_name=manifest.name,
             ).to_dict()
         )
 
