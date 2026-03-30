@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-26
-**Updated**: 2026-03-29
+**Updated**: 2026-03-30
 **Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019, RFC-0024
 
 ## Abstract
@@ -120,10 +120,7 @@ Level 3 (Result):        └ ✓ Result metrics
 
 ### Pattern: Tool Activity
 
-**Registration**:
-- Type: `soothe.tool.<tool_name>.call_started`
-- Template: `<tool_name>({args_summary})`
-- Verbosity: `VerbosityTier.DETAILED`
+**Implementation**: Tool display is handled by `CliRenderer.on_tool_call`/`on_tool_result` via `EventProcessor` processing LangChain `tool_calls` from `AIMessage` and `ToolMessage`. This is NOT event-based display.
 
 **Display**:
 ```
@@ -131,7 +128,9 @@ Level 3 (Result):        └ ✓ Result metrics
   └ ✓ Result summary (duration)
 ```
 
-**Note**: Tool activity filtered at normal verbosity. Only subagent tools with `VerbosityTier.NORMAL` appear in normal mode.
+**Verbosity**: Tool calls are visible at `VerbosityTier.NORMAL` (shown at normal verbosity and above).
+
+**Tool Events**: Custom tool events (e.g., `soothe.tool.file_ops.read`) are `VerbosityTier.DETAILED` for internal progress tracking. They are NOT used for CLI display.
 
 #### Tool Output Formatting (RFC-0020 Enhancement)
 
@@ -546,22 +545,52 @@ TUI must preserve the same semantic separation intent using widget spacing, marg
 
 ## CLI Stream Display Pipeline
 
-This section defines the CLI-specific stream display pipeline that processes events into a streaming narrative with goal/step/tool context.
+This section defines the CLI-specific stream display pipeline that processes events into a streaming narrative with goal/step/subagent context.
 
 ### Architecture
 
 ```
-Event → StreamDisplayPipeline.process(event, verbosity) → DisplayLine[] → CliStreamRenderer.write()
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Event Processing Paths                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  LangChain Messages (AIMessage.tool_calls, ToolMessage)                 │
+│       ↓                                                                  │
+│  EventProcessor._handle_ai_message() / _handle_tool_message()           │
+│       ↓                                                                  │
+│  CliRenderer.on_tool_call() / on_tool_result()                          │
+│       ↓                                                                  │
+│  ⚙ ToolName(args)  ───────────────────────────────────────────────────► │
+│     └ ✓ Result (duration)                                                │
+│                                                                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Custom Events (goal, step, subagent)                                   │
+│       ↓                                                                  │
+│  CliRenderer.on_progress_event()                                        │
+│       ↓                                                                  │
+│  StreamDisplayPipeline.process(event, verbosity)                         │
+│       ↓                                                                  │
+│  DisplayLine[]                                                           │
+│       ↓                                                                  │
+│  CliRenderer.write_lines()                                               │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Key Separation**:
+- **Tool display**: Handled by `CliRenderer.on_tool_call`/`on_tool_result` via `EventProcessor` processing LangChain `tool_calls`
+- **Goal/Step/Subagent display**: Handled by `StreamDisplayPipeline` processing custom events
 
 ### Components
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
 | `DisplayLine` | `stream/display_line.py` | Structured output unit |
-| `PipelineContext` | `stream/context.py` | Goal/step/tool state tracking |
-| `StreamDisplayPipeline` | `stream/pipeline.py` | Event processing, filtering, formatting |
-| `CliStreamRenderer` | `renderer.py` | Pure output to stdout/stderr |
+| `PipelineContext` | `stream/context.py` | Goal/step state tracking |
+| `StreamDisplayPipeline` | `stream/pipeline.py` | Goal/step/subagent event processing |
+| `CliRenderer` | `renderer.py` | Tool display + pipeline output to stdout/stderr |
+| `EventProcessor` | `core/event_processor.py` | LangChain message routing |
 
 ### DisplayLine Structure
 
@@ -581,7 +610,7 @@ class DisplayLine:
 | Level | Indent | Usage |
 |-------|--------|-------|
 | 1 | `""` | Goal header, completion |
-| 2 | `"  └ "` | Step header, tool call |
+| 2 | `"  └ "` | Step header, tool call (via CliRenderer) |
 | 3 | `"     └ "` | Tool result, milestone |
 
 ### CLI Event Visibility (NORMAL Verbosity)
@@ -590,12 +619,13 @@ class DisplayLine:
 |------------|------|---------------|
 | `soothe.agentic.loop.started` | NORMAL | `● Goal: {goal}` |
 | `soothe.cognition.plan.step_started` | NORMAL | `  └ Step {n}: {description}` |
-| `soothe.tool.*.call_started` | NORMAL | `  ⚙ {name}({args})` |
-| `soothe.tool.*.call_completed` | NORMAL | `     └ ✓ {summary} ({duration}ms)` |
+| `soothe.subagent.*.dispatched` | NORMAL | `  ⚙ {name}_subagent({query})` |
 | `soothe.subagent.*.step` | NORMAL | `     └ ✓ {milestone}` |
 | `soothe.subagent.*.completed` | NORMAL | `     └ ✓ Done: {summary} ({duration}s)` |
 | `soothe.cognition.plan.step_completed` | NORMAL | `  ✓ Step {n} done ({duration}s)` |
 | `soothe.agentic.loop.completed` | QUIET | `● Goal: {goal} (complete, {steps} steps, {total}s)` |
+
+**Note**: Tool calls (`⚙ ToolName(args)`) are displayed by `CliRenderer.on_tool_call`/`on_tool_result` via `EventProcessor`, not through the pipeline. Tool events (`soothe.tool.*`) are `DETAILED` verbosity for internal progress tracking.
 
 ### Parallel Tool Handling
 
@@ -626,19 +656,21 @@ Hidden: internal LLM reasoning, result parsing, synthesis steps.
 ```
 ● Goal: Analyze codebase structure
   └ Step 1: Read configuration files
-  ⚙ read_file("config.yml")
+
+  ⚙ ReadFile("config.yml")
      └ ✓ Read 2.3 KB (42 lines) (150ms)
 
-  ⚙ glob("*.py")
+  ⚙ Glob("*.py")
      └ ✓ Found 150 files (80ms)
 
   ✓ Step 1 done (3.2s)
 
-  └ Step 2: Parse dependencies (parallel)
-  ⚙ read_file("requirements.txt") [running]
-  ⚙ read_file("pyproject.toml") [running]
-     └ ✓ read_file: 1.1 KB (95ms)
-     └ ✓ read_file: 2.4 KB (120ms)
+  └ Step 2: Parse dependencies
+
+  ⚙ ReadFile("requirements.txt")
+     └ ✓ Read 1.1 KB (95ms)
+  ⚙ ReadFile("pyproject.toml")
+     └ ✓ Read 2.4 KB (120ms)
 
   ✓ Step 2 done (1.8s)
 
@@ -646,6 +678,8 @@ Hidden: internal LLM reasoning, result parsing, synthesis steps.
 
 The codebase contains 150 Python files...
 ```
+
+**Note**: Tool calls (⚙ ReadFile) are displayed by `CliRenderer` via `EventProcessor`, not through events. Goal/Step display comes from the pipeline processing events.
 
 ---
 

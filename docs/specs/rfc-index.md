@@ -116,6 +116,10 @@ All RFCs are now under the target limits:
   - Establishes naming convention: atomic ops use simple verbs, async ops use started/completed/failed triplets
   - Renames `backup_created` → `backup` in file_ops tool
   - Aligns event naming with atomic verb pattern
+- Updated RFC-0020 (Event Display Architecture)
+  - Fixed inconsistency: tool display is handled by CliRenderer via EventProcessor, not pipeline events
+  - Clarified architecture: LangChain tool_calls → CliRenderer, custom events → StreamDisplayPipeline
+  - Updated CLI event visibility table to remove non-existent event types
 
 ## Recent Changes (2026-03-29)
 
