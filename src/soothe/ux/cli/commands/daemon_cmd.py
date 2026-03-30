@@ -95,7 +95,8 @@ def daemon_start(
                 ready = True
                 break
         if ready:
-            pid = pid_path().read_text().strip() if pid_path().exists() else "?"
+            # Use find_pid() which tries multiple methods (PID file, port scan, pgrep)
+            pid = SootheDaemon.find_pid() or "?"
             typer.echo(f"Soothe daemon started (PID: {pid})")
         elif SootheDaemon.is_running():
             typer.echo("Soothe daemon started but protocol readiness check failed.", err=True)

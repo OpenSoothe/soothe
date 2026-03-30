@@ -16,456 +16,162 @@ This RFC defines Layer 1 of Soothe's three-layer execution architecture: the Cor
 ### Three-Layer Model
 
 ```
-Layer 3: Autonomous Goal Management (RFC-0007)
-  └─ Delegates to Layer 2 (PERFORM stage)
-
-Layer 2: Agentic Goal Execution (RFC-0008)
-  └─ Delegates to Layer 1 (ACT phase) for step execution
-
-Layer 1: CoreAgent Runtime (this RFC)
-  ├─ Foundation: create_soothe_agent() → CompiledStateGraph
-  ├─ Execution: Model → Tools → Model loop (LangGraph native)
-  └─ Used by: Layer 2 ACT phase, CLI, daemon
+Layer 3: Autonomous Goal Management (RFC-0007) → Layer 2 (PERFORM stage)
+Layer 2: Agentic Goal Execution (RFC-0008) → Layer 1 (ACT phase)
+Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 ```
 
-### Layer 1 Responsibilities
+**Layer 1 Responsibilities**: CoreAgent factory (`create_soothe_agent()` → CompiledStateGraph), built-in capabilities (tools, subagents, MCP, middlewares), execution engine (LangGraph loop), thread management, middleware integration, protocol attachments, Layer 2 integration.
 
-Layer 1 provides the execution runtime for tool and subagent operations:
+### Layer Integration
 
-- **CoreAgent factory**: `create_soothe_agent()` creates CompiledStateGraph
-- **Built-in capabilities**: Tools, subagents, MCP servers, middlewares
-- **Execution engine**: LangGraph Model → Tools → Model loop
-- **Thread management**: Sequential vs parallel execution with isolated threads
-- **Middleware integration**: Context, memory, policy, planner, summarization
-- **Protocol attachments**: Soothe protocol instances attached to graph
-- **Layer 2 integration**: agent.astream() for ACT phase step execution
+**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution with isolated threads `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])`.
 
-### Integration with Layer 2
-
-**Layer 2 ACT → Layer 1**:
-
-Layer 2's ACT phase invokes CoreAgent for step execution:
-
-```python
-# Sequential execution (one agent turn)
-result = await core_agent.astream(
-    input=build_input_from_steps(steps),
-    config={"configurable": {"thread_id": tid}}
-)
-
-# Parallel execution (multiple agent turns with isolated threads)
-results = await asyncio.gather(*[
-    core_agent.astream(
-        input=f"Execute: {step.description}",
-        config={"configurable": {"thread_id": f"{tid}__step_{i}"}}
-    )
-    for i, step in enumerate(steps)
-])
-```
+**CoreAgent Usage**: Foundation for Layer 2 ACT phase, CLI direct usage, daemon queries, subagent tool calls.
 
 ## CoreAgent Factory
 
 ### Factory Function
-
-`create_soothe_agent()` creates Soothe's CoreAgent runtime:
 
 ```python
 def create_soothe_agent(config: SootheConfig) -> CompiledStateGraph:
     """
     Factory that creates Soothe's CoreAgent runtime (Layer 1).
 
-    Assembles:
-    - Tools (execution, websearch, research, etc.)
-    - Subagents (Browser, Claude, Skillify, Weaver)
-    - MCP servers (loaded via configuration)
-    - Middlewares (context, memory, policy, planner, summarization)
-    - Protocol instances (attached to graph)
-
-    Args:
-        config: Soothe configuration
+    Assembles: Tools, Subagents, MCP servers, Middlewares, Protocol instances.
 
     Returns:
         CompiledStateGraph with attached protocol instances:
-        - soothe_context: ContextProtocol instance
-        - soothe_memory: MemoryProtocol instance
-        - soothe_planner: PlannerProtocol instance
-        - soothe_policy: PolicyProtocol instance
-        - soothe_durability: DurabilityProtocol instance
-
-    Example:
-        config = SootheConfig.from_file("config.yml")
-        agent = create_soothe_agent(config)
-        stream = await agent.astream("query", config={"thread_id": "123"})
+        - soothe_context, soothe_memory, soothe_planner, soothe_policy, soothe_durability
     """
 ```
 
-### Factory Assembly
+### Assembly Steps
 
-The factory assembles components in this order:
-
-1. **Load configuration**: Resolve models, protocols, capabilities
-2. **Instantiate protocols**: Context, Memory, Planner, Policy, Durability
-3. **Resolve models**: Map roles to provider:model strings
-4. **Assemble tools**: Built-in + configured tools
-5. **Assemble subagents**: Browser, Claude, Skillify, Weaver
-6. **Load MCP servers**: Via langchain-mcp-adapters
-7. **Wire middlewares**: Soothe protocol middlewares + deepagents middlewares
-8. **Call create_deep_agent()**: Assemble final graph
-9. **Attach protocols**: Add protocol instances as graph attributes
-10. **Return CompiledStateGraph**: Ready for execution
+1. Load configuration → resolve models, protocols, capabilities
+2. Instantiate protocols → Context, Memory, Planner, Policy, Durability
+3. Resolve models → Map roles to provider:model strings
+4. Assemble tools/subagents → Built-in + configured
+5. Load MCP servers → Via langchain-mcp-adapters
+6. Wire middlewares → Soothe + deepagents
+7. Call `create_deep_agent()` → Assemble graph
+8. Attach protocols → Add instances as graph attributes
 
 ## Execution Interface
 
-### Agent Stream API
-
-CoreAgent provides streaming execution interface:
+### Stream API
 
 ```python
-agent.astream(
-    input: str | dict,
-    config: RunnableConfig
-) → AsyncIterator[StreamChunk]
+agent.astream(input: str | dict, config: RunnableConfig) → AsyncIterator[StreamChunk]
 ```
 
-**Input**:
-- `input`: User query or execution instruction (str or dict)
-- `config`: LangGraph configuration
+**Config**: `{"configurable": {"thread_id": str, "recursion_limit": int}}`
 
-**Config Structure**:
-```python
-config = {
-    "configurable": {
-        "thread_id": str,  # Thread context for execution
-        "recursion_limit": int,  # Max tool calls per turn (default: 25)
-        # ... other LangGraph config
-    }
-}
-```
-
-**Output**:
-- AsyncIterator yielding `StreamChunk` events
-- Events include: messages, tool calls, custom events, tokens
+**Output**: AsyncIterator yielding StreamChunk events (messages, tool calls, custom events, tokens).
 
 ### Execution Flow
 
 ```
-agent.astream(input, config)
-    |
-    v
-LangGraph CompiledStateGraph execution:
-    |
-    +-- Model turn:
-    |      LLM processes input + context
-    |      Decides tool calls
-    |
-    +-- Tool execution:
-    |      Execute tools in parallel (tool_calls)
-    |      Collect tool results
-    |      Middlewares: policy check, context update, memory persist
-    |
-    +-- Model turn (second call):
-    |      LLM processes tool results
-    |      Decides more tools OR final response
-    |
-    +-- Stream output:
-           Yield StreamChunk events (messages, tool calls, custom events)
-```
-
-### Example Usage
-
-```python
-# Basic usage
-config = SootheConfig.from_file("config.yml")
-agent = create_soothe_agent(config)
-
-async for chunk in agent.astream(
-    input="What files are in the src directory?",
-    config={"configurable": {"thread_id": "thread-123"}}
-):
-    print(chunk)
-
-# Layer 2 ACT phase usage
-result = await agent.astream(
-    input="Execute: Read config.json and validate schema",
-    config={"configurable": {"thread_id": "thread-123__step-1"}}
-)
+agent.astream(input, config) → LangGraph execution:
+  Model turn → LLM processes input, decides tool calls
+  Tool execution → Execute tools, collect results, apply middlewares
+  Model turn → LLM processes results, decides more tools or final response
+  Stream output → Yield events
 ```
 
 ## Thread Model
 
 ### Sequential Execution
 
-Single thread context for sequential operations:
-
-```python
-# One agent turn, shared context
-result = await agent.astream(
-    input="Execute steps 1, 2, 3 sequentially",
-    config={"configurable": {"thread_id": "tid"}}
-)
-```
-
-**Characteristics**:
-- Single thread context: `thread_id` maintained across agent turn
-- Middlewares work per-thread: context isolation, memory persistence
-- Tools/subagents share thread state
-- Conversation history preserved
+Single thread context: `astream(input, config={"thread_id": "tid"})`. Shared context, middlewares per-thread, tools/subagents share state.
 
 ### Parallel Execution
 
-Isolated thread contexts for parallel operations:
+Isolated threads: `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])`. Parent → child threads, independent contexts, results merged after completion.
 
-```python
-# Multiple agent turns, isolated contexts
-results = await asyncio.gather(*[
-    agent.astream(
-        input=f"Execute: {step.description}",
-        config={"configurable": {"thread_id": f"{tid}__step_{i}"}}
-    )
-    for i, step in enumerate(steps)
-])
-```
-
-**Characteristics**:
-- Parent thread → child threads (`{parent}__step_{i}`)
-- Each parallel execution gets independent agent context
-- Results merged after parallel completion
-- Thread isolation prevents context pollution
-
-**Thread Naming Convention**:
-- Parent: `thread-123`
-- Parallel steps: `thread-123__step_0`, `thread-123__step_1`, `thread-123__step_2`
-- Goals: `thread-123__goal_a1b2c3d4`
+**Thread Naming**: Parent `thread-123`, parallel steps `thread-123__step_0/1/2`, goals `thread-123__goal_id`.
 
 ## Built-in Capabilities
 
 ### Tools
 
-**Execution Tools** (RFC-0016):
-- `execute`: Run shell commands
-- `ls`, `read_file`, `write_file`, `edit_file`: File operations
-- `glob`, `grep`: Search tools
+**Execution** (RFC-0016): `execute`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
 
-**Websearch Tools**:
-- `TavilySearchResults`: Tavily web search
-- `DuckDuckGoSearchRun`: DuckDuckGo search
+**Websearch**: `TavilySearchResults`, `DuckDuckGoSearchRun`.
 
-**Research Tools** (RFC-0021):
-- `ArxivQueryRun`: ArXiv paper search
-- `WikipediaQueryRun`: Wikipedia search
-- `GitHubAPIWrapper`: GitHub operations
+**Research** (RFC-0021): `ArxivQueryRun`, `WikipediaQueryRun`, `GitHubAPIWrapper`.
 
-**Other Tools**:
-- langchain ecosystem tools (Gmail, Python REPL, etc.)
-- Custom tools via configuration
+**Other**: langchain ecosystem tools, custom tools via configuration.
 
 ### Subagents
 
-**Browser** (deepagents): Web browsing and automation
-**Claude** (deepagents): Claude CLI integration
-**Skillify** (RFC-0004): Skill discovery and execution
-**Weaver** (RFC-0005): Code weaving and synthesis
+**Browser** (deepagents): Web browsing and automation.
+
+**Claude** (deepagents): Claude CLI integration.
+
+**Skillify** (RFC-0004): Skill discovery and execution.
+
+**Weaver** (RFC-0005): Code weaving and synthesis.
 
 ### MCP Servers
 
-**Loading**: Via langchain-mcp-adapters
-**Configuration**: In `config.yml` under `mcp_servers`
-**Exposure**: As tools through langchain tool interface
+Loading via langchain-mcp-adapters, configuration in `config.yml`, exposed as tools.
 
 ### Middlewares
 
-**deepagents Middlewares**:
-- `SummarizationMiddleware`: Auto-compaction for long conversations
-- `PromptCachingMiddleware`: Cache frequent prompts
-- `TodoListMiddleware`: Task tracking
-- `FilesystemMiddleware`: File operations
+**deepagents**: `SummarizationMiddleware`, `PromptCachingMiddleware`, `TodoListMiddleware`, `FilesystemMiddleware`.
 
-**Soothe Protocol Middlewares** (wrapped):
-- `ExecutionHintsMiddleware`: Process Layer 2 execution hints, inject into system prompt
-- `ContextMiddleware`: Context injection and persistence
-- `MemoryMiddleware`: Memory recall and persistence
-- `PolicyMiddleware`: Policy checking for actions
-- `PlannerMiddleware`: Planner protocol integration
+**Soothe Protocol** (wrapped): `ExecutionHintsMiddleware`, `ContextMiddleware`, `MemoryMiddleware`, `PolicyMiddleware`, `PlannerMiddleware`.
 
 ## Protocol Attachments
 
-Protocol instances are attached to the CompiledStateGraph for access during execution:
+Protocol instances attached to CompiledStateGraph: `agent.soothe_context`, `agent.soothe_memory`, `agent.soothe_planner`, `agent.soothe_policy`, `agent.soothe_durability`.
 
-```python
-agent = create_soothe_agent(config)
+**Usage**: Tools/middlewares access protocols via `state["agent"].soothe_*`.
 
-# Access protocol instances
-context = agent.soothe_context  # ContextProtocol
-memory = agent.soothe_memory    # MemoryProtocol
-planner = agent.soothe_planner  # PlannerProtocol
-policy = agent.soothe_policy    # PolicyProtocol
-durability = agent.soothe_durability  # DurabilityProtocol
-```
-
-**Usage in Tools/Middlewares**:
-```python
-# In a tool
-def my_tool(state: AgentState) -> str:
-    context = state["agent"].soothe_context
-    memory = state["agent"].soothe_memory
-    # Use protocols
-    ...
-```
-
-## Integration Contract
-
-### Layer 2 Usage Pattern
-
-Layer 2's ACT phase uses CoreAgent for step execution:
-
-```python
-# Layer 2 ACT phase
-async def execute_step_via_agent(
-    agent: CompiledStateGraph,
-    step: StepAction,
-    thread_id: str
-) -> StepResult:
-    """Execute single step through Layer 1 CoreAgent with hints."""
-
-    # Build config with Layer 2 → Layer 1 hints (advisory)
-    config = {
-        "configurable": {
-            "thread_id": thread_id,
-            "soothe_step_tools": step.tools,           # Suggested tools
-            "soothe_step_subagent": step.subagent,     # Suggested subagent
-            "soothe_step_expected_output": step.expected_output,  # Expected result
-        }
-    }
-
-    stream = await agent.astream(
-        input=f"Execute: {step.description}",
-        config=config  # Hints passed via config
-    )
-    # Collect evidence from stream
-    result = await collect_stream_evidence(stream)
-    return result
-```
+## Layer 2 Integration Contract
 
 ### Execution Hints
 
-Layer 2's ACT phase passes advisory execution hints to Layer 1 CoreAgent via `config.configurable`:
+Layer 2 passes advisory hints via `config.configurable`:
 
-| Hint Field | Purpose | Example |
-|------------|---------|---------|
-| `soothe_step_tools` | Suggested tools for execution | `["read_file", "grep"]` |
-| `soothe_step_subagent` | Suggested subagent to invoke | `"browser"` |
-| `soothe_step_expected_output` | Expected result description | `"File contents matching pattern"` |
+| Hint | Purpose | Example |
+|------|---------|---------|
+| `soothe_step_tools` | Suggested tools | `["read_file", "grep"]` |
+| `soothe_step_subagent` | Suggested subagent | `"browser"` |
+| `soothe_step_expected_output` | Expected result | `"File contents matching pattern"` |
 
-**Hint Behavior**:
-- **Advisory, not mandatory**: Layer 1 LLM considers hints but may choose different approach
-- **ExecutionHintsMiddleware**: Injects hints into system prompt for LLM consideration
-- **Natural integration**: LLM sees hints in decision-making context, decides final execution
-- **Backward compatible**: Steps without hints work unchanged (middleware skips processing)
+**Behavior**: Advisory (not mandatory), `ExecutionHintsMiddleware` injects into system prompt, LLM considers hints but decides final execution, backward compatible (steps without hints work unchanged).
 
-**Example Integration**:
-
+**Example**:
 ```python
-# Layer 2 Planner decision
-decision = AgentDecision(
-    steps=[
-        StepAction(
-            description="Find configuration files",
-            tools=["glob", "grep"],
-            expected_output="List of config files"
-        )
-    ],
-    execution_mode="sequential"
-)
+# Layer 2 decision
+decision = AgentDecision(steps=[StepAction(description="Find config files", tools=["glob", "grep"])])
 
-# Executor passes hints to Layer 1
+# Executor passes hints
 await core_agent.astream(
-    input="Execute: Find configuration files",
-    config={
-        "configurable": {
-            "thread_id": "thread-123",
-            "soothe_step_tools": ["glob", "grep"],
-            "soothe_step_expected_output": "List of config files"
-        }
-    }
+    input="Execute: Find config files",
+    config={"configurable": {"thread_id": "tid", "soothe_step_tools": ["glob", "grep"]}}
 )
-
-# CoreAgent LLM receives enhanced system prompt:
-# "You are Soothe agent...
-#
-# Execution hints: Suggested tools: glob, grep. Expected output: List of config files.
-# Consider using the suggested approach first, but decide based on what works best."
-#
-# → LLM decides to use glob first, then grep for filtering
 ```
 
-**Architecture Principle**: This integration honors the three-layer separation:
-- Layer 2 controls **what to execute** (step content + tool/subagent suggestions)
-- Layer 1 handles **how to execute** (runtime decisions with hints as context)
+### Responsibility Split
 
-### Responsibilities Split
+**Layer 2 Controls**: What to execute (step content), when to execute (timing), how to sequence (parallel/sequential/dependency), thread isolation.
 
-**Layer 2 Controls**:
-- What to execute (step content)
-- When to execute (iteration timing)
-- How to sequence (parallel vs sequential vs dependency)
-- Thread isolation strategy
-
-**Layer 1 (CoreAgent) Handles**:
-- How to execute (tool sequencing within agent turn)
-- Middleware application (context, memory, policy)
-- Thread state management
-- Tool/subagent orchestration
-
-## Architecture Role
-
-### Foundation for Multiple Consumers
-
-CoreAgent serves as foundation for:
-
-1. **Layer 2 ACT phase**: Step execution in agentic loop
-2. **CLI direct usage**: `soothe run "query"` without agentic loop
-3. **Daemon queries**: HTTP/WebSocket/Unix socket requests
-4. **Tool execution**: Subagent tool calls (deepagents `task` tool)
-
-### Execution Model
-
-```
-User Request (via CLI/daemon/agent)
-    ↓
-CoreAgent.astream(input, thread_config)
-    ↓
-LangGraph Model → Tools → Model loop
-    ↓
-Middlewares: context, memory, policy, planner
-    ↓
-Tools/Subagents: execute operations
-    ↓
-Stream results back to caller
-```
+**Layer 1 Handles**: How to execute (tool sequencing within turn), middleware application, thread state, tool/subagent orchestration.
 
 ## Implementation
 
-### File: `src/soothe/core/agent.py`
+**File**: `src/soothe/core/agent.py`
 
 **Status**: ✅ Implemented
 
-The `create_soothe_agent()` factory exists and assembles:
-- Tools from `soothe.tools.*`
-- Subagents from `soothe.subagents.*`
-- MCP servers from configuration
-- Middlewares from deepagents + Soothe protocols
-- Protocol instances from `soothe.protocols.*`
-
-**Implementation Notes**:
-- Uses `create_deep_agent()` from deepagents
-- Wires protocols as middleware
-- Attaches protocol instances to returned graph
-- Follows RFC-0001 Principle 2: "Extend deepagents, don't fork it"
+Factory assembles tools (`soothe.tools.*`), subagents (`soothe.subagents.*`), MCP servers, middlewares, protocols (`soothe.protocols.*`). Uses `create_deep_agent()` from deepagents, wires protocols as middleware, attaches instances to graph. Follows RFC-0001 Principle 2: "Extend deepagents, don't fork it".
 
 ## Configuration
 
 ```yaml
-# CoreAgent capabilities configured in SootheConfig
 providers:
   openai:
     api_key: ${OPENAI_API_KEY}
@@ -473,18 +179,9 @@ providers:
 models:
   default: openai:gpt-4o
   fast: openai:gpt-4o-mini
-  embedding: openai:text-embedding-3-small
 
-tools:
-  - execution
-  - websearch
-  - research
-
-subagents:
-  - browser
-  - claude
-  - skillify
-  - weaver
+tools: [execution, websearch, research]
+subagents: [browser, claude, skillify, weaver]
 
 mcp_servers:
   filesystem:
@@ -492,22 +189,24 @@ mcp_servers:
     args: ["/path/to/root"]
 ```
 
-## Related Documents
-
-- [RFC-0001](./RFC-0001-system-conceptual-design.md) - System Conceptual Design
-- [RFC-0002](./RFC-0002-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-0007](./RFC-0007-autonomous-goal-management-loop.md) - Layer 3: Autonomous Goal Management
-- [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) - Layer 2: Agentic Goal Execution
-- [RFC-0004](./RFC-0004-skillify-agent-architecture.md) - Skillify Subagent
-- [RFC-0005](./RFC-0005-weaver-agent-architecture.md) - Weaver Subagent
-- [RFC-0016](./RFC-0016-tool-interface-optimization.md) - Tool Interface
-- [RFC-0021](./RFC-0021-research-subagent.md) - Research Tools
-
 ## Changelog
 
 ### 2026-03-29
 - Initial RFC establishing Layer 1 foundation
-- Documented CoreAgent architecture based on existing implementation
-- Defined three-layer positioning and Layer 2 integration
-- Documented execution interface, thread model, built-in capabilities
-- Specified protocol attachments and middleware integration
+- Documented CoreAgent architecture, execution interface, thread model, capabilities
+- Specified protocol attachments and Layer 2 integration with execution hints
+
+## References
+
+- RFC-0001: System conceptual design
+- RFC-0002: Core modules architecture
+- RFC-0007: Layer 3 autonomous goal management
+- RFC-0008: Layer 2 agentic goal execution
+- RFC-0004: Skillify subagent
+- RFC-0005: Weaver subagent
+- RFC-0016: Tool interface
+- RFC-0021: Research tools
+
+---
+
+*Layer 1 CoreAgent runtime providing execution foundation through LangGraph Model → Tools → Model loop.*
