@@ -330,8 +330,14 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle deserialized dict messages (after JSON transport)."""
+        msg_type = msg.get("type", "")
         msg_id = msg.get("id", "")
-        is_chunk = msg.get("type") == "AIMessageChunk"
+        is_chunk = msg_type == "AIMessageChunk"
+
+        # Handle ToolMessage dicts (serialized via model_dump)
+        if msg_type in ("ToolMessage", "tool"):
+            self._handle_tool_message_dict(msg, is_main=is_main)
+            return
 
         if not is_chunk:
             if msg_id and msg_id in self._state.seen_message_ids:
@@ -388,7 +394,18 @@ class EventProcessor:
                     tool_call_id = block.get("id", "")
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
-        # Handle tool_call_chunks
+        # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
+        tool_calls = msg.get("tool_calls", [])
+        if isinstance(tool_calls, list):
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    name = tc.get("name", "")
+                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
+                        args = coerce_tool_call_args_to_dict(tc.get("args", {}))
+                        tool_call_id = tc.get("id", "")
+                        self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+
+        # Handle tool_call_chunks (streaming)
         tool_call_chunks = msg.get("tool_call_chunks", [])
         if isinstance(tool_call_chunks, list):
             for tc in tool_call_chunks:
@@ -398,6 +415,55 @@ class EventProcessor:
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+
+    def _handle_tool_message_dict(
+        self,
+        msg: dict[str, Any],
+        *,
+        is_main: bool,
+    ) -> None:
+        """Handle ToolMessage dict (serialized via model_dump).
+
+        Args:
+            msg: ToolMessage serialized as dict.
+            is_main: True if from main agent.
+        """
+        if not should_show(VerbosityTier.NORMAL, self._verbosity):
+            return
+
+        tool_name = msg.get("name", "tool")
+        tool_call_id = msg.get("tool_call_id", "")
+        content = msg.get("content", "")
+        if not isinstance(content, str):
+            content = str(content)
+
+        brief = extract_tool_brief(tool_name, content)
+
+        # Finalize pending tool call if needed (IG-053)
+        parsed_args, pending, needs_emit = finalize_pending_tool_call(
+            self._state.pending_tool_calls,
+            tool_call_id,
+        )
+        if needs_emit:
+            self._renderer.on_tool_call(
+                pending.get("name") or tool_name,
+                parsed_args or {},
+                tool_call_id,
+                is_main=pending.get("is_main", is_main),
+            )
+
+        # Determine if error
+        is_error = any(
+            indicator in content.lower() for indicator in ["error", "failed", "exception", "traceback"]
+        )
+
+        self._renderer.on_tool_result(
+            tool_name,
+            brief,
+            tool_call_id,
+            is_error=is_error,
+            is_main=is_main,
+        )
 
     def _emit_pending_tool_calls(self, is_main: bool) -> None:  # noqa: FBT001
         """Emit pending tool calls that have complete JSON args."""

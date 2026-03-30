@@ -86,12 +86,19 @@ def daemon_start(
             if pid_path().exists():
                 break
             time.sleep(0.2)
-        # Additional wait for WebSocket server to be fully ready
-        time.sleep(0.5)
-        if SootheDaemon.is_running() and _wait_for_daemon_ready(cfg):
-            pass  # Daemon started successfully
+        # Wait for WebSocket server to be fully ready with retries
+        # The daemon needs time to initialize transports after writing PID
+        ready = False
+        for _attempt in range(10):
+            time.sleep(0.5)
+            if SootheDaemon.is_running() and _wait_for_daemon_ready(cfg):
+                ready = True
+                break
+        if ready:
+            pid = pid_path().read_text().strip() if pid_path().exists() else "?"
+            typer.echo(f"Soothe daemon started (PID: {pid})")
         elif SootheDaemon.is_running():
-            typer.echo("Soothe daemon process started but did not become ready.", err=True)
+            typer.echo("Soothe daemon started but protocol readiness check failed.", err=True)
         else:
             typer.echo("Soothe daemon failed to start.", err=True)
 

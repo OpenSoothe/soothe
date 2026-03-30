@@ -225,14 +225,17 @@ class SootheDaemon(DaemonHandlersMixin):
 
     @staticmethod
     def _is_port_live(host: str, port: int) -> bool:
-        """Check if a TCP port is accepting connections.
+        """Check if a WebSocket server is accepting connections.
+
+        Uses a proper WebSocket connection attempt instead of raw TCP
+        to avoid "did not receive a valid HTTP request" errors.
 
         Args:
             host: Host address to check.
             port: TCP port number.
 
         Returns:
-            True if port is accepting connections, False otherwise.
+            True if WebSocket server is responsive, False otherwise.
         """
         import socket as sock_mod
 
@@ -240,8 +243,22 @@ class SootheDaemon(DaemonHandlersMixin):
             s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
             s.settimeout(1.0)
             s.connect((host, port))
+            # Send minimal WebSocket upgrade request instead of just closing
+            # This prevents "did not receive a valid HTTP request" errors
+            http_request = (
+                f"GET / HTTP/1.1\r\n"
+                f"Host: {host}:{port}\r\n"
+                f"Upgrade: websocket\r\n"
+                f"Connection: Upgrade\r\n"
+                f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                f"Sec-WebSocket-Version: 13\r\n"
+                f"\r\n"
+            )
+            s.sendall(http_request.encode())
+            # Read response to confirm server is alive
+            s.recv(128)
             s.close()
-        except (ConnectionRefusedError, OSError):
+        except (ConnectionRefusedError, OSError, TimeoutError):
             return False
         else:
             return True
