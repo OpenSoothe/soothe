@@ -245,11 +245,7 @@ class EventProcessor:
                         )
                         if coerced:
                             tool_call_emitted_from_blocks = True
-        elif (
-            is_main
-            and isinstance(msg.content, str)
-            and msg.content
-        ):
+        elif is_main and isinstance(msg.content, str) and msg.content:
             # Always pass to renderer for accumulation, let renderer decide display
             cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
             if cleaned:
@@ -356,11 +352,7 @@ class EventProcessor:
             content = msg.get("content", "")
             if isinstance(content, list):
                 blocks = content
-            elif (
-                is_main
-                and isinstance(content, str)
-                and content
-            ):
+            elif is_main and isinstance(content, str) and content:
                 # Always pass to renderer for accumulation, let renderer decide display
                 cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
                 if cleaned:
@@ -473,9 +465,7 @@ class EventProcessor:
             )
 
         # Determine if error
-        is_error = any(
-            indicator in content.lower() for indicator in ["error", "failed", "exception", "traceback"]
-        )
+        is_error = any(indicator in content.lower() for indicator in ["error", "failed", "exception", "traceback"])
 
         self._renderer.on_tool_result(
             tool_name,
@@ -613,7 +603,7 @@ class EventProcessor:
 
     def _clean_assistant_text(self, text: str, *, is_streaming: bool = False) -> str:
         """Apply shared response cleaning for user-facing assistant text.
-        
+
         Args:
             text: Text to clean.
             is_streaming: If True, preserve boundary whitespace for proper

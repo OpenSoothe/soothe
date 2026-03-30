@@ -19,13 +19,6 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from soothe.cognition import GoalEngine
-from soothe.tools.goals.events import (
-    GoalCompletedEvent,
-    GoalCreatedEvent,
-    GoalFailedEvent,
-    GoalListedEvent,
-)
-from soothe.utils.progress import emit_progress
 
 logger = logging.getLogger(__name__)
 
@@ -92,16 +85,6 @@ class CreateGoalTool(BaseTool):
         async def _create() -> dict[str, Any]:
             goal = await self.goal_engine.create_goal(description, priority=priority, parent_id=parent_id or None)
 
-            # Emit goal created event
-            emit_progress(
-                GoalCreatedEvent(
-                    goal_id=goal.id,
-                    description=description,
-                    priority=priority,
-                ).to_dict(),
-                logger,
-            )
-
             return {"created": goal.model_dump(mode="json")}
 
         return _run_async(_create())
@@ -144,15 +127,6 @@ class ListGoalsTool(BaseTool):
             filter_status = status if status in ("pending", "active", "completed", "failed") else None
             goals = await self.goal_engine.list_goals(filter_status)
 
-            # Emit goal listed event
-            emit_progress(
-                GoalListedEvent(
-                    count=len(goals),
-                    status_filter=status or "",
-                ).to_dict(),
-                logger,
-            )
-
             return {"goals": [g.model_dump(mode="json") for g in goals]}
 
         return _run_async(_list())
@@ -190,12 +164,6 @@ class CompleteGoalTool(BaseTool):
         async def _complete() -> dict[str, Any]:
             try:
                 goal = await self.goal_engine.complete_goal(goal_id)
-
-                # Emit goal completed event
-                emit_progress(
-                    GoalCompletedEvent(goal_id=goal_id).to_dict(),
-                    logger,
-                )
 
                 return {"completed": goal.model_dump(mode="json")}
             except KeyError:
@@ -248,15 +216,6 @@ class FailGoalTool(BaseTool):
         async def _fail() -> dict[str, Any]:
             try:
                 goal = await self.goal_engine.fail_goal(goal_id, error=reason)
-
-                # Emit goal failed event
-                emit_progress(
-                    GoalFailedEvent(
-                        goal_id=goal_id,
-                        reason=reason,
-                    ).to_dict(),
-                    logger,
-                )
 
                 return {"failed": goal.model_dump(mode="json")}
             except KeyError:

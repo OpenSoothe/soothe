@@ -9,11 +9,6 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from soothe.tools._internal.wizsearch._helpers import _require_wizsearch, _run_coro
-from soothe.tools.web_search.events import (
-    TOOL_WEBSEARCH_CRAWL_COMPLETED,
-    TOOL_WEBSEARCH_CRAWL_FAILED,
-    TOOL_WEBSEARCH_CRAWL_STARTED,
-)
 from soothe.utils.url_validation import validate_url
 
 logger = logging.getLogger(__name__)
@@ -46,7 +41,6 @@ class WizsearchCrawlPageTool(BaseTool):
         from wizsearch import PageCrawler
 
         from soothe.utils.output_capture import capture_subagent_output
-        from soothe.utils.progress import emit_progress
 
         _require_wizsearch()
         selected_format = (content_format or self.default_content_format).strip().lower()
@@ -56,16 +50,6 @@ class WizsearchCrawlPageTool(BaseTool):
         validated_url, error = validate_url(url)
         if error:
             logger.warning("Invalid URL: %s", error)
-            emit_progress(
-                {
-                    "type": TOOL_WEBSEARCH_CRAWL_FAILED,
-                    "url": url,
-                    "error": error,
-                    "tool": "wizsearch_crawl_page",
-                    "tool_group": "websearch",
-                },
-                logger,
-            )
             return {
                 "url": url,
                 "content_format": selected_format,
@@ -75,17 +59,6 @@ class WizsearchCrawlPageTool(BaseTool):
                 "content_length": 0,
                 "error": error,
             }
-
-        emit_progress(
-            {
-                "type": TOOL_WEBSEARCH_CRAWL_STARTED,
-                "url": validated_url,
-                "content_format": selected_format,
-                "tool": "wizsearch_crawl_page",
-                "tool_group": "websearch",
-            },
-            logger,
-        )
 
         try:
             with capture_subagent_output("wizsearch", suppress=True):
@@ -104,17 +77,6 @@ class WizsearchCrawlPageTool(BaseTool):
                 "content": content or "",
                 "content_length": len(content or ""),
             }
-
-            emit_progress(
-                {
-                    "type": TOOL_WEBSEARCH_CRAWL_COMPLETED,
-                    "url": validated_url,
-                    "content_length": len(content or ""),
-                    "tool": "wizsearch_crawl_page",
-                    "tool_group": "websearch",
-                },
-                logger,
-            )
         except Exception as exc:
             logger.exception("Crawl failed for %s", validated_url)
 
@@ -126,17 +88,6 @@ class WizsearchCrawlPageTool(BaseTool):
             elif "javascript" in error_str or "render" in error_str:
                 logger.warning("JavaScript rendering issue - page may require JS execution")
 
-            emit_progress(
-                {
-                    "type": TOOL_WEBSEARCH_CRAWL_FAILED,
-                    "url": validated_url,
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "tool": "wizsearch_crawl_page",
-                    "tool_group": "websearch",
-                },
-                logger,
-            )
             return {
                 "url": validated_url,
                 "content_format": selected_format,

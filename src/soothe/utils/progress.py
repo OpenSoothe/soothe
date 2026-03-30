@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 # Context variable for current step ID
 _current_step_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_step_id", default=None)
 
+# Constants for formatting
+_MAX_FIELD_LEN = 50
+
 
 def set_step_context(step_id: str | None) -> contextvars.Token:
     """Set the current step ID in context.
@@ -74,8 +77,8 @@ def _format_event_compact(event: dict[str, Any]) -> str:
             if field == "duration_ms":
                 parts.append(f"duration={val}ms")
             # Truncate long strings
-            elif isinstance(val, str) and len(val) > 50:
-                parts.append(f"{field}={val[:47]}...")
+            elif isinstance(val, str) and len(val) > _MAX_FIELD_LEN:
+                parts.append(f"{field}={val[: _MAX_FIELD_LEN - 3]}...")
             else:
                 parts.append(f"{field}={val}")
 

@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
 from soothe.utils import expand_path
-from soothe.utils.tool_logging import wrap_main_agent_tool_with_logging
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -155,8 +154,7 @@ def _resolve_tools_sequential(
     for name in tool_names:
         try:
             resolved = _resolve_single_tool_group(name, config)
-            wrapped = [wrap_main_agent_tool_with_logging(tool, logger, tool_group=name) for tool in resolved]
-            tools.extend(wrapped)
+            tools.extend(resolved)
         except Exception:
             logger.warning("Failed to load tool group '%s'", name, exc_info=True)
     return tools
@@ -187,7 +185,7 @@ def _resolve_tools_parallel(
 
     tools: list[BaseTool] = []
     for name in tool_names:
-        tools.extend(wrap_main_agent_tool_with_logging(t, logger, tool_group=name) for t in results.get(name, []))
+        tools.extend(results.get(name, []))
     return tools
 
 
@@ -232,7 +230,7 @@ def _resolve_single_tool_group_uncached(name: str, config: SootheConfig | None =
             plugin_tools = registry.get_tools_for_group(name)
             if plugin_tools:
                 logger.debug("Resolved tool group '%s' from plugins (%d tools)", name, len(plugin_tools))
-                return [wrap_main_agent_tool_with_logging(t, logger, tool_group=name) for t in plugin_tools]
+                return plugin_tools
     except RuntimeError:
         logger.debug("Plugin registry not loaded, falling back to hardcoded dispatch for '%s'", name)
 

@@ -24,14 +24,7 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from soothe.tools._internal.file_edit import _display_path, _normalize_workspace_relative_input
-from soothe.tools.file_ops.events import (
-    BackupEvent,
-    FileDeleteEvent,
-    FileReadEvent,
-    FileWriteEvent,
-)
 from soothe.utils import expand_path
-from soothe.utils.progress import emit_progress
 
 logger = logging.getLogger(__name__)
 
@@ -160,10 +153,6 @@ class ReadFileTool(BaseTool):
             logger.exception("Failed to read file")
             return f"Error reading file: {e}"
         else:
-            emit_progress(
-                FileReadEvent(path=str(resolved), bytes_read=len(result.encode("utf-8"))).to_dict(),
-                logger,
-            )
             return result
 
     async def _arun(self, path: str, start_line: int | None = None, end_line: int | None = None, **kwargs: Any) -> str:
@@ -279,11 +268,6 @@ class WriteFileTool(BaseTool):
         shutil.copy2(file_path, backup_path)
         logger.info("Created backup: %s", backup_path)
 
-        emit_progress(
-            BackupEvent(original_path=str(file_path), backup_path=str(backup_path)).to_dict(),
-            logger,
-        )
-
         return backup_path
 
     def _run(self, path: str, content: str, mode: str = "overwrite") -> str:
@@ -317,11 +301,6 @@ class WriteFileTool(BaseTool):
             resolved.parent.mkdir(parents=True, exist_ok=True)
 
             resolved.write_text(content, encoding="utf-8")
-
-            emit_progress(
-                FileWriteEvent(path=str(resolved), bytes_written=content_size, mode=mode).to_dict(),
-                logger,
-            )
 
             result = f"Created: {_display_path(resolved, self.work_dir)}"
             if backup_path:
@@ -454,11 +433,6 @@ class DeleteFileTool(BaseTool):
             backup_path = self._create_backup(resolved)
 
             resolved.unlink()
-
-            emit_progress(
-                FileDeleteEvent(path=str(resolved), backup_created=backup_path is not None).to_dict(),
-                logger,
-            )
 
             result = f"Deleted: {_display_path(resolved, self.work_dir)}"
             if backup_path:

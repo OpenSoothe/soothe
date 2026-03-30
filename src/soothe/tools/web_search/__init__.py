@@ -4,26 +4,12 @@ from typing import Any
 
 from soothe_sdk import plugin
 
-from .events import (
-    WebsearchCrawlCompletedEvent,
-    WebsearchCrawlFailedEvent,
-    WebsearchCrawlStartedEvent,
-    WebsearchSearchCompletedEvent,
-    WebsearchSearchFailedEvent,
-    WebsearchSearchStartedEvent,
-)
 from .implementation import CrawlWebTool, SearchWebTool, create_websearch_tools
 
 __all__ = [
     "CrawlWebTool",
     "SearchWebTool",
-    "WebsearchCrawlCompletedEvent",
-    "WebsearchCrawlFailedEvent",
-    "WebsearchCrawlStartedEvent",
     "WebsearchPlugin",
-    "WebsearchSearchCompletedEvent",
-    "WebsearchSearchFailedEvent",
-    "WebsearchSearchStartedEvent",
     "create_websearch_tools",
 ]
 

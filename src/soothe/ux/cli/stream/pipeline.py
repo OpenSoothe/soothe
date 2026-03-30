@@ -104,6 +104,8 @@ class StreamDisplayPipeline:
         Returns:
             VerbosityTier for the event.
         """
+        from soothe.core.event_catalog import REGISTRY
+
         # Goal events - NORMAL
         if event_type in GOAL_START_EVENTS:
             return VerbosityTier.NORMAL
@@ -112,20 +114,19 @@ class StreamDisplayPipeline:
         if event_type in STEP_START_EVENTS or event_type in STEP_COMPLETE_EVENTS:
             return VerbosityTier.NORMAL
 
-        # Custom tool progress events (soothe.tool.*.*) - NORMAL per RFC-0020
-        # These are different from LangChain tool_calls which are handled
-        # by CliRenderer.on_tool_call via EventProcessor.
-        # Custom events flow through on_progress_event -> pipeline.
-        if event_type.startswith("soothe.tool."):
-            return VerbosityTier.NORMAL
-
-        # Subagent events - NORMAL
-        if ".subagent." in event_type:
-            return VerbosityTier.NORMAL
-
         # Goal completion - QUIET (always visible)
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
+
+        # soothe.* events: defer to registry classification (RFC-0020)
+        # Tool events are INTERNAL (displayed via LangChain tool_calls, not custom events)
+        # Subagent events are NORMAL/DETAILED based on registration
+        if event_type.startswith("soothe."):
+            return REGISTRY.get_verbosity(event_type)
+
+        # Non-soothe events (from deepagents subagents)
+        if ".subagent." in event_type:
+            return VerbosityTier.NORMAL
 
         # Default to DETAILED (hidden at normal)
         return VerbosityTier.DETAILED
@@ -145,17 +146,6 @@ class StreamDisplayPipeline:
 
         if event_type in STEP_START_EVENTS:
             return self._on_step_started(event)
-
-        # Custom tool progress events
-        if event_type.startswith("soothe.tool.") and "_started" in event_type:
-            return self._on_tool_started(event)
-
-        if event_type.startswith("soothe.tool.") and "_completed" in event_type:
-            return self._on_tool_completed(event)
-
-        # Atomic tool events (read, write, backup, etc.)
-        if event_type.startswith("soothe.tool.") and not ("_started" in event_type or "_completed" in event_type):
-            return self._on_tool_atomic(event)
 
         if ".subagent." in event_type and ".dispatched" in event_type:
             return self._on_subagent_dispatched(event)
@@ -224,65 +214,6 @@ class StreamDisplayPipeline:
         step_num = self._context.steps_completed + 1
 
         return [format_step_header(step_num, description)]
-
-    def _on_tool_started(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle tool started event.
-
-        Args:
-            event: Event dictionary.
-
-        Returns:
-            Display lines for tool call.
-        """
-        tool_name = event.get("tool", "tool")
-        args = event.get("args", {})
-
-        # Format args for display
-        args_summary = ""
-        if args:
-            if isinstance(args, dict):
-                # Show first meaningful arg
-                for key, val in args.items():
-                    if val and not key.startswith("_"):
-                        args_summary = f"{val}" if isinstance(val, str) else str(val)[:40]
-                        break
-            else:
-                args_summary = str(args)[:40]
-
-        return [format_tool_call(tool_name, args_summary)]
-
-    def _on_tool_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle tool completed event.
-
-        Args:
-            event: Event dictionary.
-
-        Returns:
-            Display lines for tool result.
-        """
-        result_preview = event.get("result_preview", "")
-
-        # Truncate result for display
-        brief = result_preview[:50] if result_preview else "done"
-
-        return [format_subagent_done(brief, 0)]
-
-    def _on_tool_atomic(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle atomic tool event (read, write, backup, etc.).
-
-        Args:
-            event: Event dictionary.
-
-        Returns:
-            Display lines for atomic tool operation.
-        """
-        tool_name = event.get("tool", "tool")
-        path = event.get("path", "")
-
-        # Show path or other relevant info
-        args_summary = f'"{path[:40]}"' if path else ""
-
-        return [format_tool_call(tool_name, args_summary)]
 
     def _on_subagent_dispatched(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent dispatched event.

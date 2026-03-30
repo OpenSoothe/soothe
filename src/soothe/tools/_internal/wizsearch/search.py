@@ -17,11 +17,6 @@ from soothe.tools._internal.wizsearch._helpers import (
     _save_raw_results,
     _to_serializable_sources,
 )
-from soothe.tools.web_search.events import (
-    TOOL_WEBSEARCH_SEARCH_COMPLETED,
-    TOOL_WEBSEARCH_SEARCH_FAILED,
-    TOOL_WEBSEARCH_SEARCH_STARTED,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +148,6 @@ class WizsearchSearchTool(BaseTool):
         from wizsearch import WizSearch, WizSearchConfig
 
         from soothe.utils.output_capture import capture_subagent_output
-        from soothe.utils.progress import emit_progress
 
         _require_wizsearch()
         _maybe_apply_tavily_key()
@@ -173,17 +167,6 @@ class WizsearchSearchTool(BaseTool):
         for warning in validation_warnings:
             logger.warning("Engine %s: %s - %s", warning["engine"], warning["issue"], warning["message"])
 
-        emit_progress(
-            {
-                "type": TOOL_WEBSEARCH_SEARCH_STARTED,
-                "query": query,
-                "engines": self.default_engines,
-                "tool": "wizsearch_search",
-                "tool_group": "websearch",
-            },
-            logger,
-        )
-
         try:
             with capture_subagent_output("wizsearch", suppress=not self._debug_mode):
                 searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
@@ -194,36 +177,12 @@ class WizsearchSearchTool(BaseTool):
                     for engine_name, status in engine_status.items():
                         logger.debug("Engine %s: %s", engine_name, status)
 
-                sources = _to_serializable_sources(result)
-                emit_progress(
-                    {
-                        "type": TOOL_WEBSEARCH_SEARCH_COMPLETED,
-                        "query": query,
-                        "result_count": len(sources),
-                        "response_time": getattr(result, "response_time", None),
-                        "tool": "wizsearch_search",
-                        "tool_group": "websearch",
-                    },
-                    logger,
-                )
+                _ = _to_serializable_sources(result)  # Keep for potential future use
                 _save_raw_results(query, result)
                 return self._build_result_payload(result)
         except Exception as exc:
             logger.exception("Search failed with engines %s", self.default_engines)
 
-            emit_progress(
-                {
-                    "type": TOOL_WEBSEARCH_SEARCH_FAILED,
-                    "query": query,
-                    "error": str(exc),
-                    "engines": self.default_engines,
-                    "engine_status": getattr(exc, "engine_status", {}),
-                    "debug_mode": self._debug_mode,
-                    "tool": "wizsearch_search",
-                    "tool_group": "websearch",
-                },
-                logger,
-            )
             return f'Search failed for "{query}": {exc}'
 
     def _run(

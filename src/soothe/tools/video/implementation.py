@@ -14,16 +14,6 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools.video.events import (
-    VideoAnalysisCompletedEvent,
-    VideoAnalysisFailedEvent,
-    VideoAnalysisStartedEvent,
-    VideoProcessingEvent,
-    VideoUploadCompletedEvent,
-    VideoUploadStartedEvent,
-)
-from soothe.utils.progress import emit_progress
-
 logger = logging.getLogger(__name__)
 
 
@@ -104,42 +94,16 @@ class VideoAnalysisTool(BaseTool):
             RuntimeError: If upload fails.
         """
         try:
-            file_size_mb = video_path.stat().st_size / (1024 * 1024)
-
-            # Emit upload started event
-            emit_progress(
-                VideoUploadStartedEvent(
-                    video_path=str(video_path),
-                    file_size_mb=file_size_mb,
-                ).to_dict(),
-                logger,
-            )
+            _ = video_path.stat().st_size / (1024 * 1024)  # Check file size
 
             logger.info("Uploading video: %s", video_path)
 
             video_file = client.files.upload(file=str(video_path))
 
-            # Emit upload completed event
-            emit_progress(
-                VideoUploadCompletedEvent(
-                    video_path=str(video_path),
-                    file_name=video_file.name,
-                ).to_dict(),
-                logger,
-            )
-
             # Wait for processing
             import time
 
             while video_file.state.name == "PROCESSING":
-                # Emit processing event
-                emit_progress(
-                    VideoProcessingEvent(
-                        file_name=video_file.name,
-                        state=video_file.state.name,
-                    ).to_dict(),
-                    logger,
-                )
                 logger.debug("Waiting for video processing...")
                 time.sleep(2)
                 video_file = client.files.get(name=video_file.name)
@@ -178,15 +142,6 @@ class VideoAnalysisTool(BaseTool):
             from google import genai
             from google.genai.types import HttpOptions
 
-            # Emit analysis started event
-            emit_progress(
-                VideoAnalysisStartedEvent(
-                    video_path=video_path,
-                    question=question,
-                ).to_dict(),
-                logger,
-            )
-
             # Initialize client
             client = genai.Client(
                 api_key=api_key,
@@ -204,12 +159,6 @@ class VideoAnalysisTool(BaseTool):
                 request_kwargs={"timeout": 300},  # 5 minute timeout
             )
 
-            # Emit analysis completed event
-            emit_progress(
-                VideoAnalysisCompletedEvent(video_path=video_path).to_dict(),
-                logger,
-            )
-
             # Clean up uploaded file
             try:
                 client.files.delete(name=video_file.name)
@@ -219,23 +168,9 @@ class VideoAnalysisTool(BaseTool):
 
         except ImportError:
             error_msg = "google-genai not installed. Install with: pip install google-genai"
-            emit_progress(
-                VideoAnalysisFailedEvent(
-                    video_path=video_path,
-                    error=error_msg,
-                ).to_dict(),
-                logger,
-            )
             return f"Error: {error_msg}"
         except Exception as e:
             logger.exception("Video analysis failed")
-            emit_progress(
-                VideoAnalysisFailedEvent(
-                    video_path=video_path,
-                    error=str(e),
-                ).to_dict(),
-                logger,
-            )
             return f"Error analyzing video: {e}"
         else:
             return response.text

@@ -273,7 +273,7 @@ class DisplayPolicy:
             leading_ws = len(text) - len(text.lstrip())
             trailing_ws = len(text) - len(text.rstrip())
             lead = text[:leading_ws]
-            trail = text[len(text) - trailing_ws:] if trailing_ws > 0 else ""
+            trail = text[len(text) - trailing_ws :] if trailing_ws > 0 else ""
 
         text = self._filter_json_code_blocks(text)
         text = self._filter_plain_json(text)

@@ -28,19 +28,7 @@ from soothe.tools._internal.shell import (
     _shell_health_states,
     _shell_instances,
 )
-from soothe.tools.execution.events import (
-    BackgroundProcessStartedEvent,
-    CommandCompletedEvent,
-    CommandFailedEvent,
-    CommandStartedEvent,
-    CommandTimeoutEvent,
-    ProcessKilledEvent,
-    PythonExecutionCompletedEvent,
-    PythonExecutionStartedEvent,
-    ShellRecoveryEvent,
-)
 from soothe.utils import expand_path
-from soothe.utils.progress import emit_progress
 
 logger = logging.getLogger(__name__)
 
@@ -299,13 +287,6 @@ class RunCommandTool(BaseTool):
 
         logger.warning("Attempting to recover shell...")
 
-        # Emit shell recovery event
-        reason = "unresponsive shell"
-        emit_progress(
-            ShellRecoveryEvent(reason=reason).to_dict(),
-            logger,
-        )
-
         for attempt in range(max_retries):
             try:
                 with contextlib.suppress(Exception):
@@ -367,12 +348,6 @@ class RunCommandTool(BaseTool):
         # Use provided timeout or fall back to instance default
         actual_timeout = timeout if timeout is not None else self.timeout
 
-        # Emit command started event
-        emit_progress(
-            CommandStartedEvent(command=command, timeout=actual_timeout).to_dict(),
-            logger,
-        )
-
         health = _shell_health_states.get("default")
         if health is None:
             health = ShellHealthState()
@@ -387,14 +362,6 @@ class RunCommandTool(BaseTool):
                         self._recover_shell()
                         health.shell_recovered = True
                     except RuntimeError as e:
-                        emit_progress(
-                            CommandFailedEvent(
-                                command=command,
-                                error=f"Shell recovery failed: {e}",
-                                timeout_occurred=False,
-                            ).to_dict(),
-                            logger,
-                        )
                         return f"Error: Shell recovery failed. Please restart the application. Details: {e}"
             else:
                 health.shell_recovered = False
@@ -405,30 +372,12 @@ class RunCommandTool(BaseTool):
             try:
                 child.expect(self.custom_prompt, timeout=actual_timeout)
             except pexpect.TIMEOUT:
-                duration_ms = int((time.time() - start_time) * 1000)
                 trouble_sign = self._detect_trouble_sign(error=TimeoutError(f"Timeout after {actual_timeout}s"))
                 health.last_command_success = False
                 health.last_command_timestamp = datetime.now()
                 health.consecutive_failures += 1
                 health.last_trouble_sign = trouble_sign
                 health.first_command_executed = True
-
-                # Emit timeout event
-                emit_progress(
-                    CommandTimeoutEvent(
-                        command=command,
-                        timeout_seconds=actual_timeout,
-                    ).to_dict(),
-                    logger,
-                )
-                emit_progress(
-                    CommandFailedEvent(
-                        command=command,
-                        error=f"Timeout after {actual_timeout}s",
-                        timeout_occurred=True,
-                    ).to_dict(),
-                    logger,
-                )
 
                 return (
                     f"Error: Command timed out after {actual_timeout}s. "
@@ -442,27 +391,16 @@ class RunCommandTool(BaseTool):
             if len(output) > self.max_output_length:
                 output = output[: self.max_output_length] + "\n... (output truncated)"
 
-            duration_ms = int((time.time() - start_time) * 1000)
             health.last_command_success = True
             health.last_command_timestamp = datetime.now()
             health.consecutive_failures = 0
             health.last_trouble_sign = "none"
             health.first_command_executed = True
 
-            # Emit command completed event
-            emit_progress(
-                CommandCompletedEvent(
-                    command=command,
-                    exit_code=0,  # Success
-                    duration_ms=duration_ms,
-                ).to_dict(),
-                logger,
-            )
-
             return output.strip()
 
         except pexpect.EOF as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            _ = int((time.time() - start_time) * 1000)  # Duration tracking
             logger.exception("Shell process terminated unexpectedly")
             trouble_sign = self._detect_trouble_sign(error=e)
             health.last_command_success = False
@@ -473,19 +411,10 @@ class RunCommandTool(BaseTool):
             self._recover_shell()
             health.shell_recovered = True
 
-            # Emit failed event
-            emit_progress(
-                CommandFailedEvent(
-                    command=command,
-                    error="Shell terminated unexpectedly",
-                    timeout_occurred=False,
-                ).to_dict(),
-                logger,
-            )
             return "Error: Shell terminated unexpectedly. Shell has been restarted. Please retry your command."
 
         except Exception as e:
-            duration_ms = int((time.time() - start_time) * 1000)
+            _ = int((time.time() - start_time) * 1000)  # Duration tracking
             logger.exception("CLI command failed")
             trouble_sign = self._detect_trouble_sign(error=e)
             health.last_command_success = False
@@ -497,15 +426,6 @@ class RunCommandTool(BaseTool):
                 self._recover_shell()
                 health.shell_recovered = True
 
-            # Emit failed event
-            emit_progress(
-                CommandFailedEvent(
-                    command=command,
-                    error=str(e),
-                    timeout_occurred=False,
-                ).to_dict(),
-                logger,
-            )
             return f"Error executing command: {e}"
 
     async def _arun(self, command: str, timeout: int | None = None) -> str:  # noqa: ASYNC109
@@ -570,26 +490,9 @@ class RunPythonTool(BaseTool):
             # Default session ID
             actual_session_id = "default"
 
-        # Emit python execution started event
-        emit_progress(
-            PythonExecutionStartedEvent(session_id=actual_session_id).to_dict(),
-            logger,
-        )
-
         # Get session manager and execute
         manager = get_session_manager()
-        result = manager.execute(session_id=actual_session_id, code=code)
-
-        # Emit python execution completed event
-        emit_progress(
-            PythonExecutionCompletedEvent(
-                session_id=actual_session_id,
-                success=result.get("success", False),
-            ).to_dict(),
-            logger,
-        )
-
-        return result
+        return manager.execute(session_id=actual_session_id, code=code)
 
     async def _arun(self, code: str, session_id: str | None = None) -> dict[str, Any]:
         """Async execution (delegates to sync)."""
@@ -634,16 +537,10 @@ class RunBackgroundTool(BaseTool):
             output = ANSI_ESCAPE.sub("", output)
             pid = output.strip()
 
-            # Emit background process started event
             pid_int = int(pid)
         except Exception as e:
             return {"pid": None, "status": "error", "message": f"Error starting background process: {e}"}
         else:
-            emit_progress(
-                BackgroundProcessStartedEvent(command=command, pid=pid_int).to_dict(),
-                logger,
-            )
-
             return {"pid": pid_int, "status": "running", "message": f"Background process started with PID: {pid}"}
 
     async def _arun(self, command: str) -> dict[str, Any]:
@@ -684,12 +581,6 @@ class KillProcessTool(BaseTool):
 
             output = child.before or ""
             output = ANSI_ESCAPE.sub("", output)
-
-            # Emit process killed event
-            emit_progress(
-                ProcessKilledEvent(pid=pid).to_dict(),
-                logger,
-            )
 
         except Exception as e:
             return f"Error killing process: {e}"

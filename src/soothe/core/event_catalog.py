@@ -38,7 +38,6 @@ from soothe.core.base_events import (
     OutputEvent,
     ProtocolEvent,
     SootheEvent,
-    ToolEvent,
 )
 from soothe.core.verbosity_tier import VerbosityTier
 
@@ -438,91 +437,6 @@ class GoalDeferredEvent(ProtocolEvent):
 
 
 # ---------------------------------------------------------------------------
-# Tool events
-# ---------------------------------------------------------------------------
-
-
-class ToolStartedEvent(ToolEvent):
-    tool: str
-    args: str = ""
-    kwargs: str = ""
-
-
-class ToolCompletedEvent(ToolEvent):
-    tool: str
-    result_preview: str = ""
-
-
-class ToolFailedEvent(ToolEvent):
-    tool: str
-    error: str = ""
-
-
-class ToolResultEvent(ToolEvent):
-    """Tool execution result with separated LLM and display content.
-
-    This event enables event-level filtering by separating:
-    - llm_content: Full result with instructions/tags (for LLM context)
-    - display_content: Semantic summary (for user display)
-
-    This eliminates the need for post-hoc content filtering in most cases.
-    """
-
-    type: Literal["soothe.tool.execution.result"] = "soothe.tool.execution.result"
-    tool_call_id: str = ""
-    tool_name: str = ""
-    llm_content: str = ""  # Full result for LLM context
-    display_content: str = ""  # Semantic summary for user display
-    duration_ms: int = 0
-    args: dict[str, Any] = field(default_factory=dict)
-
-
-def make_tool_started(tool_name: str, *, tool_group: str | None = None, **extra: Any) -> dict[str, Any]:
-    """Build a main-agent tool-started event dict.
-
-    Args:
-        tool_name: Internal tool name (e.g. ``search_web``).
-        tool_group: User-facing tool group (e.g. ``websearch``).
-            When provided the type uses ``soothe.tool.<group>.<tool>_started``;
-            otherwise falls back to ``soothe.tool.<tool>.started``.
-        **extra: Additional event payload fields.
-    """
-    grp = tool_group or tool_name
-    etype = f"soothe.tool.{tool_group}.{tool_name}_started" if tool_group else f"soothe.tool.{tool_name}.started"
-    return {"type": etype, "tool": tool_name, "tool_group": grp, **extra}
-
-
-def make_tool_completed(tool_name: str, *, tool_group: str | None = None, **extra: Any) -> dict[str, Any]:
-    """Build a main-agent tool-completed event dict.
-
-    Args:
-        tool_name: Internal tool name.
-        tool_group: User-facing tool group.
-        **extra: Additional event payload fields.
-    """
-    grp = tool_group or tool_name
-    etype = f"soothe.tool.{tool_group}.{tool_name}_completed" if tool_group else f"soothe.tool.{tool_name}.completed"
-    return {"type": etype, "tool": tool_name, "tool_group": grp, **extra}
-
-
-def make_tool_failed(tool_name: str, *, tool_group: str | None = None, **extra: Any) -> dict[str, Any]:
-    """Build a main-agent tool-failed event dict.
-
-    Args:
-        tool_name: Internal tool name.
-        tool_group: User-facing tool group.
-        **extra: Additional event payload fields.
-    """
-    grp = tool_group or tool_name
-    etype = f"soothe.tool.{tool_group}.{tool_name}_failed" if tool_group else f"soothe.tool.{tool_name}.failed"
-    return {"type": etype, "tool": tool_name, "tool_group": grp, **extra}
-
-
-# ---------------------------------------------------------------------------
-# Tool and subagent event helpers
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Subagent tool events (generic for any subagent)
 # ---------------------------------------------------------------------------
 
@@ -599,7 +513,7 @@ _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "lifecycle": VerbosityTier.DETAILED,
     "protocol": VerbosityTier.DETAILED,
     "cognition": VerbosityTier.NORMAL,
-    "tool": VerbosityTier.NORMAL,  # RFC-0020: tool activity visible at normal
+    "tool": VerbosityTier.INTERNAL,  # RFC-0020: tool display via LangChain on_tool_call
     "subagent": VerbosityTier.NORMAL,  # RFC-0020: subagent activity visible at normal
     "output": VerbosityTier.QUIET,
     "error": VerbosityTier.QUIET,
@@ -883,14 +797,6 @@ _reg(
 )
 _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred: {reason}")
 
-# -- Tool result event -------------------------------------------------------
-_reg(
-    "soothe.tool.execution.result",
-    ToolResultEvent,
-    verbosity=VerbosityTier.NORMAL,  # RFC-0020: visible at normal
-    summary_template="{tool_name}: {display_content}",
-)
-
 # -- Output ------------------------------------------------------------------
 _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
@@ -910,13 +816,4 @@ import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402
 import soothe.subagents.research.events  # noqa: E402
 import soothe.subagents.skillify.events  # noqa: E402
-import soothe.subagents.weaver.events  # noqa: E402
-import soothe.tools.audio.events  # noqa: E402
-import soothe.tools.code_edit.events  # noqa: E402
-import soothe.tools.data.events  # noqa: E402
-import soothe.tools.execution.events  # noqa: E402
-import soothe.tools.file_ops.events  # noqa: E402
-import soothe.tools.goals.events  # noqa: E402
-import soothe.tools.image.events  # noqa: E402
-import soothe.tools.video.events  # noqa: E402
-import soothe.tools.web_search.events  # noqa: F401, E402
+import soothe.subagents.weaver.events  # noqa: E402, F401

@@ -202,7 +202,7 @@ class CliRenderer:
         # Format as child line with duration (RFC-0020 two-level tree)
         # Note: extract_tool_brief() may already include ✓/✗ icon
         result_stripped = result.lstrip()
-        if result_stripped.startswith("✓") or result_stripped.startswith("✗"):
+        if result_stripped.startswith(("✓", "✗")):
             # Result already has icon, don't add another
             result_line = f"  └ {result}"
         else:

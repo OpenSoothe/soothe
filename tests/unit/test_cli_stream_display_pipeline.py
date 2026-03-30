@@ -308,47 +308,41 @@ class TestStreamDisplayPipeline:
         assert "3 steps" in lines[0].content
 
     def test_tool_events_handled_by_pipeline(self) -> None:
-        """Tool events ARE handled by the pipeline at NORMAL verbosity.
+        """Tool events are INTERNAL (RFC-0020) - not displayed via pipeline.
 
-        Two parallel display paths exist:
-        1. LangChain tool_calls → CliRenderer.on_tool_call via EventProcessor
-        2. Custom tool events (soothe.tool.*) → pipeline via on_progress_event
-
-        Both paths display tool activity. Custom events provide fine-grained
-        progress tracking (started/completed) while LangChain tool_calls
-        provide the primary tool call display.
+        Tool display is via LangChain tool_calls → CliRenderer.on_tool_call.
+        Tool events (soothe.tool.*) are for logging/metrics only, not display.
+        They should be filtered out at NORMAL verbosity.
         """
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
-        # Tool started events now show at NORMAL verbosity
-        event = {
-            "type": "soothe.tool.file_ops.read_file_started",
-            "tool": "read_file",
-            "args": {"path": "config.yml"},
-        }
-        lines = pipeline.process(event)
-        assert len(lines) == 1
-        assert "read_file" in lines[0].content
-        assert lines[0].icon == "⚙"
-
-        # Tool completed events also show
-        event = {
-            "type": "soothe.tool.file_ops.read_file_completed",
-            "tool": "read_file",
-            "result_preview": "42 lines read",
-        }
-        lines = pipeline.process(event)
-        assert len(lines) == 1
-
-        # Atomic tool events (read, write, backup) also show
+        # Tool events should NOT be visible at NORMAL verbosity (INTERNAL)
+        # Using actual registered events from file_ops/events.py
         event = {
             "type": "soothe.tool.file_ops.read",
             "tool": "read_file",
             "path": "config.yml",
         }
         lines = pipeline.process(event)
-        assert len(lines) == 1
-        assert "read_file" in lines[0].content
+        assert len(lines) == 0  # Filtered out (INTERNAL tier)
+
+        # Tool write events should also NOT be visible
+        event = {
+            "type": "soothe.tool.file_ops.write",
+            "tool": "write_file",
+            "path": "config.yml",
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 0  # Filtered out (INTERNAL tier)
+
+        # Tool search events should also NOT be visible
+        event = {
+            "type": "soothe.tool.file_ops.search_started",
+            "tool": "search_files",
+            "pattern": "*.py",
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 0  # Filtered out (INTERNAL tier)
 
     def test_subagent_completed(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")

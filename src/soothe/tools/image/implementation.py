@@ -13,13 +13,6 @@ import logging
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
-from soothe.tools.image.events import (
-    ImageAnalysisCompletedEvent,
-    ImageAnalysisStartedEvent,
-    ImageOCRCompletedEvent,
-    ImageOCREvent,
-)
-from soothe.utils.progress import emit_progress
 from soothe.utils.tool_error_handler import tool_error_handler
 from soothe.utils.url_validation import validate_url
 
@@ -79,11 +72,6 @@ class ImageAnalysisTool(BaseTool):
     def _run(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
         from langchain.chat_models import init_chat_model
 
-        emit_progress(
-            ImageAnalysisStartedEvent(image_path=image_path, prompt=prompt).to_dict(),
-            logger,
-        )
-
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")
         msg = model.invoke(
@@ -98,21 +86,11 @@ class ImageAnalysisTool(BaseTool):
             ]
         )
 
-        emit_progress(
-            ImageAnalysisCompletedEvent(image_path=image_path).to_dict(),
-            logger,
-        )
-
         return str(msg.content)
 
     @tool_error_handler("analyze_image", return_type="str")
     async def _arun(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
         from langchain.chat_models import init_chat_model
-
-        emit_progress(
-            ImageAnalysisStartedEvent(image_path=image_path, prompt=prompt).to_dict(),
-            logger,
-        )
 
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")
@@ -126,11 +104,6 @@ class ImageAnalysisTool(BaseTool):
                     ],
                 }
             ]
-        )
-
-        emit_progress(
-            ImageAnalysisCompletedEvent(image_path=image_path).to_dict(),
-            logger,
         )
 
         return str(msg.content)
@@ -147,11 +120,6 @@ class ExtractTextFromImageTool(BaseTool):
     def _run(self, image_path: str) -> str:
         from langchain.chat_models import init_chat_model
 
-        emit_progress(
-            ImageOCREvent(image_path=image_path).to_dict(),
-            logger,
-        )
-
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")
         msg = model.invoke(
@@ -169,22 +137,11 @@ class ExtractTextFromImageTool(BaseTool):
             ]
         )
 
-        result = str(msg.content)
-        emit_progress(
-            ImageOCRCompletedEvent(image_path=image_path, text_length=len(result)).to_dict(),
-            logger,
-        )
-
-        return result
+        return str(msg.content)
 
     @tool_error_handler("extract_text_from_image", return_type="str")
     async def _arun(self, image_path: str) -> str:
         from langchain.chat_models import init_chat_model
-
-        emit_progress(
-            ImageOCREvent(image_path=image_path).to_dict(),
-            logger,
-        )
 
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")
@@ -203,13 +160,7 @@ class ExtractTextFromImageTool(BaseTool):
             ]
         )
 
-        result = str(msg.content)
-        emit_progress(
-            ImageOCRCompletedEvent(image_path=image_path, text_length=len(result)).to_dict(),
-            logger,
-        )
-
-        return result
+        return str(msg.content)
 
 
 def create_image_tools() -> list[BaseTool]:

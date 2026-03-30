@@ -43,12 +43,6 @@ class ProtocolEvent(SootheEvent):
     """Core protocol activity events."""
 
 
-class ToolEvent(SootheEvent):
-    """Main agent tool execution events."""
-
-    tool: str
-
-
 class SubagentEvent(SootheEvent):
     """Subagent activity events."""
 
@@ -70,5 +64,4 @@ __all__ = [
     "ProtocolEvent",
     "SootheEvent",
     "SubagentEvent",
-    "ToolEvent",
 ]

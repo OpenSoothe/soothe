@@ -82,10 +82,16 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("soothe.cognition.plan.created") == VerbosityTier.NORMAL
 
     def test_classify_tool_events(self) -> None:
-        """Tool events classify to NORMAL (RFC-0020: visible at normal)."""
-        assert classify_event_to_tier("soothe.tool.execution.result") == VerbosityTier.NORMAL
-        # Unregistered tool events fall back to domain default
-        assert classify_event_to_tier("soothe.tool.websearch.search_started") == VerbosityTier.NORMAL
+        """Tool events classify to INTERNAL (RFC-0020).
+
+        Tool calls are displayed via LangChain's on_tool_call/on_tool_result at NORMAL.
+        Internal tool events (soothe.tool.*) are for logging/metrics only, not display.
+        """
+        # All tool events should be INTERNAL (invisible) to avoid duplicate display
+        assert classify_event_to_tier("soothe.tool.execution.result") == VerbosityTier.INTERNAL
+        assert classify_event_to_tier("soothe.tool.websearch.search_started") == VerbosityTier.INTERNAL
+        assert classify_event_to_tier("soothe.tool.file_ops.read") == VerbosityTier.INTERNAL
+        assert classify_event_to_tier("soothe.tool.data.inspection_started") == VerbosityTier.INTERNAL
 
     def test_classify_output_events(self) -> None:
         """Output events classify to QUIET (always visible)."""
