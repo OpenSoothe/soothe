@@ -120,6 +120,8 @@ All RFCs are now under the target limits:
   - Fixed inconsistency: tool display is handled by CliRenderer via EventProcessor, not pipeline events
   - Clarified architecture: LangChain tool_calls → CliRenderer, custom events → StreamDisplayPipeline
   - Updated CLI event visibility table to remove non-existent event types
+  - Updated Principle 5 to reference RFC-0019's RendererProtocol pattern instead of outdated "Required Helpers"
+  - Added note clarifying RFC-0019 defines rendering architecture, RFC-0020 defines display patterns
 
 ## Recent Changes (2026-03-29)
 

@@ -8,6 +8,8 @@
 **Updated**: 2026-03-30
 **Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015, RFC-0019, RFC-0024
 
+**Note**: Rendering architecture is defined by RFC-0019 (`RendererProtocol` callbacks). This RFC defines the display patterns, verbosity behavior, and formatting rules that renderers follow.
+
 ## Abstract
 
 This RFC establishes the architectural foundation for displaying agent activity events across CLI and TUI interfaces using a **registry-driven, three-level tree display system**. Events register their display metadata (templates, verbosity) at definition time, enabling automatic integration without renderer modifications.
@@ -100,17 +102,27 @@ Level 3 (Result):        └ ✓ Result metrics
 - `"Tool: {tool}"` → "Tool: read_file"
 - `"Done (${cost_usd}, {duration_ms}ms)"` → "Done ($0.0023, 1234ms)"
 
-### Principle 5: Surface-Aware Rendering with Shared Semantics
+### Principle 5: Surface-Aware Rendering via RendererProtocol
 
 **Rule**: Presentation semantics are shared, but final formatting is surface-aware.
 
-**Required Helpers**:
-- `classify_display_event(namespace, mode, data)` → semantic classification
-- `build_presentation_item(event, registry, verbosity)` → shared presentation item creation
-- `clean_response_text(text)` → strip internal tags and embellishment
-- `extract_quiet_answer(text)` → answer extraction with fallback confidence
-- `render_headless_block(item)` → headless text block output
-- `render_tui_item(item)` → TUI widget mapping
+**Architecture** (per RFC-0019):
+- `EventProcessor` handles unified event routing, state management, and verbosity filtering
+- `RendererProtocol` callbacks define the rendering interface
+- `CliRenderer` and `TuiRenderer` implement mode-specific display
+
+**Shared Semantics**:
+- `classify_event_to_tier(event_type, namespace)` → `VerbosityTier` (RFC-0024)
+- `build_event_summary(event_type, data)` → formatted string from registry template
+- `DisplayPolicy.filter_content(text)` → strip internal tags and embellishment
+- `DisplayPolicy.extract_quiet_answer(text)` → answer extraction with fallback
+- `should_show(tier, verbosity)` → visibility check via integer comparison
+
+**RendererProtocol Callbacks**:
+- `on_assistant_text()` → streaming text output
+- `on_tool_call()` / `on_tool_result()` → tool execution display
+- `on_progress_event()` → custom event handling
+- `on_plan_created/step_started/step_completed()` → plan progress
 
 **Formatting Rule**:
 - Headless output prepends one empty line before every displayed block.
@@ -305,6 +317,21 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
 ```
 
 ## Implementation Requirements
+
+### RendererProtocol Implementation (RFC-0019)
+
+Each renderer implements `RendererProtocol` callbacks for mode-specific display:
+
+**CliRenderer** (`src/soothe/ux/cli/renderer.py`):
+- `on_tool_call()` → writes `⚙ ToolName(args)` to stderr
+- `on_tool_result()` → writes `└ ✓ result (duration)` to stderr
+- `on_assistant_text()` → streams text to stdout
+- `on_progress_event()` → delegates to `StreamDisplayPipeline`
+
+**TuiRenderer** (`src/soothe/ux/tui/renderer.py`):
+- Implements same callbacks with Rich widget output
+- Uses `VerbosityTier` for visibility filtering
+- Maintains display state (streaming buffers, panel updates)
 
 ### Event Registration
 
