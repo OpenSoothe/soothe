@@ -17,7 +17,6 @@ from soothe.ux.cli.stream.formatter import (
     format_subagent_done,
     format_subagent_milestone,
     format_tool_call,
-    format_tool_result,
 )
 from soothe.ux.core.display_policy import VerbosityLevel, normalize_verbosity
 
@@ -113,10 +112,8 @@ class StreamDisplayPipeline:
         if event_type in STEP_START_EVENTS or event_type in STEP_COMPLETE_EVENTS:
             return VerbosityTier.NORMAL
 
-        # Tool events - NORMAL (key change from DETAILED)
-        # Match: soothe.tool.file_ops.read_file_started, soothe.tool.*.call_started, etc.
-        if ".tool." in event_type and ("_started" in event_type or "_completed" in event_type):
-            return VerbosityTier.NORMAL
+        # Tool events are handled by CliRenderer.on_tool_call/on_tool_result
+        # via EventProcessor, not through the pipeline. This avoids duplicate display.
 
         # Subagent events - NORMAL
         if ".subagent." in event_type:
@@ -145,12 +142,7 @@ class StreamDisplayPipeline:
         if event_type in STEP_START_EVENTS:
             return self._on_step_started(event)
 
-        # Tool events: soothe.tool.file_ops.read_file_started, soothe.tool.*.call_started
-        if ".tool." in event_type and "_started" in event_type:
-            return self._on_tool_call_started(event)
-
-        if ".tool." in event_type and "_completed" in event_type:
-            return self._on_tool_call_completed(event)
+        # Tool events are handled by CliRenderer, not pipeline
 
         if ".subagent." in event_type and ".dispatched" in event_type:
             return self._on_subagent_dispatched(event)
@@ -219,78 +211,6 @@ class StreamDisplayPipeline:
         step_num = self._context.steps_completed + 1
 
         return [format_step_header(step_num, description)]
-
-    def _on_tool_call_started(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle tool call started event.
-
-        Args:
-            event: Event dictionary.
-
-        Returns:
-            Display lines for tool call.
-        """
-        # Handle both event formats:
-        # - soothe.tool.file_ops.read_file_started: {'tool': 'read_file', 'args': {...}}
-        # - soothe.tool.*.call_started: {'name': 'read_file', 'tool_call_id': '...'}
-        tool_call_id = event.get("tool_call_id", event.get("id", ""))
-        name = event.get("name", event.get("tool", "tool"))
-        args = event.get("args", {})
-        args_summary = self._format_args_summary(args)
-
-        # Track tool call
-        start_time = time.time()
-        self._context.start_tool_call(tool_call_id, name, args_summary, start_time)
-
-        lines = []
-
-        # If entering parallel mode and header not yet emitted with (parallel)
-        if (
-            self._context.parallel_mode
-            and not self._context.parallel_header_emitted
-            and self._context.current_step_description
-        ):
-            # Re-emit step header with (parallel) suffix
-            step_num = self._context.steps_completed + 1
-            lines.append(format_step_header(step_num, self._context.current_step_description, parallel=True))
-            self._context.parallel_header_emitted = True
-
-        # Emit tool call
-        is_running = self._context.parallel_mode
-        lines.append(format_tool_call(name, args_summary, running=is_running))
-
-        return lines
-
-    def _on_tool_call_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle tool call completed event.
-
-        Args:
-            event: Event dictionary.
-
-        Returns:
-            Display lines for tool result.
-        """
-        # Handle both event formats:
-        # - soothe.tool.file_ops.read_file_completed: {'tool': 'read_file', 'result_preview': '...'}
-        # - soothe.tool.*.call_completed: {'name': 'read_file', 'result': '...', 'duration_ms': 100}
-        tool_call_id = event.get("tool_call_id", event.get("id", ""))
-        name = event.get("name", event.get("tool", "tool"))
-        result = event.get("result", event.get("result_preview", ""))
-        is_error = event.get("is_error", False)
-        duration_ms = event.get("duration_ms", 0)
-
-        # Track tool call if not already tracked
-        if not tool_call_id:
-            tool_call_id = f"{name}_{time.time()}"
-
-        # Get tool info and calculate duration if not provided
-        tool_info = self._context.complete_tool_call(tool_call_id)
-        if tool_info and duration_ms == 0:
-            duration_ms = int((time.time() - tool_info.start_time) * 1000)
-
-        # Format result summary
-        summary = self._format_result_summary(result, is_error=is_error)
-
-        return [format_tool_result(summary, duration_ms, is_error=is_error)]
 
     def _on_subagent_dispatched(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent dispatched event.
@@ -399,48 +319,6 @@ class StreamDisplayPipeline:
         self._context.reset_goal()
 
         return [format_goal_done(goal, steps, total_s)]
-
-    def _format_args_summary(self, args: Any, max_len: int = 40) -> str:
-        """Format tool args as summary string.
-
-        Args:
-            args: Args value (dict or other).
-            max_len: Maximum length.
-
-        Returns:
-            Truncated args summary.
-        """
-        if isinstance(args, dict):
-            # Show first key-value pair
-            if args:
-                key = next(iter(args))
-                val = str(args[key])[:20]
-                return f'{key}="{val}"'
-            return ""
-
-        return str(args)[:max_len]
-
-    def _format_result_summary(self, result: Any, *, is_error: bool, max_len: int = 60) -> str:
-        """Format tool result as summary string.
-
-        Args:
-            result: Result value.
-            is_error: Whether result is an error.
-            max_len: Maximum length.
-
-        Returns:
-            Truncated result summary.
-        """
-        s = str(result)
-        if is_error:
-            # Show more of error messages
-            return s[:max_len]
-
-        # Try to extract meaningful summary
-        if len(s) <= max_len:
-            return s
-
-        return s[: max_len - 3] + "..."
 
 
 __all__ = ["StreamDisplayPipeline"]

@@ -1,4 +1,9 @@
-"""Tests for CLI Stream Display Pipeline (RFC-0020)."""
+"""Tests for CLI Stream Display Pipeline (RFC-0020).
+
+NOTE: Tool call display is handled by CliRenderer.on_tool_call/on_tool_result
+via EventProcessor, NOT through the pipeline. The pipeline handles goal/step/subagent events.
+Tool formatters remain for subagent dispatch display.
+"""
 
 from __future__ import annotations
 
@@ -192,7 +197,11 @@ class TestPipelineContext:
 
 
 class TestStreamDisplayPipeline:
-    """Tests for StreamDisplayPipeline."""
+    """Tests for StreamDisplayPipeline.
+
+    Note: Tool events are handled by CliRenderer.on_tool_call/on_tool_result
+    via EventProcessor. The pipeline focuses on goal/step/subagent events.
+    """
 
     def test_goal_started(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
@@ -221,74 +230,20 @@ class TestStreamDisplayPipeline:
         assert "Step 1" in lines[0].content
         assert "Read config" in lines[0].content
 
-    def test_tool_call_visible_at_normal(self) -> None:
+    def test_subagent_dispatched(self) -> None:
+        """Test subagent dispatch shows as tool call."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.tool.read_file.call_started",
-            "tool_call_id": "tc1",
-            "name": "read_file",
-            "args": {"path": "config.yml"},
-        }
-        lines = pipeline.process(event)
-
-        # Tool calls should be visible at NORMAL verbosity
-        assert len(lines) == 1
-        assert "read_file" in lines[0].content
-
-    def test_tool_result_visible_at_normal(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
-
-        # First start the tool call
-        pipeline.process(
-            {
-                "type": "soothe.tool.read_file.call_started",
-                "tool_call_id": "tc1",
-                "name": "read_file",
-                "args": {},
-            }
-        )
-
-        event = {
-            "type": "soothe.tool.read_file.call_completed",
-            "tool_call_id": "tc1",
-            "result": "Read 42 lines",
-            "duration_ms": 150,
+            "type": "soothe.subagent.research.dispatched",
+            "name": "research",
+            "query": "quantum computing papers",
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].icon == "✓"
-        assert lines[0].duration_ms == 150
-
-    def test_parallel_tool_detection(self) -> None:
-        pipeline = StreamDisplayPipeline(verbosity="normal")
-        pipeline._context.current_step_description = "Test step"
-        pipeline._context.steps_completed = 0
-
-        # Start first tool
-        pipeline.process(
-            {
-                "type": "soothe.tool.read_file.call_started",
-                "tool_call_id": "tc1",
-                "name": "read_file",
-                "args": {},
-            }
-        )
-
-        # Start second tool - should trigger parallel mode
-        lines = pipeline.process(
-            {
-                "type": "soothe.tool.glob.call_started",
-                "tool_call_id": "tc2",
-                "name": "glob",
-                "args": {},
-            }
-        )
-
-        # Should emit step header with (parallel) and tool call
-        assert pipeline._context.parallel_mode
-        assert any("(parallel)" in line.content for line in lines)
+        assert "research_subagent" in lines[0].content
+        assert lines[0].icon == "⚙"
 
     def test_subagent_step_shown_for_query(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
@@ -328,12 +283,10 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
         assert len(lines) == 1
 
-        # Tool calls should not show at quiet
+        # Goal start should not show at quiet
         event = {
-            "type": "soothe.tool.read_file.call_started",
-            "tool_call_id": "tc1",
-            "name": "read_file",
-            "args": {},
+            "type": "soothe.agentic.loop.started",
+            "goal": "test",
         }
         lines = pipeline.process(event)
         assert len(lines) == 0
@@ -353,3 +306,36 @@ class TestStreamDisplayPipeline:
         assert lines[0].icon == "●"
         assert "complete" in lines[0].content
         assert "3 steps" in lines[0].content
+
+    def test_tool_events_not_handled_by_pipeline(self) -> None:
+        """Tool events should not be handled by the pipeline.
+
+        Tool display is handled by CliRenderer.on_tool_call/on_tool_result
+        via EventProcessor processing LangChain tool_calls.
+        """
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        # These tool event types should not produce output from pipeline
+        # They are handled by CliRenderer directly
+        event = {
+            "type": "soothe.tool.file_ops.read",
+            "tool": "read_file",
+            "path": "config.yml",
+        }
+        lines = pipeline.process(event)
+        # Tool events are classified as DETAILED, hidden at normal
+        assert len(lines) == 0
+
+    def test_subagent_completed(self) -> None:
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.subagent.research.completed",
+            "summary": "5 papers found",
+            "duration_s": 45.2,
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert "Done: 5 papers" in lines[0].content
+        assert lines[0].duration_ms == 45200
