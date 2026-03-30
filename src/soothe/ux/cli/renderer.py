@@ -322,11 +322,27 @@ class CliRenderer:
         self.write_lines(lines)
 
     def on_turn_end(self) -> None:
-        """Finalize output on turn end."""
-        if self._state.full_response:
+        """Finalize output on turn end.
+
+        If multi_step_active was suppressing output, flush the accumulated
+        response to stdout now that the plan is complete.
+        """
+        # Output any accumulated response that was suppressed during multi-step plan
+        if self._state.multi_step_active and self._state.full_response:
+            # Add separation after stderr progress output
+            sys.stdout.write("\n\n")
+            # Output the accumulated response
+            sys.stdout.write("".join(self._state.full_response))
             sys.stdout.write("\n")
             sys.stdout.flush()
+        elif self._state.full_response:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        # Reset state for next turn
         self._state.needs_stdout_newline = False
+        self._state.multi_step_active = False
+        self._state.full_response = []
 
     def _ensure_newline(self) -> None:
         """Ensure stdout has newline before stderr output.

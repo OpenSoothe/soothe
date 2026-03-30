@@ -42,6 +42,46 @@ def get_step_id() -> str | None:
     return _current_step_id.get()
 
 
+def _format_event_compact(event: dict[str, Any]) -> str:
+    """Format event dict into a compact, readable string.
+
+    Extracts key fields and formats them concisely:
+    - Shortens event type (removes 'soothe.' prefix)
+    - Shows important fields based on event type
+    - Truncates long values
+
+    Args:
+        event: Event dictionary with at minimum a 'type' key.
+
+    Returns:
+        Compact string representation.
+    """
+    event_type = event.get("type", "unknown")
+    # Shorten type: "soothe.tool.execution.command_started" -> "tool.execution.command_started"
+    short_type = event_type.replace("soothe.", "") if event_type.startswith("soothe.") else event_type
+
+    # Key fields to extract (in priority order)
+    key_fields = ["tool", "command", "exit_code", "duration_ms", "error", "timeout", "pid", "session_id", "success"]
+
+    parts = [short_type]
+
+    for field in key_fields:
+        if field in event:
+            val = event[field]
+            if val is None:
+                continue
+            # Format duration nicely
+            if field == "duration_ms":
+                parts.append(f"duration={val}ms")
+            # Truncate long strings
+            elif isinstance(val, str) and len(val) > 50:
+                parts.append(f"{field}={val[:47]}...")
+            else:
+                parts.append(f"{field}={val}")
+
+    return " ".join(parts)
+
+
 def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:
     """Emit a progress event via the LangGraph stream writer with logging fallback.
 
@@ -55,8 +95,8 @@ def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:
         event: Event dict with at minimum a ``type`` key.
         logger: Caller's logger instance for logging.
     """
-    # Always log to file first for audit trail
-    logger.info("Progress: %s", event)
+    # Always log to file first for audit trail (compact format)
+    logger.info(_format_event_compact(event))
 
     # Inject step_id if available in context
     step_id = get_step_id()

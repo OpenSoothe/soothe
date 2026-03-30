@@ -796,7 +796,7 @@ _reg(
 _reg(
     "soothe.agentic.step.started",
     AgenticStepStartedEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
 )
 _reg(

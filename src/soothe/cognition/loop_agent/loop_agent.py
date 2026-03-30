@@ -118,7 +118,7 @@ class LoopAgent:
         )
 
         logger.info(
-            "Starting Layer 2 loop for goal: %s (max_iterations: %d)",
+            "Starting agentic loop for goal: %s (max_iterations: %d)",
             goal[:100],
             max_iterations,
         )

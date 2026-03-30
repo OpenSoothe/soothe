@@ -102,7 +102,7 @@ class TestFormatters:
         line = format_step_header(1, "Read files", parallel=False)
         assert line.level == 2
         assert line.content == "Step 1: Read files"
-        assert line.icon == "└"
+        assert line.icon == ""  # Connector is in indent, not icon
         assert line.status is None
 
     def test_format_step_header_parallel(self) -> None:

@@ -10,473 +10,254 @@
 
 ## Abstract
 
-This RFC defines a typed, registry-based progress event protocol for Soothe's `soothe.*` custom event system. It introduces a domain-tiered naming hierarchy (`soothe.<domain>.<component>.<action>`), typed event models, O(1) registry dispatch, and a unified renderer protocol. The design replaces the current ad-hoc `dict[str, Any]` events, duplicated if-elif rendering chains, and inconsistent naming conventions with a single-source-of-truth event catalog that is type-safe, extensible, and structurally classifiable.
+This RFC defines a typed, registry-based progress event protocol for Soothe's `soothe.*` custom event system. It introduces a domain-tiered naming hierarchy (`soothe.<domain>.<component>.<action>`), typed event models, O(1) registry dispatch, and unified renderer protocol. The design replaces ad-hoc `dict[str, Any]` events, duplicated if-elif rendering chains, and inconsistent naming with a single-source-of-truth event catalog that is type-safe, extensible, and structurally classifiable.
 
-## Motivation
+## Problem Statement
 
-Progress events are the sole mechanism for protocol orchestration observability between the Soothe daemon/runner and CLI/TUI consumers. The current implementation suffers from ten systemic drawbacks:
+Current implementation has ten systemic issues:
 
-### D1. No type safety
-
-Events are `dict[str, Any]` with magic string keys. A typo in `"soothe.plan.step_starrted"` is silently ignored. `core/events.py` defines constants for only 13 of 70+ distinct event types; the rest are inline string literals scattered across 10+ files.
-
-### D2. O(n) if-elif dispatch
-
-`progress_renderer.py` uses ~30 if-elif branches (209 lines). `renderers.py` uses ~25 branches in `_handle_protocol_event`, ~12 in `_handle_subagent_progress`, and ~10 in `_handle_subagent_custom`. Every event traverses a linear scan.
-
-### D3. Quadruple-duplicated rendering logic
-
-The same event types are independently handled in four consumer locations:
-- `cli/rendering/progress_renderer.py` (headless CLI stderr)
-- `cli/tui/renderers.py` (TUI activity panel via Rich Text)
-- `cli/execution/daemon_runner.py` (daemon headless, ad-hoc for `final_report`/`chitchat`)
-- `cli/execution/standalone_runner.py` (standalone headless, same ad-hoc)
-
-Each has its own formatting. For example, `soothe.browser.step` is rendered three different ways.
-
-### D4. No single source of truth
-
-Event type strings are scattered across `core/events.py`, `_runner_phases.py`, `_runner_steps.py`, `_runner_autonomous.py`, `_runner_checkpoint.py`, `subagents/browser.py`, `subagents/claude.py`, `subagents/weaver/`, `subagents/skillify/`, `subagents/research/`, `tools/_internal/wizsearch/`, and `utils/tool_logging.py`.
-
-### D5. No payload validation
-
-Missing required fields silently produce broken rendering. `soothe.plan.step_started` expects `step_id` but nothing enforces it at emission time.
-
-### D6. Inconsistent naming
-
-- Subagent tools: `soothe.{agent}.tool_start` vs main agent: `soothe.tool.{name}.started`
-- Tense inconsistency: `projected` vs `started` vs `step_completed` in the same domain
-- `soothe.chitchat.*`, `soothe.autonomous.*` are undocumented in RFC-0003
-
-### D7. Closed taxonomy
-
-Adding a new event requires modifying the emitter, `progress_renderer.py`, `renderers.py`, and `progress_verbosity.py`'s prefix sets. No open extension mechanism exists.
-
-### D8. No event versioning
-
-No mechanism to add or rename fields without breaking all consumers simultaneously.
-
-### D9. Fragile verbosity classification
-
-`classify_custom_event()` uses hardcoded `_SUBAGENT_PREFIXES` sets and string heuristics (`"thinking" in etype`). New subagents or protocols must be manually added.
-
-### D10. Duplicated event construction
-
-`_runner_phases.py` builds a full plan-created dict inline (15 lines). `tool_logging.py` repeats nearly identical emit blocks four times (120 lines of boilerplate). No builder helpers exist.
+1. **No type safety** - Events are `dict[str, Any]`, typos silently ignored, only 13 of 70+ event types have constants
+2. **O(n) dispatch** - ~30 if-elif branches in `progress_renderer.py`, ~25 in `renderers.py`, linear scans
+3. **Quadruple-duplicated logic** - Same events handled independently in 4 locations with inconsistent formatting
+4. **No single source of truth** - Event strings scattered across 10+ files
+5. **No payload validation** - Missing fields cause silent rendering failures
+6. **Inconsistent naming** - `soothe.{agent}.tool_start` vs `soothe.tool.{name}.started`, tense inconsistency
+7. **Closed taxonomy** - Adding events requires modifying emitters, renderers, verbosity classification
+8. **No versioning** - No mechanism for backward-compatible field changes
+9. **Fragile classification** - Hardcoded prefix sets and string heuristics
+10. **Duplicated construction** - 120 lines of boilerplate in `tool_logging.py`
 
 ## Design Principles
 
-### Principle 1: Structural classification via naming
-
-The event type string itself encodes the classification domain. No runtime heuristics or hardcoded prefix sets are needed — `event_type.split(".")[1]` yields the domain.
-
-### Principle 2: Single source of truth
-
-Every event type is defined exactly once in a central catalog module. Emission sites import typed constructors; consumer sites import handler registrations. No inline string literals for event types.
-
-### Principle 3: Type-safe emission and consumption
-
-Event payloads are validated at construction time via Pydantic models. Missing required fields raise immediate errors at the emission site, not silent rendering failures downstream.
-
-### Principle 4: O(1) dispatch
-
-Consumers use a `dict[str, Handler]` registry instead of if-elif chains. Handler lookup is constant-time. Unknown event types fall through to a default handler.
-
-### Principle 5: Open for extension, closed for modification
-
-Adding a new event type requires only: (1) define the model in the catalog, (2) register handler(s). No existing consumer code is modified. The registry is append-only.
-
-### Principle 6: Render once, display anywhere
-
-Each event type defines a single canonical summary extraction. Renderers (CLI, TUI, JSONL) differ only in formatting/styling, not in field extraction or message composition.
-
-### Principle 7: Wire-format backward compatibility
-
-The JSON wire format is unchanged: `{"type": "soothe.xxx.yyy.zzz", ...fields}`. Typed models serialize to the same dict shape via `.model_dump()`. The IPC protocol (RFC-0013) is unaffected.
+1. **Structural classification** - Event type encodes domain: `event_type.split(".")[1]`
+2. **Single source of truth** - Central catalog, no inline string literals
+3. **Type-safe emission** - Pydantic models validate at construction
+4. **O(1) dispatch** - Registry lookup, not if-elif chains
+5. **Open extension** - Add events without modifying consumers
+6. **Render once** - Single summary extraction, multiple display formats
+7. **Wire-format compatible** - Unchanged JSON: `{"type": "...", ...fields}`
 
 ## Prefix Hierarchy
 
-### Current state: flat namespace
+### Current: Flat Namespace
 
-All events share `soothe.<something>.*` with 14+ distinct second-level segments. Protocols (`soothe.context.*`), subagents (`soothe.browser.*`), lifecycle (`soothe.thread.*`), tools (`soothe.tool.*`), and output (`soothe.chitchat.*`) sit at the same level. Classification requires hardcoded prefix sets in `classify_custom_event()`.
+`soothe.<something>.*` with 14+ second-level segments. Different patterns for subagent tools vs main agent tools. Classification requires hardcoded prefix sets.
 
-Subagent tool events use a completely different pattern from main agent tools:
-- Main agent: `soothe.tool.{name}.started` / `.completed` / `.failed`
-- Subagent: `soothe.{agent}.tool_start` / `.tool_end` / `.tool_error`
-
-### Proposed: 4-segment `soothe.<domain>.<component>.<action>`
-
-A mandatory **domain** tier is introduced as the second segment.
+### Proposed: 4-Segment `soothe.<domain>.<component>.<action>`
 
 ```
 soothe.<domain>.<component>.<action>
   │       │         │          │
-  │       │         │          └── past-participle verb (created, started, completed, failed, ...)
-  │       │         └── protocol name, subagent name, or tool name
-  │       └── one of: lifecycle, protocol, tool, subagent, output, error
+  │       │         │          └── past-participle (created, started, completed, failed)
+  │       │         └── protocol/subagent/tool name
+  │       └── lifecycle, protocol, tool, subagent, output, error
   └── fixed prefix
 ```
 
-#### Domain definitions
+### Domain Definitions
 
-| Domain | Purpose | Default VerbosityTier |
-|--------|---------|----------------------|
-| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `DETAILED` |
-| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `DETAILED` |
-| `tool` | Main agent tool execution lifecycle | `DETAILED` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver, planner tool calls, scout tool calls | `DETAILED` (promoted key events at `NORMAL`) |
-| `output` | Content destined for user display: chitchat responses, final reports, subagent text/response | `QUIET` |
-| `error` | Error events | `QUIET` (always shown) |
+| Domain | Purpose | Default Tier |
+|--------|---------|--------------|
+| `lifecycle` | Thread/session/iteration/checkpoint/recovery | DETAILED |
+| `protocol` | Context/memory/plan/policy/goal | DETAILED |
+| `tool` | Main agent tool execution | DETAILED |
+| `subagent` | Browser/research/claude/skillify/weaver | DETAILED (promoted key events: NORMAL) |
+| `output` | Chitchat/final reports | QUIET |
+| `error` | Error events | QUIET (always shown) |
 
-See [RFC-0024](./RFC-0024-verbosity-tier-unification.md) for the complete VerbosityTier specification.
+**Classification**: `classify_event(event_type) = event_type.split(".")[1]`
 
-#### Classification rule
+### Naming Conventions
 
-```python
-def classify_event(event_type: str) -> str:
-    segments = event_type.split(".")
-    if len(segments) >= 2:
-        return segments[1]  # lifecycle, protocol, tool, subagent, output, error
-    return "unknown"
-```
+**Action suffixes**: `created`, `started`, `resumed`, `saved`, `completed`, `failed`, `projected`, `recalled`, `ingested`, `stored`, `checked`, `denied`, `reflected`
 
-No prefix sets. No string heuristics. Structural by construction.
+**Component names**: `thread`, `context`, `memory`, `plan`, `policy`, `goal`, `iteration`, `checkpoint`, `recovery`, `browser`, `research`, `claude`, `skillify`, `weaver`, `chitchat`
 
-### Naming conventions
+**Subagent tool events**: Unified as `soothe.subagent.<agent>.tool_started/completed/failed`
 
-#### Action suffixes
+### Migration Mapping
 
-All action suffixes use past participle for state changes and observations:
+**Lifecycle**: `soothe.thread.*` → `soothe.lifecycle.thread.*`
 
-| Category | Suffixes |
-|----------|----------|
-| Lifecycle transitions | `created`, `started`, `resumed`, `saved`, `ended`, `completed` |
-| Activity lifecycle | `started`, `completed`, `failed` |
-| Protocol observations | `projected`, `recalled`, `ingested`, `stored`, `checked`, `denied`, `reflected` |
-
-#### Component names
-
-Components use the existing protocol or subagent name in snake_case: `thread`, `context`, `memory`, `plan`, `policy`, `goal`, `iteration`, `checkpoint`, `recovery`, `browser`, `research`, `claude`, `skillify`, `weaver`, `planner`, `scout`, `chitchat`, `autonomous`.
-
-For dynamic main-agent tools, `<component>` is the tool name: `soothe.tool.search.started`, `soothe.tool.read_file.completed`.
-
-#### Subagent tool events
-
-Subagent tool events are unified under a consistent pattern:
-
-```
-soothe.subagent.<agent>.tool_started
-soothe.subagent.<agent>.tool_completed
-soothe.subagent.<agent>.tool_failed
-```
-
-This replaces the current inconsistent `soothe.{agent}.tool_start` / `tool_end` / `tool_error` and aligns suffixes with the main agent tool pattern.
-
-### Migration mapping
-
-All current events migrate to the new domain-prefixed naming. Key patterns:
-
-**Lifecycle**: `soothe.thread.*` → `soothe.lifecycle.thread.*`, `soothe.iteration.*` → `soothe.lifecycle.iteration.*`
-
-**Protocol**: `soothe.context.*` → `soothe.protocol.context.*`, `soothe.memory.*` → `soothe.protocol.memory.*`, `soothe.plan.*` → `soothe.cognition.plan.*`, `soothe.policy.*` → `soothe.protocol.policy.*`, `soothe.goal.*` → `soothe.cognition.goal.*`
+**Protocol**: `soothe.context.*` → `soothe.protocol.context.*`, `soothe.plan.*` → `soothe.cognition.plan.*`
 
 **Tool**: Largely unchanged (`soothe.tool.{name}.*`)
 
-**Subagent**: `soothe.browser.*` → `soothe.subagent.browser.*`, `soothe.claude.*` → `soothe.subagent.claude.*`, `soothe.research.*` → `soothe.subagent.research.*`, `soothe.skillify.*` → `soothe.subagent.skillify.*`, `soothe.weaver.*` → `soothe.subagent.weaver.*`
+**Subagent**: `soothe.browser.*` → `soothe.subagent.browser.*`
 
-**Subagent tool events**: `soothe.{agent}.tool_start` → `soothe.subagent.{agent}.tool_started` (unified suffix pattern)
+**Output**: `soothe.chitchat.*` → `soothe.output.chitchat.*`
 
-**Output**: `soothe.chitchat.*` → `soothe.output.chitchat.*`, `soothe.autonomous.final_report` → `soothe.output.autonomous.final_report`
-
-**Error**: `soothe.error` → `soothe.error.general`
-
-Subagent events with 5-segment depth (e.g., `soothe.skillify.retrieve.started`) are flattened to 4 segments using underscores: `soothe.subagent.skillify.retrieve_started`.
+**Subagent tools**: `soothe.{agent}.tool_start` → `soothe.subagent.{agent}.tool_started`
 
 ## Architecture
 
-### Event model hierarchy
-
-All events inherit from `SootheEvent` (Pydantic `BaseModel`) with domain-specific base classes:
+### Event Model Hierarchy
 
 ```
 SootheEvent (BaseModel)
-├── LifecycleEvent      — Thread and session lifecycle
-├── ProtocolEvent       — Core protocol activity
-├── ToolEvent           — Main agent tool execution (includes tool: str field)
-├── SubagentEvent       — Subagent activity
-├── OutputEvent         — Content for user display
-└── ErrorEvent          — Error events (includes error: str field)
+├── LifecycleEvent
+├── ProtocolEvent
+├── ToolEvent (includes tool: str)
+├── SubagentEvent
+├── OutputEvent
+└── ErrorEvent (includes error: str)
 ```
 
-### Base event model
+### Base Event Model
 
 ```python
 class SootheEvent(BaseModel):
-    """Base class for all Soothe progress events."""
     type: str
-
     model_config = ConfigDict(extra="allow")
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(exclude_none=True)
+
+    def emit(self, logger: logging.Logger) -> None:
+        emit_progress(self.to_dict(), logger)
 ```
 
-The `extra="allow"` policy permits forward-compatible consumption. Each concrete event class uses `Literal` type for the `type` field (e.g., `type: Literal["soothe.cognition.plan.step_started"]`).
-
-### Example concrete models
-
-```python
-class PlanStepStartedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.step_started"] = "soothe.cognition.plan.step_started"
-    step_id: str
-    description: str
-    depends_on: list[str] = []
-    batch_index: int | None = None
-
-class ToolStartedEvent(ToolEvent):
-    type: str  # Dynamic: "soothe.tool.{name}.started"
-    tool: str
-    args: str = ""
-    kwargs: str = ""
-```
-
-### Event catalog and registry
-
-A central catalog module (`core/event_catalog.py`) serves as the single source of truth:
+### Event Catalog & Registry
 
 ```python
 @dataclass(frozen=True)
 class EventMeta:
-    """Metadata for a registered event type."""
     type_string: str
     model: type[SootheEvent]
     domain: str
     component: str
     action: str
-    verbosity: VerbosityTier  # Unified visibility tier (RFC-0024)
+    verbosity: VerbosityTier
     summary_template: str
 
 class EventRegistry:
-    """Central registry for all Soothe event types."""
-
-    def register(self, meta: EventMeta) -> None: ...
-    def get_meta(self, event_type: str) -> EventMeta | None: ...
-    def classify(self, event_type: str) -> str: ...
-    def get_verbosity(self, event_type: str) -> VerbosityTier: ...
-    def on(self, event_type: str, handler: EventHandler) -> None: ...
-    def dispatch(self, event: dict[str, Any]) -> None: ...
+    def register(self, meta: EventMeta) -> None
+    def get_meta(self, event_type: str) -> EventMeta | None
+    def classify(self, event_type: str) -> str
+    def get_verbosity(self, event_type: str) -> VerbosityTier
+    def on(self, event_type: str, handler: EventHandler) -> None
+    def dispatch(self, event: dict[str, Any]) -> None
 
 REGISTRY = EventRegistry()
 ```
 
-The registry provides O(1) dispatch via `dict[str, EventMeta]` lookup, replacing if-elif chains. Domain default verbosity is configured in `_DOMAIN_DEFAULT_TIER` (see RFC-0024).
+O(1) dispatch via dict lookup, domain default verbosity from RFC-0024.
 
-### Event emission
-
-Emission sites use typed constructors instead of raw dicts:
+### Event Emission
 
 ```python
-# Before (current):
-yield _custom({"type": "soothe.plan.step_started", "step_id": s.id, "description": s.description})
-
-# After (proposed):
-yield _custom(PlanStepStartedEvent(step_id=s.id, description=s.description).to_dict())
+# Before: yield _custom({"type": "soothe.plan.step_started", "step_id": s.id})
+# After:  yield _custom(PlanStepStartedEvent(step_id=s.id, description=s.description).to_dict())
 ```
 
-For convenience, an `emit()` helper is provided on the base model:
-
-```python
-class SootheEvent(BaseModel):
-    def emit(self, logger: logging.Logger) -> None:
-        from soothe.utils.progress import emit_progress
-        emit_progress(self.to_dict(), logger)
-```
-
-### Renderer protocol
-
-A unified renderer protocol replaces the duplicated if-elif rendering logic:
+### Renderer Protocol
 
 ```python
 class EventRenderer(Protocol):
-    """Protocol for rendering progress events."""
-
     def render(self, event: dict[str, Any], *, verbosity: VerbosityLevel = "normal") -> None:
-        """Render event with verbosity filtering via VerbosityTier comparison."""
-```
+        """Render event with verbosity filtering."""
 
-Three implementations:
-
-1. **`CliEventRenderer`** — replaces `progress_renderer.py`. Writes formatted text to stderr.
-2. **`TuiEventRenderer`** — replaces `_handle_protocol_event`, `_handle_subagent_progress`, `_handle_subagent_custom` in `renderers.py`. Produces Rich `Text` objects for the activity panel.
-3. **`JsonlEventRenderer`** — passthrough for `--format jsonl` mode.
-
-Each renderer uses registry-based dispatch internally:
-
-```python
-class CliEventRenderer:
-    def __init__(self, registry: EventRegistry) -> None:
-        self._registry = registry
-        self._handlers: dict[str, Callable] = {}
-        self._register_handlers()
-
-    def render(self, event: dict[str, Any], *, verbosity: VerbosityLevel = "normal") -> None:
+class CliEventRenderer:  # Replaces progress_renderer.py
+    def render(self, event, *, verbosity="normal"):
         etype = event.get("type", "")
         meta = self._registry.get_meta(etype)
-        if meta and not should_show(meta.verbosity, verbosity):  # RFC-0024 integer comparison
+        if meta and not should_show(meta.verbosity, verbosity):  # RFC-0024
             return
         handler = self._handlers.get(etype, self._default_handler)
         handler(event)
-
-    def _default_handler(self, event: dict[str, Any]) -> None:
-        etype = event.get("type", "")
-        domain = self._registry.classify(etype)
-        tag = etype.split(".")[-2] if len(etype.split(".")) >= 3 else domain
-        summary = self._extract_summary(event)
-        sys.stderr.write(f"[{tag}] {summary}\n")
-        sys.stderr.flush()
 ```
 
-### Summary extraction
+**Implementations**: `CliEventRenderer` (stderr), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough).
 
-Each event registration includes a `summary_template` that defines how to extract a human-readable one-liner:
+### Summary Extraction
+
+Each registration includes `summary_template`:
 
 ```python
 EventMeta(
     type_string="soothe.cognition.plan.step_started",
     model=PlanStepStartedEvent,
-    domain="cognition",
-    component="plan",
-    action="step_started",
     verbosity=VerbosityTier.NORMAL,
     summary_template="Step {step_id}: {description}",
 )
 ```
 
-The renderer evaluates the template against the event dict using `str.format_map()`. For events that need custom logic (e.g., conditional fields), the handler can override the template.
+Renderer evaluates template via `str.format_map()`.
 
-### Data flow
+### Data Flow
 
 ```
-Emission Site                    Registry                    Consumer
-─────────────                    ────────                    ────────
-PlanStepStartedEvent(            REGISTRY.get_meta(          CliEventRenderer.render(
-  step_id="s1",        ──to_dict()──>  "soothe.protocol.    ──dispatch──>  handler(event)
-  description="..."               plan.step_started")          │
-)                                   │                          ├─ template: "Step {step_id}: {description}"
-                                    ├─ verbosity: "protocol"   ├─ should_show(verbosity)?
-                                    └─ domain: "protocol"      └─ sys.stderr.write("[plan] Step s1: ...")
+Emission Site → REGISTRY.get_meta() → Renderer.render() → should_show(verbosity) → handler(event)
+                ├─ verbosity            ├─ template         ├─ integer comparison
+                └─ domain               └─ extraction       └─ display
 ```
 
-### Verbosity integration
-
-The registry replaces `classify_custom_event()` entirely. Visibility is determined by integer comparison:
+### Verbosity Integration
 
 ```python
 def should_render(event_type: str, verbosity: VerbosityLevel) -> bool:
     tier = REGISTRY.get_verbosity(event_type)
-    return should_show(tier, verbosity)  # tier <= verbosity via integer comparison
+    return should_show(tier, verbosity)  # tier <= verbosity
 ```
 
-See RFC-0024 for the `VerbosityTier` enum and `should_show()` implementation.
-
-Promoted subagent events (visible at `normal` verbosity) are registered with `verbosity=VerbosityTier.NORMAL` instead of the domain default `VerbosityTier.DETAILED`.
+Replaces `classify_custom_event()` entirely. Promoted events registered with `VerbosityTier.NORMAL`.
 
 ## Event Catalog
 
-The complete event catalog with all event types, fields, and verbosity classifications is maintained in [event-catalog.md](event-catalog.md).
+Complete catalog maintained in [event-catalog.md](event-catalog.md).
 
-### Event domains
+### Event Domains
 
-| Domain | Purpose | Default VerbosityTier |
-|--------|---------|----------------------|
-| `lifecycle` | Thread creation/resume/save, iteration start/end, checkpoint, recovery | `DETAILED` |
-| `protocol` | Core protocol activity: context, memory, plan, policy, goal | `DETAILED` |
-| `tool` | Main agent tool execution lifecycle | `DETAILED` |
-| `subagent` | All subagent activity: browser, research, claude, skillify, weaver | `DETAILED` (promoted key events at `NORMAL`) |
-| `output` | Content destined for user display: chitchat responses, final reports | `QUIET` |
-| `error` | Error events | `QUIET` (always shown) |
+| Domain | Purpose | Default Tier |
+|--------|---------|--------------|
+| `lifecycle` | Thread/iteration/checkpoint | DETAILED |
+| `protocol` | Context/memory/plan/policy/goal | DETAILED |
+| `tool` | Main agent tools | DETAILED |
+| `subagent` | Browser/research/claude/skillify/weaver | DETAILED (promoted: NORMAL) |
+| `output` | Chitchat/final reports | QUIET |
+| `error` | Errors | QUIET |
 
 ## Event Access
 
-### Real-time streaming
+**Real-time**: WebSocket/Unix socket streaming (RFC-0013).
 
-Real-time event streaming uses WebSocket or Unix socket transports as defined in RFC-0013. Events are streamed immediately as they occur during agent execution.
+**Historical**: `GET /api/v1/threads/{thread_id}/messages` with filtering by `kind`, `type`, time range.
 
-### Historical access
-
-Historical events can be retrieved via the REST API endpoint:
-
-```http
-GET /api/v1/threads/{thread_id}/messages
-```
-
-This endpoint supports filtering by `kind`, `type`, and time range. See RFC-0013 for complete REST API specification.
-
-### Event classification
-
-Events are classified by domain (second segment of type string):
-
-```python
-def classify_event(event_type: str) -> str:
-    segments = event_type.split(".")
-    return segments[1] if len(segments) >= 2 else "unknown"
-```
-
-Classification values: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`
+**Classification**: `classify_event(event_type) = event_type.split(".")[1]` → domain.
 
 ## Backward Compatibility
 
-### Wire format
+### Wire Format
 
-The JSON wire format is unchanged. Events are `{"type": "...", ...fields}` dicts. The IPC protocol (RFC-0013) event message wrapping is unaffected. Typed models serialize to the same dict shape via `model_dump(exclude_none=True)`.
+Unchanged JSON: `{"type": "...", ...fields}`. Models serialize via `model_dump(exclude_none=True)`.
 
-### Migration strategy
+### Migration Strategy
 
-Migration uses a staged approach:
+**Phase 1** (Non-breaking): Create catalog/registry, emit new-format strings, consumers handle both formats.
 
-**Phase 1: Catalog and registry (non-breaking)**
-- Create `core/event_catalog.py` with all event models and registry
-- Event models accept both old and new type strings during transition
-- Emit new-format strings from emission sites
-- Consumer registrations handle both formats
+**Phase 2**: Replace if-elif chains with registry dispatch, `CliEventRenderer`/`TuiEventRenderer` replace old renderers.
 
-**Phase 2: Consumer migration**
-- Replace if-elif chains in renderers with registry dispatch
-- `CliEventRenderer` replaces `progress_renderer.py`
-- `TuiEventRenderer` replaces `_handle_protocol_event`, `_handle_subagent_progress`, `_handle_subagent_custom`
-- `classify_custom_event()` delegates to `REGISTRY.classify()`
-
-**Phase 3: Cleanup**
-- Remove old `core/events.py` constants (superseded by catalog)
-- Remove `_SUBAGENT_PREFIXES` and `_PROTOCOL_PREFIXES` sets
-- Remove deprecated if-elif rendering functions
+**Phase 3**: Remove old constants, prefix sets, deprecated functions.
 
 ### Versioning
 
-Event models support forward compatibility via `extra="allow"` in the Pydantic config. Consumers ignore unknown fields. If a field is renamed, both old and new names can coexist during transition via field aliases.
+Forward compatibility via `extra="allow"`. Field renames use aliases during transition.
 
 ## Architectural Constraints
 
-1. **All events MUST use the 4-segment type string** `soothe.<domain>.<component>.<action>` with the exception of dynamic tool events which may have the tool name as the component.
-2. **All event types MUST be registered** in the central catalog before emission.
-3. **Consumers MUST NOT match event types with if-elif chains**; registry dispatch is mandatory.
-4. **Event models MUST validate required fields** at construction time.
-5. **The wire format MUST remain JSON dicts** for IPC compatibility.
-6. **New subagents automatically get the `soothe.subagent.<name>.*` prefix** without modifying any consumer code.
+1. All events MUST use 4-segment type string `soothe.<domain>.<component>.<action>`
+2. All event types MUST be registered in catalog before emission
+3. Consumers MUST use registry dispatch, not if-elif chains
+4. Event models MUST validate required fields at construction
+5. Wire format MUST remain JSON dicts for IPC compatibility
+6. New subagents automatically get `soothe.subagent.<name>.*` prefix
 
-## Dependencies
+## References
 
-- RFC-0003 (CLI TUI Architecture Design — current event taxonomy)
-- RFC-0013 (Unified Daemon Communication Protocol — IPC message wrapping)
-- RFC-0024 (VerbosityTier Unification — unified verbosity classification)
-
-## Related Documents
-
-- [RFC-0003](./RFC-0003.md) — CLI TUI Architecture Design (superseded for event schema; retains TUI layout, daemon architecture)
-- [RFC-0013](./RFC-0013.md) — Unified Daemon Communication Protocol
-- [RFC-0024](./RFC-0024-verbosity-tier-unification.md) — VerbosityTier Unification
-- [RFC Index](./rfc-index.md) — All RFCs
+- RFC-0003: CLI TUI Architecture (superseded for event schema)
+- RFC-0013: Daemon Communication Protocol
+- RFC-0024: VerbosityTier Unification
 
 ---
 
-*This RFC supersedes the "Protocol custom events" table in RFC-0003 Section "Stream Architecture" for event type definitions, naming conventions, and schema specifications. RFC-0003 retains ownership of TUI layout, daemon architecture, stream format, and IPC protocol.*
+*Registry-based progress events with domain-tiered naming, type-safe models, O(1) dispatch.*

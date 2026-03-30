@@ -33,7 +33,11 @@ class DisplayLine:
         Returns:
             Formatted line ready for output.
         """
-        parts = [self.indent, self.icon, " ", self.content]
+        # Handle empty icon (connector already in indent)
+        if self.icon:
+            parts = [self.indent, self.icon, " ", self.content]
+        else:
+            parts = [self.indent, self.content]
 
         if self.status:
             parts.append(f" [{self.status}]")

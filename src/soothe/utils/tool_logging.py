@@ -162,6 +162,18 @@ def wrap_main_agent_tool_with_logging(
 
     tool_name = tool.name if isinstance(tool, BaseTool) else getattr(tool, "__name__", "unknown")
 
+    # Skip wrapper for tools that emit their own detailed progress events
+    # These tools already emit domain-specific events with richer context
+    _tools_with_own_progress = {
+        "run_command",  # Emits CommandStartedEvent, CommandCompletedEvent, etc.
+        "run_python",  # Emits PythonExecutionStartedEvent, PythonExecutionCompletedEvent
+        "run_background",  # Emits BackgroundProcessStartedEvent
+        "kill_process",  # Emits ProcessKilledEvent
+    }
+    if tool_name in _tools_with_own_progress:
+        tool._soothe_progress_wrapped = True
+        return tool
+
     def _started(**extra: Any) -> dict[str, Any]:
         return make_tool_started(tool_name, tool_group=tool_group, **extra)
 

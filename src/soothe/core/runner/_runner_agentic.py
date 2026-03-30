@@ -84,13 +84,6 @@ class AgenticMixin:
             config=self._config,
         )
 
-        # Run PLAN → ACT → JUDGE loop with progress events (RFC-0020)
-        logger.info(
-            "Starting Layer 2 loop for goal: %s (thread: %s)",
-            user_input[:100],
-            tid,
-        )
-
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,

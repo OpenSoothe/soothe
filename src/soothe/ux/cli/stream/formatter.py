@@ -37,7 +37,7 @@ def format_step_header(step_num: int, description: str, *, parallel: bool = Fals
     return DisplayLine(
         level=2,
         content=f"Step {step_num}: {description}{suffix}",
-        icon="└",
+        icon="",  # No icon - connector is in indent
         indent=indent_for_level(2),
     )
 

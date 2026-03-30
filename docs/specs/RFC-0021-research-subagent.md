@@ -1,66 +1,44 @@
 # RFC-0021: Research Subagent
 
-## Metadata
-
-| Field | Value |
-|-------|-------|
-| RFC Number | 0021 |
-| Title | Research Subagent |
-| Status | Implemented |
-| Type | Architecture Design |
-| Created | 2026-03-26 |
-| Updated | 2026-03-27 |
-| Authors | Claude (AI Agent) |
-| Replaces | RFC-0014 (Research Tool - implied) |
-| Superseded By | - |
-| Dependencies | RFC-0001, RFC-0018, RFC-0019 |
+**RFC**: 0021
+**Title**: Research Subagent
+**Status**: Implemented
+**Kind**: Architecture Design
+**Created**: 2026-03-26
+**Updated**: 2026-03-27
+**Replaces**: RFC-0014 (Research Tool)
+**Dependencies**: RFC-0001, RFC-0018, RFC-0019
 
 ## Abstract
 
-Convert the existing research tool and inquiry module into a unified, self-contained research subagent. This RFC consolidates all research-related functionality into a single package following Soothe's plugin architecture and module self-containment principle. The research capability is upgraded from a tool to a subagent due to its inherently multi-step, stateful, and complex nature.
+Convert research tool and inquiry module into unified, self-contained research subagent. This RFC consolidates all research functionality into a single package following Soothe's plugin architecture (RFC-0018) and module self-containment principle (RFC-0002). Research upgraded from tool to subagent due to multi-step, stateful, complex nature.
 
-## Motivation
+## Problem & Solution
 
-### Problem Statement
+### Problem: Split Architecture
 
-The current architecture separates the research capability into two disconnected modules:
-- `tools/research/` - Tool wrapper exposing InquiryEngine
-- `inquiry/` - Core research engine and information sources
+Current architecture separates research into disconnected modules:
+- `tools/research/` - Tool wrapper
+- `inquiry/` - Core engine and sources
 
-This violates the module self-containment principle (RFC-0002) and creates several issues:
-
-1. **Cross-module dependencies**: Research tool depends on inquiry module in a different location
-2. **Abstraction mismatch**: Research is complex enough to warrant subagent status (iterative loops, stateful execution)
-3. **Plugin integration**: Not fully leveraging RFC-0018 plugin decorator patterns
-4. **Maintenance burden**: Related code spread across multiple top-level modules
+**Issues**: Cross-module dependencies, abstraction mismatch (complex research as tool), incomplete plugin integration, maintenance burden.
 
 ### Why Research Should Be a Subagent
 
-Research exhibits characteristics that align with subagent semantics:
+**Characteristics**:
+- Multi-step workflows: Analyze → Generate Queries → Gather → Summarize → Reflect → Synthesize
+- Stateful execution: Accumulates summaries, tracks loops, maintains context
+- Long-running: Seconds to minutes
+- Complex orchestration: Parallel queries, conditional iteration
+- Comprehensive results: Full reports with citations
 
-- **Multi-step workflows**: Analyze → Generate Queries → Gather → Summarize → Reflect → Synthesize
-- **Stateful execution**: Accumulates summaries, tracks loop counts, maintains context
-- **Long-running operations**: Seconds to minutes per invocation
-- **Complex orchestration**: Parallel query execution, conditional iteration
-- **Comprehensive results**: Returns full reports with citations, not simple values
-
-Tools are appropriate for single-shot operations; subagents are appropriate for complex, stateful workflows.
+**Principle**: Tools for single-shot operations; subagents for complex, stateful workflows.
 
 ### Goals
 
-1. Consolidate all research logic into `subagents/research/`
-2. Convert from tool API to subagent API
-3. Eliminate cross-module dependencies
-4. Follow RFC-0018 plugin decorator pattern
-5. Maintain all existing research capabilities
-6. Enable third-party plugins to register custom research sources
+Consolidate into `subagents/research/`, convert to subagent API, eliminate cross-module dependencies, follow RFC-0018 plugin pattern, maintain capabilities, enable third-party source registration.
 
-### Non-Goals
-
-1. Backward compatibility with tool API
-2. Changing research algorithm or behavior
-3. Adding new information sources
-4. Modifying event system architecture
+**Non-Goals**: Backward compatibility, algorithm changes, new sources, event system modifications.
 
 ## Specification
 
@@ -68,140 +46,43 @@ Tools are appropriate for single-shot operations; subagents are appropriate for 
 
 ```
 src/soothe/subagents/research/
-├── __init__.py              # Plugin definition + public exports
-├── implementation.py        # Research subagent factory
-├── events.py                # Research events (self-registered)
-├── engine.py                # InquiryEngine (LangGraph implementation)
+├── __init__.py              # Plugin + exports
+├── implementation.py        # Subagent factory
+├── events.py                # Events (self-registered)
+├── engine.py                # InquiryEngine (LangGraph)
 ├── protocol.py              # InformationSource protocol
-├── router.py                # SourceRouter (deterministic routing)
-└── sources/                 # Information source implementations
-    ├── __init__.py
-    ├── web.py               # WebSource (Tavily, DuckDuckGo)
-    ├── academic.py          # AcademicSource (ArXiv)
-    ├── filesystem.py        # FilesystemSource (local files)
-    ├── cli.py               # CLISource (CLI tools)
-    ├── browser.py           # BrowserSource (browser automation)
-    └── document.py          # DocumentSource (PDF, DOCX)
+├── router.py                # SourceRouter
+└── sources/                 # Source implementations
+    ├── web.py, academic.py, filesystem.py, cli.py, browser.py, document.py
 ```
 
-### Public API
-
-#### Plugin Definition
+### Plugin Definition
 
 ```python
-from soothe_sdk import plugin, subagent
-
-@plugin(
-    name="research",
-    version="2.0.0",
-    description="Deep research subagent with multi-source synthesis",
-    trust_level="built-in",
-)
+@plugin(name="research", version="2.0.0", description="Deep research subagent", trust_level="built-in")
 class ResearchPlugin:
-    """Research subagent plugin.
-
-    Provides deep research capability with iterative reflection
-    across multiple information sources.
-    """
-
     @subagent(
         name="research",
-        description=(
-            "Deep research subagent that iteratively searches, analyses, and synthesizes "
-            "information from multiple sources. Use when a question requires thorough "
-            "investigation, cross-validation, or multi-step research beyond a single "
-            "web search. "
-            "Inputs: `topic` (required, the research question), "
-            "`domain` (optional, one of 'auto', 'web', 'code', 'deep'; default 'auto'). "
-            "- 'web': Internet research (web search + academic papers). "
-            "- 'code': Codebase exploration (filesystem + CLI tools). "
-            "- 'deep': All sources combined for comprehensive research. "
-            "- 'auto': Automatically selects sources based on the topic. "
-            "Returns a comprehensive answer with citations."
-        ),
+        description="Deep research with iterative reflection across sources. Inputs: topic (required), domain (auto/web/code/deep). Returns comprehensive answer with citations."
     )
-    async def create_subagent(
-        self,
-        model: BaseChatModel,
-        config: SootheConfig,
-        context: dict[str, Any],
-    ) -> CompiledSubAgent:
-        """Create and return the research subagent.
-
-        Args:
-            model: LLM for analysis, reflection, and synthesis.
-            config: Soothe configuration for model and source setup.
-            context: Plugin context with work_dir and other settings.
-
-        Returns:
-            Compiled LangGraph subagent.
-        """
+    async def create_subagent(self, model, config, context) -> CompiledSubAgent:
         return create_research_subagent(model, config, context)
-```
-
-#### Subagent Factory
-
-```python
-def create_research_subagent(
-    model: BaseChatModel,
-    config: SootheConfig,
-    context: dict[str, Any],
-) -> CompiledSubAgent:
-    """Create research subagent.
-
-    Args:
-        model: LLM for research operations.
-        config: Soothe configuration.
-        context: Context with work_dir and settings.
-
-    Returns:
-        Compiled LangGraph subagent implementing research workflow.
-    """
 ```
 
 ### InformationSource Protocol
 
-Internal protocol for queryable information sources:
-
 ```python
 @runtime_checkable
 class InformationSource(Protocol):
-    """Protocol for a queryable information source."""
+    @property
+    def name(self) -> str: ...
 
     @property
-    def name(self) -> str:
-        """Human-readable source name (e.g. 'web_search', 'filesystem')."""
-        ...
+    def source_type(self) -> SourceType: ...
 
-    @property
-    def source_type(self) -> SourceType:
-        """Canonical source type for profile-based filtering."""
-        ...
+    async def query(self, query: str, context: GatherContext) -> list[SourceResult]: ...
 
-    async def query(self, query: str, context: GatherContext) -> list[SourceResult]:
-        """Execute a query against this source.
-
-        Args:
-            query: The search query or exploration directive.
-            context: Contextual information about the research state.
-
-        Returns:
-            List of results, possibly empty if the source found nothing.
-        """
-        ...
-
-    def relevance_score(self, query: str) -> float:
-        """Score how well this source can handle the given query.
-
-        Returns a value in [0.0, 1.0]. Used for deterministic routing.
-
-        Args:
-            query: The search query to evaluate.
-
-        Returns:
-            Relevance score between 0.0 and 1.0.
-        """
-        ...
+    def relevance_score(self, query: str) -> float: ...
 ```
 
 ### SourceRouter
@@ -210,77 +91,29 @@ Deterministic source selection without LLM calls:
 
 ```python
 class SourceRouter:
-    """Routes queries to appropriate sources based on relevance scores."""
-
-    def __init__(self, sources: list[InformationSource], config: InquiryConfig):
-        """Initialize router with sources and configuration."""
-
     def select(self, query: str, domain: str = "auto") -> list[InformationSource]:
-        """Select best sources for query.
-
-        Args:
-            query: Search query.
-            domain: Domain hint ('web', 'code', 'deep', 'auto').
-
-        Returns:
-            List of selected sources (max: config.max_sources_per_query).
-        """
+        """Select best sources based on relevance scores."""
 ```
 
 ### InquiryEngine
 
-LangGraph-based research workflow:
-
 ```python
-def build_inquiry_engine(
-    model: BaseChatModel,
-    sources: list[InformationSource],
-    config: InquiryConfig,
-) -> CompiledStateGraph:
-    """Build iterative research graph.
-
-    Workflow:
-      analyze_topic → generate_queries → [route_and_gather] →
-      summarize → reflect → [continue | synthesize] → END
-
-    Args:
-        model: LLM for research operations.
-        sources: Available information sources.
-        config: Research configuration.
-
-    Returns:
-        Compiled LangGraph runnable.
-    """
+def build_inquiry_engine(model, sources, config) -> CompiledStateGraph:
+    """Build iterative research graph: analyze → generate_queries → gather → summarize → reflect → [iterate | synthesize] → END"""
 ```
 
 ### Events
 
-All events remain unchanged, just relocated:
-
-- `ResearchAnalyzeEvent` - Topic analysis started
-- `ResearchSubQuestionsEvent` - Sub-questions identified
-- `ResearchQueriesGeneratedEvent` - Search queries generated
-- `ResearchGatherEvent` - Information gathering started
-- `ResearchGatherDoneEvent` - Gathering completed
-- `ResearchSummarizeEvent` - Summarization started
-- `ResearchReflectEvent` - Reflection started
-- `ResearchReflectionDoneEvent` - Reflection completed
-- `ResearchSynthesizeEvent` - Synthesis started
-- `ResearchCompletedEvent` - Research completed
-- `ResearchInternalLLMResponseEvent` - Internal LLM response
-
-Events are self-registered via `register_event()` following RFC-0019.
+Self-registered via `register_event()` (RFC-0019): ResearchAnalyzeEvent, ResearchSubQuestionsEvent, ResearchQueriesGeneratedEvent, ResearchGatherEvent, ResearchGatherDoneEvent, ResearchSummarizeEvent, ResearchReflectEvent, ResearchReflectionDoneEvent, ResearchSynthesizeEvent, ResearchCompletedEvent, ResearchInternalLLMResponseEvent.
 
 ### Configuration
 
 ```python
 class InquiryConfig(BaseModel):
-    """Research configuration."""
-
-    max_loops: int = 3  # Maximum reflection iterations
-    max_sources_per_query: int = 3  # Maximum sources per query
-    parallel_queries: bool = True  # Execute queries in parallel
-    default_domain: str = "auto"  # Default source domain
+    max_loops: int = 3
+    max_sources_per_query: int = 3
+    parallel_queries: bool = True
+    default_domain: str = "auto"
     enabled_sources: list[SourceType] = ["web", "academic", "filesystem", "cli", "document"]
     source_profiles: dict[str, list[SourceType]] = {
         "web": ["web", "academic"],
@@ -289,192 +122,98 @@ class InquiryConfig(BaseModel):
     }
 ```
 
-### Information Sources
+### Built-in Sources
 
-#### Built-in Sources
+| Source | Type | Purpose | Dependencies |
+|--------|------|---------|--------------|
+| WebSource | web | Tavily, DuckDuckGo | langchain-community |
+| AcademicSource | academic | ArXiv papers | arxiv |
+| FilesystemSource | filesystem | Local files | None |
+| CLISource | cli | CLI tools | None |
+| BrowserSource | browser | Web automation (optional) | browser-use |
+| DocumentSource | document | PDF/DOCX parsing | pypdf, docx2txt |
 
-1. **WebSource** - Web search (Tavily, DuckDuckGo)
-   - `source_type: "web"`
-   - High relevance for: news, current events, general knowledge
-   - Dependencies: `langchain-community`
-
-2. **AcademicSource** - ArXiv papers
-   - `source_type: "academic"`
-   - High relevance for: scientific papers, research topics
-   - Dependencies: `arxiv`
-
-3. **FilesystemSource** - Local file exploration
-   - `source_type: "filesystem"`
-   - High relevance for: code searches, local documents
-   - Dependencies: None
-
-4. **CLISource** - CLI tool execution
-   - `source_type: "cli"`
-   - High relevance for: code analysis, system operations
-   - Dependencies: None
-
-5. **BrowserSource** - Browser automation (optional)
-   - `source_type: "browser"`
-   - High relevance for: interactive web tasks, logged-in sessions
-   - Dependencies: `browser-use` (optional extra)
-
-6. **DocumentSource** - PDF/DOCX parsing
-   - `source_type: "document"`
-   - High relevance for: document analysis
-   - Dependencies: `pypdf`, `docx2txt`
-
-### Domain Profiles
-
-- **web**: Web + Academic sources
-- **code**: Filesystem + CLI sources
-- **deep**: All available sources
-- **auto**: Router selects based on query relevance
+**Domain Profiles**: web (web+academic), code (filesystem+cli), deep (all sources), auto (router selects by relevance).
 
 ### Execution Flow
 
-1. **Analyze Topic**: Parse topic, identify sub-questions
-2. **Generate Queries**: Create targeted search queries
-3. **Route to Sources**: Select sources via deterministic routing
-4. **Gather Information**: Execute queries against selected sources
-5. **Summarize Results**: Integrate gathered information
-6. **Reflect**: Evaluate completeness, identify gaps
-7. **Iterate or Synthesize**:
-   - If gaps exist and loops < max: Generate follow-up queries, go to step 3
-   - Otherwise: Synthesize final answer
-8. **Return Answer**: Comprehensive result with citations
+1. Analyze topic → identify sub-questions
+2. Generate queries → create targeted searches
+3. Route to sources → select via deterministic routing
+4. Gather information → execute queries against sources
+5. Summarize results → integrate gathered info
+6. Reflect → evaluate completeness, identify gaps
+7. Iterate or synthesize → if gaps & loops < max: generate follow-up queries, goto 3; else: synthesize final answer
+8. Return answer → comprehensive result with citations
 
-## Implementation Notes
+## Implementation
 
 ### Migration Strategy
 
-1. **Phase 1**: Create new package structure
-   - Create `subagents/research/` directory
-   - Copy `inquiry/` contents into new package
-   - Copy `tools/research/events.py` into new package
+**Phase 1**: Create `subagents/research/`, copy `inquiry/` contents, copy `tools/research/events.py`.
 
-2. **Phase 2**: Convert to subagent
-   - Create `implementation.py` with `create_research_subagent()`
-   - Update plugin definition with `@subagent` decorator
-   - Adapt ResearchTool logic to CompiledSubAgent interface
+**Phase 2**: Create `implementation.py`, update plugin with `@subagent`, adapt ResearchTool to CompiledSubAgent.
 
-3. **Phase 3**: Update imports
-   - Find all imports of `soothe.tools.research`
-   - Find all imports of `soothe.inquiry`
-   - Update to `soothe.subagents.research`
+**Phase 3**: Update imports from `soothe.tools.research`/`soothe.inquiry` to `soothe.subagents.research`.
 
-4. **Phase 4**: Remove old code
-   - Delete `src/soothe/tools/research/` package
-   - Delete `src/soothe/inquiry/` package
+**Phase 4**: Delete `src/soothe/tools/research/`, `src/soothe/inquiry/`.
 
-5. **Phase 5**: Update tests
-   - Move tests from `tests/tools/research/` to `tests/subagents/research/`
-   - Move tests from `tests/inquiry/` to `tests/subagents/research/`
-   - Update test imports
+**Phase 5**: Move tests to `tests/subagents/research/`.
 
 ### Breaking Changes
 
-**Removed APIs**:
-- `soothe.tools.research.ResearchTool`
-- `soothe.tools.research.create_research_tools()`
-- `soothe.inquiry.*` (entire module)
+**Removed**: `soothe.tools.research.*`, `soothe.inquiry.*`
 
-**New APIs**:
-- `soothe.subagents.research.create_research_subagent()`
-- `soothe.subagents.research.ResearchPlugin`
+**New**: `soothe.subagents.research.create_research_subagent()`, `ResearchPlugin`
 
-**Migration Example**:
-
+**Migration**:
 ```python
-# OLD (tool-based)
-from soothe.tools.research import create_research_tools
-
-tools = create_research_tools(config, work_dir="/workspace")
-result = tools[0].invoke({"topic": "AI safety", "domain": "web"})
-
-# NEW (subagent-based)
-from soothe.subagents.research import create_research_subagent
-from langchain_core.messages import HumanMessage
-
-agent = create_research_subagent(model, config, {"work_dir": "/workspace"})
-result = await agent.ainvoke({
-    "messages": [HumanMessage(content="Research AI safety")]
-})
-answer = result.get("answer")
+# OLD: tools = create_research_tools(config); result = tools[0].invoke({"topic": "AI safety"})
+# NEW: agent = create_research_subagent(model, config, {}); result = await agent.ainvoke({"messages": [HumanMessage("Research AI safety")]})
 ```
 
-### Testing Requirements
+### Testing
 
-1. **Unit Tests**:
-   - Test each information source in isolation
-   - Test source router with mock sources
-   - Test event registration and emission
+**Unit**: Source isolation, router logic, event registration.
 
-2. **Integration Tests**:
-   - Test full research workflow with real sources
-   - Test domain profile selection
-   - Test iterative reflection logic
+**Integration**: Full workflow, domain selection, reflection iteration.
 
-3. **Subagent Tests**:
-   - Test CompiledSubAgent interface compliance
-   - Test async invocation
-   - Test state management
+**Subagent**: CompiledSubAgent compliance, async invocation, state management.
 
-4. **Plugin Tests**:
-   - Test plugin loading via @plugin decorator
-   - Test subagent creation via @subagent decorator
-   - Test event system integration
+**Plugin**: Plugin loading, subagent creation, event integration.
 
-### Performance Considerations
+### Performance
 
-- **Caching**: Source-level result caching to avoid redundant queries
-- **Parallelism**: Configurable parallel query execution
-- **Thread pool**: Shared async-to-sync conversion pool (existing pattern)
-- **Streaming**: Support partial results via LangGraph streaming
+Caching (source-level), parallelism (configurable queries), thread pool (async-to-sync), streaming (partial results).
 
-### Security Considerations
+### Security
 
-- Sources operate within plugin trust boundaries
-- No arbitrary code execution (except CLISource with workspace constraints)
-- User-provided queries are sanitized by LLM prompts
-- Filesystem access limited to configured work directories
+Sources within trust boundaries, no arbitrary code execution (except CLISource with constraints), query sanitization via LLM, filesystem access limited to work directories.
 
 ## Alternatives Considered
 
-### Alternative 1: Keep as Tool
-**Rejected**: Research complexity (iterative, stateful) aligns better with subagent semantics. Tools are for single-shot operations.
+**Keep as Tool**: Rejected - complexity aligns with subagent semantics.
 
-### Alternative 2: Keep Tool + Add Subagent Wrapper
-**Rejected**: Violates self-containment principle. Would require maintaining two APIs and add unnecessary abstraction layers.
+**Tool + Subagent Wrapper**: Rejected - violates self-containment, unnecessary abstraction.
 
-### Alternative 3: Split Sources into Separate Packages
-**Rejected**: Increases complexity and coupling. Sources are internal implementation details of the research capability.
-
-## Open Questions
-
-1. **Q: Should we support custom source registration from third-party plugins?**
-   - **A**: Yes, via InformationSource protocol. Plugins can implement their own sources and register them.
-
-2. **Q: How do we handle optional source dependencies (e.g., browser-use)?**
-   - **A**: Sources check dependencies at runtime. Missing dependencies result in graceful degradation (source excluded from routing).
-
-3. **Q: Should we expose the source router configuration to users?**
-   - **A**: Yes, via InquiryConfig. Users can customize domain profiles and source selection parameters.
+**Split Sources**: Rejected - increases complexity, sources are internal details.
 
 ## References
 
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture
-- RFC-0018: Plugin Extension System
-- RFC-0019: Event System Optimization
-- IG-047: Module Self-Containment Refactoring
-- IG-052: Event System Optimization
-- LangGraph Documentation: https://langchain-ai.github.io/langgraph/
-- DeepAgents SubAgent API: https://github.com/langchain-ai/deepagents
+- RFC-0001: System conceptual design
+- RFC-0002: Core modules architecture
+- RFC-0018: Plugin extension system
+- RFC-0019: Event system optimization
+- IG-047: Module self-containment
+- IG-052: Event system optimization
 
 ## Changelog
 
-### 2026-03-26 - RFC-0021 Draft
-- Initial RFC draft created
-- Defined research subagent architecture
-- Specified migration strategy from tool to subagent
-- Documented breaking changes and migration path
+### 2026-03-26
+- Initial RFC
+- Research subagent architecture
+- Migration strategy
+
+---
+
+*Self-contained research subagent with iterative reflection across multiple information sources.*

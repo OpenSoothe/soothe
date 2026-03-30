@@ -302,13 +302,13 @@ class Executor:
             )
 
     async def _collect_stream_with_events(self, stream: AsyncGenerator) -> tuple[str, list[StreamEvent]]:
-        """Collect output from agent stream while preserving custom events.
+        """Collect output from agent stream while preserving events for display.
 
         Args:
             stream: Async iterator from agent.astream()
 
         Returns:
-            Tuple of (combined output string, list of custom events)
+            Tuple of (combined output string, list of events for upstream propagation)
         """
         chunks: list[str] = []
         events: list[StreamEvent] = []
@@ -318,10 +318,12 @@ class Executor:
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 namespace, mode, data = chunk
 
-                # Collect custom events for upstream propagation
-                if mode == "custom":
-                    events.append(chunk)
-                elif mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
+                # Propagate all events for display (tool calls, custom events, etc.)
+                # EventProcessor will handle filtering and rendering
+                events.append(chunk)
+
+                # Also extract content for output collection
+                if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
                     msg_chunk = data[0]
                     if hasattr(msg_chunk, "content"):
                         content = msg_chunk.content
