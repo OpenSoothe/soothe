@@ -235,7 +235,7 @@ class EventProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
-                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
+                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         if not coerced and raw_tcs:
                             continue
@@ -270,7 +270,7 @@ class EventProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
-                if not name or not should_show(VerbosityTier.DETAILED, self._verbosity):
+                if not name or not should_show(VerbosityTier.NORMAL, self._verbosity):
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
 
@@ -290,7 +290,7 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle ToolMessage objects."""
-        if not should_show(VerbosityTier.DETAILED, self._verbosity):
+        if not should_show(VerbosityTier.NORMAL, self._verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -383,7 +383,7 @@ class EventProcessor:
                         )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
-                if name and should_show(VerbosityTier.DETAILED, self._verbosity):
+                if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                     args = coerce_tool_call_args_to_dict(block.get("args", {}))
                     tool_call_id = block.get("id", "")
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
@@ -394,7 +394,7 @@ class EventProcessor:
             for tc in tool_call_chunks:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
-                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
+                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
@@ -405,7 +405,7 @@ class EventProcessor:
             if pending["emitted"]:
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and should_show(VerbosityTier.DETAILED, self._verbosity):
+            if parsed_args is not None and should_show(VerbosityTier.NORMAL, self._verbosity):
                 self._renderer.on_tool_call(
                     pending["name"],
                     parsed_args,
@@ -431,9 +431,8 @@ class EventProcessor:
         if etype.startswith("soothe.subagent.research.") and etype != SUBAGENT_RESEARCH_INTERNAL_LLM:
             self._state.internal_context_active = False
 
-        # Skip most tool events (handled by message layer) except research subagent events
-        if etype.startswith("soothe.tool.") and not etype.startswith("soothe.subagent.research."):
-            return
+        # Tool events are now visible at NORMAL verbosity (RFC-0020 CLI Stream Display Pipeline)
+        # They are processed through on_progress_event -> StreamDisplayPipeline
 
         # Handle chitchat/final responses through shared cleaner path
         if etype in {"soothe.output.chitchat.response", "soothe.output.autonomous.final_report"}:

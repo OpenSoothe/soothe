@@ -1,0 +1,172 @@
+"""Formatter functions for CLI display lines."""
+
+from __future__ import annotations
+
+from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
+
+
+def format_goal_header(goal: str) -> DisplayLine:
+    """Format a goal header line.
+
+    Args:
+        goal: Goal description.
+
+    Returns:
+        DisplayLine for goal header.
+    """
+    return DisplayLine(
+        level=1,
+        content=f"Goal: {goal}",
+        icon="●",
+        indent=indent_for_level(1),
+    )
+
+
+def format_step_header(step_num: int, description: str, *, parallel: bool = False) -> DisplayLine:
+    """Format a step header line.
+
+    Args:
+        step_num: Step number (1-indexed).
+        description: Step description.
+        parallel: Whether step has parallel tools.
+
+    Returns:
+        DisplayLine for step header.
+    """
+    suffix = " (parallel)" if parallel else ""
+    return DisplayLine(
+        level=2,
+        content=f"Step {step_num}: {description}{suffix}",
+        icon="└",
+        indent=indent_for_level(2),
+    )
+
+
+def format_tool_call(name: str, args_summary: str, *, running: bool = False) -> DisplayLine:
+    """Format a tool call line.
+
+    Args:
+        name: Tool name.
+        args_summary: Truncated args.
+        running: Whether tool is in parallel mode.
+
+    Returns:
+        DisplayLine for tool call.
+    """
+    return DisplayLine(
+        level=2,
+        content=f"{name}({args_summary})",
+        icon="⚙",
+        indent=indent_for_level(2),
+        status="running" if running else None,
+    )
+
+
+def format_tool_result(summary: str, duration_ms: int, *, is_error: bool = False) -> DisplayLine:
+    """Format a tool result line.
+
+    Args:
+        summary: Result summary.
+        duration_ms: Duration in milliseconds.
+        is_error: Whether result is an error.
+
+    Returns:
+        DisplayLine for tool result.
+    """
+    return DisplayLine(
+        level=3,
+        content=summary,
+        icon="✗" if is_error else "✓",
+        indent=indent_for_level(3),
+        duration_ms=duration_ms,
+    )
+
+
+def format_subagent_milestone(brief: str) -> DisplayLine:
+    """Format a subagent milestone line.
+
+    Args:
+        brief: Milestone description.
+
+    Returns:
+        DisplayLine for milestone.
+    """
+    return DisplayLine(
+        level=3,
+        content=brief,
+        icon="✓",
+        indent=indent_for_level(3),
+    )
+
+
+def format_subagent_done(summary: str, duration_s: float) -> DisplayLine:
+    """Format a subagent completion line.
+
+    Args:
+        summary: Completion summary.
+        duration_s: Duration in seconds.
+
+    Returns:
+        DisplayLine for subagent done.
+    """
+    duration_ms = int(duration_s * 1000)
+    return DisplayLine(
+        level=3,
+        content=f"Done: {summary}",
+        icon="✓",
+        indent=indent_for_level(3),
+        duration_ms=duration_ms,
+    )
+
+
+def format_step_done(step_num: int, duration_s: float) -> DisplayLine:
+    """Format a step completion line.
+
+    Args:
+        step_num: Step number.
+        duration_s: Duration in seconds.
+
+    Returns:
+        DisplayLine for step done.
+    """
+    duration_ms = int(duration_s * 1000)
+    return DisplayLine(
+        level=2,
+        content=f"Step {step_num} done",
+        icon="✓",
+        indent=indent_for_level(2),
+        duration_ms=duration_ms,
+    )
+
+
+def format_goal_done(goal: str, steps: int, total_s: float) -> DisplayLine:
+    """Format a goal completion line.
+
+    Args:
+        goal: Goal description.
+        steps: Total steps completed.
+        total_s: Total duration in seconds.
+
+    Returns:
+        DisplayLine for goal done.
+    """
+    duration_ms = int(total_s * 1000)
+    return DisplayLine(
+        level=1,
+        content=f"Goal: {goal} (complete, {steps} steps)",
+        icon="●",
+        indent=indent_for_level(1),
+        duration_ms=duration_ms,
+    )
+
+
+__all__ = [
+    "format_goal_done",
+    "format_goal_header",
+    "format_step_done",
+    "format_step_header",
+    "format_subagent_done",
+    "format_subagent_milestone",
+    "format_tool_call",
+    "format_tool_result",
+]

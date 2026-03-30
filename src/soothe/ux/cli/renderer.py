@@ -2,6 +2,7 @@
 
 This module provides the CliRenderer class that outputs events to
 stdout (assistant text) and stderr (progress/tool events).
+Uses StreamDisplayPipeline for RFC-0020 compliant progress display.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.core.verbosity_tier import VerbosityTier, should_show
 from soothe.tools.display_names import get_tool_display_name
+from soothe.ux.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe.ux.cli.utils import make_tool_block
 from soothe.ux.core.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.core.message_processing import format_tool_call_args
@@ -50,7 +52,7 @@ class CliRenderer:
     Implements RendererProtocol callbacks for CLI mode:
     - Assistant text -> stdout (streaming)
     - Tool calls/results -> stderr (tree format)
-    - Progress events -> stderr (bracketed format)
+    - Progress events -> stderr via StreamDisplayPipeline
     - Errors -> stderr
 
     Usage:
@@ -66,6 +68,7 @@ class CliRenderer:
         """
         self._verbosity = normalize_verbosity(verbosity)
         self._state = CliRendererState()
+        self._pipeline = StreamDisplayPipeline(verbosity=verbosity)
 
     @property
     def full_response(self) -> list[str]:
@@ -76,6 +79,23 @@ class CliRenderer:
     def multi_step_active(self) -> bool:
         """Whether multi-step plan is active."""
         return self._state.multi_step_active
+
+    def write_lines(self, lines: list[DisplayLine]) -> None:
+        """Write display lines to stderr.
+
+        Args:
+            lines: List of DisplayLine objects to render.
+        """
+        if not lines:
+            return
+
+        self._ensure_newline()
+
+        for line in lines:
+            sys.stderr.write(line.format() + "\n")
+
+        sys.stderr.flush()
+        self._state.stderr_just_written = True
 
     def on_assistant_text(
         self,
@@ -218,19 +238,17 @@ class CliRenderer:
         *,
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
-        """Write progress event to stderr using existing renderer.
+        """Write progress event to stderr using StreamDisplayPipeline.
 
         Args:
             event_type: Event type string.
             data: Event payload.
             namespace: Subagent namespace.
         """
-        from soothe.ux.cli.progress import render_progress_event
-
-        self._ensure_newline()
-        render_progress_event(event_type, data, current_plan=self._state.current_plan)
-        # Mark that stderr was just written
-        self._state.stderr_just_written = True
+        # Build event dict for pipeline
+        event = {"type": event_type, **data}
+        lines = self._pipeline.process(event)
+        self.write_lines(lines)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -238,16 +256,20 @@ class CliRenderer:
         Args:
             plan: Created plan object.
         """
-        self._ensure_newline()
         self._state.current_plan = plan
         self._state.multi_step_active = len(plan.steps) > 1
-        sys.stderr.write(f"\nPlan: {plan.goal}\n")
-        sys.stderr.flush()
-        # Mark that stderr was just written
-        self._state.stderr_just_written = True
 
-    def on_plan_step_started(self, step_id: str, _description: str) -> None:
-        """Update plan state and show updated plan status.
+        # Use pipeline for consistent formatting
+        event = {
+            "type": "soothe.cognition.plan.created",
+            "goal": plan.goal,
+            "steps": [{"id": s.id, "description": s.description} for s in plan.steps],
+        }
+        lines = self._pipeline.process(event)
+        self.write_lines(lines)
+
+    def on_plan_step_started(self, step_id: str, description: str) -> None:
+        """Update plan state and show step header.
 
         Args:
             step_id: Step identifier.
@@ -259,16 +281,23 @@ class CliRenderer:
                 if step.id == step_id:
                     step.status = "in_progress"
                     break
-            # Display updated plan status
-            self._render_plan_update()
+
+        # Use pipeline for consistent formatting
+        event = {
+            "type": "soothe.cognition.plan.step_started",
+            "step_id": step_id,
+            "description": description,
+        }
+        lines = self._pipeline.process(event)
+        self.write_lines(lines)
 
     def on_plan_step_completed(
         self,
         step_id: str,
         success: bool,  # noqa: FBT001
-        _duration_ms: int,
+        duration_ms: int,
     ) -> None:
-        """Update plan state and show updated plan status.
+        """Update plan state and show step completion.
 
         Args:
             step_id: Step identifier.
@@ -281,30 +310,16 @@ class CliRenderer:
                 if step.id == step_id:
                     step.status = "completed" if success else "failed"
                     break
-            # Display updated plan status
-            self._render_plan_update()
 
-    def _render_plan_update(self) -> None:
-        """Render the current plan with status indicators."""
-        if not self._state.current_plan:
-            return
-
-        self._ensure_newline()
-        plan = self._state.current_plan
-
-        active_step = next((step for step in plan.steps if step.status == "in_progress"), None)
-        completed_step = next((step for step in reversed(plan.steps) if step.status == "completed"), None)
-        failed_step = next((step for step in reversed(plan.steps) if step.status == "failed"), None)
-
-        if failed_step:
-            sys.stderr.write(f"\nDone: {failed_step.description}\n")
-        elif active_step:
-            sys.stderr.write(f"\nPlan: {active_step.description}\n")
-        elif completed_step:
-            sys.stderr.write(f"\nDone: {completed_step.description}\n")
-        sys.stderr.flush()
-        # Mark that stderr was just written
-        self._state.stderr_just_written = True
+        # Use pipeline for consistent formatting
+        event = {
+            "type": "soothe.cognition.plan.step_completed",
+            "step_id": step_id,
+            "success": success,
+            "duration_ms": duration_ms,
+        }
+        lines = self._pipeline.process(event)
+        self.write_lines(lines)
 
     def on_turn_end(self) -> None:
         """Finalize output on turn end."""

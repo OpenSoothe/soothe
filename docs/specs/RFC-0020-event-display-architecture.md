@@ -544,6 +544,109 @@ TUI must preserve the same semantic separation intent using widget spacing, marg
 - [RFC-0024](./RFC-0024-verbosity-tier-unification.md) - VerbosityTier unification
 - [IG-066](../impl/IG-066-subagent-event-display-fix.md) - Implementation example
 
+## CLI Stream Display Pipeline
+
+This section defines the CLI-specific stream display pipeline that processes events into a streaming narrative with goal/step/tool context.
+
+### Architecture
+
+```
+Event → StreamDisplayPipeline.process(event, verbosity) → DisplayLine[] → CliStreamRenderer.write()
+```
+
+### Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| `DisplayLine` | `stream/display_line.py` | Structured output unit |
+| `PipelineContext` | `stream/context.py` | Goal/step/tool state tracking |
+| `StreamDisplayPipeline` | `stream/pipeline.py` | Event processing, filtering, formatting |
+| `CliStreamRenderer` | `renderer.py` | Pure output to stdout/stderr |
+
+### DisplayLine Structure
+
+```python
+@dataclass
+class DisplayLine:
+    level: int  # 1=goal, 2=step/tool, 3=result
+    content: str
+    icon: str  # "●", "└", "⚙", "✓", "✗"
+    indent: str  # computed from level
+    status: str | None  # "running" for parallel tools
+    duration_ms: int | None  # timing suffix
+```
+
+### Indent Levels
+
+| Level | Indent | Usage |
+|-------|--------|-------|
+| 1 | `""` | Goal header, completion |
+| 2 | `"  └ "` | Step header, tool call |
+| 3 | `"     └ "` | Tool result, milestone |
+
+### CLI Event Visibility (NORMAL Verbosity)
+
+| Event Type | Tier | Output Format |
+|------------|------|---------------|
+| `soothe.agentic.loop.started` | NORMAL | `● Goal: {goal}` |
+| `soothe.cognition.plan.step_started` | NORMAL | `  └ Step {n}: {description}` |
+| `soothe.tool.*.call_started` | NORMAL | `  ⚙ {name}({args})` |
+| `soothe.tool.*.call_completed` | NORMAL | `     └ ✓ {summary} ({duration}ms)` |
+| `soothe.subagent.*.step` | NORMAL | `     └ ✓ {milestone}` |
+| `soothe.subagent.*.completed` | NORMAL | `     └ ✓ Done: {summary} ({duration}s)` |
+| `soothe.cognition.plan.step_completed` | NORMAL | `  ✓ Step {n} done ({duration}s)` |
+| `soothe.agentic.loop.completed` | QUIET | `● Goal: {goal} (complete, {steps} steps, {total}s)` |
+
+### Parallel Tool Handling
+
+When multiple tools execute concurrently:
+
+```
+  └ Step {n}: {description} (parallel)
+  ⚙ {name}({args}) [running]
+  ⚙ {name2}({args}) [running]
+     └ ✓ {name}: {summary} ({duration}ms)
+     └ ✓ {name2}: {summary} ({duration}ms)
+```
+
+### Subagent Compact Hybrid
+
+Subagent activity shows key milestones only:
+
+```
+  ⚙ research_subagent("query")
+     └ ✓ arxiv: 15 results
+     └ ✓ Done: 5 papers (45.2s)
+```
+
+Hidden: internal LLM reasoning, result parsing, synthesis steps.
+
+### CLI Example Output
+
+```
+● Goal: Analyze codebase structure
+  └ Step 1: Read configuration files
+  ⚙ read_file("config.yml")
+     └ ✓ Read 2.3 KB (42 lines) (150ms)
+
+  ⚙ glob("*.py")
+     └ ✓ Found 150 files (80ms)
+
+  ✓ Step 1 done (3.2s)
+
+  └ Step 2: Parse dependencies (parallel)
+  ⚙ read_file("requirements.txt") [running]
+  ⚙ read_file("pyproject.toml") [running]
+     └ ✓ read_file: 1.1 KB (95ms)
+     └ ✓ read_file: 2.4 KB (120ms)
+
+  ✓ Step 2 done (1.8s)
+
+● Goal: Analyze codebase structure (complete, 2 steps, 5.0s)
+
+The codebase contains 150 Python files...
+```
+
 ---
 
 *This RFC establishes the registry-driven display architecture for consistent, extensible event display.*

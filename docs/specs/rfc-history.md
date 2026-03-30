@@ -6,6 +6,7 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-03-30 | RFC-0020 | Draft | Added CLI Stream Display Pipeline section with goal/step/tool narrative format |
 | 2026-03-29 | RFC-0024 | Draft | VerbosityTier Unification - replaces two-layer classification with unified enum |
 | 2026-03-29 | RFC-0022 | Implemented | Updated to use VerbosityTier, changed VerbosityLevel from `minimal` to `quiet` |
 | 2026-03-29 | RFC-0020 | Draft | Updated to use VerbosityTier classification throughout |
