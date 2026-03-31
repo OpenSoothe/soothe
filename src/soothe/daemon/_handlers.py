@@ -96,7 +96,10 @@ class DaemonHandlersMixin:
             text = msg.get("text", "").strip()
             if text:
                 multi_threading_enabled = getattr(self._config.daemon, "multi_threading_enabled", False)
-                if self._query_running and not multi_threading_enabled:
+                # Check if daemon is busy: check both _active_threads and _query_running for compatibility
+                has_active_threads = hasattr(self, "_active_threads") and bool(self._active_threads)
+                has_active_query = has_active_threads or self._query_running
+                if has_active_query and not multi_threading_enabled:
                     await self._send_client_message(
                         client_id,
                         {
@@ -731,7 +734,16 @@ class DaemonHandlersMixin:
         if self._input_history:
             self._input_history.add(text)
 
-        self._query_running = True
+        # Use lock to ensure atomic state transition
+        query_state_lock = getattr(self, "_query_state_lock", None)
+        if query_state_lock:
+            async with query_state_lock:
+                self._query_running = True
+                # Register in _active_threads for consistent tracking
+                self._active_threads[thread_id] = None  # Placeholder, will set task below
+        else:
+            self._query_running = True
+
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
 
         # RFC-0013: Claim thread ownership for cancel-on-disconnect
@@ -811,11 +823,18 @@ class DaemonHandlersMixin:
                     }
                 )
             finally:
+                # Clear state in finally block - this runs even on cancellation
                 self._query_running = False
+                # Remove from _active_threads if present
+                if hasattr(self, "_active_threads"):
+                    self._active_threads.pop(thread_id, None)
 
         try:
-            self._current_query_task = asyncio.create_task(_run_stream())
-            await self._current_query_task
+            task = asyncio.create_task(_run_stream())
+            self._current_query_task = task
+            # Also register in _active_threads for consistent tracking
+            self._active_threads[thread_id] = task
+            await task
         except asyncio.CancelledError:
             logger.info("Query task cancelled")
         finally:
@@ -1013,20 +1032,39 @@ class DaemonHandlersMixin:
     async def _cancel_thread(self, thread_id: str) -> None:
         """Cancel a specific thread's execution.
 
-        Handles both single-threaded and multi-threaded execution modes.
-        Awaits task cancellation to ensure _query_running is reset before returning.
+        Uses _query_state_lock to ensure atomic state transitions.
+        Awaits task cancellation to ensure cleanup completes before returning.
 
         Args:
             thread_id: Thread ID to cancel.
         """
-        # Multi-threaded mode: cancel via _active_threads
+        # Use lock to ensure atomic state transitions
+        query_state_lock = getattr(self, "_query_state_lock", None)
+        if query_state_lock:
+            async with query_state_lock:
+                await self._cancel_thread_locked(thread_id)
+        else:
+            # Fallback if lock not available (shouldn't happen)
+            await self._cancel_thread_locked(thread_id)
+
+    async def _cancel_thread_locked(self, thread_id: str) -> None:
+        """Internal method to cancel thread while holding state lock.
+
+        Args:
+            thread_id: Thread ID to cancel.
+        """
+        # Check _active_threads first (works for both single and multi-threaded mode)
         if hasattr(self, "_active_threads") and thread_id in self._active_threads:
-            task = self._active_threads[thread_id]
-            task.cancel()
-            logger.info("Cancelled thread %s (multi-threaded mode)", thread_id)
-            # Await task cancellation to ensure cleanup completes
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            task = self._active_threads.pop(thread_id, None)
+            if task and not task.done():
+                task.cancel()
+                logger.info("Cancelled thread %s", thread_id)
+                # Await task cancellation to ensure cleanup completes
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+            # Clear legacy state flags for consistency
+            self._query_running = False
+            self._current_query_task = None
             await self._broadcast(
                 {
                     "type": "status",
@@ -1037,16 +1075,16 @@ class DaemonHandlersMixin:
             )
             return
 
-        # Single-threaded mode: cancel _current_query_task if thread_id matches
+        # Fallback: check _current_query_task (legacy single-threaded mode)
         if self._current_query_task and not self._current_query_task.done():
             current_thread = self._runner.current_thread_id if self._runner else None
             if current_thread == thread_id:
                 self._current_query_task.cancel()
-                logger.info("Cancelled thread %s (single-threaded mode)", thread_id)
-                # Await task cancellation to ensure _query_running is reset
+                logger.info("Cancelled thread %s (legacy single-threaded mode)", thread_id)
+                # Await task cancellation
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._current_query_task
-                # Reset state since task's finally block has now run
+                # Clear all state
                 self._query_running = False
                 self._current_query_task = None
                 await self._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})

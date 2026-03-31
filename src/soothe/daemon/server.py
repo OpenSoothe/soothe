@@ -69,7 +69,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
         self._running = False
-        self._query_running = False
+        self._query_running = False  # Deprecated: use _active_threads instead
         self._current_query_task: asyncio.Task | None = None
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
@@ -92,6 +92,8 @@ class SootheDaemon(DaemonHandlersMixin):
         # Multi-threading support (RFC-0017)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
+        # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
+        self._query_state_lock = asyncio.Lock()
         # Draft thread tracking for lazy creation
         self._draft_thread_id: str | None = None  # Thread ID created but not yet persisted
         # Daemon readiness state for explicit startup handshake (RFC-0023)
@@ -214,7 +216,10 @@ class SootheDaemon(DaemonHandlersMixin):
         Returns:
             List of initial messages to send to the client.
         """
-        initial_state = "running" if self._query_running else ("idle" if self._running else "stopped")
+        # Check both _active_threads and _query_running for reliable state detection
+        has_active_threads = hasattr(self, "_active_threads") and bool(self._active_threads)
+        has_active_query = has_active_threads or self._query_running
+        initial_state = "running" if has_active_query else ("idle" if self._running else "stopped")
         initial_msg = {
             "type": "status",
             "state": initial_state,
@@ -227,15 +232,15 @@ class SootheDaemon(DaemonHandlersMixin):
     def _is_port_live(host: str, port: int) -> bool:
         """Check if a WebSocket server is accepting connections.
 
-        Uses a proper WebSocket connection attempt instead of raw TCP
-        to avoid "did not receive a valid HTTP request" errors.
+        Uses a simple TCP connection check without sending WebSocket upgrade.
+        This avoids corrupting the WebSocket server state.
 
         Args:
             host: Host address to check.
             port: TCP port number.
 
         Returns:
-            True if WebSocket server is responsive, False otherwise.
+            True if server is accepting TCP connections, False otherwise.
         """
         import socket as sock_mod
 
@@ -243,20 +248,8 @@ class SootheDaemon(DaemonHandlersMixin):
             s = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
             s.settimeout(1.0)
             s.connect((host, port))
-            # Send minimal WebSocket upgrade request instead of just closing
-            # This prevents "did not receive a valid HTTP request" errors
-            http_request = (
-                f"GET / HTTP/1.1\r\n"
-                f"Host: {host}:{port}\r\n"
-                f"Upgrade: websocket\r\n"
-                f"Connection: Upgrade\r\n"
-                f"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                f"Sec-WebSocket-Version: 13\r\n"
-                f"\r\n"
-            )
-            s.sendall(http_request.encode())
-            # Read response to confirm server is alive
-            s.recv(128)
+            # Just close immediately - we only need to verify the port is open
+            # Sending a WebSocket upgrade request without proper close corrupts server state
             s.close()
         except (ConnectionRefusedError, OSError, TimeoutError):
             return False
