@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
+from soothe.safety import validate_client_workspace
 from soothe.daemon.protocol import decode, encode
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
 
@@ -135,7 +136,20 @@ class DaemonHandlersMixin:
             await self._current_input_queue.put({"type": "command", "cmd": cmd})
         elif msg_type == "resume_thread":
             thread_id = msg.get("thread_id", "")
+            client_workspace = msg.get("workspace")
+
             logger.info("Received resume_thread request for thread_id=%r from client=%s", thread_id, client_id)
+
+            if client_workspace:
+                try:
+                    validated = validate_client_workspace(client_workspace)
+                    logger.info(
+                        f"Client workspace {validated} provided for resume, "
+                        f"thread will use persisted workspace"
+                    )
+                except ValueError as e:
+                    logger.warning(f"Invalid client workspace on resume: {e}")
+
             if thread_id:
                 from soothe.core.thread import ThreadContextManager
 
@@ -194,6 +208,21 @@ class DaemonHandlersMixin:
         elif msg_type == "daemon_ready":
             await self._send_client_message(client_id, self.daemon_ready_message())
         elif msg_type == "new_thread":
+            # Extract workspace from client
+            client_workspace = msg.get("workspace")
+            if client_workspace:
+                try:
+                    thread_workspace = validate_client_workspace(client_workspace)
+                    logger.info(
+                        f"Client {client_id[:8]} requested workspace: {thread_workspace}"
+                    )
+                except ValueError as e:
+                    logger.warning(f"Invalid client workspace: {e}, using daemon default")
+                    thread_workspace = self._daemon_workspace
+            else:
+                # No workspace provided, use daemon default
+                thread_workspace = self._daemon_workspace
+
             # Start a fresh thread - create draft thread ID without persisting yet
             from soothe.core.runner._types import _generate_thread_id
 
@@ -203,6 +232,11 @@ class DaemonHandlersMixin:
             # Track as draft (not persisted until first message)
             self._draft_thread_id = draft_thread_id
             self._runner.set_current_thread_id(draft_thread_id)
+
+            # Store workspace for this thread (will be persisted on first input)
+            if not hasattr(self, "_thread_workspaces"):
+                self._thread_workspaces = {}
+            self._thread_workspaces[draft_thread_id] = thread_workspace
 
             # Initialize input history for the draft thread
             self._input_history = InputHistory()
@@ -217,10 +251,11 @@ class DaemonHandlersMixin:
                         "state": "idle",
                         "thread_id": draft_thread_id,
                         "new_thread": True,
+                        "workspace": str(thread_workspace),
                         "input_history": [],
                     },
                 )
-            logger.info("[Handler] Draft thread %s created", draft_thread_id[:8])
+            logger.info(f"Created new thread {draft_thread_id} with workspace {thread_workspace}")
         # Thread management handlers (RFC-0017)
         elif msg_type == "thread_list":
             await self._handle_thread_list(msg)
