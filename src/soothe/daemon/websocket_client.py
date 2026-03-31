@@ -182,17 +182,49 @@ class WebSocketClient:
         """Notify the daemon that this client is detaching."""
         await self.send({"type": "detach"})
 
-    async def send_resume_thread(self, thread_id: str) -> None:
+    async def send_resume_thread(
+        self,
+        thread_id: str,
+        workspace: str | None = None,
+    ) -> None:
         """Request the daemon to resume a specific thread.
 
         Args:
             thread_id: The thread ID to resume.
+            workspace: Optional workspace override. Defaults to client's cwd.
         """
-        await self.send({"type": "resume_thread", "thread_id": thread_id})
+        import os
+        from pathlib import Path
 
-    async def send_new_thread(self) -> None:
-        """Request the daemon to start a new thread."""
-        await self.send({"type": "new_thread"})
+        if workspace is None:
+            workspace = os.getcwd()
+
+        workspace_str = str(Path(workspace).resolve())
+
+        await self.send({
+            "type": "resume_thread",
+            "thread_id": thread_id,
+            "workspace": workspace_str,
+        })
+
+    async def send_new_thread(self, workspace: str | None = None) -> None:
+        """Request the daemon to start a new thread.
+
+        Args:
+            workspace: Optional workspace path. Defaults to client's cwd.
+        """
+        import os
+        from pathlib import Path
+
+        if workspace is None:
+            workspace = os.getcwd()
+
+        workspace_str = str(Path(workspace).resolve())
+
+        await self.send({
+            "type": "new_thread",
+            "workspace": workspace_str,
+        })
 
     async def request_daemon_ready(self) -> None:
         """Request the daemon's readiness state."""
