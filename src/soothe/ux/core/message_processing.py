@@ -102,7 +102,7 @@ def try_parse_pending_tool_call_args(
 def finalize_pending_tool_call(
     pending_tool_calls: dict[str, dict[str, Any]],
     tool_call_id: str,
-) -> tuple[dict[str, Any] | None, dict[str, Any], bool]:
+) -> tuple[dict[str, Any] | None, dict[str, Any], bool, str]:
     """Finalize and remove a pending tool call when its result arrives.
 
     Args:
@@ -110,31 +110,34 @@ def finalize_pending_tool_call(
         tool_call_id: ID of the tool call to finalize.
 
     Returns:
-        Tuple of (parsed_args or None, pending_state dict, needs_emit).
-        needs_emit is True if the tool call wasn't emitted yet and should be.
-        If not found, returns (None, {}, False).
+        Tuple of (parsed_args, pending_state dict, needs_emit, raw_args_str).
+        - parsed_args: Parsed args dict if valid JSON, None otherwise.
+        - pending_state: The pending tool call state dict.
+        - needs_emit: True if the tool call wasn't emitted yet.
+        - raw_args_str: Raw args string for display fallback.
+        If not found, returns (None, {}, False, "").
     """
     str_id = str(tool_call_id) if tool_call_id else ""
     if not str_id or str_id not in pending_tool_calls:
-        return None, {}, False
+        return None, {}, False, ""
 
     pending = pending_tool_calls[str_id]
     parsed_args = None
     needs_emit = not pending.get("emitted", False)
+    raw_args_str = pending.get("args_str", "")
 
     if needs_emit:
         # Try to parse args one more time
-        args_str = pending.get("args_str", "")
-        if args_str:
+        if raw_args_str:
             with contextlib.suppress(json.JSONDecodeError):
-                result = json.loads(args_str)
+                result = json.loads(raw_args_str)
                 if isinstance(result, dict):
                     parsed_args = result
         pending["emitted"] = True
 
     # Clean up the pending entry
     del pending_tool_calls[str_id]
-    return parsed_args, pending, needs_emit
+    return parsed_args, pending, needs_emit, raw_args_str
 
 
 class OutputFormatter(Protocol):
@@ -372,10 +375,12 @@ class MessageProcessor:
         brief = extract_tool_brief(tool_name, content)
 
         # Check for pending tool call that hasn't been emitted yet (IG-053)
-        parsed_args, pending, needs_emit = finalize_pending_tool_call(self.state.pending_tool_calls, tool_call_id)
+        parsed_args, pending, needs_emit, raw_args_str = finalize_pending_tool_call(
+            self.state.pending_tool_calls, tool_call_id
+        )
         if needs_emit:
-            # Emit the tool call (even with empty args)
-            tc_display = {"args": parsed_args or {}}
+            # Emit the tool call (even with empty args, include raw args for display)
+            tc_display = {"args": parsed_args or {}, "raw_args_str": raw_args_str}
             self.formatter.emit_tool_call(
                 pending.get("name") or tool_name,
                 prefix=prefix,
@@ -579,30 +584,52 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
 
     Args:
         tool_name: Tool name as emitted by the model (snake_case or PascalCase).
-        tool_call: Tool call dict with 'args' key containing arguments
+        tool_call: Tool call dict with 'args' key containing arguments.
+            May also contain '_raw' key with raw args string for fallback display.
 
     Returns:
-        Formatted argument string like "(file_name.md)" or "(/Users/dev/.../file.md, pattern)"
-        Empty string if no relevant argument found
+        Formatted argument string like "file_name.md" or "/Users/dev/.../file.md, pattern"
+        (without outer parentheses - caller adds them).
+        Returns "..." when args are empty but tool is known.
+        Returns "" if tool is unknown and no args.
 
     Examples:
         >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
-        '(config.yml)'
-        >>> format_tool_call_args("read_file", {"args": '{"file_path": "/README.md"}'})
-        '(/Users/dev/project/README.md)'  # Converted to OS path
+        'config.yml'
         >>> format_tool_call_args("run_command", {"args": {"command": "ls", "args": "-la"}})
-        '(ls, -la)'
-        >>> format_tool_call_args("ls", {"args": {"path": "/tests", "pattern": "*.py"}})
-        '(/Users/dev/.../tests, *.py)'  # Path converted and abbreviated
+        'ls, -la'
+        >>> format_tool_call_args("read_file", {"args": {}})
+        '...'
+        >>> format_tool_call_args("read_file", {"args": {}, "_raw": '{"path": "file.txt"}'})
+        'file.txt'
     """
     from soothe.utils.path_display import convert_and_abbreviate_path, is_path_argument
 
     args = coerce_tool_call_args_to_dict(tool_call.get("args"))
-    if not args:
-        return ""
-
     internal = _normalize_tool_name_for_arg_map(tool_name)
     key_args = _ARG_DISPLAY_MAP.get(internal)
+
+    # Check for raw args string fallback
+    raw_args_str = tool_call.get("_raw") or tool_call.get("raw_args_str", "")
+
+    # If args are empty, try to extract from raw args string
+    if not args and raw_args_str:
+        # Try to parse raw string as JSON
+        with contextlib.suppress(json.JSONDecodeError):
+            parsed_raw = json.loads(raw_args_str)
+            if isinstance(parsed_raw, dict):
+                args = parsed_raw
+
+    # If args are still empty but tool is known, show placeholder
+    if not args:
+        if key_args:
+            # Try to show truncated raw args as fallback
+            if raw_args_str:
+                max_len = 40
+                return raw_args_str[:max_len] + "..." if len(raw_args_str) > max_len else raw_args_str
+            return "..."
+        return ""
+
     if not key_args:
         return ""
 
@@ -632,10 +659,11 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                 elif len(s) > max_value_length:
                     s = s[: max_value_length - 3] + "..."
                 parts.append(s)
-            return f"({', '.join(parts)})"
-        return ""
+            return ", ".join(parts)
+        # Known tool but no matching args found
+        return "..."
 
-    return f"({', '.join(values)})"
+    return ", ".join(values)
 
 
 def is_multi_step_plan(event: dict[str, Any]) -> bool:

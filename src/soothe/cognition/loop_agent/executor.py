@@ -66,7 +66,7 @@ class Executor:
             return
 
         logger.info(
-            "Executing %d steps in mode: %s",
+            "Executing %d steps in mode: %s (streaming should be immediate for sequential, batched for parallel)",
             len(ready_steps),
             decision.execution_mode,
         )
@@ -147,13 +147,15 @@ class Executor:
             state: Loop state
 
         Yields:
-            StreamEvent during execution, then StepResult.
+            StreamEvent during execution (immediate streaming), then StepResult.
         """
         from langchain_core.messages import HumanMessage
 
         combined_description = self._build_sequential_input(steps)
 
         start = time.perf_counter()
+        output = ""
+        event_count = 0  # Track events for debugging
         try:
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
@@ -162,19 +164,22 @@ class Executor:
                 subgraphs=True,
             )
 
-            # Collect results and yield events
-            output, events = await self._collect_stream_with_events(stream)
-
-            # Yield collected events
-            for event in events:
-                yield event
+            # Stream events immediately as they arrive
+            async for final_output, event in self._stream_and_collect(stream):
+                if event is not None:
+                    # Yield events immediately for real-time display
+                    event_count += 1
+                    yield event
+                elif final_output is not None:
+                    output = final_output
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Sequential execution completed in %dms - output length: %d",
+                "Sequential execution completed in %dms - output length: %d, events yielded: %d",
                 duration_ms,
                 len(output),
+                event_count,
             )
 
             yield StepResult(
@@ -226,6 +231,7 @@ class Executor:
         """Execute single step, collecting events for later yielding.
 
         Used for parallel execution where we can't yield in real-time.
+        Events are collected and returned with the final result.
 
         Args:
             step: StepAction with description and optional hints
@@ -238,6 +244,7 @@ class Executor:
 
         start = time.perf_counter()
         events: list[StreamEvent] = []
+        output = ""
 
         try:
             logger.debug(
@@ -264,7 +271,13 @@ class Executor:
                 subgraphs=True,
             )
 
-            output, events = await self._collect_stream_with_events(stream)
+            # Stream events and collect for parallel execution
+            async for final_output, event in self._stream_and_collect(stream):
+                if event is not None:
+                    events.append(event)
+                elif final_output is not None:
+                    output = final_output
+
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
@@ -303,26 +316,34 @@ class Executor:
                 thread_id=thread_id,
             )
 
-    async def _collect_stream_with_events(self, stream: AsyncGenerator) -> tuple[str, list[StreamEvent]]:
-        """Collect output from agent stream while preserving events for display.
+    async def _stream_and_collect(
+        self,
+        stream: AsyncGenerator,
+    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None], None]:
+        """Stream events immediately while accumulating output.
+
+        This is the canonical streaming method that yields events as they arrive
+        for real-time display, while also collecting output content for the final
+        result.
 
         Args:
             stream: Async iterator from agent.astream()
 
-        Returns:
-            Tuple of (combined output string, list of events for upstream propagation)
+        Yields:
+            Tuple of (output, event):
+            - When event is not None: yield (None, event) for immediate display
+            - At end: yield (combined_output, None) for final result
         """
         chunks: list[str] = []
-        events: list[StreamEvent] = []
 
         async for chunk in stream:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 namespace, mode, data = chunk
 
-                # Propagate all events for display (tool calls, custom events, etc.)
+                # Yield event immediately for real-time display
                 # EventProcessor will handle filtering and rendering
-                events.append(chunk)
+                yield None, chunk
 
                 # Also extract content for output collection
                 if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
@@ -362,7 +383,8 @@ class Executor:
             elif hasattr(chunk, "content"):
                 chunks.append(str(chunk.content))
 
-        return "".join(chunks), events
+        # Final yield with combined output
+        yield "".join(chunks), None
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

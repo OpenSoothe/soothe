@@ -22,7 +22,7 @@ class TestFormatToolCallArgs:
                 "ReadFile",
                 {"args": {"path": "README.md"}},
             )
-            == "(README.md)"
+            == "README.md"
         )
 
     def test_snake_case_unchanged(self) -> None:
@@ -31,7 +31,7 @@ class TestFormatToolCallArgs:
                 "read_file",
                 {"args": {"path": "x.txt"}},
             )
-            == "(x.txt)"
+            == "x.txt"
         )
 
     def test_fallback_when_mapped_keys_missing(self) -> None:

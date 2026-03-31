@@ -234,7 +234,8 @@ class EventProcessor:
                     name = block.get("name", "")
                     if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
-                        if not coerced and raw_tcs:
+                        # Skip if no args - will be emitted when tool result arrives
+                        if not coerced:
                             continue
                         tool_call_id = block.get("id", "")
                         self._renderer.on_tool_call(
@@ -243,8 +244,7 @@ class EventProcessor:
                             tool_call_id,
                             is_main=is_main,
                         )
-                        if coerced:
-                            tool_call_emitted_from_blocks = True
+                        tool_call_emitted_from_blocks = True
         elif is_main and isinstance(msg.content, str) and msg.content:
             # Always pass to renderer for accumulation, let renderer decide display
             cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
@@ -256,6 +256,8 @@ class EventProcessor:
                 )
 
         # Handle tool_calls attribute
+        # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
+        # from tool_call_chunks happen and emit when tool result arrives.
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
@@ -263,11 +265,15 @@ class EventProcessor:
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
 
-                # Skip chunks with empty args
+                # Skip chunks with empty args - they'll come from tool_call_chunks
                 if is_chunk and not tc_args and not has_tc_args:
                     continue
 
-                if has_tc_args or (not tc_args and not tool_call_emitted_from_blocks):
+                # Skip if args are empty - will be emitted via finalize_pending_tool_call
+                if not tc_args and not tool_call_emitted_from_blocks:
+                    continue
+
+                if has_tc_args:
                     tool_call_id = tc.get("id", "")
                     # Deduplicate tool calls by ID
                     if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
@@ -300,14 +306,16 @@ class EventProcessor:
         brief = extract_tool_brief(tool_name, content)
 
         # Finalize pending tool call if needed (IG-053)
-        parsed_args, pending, needs_emit = finalize_pending_tool_call(
+        parsed_args, pending, needs_emit, raw_args_str = finalize_pending_tool_call(
             self._state.pending_tool_calls,
             tool_call_id,
         )
         if needs_emit:
+            # Pass raw args for display fallback when parsed args unavailable
+            args_to_display = parsed_args or ({"_raw": raw_args_str} if raw_args_str else {})
             self._renderer.on_tool_call(
                 pending.get("name") or tool_name,
-                parsed_args or {},
+                args_to_display,
                 tool_call_id,
                 is_main=pending.get("is_main", is_main),
             )
@@ -345,6 +353,15 @@ class EventProcessor:
                 return
             if msg_id:
                 self._state.seen_message_ids.add(msg_id)
+
+        # Accumulate streaming tool args from tool_call_chunks (IG-053)
+        tool_call_chunks = msg.get("tool_call_chunks", [])
+        if isinstance(tool_call_chunks, list) and tool_call_chunks:
+            accumulate_tool_call_chunks(
+                self._state.pending_tool_calls,
+                tool_call_chunks,
+                is_main=is_main,
+            )
 
         # Process content blocks or content string
         blocks = msg.get("content_blocks") or []
@@ -390,6 +407,8 @@ class EventProcessor:
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
         # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
+        # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
+        # from tool_call_chunks happen and emit when tool result arrives.
         tool_calls = msg.get("tool_calls", [])
         if isinstance(tool_calls, list):
             for tc in tool_calls:
@@ -398,22 +417,12 @@ class EventProcessor:
                     if name and should_show(VerbosityTier.NORMAL, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
-                        # Deduplicate tool calls
-                        if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
-                            continue
-                        if tool_call_id:
-                            self._state.emitted_tool_call_ids.add(tool_call_id)
-                        self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
 
-        # Handle tool_call_chunks (streaming)
-        tool_call_chunks = msg.get("tool_call_chunks", [])
-        if isinstance(tool_call_chunks, list):
-            for tc in tool_call_chunks:
-                if isinstance(tc, dict):
-                    name = tc.get("name", "")
-                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
-                        args = coerce_tool_call_args_to_dict(tc.get("args", {}))
-                        tool_call_id = tc.get("id", "")
+                        # Skip emitting if args are empty - they'll come from tool_call_chunks
+                        # and will be emitted when the tool result arrives (via finalize_pending_tool_call)
+                        if not args:
+                            continue
+
                         # Deduplicate tool calls
                         if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
                             continue
@@ -452,14 +461,16 @@ class EventProcessor:
         brief = extract_tool_brief(tool_name, content)
 
         # Finalize pending tool call if needed (IG-053)
-        parsed_args, pending, needs_emit = finalize_pending_tool_call(
+        parsed_args, pending, needs_emit, raw_args_str = finalize_pending_tool_call(
             self._state.pending_tool_calls,
             tool_call_id,
         )
         if needs_emit:
+            # Pass raw args for display fallback when parsed args unavailable
+            args_to_display = parsed_args or ({"_raw": raw_args_str} if raw_args_str else {})
             self._renderer.on_tool_call(
                 pending.get("name") or tool_name,
-                parsed_args or {},
+                args_to_display,
                 tool_call_id,
                 is_main=pending.get("is_main", is_main),
             )

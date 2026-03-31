@@ -146,7 +146,7 @@ class CliRenderer:
 
         Args:
             name: Tool name.
-            args: Parsed arguments.
+            args: Parsed arguments (may contain _raw for fallback).
             tool_call_id: Tool call identifier.
             is_main: True if from main agent.
         """
@@ -156,7 +156,9 @@ class CliRenderer:
         self._ensure_newline()
 
         display_name = get_tool_display_name(name)
-        args_str = format_tool_call_args(name, {"args": args})
+
+        # Pass args directly, including any _raw fallback
+        args_str = format_tool_call_args(name, {"args": args, "_raw": args.get("_raw", "")})
 
         # Use display helper for consistency with TUI (RFC-0020 Principle 5)
         tool_block = make_tool_block(display_name, args_str, status="running")
