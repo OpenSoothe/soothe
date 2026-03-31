@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.safety import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
@@ -88,6 +89,15 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         self._config = config or SootheConfig()
         self._handle_sigint_shutdown = handle_sigint_shutdown
+
+        # Resolve daemon workspace
+        self._daemon_workspace = resolve_daemon_workspace(
+            self._config.workspace_dir
+        )
+        logger.info(f"Daemon workspace: {self._daemon_workspace}")
+
+        # Update config with resolved workspace
+        self._config.workspace_dir = str(self._daemon_workspace)
         self._clients: list[_ClientConn] = []
         self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
