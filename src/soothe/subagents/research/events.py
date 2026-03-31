@@ -136,10 +136,31 @@ class ResearchInternalLLMResponseEvent(SootheEvent):
     model_config = ConfigDict(extra="allow")
 
 
+class ResearchJudgementEvent(SootheEvent):
+    """Research judgement event for displaying LLM decision reasoning.
+
+    IG-089: Shows meaningful judgement info at normal verbosity without
+    exposing raw intermediate data. Extracted from reflection responses.
+
+    Attributes:
+        judgement: Human-readable summary (e.g., "Need more sources: statistics gap").
+        action: Decision taken ("continue" or "complete").
+        confidence: Confidence level if available (0.0-1.0).
+    """
+
+    type: Literal["soothe.subagent.research.judgement"] = "soothe.subagent.research.judgement"
+    judgement: str = ""
+    action: str = ""  # "continue" or "complete"
+    confidence: float | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
 # Register all research events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
+# Dispatch/Complete events visible at NORMAL (user wants to see start/end)
 register_event(
     ResearchDispatchedEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -150,18 +171,62 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
-register_event(ResearchAnalyzeEvent, summary_template="Analyzing: {topic}")
-register_event(ResearchSubQuestionsEvent, summary_template="Identified {count} sub-questions")
-register_event(ResearchQueriesGeneratedEvent, summary_template="Generated {queries} queries")
-register_event(ResearchGatherEvent, summary_template="Gathering from {domain}: {query}")
-register_event(ResearchGatherDoneEvent, summary_template="Gathered {result_count} results")
-register_event(ResearchSummarizeEvent, summary_template="Summarizing {total_summaries} results")
-register_event(ResearchReflectEvent, summary_template="Reflecting (loop {loop})")
+
+# IG-089: Judgement event visible at NORMAL (shows meaningful progress info)
+register_event(
+    ResearchJudgementEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{judgement}",
+)
+
+# Internal research steps at DETAILED (hidden at normal verbosity)
+register_event(
+    ResearchAnalyzeEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Analyzing: {topic}",
+)
+register_event(
+    ResearchSubQuestionsEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Identified {count} sub-questions",
+)
+register_event(
+    ResearchQueriesGeneratedEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Generated {queries} queries",
+)
+register_event(
+    ResearchGatherEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Gathering from {domain}: {query}",
+)
+register_event(
+    ResearchGatherDoneEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Gathered {result_count} results",
+)
+register_event(
+    ResearchSummarizeEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Summarizing {total_summaries} results",
+)
+register_event(
+    ResearchReflectEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Reflecting (loop {loop})",
+)
 register_event(
     ResearchReflectionDoneEvent,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Reflection: sufficient={is_sufficient}",
 )
-register_event(ResearchSynthesizeEvent, summary_template="Synthesizing findings")
+register_event(
+    ResearchSynthesizeEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Synthesizing findings",
+)
+
+# Internal LLM response - never shown
 register_event(
     ResearchInternalLLMResponseEvent,
     verbosity=VerbosityTier.INTERNAL,
@@ -181,6 +246,7 @@ SUBAGENT_RESEARCH_REFLECTION_DONE = "soothe.subagent.research.reflection_done"
 SUBAGENT_RESEARCH_SYNTHESIZE = "soothe.subagent.research.synthesize"
 SUBAGENT_RESEARCH_COMPLETED = "soothe.subagent.research.completed"
 SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.subagent.research.internal_llm"
+SUBAGENT_RESEARCH_JUDGEMENT = "soothe.subagent.research.judgement"
 
 __all__ = [
     "SUBAGENT_RESEARCH_ANALYZE",
@@ -189,6 +255,7 @@ __all__ = [
     "SUBAGENT_RESEARCH_GATHER",
     "SUBAGENT_RESEARCH_GATHER_DONE",
     "SUBAGENT_RESEARCH_INTERNAL_LLM",
+    "SUBAGENT_RESEARCH_JUDGEMENT",
     "SUBAGENT_RESEARCH_QUERIES_GENERATED",
     "SUBAGENT_RESEARCH_REFLECT",
     "SUBAGENT_RESEARCH_REFLECTION_DONE",
@@ -201,6 +268,7 @@ __all__ = [
     "ResearchGatherDoneEvent",
     "ResearchGatherEvent",
     "ResearchInternalLLMResponseEvent",
+    "ResearchJudgementEvent",
     "ResearchQueriesGeneratedEvent",
     "ResearchReflectEvent",
     "ResearchReflectionDoneEvent",

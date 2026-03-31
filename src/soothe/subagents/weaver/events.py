@@ -170,6 +170,7 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
+# Dispatch/Complete events visible at NORMAL
 register_event(
     WeaverDispatchedEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -180,20 +181,64 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
-register_event(WeaverAnalysisStartedEvent)
-register_event(WeaverAnalysisCompletedEvent)
-register_event(WeaverReuseHitEvent)
-register_event(WeaverReuseMissEvent)
-register_event(WeaverSkillifyPendingEvent)
-register_event(WeaverHarmonizeStartedEvent)
-register_event(WeaverHarmonizeCompletedEvent)
-register_event(WeaverGenerateStartedEvent)
-register_event(WeaverGenerateCompletedEvent)
-register_event(WeaverValidateStartedEvent)
-register_event(WeaverValidateCompletedEvent)
-register_event(WeaverRegistryUpdatedEvent)
-register_event(WeaverExecuteStartedEvent)
-register_event(WeaverExecuteCompletedEvent)
+
+# IG-089: Internal weaver steps at DETAILED (hidden at normal verbosity)
+register_event(
+    WeaverAnalysisStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverAnalysisCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverReuseHitEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverReuseMissEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverSkillifyPendingEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverHarmonizeStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverHarmonizeCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverGenerateStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverGenerateCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverValidateStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverValidateCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverRegistryUpdatedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    WeaverExecuteStartedEvent,
+    verbosity=VerbosityTier.NORMAL,  # Execution visible (actual task being run)
+)
+register_event(
+    WeaverExecuteCompletedEvent,
+    verbosity=VerbosityTier.NORMAL,  # Execution result visible
+)
 
 # Event type constants for convenient imports
 SUBAGENT_WEAVER_DISPATCHED = "soothe.subagent.weaver.dispatched"

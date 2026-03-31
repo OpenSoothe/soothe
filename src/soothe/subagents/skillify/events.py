@@ -112,6 +112,7 @@ class SkillifyIndexFailedEvent(SubagentEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
+# Dispatch/Complete events visible at NORMAL
 register_event(
     SkillifyDispatchedEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -122,14 +123,40 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms ({result_count} results)",
 )
-register_event(SkillifyIndexingPendingEvent)
-register_event(SkillifyRetrieveStartedEvent)
-register_event(SkillifyRetrieveCompletedEvent)
-register_event(SkillifyRetrieveNotReadyEvent)
-register_event(SkillifyIndexStartedEvent)
-register_event(SkillifyIndexUpdatedEvent)
-register_event(SkillifyIndexUnchangedEvent)
-register_event(SkillifyIndexFailedEvent)
+
+# IG-089: Internal skillify steps at DETAILED (hidden at normal verbosity)
+register_event(
+    SkillifyIndexingPendingEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyRetrieveStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyRetrieveCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyRetrieveNotReadyEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyIndexStartedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyIndexUpdatedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyIndexUnchangedEvent,
+    verbosity=VerbosityTier.DETAILED,
+)
+register_event(
+    SkillifyIndexFailedEvent,
+    verbosity=VerbosityTier.NORMAL,  # Failures visible for debugging
+)
 
 # Event type constants for convenient imports
 SUBAGENT_SKILLIFY_DISPATCHED = "soothe.subagent.skillify.dispatched"

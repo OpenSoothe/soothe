@@ -445,7 +445,7 @@ _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "protocol": VerbosityTier.DETAILED,
     "cognition": VerbosityTier.NORMAL,
     "tool": VerbosityTier.INTERNAL,  # RFC-0020: tool display via LangChain on_tool_call
-    "subagent": VerbosityTier.NORMAL,  # RFC-0020: subagent activity visible at normal
+    "subagent": VerbosityTier.DETAILED,  # IG-089: subagent internals hidden at normal
     "output": VerbosityTier.QUIET,
     "error": VerbosityTier.QUIET,
     "agentic": VerbosityTier.NORMAL,

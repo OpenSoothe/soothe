@@ -32,6 +32,7 @@ from .events import (
     ResearchGatherDoneEvent,
     ResearchGatherEvent,
     ResearchInternalLLMResponseEvent,
+    ResearchJudgementEvent,
     ResearchQueriesGeneratedEvent,
     ResearchReflectEvent,
     ResearchReflectionDoneEvent,
@@ -447,12 +448,28 @@ def build_research_engine(
 
         is_sufficient = parsed.get("is_sufficient", True)
         follow_ups = parsed.get("follow_up_queries", [])
+        knowledge_gap = parsed.get("knowledge_gap", "")
 
         _emit_progress(
             ResearchReflectionDoneEvent(
                 loop=loop_count + 1,
                 is_sufficient=is_sufficient,
                 follow_up_count=len(follow_ups),
+            ).to_dict()
+        )
+
+        # IG-089: Emit judgement event with meaningful summary (visible at normal verbosity)
+        if is_sufficient:
+            judgement_text = "Research complete"
+            action_text = "complete"
+        else:
+            gap_desc = knowledge_gap[:50] if knowledge_gap else "more sources needed"
+            judgement_text = f"Need {gap_desc}"
+            action_text = "continue"
+        _emit_progress(
+            ResearchJudgementEvent(
+                judgement=judgement_text,
+                action=action_text,
             ).to_dict()
         )
 

@@ -247,8 +247,24 @@ class TestStreamDisplayPipeline:
         assert "research_subagent" in lines[0].content
         assert lines[0].icon == "⚙"
 
-    def test_subagent_step_shown_for_query(self) -> None:
+    def test_subagent_step_hidden_at_normal(self) -> None:
+        """IG-089: Subagent internal steps hidden at normal verbosity."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.subagent.research.step",
+            "step_type": "query",
+            "action": "arxiv search",
+            "target": "quantum computing",
+        }
+        lines = pipeline.process(event)
+
+        # Internal steps hidden at normal verbosity
+        assert len(lines) == 0
+
+    def test_subagent_step_shown_at_detailed(self) -> None:
+        """IG-089: Subagent internal steps visible at detailed verbosity."""
+        pipeline = StreamDisplayPipeline(verbosity="detailed")
 
         event = {
             "type": "soothe.subagent.research.step",
@@ -260,6 +276,21 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert lines[0].icon == "✓"
+
+    def test_subagent_judgement_shown_at_normal(self) -> None:
+        """IG-089: Subagent judgement visible at normal verbosity."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.subagent.research.judgement",
+            "judgement": "Need more sources: statistics gap",
+            "action": "continue",
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert "Need more sources" in lines[0].content
+        assert lines[0].icon == "→"  # Arrow for continue action
 
     def test_subagent_step_hidden_for_internal(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")

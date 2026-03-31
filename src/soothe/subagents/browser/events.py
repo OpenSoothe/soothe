@@ -59,6 +59,7 @@ class BrowserCdpEvent(SubagentEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
+# Dispatch/Complete events visible at NORMAL
 register_event(
     BrowserDispatchedEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -69,14 +70,16 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Completed in {duration_ms}ms",
 )
+
+# IG-089: Internal browser steps at DETAILED (hidden at normal verbosity)
 register_event(
     BrowserStepEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Step {step}",
 )
 register_event(
     BrowserCdpEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Browser CDP: {status}",
 )
 

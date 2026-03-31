@@ -12,6 +12,7 @@ from soothe.ux.cli.stream.display_line import DisplayLine
 from soothe.ux.cli.stream.formatter import (
     format_goal_done,
     format_goal_header,
+    format_judgement,
     format_step_done,
     format_step_header,
     format_subagent_done,
@@ -154,6 +155,9 @@ class StreamDisplayPipeline:
         if ".subagent." in event_type and ".dispatched" in event_type:
             return self._on_subagent_dispatched(event)
 
+        if ".subagent." in event_type and ".judgement" in event_type:
+            return self._on_subagent_judgement(event)
+
         if ".subagent." in event_type and ".step" in event_type:
             return self._on_subagent_step(event)
 
@@ -244,6 +248,25 @@ class StreamDisplayPipeline:
         query = event.get("query", event.get("task", event.get("topic", "")))
         args_summary = f'"{query[:40]}"' if query else ""
         return [format_tool_call(f"{name}_subagent", args_summary)]
+
+    def _on_subagent_judgement(self, event: dict[str, Any]) -> list[DisplayLine]:
+        """Handle subagent judgement event.
+
+        IG-089: Shows meaningful LLM decision reasoning without raw intermediate data.
+
+        Args:
+            event: Event dictionary.
+
+        Returns:
+            Display lines for judgement.
+        """
+        judgement = event.get("judgement", "")
+        action = event.get("action", "")
+
+        if not judgement:
+            return []
+
+        return [format_judgement(judgement, action)]
 
     def _on_subagent_step(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent step event (compact hybrid).

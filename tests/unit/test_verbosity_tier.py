@@ -109,6 +109,13 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("unknown_event", namespace=()) == VerbosityTier.DEBUG
 
     def test_classify_subagent_events(self) -> None:
-        """Subagent events classify to NORMAL (RFC-0020: visible at normal)."""
-        assert classify_event_to_tier("soothe.subagent.browser.step") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.subagent.claude.tool_use") == VerbosityTier.NORMAL
+        """Subagent events classify to DETAILED (IG-089: hidden at normal).
+
+        Dispatch/completed events are NORMAL, but internal steps are DETAILED.
+        """
+        # Internal steps hidden at normal
+        assert classify_event_to_tier("soothe.subagent.browser.step") == VerbosityTier.DETAILED
+        assert classify_event_to_tier("soothe.subagent.claude.tool_use") == VerbosityTier.DETAILED
+        # Dispatch and completed visible at normal
+        assert classify_event_to_tier("soothe.subagent.browser.dispatched") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.subagent.research.completed") == VerbosityTier.NORMAL

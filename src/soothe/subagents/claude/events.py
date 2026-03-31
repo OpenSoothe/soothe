@@ -45,19 +45,20 @@ class ClaudeResultEvent(SubagentEvent):
 from soothe.core.event_catalog import register_event  # noqa: E402
 from soothe.core.verbosity_tier import VerbosityTier  # noqa: E402
 
+# IG-089: Claude subagent internal events at DETAILED (hidden at normal)
 register_event(
     ClaudeTextEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Text: {text}",
 )
 register_event(
     ClaudeToolUseEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="Tool: {tool}",
 )
 register_event(
     ClaudeResultEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.NORMAL,  # Completion visible
     summary_template="Done (${cost_usd}, {duration_ms}ms)",
 )
 

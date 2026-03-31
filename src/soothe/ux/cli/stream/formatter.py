@@ -118,6 +118,27 @@ def format_subagent_done(summary: str, duration_s: float) -> DisplayLine:
     )
 
 
+def format_judgement(judgement: str, action: str) -> DisplayLine:
+    """Format a judgement line for LLM decision reasoning.
+
+    IG-089: Shows meaningful judgement info without raw intermediate data.
+
+    Args:
+        judgement: Human-readable summary of the decision.
+        action: Action taken ("continue" or "complete").
+
+    Returns:
+        DisplayLine for judgement.
+    """
+    action_icon = "→" if action == "continue" else "✓"
+    return DisplayLine(
+        level=3,
+        content=judgement,
+        icon=action_icon,
+        indent=indent_for_level(3),
+    )
+
+
 def format_step_done(description: str, duration_s: float) -> DisplayLine:
     """Format a step completion line with solid checkbox.
 
@@ -162,6 +183,7 @@ def format_goal_done(goal: str, steps: int, total_s: float) -> DisplayLine:
 __all__ = [
     "format_goal_done",
     "format_goal_header",
+    "format_judgement",
     "format_step_done",
     "format_step_header",
     "format_subagent_done",
