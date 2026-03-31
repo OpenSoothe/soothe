@@ -572,7 +572,6 @@ class SootheDaemon(DaemonHandlersMixin):
             msg: Message dict to route. Must contain 'type' field.
         """
         msg_type = msg.get("type", "")
-        logger.debug("Broadcasting event: type=%s", msg_type)
 
         # Extract thread_id for routing
         thread_id = msg.get("thread_id")
@@ -594,7 +593,6 @@ class SootheDaemon(DaemonHandlersMixin):
         if thread_id:
             # Route to thread-specific topic
             topic = f"thread:{thread_id}"
-            logger.debug("Publishing event to topic %s: %s", topic, msg_type)
             await self._event_bus.publish(topic, msg, event_meta=event_meta)
         else:
             # Event without thread_id - broadcast to all transports

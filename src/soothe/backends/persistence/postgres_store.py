@@ -78,7 +78,7 @@ class PostgreSQLPersistStore:
                 pool.open()
                 self._create_table(pool)
                 logger.info(
-                    "PostgreSQL persist store initialized (namespace=%s, pool_size=%d)",
+                    "[Store] PostgreSQL initialized (namespace=%s, pool=%d)",
                     self._namespace,
                     self._pool_size,
                 )
@@ -207,4 +207,4 @@ class PostgreSQLPersistStore:
         if self._pool is not None:
             self._pool.close()
             self._pool = None
-            logger.info("PostgreSQL persist store closed (namespace=%s)", self._namespace)
+            logger.info("[Store] PostgreSQL closed (namespace=%s)", self._namespace)

@@ -67,7 +67,7 @@ class WebSocketClient:
                     await self.close()
                     raise ConnectionError("Authentication failed")
 
-            logger.info("Connected to daemon via WebSocket at %s", self._url)
+            logger.info("[Client] Connected to daemon at %s", self._url)
         except Exception as e:
             self._connected = False
             msg = f"Failed to connect to daemon: {e}"
@@ -247,7 +247,7 @@ class WebSocketClient:
             "verbosity": verbosity,
         }
         await self.send(msg)
-        logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
+        logger.info("[Client] Subscribed to thread %s (%s)", thread_id[:8], verbosity)
 
     async def wait_for_subscription_confirmed(
         self,

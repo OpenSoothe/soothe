@@ -104,13 +104,12 @@ class RunCommandTool(BaseTool):
             self._shell_initialized = True
 
     def _initialize_shell(self) -> None:
-        """Start persistent shell with custom prompt."""
+        """Start persistent shell with custom prompt (optimized)."""
         try:
-            import time
-
             import pexpect
 
             custom_prompt = "soothe-cli>> "
+            init_timeout = 2  # Reduced from default 5s for faster initialization
 
             child = pexpect.spawn(
                 "/bin/bash",
@@ -119,30 +118,27 @@ class RunCommandTool(BaseTool):
                 timeout=self.timeout,
             )
 
-            child.sendline("stty -onlcr")
-            time.sleep(0.1)
+            # Send all setup commands in one batch (eliminates unnecessary sleeps)
+            # stty -onlcr: disable newline-to-carriage-return mapping
+            # unset PROMPT_COMMAND: clear any existing prompt hooks
+            # PS1 setup: set custom prompt marker
+            # echo '__init__': validation marker to confirm initialization
+            child.sendline("stty -onlcr; unset PROMPT_COMMAND; PS1='soothe-cli>> '; echo '__init__'")
 
-            child.sendline("unset PROMPT_COMMAND")
-            time.sleep(0.1)
-
-            child.sendline(f"PS1='{custom_prompt}'")
-            child.expect(custom_prompt, timeout=self.quick_timeout)
-
-            child.sendline("echo '__buffer_clear__'")
-            child.expect(custom_prompt, timeout=self.quick_timeout)
-
-            child.sendline("echo '__validation__'")
-            child.expect(custom_prompt, timeout=self.quick_timeout)
+            # Single expect operation for all setup (was 5 separate expects before)
+            child.expect(custom_prompt, timeout=init_timeout)
             output = child.before or ""
 
-            if "__validation__" not in output:
-                msg = f"Shell prompt validation failed. Expected '__validation__' in output, got: {output[:100]}"
+            # Validate initialization marker
+            if "__init__" not in output:
+                msg = f"Shell initialization failed. Expected '__init__' in output, got: {output[:100]}"
                 raise RuntimeError(msg)
 
+            # Set working directory if specified
             if self.workspace_root:
                 workspace = str(expand_path(self.workspace_root))
                 child.sendline(f"cd '{workspace}'")
-                child.expect(custom_prompt, timeout=self.quick_timeout)
+                child.expect(custom_prompt, timeout=init_timeout)
 
             _shell_instances["default"] = child
             self.custom_prompt = custom_prompt

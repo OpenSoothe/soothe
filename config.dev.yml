@@ -354,7 +354,7 @@ execution:
 logging:
   # Backend file logging (Python logging module)
   file:
-    level: INFO              # File logging level (DEBUG, INFO, WARNING, ERROR)
+    level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
     max_bytes: 10485760      # 10 MB before rotation
     backup_count: 3          # Number of rotating backups
@@ -362,7 +362,7 @@ logging:
   # Console logging (disabled by default for TUI compatibility)
   console:
     enabled: false           # Enable to see backend logs in terminal
-    level: WARNING           # Console logging level (typically higher than file)
+    level: INFO           # Console logging level (typically higher than file)
     stream: stderr           # stdout or stderr
     format: "%(levelname)-8s %(name)s %(message)s"
 

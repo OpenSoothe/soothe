@@ -66,9 +66,9 @@ class TestClassifyEventToTier:
         """Agentic loop events classify to correct tiers."""
         assert classify_event_to_tier("soothe.agentic.loop.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.agentic.loop.completed") == VerbosityTier.QUIET
-        # RFC-0020: Step descriptions visible at NORMAL verbosity
+        # Step descriptions visible at NORMAL, step completion at DETAILED (optimization)
         assert classify_event_to_tier("soothe.agentic.step.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.DETAILED
 
     def test_classify_lifecycle_events(self) -> None:
         """Lifecycle events classify to DETAILED by default."""

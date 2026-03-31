@@ -16,7 +16,6 @@ from rich.console import RenderableType
 from rich.text import Text
 
 from soothe.tools.display_names import get_tool_display_name
-from soothe.ux.core.event_filter import should_skip_event
 from soothe.ux.core.event_formatter import build_event_summary
 from soothe.ux.core.message_processing import format_tool_call_args
 from soothe.ux.tui.utils import (
@@ -57,6 +56,9 @@ class TuiRendererState:
 
     # Track tool call start times for duration display (RFC-0020)
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
+
+    # Track if final response was already emitted via custom event (deduplication)
+    final_response_emitted: bool = False
 
 
 class TuiRenderer:
@@ -110,6 +112,14 @@ class TuiRenderer:
         """Whether currently streaming assistant text."""
         return self._state.streaming_active
 
+    def mark_final_response_emitted(self) -> None:
+        """Mark that final response was emitted via custom event.
+
+        Prevents duplicate output when the same content comes through
+        the AIMessage stream.
+        """
+        self._state.final_response_emitted = True
+
     def on_assistant_text(
         self,
         text: str,
@@ -124,6 +134,10 @@ class TuiRenderer:
             is_main: True if from main agent.
             is_streaming: True if partial chunk.
         """
+        # Skip if final response was already emitted via custom event
+        if self._state.final_response_emitted:
+            return
+
         if is_main:
             self._stream_main_text(text)
         else:
@@ -330,10 +344,6 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # Check skip filter (unified with CLI)
-        if should_skip_event(event_type):
-            return
-
         # Build top-level summary from registry template
         summary = self._build_event_summary(event_type, data)
         if not summary:
@@ -357,61 +367,6 @@ class TuiRenderer:
         """
         # Delegate to shared logic
         return build_event_summary(event_type, data)
-
-    def _format_event_details(self, event_type: str, data: dict[str, Any]) -> str | None:
-        """Extract additional details for second-level display.
-
-        Args:
-            event_type: Event type string.
-            data: Event payload.
-
-        Returns:
-            Details string for second level, or None if no details.
-        """
-        # Browser step events: show action + url
-        if "browser.step" in event_type:
-            parts = []
-            if action := data.get("action"):
-                parts.append(str(action)[:60])
-            if url := data.get("url"):
-                parts.append(url[:80])
-            return " | ".join(parts) if parts else None
-
-        # Browser CDP events: show CDP URL
-        if "browser.cdp" in event_type:
-            return data.get("cdp_url")
-
-        # Claude text events: show text preview
-        if "claude.text" in event_type:
-            text = data.get("text", "")
-            return text[:80] if text else None  # RFC-0020 compliance: 80 char limit
-
-        # Claude tool use: no additional details
-        if "claude.tool_use" in event_type:
-            return None
-
-        # Claude result: cost and duration already in summary
-        if "claude.result" in event_type:
-            return None
-
-        # Agentic events: preserve existing logic
-        if "agentic" in event_type:
-            if "loop.started" in event_type:
-                return f"max {data.get('max_iterations', 3)} iterations"
-            if "loop.completed" in event_type:
-                return f"{data.get('total_iterations', 0)} iterations"
-            if "iteration.started" in event_type:
-                return f"Iteration {data.get('iteration', 0) + 1}"
-            if "observation.completed" in event_type:
-                context = data.get("context_entries", 0)
-                memories = data.get("memories_recalled", 0)
-                strategy = data.get("planning_strategy", "unknown")
-                return f"{context} context, {memories} memories → {strategy}"
-            if "verification.completed" in event_type:
-                should_continue = data.get("should_continue", False)
-                return "→ continuing" if should_continue else "✓ complete"
-
-        return None
 
     def on_plan_created(self, plan: Plan) -> None:  # noqa: ARG002
         """Handle plan creation.
@@ -454,7 +409,8 @@ class TuiRenderer:
             self._state.streaming_active = False
             self._state.last_assistant_output = self._state.streaming_text_buffer
             self._state.streaming_text_buffer = ""
-            self._state.current_tool_calls.clear()
+        # Reset deduplication flag for next turn
+        self._state.final_response_emitted = False
 
     def _is_long_running_tool(self, name: str) -> bool:
         """Detect if tool typically takes >5 seconds.

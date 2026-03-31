@@ -8,7 +8,6 @@ from typing import Any
 from rich.text import Text
 
 from soothe.protocols.planner import Plan
-from soothe.ux.core.message_processing import SharedState
 
 
 @dataclass
@@ -56,8 +55,17 @@ class SubagentTracker:
 class TuiState:
     """Mutable display state shared by TUI frontends."""
 
-    # Compose shared state for common fields
-    shared: SharedState = field(default_factory=SharedState)
+    # Shared state fields (formerly in SharedState)
+    full_response: list[str] = field(default_factory=list)
+    seen_message_ids: set[str] = field(default_factory=set)
+    name_map: dict[str, str] = field(default_factory=dict)
+    multi_step_active: bool = False
+    has_error: bool = False
+    # Track pending tool calls for streaming arg accumulation (IG-053)
+    # Maps tool_call_id -> {'name': str, 'args_str': str, 'emitted': bool, 'is_main': bool}
+    pending_tool_calls: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Track internal context for research tool filtering (IG-064)
+    internal_context_active: bool = False
 
     # TUI-specific state
     tool_call_buffers: dict[str | int, dict[str, Any]] = field(default_factory=dict)
@@ -75,64 +83,3 @@ class TuiState:
     last_assistant_output: str = ""  # Stores final assistant output for copy-last action
     current_tool_calls: dict[str, dict[str, str]] = field(default_factory=dict)  # Tracks in-progress tool calls by ID
     # Each entry: {"name": str, "args_summary": str}
-
-    # Convenience properties to access shared state
-    @property
-    def full_response(self) -> list[str]:
-        """Get full_response from shared state."""
-        return self.shared.full_response
-
-    @full_response.setter
-    def full_response(self, value: list[str]) -> None:
-        """Set full_response in shared state."""
-        self.shared.full_response = value
-
-    @property
-    def seen_message_ids(self) -> set[str]:
-        """Get seen_message_ids from shared state."""
-        return self.shared.seen_message_ids
-
-    @seen_message_ids.setter
-    def seen_message_ids(self, value: set[str]) -> None:
-        """Set seen_message_ids in shared state."""
-        self.shared.seen_message_ids = value
-
-    @property
-    def name_map(self) -> dict[str, str]:
-        """Get name_map from shared state."""
-        return self.shared.name_map
-
-    @name_map.setter
-    def name_map(self, value: dict[str, str]) -> None:
-        """Set name_map in shared state."""
-        self.shared.name_map = value
-
-    @property
-    def multi_step_active(self) -> bool:
-        """Get multi_step_active from shared state."""
-        return self.shared.multi_step_active
-
-    @multi_step_active.setter
-    def multi_step_active(self, value: bool) -> None:
-        """Set multi_step_active in shared state."""
-        self.shared.multi_step_active = value
-
-    @property
-    def has_error(self) -> bool:
-        """Get has_error from shared state."""
-        return self.shared.has_error
-
-    @has_error.setter
-    def has_error(self, value: bool) -> None:
-        """Set has_error in shared state."""
-        self.shared.has_error = value
-
-    @property
-    def pending_tool_calls(self) -> dict[str, dict[str, Any]]:
-        """Get pending_tool_calls from shared state (IG-053 streaming args)."""
-        return self.shared.pending_tool_calls
-
-    @pending_tool_calls.setter
-    def pending_tool_calls(self, value: dict[str, dict[str, Any]]) -> None:
-        """Set pending_tool_calls in shared state."""
-        self.shared.pending_tool_calls = value

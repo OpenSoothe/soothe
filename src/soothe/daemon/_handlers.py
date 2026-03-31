@@ -220,7 +220,7 @@ class DaemonHandlersMixin:
                         "input_history": [],
                     },
                 )
-            logger.info("Created draft thread %s", draft_thread_id)
+            logger.info("[Handler] Draft thread %s created", draft_thread_id[:8])
         # Thread management handlers (RFC-0017)
         elif msg_type == "thread_list":
             await self._handle_thread_list(msg)

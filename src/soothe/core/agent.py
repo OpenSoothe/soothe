@@ -222,6 +222,23 @@ class CoreAgent:
             ):
                 process(chunk)
         """
+        # Log execution start
+        thread_id = config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
+        hints = config.get("configurable", {}) if config else {}
+
+        input_preview = input_arg if isinstance(input_arg, str) else str(input_arg)[:80]
+        logger.debug(
+            "[Exec] Starting execution (thread=%s): %s",
+            thread_id,
+            input_preview[:80],
+        )
+
+        # Log execution hints if present
+        if hints.get("soothe_step_tools"):
+            logger.debug("[Exec] Hint: suggested tools=%s", hints["soothe_step_tools"])
+        if hints.get("soothe_step_subagent"):
+            logger.debug("[Exec] Hint: suggested subagent=%s", hints["soothe_step_subagent"])
+
         if stream_mode:
             return self._graph.astream(input_arg, config or {}, stream_mode=stream_mode, subgraphs=subgraphs)
         return self._graph.astream(input_arg, config or {}, subgraphs=subgraphs)
@@ -369,16 +386,16 @@ def create_soothe_agent(
         resolved_policy = policy or resolve_policy(config)
 
     resolve_ms = (time.perf_counter() - resolve_start) * 1000
-    logger.debug("Protocols resolved in %.1fms", resolve_ms)
+    logger.debug("[Init] Protocols resolved (%.1fms)", resolve_ms)
 
     if resolved_context:
-        logger.info("Context: %s", type(resolved_context).__name__)
+        logger.info("[Init] Context: %s", type(resolved_context).__name__)
     if resolved_memory:
-        logger.info("Memory: %s", type(resolved_memory).__name__)
+        logger.info("[Init] Memory: %s", type(resolved_memory).__name__)
     if resolved_planner:
-        logger.info("Planner: %s", type(resolved_planner).__name__)
+        logger.info("[Init] Planner: %s", type(resolved_planner).__name__)
     if resolved_policy:
-        logger.info("Policy: %s", type(resolved_policy).__name__)
+        logger.info("[Init] Policy: %s", type(resolved_policy).__name__)
 
     # Load plugins
     import asyncio
@@ -399,7 +416,7 @@ def create_soothe_agent(
     except RuntimeError:
         logger.debug("Plugin loading failed, will load on demand")
     plugins_ms = (time.perf_counter() - plugins_start) * 1000
-    logger.info("Plugins loaded in %.1fms", plugins_ms)
+    logger.info("[Init] Plugins loaded (%.1fms)", plugins_ms)
 
     # Resolve tools (NO goal_tools - Layer 3 responsibility)
     tools_start = time.perf_counter()
@@ -408,7 +425,7 @@ def create_soothe_agent(
     if tools:
         all_tools.extend(tools)
     tools_ms = (time.perf_counter() - tools_start) * 1000
-    logger.info("Tools resolved in %.1fms", tools_ms)
+    logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
     subagents_start = time.perf_counter()
     config_subagents = resolve_subagents(
@@ -418,7 +435,7 @@ def create_soothe_agent(
     if subagents:
         all_subagents.extend(subagents)
     subagents_ms = (time.perf_counter() - subagents_start) * 1000
-    logger.info("Subagents resolved in %.1fms", subagents_ms)
+    logger.info("[Init] Subagents resolved: %d agents (%.1fms)", len(all_subagents), subagents_ms)
 
     resolved_backend = backend
     if resolved_backend is None:
@@ -448,11 +465,11 @@ def create_soothe_agent(
         and config.performance.unified_classification
     ):
         default_middleware.append(SystemPromptOptimizationMiddleware(config=config))
-        logger.info("System prompt optimization middleware enabled")
+        logger.info("[Init] System prompt optimization enabled")
 
     # Add execution hints middleware for Layer 2 → Layer 1 integration (RFC-0023)
     default_middleware.append(ExecutionHintsMiddleware())
-    logger.debug("Execution hints middleware enabled")
+    logger.debug("[Init] Execution hints middleware enabled")
 
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))
@@ -460,7 +477,7 @@ def create_soothe_agent(
     # Add parallel tools middleware for performance (always enabled with safe defaults)
     max_parallel_tools = config.execution.concurrency.max_parallel_tools if hasattr(config, "execution") else 3
     default_middleware.append(ParallelToolsMiddleware(max_parallel_tools=max_parallel_tools))
-    logger.info("Parallel tools middleware enabled with max_parallel_tools=%d", max_parallel_tools)
+    logger.info("[Init] Parallel tools middleware (max=%d)", max_parallel_tools)
 
     all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
@@ -485,7 +502,7 @@ def create_soothe_agent(
         debug=config.debug,
     )
     deep_agent_ms = (time.perf_counter() - deep_agent_start) * 1000
-    logger.info("Deep agent graph created in %.1fms", deep_agent_ms)
+    logger.info("[Init] Deep agent graph created (%.1fms)", deep_agent_ms)
 
     # Wrap graph in CoreAgent with typed protocol properties
     agent = CoreAgent(
@@ -499,6 +516,6 @@ def create_soothe_agent(
     )
 
     total_ms = (time.perf_counter() - create_start) * 1000
-    logger.info("CoreAgent created in %.1fms", total_ms)
+    logger.info("[Init] ✓ CoreAgent ready (%.1fms total)", total_ms)
 
     return agent

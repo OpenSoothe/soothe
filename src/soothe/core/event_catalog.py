@@ -647,7 +647,7 @@ _reg(
 _reg(
     "soothe.agentic.step.completed",
     AgenticStepCompletedEvent,
-    verbosity=VerbosityTier.NORMAL,
+    verbosity=VerbosityTier.DETAILED,
     summary_template="{summary} ({duration_ms}ms)",
 )
 
@@ -663,7 +663,12 @@ _reg(MEMORY_STORED, MemoryStoredEvent, summary_template="Stored memory: {id}")
 # Plan display is handled by on_plan_created() renderer, not summary template
 _reg(PLAN_CREATED, PlanCreatedEvent)
 _reg(PLAN_STEP_STARTED, PlanStepStartedEvent, summary_template="Step {step_id}: {description}")
-_reg(PLAN_STEP_COMPLETED, PlanStepCompletedEvent, summary_template="Step {step_id}: done")
+_reg(
+    PLAN_STEP_COMPLETED,
+    PlanStepCompletedEvent,
+    verbosity=VerbosityTier.DETAILED,
+    summary_template="Step {step_id}: done",
+)
 _reg(PLAN_STEP_FAILED, PlanStepFailedEvent, summary_template="Step {step_id}: FAILED - {error}")
 _reg(PLAN_BATCH_STARTED, PlanBatchStartedEvent, summary_template="Batch: {parallel_count} steps in parallel")
 _reg(PLAN_REFLECTED, PlanReflectedEvent, summary_template="Reflected: {assessment}")
@@ -697,6 +702,7 @@ _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 # These modules call register_event() at import time
 # Must be at the end after all core events are registered
 # ---------------------------------------------------------------------------
+import soothe.cognition.loop_agent.events  # noqa: E402
 import soothe.plugin.events  # noqa: E402
 import soothe.subagents.browser.events  # noqa: E402
 import soothe.subagents.claude.events  # noqa: E402

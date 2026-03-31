@@ -58,14 +58,14 @@ class PlannerPhase:
             and state.previous_judgment.should_continue()
         ):
             logger.info(
-                "Reusing existing AgentDecision (continue strategy) - %d remaining steps",
+                "[Plan] Reusing decision (%d remaining steps)",
                 len(state.current_decision.get_ready_steps(state.completed_step_ids)),
             )
             return state.current_decision
 
         # Create new decision
         logger.info(
-            "Creating new AgentDecision (iteration %d) - previous judgment: %s",
+            "[Plan] Creating decision (iteration %d, prev=%s)",
             state.iteration,
             state.previous_judgment.status if state.previous_judgment else "none",
         )
@@ -77,10 +77,10 @@ class PlannerPhase:
         )
 
         logger.info(
-            "Created AgentDecision with %d steps, mode: %s, granularity: %s",
+            "[Plan] Decision created: %d steps, mode=%s, granularity=%s",
             len(decision.steps),
             decision.execution_mode,
-            decision.adaptive_granularity or "unspecified",
+            decision.adaptive_granularity or "default",
         )
 
         return decision

@@ -118,8 +118,8 @@ class LoopAgent:
         )
 
         logger.info(
-            "Starting agentic loop for goal: %s (max_iterations: %d)",
-            goal[:100],
+            "[Goal] %s (max_iterations=%d)",
+            goal[:80],
             max_iterations,
         )
 
@@ -218,6 +218,18 @@ class LoopAgent:
             state.iteration += 1
             state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
+            # Yield judgment event (visible to user)
+            yield (
+                "judgment",
+                {
+                    "status": judgment.status,
+                    "progress": judgment.goal_progress,
+                    "confidence": judgment.confidence,
+                    "reasoning": judgment.reasoning[:200] if judgment.reasoning else "",
+                    "iteration": state.iteration,
+                },
+            )
+
             # Yield iteration completed event
             yield (
                 "iteration_completed",
@@ -232,7 +244,7 @@ class LoopAgent:
             # Decision logic
             if judgment.is_done():
                 logger.info(
-                    "Goal achieved after %d iterations (%dms total)",
+                    "[✓] Goal achieved in %d iterations (%dms)",
                     state.iteration,
                     state.total_duration_ms,
                 )
@@ -241,7 +253,7 @@ class LoopAgent:
 
             if judgment.should_replan():
                 logger.info(
-                    "Replan needed after iteration %d (progress: %.0f%%)",
+                    "[↻] Replan needed at iteration %d (progress=%.0f%%)",
                     state.iteration,
                     judgment.goal_progress * 100,
                 )
@@ -255,7 +267,7 @@ class LoopAgent:
             if not ready_steps:
                 # All steps completed but goal not achieved - force replan
                 logger.info(
-                    "Continue strategy but no ready steps (all %d completed) - forcing replan",
+                    "[↻] No ready steps remaining (%d completed) - forcing replan",
                     len(state.completed_step_ids),
                 )
                 state.current_decision = None
@@ -263,9 +275,9 @@ class LoopAgent:
                 continue
 
             logger.info(
-                "Continue strategy after iteration %d (%d remaining steps)",
-                state.iteration,
+                "[→] Continue with remaining %d steps at iteration %d",
                 len(ready_steps),
+                state.iteration,
             )
             # Reuse current decision, execute remaining steps
             state.current_decision = decision
@@ -273,7 +285,7 @@ class LoopAgent:
 
         # Max iterations reached
         logger.warning(
-            "Max iterations (%d) reached without goal completion (progress: %.0f%%)",
+            "[⚠] Max iterations (%d) reached (progress=%.0f%%)",
             state.max_iterations,
             state.previous_judgment.goal_progress * 100 if state.previous_judgment else 0,
         )

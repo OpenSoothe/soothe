@@ -25,7 +25,7 @@ class HealthChecker:
         """Initialize health checker.
 
         Args:
-            config: SootheConfig instance. If None, runs standalone checks
+            config: SootheConfig instance. If None, runs basic checks
                 that don't require configuration.
         """
         self.config = config

@@ -66,14 +66,6 @@ class EventBus:
                 dropped += 1
                 logger.warning("Queue full for topic %s, dropping event", topic)
 
-        logger.debug(
-            "Published event %s to topic %s: %d delivered, %d dropped",
-            event.get("type"),
-            topic,
-            len(queues) - dropped,
-            dropped,
-        )
-
     async def subscribe(self, topic: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Subscribe queue to receive events for topic.
 

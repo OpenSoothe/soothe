@@ -45,6 +45,9 @@ class CliRendererState:
     # Track tool call start times for duration display (RFC-0020)
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
+    # Track if final response was already emitted via custom event (deduplication)
+    final_response_emitted: bool = False
+
 
 class CliRenderer:
     """CLI renderer for headless stdout/stderr output.
@@ -80,6 +83,14 @@ class CliRenderer:
         """Whether multi-step plan is active."""
         return self._state.multi_step_active
 
+    def mark_final_response_emitted(self) -> None:
+        """Mark that final response was emitted via custom event.
+
+        Prevents duplicate output when the same content comes through
+        the AIMessage stream.
+        """
+        self._state.final_response_emitted = True
+
     def write_lines(self, lines: list[DisplayLine]) -> None:
         """Write display lines to stderr.
 
@@ -113,6 +124,10 @@ class CliRenderer:
         """
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
+
+        # Skip if final response was already emitted via custom event
+        if self._state.final_response_emitted:
+            return
 
         self._state.full_response.append(text)
 
@@ -336,22 +351,28 @@ class CliRenderer:
         If multi_step_active was suppressing output, flush the accumulated
         response to stdout now that the plan is complete.
         """
-        # Output any accumulated response that was suppressed during multi-step plan
-        if self._state.multi_step_active and self._state.full_response:
-            # Add separation after stderr progress output
-            sys.stdout.write("\n\n")
-            # Output the accumulated response
-            sys.stdout.write("".join(self._state.full_response))
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        elif self._state.full_response:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+        # Capture state BEFORE resetting
+        was_multi_step = self._state.multi_step_active
+        accumulated_response = self._state.full_response
 
-        # Reset state for next turn
+        # Reset state for next turn FIRST (before output logic)
         self._state.needs_stdout_newline = False
         self._state.multi_step_active = False
         self._state.full_response = []
+        self._state.final_response_emitted = False
+
+        # Output any accumulated response that was suppressed during multi-step plan
+        # Use captured state, not current state (which is now reset)
+        if was_multi_step and accumulated_response:
+            # Add separation after stderr progress output
+            sys.stdout.write("\n\n")
+            # Output the accumulated response
+            sys.stdout.write("".join(accumulated_response))
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        elif accumulated_response:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
 
     def _ensure_newline(self) -> None:
         """Ensure stdout has newline before stderr output.

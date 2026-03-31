@@ -66,7 +66,7 @@ class JudgePhase:
         failures = sum(1 for r in state.step_results if not r.success)
 
         logger.info(
-            "Judging goal progress - %d steps executed (%d success, %d failed)",
+            "[Judge] Evaluating %d steps (%d ✓, %d ✗)",
             len(state.step_results),
             successes,
             failures,
@@ -89,11 +89,11 @@ class JudgePhase:
 
         # Log judgment result
         logger.info(
-            "Judgment: status=%s progress=%.0f%% confidence=%.0f%% - %s",
+            "[Judge] Result: %s (progress=%.0f%%, confidence=%.0f%%) - %s",
             judgment.status,
             judgment.goal_progress * 100,
             judgment.confidence * 100,
-            judgment.reasoning[:100],
+            judgment.reasoning[:80],
         )
 
         return judgment

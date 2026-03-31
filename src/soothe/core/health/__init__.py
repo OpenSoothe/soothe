@@ -13,7 +13,7 @@ Example usage:
     checker = HealthChecker(config)
     report = await checker.run_all_checks()
 
-    # Standalone (no config)
+    # Basic checks (no config)
     checker = HealthChecker()
     report = await checker.run_all_checks()
 

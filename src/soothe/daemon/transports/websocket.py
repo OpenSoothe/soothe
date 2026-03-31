@@ -60,7 +60,7 @@ class WebSocketTransport(TransportServer):
             handshake_callback: Optional callback for initial handshake messages.
         """
         if not self._config.enabled:
-            logger.info("WebSocket transport disabled by configuration")
+            logger.info("[WS] Transport disabled")
             return
 
         self._message_handler = message_handler
@@ -152,7 +152,7 @@ class WebSocketTransport(TransportServer):
         await self._server.wait_closed()
         self._server = None
 
-        logger.info("WebSocket transport stopped")
+        logger.info("[WS] Transport stopped")
 
     @property
     def transport_type(self) -> str:
@@ -219,8 +219,8 @@ class WebSocketTransport(TransportServer):
         # Register client
         self._clients[websocket] = client_info
         logger.info(
-            "WebSocket client connected from %s (total=%d)",
-            websocket.remote_address,
+            "[WS] Client connected from %s (%d active)",
+            websocket.remote_address[0] if websocket.remote_address else "unknown",
             len(self._clients),
         )
 
@@ -276,7 +276,7 @@ class WebSocketTransport(TransportServer):
             # Unregister client
             self._clients.pop(websocket, None)
             logger.info(
-                "WebSocket client disconnected from %s (total=%d)",
-                websocket.remote_address,
+                "[WS] Client disconnected from %s (%d active)",
+                websocket.remote_address[0] if websocket.remote_address else "unknown",
                 len(self._clients),
             )

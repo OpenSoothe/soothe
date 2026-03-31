@@ -232,7 +232,7 @@ class EventProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
-                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
+                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         # Skip if no args - will be emitted when tool result arrives
                         if not coerced:
@@ -261,7 +261,7 @@ class EventProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
-                if not name or not should_show(VerbosityTier.NORMAL, self._verbosity):
+                if not name or not should_show(VerbosityTier.DETAILED, self._verbosity):
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
 
@@ -290,7 +290,7 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle ToolMessage objects."""
-        if not should_show(VerbosityTier.NORMAL, self._verbosity):
+        if not should_show(VerbosityTier.DETAILED, self._verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -442,7 +442,7 @@ class EventProcessor:
             msg: ToolMessage serialized as dict.
             is_main: True if from main agent.
         """
-        if not should_show(VerbosityTier.NORMAL, self._verbosity):
+        if not should_show(VerbosityTier.DETAILED, self._verbosity):
             return
 
         tool_name = msg.get("name", "tool")
@@ -496,7 +496,7 @@ class EventProcessor:
                 pending["emitted"] = True
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and should_show(VerbosityTier.NORMAL, self._verbosity):
+            if parsed_args is not None and should_show(VerbosityTier.DETAILED, self._verbosity):
                 self._state.emitted_tool_call_ids.add(tc_id)
                 self._renderer.on_tool_call(
                     pending["name"],
@@ -537,6 +537,9 @@ class EventProcessor:
                         is_main=True,
                         is_streaming=False,
                     )
+                    # Mark that final response was emitted (prevent duplicate from AIMessage stream)
+                    if hasattr(self._renderer, "mark_final_response_emitted"):
+                        self._renderer.mark_final_response_emitted()
             return
 
         category = classify_event_to_tier(etype, namespace)

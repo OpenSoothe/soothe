@@ -115,9 +115,11 @@ class StreamDisplayPipeline:
         if event_type in GOAL_START_EVENTS:
             return VerbosityTier.NORMAL
 
-        # Step events - NORMAL
-        if event_type in STEP_START_EVENTS or event_type in STEP_COMPLETE_EVENTS:
+        # Step events - NORMAL for start, DETAILED for completion
+        if event_type in STEP_START_EVENTS:
             return VerbosityTier.NORMAL
+        if event_type in STEP_COMPLETE_EVENTS:
+            return VerbosityTier.DETAILED
 
         # Goal completion - QUIET (always visible)
         if event_type in GOAL_COMPLETE_EVENTS:

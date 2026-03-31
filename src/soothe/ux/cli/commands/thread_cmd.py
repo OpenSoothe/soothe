@@ -50,7 +50,7 @@ def thread_list(
     if SootheDaemon.is_running():
         _thread_list_via_daemon(cfg, status_filter=status, limit=limit)
     else:
-        _thread_list_standalone(cfg, status_filter=status, limit=limit)
+        _thread_list_direct(cfg, status_filter=status, limit=limit)
 
 
 def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
@@ -97,8 +97,8 @@ def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = No
     asyncio.run(_list())
 
 
-def _thread_list_standalone(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
-    """List threads in standalone mode (no daemon)."""
+def _thread_list_direct(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
+    """List threads directly from durability backend (no daemon connection)."""
     from soothe.core.runner import SootheRunner
     from soothe.core.thread import ThreadContextManager
 
@@ -154,10 +154,6 @@ def thread_continue(
         typer.Option("--config", "-c", help="Path to configuration file."),
     ] = None,
     *,
-    daemon: Annotated[
-        bool,
-        typer.Option("--daemon", help="Attach to running daemon instead of standalone."),
-    ] = False,
     new: Annotated[
         bool,
         typer.Option("--new", help="Create a new thread instead of continuing."),
@@ -165,13 +161,10 @@ def thread_continue(
 ) -> None:
     """Continue a conversation thread in the TUI.
 
-    Works in two modes:
-    1. Standalone (default): Runs agent directly
-    2. Daemon mode (--daemon): Connects to running daemon
+    Requires a running daemon. Start daemon with 'soothe daemon start' first.
 
     Examples:
         soothe thread continue abc123
-        soothe thread continue abc123 --daemon
         soothe thread continue --new
         soothe thread continue
     """
@@ -182,11 +175,16 @@ def thread_continue(
     cfg = load_config(config)
     setup_logging(cfg)
 
+    # Check if daemon is running - required for thread continuation
+    if not SootheDaemon.is_running():
+        typer.echo("Error: No daemon running. Start with 'soothe daemon start'.", err=True)
+        sys.exit(1)
+
     # Handle --new flag
     if new:
         thread_id = None
     elif not thread_id:
-
+        # Find the most recently updated active thread through the daemon via WebSocket
         async def get_last_thread_via_daemon() -> str | None:
             """Find the most recently updated active thread through the daemon via WebSocket."""
             from soothe.daemon import WebSocketClient
@@ -216,39 +214,11 @@ def thread_continue(
             typer.echo("No active threads found.", err=True)
             sys.exit(1)
 
-        async def get_last_thread_standalone() -> str | None:
-            """Find the most recently updated active thread from local durability."""
-            from soothe.core.runner import SootheRunner
+        thread_id = asyncio.run(get_last_thread_via_daemon())
 
-            runner = SootheRunner(cfg)
-            try:
-                threads = await runner.list_threads()
-                active_threads = [t for t in threads if t.get("status") in ("active", "idle")]
-                if not active_threads:
-                    typer.echo("No active threads found.", err=True)
-                    sys.exit(1)
-                active_threads.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-                return active_threads[0].get("thread_id")
-            finally:
-                await runner.cleanup()
-
-        if SootheDaemon.is_running():
-            thread_id = asyncio.run(get_last_thread_via_daemon())
-        else:
-            thread_id = asyncio.run(get_last_thread_standalone())
-
-    # Handle --daemon flag
-    if daemon:
-        if not SootheDaemon.is_running():
-            typer.echo("Error: No daemon running. Start with 'soothe daemon start'.", err=True)
-            sys.exit(1)
-
-        # Connect to daemon and resume thread
-        # This will trigger TUI to connect to daemon
-        run_tui(cfg, thread_id=thread_id, config_path=config)
-    else:
-        # Standalone mode (existing behavior)
-        run_tui(cfg, thread_id=thread_id, config_path=config)
+    # Connect to daemon and resume thread
+    # This will trigger TUI to connect to daemon
+    run_tui(cfg, thread_id=thread_id, config_path=config)
 
 
 def thread_archive(

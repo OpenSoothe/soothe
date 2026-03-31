@@ -60,7 +60,6 @@ run_headless_via_daemon()
 
 **Key Files:**
 - `src/soothe/ux/cli/execution/daemon.py` - Daemon client interaction
-- `src/soothe/ux/cli/execution/standalone.py` - Fallback standalone mode
 
 ## 2. Daemon Processing
 

@@ -83,17 +83,19 @@ Continue a conversation thread in the TUI.
 - `thread-id` - Optional. Thread ID to continue. Omit to continue last active thread.
 
 **Options**:
-- `--daemon` - Attach to running daemon instead of standalone
 - `--new` - Create a new thread instead of continuing
 - `--config <file>` - Use custom configuration file
 
+**Requirements**:
+- Requires a running daemon. Start daemon with `soothe daemon start` first.
+
 **Examples**:
 ```bash
+# Start daemon first
+soothe daemon start
+
 # Continue specific thread
 soothe thread continue abc123
-
-# Continue via running daemon
-soothe thread continue abc123 --daemon
 
 # Start a new thread
 soothe thread continue --new

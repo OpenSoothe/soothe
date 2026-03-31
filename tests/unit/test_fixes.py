@@ -133,28 +133,25 @@ async def test_thread_list_breaks_on_empty_response() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_thread_continue_accepts_daemon_flag() -> None:
-    """Test that thread continue command has --daemon flag."""
-    from typing import get_type_hints
-
-    import typer
+def test_thread_continue_requires_daemon() -> None:
+    """Test that thread continue command requires running daemon."""
+    import inspect
 
     from soothe.ux.cli.commands.thread_cmd import thread_continue
 
     sig = inspect.signature(thread_continue)
     params = sig.parameters
 
-    # Check for daemon flag
-    assert "daemon" in params, "thread_continue should have daemon parameter"
+    # Check that daemon flag has been removed (no longer a parameter)
+    assert "daemon" not in params, "thread_continue should NOT have daemon parameter (deprecated)"
 
-    # Check it's optional
-    param = params["daemon"]
-    assert param.default is not inspect.Parameter.empty or str(param).startswith("daemon:"), (
-        "daemon flag should be optional"
-    )
-
-    # Check for new flag
+    # Check for new flag (should still exist)
     assert "new" in params, "thread_continue should have new parameter"
+
+    # Check the function docstring mentions daemon requirement
+    docstring = thread_continue.__doc__
+    assert docstring is not None
+    assert "daemon" in docstring.lower(), "Docstring should mention daemon requirement"
 
 
 @pytest.mark.asyncio

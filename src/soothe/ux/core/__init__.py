@@ -25,7 +25,6 @@ from soothe.ux.core.display_policy import (
 from soothe.ux.core.event_processor import EventProcessor
 from soothe.ux.core.logging_setup import setup_logging
 from soothe.ux.core.message_processing import (
-    SharedState,
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     extract_tool_brief,
@@ -57,7 +56,6 @@ __all__ = [
     # Rendering
     "RendererProtocol",
     # Message processing
-    "SharedState",
     "VerbosityLevel",
     # Verbosity tier (RFC-0024)
     "VerbosityTier",

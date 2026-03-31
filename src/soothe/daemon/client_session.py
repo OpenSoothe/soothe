@@ -111,7 +111,7 @@ class ClientSessionManager:
         # Start sender task
         session.sender_task = asyncio.create_task(self._sender_loop(session))
 
-        logger.info("Created client session %s via %s", client_id, transport.transport_type)
+        logger.info("[Session] Client %s connected (%s)", client_id[:8], transport.transport_type)
 
         return client_id
 
@@ -146,9 +146,9 @@ class ClientSessionManager:
         session.subscriptions.add(thread_id)
 
         logger.info(
-            "Client %s subscribed to thread %s with verbosity=%s",
-            client_id,
-            thread_id,
+            "[Session] Client %s → thread %s (verbosity=%s)",
+            client_id[:8],
+            thread_id[:8],
             verbosity,
         )
 
@@ -173,7 +173,7 @@ class ClientSessionManager:
         await self._event_bus.unsubscribe(topic, session.event_queue)
         session.subscriptions.discard(thread_id)
 
-        logger.info("Client %s unsubscribed from thread %s", client_id, thread_id)
+        logger.info("[Session] Client %s ← thread %s", client_id[:8], thread_id[:8])
 
     async def migrate_subscriptions(self, old_thread_id: str, new_thread_id: str) -> None:
         """Migrate all client subscriptions from old thread_id to new thread_id.
@@ -200,8 +200,8 @@ class ClientSessionManager:
                     session.subscriptions.add(new_thread_id)
 
                     logger.info(
-                        "Migrated client %s subscription: %s -> %s",
-                        client_id,
+                        "[Session] Client %s migrated: %s → %s",
+                        client_id[:8],
                         old_thread_id[:8],
                         new_thread_id[:8],
                     )
@@ -228,9 +228,9 @@ class ClientSessionManager:
                 try:
                     await self._cancel_callback(owned_thread_id)
                     logger.info(
-                        "Auto-cancelled thread %s on client %s disconnect (no detach requested)",
-                        owned_thread_id,
-                        client_id,
+                        "[Session] Thread %s cancelled (client %s disconnect)",
+                        owned_thread_id[:8],
+                        client_id[:8],
                     )
                 except Exception:
                     logger.exception(
@@ -253,7 +253,7 @@ class ClientSessionManager:
         # Unsubscribe from all topics
         await self._event_bus.unsubscribe_all(session.event_queue)
 
-        logger.info("Removed client session %s", client_id)
+        logger.info("[Session] Client %s disconnected", client_id[:8])
 
     async def get_session(self, client_id: str) -> ClientSession | None:
         """Get session by client_id.

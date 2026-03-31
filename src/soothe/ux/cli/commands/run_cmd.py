@@ -53,7 +53,7 @@ def run_impl(
             )
 
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
-        logger.info("Startup completed in %.1fms", startup_elapsed_ms)
+        logger.info("[Startup] ✓ Ready (%.1fms)", startup_elapsed_ms)
 
         run_start = time.perf_counter()
 

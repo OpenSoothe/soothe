@@ -376,7 +376,7 @@ class APIRateLimiter:
 
 ## CLI Commands
 
-The `soothe thread continue` command supports both standalone and daemon modes. The deprecated `soothe daemon attach --thread-id` is replaced by `soothe thread continue --daemon`. See user documentation for complete CLI reference.
+The `soothe thread continue` command requires a running daemon for thread continuation. The deprecated `soothe daemon attach --thread-id` has been replaced by `soothe thread continue`, which now exclusively operates via the daemon. See user documentation for complete CLI reference.
 
 ## Implementation Notes
 

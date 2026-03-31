@@ -67,7 +67,7 @@ def checkhealth(
         except Exception as e:
             if not quiet:
                 typer.echo(f"Warning: Could not load config: {e}", err=True)
-                typer.echo("Running standalone checks without config.\n", err=True)
+                typer.echo("Running basic checks without config.\n", err=True)
 
         # Create health checker
         checker = HealthChecker(cfg)

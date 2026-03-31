@@ -46,13 +46,8 @@ from soothe.core.verbosity_tier import (
 # =============================================================================
 
 
-QUIET_ALIAS = "minimal"
-
-
 def normalize_verbosity(verbosity: str) -> VerbosityLevel:
     """Normalize external verbosity values to canonical internal names."""
-    if verbosity == QUIET_ALIAS:
-        return "quiet"
     if verbosity in {"quiet", "normal", "detailed", "debug"}:
         return verbosity
     return "normal"
@@ -80,13 +75,17 @@ INTERNAL_EVENT_TYPES = frozenset(
     }
 )
 
-# Event types to skip in progress display (handled by plan update mechanism)
+# Event types to skip in progress display (handled by plan update mechanism or not rendered)
 SKIP_EVENT_TYPES = frozenset(
     {
+        # Plan events handled by renderer's plan update mechanism
         "soothe.cognition.plan.batch_started",
         "soothe.cognition.plan.step_started",
         "soothe.cognition.plan.step_completed",
         "soothe.cognition.plan.step_failed",
+        # Policy events not rendered (RFC-0019)
+        "soothe.policy.checked",
+        "soothe.policy.denied",
     }
 )
 

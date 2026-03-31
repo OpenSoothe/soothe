@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from soothe.backends.judgment.llm_judge import LLMJudgeEngine
 from soothe.cognition.loop_agent import LoopAgent
+from soothe.cognition.loop_agent.events import LoopAgentJudgmentEvent
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -59,7 +60,7 @@ class AgenticMixin:
             classification = await self._unified_classifier.classify_routing(user_input)
             if classification.task_complexity == "chitchat":
                 # Use chitchat fast path
-                logger.info("Chitchat detected, using fast path")
+                logger.info("[Router] Chitchat detected → fast path")
                 async for chunk in self._run_chitchat(user_input, classification):
                     yield chunk
                 return
@@ -91,12 +92,12 @@ class AgenticMixin:
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user
-                logger.debug("Iteration %d started", event_data["iteration"])
+                logger.debug("[Loop] Iteration %d started", event_data["iteration"])
 
             elif event_type == "plan_decision":
                 # Internal - used for debugging only
                 logger.debug(
-                    "Plan decision: %d steps, mode=%s",
+                    "[Loop] Plan: %d steps (%s mode)",
                     len(event_data["steps"]),
                     event_data["execution_mode"],
                 )
@@ -129,10 +130,22 @@ class AgenticMixin:
                 # event_data is a StreamChunk tuple
                 yield event_data
 
+            elif event_type == "judgment":
+                # Emit judgment event (visible to user)
+                yield _custom(
+                    LoopAgentJudgmentEvent(
+                        status=event_data["status"],
+                        progress=event_data["progress"],
+                        confidence=event_data["confidence"],
+                        reasoning=event_data["reasoning"],
+                        iteration=event_data["iteration"],
+                    ).to_dict()
+                )
+
             elif event_type == "iteration_completed":
                 # Internal - used for debugging only
                 logger.debug(
-                    "Iteration %d completed: status=%s progress=%.0f%%",
+                    "[Loop] Iteration %d completed (status=%s, progress=%.0f%%)",
                     event_data["iteration"],
                     event_data["status"],
                     event_data["progress"] * 100,
@@ -161,7 +174,7 @@ class AgenticMixin:
                 )
 
                 logger.info(
-                    "Layer 2 loop completed: status=%s progress=%.0f%%",
+                    "[Runner] Agentic loop completed (status=%s, progress=%.0f%%)",
                     judge_result.status,
                     judge_result.goal_progress * 100,
                 )
