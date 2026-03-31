@@ -63,12 +63,20 @@ def format_goal_header(
     )
 
 
-def format_step_header(description: str, *, parallel: bool = False) -> DisplayLine:
+def format_step_header(
+    description: str,
+    *,
+    parallel: bool = False,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a step header line with checkbox style.
 
     Args:
         description: Step description.
         parallel: Whether step has parallel tools.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for step header with hollow circle icon.
@@ -79,16 +87,26 @@ def format_step_header(description: str, *, parallel: bool = False) -> DisplayLi
         content=f"{description}{suffix}",
         icon="○",  # Hollow circle for in-progress step
         indent=indent_for_level(2),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_tool_call(name: str, args_summary: str, *, running: bool = False) -> DisplayLine:
+def format_tool_call(
+    name: str,
+    args_summary: str,
+    *,
+    running: bool = False,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a tool call line.
 
     Args:
         name: Tool name.
         args_summary: Truncated args.
         running: Whether tool is in parallel mode.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for tool call.
@@ -99,16 +117,26 @@ def format_tool_call(name: str, args_summary: str, *, running: bool = False) -> 
         icon="⚙",
         indent=indent_for_level(2),
         status="running" if running else None,
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_tool_result(summary: str, duration_ms: int, *, is_error: bool = False) -> DisplayLine:
+def format_tool_result(
+    summary: str,
+    duration_ms: int,
+    *,
+    is_error: bool = False,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a tool result line.
 
     Args:
         summary: Result summary.
         duration_ms: Duration in milliseconds.
         is_error: Whether result is an error.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for tool result.
@@ -119,14 +147,22 @@ def format_tool_result(summary: str, duration_ms: int, *, is_error: bool = False
         icon="✗" if is_error else "✓",
         indent=indent_for_level(3),
         duration_ms=duration_ms,
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_subagent_milestone(brief: str) -> DisplayLine:
+def format_subagent_milestone(
+    brief: str,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a subagent milestone line.
 
     Args:
         brief: Milestone description.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for milestone.
@@ -136,15 +172,24 @@ def format_subagent_milestone(brief: str) -> DisplayLine:
         content=brief,
         icon="✓",
         indent=indent_for_level(3),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_subagent_done(summary: str, duration_s: float) -> DisplayLine:
+def format_subagent_done(
+    summary: str,
+    duration_s: float,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a subagent completion line.
 
     Args:
         summary: Completion summary.
         duration_s: Duration in seconds.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for subagent done.
@@ -156,10 +201,17 @@ def format_subagent_done(summary: str, duration_s: float) -> DisplayLine:
         icon="✓",
         indent=indent_for_level(3),
         duration_ms=duration_ms,
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_judgement(judgement: str, action: str) -> DisplayLine:
+def format_judgement(
+    judgement: str,
+    action: str,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a judgement line for LLM decision reasoning.
 
     IG-089: Shows meaningful judgement info without raw intermediate data.
@@ -167,6 +219,8 @@ def format_judgement(judgement: str, action: str) -> DisplayLine:
     Args:
         judgement: Human-readable summary of the decision.
         action: Action taken ("continue" or "complete").
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for judgement.
@@ -177,15 +231,24 @@ def format_judgement(judgement: str, action: str) -> DisplayLine:
         content=judgement,
         icon=action_icon,
         indent=indent_for_level(3),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_step_done(description: str, duration_s: float) -> DisplayLine:
+def format_step_done(
+    description: str,
+    duration_s: float,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a step completion line with solid checkbox.
 
     Args:
         description: Step description (same as header).
         duration_s: Duration in seconds.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for step done with solid circle icon.
@@ -197,16 +260,26 @@ def format_step_done(description: str, duration_s: float) -> DisplayLine:
         icon="●",  # Solid circle for completed step
         indent=indent_for_level(2),
         duration_ms=duration_ms,
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
-def format_goal_done(goal: str, steps: int, total_s: float) -> DisplayLine:
+def format_goal_done(
+    goal: str,
+    steps: int,
+    total_s: float,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a goal completion line.
 
     Args:
         goal: Goal description.
         steps: Total steps completed.
         total_s: Total duration in seconds.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for goal done.
@@ -218,6 +291,7 @@ def format_goal_done(goal: str, steps: int, total_s: float) -> DisplayLine:
         icon="●",
         indent=indent_for_level(1),
         duration_ms=duration_ms,
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
