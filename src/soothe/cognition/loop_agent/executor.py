@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 _TUPLE_LEN = 3
 _LIST_MIN_LEN = 2
+_MSG_TUPLE_LEN = 2  # (msg, metadata) tuple from deepagents streaming
 
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
@@ -334,6 +335,8 @@ class Executor:
             - When event is not None: yield (None, event) for immediate display
             - At end: yield (combined_output, None) for final result
         """
+        from langchain_core.messages import AIMessage, ToolMessage
+
         chunks: list[str] = []
 
         async for chunk in stream:
@@ -346,18 +349,44 @@ class Executor:
                 yield None, chunk
 
                 # Also extract content for output collection
-                if mode == "messages" and not namespace and isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
-                    msg_chunk = data[0]
-                    if hasattr(msg_chunk, "content"):
-                        content = msg_chunk.content
-                        if isinstance(content, str):
-                            chunks.append(content)
-                        elif isinstance(content, list):
-                            for c in content:
-                                if isinstance(c, str):
-                                    chunks.append(c)
-                                elif isinstance(c, dict) and "text" in c:
-                                    chunks.append(c["text"])
+                if mode == "messages" and not namespace:
+                    # Handle tuple format (msg, metadata) from deepagents streaming
+                    if isinstance(data, tuple) and len(data) >= _MSG_TUPLE_LEN:
+                        msg, _metadata = data
+                        if isinstance(msg, ToolMessage):
+                            # Extract tool result content
+                            content = msg.content
+                            if isinstance(content, str) and content:
+                                chunks.append(content)
+                            elif isinstance(content, list):
+                                for c in content:
+                                    if isinstance(c, str):
+                                        chunks.append(c)
+                                    elif isinstance(c, dict) and "text" in c:
+                                        chunks.append(c["text"])
+                        elif isinstance(msg, AIMessage):
+                            # Extract AI response content
+                            if isinstance(msg.content, str) and msg.content:
+                                chunks.append(msg.content)
+                            elif isinstance(msg.content, list):
+                                for c in msg.content:
+                                    if isinstance(c, str):
+                                        chunks.append(c)
+                                    elif isinstance(c, dict) and "text" in c:
+                                        chunks.append(c["text"])
+                    # Handle list format [msg, metadata] (legacy compatibility)
+                    elif isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
+                        msg_chunk = data[0]
+                        if hasattr(msg_chunk, "content"):
+                            content = msg_chunk.content
+                            if isinstance(content, str):
+                                chunks.append(content)
+                            elif isinstance(content, list):
+                                for c in content:
+                                    if isinstance(c, str):
+                                        chunks.append(c)
+                                    elif isinstance(c, dict) and "text" in c:
+                                        chunks.append(c["text"])
             # Handle dict chunks (standard LangGraph format)
             elif isinstance(chunk, dict):
                 if "model" in chunk:

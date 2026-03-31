@@ -235,10 +235,22 @@ class LoopAgent:
                 state.completed_step_ids.clear()
                 continue
 
+            # Check if there are actually ready steps to execute
+            ready_steps = decision.get_ready_steps(state.completed_step_ids)
+            if not ready_steps:
+                # All steps completed but goal not achieved - force replan
+                logger.info(
+                    "Continue strategy but no ready steps (all %d completed) - forcing replan",
+                    len(state.completed_step_ids),
+                )
+                state.current_decision = None
+                state.completed_step_ids.clear()
+                continue
+
             logger.info(
                 "Continue strategy after iteration %d (%d remaining steps)",
                 state.iteration,
-                len(decision.get_ready_steps(state.completed_step_ids)),
+                len(ready_steps),
             )
             # Reuse current decision, execute remaining steps
             state.current_decision = decision
