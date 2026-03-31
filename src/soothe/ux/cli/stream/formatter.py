@@ -2,14 +2,54 @@
 
 from __future__ import annotations
 
+from soothe.core.verbosity_tier import VerbosityTier
 from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
 
 
-def format_goal_header(goal: str) -> DisplayLine:
+def _derive_source_prefix(
+    namespace: tuple[str, ...],
+    verbosity_tier: VerbosityTier,
+) -> str | None:
+    """Derive source prefix from namespace for debug mode.
+
+    Args:
+        namespace: Event namespace tuple (empty = main, non-empty = subagent).
+        verbosity_tier: Current verbosity tier.
+
+    Returns:
+        Source prefix string if DEBUG level, None otherwise.
+
+    Examples:
+        >>> _derive_source_prefix((), VerbosityTier.DEBUG)
+        '[main]'
+        >>> _derive_source_prefix(('research',), VerbosityTier.DEBUG)
+        '[subagent:research]'
+        >>> _derive_source_prefix((), VerbosityTier.NORMAL)
+        None
+    """
+    # Only show prefix at DEBUG verbosity
+    if verbosity_tier < VerbosityTier.DEBUG:
+        return None
+
+    if not namespace:
+        return "[main]"
+    else:
+        # Format: [subagent:name1:name2]
+        return "[subagent:" + ":".join(namespace) + "]"
+
+
+def format_goal_header(
+    goal: str,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
     """Format a goal header line.
 
     Args:
         goal: Goal description.
+        namespace: Event namespace (empty for main, non-empty for subagent).
+        verbosity_tier: Current verbosity tier.
 
     Returns:
         DisplayLine for goal header.
@@ -19,6 +59,7 @@ def format_goal_header(goal: str) -> DisplayLine:
         content=f"Goal: {goal}",
         icon="●",
         indent=indent_for_level(1),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
 
