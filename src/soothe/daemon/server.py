@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.safety import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
@@ -27,6 +26,7 @@ from soothe.daemon.singleton import (
 )
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
 from soothe.daemon.transport_manager import TransportManager
+from soothe.safety import resolve_daemon_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +91,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._handle_sigint_shutdown = handle_sigint_shutdown
 
         # Resolve daemon workspace
-        self._daemon_workspace = resolve_daemon_workspace(
-            self._config.workspace_dir
-        )
-        logger.info(f"Daemon workspace: {self._daemon_workspace}")
+        self._daemon_workspace = resolve_daemon_workspace(self._config.workspace_dir)
+        logger.info("Daemon workspace: %s", self._daemon_workspace)
 
         # Update config with resolved workspace
         self._config.workspace_dir = str(self._daemon_workspace)

@@ -22,7 +22,7 @@ def _derive_source_prefix(
     Examples:
         >>> _derive_source_prefix((), VerbosityTier.DEBUG)
         '[main]'
-        >>> _derive_source_prefix(('research',), VerbosityTier.DEBUG)
+        >>> _derive_source_prefix(("research",), VerbosityTier.DEBUG)
         '[subagent:research]'
         >>> _derive_source_prefix((), VerbosityTier.NORMAL)
         None
@@ -33,9 +33,8 @@ def _derive_source_prefix(
 
     if not namespace:
         return "[main]"
-    else:
-        # Format: [subagent:name1:name2]
-        return "[subagent:" + ":".join(namespace) + "]"
+    # Format: [subagent:name1:name2]
+    return "[subagent:" + ":".join(namespace) + "]"
 
 
 def format_goal_header(

@@ -8,8 +8,8 @@ from soothe.safety.workspace import (
 )
 
 __all__ = [
-    "ConfigDrivenPolicy",
     "INVALID_WORKSPACE_DIRS",
+    "ConfigDrivenPolicy",
     "FrameworkFilesystem",
     "resolve_daemon_workspace",
     "validate_client_workspace",

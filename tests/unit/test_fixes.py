@@ -258,7 +258,11 @@ async def test_daemon_client_send_resume_thread() -> None:
     client.send = _fake_send  # type: ignore[method-assign]
     await client.send_resume_thread("thread-789")
 
-    assert captured == [{"type": "resume_thread", "thread_id": "thread-789"}]
+    # Protocol now includes workspace field
+    assert len(captured) == 1
+    assert captured[0]["type"] == "resume_thread"
+    assert captured[0]["thread_id"] == "thread-789"
+    assert "workspace" in captured[0]  # Workspace is now sent
 
 
 @pytest.mark.asyncio

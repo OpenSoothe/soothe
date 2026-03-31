@@ -70,39 +70,39 @@ class StreamDisplayPipeline:
     """
 
     def __init__(self, verbosity: VerbosityLevel = "normal") -> None:
-    """Initialize the pipeline.
+        """Initialize the pipeline.
 
-    Args:
-        verbosity: Verbosity level for filtering.
-    """
-    self._verbosity = normalize_verbosity(verbosity)
-    self._verbosity_tier = _VERBOSITY_TO_TIER.get(self._verbosity, VerbosityTier.NORMAL)
-    self._context = PipelineContext()
-    self._current_namespace: tuple[str, ...] = ()  # Track current namespace
+        Args:
+            verbosity: Verbosity level for filtering.
+        """
+        self._verbosity = normalize_verbosity(verbosity)
+        self._verbosity_tier = _VERBOSITY_TO_TIER.get(self._verbosity, VerbosityTier.NORMAL)
+        self._context = PipelineContext()
+        self._current_namespace: tuple[str, ...] = ()  # Track current namespace
 
     def process(self, event: dict[str, Any]) -> list[DisplayLine]:
-    """Process an event into display lines.
+        """Process an event into display lines.
 
-    Args:
-        event: Event dictionary with 'type' key.
+        Args:
+            event: Event dictionary with 'type' key.
 
-    Returns:
-        List of DisplayLine objects to render.
-    """
-    event_type = event.get("type", "")
-    if not event_type:
-        return []
+        Returns:
+            List of DisplayLine objects to render.
+        """
+        event_type = event.get("type", "")
+        if not event_type:
+            return []
 
-    # Extract namespace from event
-    self._current_namespace = tuple(event.get("namespace", []))
+        # Extract namespace from event
+        self._current_namespace = tuple(event.get("namespace", []))
 
-    # Classify and filter
-    tier = self._classify_event(event_type)
-    if tier > self._verbosity_tier:
-        return []
+        # Classify and filter
+        tier = self._classify_event(event_type)
+        if tier > self._verbosity_tier:
+            return []
 
-    # Dispatch to handlers
-    return self._dispatch_event(event_type, event)
+        # Dispatch to handlers
+        return self._dispatch_event(event_type, event)
 
     def _classify_event(self, event_type: str) -> VerbosityTier:
         """Classify event type to verbosity tier.
@@ -200,11 +200,13 @@ class StreamDisplayPipeline:
         steps = event.get("steps", [])
         self._context.steps_total = len(steps) if steps else 0
 
-        return [format_goal_header(
-            goal,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_goal_header(
+                goal,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_step_started(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle step start event.
@@ -231,11 +233,13 @@ class StreamDisplayPipeline:
         self._context.step_start_time = time.time()
         self._context.step_header_emitted = True
 
-        return [format_step_header(
-            description,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_step_header(
+                description,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_subagent_dispatched(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent dispatched event.
@@ -261,12 +265,14 @@ class StreamDisplayPipeline:
         # Emit tool call for subagent dispatch
         query = event.get("query", event.get("task", event.get("topic", "")))
         args_summary = f'"{query[:40]}"' if query else ""
-        return [format_tool_call(
-            f"{name}_subagent",
-            args_summary,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_tool_call(
+                f"{name}_subagent",
+                args_summary,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_subagent_judgement(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent judgement event.
@@ -285,12 +291,14 @@ class StreamDisplayPipeline:
         if not judgement:
             return []
 
-        return [format_judgement(
-            judgement,
-            action,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_judgement(
+                judgement,
+                action,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_subagent_step(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent step event (compact hybrid).
@@ -315,11 +323,13 @@ class StreamDisplayPipeline:
         if not brief:
             return []
 
-        return [format_subagent_milestone(
-            brief[:60],
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_subagent_milestone(
+                brief[:60],
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_subagent_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent completed event.
@@ -349,12 +359,14 @@ class StreamDisplayPipeline:
             duration_ms = event.get("duration_ms", 0)
             duration_s = duration_ms / 1000 if duration_ms else 0
 
-        return [format_subagent_done(
-            summary[:50],
-            duration_s,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_subagent_done(
+                summary[:50],
+                duration_s,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_step_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle step completed event.
@@ -387,12 +399,14 @@ class StreamDisplayPipeline:
         self._context.current_step_description = None
         self._context.step_start_time = None
 
-        return [format_step_done(
-            description,
-            duration_s,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_step_done(
+                description,
+                duration_s,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
     def _on_goal_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle goal completed event.
@@ -413,13 +427,15 @@ class StreamDisplayPipeline:
         # Reset goal context
         self._context.reset_goal()
 
-        return [format_goal_done(
-            goal,
-            steps,
-            total_s,
-            namespace=self._current_namespace,
-            verbosity_tier=self._verbosity_tier,
-        )]
+        return [
+            format_goal_done(
+                goal,
+                steps,
+                total_s,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
 
 
 __all__ = ["StreamDisplayPipeline"]

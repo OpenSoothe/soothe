@@ -5,12 +5,12 @@ This module is kept for backward compatibility only.
 
 import warnings
 
+from soothe.safety.filesystem import FrameworkFilesystem
+
 warnings.warn(
     "soothe.core.filesystem is deprecated, use soothe.safety instead",
     DeprecationWarning,
     stacklevel=2,
 )
-
-from soothe.safety.filesystem import FrameworkFilesystem
 
 __all__ = ["FrameworkFilesystem"]

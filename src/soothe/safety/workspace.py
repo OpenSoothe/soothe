@@ -91,8 +91,7 @@ def validate_client_workspace(workspace: str | Path) -> Path:
 
     if original_str in INVALID_WORKSPACE_DIRS or resolved_str in INVALID_WORKSPACE_DIRS:
         raise ValueError(
-            f"Invalid client workspace: {workspace} is a system directory. "
-            f"Please run from a project directory."
+            f"Invalid client workspace: {workspace} is a system directory. Please run from a project directory."
         )
 
     # Warn if workspace doesn't exist

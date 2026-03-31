@@ -201,11 +201,13 @@ class WebSocketClient:
 
         workspace_str = str(Path(workspace).resolve())
 
-        await self.send({
-            "type": "resume_thread",
-            "thread_id": thread_id,
-            "workspace": workspace_str,
-        })
+        await self.send(
+            {
+                "type": "resume_thread",
+                "thread_id": thread_id,
+                "workspace": workspace_str,
+            }
+        )
 
     async def send_new_thread(self, workspace: str | None = None) -> None:
         """Request the daemon to start a new thread.
@@ -221,10 +223,12 @@ class WebSocketClient:
 
         workspace_str = str(Path(workspace).resolve())
 
-        await self.send({
-            "type": "new_thread",
-            "workspace": workspace_str,
-        })
+        await self.send(
+            {
+                "type": "new_thread",
+                "workspace": workspace_str,
+            }
+        )
 
     async def request_daemon_ready(self) -> None:
         """Request the daemon's readiness state."""

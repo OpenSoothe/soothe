@@ -8,9 +8,9 @@ import logging
 from typing import Any
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE, ERROR, FINAL_REPORT
-from soothe.safety import validate_client_workspace
 from soothe.daemon.protocol import decode, encode
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
+from soothe.safety import validate_client_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -144,11 +144,11 @@ class DaemonHandlersMixin:
                 try:
                     validated = validate_client_workspace(client_workspace)
                     logger.info(
-                        f"Client workspace {validated} provided for resume, "
-                        f"thread will use persisted workspace"
+                        "Client workspace %s provided for resume, thread will use persisted workspace",
+                        validated,
                     )
                 except ValueError as e:
-                    logger.warning(f"Invalid client workspace on resume: {e}")
+                    logger.warning("Invalid client workspace on resume: %s", e)
 
             if thread_id:
                 from soothe.core.thread import ThreadContextManager
@@ -214,10 +214,12 @@ class DaemonHandlersMixin:
                 try:
                     thread_workspace = validate_client_workspace(client_workspace)
                     logger.info(
-                        f"Client {client_id[:8]} requested workspace: {thread_workspace}"
+                        "Client %s requested workspace: %s",
+                        client_id[:8],
+                        thread_workspace,
                     )
                 except ValueError as e:
-                    logger.warning(f"Invalid client workspace: {e}, using daemon default")
+                    logger.warning("Invalid client workspace: %s, using daemon default", e)
                     thread_workspace = self._daemon_workspace
             else:
                 # No workspace provided, use daemon default
@@ -255,7 +257,7 @@ class DaemonHandlersMixin:
                         "input_history": [],
                     },
                 )
-            logger.info(f"Created new thread {draft_thread_id} with workspace {thread_workspace}")
+            logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)
         # Thread management handlers (RFC-0017)
         elif msg_type == "thread_list":
             await self._handle_thread_list(msg)
