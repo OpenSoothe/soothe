@@ -1,14 +1,14 @@
 # Three-Layer Architecture Refinement Proposal
 
 **Created**: 2026-03-29
-**Purpose**: Establish RFC-200 and RFC-201 as foundational documents for the three-layer architecture, merge RFC-0011 into RFC-200, and address documentation gaps
+**Purpose**: Establish RFC-200 and RFC-201 as foundational documents for the three-layer architecture, merge RFC-200 (merged) into RFC-200, and address documentation gaps
 
 ---
 
 ## Executive Summary
 
 The current RFC architecture has evolved organically, resulting in:
-1. **RFC-0011** should be merged into **RFC-200** (both address Layer 3 goal management)
+1. **RFC-200 (merged)** should be merged into **RFC-200** (both address Layer 3 goal management)
 2. **RFC-200** and **RFC-201** should be established as the foundational documents for the three-layer architecture
 3. **RFC-201** has major gaps between documented "intended architecture" and actual implementation
 4. **Layer relationships** are unclear across RFCs, causing architectural fragmentation
@@ -43,19 +43,19 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 ## Current Architecture Gaps Analysis
 
-### Gap 1: RFC-0011 Should Be Part of RFC-200
+### Gap 1: RFC-200 (merged) Should Be Part of RFC-200
 
 **Current State**:
 - RFC-200: Autonomous iteration loop (goal creation, scheduling, execution)
-- RFC-0011: Dynamic goal management during reflection (goal DAG mutations)
+- RFC-200 (merged): Dynamic goal management during reflection (goal DAG mutations)
 
 **Problem**:
 - Both RFCs address Layer 3 concerns
-- RFC-0011 extends RFC-200's reflection mechanism
+- RFC-200 (merged) extends RFC-200's reflection mechanism
 - Splitting creates unnecessary complexity and cross-references
 - Goal DAG management is inherently dynamic - should be documented as one cohesive system
 
-**Solution**: Merge RFC-0011 content into RFC-200 sections:
+**Solution**: Merge RFC-200 (merged) content into RFC-200 sections:
 - GoalDirective → Section in RFC-200 "Dynamic Goal Management"
 - GoalContext → Section in RFC-200 "Reflection Context"
 - Safety mechanisms → Section in RFC-200 "Goal DAG Safety"
@@ -129,17 +129,17 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 ## Proposed RFC Refinement Plan
 
-### Phase 1: Merge RFC-0011 into RFC-200
+### Phase 1: Merge RFC-200 (merged) into RFC-200
 
 **Actions**:
 1. Add new sections to RFC-200:
-   - §5.5 "Dynamic Goal Management" (from RFC-0011 §3)
-   - §5.6 "Goal DAG Safety" (from RFC-0011 §6)
-   - §5.7 "Goal Context for Reflection" (from RFC-0011 §2)
+   - §5.5 "Dynamic Goal Management" (from RFC-200 (merged) §3)
+   - §5.6 "Goal DAG Safety" (from RFC-200 (merged) §6)
+   - §5.7 "Goal Context for Reflection" (from RFC-200 (merged) §2)
 2. Update RFC-200 reflection section to accept `goal_context` and return `goal_directives`
 3. Add GoalDirective, GoalContext models to RFC-200 data models section
-4. Merge RFC-0011 examples into RFC-200 use cases
-5. Deprecate RFC-0011 with merge notice
+4. Merge RFC-200 (merged) examples into RFC-200 use cases
+5. Deprecate RFC-200 (merged) with merge notice
 
 ### Phase 2: Establish RFC-200 as Layer 3 Foundation
 
@@ -192,7 +192,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 2. Update RFC index:
    - Add "Layer" column to RFC tables
    - Reorder by layer (L3 → L2 → L1)
-   - Mark RFC-0011 as "Merged into RFC-200"
+   - Mark RFC-200 (merged) as "Merged into RFC-200"
 3. Update RFC cross-references across all specs
 
 ### Phase 6: Update Implementation State
@@ -203,7 +203,7 @@ Layer 1: Tool Loop (deepagents/langchain)
    - Add changelog entry documenting layer positioning
    - Note implementation gaps (especially RFC-201)
 2. Create implementation roadmap:
-   - RFC-200: ✅ Already implemented (including RFC-0011 content)
+   - RFC-200: ✅ Already implemented (including RFC-200 (merged) content)
    - RFC-201: ❌ Major implementation gaps (needs IG)
    - RFC-202: ✅ Implemented but needs Layer 2 integration
 3. Prioritize RFC-201 implementation as critical
@@ -221,7 +221,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 **RFC-202**: "DAG-Based Step Execution and Concurrency Control"
 - Clarifies role as execution infrastructure (complementary to Layer 2)
 
-**RFC-0011**: DEPRECATED - Merged into RFC-200
+**RFC-200 (merged)**: DEPRECATED - Merged into RFC-200
 
 ---
 
@@ -239,7 +239,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 ### RFC-200 (Layer 3): ✅ Already Implemented
 - GoalEngine with DAG scheduling (RFC-202)
-- Dynamic goal management (RFC-0011 already in code)
+- Dynamic goal management (RFC-200 (merged) already in code)
 - Reflection with goal directives
 - Safety mechanisms and validation
 - **Gap**: Missing explicit Layer 2 delegation (PERFORM → RFC-201 loop)
@@ -274,7 +274,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 ## Questions for User Confirmation
 
 1. Does the three-layer architecture model match your expectations?
-2. Should we proceed with merging RFC-0011 into RFC-200?
+2. Should we proceed with merging RFC-200 (merged) into RFC-200?
 3. Should RFC-201 undergo fundamental redesign to match Layer 2 expectations?
 4. Are the layer positioning and delegation models correct?
 5. Should we prioritize RFC-201 implementation after refinement?
@@ -285,7 +285,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 - RFC-200: Autonomous Iteration Loop (current)
 - RFC-201: Agentic Loop Execution (current)
-- RFC-0011: Dynamic Goal Management (to merge)
+- RFC-200 (merged): Dynamic Goal Management (to merge)
 - RFC-202: DAG-Based Execution
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture

@@ -1,6 +1,6 @@
 # IG-028: Dynamic Goal Management During Reflection
 
-**Status**: ✅ Completed - RFC-0011 merged into RFC-200 (2026-03-29)
+**Status**: ✅ Completed - RFC-200 (merged) merged into RFC-200 (2026-03-29)
 
 ## Objective
 

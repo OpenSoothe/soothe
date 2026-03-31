@@ -49,7 +49,7 @@
 | RFC-201 | Agentic Loop Execution | 70% | Core loop implemented, verification phase partial |
 | RFC-202 | DAG-Based Execution | 75% | StepScheduler implemented, full DAG incomplete |
 | RFC-202 | Failure Recovery & Persistence | 60% | Checkpointing works, progressive persistence partial |
-| RFC-0011 | Dynamic Goal Management | 50% | Basic reflection works, dynamic revision partial |
+| RFC-200 (merged) | Dynamic Goal Management | 50% | Basic reflection works, dynamic revision partial |
 | RFC-400 | Daemon Communication Protocol | 90% | Multi-transport implemented, HTTP REST partial |
 | RFC-401 | Progress Event Protocol | 95% | Events defined and emitted, minor gaps |
 
@@ -527,7 +527,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 - `/Users/chenxm/Workspace/Soothe/tests/unit/` - 900+ unit tests (from CLAUDE.md)
 - Test files found for: protocols, plugins, daemon, event processing, tools, memory
 
-**Gap**: Some newer RFCs (RFC-202, RFC-0011) may have lower test coverage for advanced features.
+**Gap**: Some newer RFCs (RFC-202, RFC-200 (merged)) may have lower test coverage for advanced features.
 
 **Recommendation**: Add integration tests for:
 - Multi-transport daemon communication

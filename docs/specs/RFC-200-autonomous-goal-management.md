@@ -352,7 +352,7 @@ autonomous:
 ## Implementation Status
 
 - ✅ GoalEngine with DAG scheduling (RFC-202)
-- ✅ Dynamic goal management (RFC-0011 features in code)
+- ✅ Dynamic goal management (merged into this RFC)
 - ✅ Reflection with goal directives
 - ✅ Safety mechanisms and validation
 - ⚠️ Missing: Explicit Layer 2 delegation (PERFORM → Layer 2 loop integration)
@@ -361,20 +361,18 @@ autonomous:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-201](./RFC-201-agentic-goal-execution-loop.md) - Layer 2: Agentic Goal Execution
-- [RFC-202](./RFC-202-dag-based-execution.md) - DAG-Based Execution
-- [RFC-0011](./RFC-0011-dynamic-goal-management.md) - DEPRECATED, merged into this RFC
+- [RFC-201](./RFC-201-agentic-goal-execution.md) - Layer 2: Agentic Goal Execution
+- [RFC-202](./RFC-202-dag-execution.md) - DAG Execution & Failure Recovery
 
 ## Changelog
 
 ### 2026-03-29
 - Established as Layer 3 foundation in three-layer architecture
-- Merged RFC-0011 content (dynamic goal management)
+- Merged dynamic goal management content
 - Added §2 "Architecture Position" with three-layer model
 - Defined PERFORM → Layer 2 delegation model (full delegation)
 - Defined REFLECT integration with Layer 2 JudgeResult
 - Updated title to "Layer 3: Autonomous Goal Management Loop"
-- Marked RFC-0011 as deprecated
 
 ### 2026-03-15
 - Initial autonomous iteration loop design

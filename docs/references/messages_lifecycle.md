@@ -1140,9 +1140,9 @@ sequenceDiagram
 
 ## References
 
-- [RFC-000: System Conceptual Design](../specs/RFC-000.md)
-- [RFC-300: Context and Memory Architecture Design](../specs/RFC-300.md)
-- [RFC-201: Protocol Specification](../specs/RFC-201.md)
-- [RFC-202: Failure Recovery, Progressive Persistence](../specs/RFC-202.md)
-- [RFC-400: Unified Daemon Communication Protocol](../specs/RFC-400.md)
-- [RFC-0017: Unified Thread Management Architecture](../specs/RFC-0017.md)
+- [RFC-000: System Conceptual Design](../specs/RFC-000-system-conceptual-design.md)
+- [RFC-300: Context and Memory Architecture Design](../specs/RFC-300-context-memory-protocols.md)
+- [RFC-201: Agentic Goal Execution](../specs/RFC-201-agentic-goal-execution.md)
+- [RFC-202: DAG Execution & Failure Recovery](../specs/RFC-202-dag-execution.md)
+- [RFC-400: Daemon Communication Protocol](../specs/RFC-400-daemon-communication.md)
+- [RFC-0017: Unified Thread Management Architecture](../specs/RFC-0017-unified-thread-management.md)

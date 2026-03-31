@@ -219,4 +219,4 @@ Events are classified into VerbosityTier values (RFC-0024) that determine visibi
 
 ---
 
-**See Also**: [RFC-0015](RFC-0015.md) for event architecture, [RFC-0024](RFC-0024-verbosity-tier-unification.md) for VerbosityTier specification.
+**See Also**: [RFC-401](RFC-401-event-processing.md) for event architecture, [RFC-501](RFC-501-display-verbosity.md) for VerbosityTier specification.

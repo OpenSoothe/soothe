@@ -1,6 +1,6 @@
 # IG-029: Planner Refactoring and RFC-200 Goal Context Support
 
-**Status**: ✅ Completed - RFC-0011 merged into RFC-200 (2026-03-29)
+**Status**: ✅ Completed - RFC-200 (merged) merged into RFC-200 (2026-03-29)
 
 ## Objective
 
@@ -14,14 +14,14 @@ Refactor the planner subsystem to:
 
 ## Related
 
-- [RFC-0011](../specs/RFC-0011.md) -- Dynamic Goal Management During Reflection
+- [RFC-200 (merged)](../specs/RFC-200 (merged).md) -- Dynamic Goal Management During Reflection
 - [IG-028](028-dynamic-goal-management.md) -- Dynamic Goal Management (prior impl)
 - [RFC-200](../specs/RFC-200.md) -- Autonomous Iteration Loop
 - [RFC-202](../specs/RFC-202.md) -- DAG-Based Execution
 
 ## Problem Analysis
 
-### 1. RFC-0011 `goal_context` Not Propagated (Bug)
+### 1. RFC-200 (merged) `goal_context` Not Propagated (Bug)
 
 The autonomous runner calls `reflect(plan, step_results, goal_context)` but:
 - `AutoPlanner.reflect()` signature is `reflect(plan, step_results)` -- drops `goal_context`
@@ -67,14 +67,14 @@ Config: `routing_mode: "heuristic" | "llm" | "hybrid"` (default: `"hybrid"`).
   generate `goal_directives`
 - Falls back to heuristic if LLM fails
 
-### RFC-0011 Support: All Planning Modes
+### RFC-200 (merged) Support: All Planning Modes
 
 All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_context`.
 `AutoPlanner` forwards it to its delegate.
 
 ## Changes
 
-### Phase 1: Shared Module and RFC-0011 Fix
+### Phase 1: Shared Module and RFC-200 (merged) Fix
 
 **`backends/planning/_shared.py`** (NEW)
 
@@ -201,7 +201,7 @@ Extract `parse_plan_from_text()` from SubagentPlanner/ClaudePlanner.
 Extract `reflect_heuristic()` from all planners (with `goal_context` + `goal_directives`).
 Add `reflect_with_llm()` stub.
 
-### Step 2: Fix RFC-0011 `goal_context` in All Planners
+### Step 2: Fix RFC-200 (merged) `goal_context` in All Planners
 
 Update `AutoPlanner.reflect()`, `SubagentPlanner.reflect()`, `ClaudePlanner.reflect()`
 to accept and process `goal_context: GoalContext | None = None`.

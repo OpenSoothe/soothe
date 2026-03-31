@@ -118,7 +118,7 @@ async def perform_goal(goal: Goal) -> JudgeResult:
 
 ### 2.4 Dynamic Goal Management
 
-**GoalDirective Model** (merged from RFC-0011):
+**GoalDirective Model** (merged from RFC-200 (merged)):
 
 Layer 3's reflection can dynamically restructure the goal DAG through structured directives:
 
@@ -638,7 +638,7 @@ Layer 3: Goal DAG Management
 
 **Changes**:
 - Add §2 "Architecture Layer Position": Three-layer hierarchy, Layer 3 scope
-- Merge RFC-0011 content: Dynamic goal management sections
+- Merge RFC-200 (merged) content: Dynamic goal management sections
 - Update title: "Layer 3: Autonomous Goal Management Loop"
 - Specify PERFORM → Layer 2 delegation model (full delegation)
 - Define REFLECT integration with Layer 2 JudgeResult
@@ -690,11 +690,11 @@ Layer 3: Goal DAG Management
 
 **Status**: Architecture update (Draft → Revised)
 
-### 6.5 RFC-0011 - Deprecation
+### 6.5 RFC-200 (merged) - Deprecation
 
 **Status**: Deprecated (merged into RFC-200)
 
-**Merge Notice**: "RFC-0011 content merged into RFC-200 §5.5-5.7"
+**Merge Notice**: "RFC-200 (merged) content merged into RFC-200 §5.5-5.7"
 
 ---
 
@@ -704,7 +704,7 @@ Layer 3: Goal DAG Management
 
 **Layer 3 (RFC-200)**: ✅ **Implemented**
 - GoalEngine with DAG scheduling
-- Dynamic goal management (RFC-0011 features already in code)
+- Dynamic goal management (RFC-200 (merged) features already in code)
 - Reflection with goal directives
 - Safety mechanisms and validation
 - **Gap**: Missing explicit Layer 2 delegation (PERFORM → Layer 2 loop)
@@ -730,7 +730,7 @@ Layer 3: Goal DAG Management
 ### 7.2 Implementation Roadmap
 
 **Phase 1: RFC Documentation** (Week 1-2)
-1. Merge RFC-0011 into RFC-200
+1. Merge RFC-200 (merged) into RFC-200
 2. Revise RFC-200 with Layer 3 positioning
 3. Fundamental redesign of RFC-201 (Layer 2)
 4. Create RFC-00XX (Layer 1 CoreAgent)
@@ -840,7 +840,7 @@ This design does not address:
 - RFC-601: Research Subagent
 
 ### Merged RFCs
-- RFC-0011: Dynamic Goal Management (merged into RFC-200)
+- RFC-200 (merged): Dynamic Goal Management (merged into RFC-200)
 
 ### External References
 - LangGraph Documentation: CompiledStateGraph, RunnableConfig
@@ -887,7 +887,7 @@ This design was refined through collaborative discussion with the following key 
 6. **Iteration Flow**: Reuse Existing Decision (continue executing strategy until replan needed)
 7. **Layer 1 Integration**: Hybrid Sequential vs Parallel (ACT chooses execution mode)
 8. **Layer 1 Foundation**: CoreAgent based on `create_soothe_agent()` (existing implementation)
-9. **RFC-0011 Merge**: Merge into RFC-200 (both address Layer 3 goal management)
+9. **RFC-200 (merged) Merge**: Merge into RFC-200 (both address Layer 3 goal management)
 10. **CoreAgent RFC Scope**: Architecture Documentation (establish Layer 1 foundation, reference other RFCs for details)
 
 Each decision was validated incrementally through the design discussion process.

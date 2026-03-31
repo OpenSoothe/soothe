@@ -279,5 +279,5 @@ If you were using the removed `soothe auth` commands:
 - [Multi-Transport Setup](multi-transport.md) - Enable WebSocket and HTTP REST
 - [Configuration Guide](configuration.md) - Daemon configuration
 - [Troubleshooting](troubleshooting.md) - Connection issues
-- [RFC-400](../specs/RFC-400.md) - Daemon communication protocol
-- [RFC-0017](../specs/RFC-0017.md) - Unified thread management
+- [RFC-400](../specs/RFC-400-daemon-communication.md) - Daemon communication protocol
+- [RFC-0017](../specs/RFC-0017-unified-thread-management.md) - Unified thread management
