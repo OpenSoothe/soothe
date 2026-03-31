@@ -33,7 +33,7 @@ def resolve_daemon_workspace(config_workspace_dir: str = ".") -> Path:
     if env_workspace:
         workspace = Path(env_workspace).expanduser().resolve()
         _validate_workspace_dir(workspace)
-        logger.info(f"Using SOOTHE_WORKSPACE: {workspace}")
+        logger.info("Using SOOTHE_WORKSPACE: %s", workspace)
         return workspace
 
     # Priority 2: $SOOTHE_HOME/Workspace/ (only when config is default ".")
@@ -41,13 +41,13 @@ def resolve_daemon_workspace(config_workspace_dir: str = ".") -> Path:
     if config_workspace_dir == ".":
         # Create if doesn't exist
         soothe_workspace.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Using default workspace: {soothe_workspace}")
+        logger.info("Using default workspace: %s", soothe_workspace)
         return soothe_workspace.resolve()
 
     # Priority 3: config.yml workspace_dir (legacy)
     workspace = Path(config_workspace_dir).expanduser().resolve()
     _validate_workspace_dir(workspace)
-    logger.info(f"Using config workspace_dir: {workspace}")
+    logger.info("Using config workspace_dir: %s", workspace)
     return workspace
 
 
@@ -96,6 +96,6 @@ def validate_client_workspace(workspace: str | Path) -> Path:
 
     # Warn if workspace doesn't exist
     if not path.exists():
-        logger.warning(f"Client workspace does not exist: {path}")
+        logger.warning("Client workspace does not exist: %s", path)
 
     return path
