@@ -439,7 +439,7 @@ def create_soothe_agent(
 
     resolved_backend = backend
     if resolved_backend is None:
-        from soothe.core.filesystem import FrameworkFilesystem
+        from soothe.safety import FrameworkFilesystem
 
         # Initialize framework-wide singleton
         # Use deepagents FilesystemBackend directly with proper virtual_mode semantics

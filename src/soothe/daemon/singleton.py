@@ -16,7 +16,7 @@ def write_pid() -> None:
 
     # Use FrameworkFilesystem for consistency if available
     try:
-        from soothe.core.filesystem import FrameworkFilesystem
+        from soothe.safety import FrameworkFilesystem
 
         backend = FrameworkFilesystem.get()
         # Write to the PID file location

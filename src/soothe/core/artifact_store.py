@@ -15,7 +15,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.core.filesystem import FrameworkFilesystem
+from soothe.safety import FrameworkFilesystem
 
 logger = logging.getLogger(__name__)
 
