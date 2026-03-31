@@ -74,7 +74,7 @@ class TestCoreAgentClass:
         mock_graph = _mock_graph()
 
         # Create an async generator for astream to return
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(input_arg, config, **kwargs):
             yield "chunk1"
             yield "chunk2"
 
@@ -103,8 +103,8 @@ class TestCoreAgentClass:
         # Track what args were passed
         call_args = []
 
-        async def mock_astream(input_arg, config):
-            call_args.append((input_arg, config))
+        async def mock_astream(input_arg, config, **kwargs):
+            call_args.append((input_arg, config, kwargs))
             yield "chunk"
 
         mock_graph.astream = mock_astream
@@ -122,8 +122,8 @@ class TestCoreAgentClass:
         async for _ in result:
             pass
 
-        # Should pass empty dict when config is None
-        assert call_args[0] == ("test input", {})
+        # Should pass empty dict when config is None, and subgraphs=False
+        assert call_args[0] == ("test input", {}, {"subgraphs": False})
 
     def test_create_factory_returns_core_agent(self) -> None:
         """create_soothe_agent() returns CoreAgent instance."""

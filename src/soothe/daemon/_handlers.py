@@ -1014,6 +1014,7 @@ class DaemonHandlersMixin:
         """Cancel a specific thread's execution.
 
         Handles both single-threaded and multi-threaded execution modes.
+        Awaits task cancellation to ensure _query_running is reset before returning.
 
         Args:
             thread_id: Thread ID to cancel.
@@ -1023,6 +1024,9 @@ class DaemonHandlersMixin:
             task = self._active_threads[thread_id]
             task.cancel()
             logger.info("Cancelled thread %s (multi-threaded mode)", thread_id)
+            # Await task cancellation to ensure cleanup completes
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
             await self._broadcast(
                 {
                     "type": "status",
@@ -1039,7 +1043,13 @@ class DaemonHandlersMixin:
             if current_thread == thread_id:
                 self._current_query_task.cancel()
                 logger.info("Cancelled thread %s (single-threaded mode)", thread_id)
-                # The _run_query() finally block handles cleanup and broadcast
+                # Await task cancellation to ensure _query_running is reset
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._current_query_task
+                # Reset state since task's finally block has now run
+                self._query_running = False
+                self._current_query_task = None
+                await self._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
                 return
 
         logger.debug("Thread %s not found or already complete", thread_id)
