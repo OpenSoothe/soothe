@@ -353,7 +353,7 @@ class ClientSessionManager:
                         if not should_show(event_meta.verbosity, session.verbosity):
                             # Filter out - do not send to client
                             logger.debug(
-                                "Filtered event %s for client %s (event_verbosity=%s, client_verbosity=%s)",
+                                "Filtered event [%s] for client %s (event_verbosity=%s, client_verbosity=%s)",
                                 event.get("type"),
                                 session.client_id,
                                 event_meta.verbosity,

@@ -193,19 +193,18 @@ class WebSocketClient:
             thread_id: The thread ID to resume.
             workspace: Optional workspace override. Defaults to client's cwd.
         """
-        import os
         from pathlib import Path
 
         if workspace is None:
-            workspace = os.getcwd()
-
-        workspace_str = str(Path(workspace).resolve())
+            workspace = str(Path.cwd())
+        else:
+            workspace = str(Path(workspace).resolve())
 
         await self.send(
             {
                 "type": "resume_thread",
                 "thread_id": thread_id,
-                "workspace": workspace_str,
+                "workspace": workspace,
             }
         )
 
@@ -215,18 +214,17 @@ class WebSocketClient:
         Args:
             workspace: Optional workspace path. Defaults to client's cwd.
         """
-        import os
         from pathlib import Path
 
         if workspace is None:
-            workspace = os.getcwd()
-
-        workspace_str = str(Path(workspace).resolve())
+            workspace = str(Path.cwd())
+        else:
+            workspace = str(Path(workspace).resolve())
 
         await self.send(
             {
                 "type": "new_thread",
-                "workspace": workspace_str,
+                "workspace": workspace,
             }
         )
 
