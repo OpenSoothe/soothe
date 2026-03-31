@@ -176,6 +176,23 @@ class LoopAgent:
                     # It's a StepResult
                     step_results.append(item)
 
+            # Check for fatal errors and abort immediately
+            fatal_errors = [r for r in step_results if r.error_type == "fatal"]
+            if fatal_errors:
+                logger.error(
+                    "Fatal error detected, aborting loop: %s",
+                    fatal_errors[0].error,
+                )
+                yield (
+                    "fatal_error",
+                    {
+                        "error": fatal_errors[0].error,
+                        "step_id": fatal_errors[0].step_id,
+                    },
+                )
+                # Return early with failure status
+                return
+
             # Update state with results
             for result in step_results:
                 state.add_step_result(result)

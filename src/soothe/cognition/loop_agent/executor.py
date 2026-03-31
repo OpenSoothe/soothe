@@ -124,7 +124,7 @@ class Executor:
                     step_id=steps[i].id,
                     success=False,
                     error=str(result),
-                    error_type="execution",
+                    error_type=self._classify_error_severity(result),
                     duration_ms=0,
                     thread_id=f"{state.thread_id}__step_{i}",
                 )
@@ -201,7 +201,7 @@ class Executor:
                 step_id=steps[0].id,
                 success=False,
                 error=error_msg,
-                error_type="execution",
+                error_type=self._classify_error_severity(e),
                 duration_ms=duration_ms,
                 thread_id=state.thread_id,
             )
@@ -312,7 +312,7 @@ class Executor:
                 step_id=step.id,
                 success=False,
                 error=error_msg,
-                error_type="execution",
+                error_type=self._classify_error_severity(e),
                 duration_ms=duration_ms,
                 thread_id=thread_id,
             )
@@ -469,3 +469,40 @@ class Executor:
             return f"{exc_type}: {error_str[:200]}"
 
         return fallback
+
+    def _classify_error_severity(self, exc: Exception) -> str:
+        """Classify error severity using structured SDK error codes.
+
+        Determines whether an error is fatal (non-retryable) or retryable
+        by checking SDK-specific attributes rather than keyword matching.
+
+        Non-retryable errors:
+        - LangChain ContextOverflowError (context limit exceeded)
+        - HTTP 401 (authentication error)
+        - HTTP 403 (permission denied)
+        - HTTP 413 (request too large)
+        - OpenAI error code "invalid_parameter_error"
+
+        Args:
+            exc: The exception to classify
+
+        Returns:
+            "fatal" for non-retryable errors, "execution" for retryable errors
+        """
+        from langchain_core.exceptions import ContextOverflowError
+
+        # LangChain dedicated context limit exception
+        if isinstance(exc, ContextOverflowError):
+            return "fatal"
+
+        # Check status_code attribute (OpenAI/Anthropic APIStatusError)
+        status_code = getattr(exc, "status_code", None)
+        if status_code in (401, 403, 413):  # Auth/Permission/Too Large
+            return "fatal"
+
+        # OpenAI error code attribute
+        error_code = getattr(exc, "code", None)
+        if error_code == "invalid_parameter_error":
+            return "fatal"
+
+        return "execution"

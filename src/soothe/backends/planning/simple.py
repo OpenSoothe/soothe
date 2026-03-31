@@ -56,12 +56,27 @@ def _parse_step_decision_text(response: str, goal: str) -> Any:
 
         data = json.loads(json_str)
 
+        # Known subagent names (from _SIMPLE_PLANNER_HINT_MAP keys)
+        known_subagents = {"browser", "weaver", "skillify", "claude", "research"}
+
         # Build StepAction objects
         steps = []
         for i, step_data in enumerate(data.get("steps", [])):
             # Handle dependencies - ensure it's a list of strings
             deps = step_data.get("dependencies")
             deps = [] if deps is None or not isinstance(deps, list) else [str(d) for d in deps if d is not None]
+
+            # Normalize: move subagent names from tools to subagent field
+            tools = step_data.get("tools") or []
+            if tools:
+                subagent_tools = [t for t in tools if t in known_subagents]
+                if subagent_tools:
+                    if not step_data.get("subagent"):
+                        step_data["subagent"] = subagent_tools[0]
+                        logger.debug("Normalized subagent '%s' from tools to subagent field", subagent_tools[0])
+                    # Remove subagent names from tools list
+                    remaining_tools = [t for t in tools if t not in known_subagents]
+                    step_data["tools"] = remaining_tools or None
 
             step = StepAction(
                 id=f"step_{i}",

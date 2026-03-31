@@ -136,7 +136,7 @@ class StepResult(BaseModel):
     success: bool
     output: str | None = None
     error: str | None = None
-    error_type: Literal["execution", "tool", "timeout", "policy", "unknown"] | None = None
+    error_type: Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None = None
     duration_ms: int
     thread_id: str
 
