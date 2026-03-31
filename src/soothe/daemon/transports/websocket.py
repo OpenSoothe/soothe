@@ -86,7 +86,7 @@ class WebSocketTransport(TransportServer):
         )
 
         protocol = "wss" if self._config.tls_enabled else "ws"
-        logger.info(
+        logger.debug(
             "WebSocket transport listening on %s://%s:%d",
             protocol,
             self._config.host,

@@ -3,6 +3,25 @@
 import warnings
 from typing import Any
 
+# Version is read from installed package metadata (pyproject.toml)
+# Falls back to parsing pyproject.toml directly for development mode
+try:
+    from importlib.metadata import version
+
+    __version__ = version("soothe")
+except Exception:
+    # Development mode: read from pyproject.toml
+    import tomllib
+    from pathlib import Path
+
+    pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+    if pyproject_path.exists():
+        with pyproject_path.open("rb") as f:
+            data = tomllib.load(f)
+            __version__ = data["project"]["version"]
+    else:
+        __version__ = "0.0.0.dev"
+
 # Suppress requests library warning about chardet version mismatch
 # chardet 7.1.0 is required by crawl4ai, but requests only supports < 6.0.0
 # requests will use charset_normalizer (which is at the correct version) anyway

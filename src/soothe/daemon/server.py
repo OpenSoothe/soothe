@@ -34,6 +34,29 @@ _STOP_TIMEOUT_S = 8.0
 _HEARTBEAT_INTERVAL_S = 5.0  # Broadcast heartbeat every 5 seconds
 
 
+def _log_startup_banner(transport_manager: TransportManager | None) -> None:
+    """Log a clean startup banner with transport info.
+
+    Args:
+        transport_manager: The transport manager with started transports.
+    """
+    from soothe import __version__
+
+    # Get transport details
+    transports = transport_manager.get_transport_info() if transport_manager else []
+    if transports:
+        transport_str = " | ".join(f"{t['type']}: {t['client_count']} clients" for t in transports)
+    else:
+        transport_str = "none"
+
+    # Compact single-line banner
+    logger.info(
+        "╭─ Soothe v%s ── transports: %s ──╯",
+        __version__,
+        transport_str,
+    )
+
+
 @dataclass
 class _ClientConn:
     """Internal client connection state."""
@@ -133,7 +156,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
             # Initialize persistent input history
             self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
-            logger.info("Input history initialized with %d entries", len(self._input_history.history))
+            logger.debug("Input history initialized with %d entries", len(self._input_history.history))
 
             self._stop_event = asyncio.Event()
             self._running = True
@@ -149,7 +172,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # Initialize ThreadExecutor for multi-threading support (RFC-0017)
             max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
             self._thread_executor = ThreadExecutor(self._runner, max_concurrent_threads=max_concurrent)
-            logger.info("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)
+            logger.debug("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)
 
             self._transport_manager = TransportManager(
                 self._config.daemon,
@@ -177,6 +200,9 @@ class SootheDaemon(DaemonHandlersMixin):
 
             self._readiness_state = "ready"
             self._readiness_message = None
+
+            # Log startup banner with transport info
+            _log_startup_banner(self._transport_manager)
         except Exception as exc:
             # Startup failed - cleanup and release PID lock
             self._readiness_state = "error"

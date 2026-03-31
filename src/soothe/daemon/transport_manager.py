@@ -127,7 +127,7 @@ class TransportManager:
         try:
             await asyncio.gather(*start_tasks)
             self._started = True
-            logger.info(
+            logger.debug(
                 "Started %d transport(s): %s",
                 len(self._transports),
                 ", ".join(t.transport_type for t in self._transports),
