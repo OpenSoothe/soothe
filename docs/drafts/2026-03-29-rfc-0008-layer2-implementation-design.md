@@ -1,14 +1,14 @@
-# RFC-0008 (Layer 2) Implementation Design
+# RFC-201 (Layer 2) Implementation Design
 
 **Created**: 2026-03-29
 **Status**: Draft
-**Purpose**: Fill RFC-0008 (Layer 2) implementation gaps with PLAN → ACT → JUDGE architecture
+**Purpose**: Fill RFC-201 (Layer 2) implementation gaps with PLAN → ACT → JUDGE architecture
 
 ---
 
 ## Abstract
 
-This design addresses the major implementation gaps in RFC-0008 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture. We will replace the existing implementation entirely with a fresh `cognition/loop_agent/` module that implements the three-phase loop with AgentDecision (hybrid multi-step), goal-directed judgment (evidence accumulation), and Layer 1 CoreAgent integration.
+This design addresses the major implementation gaps in RFC-201 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture. We will replace the existing implementation entirely with a fresh `cognition/loop_agent/` module that implements the three-phase loop with AgentDecision (hybrid multi-step), goal-directed judgment (evidence accumulation), and Layer 1 CoreAgent integration.
 
 ---
 
@@ -24,7 +24,7 @@ This design addresses the major implementation gaps in RFC-0008 (Layer 2: Agenti
 - No decision reuse model
 - No explicit Layer 1 CoreAgent integration
 
-**Required by RFC-0008**:
+**Required by RFC-201**:
 - PLAN → ACT → JUDGE loop with goal-directed evaluation
 - AgentDecision: Hybrid multi-step model (1 or N steps)
 - Iteration-scoped planning (inside loop)
@@ -1012,7 +1012,7 @@ class StepResult(BaseModel):
 **Deliverables**:
 - ✅ Fresh `cognition/loop_agent/schemas.py`
 - ✅ Unit tests passing
-- ✅ Schemas validated against RFC-0008 spec
+- ✅ Schemas validated against RFC-201 spec
 
 ### Phase 2: Extend Protocols (Week 1, Days 3-4)
 
@@ -1286,11 +1286,11 @@ agentic:
 
 ## 16. Related Documents
 
-- [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) - Layer 2 Specification
-- [RFC-0007](./RFC-0007-autonomous-goal-management-loop.md) - Layer 3 Specification
-- [RFC-0023](./RFC-0023-coreagent-runtime.md) - Layer 1 Specification
-- [RFC-0001](./RFC-0001-system-conceptual-design.md) - System Conceptual Design
-- [RFC-0002](./RFC-0002-core-modules-architecture.md) - Core Modules Architecture
+- [RFC-201](./RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
+- [RFC-200](./RFC-200-autonomous-goal-management-loop.md) - Layer 3 Specification
+- [RFC-100](./RFC-100-coreagent-runtime.md) - Layer 1 Specification
+- [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
+- [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
 
 ---
 
@@ -1320,6 +1320,6 @@ agentic:
 
 ### 2026-03-29
 - Initial design draft
-- Complete architecture for RFC-0008 implementation
+- Complete architecture for RFC-201 implementation
 - Defined schemas, protocols, LoopAgent, runner integration
 - Specified error handling, testing, and migration strategies

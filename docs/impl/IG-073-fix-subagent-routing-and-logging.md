@@ -190,4 +190,4 @@ tail -f ~/.soothe/logs/soothe.log
 
 - **IG-071**: Research subagent slash command integration
 - **IG-072**: Quick path optimization for subagent routing
-- **RFC-0016**: Unified classifier and routing architecture
+- **RFC-101**: Unified classifier and routing architecture

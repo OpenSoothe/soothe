@@ -1,4 +1,4 @@
-# RFC-0007: Layer 3 - Autonomous Goal Management Loop
+# RFC-200: Layer 3 - Autonomous Goal Management Loop
 
 **RFC**: 0007
 **Title**: Layer 3: Autonomous Goal Management Loop
@@ -6,11 +6,11 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-15
 **Updated**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002, RFC-0003, RFC-0008
+**Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 
 ## Abstract
 
-This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-0008) through explicit PERFORM → Layer 2 delegation, and receives JudgeResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives JudgeResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
@@ -24,7 +24,7 @@ Layer 3: Autonomous Goal Management (this RFC)
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
   └─ Delegation: PERFORM invokes Layer 2's full PLAN → ACT → JUDGE loop
 
-Layer 2: Agentic Goal Execution (RFC-0008)
+Layer 2: Agentic Goal Execution (RFC-201)
   ├─ Scope: Single-goal execution through iterative refinement
   ├─ Loop: PLAN → ACT → JUDGE (max iterations: ~8)
   └─ Delegation: ACT invokes Layer 1 CoreAgent for step execution
@@ -351,7 +351,7 @@ autonomous:
 
 ## Implementation Status
 
-- ✅ GoalEngine with DAG scheduling (RFC-0009)
+- ✅ GoalEngine with DAG scheduling (RFC-202)
 - ✅ Dynamic goal management (RFC-0011 features in code)
 - ✅ Reflection with goal directives
 - ✅ Safety mechanisms and validation
@@ -359,10 +359,10 @@ autonomous:
 
 ## Related Documents
 
-- [RFC-0001](./RFC-0001-system-conceptual-design.md) - System Conceptual Design
-- [RFC-0002](./RFC-0002-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) - Layer 2: Agentic Goal Execution
-- [RFC-0009](./RFC-0009-dag-based-execution.md) - DAG-Based Execution
+- [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
+- [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
+- [RFC-201](./RFC-201-agentic-goal-execution-loop.md) - Layer 2: Agentic Goal Execution
+- [RFC-202](./RFC-202-dag-based-execution.md) - DAG-Based Execution
 - [RFC-0011](./RFC-0011-dynamic-goal-management.md) - DEPRECATED, merged into this RFC
 
 ## Changelog

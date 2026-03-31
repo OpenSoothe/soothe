@@ -3,15 +3,15 @@
 **Guide**: IG-011
 **Title**: Skillify Agent Implementation
 **Created**: 2026-03-13
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003, RFC-0004
+**Related RFCs**: RFC-000, RFC-001, RFC-500, RFC-601
 
 ## Overview
 
-This guide describes how to implement the Skillify agent as a Soothe-compatible CompiledSubAgent with a background indexing loop and a retrieval-only LangGraph. It translates RFC-0004 into concrete implementation steps, file organization, and API signatures.
+This guide describes how to implement the Skillify agent as a Soothe-compatible CompiledSubAgent with a background indexing loop and a retrieval-only LangGraph. It translates RFC-601 into concrete implementation steps, file organization, and API signatures.
 
 ## Prerequisites
 
-- [x] RFC-0004 (Skillify Architecture Design)
+- [x] RFC-601 (Skillify Architecture Design)
 - [x] VectorStoreProtocol implemented (IG-006)
 - [x] SootheConfig with SkillifyConfig section (Phase 5 wiring)
 - [x] Embedding model configured via model router
@@ -212,5 +212,5 @@ def _build_skillify_graph(retriever: SkillRetriever) -> CompiledGraph:
 
 ## Related Documents
 
-- [RFC-0004](../specs/RFC-0004.md) -- Skillify Architecture Design
+- [RFC-601](../specs/RFC-601.md) -- Skillify Architecture Design
 - [IG-006](./006-vectorstore-router-persistence.md) -- VectorStore, Router, Persistence

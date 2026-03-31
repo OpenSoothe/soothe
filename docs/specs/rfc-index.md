@@ -2,157 +2,195 @@
 
 This document provides an index of all RFCs in this project.
 
-## RFC List
+## Classification System
 
-### Conceptual Design
+RFCs are organized by numeric prefix:
 
-| RFC | Title | Status | Layer | Dependencies |
-|-----|-------|--------|-------|--------------|
-| [RFC-0001](./RFC-0001-system-conceptual-design.md) | System Conceptual Design | Draft | Foundation | - |
+| Prefix | Category | Focus |
+|--------|----------|-------|
+| **0xx** | Foundation | Cross-cutting concepts, system-wide design |
+| **1xx** | Core Agent | Runtime, execution, tools, subagents |
+| **2xx** | Cognition Loop | Goal management, planning, agentic loops |
+| **3xx** | Protocols | Interface contracts, backend abstractions |
+| **4xx** | Daemon | Transport, communication, event filtering |
+| **5xx** | CLI/TUI | User interface, display, interaction |
+| **6xx** | Plugin System | Extension, discovery, lifecycle |
 
-### Architecture Design
+---
 
-| RFC | Title | Status | Layer | Dependencies |
-|-----|-------|--------|-------|--------------|
-| [RFC-0002](./RFC-0002-core-modules-architecture.md) | Core Modules Architecture Design | Implemented | Foundation | RFC-0001 |
-| [RFC-0003](./RFC-0003-cli-tui-architecture.md) | CLI TUI Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002 |
-| [RFC-0004](./RFC-0004-skillify-agent-architecture.md) | Skillify Agent Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0005](./RFC-0005-weaver-agent-architecture.md) | Weaver Agent Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003, RFC-0004 |
-| [RFC-0006](./RFC-0006-context-memory-architecture.md) | Context and Memory Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0007](./RFC-0007-autonomous-goal-management-loop.md) | Layer 3: Autonomous Goal Management Loop | Revised | **Layer 3** | RFC-0001, RFC-0002, RFC-0003, RFC-0008 |
-| [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) | Layer 2: Agentic Goal Execution Loop | Revised | **Layer 2** | RFC-0001, RFC-0002, RFC-0007, RFC-0023 |
-| [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0007 |
-| [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
-| [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for WebSocket IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
-| [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | Foundation | RFC-0003, RFC-0013 |
-| [RFC-0018](./RFC-0018-plugin-extension-system.md) | Plugin Extension Specification | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008, RFC-0013 |
-| [RFC-0019](./RFC-0019-unified-event-processing.md) | Unified Event Processing Architecture | Implemented | Foundation | RFC-0003, RFC-0015 |
-| [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | Foundation | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
-| [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | Foundation | RFC-0018, RFC-0019 |
-| [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | Foundation | RFC-0013, RFC-0015 |
-| [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Implemented | **Layer 1** | RFC-0001, RFC-0002 |
-| [RFC-0024](./RFC-0024-verbosity-tier-unification.md) | VerbosityTier Unification | Implemented | Foundation | RFC-0015 |
-| [RFC-0025](./RFC-0025-tool-event-naming-unification.md) | Tool Event Naming Unification | Draft | Foundation | RFC-0015 |
+## RFC List by Category
 
-### Implementation Interface Design
+### 0xx — Foundation (System-Wide)
 
-| RFC | Title | Status | Layer | Dependencies |
-|-----|-------|--------|-------|--------------|
-| [RFC-0012](./RFC-0012-secure-filesystem-policy.md) | Secure Filesystem Path Handling and Security Policy | Implemented | Foundation | RFC-0002 |
-| [RFC-0016](./RFC-0016-tool-interface-optimization.md) | Tool Interface Optimization Implementation Guide | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0008 |
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-000](./RFC-000-system-conceptual-design.md) | System Conceptual Design | Implemented | Conceptual Design | — |
+| [RFC-001](./RFC-001-core-modules-architecture.md) | Core Modules Architecture | Implemented | Architecture Design | RFC-000 |
+
+### 1xx — Core Agent Runtime
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-100](./RFC-100-coreagent-runtime.md) | CoreAgent Runtime (Layer 1) | Implemented | Architecture Design | RFC-000, RFC-001 |
+| [RFC-101](./RFC-101-tool-interface.md) | Tool Interface & Event Naming | Implemented | Impl Interface | RFC-100, RFC-401 |
+| [RFC-102](./RFC-102-security-filesystem-policy.md) | Security & Filesystem Policy | Implemented | Impl Interface | RFC-001 |
+
+### 2xx — Cognition Loop (Goal & Planning)
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-200](./RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (Layer 3) | Implemented | Architecture Design | RFC-000, RFC-001, RFC-201 |
+| [RFC-201](./RFC-201-agentic-goal-execution.md) | Agentic Goal Execution (Layer 2) | Implemented | Architecture Design | RFC-000, RFC-001, RFC-100 |
+| [RFC-202](./RFC-202-dag-execution.md) | DAG Execution & Failure Recovery | Draft | Architecture Design | RFC-200, RFC-201, RFC-100 |
+
+### 3xx — Protocols (Interface Contracts)
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-300](./RFC-300-context-memory-protocols.md) | Context & Memory Protocols | Implemented | Impl Interface | RFC-001 |
+| [RFC-301](./RFC-301-protocol-registry.md) | Protocol Registry | Implemented | Impl Interface | RFC-001, RFC-300 |
+
+### 4xx — Daemon (Transport & Communication)
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-400](./RFC-400-daemon-communication.md) | Daemon Communication Protocol | Implemented | Architecture Design | RFC-000, RFC-001, RFC-500 |
+| [RFC-401](./RFC-401-event-processing.md) | Event Processing & Filtering | Implemented | Impl Interface | RFC-400, RFC-500 |
+
+### 5xx — CLI/TUI (User Interface)
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-500](./RFC-500-cli-tui-architecture.md) | CLI/TUI Architecture | Implemented | Architecture Design | RFC-000, RFC-001 |
+| [RFC-501](./RFC-501-display-verbosity.md) | Display & Verbosity | Draft | Impl Interface | RFC-500, RFC-401 |
+
+### 6xx — Plugin System
+
+| RFC | Title | Status | Kind | Dependencies |
+|-----|-------|--------|------|--------------|
+| [RFC-600](./RFC-600-plugin-extension-system.md) | Plugin Extension System | Implemented | Architecture Design | RFC-000, RFC-001, RFC-100 |
+| [RFC-601](./RFC-601-built-in-agents.md) | Built-in Plugin Agents | Implemented | Architecture Design | RFC-600, RFC-301 |
+
+### Legacy RFCs (To Be Reclassified)
+
+| RFC | Title | Status | Notes |
+|-----|-------|--------|-------|
+| [RFC-0017](./RFC-0017-unified-thread-management.md) | Unified Thread Management | Draft | Pending review for 2xx or 4xx |
+
+---
+
+## Three-Layer Architecture
+
+**Layer 3: Autonomous Goal Management** (RFC-200)
+- Manages goal DAGs for long-running complex workflows
+- Delegates to Layer 2 for single-goal execution
+
+**Layer 2: Agentic Goal Execution** (RFC-201)
+- Executes single goals through PLAN → ACT → JUDGE loop
+- Delegates to Layer 1 for step execution
+
+**Layer 1: CoreAgent Runtime** (RFC-100)
+- Provides execution runtime for tools/subagents
+- Built on `create_soothe_agent()` → CompiledStateGraph
+
+---
 
 ## Reference Documents
 
-| Document | Purpose | Lines |
-|----------|---------|-------|
-| [event-catalog.md](./event-catalog.md) | Complete event type registry with VerbosityTier classification | 228 |
-| [rest-api-spec.md](./rest-api-spec.md) | HTTP REST API specification extracted from RFC-0013 | 453 |
+| Document | Purpose |
+|----------|---------|
+| [event-catalog.md](./event-catalog.md) | Complete event type registry |
+| [rest-api-spec.md](./rest-api-spec.md) | HTTP REST API specification |
+| [rfc-standard.md](./rfc-standard.md) | RFC writing conventions |
+| [rfc-history.md](./rfc-history.md) | Change history |
+| [rfc-namings.md](./rfc-namings.md) | Terminology glossary |
+| [rfc-reclassification-plan.md](./rfc-reclassification-plan.md) | Migration plan (this reclassification) |
+
+---
 
 ## Dependency Graph
 
 ```
-RFC-0001 (System Conceptual Design)
-├── RFC-0002 (Core Modules)
-│   ├── RFC-0003 (CLI TUI)
-│   │   ├── RFC-0004 (Skillify)
-│   │   │   └── RFC-0005 (Weaver)
-│   │   ├── RFC-0006 (Context & Memory)
-│   │   ├── RFC-0013 (Unified Daemon Protocol)
-│   │   └── RFC-0019 (Unified Event Processing) [depends on RFC-0015]
-│   ├── RFC-0015 (Progress Event Protocol) [depends on RFC-0003, RFC-0013]
-│   │   ├── RFC-0020 (Event Display Architecture) [depends on RFC-0013]
-│   │   ├── RFC-0024 (VerbosityTier Unification)
-│   │   └── RFC-0025 (Tool Event Naming Unification)
-│   ├── RFC-0016 (Tool Interface Optimization)
-│   ├── RFC-0007 (Layer 3: Autonomous Goal Management) [Layer 3 foundation]
-│   │   ├── RFC-0008 (Layer 2: Agentic Goal Execution) [Layer 2 foundation]
-│   │   │   └── RFC-0023 (Layer 1: CoreAgent Runtime) [Layer 1 foundation]
-│   │   ├── RFC-0009 (DAG Execution)
-│   │   │   └── RFC-0010 (Failure Recovery)
-│   └── RFC-0012 (Secure Filesystem) [Policy System]
-└── RFC-0018 (Plugin Extension System) [depends on RFC-0008]
+RFC-000 (System Conceptual Design)
+└── RFC-001 (Core Modules)
+    ├── RFC-100 (CoreAgent Runtime) [Layer 1]
+    │   ├── RFC-101 (Tool Interface)
+    │   └── RFC-201 (Agentic Goal Execution) [Layer 2]
+    │       └── RFC-200 (Autonomous Goal Management) [Layer 3]
+    │           └── RFC-202 (DAG Execution)
+    ├── RFC-102 (Security Policy)
+    ├── RFC-300 (Context & Memory)
+    │   └── RFC-301 (Protocol Registry)
+    ├── RFC-400 (Daemon Communication)
+    │   └── RFC-401 (Event Processing)
+    ├── RFC-500 (CLI/TUI Architecture)
+    │   └── RFC-501 (Display & Verbosity)
+    └── RFC-600 (Plugin Extension)
+        └── RFC-601 (Built-in Agents)
 ```
 
-## Three-Layer Architecture Foundation
-
-**Layer 3: Autonomous Goal Management** (RFC-0007)
-- Manages goal DAGs for long-running complex workflows
-- Delegates to Layer 2 for single-goal execution
-
-**Layer 2: Agentic Goal Execution** (RFC-0008)
-- Executes single goals through PLAN → ACT → JUDGE loop
-- Delegates to Layer 1 for step execution
-
-**Layer 1: CoreAgent Runtime** (RFC-0023)
-- Provides execution runtime for tools/subagents
-- Built on `create_soothe_agent()` → CompiledStateGraph
+---
 
 ## RFC Status Summary
 
-- **Total RFCs**: 23
-- **Implemented**: 19
-- **Revised**: 2 (RFC-0007, RFC-0008)
-- **Draft**: 3 (RFC-0010, RFC-0020, RFC-0025)
-- **Deprecated**: 0 (RFC-0011 merged into RFC-0007 and removed)
+| Category | Implemented | Draft | Total |
+|----------|-------------|-------|-------|
+| Foundation (0xx) | 2 | 0 | 2 |
+| Core Agent (1xx) | 3 | 0 | 3 |
+| Cognition Loop (2xx) | 2 | 1 | 3 |
+| Protocols (3xx) | 2 | 0 | 2 |
+| Daemon (4xx) | 2 | 0 | 2 |
+| CLI/TUI (5xx) | 1 | 1 | 2 |
+| Plugin System (6xx) | 2 | 0 | 2 |
+| **Total** | **14** | **2** | **16** |
 
-## Line Count Summary (After Compaction)
+---
 
-All RFCs are now under the target limits:
-- **Architectural RFCs**: All < 600 lines ✅
-- **Specification RFCs**: All < 400 lines ✅
-- **Largest RFC**: RFC-0018 at 1189 lines (needs additional work)
-- **Average size**: ~378 lines
+## Kind Distribution
+
+| Kind | Count | Purpose |
+|------|-------|---------|
+| Conceptual Design | 1 | Principles, abstractions, taxonomy |
+| Architecture Design | 10 | Components, diagrams, data flow |
+| Impl Interface Design | 5 | Contracts, naming, data structures |
+
+---
+
+## Recent Changes (2026-03-31)
+
+### RFC Reclassification
+
+- **New RFCs created**:
+  - RFC-101 (Tool Interface & Event Naming) — merged RFC-0016 + RFC-0025
+  - RFC-202 (DAG Execution & Failure Recovery) — merged RFC-0009 + RFC-0010
+  - RFC-301 (Protocol Registry) — new document for remaining protocols
+  - RFC-401 (Event Processing & Filtering) — merged RFC-0015 + RFC-0019 + RFC-0022
+  - RFC-501 (Display & Verbosity) — merged RFC-0020 + RFC-0024
+  - RFC-601 (Built-in Plugin Agents) — merged RFC-0004 + RFC-0005 + RFC-0021
+
+- **Renumbered RFCs**:
+  - RFC-0001 → RFC-000
+  - RFC-0002 → RFC-001
+  - RFC-0023 → RFC-100
+  - RFC-0012 → RFC-102
+  - RFC-0007 → RFC-200
+  - RFC-0008 → RFC-201
+  - RFC-0006 → RFC-300
+  - RFC-0013 → RFC-400
+  - RFC-0003 → RFC-500
+  - RFC-0018 → RFC-600
+
+- **Removed RFCs** (merged into new ones):
+  - RFC-0004, RFC-0005, RFC-0009, RFC-0010, RFC-0015, RFC-0016
+  - RFC-0019, RFC-0020, RFC-0021, RFC-0022, RFC-0024, RFC-0025
+
+- **Result**: 23 RFCs consolidated into 16 (14 + 2 drafts)
+
+---
 
 ## Navigation
 
-- [RFC Standard](./rfc-standard.md) - Specification kinds and process
-- [RFC History](./rfc-history.md) - Change history
-- [Terminology](./rfc-namings.md) - Naming conventions
-- [RFC Optimization Strategies](/.claude/skills/platonic-coding/references/SPECS/rfc-optimization-strategies.md) - Compaction patterns
-
-## Recent Changes (2026-03-30)
-
-- Created RFC-0025 (Tool Event Naming Unification)
-  - Establishes naming convention: atomic ops use simple verbs, async ops use started/completed/failed triplets
-  - Renames `backup_created` → `backup` in file_ops tool
-  - Aligns event naming with atomic verb pattern
-- Updated RFC-0020 (Event Display Architecture)
-  - Fixed inconsistency: tool display is handled by CliRenderer via EventProcessor, not pipeline events
-  - Clarified architecture: LangChain tool_calls → CliRenderer, custom events → StreamDisplayPipeline
-  - Updated CLI event visibility table to remove non-existent event types
-  - Updated Principle 5 to reference RFC-0019's RendererProtocol pattern instead of outdated "Required Helpers"
-  - Added note clarifying RFC-0019 defines rendering architecture, RFC-0020 defines display patterns
-
-## Recent Changes (2026-03-29)
-
-- Updated RFC-0013 (Daemon Communication Protocol)
-  - **BREAKING**: Removed Unix domain socket transport
-  - Simplified to WebSocket-only bidirectional streaming
-  - HTTP REST retained for health checks and CRUD operations
-  - Eliminated stale socket file cleanup logic
-  - Updated architecture diagram and all examples
-- Created RFC-0024 (VerbosityTier Unification)
-  - Replaces two-layer classification with unified VerbosityTier enum
-  - Eliminates ProgressCategory and EventCategory duplicate enums
-  - Simplifies classification from ~117 lines to ~25 lines
-  - Uses integer comparison (`tier <= verbosity`) instead of set membership
-- Updated RFC-0015 to reference RFC-0024 VerbosityTier
-  - EventMeta.verbosity now uses VerbosityTier enum
-  - Domain defaults use tier values (QUIET, NORMAL, DETAILED, DEBUG, INTERNAL)
-- Updated RFC-0020 to use VerbosityTier classification
-  - Event registration examples now use VerbosityTier values
-  - Verbosity behavior tables updated to tier-based visibility
-- Updated RFC-0022 daemon-side filtering to use VerbosityTier
-  - VerbosityLevel values changed: `minimal` → `quiet`
-  - Import paths updated to verbosity_tier.py
-- Updated event-catalog.md to use VerbosityTier column headers
-- Established three-layer architecture foundation
-- Revised RFC-0007 (Layer 3: Autonomous Goal Management Loop)
-- Revised RFC-0008 (Layer 2: Agentic Goal Execution Loop)
-  - Added execution hints integration with Layer 1 (§3.2)
-  - Fixed RFC-0023 dependency reference
-- Created RFC-0023 (Layer 1: CoreAgent Runtime Architecture)
-  - Added Layer 2 integration contract with execution hints specification (§4)
-  - Added ExecutionHintsMiddleware documentation (§3)
-- Removed RFC-0011 (merged into RFC-0007, content in §5.4-5.6)
-- Updated RFC-0001 with three-layer principle
+- [RFC Standard](./rfc-standard.md) — Specification kinds and process
+- [RFC History](./rfc-history.md) — Change history
+- [Terminology](./rfc-namings.md) — Naming conventions
+- [Reclassification Plan](./rfc-reclassification-plan.md) — Migration documentation

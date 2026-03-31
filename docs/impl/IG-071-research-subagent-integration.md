@@ -6,7 +6,7 @@
 
 ## Summary
 
-Fixed missing integration points for the Research subagent slash command (`/research`). The research subagent was fully implemented following RFC-0021 but was not accessible via slash commands due to missing registration in three key locations.
+Fixed missing integration points for the Research subagent slash command (`/research`). The research subagent was fully implemented following RFC-601 but was not accessible via slash commands due to missing registration in three key locations.
 
 ## Problem
 
@@ -20,7 +20,7 @@ Users could not use `/research <query>` slash command despite the research subag
 
 ## Root Cause
 
-The research subagent implementation (RFC-0021) was complete but integration was partial:
+The research subagent implementation (RFC-601) was complete but integration was partial:
 - ✅ Plugin class defined with `@plugin` and `@subagent` decorators
 - ✅ Factory function `create_research_subagent()` implemented
 - ✅ Custom events registered
@@ -145,7 +145,7 @@ All tests pass (919 passed, 2 skipped):
 
 ## Related
 
-- **RFC-0021**: Research subagent specification (conversion from tool to subagent)
+- **RFC-601**: Research subagent specification (conversion from tool to subagent)
 - **IG-047**: Module self-containment refactoring
 - **IG-052**: Event system optimization (research events registered)
 

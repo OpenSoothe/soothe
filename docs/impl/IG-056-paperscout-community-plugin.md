@@ -2,16 +2,16 @@
 
 **Status**: 🚧 In Progress
 **Created**: 2026-03-25
-**RFC**: RFC-0018 (Plugin Extension System)
+**RFC**: RFC-600 (Plugin Extension System)
 
 ## Overview
 
-Migrate PaperScout from Alithia to Soothe as the first community plugin, demonstrating RFC-0018 plugin architecture and establishing patterns for future community contributions.
+Migrate PaperScout from Alithia to Soothe as the first community plugin, demonstrating RFC-600 plugin architecture and establishing patterns for future community contributions.
 
 ## Goals
 
 1. Create `src/soothe_community/` package structure for community plugins
-2. Migrate PaperScout subagent with full RFC-0018 compliance
+2. Migrate PaperScout subagent with full RFC-600 compliance
 3. Use Soothe's `PersistStore` for storage instead of custom backend
 4. Integrate configuration into Soothe's config system
 5. Implement hybrid notification approach (email + events)
@@ -288,7 +288,7 @@ def mock_persist_store():
 
 ## References
 
-- [RFC-0018: Plugin Extension System](../specs/RFC-0018.md)
+- [RFC-600: Plugin Extension System](../specs/RFC-600.md)
 - [IG-052: Event System Optimization](IG-052.md)
 - [Browser Subagent Implementation](../../src/soothe/subagents/browser/)
 - [Original PaperScout](../../thirdparty/Alithia/alithia/paperscout/)

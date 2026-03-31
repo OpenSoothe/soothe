@@ -1,11 +1,11 @@
-# RFC-0006: Context and Memory Architecture Design
+# RFC-300: Context and Memory Architecture Design
 
 **RFC**: 0006
 **Title**: Context and Memory Architecture Design
 **Status**: Implemented
 **Created**: 2026-03-14
 **Updated**: 2026-03-27
-**Related**: RFC-0001, RFC-0002, RFC-0003
+**Related**: RFC-000, RFC-001, RFC-500
 
 ## Abstract
 
@@ -13,7 +13,7 @@ This RFC provides a detailed architecture design for Soothe's context and memory
 
 ## Motivation
 
-RFC-0002 defined the protocol interfaces for Context and Memory but left several design decisions implicit. As the implementation matured, the following gaps emerged:
+RFC-001 defined the protocol interfaces for Context and Memory but left several design decisions implicit. As the implementation matured, the following gaps emerged:
 
 1. **Context backend naming** — `KeywordContext` and `VectorContext` now clearly communicate their retrieval approach to users configuring the system.
 2. **Persistence lifecycle wiring** — context persistence and memory recall/remember are now wired into the execution flow, but the RFC still describes older sequencing and backend assumptions.
@@ -37,7 +37,7 @@ RFC-0002 defined the protocol interfaces for Context and Memory but left several
 
 ### The Unbounded Ledger / Bounded Projection Pattern
 
-From RFC-0001 principle 4: *"Unbounded context, bounded projection."*
+From RFC-000 principle 4: *"Unbounded context, bounded projection."*
 
 ```
 [Unbounded Ledger]                    [Bounded Projection]
@@ -253,13 +253,13 @@ Support remote persistence backends (S3, Redis, PostgreSQL) for multi-instance d
 
 ## Dependencies
 
-- RFC-0001 (System Conceptual Design) — Principle 4: Unbounded context, bounded projection
-- RFC-0002 (Core Modules Architecture) — Protocol definitions
-- RFC-0003 (CLI TUI Architecture) — Session logging integration
+- RFC-000 (System Conceptual Design) — Principle 4: Unbounded context, bounded projection
+- RFC-001 (Core Modules Architecture) — Protocol definitions
+- RFC-500 (CLI TUI Architecture) — Session logging integration
 
 ## Related Documents
 
-- [RFC-0001](./RFC-0001.md) - System Conceptual Design
-- [RFC-0002](./RFC-0002.md) - Core Modules Architecture Design
-- [RFC-0003](./RFC-0003.md) - CLI TUI Architecture Design
+- [RFC-000](./RFC-000.md) - System Conceptual Design
+- [RFC-001](./RFC-001.md) - Core Modules Architecture Design
+- [RFC-500](./RFC-500.md) - CLI TUI Architecture Design
 - [RFC Index](./rfc-index.md) - All RFCs

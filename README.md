@@ -290,9 +290,9 @@ Soothe is built on a **protocol-driven architecture** that ensures flexibility a
 - **[User Guide](docs/user_guide.md)** - Comprehensive usage guide with examples
 
 - **[RFCs & Specs](docs/specs/)** - Technical specifications and architecture design
-  - [RFC-0001](docs/specs/RFC-0001-system-conceptual-design.md) - System conceptual design
-  - [RFC-0008](docs/specs/RFC-0008-agentic-loop-execution.md) - Execution architecture
-  - [RFC-0018](docs/specs/RFC-0018-plugin-extension-system.md) - Plugin system design
+  - [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) - System conceptual design
+  - [RFC-201](docs/specs/RFC-201-agentic-goal-execution.md) - Execution architecture
+  - [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) - Plugin system design
 
 ### 🛠️ For Developers
 

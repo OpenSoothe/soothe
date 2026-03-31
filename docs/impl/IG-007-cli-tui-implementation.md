@@ -3,19 +3,19 @@
 **Guide**: IG-007
 **Title**: CLI Terminal User Interface Implementation
 **Created**: 2026-03-12
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003
+**Related RFCs**: RFC-000, RFC-001, RFC-500
 
 ## Overview
 
-This guide covers the implementation of the Soothe CLI TUI defined in RFC-0003. The TUI provides
+This guide covers the implementation of the Soothe CLI TUI defined in RFC-500. The TUI provides
 real-time streaming progress, protocol observability, thread management, and dynamic subagent
 routing using Rich for terminal rendering.
 
 ## Prerequisites
 
-- [x] RFC-0001 accepted (System Conceptual Design)
-- [x] RFC-0002 accepted (Core Modules Architecture Design)
-- [x] RFC-0003 accepted (CLI TUI Architecture Design)
+- [x] RFC-000 accepted (System Conceptual Design)
+- [x] RFC-001 accepted (Core Modules Architecture Design)
+- [x] RFC-500 accepted (CLI TUI Architecture Design)
 - [x] IG-005 completed (Core Protocols Implementation)
 - [x] Development environment setup (deepagents >= 0.4.10, langgraph >= 1.1.1)
 
@@ -170,7 +170,7 @@ while True:
 
 ## Related Documents
 
-- [RFC-0003](../specs/RFC-0003.md) - CLI TUI Architecture Design
-- [RFC-0001](../specs/RFC-0001.md) - System Conceptual Design
-- [RFC-0002](../specs/RFC-0002.md) - Core Modules Architecture Design
+- [RFC-500](../specs/RFC-500.md) - CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
 - [IG-005](./005-core-protocols-implementation.md) - Core Protocols Implementation

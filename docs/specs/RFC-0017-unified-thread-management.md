@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-22
-**Dependencies**: RFC-0001, RFC-0002, RFC-0008, RFC-0013, RFC-0016
+**Dependencies**: RFC-000, RFC-001, RFC-201, RFC-400, RFC-101
 **Implements**: Thread lifecycle management, multi-threading support, unified transport APIs
 
 ## Abstract
@@ -20,9 +20,9 @@ The current thread management system has several critical issues:
 
 1. **CLI Duplication**: `soothe daemon attach --thread-id <id>` duplicates functionality provided by `soothe thread continue <id>`, creating user confusion and maintenance burden.
 
-2. **Transport Limitations**: Thread operations only work via Unix socket and WebSocket. HTTP REST endpoints defined in RFC-0016 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
+2. **Transport Limitations**: Thread operations only work via Unix socket and WebSocket. HTTP REST endpoints defined in RFC-101 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
 
-3. **Protocol Gaps**: The daemon protocol (RFC-0013) lacks dedicated thread management messages. Thread operations require slash commands or are limited to `resume_thread`/`new_thread` primitives.
+3. **Protocol Gaps**: The daemon protocol (RFC-400) lacks dedicated thread management messages. Thread operations require slash commands or are limited to `resume_thread`/`new_thread` primitives.
 
 4. **Single-Threaded Execution**: The daemon maintains a single active thread (`SootheRunner.current_thread_id`). Multiple clients cannot execute queries in different threads simultaneously.
 
@@ -55,7 +55,7 @@ Current `ThreadInfo` only captures basic metadata (status, timestamps, tags). Mi
 
 ### Non-Goals
 
-- **Authentication/authorization**: Handled by reverse proxy (RFC-0013)
+- **Authentication/authorization**: Handled by reverse proxy (RFC-400)
 - **Thread collaboration**: Multi-user thread sharing not in scope
 - **Thread templates**: Pre-configured thread setups deferred to future RFC
 
@@ -98,7 +98,7 @@ New thread features (labels, categories, priority) are optional additions to exi
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Protocol Layer (RFC-0013)                   │
+│                  Protocol Layer (RFC-400)                   │
 │                                                              │
 │  Protocol message validation and routing                     │
 │  thread_list, thread_create, thread_get, ...                │
@@ -285,7 +285,7 @@ class ThreadContextManagerProtocol(Protocol):
     async def get_thread_stats(self, thread_id: str) -> ThreadStats: ...
 ```
 
-### Daemon Protocol Extensions (RFC-0013)
+### Daemon Protocol Extensions (RFC-400)
 
 Thread management operations are exposed through daemon protocol messages:
 
@@ -297,7 +297,7 @@ These messages map directly to ThreadContextManager method calls, enabling Unix 
 
 ### HTTP REST API
 
-Thread management REST endpoints are defined in the REST API specification (RFC-0016). The ThreadContextManager serves as the backend implementation for these endpoints.
+Thread management REST endpoints are defined in the REST API specification (RFC-101). The ThreadContextManager serves as the backend implementation for these endpoints.
 
 ## Multi-Threading Architecture
 
@@ -396,10 +396,10 @@ Implementation phases are detailed in the associated implementation guide. The m
 
 ## References
 
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture Design
-- RFC-0013: Unified Daemon Communication Protocol
-- RFC-0016: HTTP REST API Specification
+- RFC-000: System Conceptual Design
+- RFC-001: Core Modules Architecture Design
+- RFC-400: Unified Daemon Communication Protocol
+- RFC-101: HTTP REST API Specification
 - LangGraph Checkpointer Documentation
 - ThreadLogger Implementation
 

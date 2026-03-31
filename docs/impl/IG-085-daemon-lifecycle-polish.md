@@ -4,7 +4,7 @@
 **Title**: Polish daemon lifecycle behavior for client attachment/detachment semantics
 **Status**: Draft
 **Created**: 2026-03-28
-**RFC References**: RFC-0013 (Daemon Communication Protocol), RFC-0003 (CLI TUI Architecture)
+**RFC References**: RFC-400 (Daemon Communication Protocol), RFC-500 (CLI TUI Architecture)
 **Priority**: High
 **Estimated Effort**: 2-3 days
 
@@ -19,7 +19,7 @@ This implementation guide refines the daemon lifecycle behavior to establish cle
 
 ## RFC Changes Summary
 
-### RFC-0013 Updates (Already Completed)
+### RFC-400 Updates (Already Completed)
 
 Added **Daemon Lifecycle Semantics** section with:
 - Daemon persistence behavior
@@ -28,7 +28,7 @@ Added **Daemon Lifecycle Semantics** section with:
 - Client exit semantics
 - Thread warning on exit
 
-### RFC-0003 Updates (Already Completed)
+### RFC-500 Updates (Already Completed)
 
 Updated:
 - `/exit`/`/quit` description: "Exit TUI client; daemon keeps running"
@@ -471,8 +471,8 @@ After implementation:
 - [ ] Linting passes: `make lint` (zero errors)
 - [ ] Formatting passes: `make format-check`
 - [ ] Full verification: `./scripts/verify_finally.sh`
-- [ ] RFC-0013 updated and validated
-- [ ] RFC-0003 updated and validated
+- [ ] RFC-400 updated and validated
+- [ ] RFC-500 updated and validated
 - [ ] User-facing messages clear and consistent
 - [ ] Manual testing checklist completed
 

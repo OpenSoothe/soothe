@@ -2,14 +2,14 @@
 
 ## Overview
 
-**RFC**: RFC-0021 - Research Subagent
+**RFC**: RFC-601 - Research Subagent
 **Status**: In Progress
 **Created**: 2026-03-26
 **Author**: Claude (AI Agent)
 
 ## Objective
 
-Convert the research tool and inquiry module into a unified, self-contained research subagent following RFC-0021 specifications.
+Convert the research tool and inquiry module into a unified, self-contained research subagent following RFC-601 specifications.
 
 ## Background
 
@@ -534,7 +534,7 @@ from .events import (
 
 ## References
 
-- RFC-0021: Research Subagent
-- RFC-0018: Plugin Extension System
+- RFC-601: Research Subagent
+- RFC-600: Plugin Extension System
 - IG-047: Module Self-Containment Refactoring
 - IG-052: Event System Optimization

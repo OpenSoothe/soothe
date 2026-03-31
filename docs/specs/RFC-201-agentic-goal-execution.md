@@ -1,4 +1,4 @@
-# RFC-0008: Layer 2 - Agentic Goal Execution Loop
+# RFC-201: Layer 2 - Agentic Goal Execution Loop
 
 **RFC**: 0008
 **Title**: Layer 2: Agentic Goal Execution Loop
@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-16
 **Updated**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002, RFC-0007, RFC-0023
+**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-100
 
 ## Abstract
 
@@ -17,9 +17,9 @@ This RFC defines Layer 2 of Soothe's three-layer execution architecture: agentic
 ### Three-Layer Model
 
 ```
-Layer 3: Autonomous Goal Management (RFC-0007) → Layer 2 (PERFORM stage)
+Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
 Layer 2: Agentic Goal Execution (this RFC) → Layer 1 (ACT phase)
-Layer 1: CoreAgent Runtime (RFC-0023) → Tools/Subagents
+Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 ```
 
 **Layer 2 Responsibilities**: Single-goal focus, LLM-driven planning (AgentDecision), evidence accumulation, goal-directed evaluation, adaptive execution, strategy reuse, Layer 1 delegation.
@@ -110,7 +110,7 @@ elif execution_mode == "dependency":
     results = await execute_dag_steps(scheduler, core_agent, thread_id)
 ```
 
-**Layer 1 Integration**: `config = {"thread_id": tid, "soothe_step_tools": step.tools, "soothe_step_subagent": step.subagent, "soothe_step_expected_output": step.expected_output}`. Layer 1's `ExecutionHintsMiddleware` injects hints into system prompt (RFC-0023).
+**Layer 1 Integration**: `config = {"thread_id": tid, "soothe_step_tools": step.tools, "soothe_step_subagent": step.subagent, "soothe_step_expected_output": step.expected_output}`. Layer 1's `ExecutionHintsMiddleware` injects hints into system prompt (RFC-100).
 
 **CoreAgent Responsibilities**: Execute tools/subagents, consider hints, apply middlewares, manage thread state, return streaming results.
 
@@ -215,10 +215,10 @@ agentic:
 
 ## References
 
-- RFC-0001: System conceptual design
-- RFC-0002: Core modules architecture
-- RFC-0007: Layer 3 autonomous goal management
-- RFC-0023: Layer 1 CoreAgent runtime
+- RFC-000: System conceptual design
+- RFC-001: Core modules architecture
+- RFC-200: Layer 3 autonomous goal management
+- RFC-100: Layer 1 CoreAgent runtime
 
 ---
 

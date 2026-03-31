@@ -549,7 +549,7 @@ uv run soothe --no-tui -p "analyze the codebase structure"
 
 ## References
 
-- RFC-0003: CLI TUI Architecture Design
-- RFC-0015: Progress Event Protocol
+- RFC-500: CLI TUI Architecture Design
+- RFC-401: Progress Event Protocol
 - Design Draft: `docs/drafts/003-cli-tui-event-progress-clarity.md`
 - Current Implementation: `src/soothe/ux/cli/rendering/cli_event_renderer.py`

@@ -19,8 +19,8 @@ This implementation guide provides concrete steps for implementing RFC-0017: Uni
   - LangGraph checkpointer (`src/soothe/core/resolver/_resolver_infra.py`)
   - `ThreadLogger` (`src/soothe/daemon/thread_logger.py`)
   - `RunArtifactStore` (`src/soothe/core/artifact_store.py`)
-- Understanding of daemon protocol (RFC-0013)
-- Understanding of HTTP REST API (RFC-0016)
+- Understanding of daemon protocol (RFC-400)
+- Understanding of HTTP REST API (RFC-101)
 
 ## Implementation Phases
 

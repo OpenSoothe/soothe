@@ -1,11 +1,11 @@
-# IG-029: Planner Refactoring and RFC-0007 Goal Context Support
+# IG-029: Planner Refactoring and RFC-200 Goal Context Support
 
-**Status**: ✅ Completed - RFC-0011 merged into RFC-0007 (2026-03-29)
+**Status**: ✅ Completed - RFC-0011 merged into RFC-200 (2026-03-29)
 
 ## Objective
 
 Refactor the planner subsystem to:
-1. Fix RFC-0007 §5.4 `goal_context` propagation across all planner modes
+1. Fix RFC-200 §5.4 `goal_context` propagation across all planner modes
 2. Enhance multilingual routing with hybrid heuristic + fast-model classification
 3. Add LLM-assisted reflection for failure analysis and directive generation
 4. Consolidate duplicate code into a shared module
@@ -16,8 +16,8 @@ Refactor the planner subsystem to:
 
 - [RFC-0011](../specs/RFC-0011.md) -- Dynamic Goal Management During Reflection
 - [IG-028](028-dynamic-goal-management.md) -- Dynamic Goal Management (prior impl)
-- [RFC-0007](../specs/RFC-0007.md) -- Autonomous Iteration Loop
-- [RFC-0009](../specs/RFC-0009.md) -- DAG-Based Execution
+- [RFC-200](../specs/RFC-200.md) -- Autonomous Iteration Loop
+- [RFC-202](../specs/RFC-202.md) -- DAG-Based Execution
 
 ## Problem Analysis
 
@@ -47,7 +47,7 @@ and `reflect()` implementations.
 
 ### 5. Unused `_llm_classify`
 
-`AutoPlanner._llm_classify()` is implemented but never called (disabled in RFC-0008
+`AutoPlanner._llm_classify()` is implemented but never called (disabled in RFC-201
 for performance). Should be offered as a configurable option.
 
 ## Design Decisions

@@ -116,7 +116,7 @@ if not args and tool_call_id in self._state.current_tool_calls:
 
 - **IG-053**: Tool call streaming with args accumulation
 - **IG-064**: Unified display policy
-- **RFC-0020**: Enhanced tool execution display with duration
+- **RFC-501**: Enhanced tool execution display with duration
 
 ## Files Changed
 

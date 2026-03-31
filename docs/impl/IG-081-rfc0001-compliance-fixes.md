@@ -1,22 +1,22 @@
-# IG-081: RFC-0001 Compliance Fixes
+# IG-081: RFC-000 Compliance Fixes
 
 **Implementation Guide**: IG-081
-**Title**: RFC-0001 Compliance Fixes and Updates
+**Title**: RFC-000 Compliance Fixes and Updates
 **Status**: Draft
 **Created**: 2026-03-28
-**Dependencies**: RFC-0001, RFC-0002, IG-036 (planner simplification), IG-047 (module refactoring)
-**Related RFCs**: RFC-0001 (System Conceptual Design)
+**Dependencies**: RFC-000, RFC-001, IG-036 (planner simplification), IG-047 (module refactoring)
+**Related RFCs**: RFC-000 (System Conceptual Design)
 
 ---
 
 ## Overview
 
-This implementation guide addresses gaps discovered during systematic analysis of RFC-0001 against the current codebase implementation. The analysis verified all 6 core protocols and identified 4 issues requiring fixes.
+This implementation guide addresses gaps discovered during systematic analysis of RFC-000 against the current codebase implementation. The analysis verified all 6 core protocols and identified 4 issues requiring fixes.
 
 ## Scope
 
 **In Scope**:
-- Update RFC-0001 planner tier naming to reflect architectural evolution
+- Update RFC-000 planner tier naming to reflect architectural evolution
 - Document remote agent wrapping as future work
 - Implement MCP session lifecycle management per-thread (Invariant 11)
 - Implement context persistence on thread suspend/archive (Invariant 12)
@@ -31,7 +31,7 @@ This implementation guide addresses gaps discovered during systematic analysis o
 
 ### ✅ Verified: Core Protocols
 
-All 6 core protocols from RFC-0001 are implemented with proper `Protocol` definitions:
+All 6 core protocols from RFC-000 are implemented with proper `Protocol` definitions:
 
 | Protocol | Location | Status |
 |----------|----------|--------|
@@ -70,7 +70,7 @@ All 6 core protocols from RFC-0001 are implemented with proper `Protocol` defini
 
 ### Issue 1: Planner Tier Naming Evolution
 
-**Problem**: RFC-0001 states "Two planner tiers: DirectPlanner and SubagentPlanner" but current code has:
+**Problem**: RFC-000 states "Two planner tiers: DirectPlanner and SubagentPlanner" but current code has:
 - SimplePlanner (formerly DirectPlanner, renamed in IG-028)
 - AutoPlanner (complexity router)
 - ClaudePlanner (complex tasks)
@@ -79,10 +79,10 @@ IG-036 removed SubagentPlanner to simplify architecture.
 
 **Root Cause**: RFC not updated after architectural evolution.
 
-**Fix**: Update RFC-0001 to document current 3-tier reality.
+**Fix**: Update RFC-000 to document current 3-tier reality.
 
 **Files to Modify**:
-- `docs/specs/RFC-0001-system-conceptual-design.md` (line 53)
+- `docs/specs/RFC-000-system-conceptual-design.md` (line 53)
 
 **Changes**:
 ```markdown
@@ -105,7 +105,7 @@ IG-036 removed SubagentPlanner to simplify architecture.
 
 ### Issue 2: Remote Agent Wrapping Deferred
 
-**Problem**: RFC-0001 Invariant 8 states "Remote agents are indistinguishable from local subagents at the delegation interface" and specifies wrapping as `CompiledSubAgent`.
+**Problem**: RFC-000 Invariant 8 states "Remote agents are indistinguishable from local subagents at the delegation interface" and specifies wrapping as `CompiledSubAgent`.
 
 Current: `LangGraphRemoteAgent` implements `RemoteAgentProtocol` but is NOT wrapped.
 
@@ -114,7 +114,7 @@ Current: `LangGraphRemoteAgent` implements `RemoteAgentProtocol` but is NOT wrap
 **Fix**: Document current deviation and preserve future intent.
 
 **Files to Modify**:
-- `docs/specs/RFC-0001-system-conceptual-design.md` (line 95, line 134)
+- `docs/specs/RFC-000-system-conceptual-design.md` (line 95, line 134)
 
 **Changes**:
 ```markdown
@@ -146,7 +146,7 @@ be implemented when ACP/A2A backends are added.
 
 ### Issue 3: MCP Session Lifecycle Not Per-Thread
 
-**Problem**: RFC-0001 Invariant 11 states "MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive)".
+**Problem**: RFC-000 Invariant 11 states "MCP session lifecycle is managed alongside thread lifecycle (created on thread start, cleaned up on suspend/archive)".
 
 **Current Behavior**:
 - `MCPSessionManager` exists with `cleanup()` method ✅
@@ -231,7 +231,7 @@ class ThreadContextManager:
 
 ### Issue 4: Context Not Persisted on Thread Suspend
 
-**Problem**: RFC-0001 Invariant 12 states "Plan state and context ledger survive thread suspend/resume via DurabilityProtocol".
+**Problem**: RFC-000 Invariant 12 states "Plan state and context ledger survive thread suspend/resume via DurabilityProtocol".
 
 **Current Behavior**:
 - `context.restore()` called in `_pre_stream()` when thread_id exists ✅
@@ -281,7 +281,7 @@ async def archive_thread(self, thread_id):
 
 ### Phase 1: RFC Documentation Updates
 
-**Files**: `docs/specs/RFC-0001-system-conceptual-design.md`
+**Files**: `docs/specs/RFC-000-system-conceptual-design.md`
 
 **Changes**:
 1. Line 53: Update planner tier naming (Issue 1)
@@ -329,8 +329,8 @@ async def archive_thread(self, thread_id):
 
 ## Success Criteria
 
-1. ✅ RFC-0001 updated with planner tier evolution
-2. ✅ RFC-0001 documents remote agent future intent
+1. ✅ RFC-000 updated with planner tier evolution
+2. ✅ RFC-000 documents remote agent future intent
 3. ✅ MCP sessions created per-thread, cleaned up on suspend/archive
 4. ✅ Context persisted before suspend/archive
 5. ✅ All unit tests pass
@@ -357,8 +357,8 @@ async def archive_thread(self, thread_id):
 
 ## References
 
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture
+- RFC-000: System Conceptual Design
+- RFC-001: Core Modules Architecture
 - IG-028: Direct-to-Simple-Planner Renaming
 - IG-036: Planning Workflow Refactoring (removed SubagentPlanner)
 - IG-047: Module Self-Containment Refactoring

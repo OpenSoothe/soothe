@@ -1,18 +1,18 @@
-# IG-070: RFC-0020 Event Display Architecture Compliance Fixes
+# IG-070: RFC-501 Event Display Architecture Compliance Fixes
 
 **Implementation Guide**: IG-070
-**RFC**: RFC-0020 Event Display Architecture
+**RFC**: RFC-501 Event Display Architecture
 **Created**: 2026-03-27
 **Status**: In Progress
 **Priority**: High
 
 ## Overview
 
-This implementation guide addresses critical compliance gaps between RFC-0020 specification and the current CLI/TUI implementation for tools and subagents display. The review identified 6 major gaps with an overall compliance score of 60%.
+This implementation guide addresses critical compliance gaps between RFC-501 specification and the current CLI/TUI implementation for tools and subagents display. The review identified 6 major gaps with an overall compliance score of 60%.
 
 ## Problem Statement
 
-The current implementation violates several core principles of RFC-0020:
+The current implementation violates several core principles of RFC-501:
 
 1. **Verbosity Classification Error**: Tool events classified as `protocol` instead of `tool_activity`, causing them to be visible in normal mode when they should be filtered
 2. **Missing Subagent Lifecycle Events**: No dispatch/completion events, steps appear disconnected
@@ -28,7 +28,7 @@ After implementation:
 - ✅ New events display without modifying renderers
 - ✅ Consistent visual patterns across CLI and TUI
 - ✅ Tool results show as indented children with duration
-- ✅ All 6 RFC-0020 success criteria met
+- ✅ All 6 RFC-501 success criteria met
 
 ## Implementation Plan
 
@@ -465,8 +465,8 @@ If issues arise:
 
 ## Dependencies
 
-- RFC-0020 Event Display Architecture
-- RFC-0019 Unified Event Processing
+- RFC-501 Event Display Architecture
+- RFC-401 Unified Event Processing
 - IG-064 Unified Display Policy
 - IG-066 Subagent Event Display Fix
 
@@ -482,7 +482,7 @@ If issues arise:
 
 ## Success Metrics
 
-- ✅ All 6 RFC-0020 success criteria met
+- ✅ All 6 RFC-501 success criteria met
 - ✅ 100% of tool events have correct verbosity
 - ✅ All subagents have dispatch/completion events
 - ✅ CLI uses registry for all event display
@@ -492,4 +492,4 @@ If issues arise:
 
 ---
 
-*This implementation guide addresses the gaps identified in the RFC-0020 compliance review.*
+*This implementation guide addresses the gaps identified in the RFC-501 compliance review.*

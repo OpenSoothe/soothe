@@ -1,4 +1,4 @@
-# RFC-0018: Plugin Extension Specification
+# RFC-600: Plugin Extension Specification
 
 **RFC**: 0018
 **Title**: Plugin Extension Specification
@@ -6,8 +6,8 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-23
 **Updated**: 2026-03-27
-**Dependencies**: RFC-0001, RFC-0002, RFC-0008, RFC-0013
-**Related**: RFC-0015
+**Dependencies**: RFC-000, RFC-001, RFC-201, RFC-400
+**Related**: RFC-401
 
 ## Abstract
 
@@ -333,11 +333,11 @@ class BrowserPlugin:
 
 ## References
 
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture
-- RFC-0008: Agentic Loop Execution
-- RFC-0013: Daemon Communication Protocol
-- RFC-0015: Authentication and Security
+- RFC-000: System Conceptual Design
+- RFC-001: Core Modules Architecture
+- RFC-201: Agentic Loop Execution
+- RFC-400: Daemon Communication Protocol
+- RFC-401: Authentication and Security
 - PEP 440: Version Specification
 - PEP 517: Build System Format
 

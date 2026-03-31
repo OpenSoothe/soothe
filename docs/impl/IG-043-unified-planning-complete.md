@@ -172,7 +172,7 @@ plan = await planner.create_plan(goal, context)
 
 4. **Documentation**
    - Update architecture docs
-   - Create RFC-0016
+   - Create RFC-101
    - Update developer guide
 
 ## 📁 Files Modified

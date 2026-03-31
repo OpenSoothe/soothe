@@ -25,7 +25,7 @@ tests/
 └── integration/             # Integration tests (require external services)
     ├── conftest.py
     ├── test_daemon_*.py     # Daemon protocol tests
-    ├── test_rfc0013_e2e.py  # RFC-0013 comprehensive E2E tests
+    ├── test_rfc0013_e2e.py  # RFC-400 comprehensive E2E tests
     ├── test_vector_store_integration.py
     ├── test_performance.py
     ├── test_python_session_integration.py
@@ -67,7 +67,7 @@ pytest tests/integration/ --run-integration
 # Run specific integration test file
 pytest tests/integration/test_daemon_multi_client.py --run-integration
 
-# Run RFC-0013 E2E tests
+# Run RFC-400 E2E tests
 pytest tests/integration/test_rfc0013_e2e.py --run-integration
 
 # Run slow tests (stress tests)
@@ -137,7 +137,7 @@ The test suite covers the following modules:
 
 ### Integration Tests (24 files, ~210 tests)
 
-**Daemon Protocol (RFC-0013):**
+**Daemon Protocol (RFC-400):**
 - Multi-Client Isolation (`test_daemon_multi_client.py`)
 - Event Protocol (`test_daemon_event_protocol.py`)
 - Multi-Transport (`test_daemon_multi_transport.py`)
@@ -272,8 +272,8 @@ async def test_event_throughput_stress():
 
 ## Test Documentation
 
-- **RFC-0013 Test Coverage**: `docs/testing/rfc0013_test_coverage.md`
-  - Complete mapping of RFC-0013 requirements to tests
+- **RFC-400 Test Coverage**: `docs/testing/rfc0013_test_coverage.md`
+  - Complete mapping of RFC-400 requirements to tests
   - 88 total tests for daemon protocol
   - Breaking changes validation matrix
 
@@ -305,6 +305,6 @@ Tests are designed to run in CI/CD pipelines:
 
 ## References
 
-- RFC-0013: Unified Daemon Communication Protocol
-- RFC-0015: Event Protocol Specification
+- RFC-400: Unified Daemon Communication Protocol
+- RFC-401: Event Protocol Specification
 - Test patterns inspired by the noesium project's test suite

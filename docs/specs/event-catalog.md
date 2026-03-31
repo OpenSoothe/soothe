@@ -1,10 +1,10 @@
 # Event Catalog Reference
 
-**Purpose**: Complete catalog of Soothe progress event types (RFC-0015)
+**Purpose**: Complete catalog of Soothe progress event types (RFC-401)
 **Status**: Reference Document
-**Last Updated**: 2026-03-29
+**Last Updated**: 2026-03-31
 
-This document provides the complete catalog of all Soothe progress event types. For event naming conventions, architecture, and design principles, see [RFC-0015](RFC-0015.md). For verbosity classification, see [RFC-0024](RFC-0024-verbosity-tier-unification.md).
+This document provides the complete catalog of all Soothe progress event types. For event naming conventions, architecture, and design principles, see [RFC-401](RFC-401-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
 
 ## Event Naming Pattern
 

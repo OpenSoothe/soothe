@@ -2,14 +2,14 @@
 
 **Implementation Guide**: 069
 **Title**: Migrating Built-in Components to Plugin System
-**RFC**: RFC-0018 (Plugin Extension Specification)
+**RFC**: RFC-600 (Plugin Extension Specification)
 **Related**: IG-051 (Plugin API Implementation)
 **Created**: 2026-03-27
 **Status**: Draft
 
 ## Overview
 
-This guide describes how to migrate existing subagents and tools to the new plugin system introduced in RFC-0018 and implemented in IG-051. The plugin system provides a standardized decorator-based API for tools and subagents with lifecycle management, dependency declaration, and configuration integration.
+This guide describes how to migrate existing subagents and tools to the new plugin system introduced in RFC-600 and implemented in IG-051. The plugin system provides a standardized decorator-based API for tools and subagents with lifecycle management, dependency declaration, and configuration integration.
 
 ### What We're Building
 
@@ -622,7 +622,7 @@ Run full test suite:
 
 ## References
 
-- RFC-0018: Plugin Extension Specification
+- RFC-600: Plugin Extension Specification
 - IG-051: Plugin API Implementation
 - soothe_sdk documentation (coming soon)
 - Python entry points documentation

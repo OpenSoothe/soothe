@@ -2,16 +2,16 @@
 
 ## Overview
 
-Remove the deprecated RFC-0011 (Dynamic Goal Management) and update all references to point to RFC-0007, where the content has been merged.
+Remove the deprecated RFC-0011 (Dynamic Goal Management) and update all references to point to RFC-200, where the content has been merged.
 
 ## Context
 
-RFC-0011 has been officially deprecated and merged into RFC-0007 (Layer 3: Autonomous Goal Management Loop). The deprecation notice states:
-- GoalDirective model → RFC-0007 §5.4
-- GoalContext model → RFC-0007 §5.4
-- Enhanced PlannerProtocol.reflect() → RFC-0007 §5.4
-- DAG consistency handling → RFC-0007 §5.5
-- Safety mechanisms → RFC-0007 §5.6
+RFC-0011 has been officially deprecated and merged into RFC-200 (Layer 3: Autonomous Goal Management Loop). The deprecation notice states:
+- GoalDirective model → RFC-200 §5.4
+- GoalContext model → RFC-200 §5.4
+- Enhanced PlannerProtocol.reflect() → RFC-200 §5.4
+- DAG consistency handling → RFC-200 §5.5
+- Safety mechanisms → RFC-200 §5.6
 
 ## Scope
 
@@ -21,8 +21,8 @@ RFC-0011 has been officially deprecated and merged into RFC-0007 (Layer 3: Auton
 ### Files to Update
 1. **Index Files**: Update RFC index to remove RFC-0011 entry
 2. **User Guide**: Remove RFC-0011 reference
-3. **Source Code**: Update docstring references from RFC-0011 → RFC-0007
-4. **Config Files**: Update comments from RFC-0011 → RFC-0007
+3. **Source Code**: Update docstring references from RFC-0011 → RFC-200
+4. **Config Files**: Update comments from RFC-0011 → RFC-200
 5. **Implementation Guides**: Preserve historical context but update status
 
 ## Implementation Steps
@@ -48,12 +48,12 @@ Update all code references:
 - `src/soothe/core/runner/_runner_autonomous.py`: Update comments
 - `src/soothe/core/runner/_runner_goal_directives.py`: Update docstrings
 
-Change pattern: `(RFC-0011)` → `(RFC-0007 §5.4-5.6)` or just `(RFC-0007)` depending on context.
+Change pattern: `(RFC-0011)` → `(RFC-200 §5.4-5.6)` or just `(RFC-200)` depending on context.
 
 ### Phase 5: Update Configuration Files
 Update config comments:
-- `config.dev.yml`: Change RFC-0011 → RFC-0007 in autonomous config
-- `src/soothe/config/config.yml`: Change RFC-0011 → RFC-0007
+- `config.dev.yml`: Change RFC-0011 → RFC-200 in autonomous config
+- `src/soothe/config/config.yml`: Change RFC-0011 → RFC-200
 
 ### Phase 6: Update Test Files
 Update `tests/unit/test_dynamic_goals.py` docstring.
@@ -61,7 +61,7 @@ Update `tests/unit/test_dynamic_goals.py` docstring.
 ### Phase 7: Update Implementation Guides
 For IGs documenting historical work (IG-028, IG-029):
 - Preserve historical accuracy
-- Add note: "[Completed - RFC-0011 merged into RFC-0007]"
+- Add note: "[Completed - RFC-0011 merged into RFC-200]"
 - Update current status sections
 
 For IG-067 (rfc-refactoring):
@@ -69,7 +69,7 @@ For IG-067 (rfc-refactoring):
 
 ### Phase 8: Update Draft Documents
 For recent drafts mentioning RFC-0011:
-- Update to reflect current state (merged into RFC-0007)
+- Update to reflect current state (merged into RFC-200)
 - Preserve decision-making history
 
 ### Phase 9: Update Review/Validation Reports
@@ -80,13 +80,13 @@ These are historical snapshots - preserve as-is or add notes.
 After all updates:
 1. Run `grep -i "RFC-0011"` to verify no remaining references
 2. Run `./scripts/verify_finally.sh` to ensure no code breaks
-3. Check that RFC-0007 properly documents all merged content
+3. Check that RFC-200 properly documents all merged content
 
 ## Success Criteria
 
 1. No file named RFC-0011 exists in `docs/specs/`
-2. All code docstrings reference RFC-0007 instead of RFC-0011
-3. Configuration comments reference RFC-0007
+2. All code docstrings reference RFC-200 instead of RFC-0011
+3. Configuration comments reference RFC-200
 4. RFC index properly reflects deprecation
 5. All tests pass
 6. No grep results for RFC-0011 in active code/specs

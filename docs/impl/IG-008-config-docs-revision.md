@@ -3,7 +3,7 @@
 **Guide**: IG-008
 **Title**: Configuration Examples, Documentation, and AI Agent Rules
 **Created**: 2026-03-12
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003
+**Related RFCs**: RFC-000, RFC-001, RFC-500
 
 ## Overview
 
@@ -14,9 +14,9 @@ the Soothe codebase.
 
 ## Prerequisites
 
-- [x] RFC-0001 accepted (System Conceptual Design)
-- [x] RFC-0002 accepted (Core Modules Architecture Design)
-- [x] RFC-0003 accepted (CLI TUI Architecture Design)
+- [x] RFC-000 accepted (System Conceptual Design)
+- [x] RFC-001 accepted (Core Modules Architecture Design)
+- [x] RFC-500 accepted (CLI TUI Architecture Design)
 - [x] IG-005 completed (Core Protocols Implementation)
 - [x] IG-007 completed (CLI TUI Implementation)
 
@@ -47,7 +47,7 @@ the Soothe codebase.
 ### Phase 2: README Rewrite
 
 Replace the current README with:
-- Vision statement from RFC-0001
+- Vision statement from RFC-000
 - Architecture stack diagram
 - Quick start (install, configure, run)
 - Configuration pointers to `config/`
@@ -76,7 +76,7 @@ Expand AGENTS.md with:
 - Complete module map with all packages
 - Configuration system documentation
 - RFC and impl guide references
-- Design principles from RFC-0001
+- Design principles from RFC-000
 
 ## Verification
 
@@ -89,8 +89,8 @@ Expand AGENTS.md with:
 
 ## Related Documents
 
-- [RFC-0001](../specs/RFC-0001.md) - System Conceptual Design
-- [RFC-0002](../specs/RFC-0002.md) - Core Modules Architecture Design
-- [RFC-0003](../specs/RFC-0003.md) - CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
+- [RFC-500](../specs/RFC-500.md) - CLI TUI Architecture Design
 - [IG-005](./005-core-protocols-implementation.md) - Core Protocols Implementation
 - [IG-007](./007-cli-tui-implementation.md) - CLI TUI Implementation

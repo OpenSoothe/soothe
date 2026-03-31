@@ -1,19 +1,19 @@
 # IG-080: Framework Filesystem Consistency
 
-**RFC Reference**: RFC-0012 (Extension)
+**RFC Reference**: RFC-102 (Extension)
 **Implementation Date**: 2026-03-28
 **Status**: Draft
-**Dependencies**: RFC-0012, RFC-0002
+**Dependencies**: RFC-102, RFC-001
 
 ---
 
 ## Overview
 
-This implementation guide extends RFC-0012 to cover **framework-level filesystem operations**, ensuring consistent path handling and security across both tool and framework operations.
+This implementation guide extends RFC-102 to cover **framework-level filesystem operations**, ensuring consistent path handling and security across both tool and framework operations.
 
 ### Problem Statement
 
-RFC-0012 implemented `SecureFilesystemBackend` for **tool operations** only. However, **framework operations** bypass the backend entirely:
+RFC-102 implemented `SecureFilesystemBackend` for **tool operations** only. However, **framework operations** bypass the backend entirely:
 
 - Final report writing (`standalone.py:237`)
 - Artifact store (checkpoints, manifests, reports)
@@ -463,7 +463,7 @@ Note: virtual_mode is for path semantics (virtual paths vs real paths),
 
 4. **Update documentation** (Phase 5)
    - Document virtual_mode semantics clearly
-   - Update RFC-0012 to reflect extension
+   - Update RFC-102 to reflect extension
    - Add migration guide for users
 
 ---
@@ -500,7 +500,7 @@ Note: virtual_mode is for path semantics (virtual paths vs real paths),
 
 ## References
 
-- **RFC-0012**: Secure Filesystem Path Handling and Security Policy
+- **RFC-102**: Secure Filesystem Path Handling and Security Policy
 - **deepagents FilesystemBackend**: `thirdparty/deepagents/libs/deepagents/deepagents/backends/filesystem.py`
 - **Current workaround**: `src/soothe/backends/filesystem_secure.py` (to be removed)
 - **Agent factory**: `src/soothe/core/agent.py`

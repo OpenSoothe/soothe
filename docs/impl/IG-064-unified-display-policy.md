@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-26  
 **Status**: Completed  
-**Related**: RFC-0015 (Event Classification), RFC-0019 (Unified Event Processing)
+**Related**: RFC-401 (Event Classification), RFC-401 (Unified Event Processing)
 
 ## Overview
 
@@ -275,8 +275,8 @@ Verified with actual research queries:
 - Consistent behavior between CLI and TUI modes
 
 ### Architecture
-- Follows RFC-0015 event classification principles
-- Aligns with RFC-0019 unified event processing
+- Follows RFC-401 event classification principles
+- Aligns with RFC-401 unified event processing
 - Extensible for future internal event types
 - Type-safe with `VerbosityLevel` type alias
 
@@ -302,7 +302,7 @@ Verified with actual research queries:
 
 ## References
 
-- RFC-0015: Event Classification and Verbosity
-- RFC-0019: Unified Event Processing Architecture
+- RFC-401: Event Classification and Verbosity
+- RFC-401: Unified Event Processing Architecture
 - IG-053: CLI/TUI Event Progress Implementation
 - IG-061: Unified Event Processing

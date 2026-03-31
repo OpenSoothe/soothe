@@ -1,15 +1,15 @@
 # IG-027: Final Report CLI Output and LLM Synthesis
 
-**Implements**: RFC-0010 (Final Report Gap)
+**Implements**: RFC-202 (Final Report Gap)
 **Status**: Active
 **Created**: 2026-03-18
-**Related**: IG-023, IG-024, RFC-0009, RFC-0010
+**Related**: IG-023, IG-024, RFC-202, RFC-202
 
 ## Problem
 
 After an autonomous run completes, the CLI shows no consolidated final report.
 Individual step outputs stream to stdout during execution, but the cross-validated
-synthesis (RFC-0010) is invisible to users for two reasons:
+synthesis (RFC-202) is invisible to users for two reasons:
 
 1. **LLM synthesis never fires**: `_synthesize_root_goal_report` checks
    `hasattr(self._planner, "_invoke")`, but `AutoPlanner` (the default planner

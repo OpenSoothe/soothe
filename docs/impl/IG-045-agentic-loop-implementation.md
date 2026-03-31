@@ -3,18 +3,18 @@
 **Guide**: IG-045
 **Title**: Agentic Loop Implementation Guide
 **Created**: 2026-03-22
-**Related RFCs**: RFC-0008, RFC-0007, RFC-0009, RFC-0012, RFC-0015
+**Related RFCs**: RFC-201, RFC-200, RFC-202, RFC-102, RFC-401
 
 ## Overview
 
-This implementation guide covers the replacement of single-pass execution with the Agentic Loop architecture defined in RFC-0008. The Agentic Loop implements the **Observe → Act → Verify** pattern as the default execution mode for non-chitchat queries, with adaptive planning strategies and iterative refinement.
+This implementation guide covers the replacement of single-pass execution with the Agentic Loop architecture defined in RFC-201. The Agentic Loop implements the **Observe → Act → Verify** pattern as the default execution mode for non-chitchat queries, with adaptive planning strategies and iterative refinement.
 
 ## Prerequisites
 
-- [x] RFC-0008 accepted (Agentic Loop Execution Architecture)
-- [x] RFC-0012 implemented (Unified Classification)
-- [x] RFC-0009 implemented (DAG-Based Execution)
-- [x] RFC-0015 implemented (Progress Event Protocol)
+- [x] RFC-201 accepted (Agentic Loop Execution Architecture)
+- [x] RFC-102 implemented (Unified Classification)
+- [x] RFC-202 implemented (DAG-Based Execution)
+- [x] RFC-401 implemented (Progress Event Protocol)
 - [x] Development environment setup
 - [x] Dependencies installed
 
@@ -39,7 +39,7 @@ This implementation guide covers the replacement of single-pass execution with t
 
 **Tasks**:
 - [ ] Add 10 new event models to `/src/soothe/core/event_catalog.py`
-- [ ] Register events in event registry with RFC-0015 naming
+- [ ] Register events in event registry with RFC-401 naming
 - [ ] Add TUI event handlers in `/src/soothe/cli/tui/event_processors.py`
 - [ ] Test event emission and display
 
@@ -61,7 +61,7 @@ This implementation guide covers the replacement of single-pass execution with t
 - [ ] Import AgenticMixin in `/src/soothe/core/runner.py`
 - [ ] Remove `_run_single_pass()` method
 - [ ] Update `astream()` to route to agentic loop by default
-- [ ] Preserve autonomous mode routing (RFC-0007)
+- [ ] Preserve autonomous mode routing (RFC-200)
 - [ ] Update runner documentation
 
 ### Phase 5: Testing & Verification
@@ -97,7 +97,7 @@ tests/
     └── test_agentic_integration.py # NEW: Integration tests
 
 docs/specs/
-└── RFC-0008.md                     # UPDATED: Already updated
+└── RFC-201.md                     # UPDATED: Already updated
 ```
 
 ## Implementation Details
@@ -658,7 +658,7 @@ Add these event models after existing events:
 
 ```python
 # ---------------------------------------------------------------------------
-# Agentic Loop Events (RFC-0008)
+# Agentic Loop Events (RFC-201)
 # ---------------------------------------------------------------------------
 
 
@@ -884,8 +884,8 @@ from soothe.core._runner_agentic import AgenticMixin
 class SootheRunner(
     CheckpointMixin,
     StepLoopMixin,
-    AutonomousMixin,  # RFC-0007
-    AgenticMixin,      # RFC-0008
+    AutonomousMixin,  # RFC-200
+    AgenticMixin,      # RFC-201
     PhasesMixin,
 ):
     """Protocol-orchestrated agent runner."""
@@ -904,7 +904,7 @@ class SootheRunner(
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
-            autonomous: Enable autonomous iteration loop (RFC-0007).
+            autonomous: Enable autonomous iteration loop (RFC-200).
             max_iterations: Override max iterations.
             subagent: Optional subagent name to route the query to directly.
         """
@@ -1235,7 +1235,7 @@ async for chunk in runner.astream("debug tests"):
 - [ ] Early termination works
 - [ ] Events emitted correctly
 - [ ] TUI displays agentic loop progress
-- [ ] Autonomous mode still works (RFC-0007)
+- [ ] Autonomous mode still works (RFC-200)
 - [ ] No performance regression
 - [ ] Documentation updated
 
@@ -1252,11 +1252,11 @@ async for chunk in runner.astream("debug tests"):
 
 ## Related Documents
 
-- [RFC-0008](../specs/RFC-0008.md) - Agentic Loop Architecture
-- [RFC-0007](../specs/RFC-0007.md) - Autonomous Iteration Loop
-- [RFC-0012](../specs/RFC-0012.md) - Unified Classification
-- [RFC-0015](../specs/RFC-0015.md) - Progress Event Protocol
+- [RFC-201](../specs/RFC-201.md) - Agentic Loop Architecture
+- [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
+- [RFC-102](../specs/RFC-102.md) - Unified Classification
+- [RFC-401](../specs/RFC-401.md) - Progress Event Protocol
 
 ---
 
-*Implementation guide for RFC-0008: Agentic Loop Execution Architecture*
+*Implementation guide for RFC-201: Agentic Loop Execution Architecture*

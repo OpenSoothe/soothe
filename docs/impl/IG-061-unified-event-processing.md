@@ -2,13 +2,13 @@
 
 | Field | Value |
 |-------|-------|
-| **RFC** | RFC-0019 |
+| **RFC** | RFC-401 |
 | **Status** | Completed |
 | **Created** | 2026-03-26 |
 
 ## Overview
 
-Implementation guide for RFC-0019 Unified Event Processing Architecture. This guide covers the creation of the unified `EventProcessor` class with `RendererProtocol` callback interface, and refactoring of CLI/TUI to use the new architecture.
+Implementation guide for RFC-401 Unified Event Processing Architecture. This guide covers the creation of the unified `EventProcessor` class with `RendererProtocol` callback interface, and refactoring of CLI/TUI to use the new architecture.
 
 ## Implementation Steps
 

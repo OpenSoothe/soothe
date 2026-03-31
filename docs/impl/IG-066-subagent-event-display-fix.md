@@ -2,7 +2,7 @@
 
 **Status**: ✅ Completed
 **Created**: 2026-03-26
-**RFC References**: RFC-0015 (Authentication and Security), RFC-0019 (Unified Event Processing)
+**RFC References**: RFC-401 (Authentication and Security), RFC-401 (Unified Event Processing)
 
 ## Objective
 

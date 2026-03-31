@@ -988,9 +988,9 @@ If critical issues arise:
 **Blocks**: Future UX improvements depend on this foundation
 
 **Related RFCs**:
-- RFC-0003: CLI TUI Architecture (updated by IG-085)
-- RFC-0013: Daemon Communication Protocol (updated by IG-085)
-- RFC-0020: Event Display Architecture (alignment needed)
+- RFC-500: CLI TUI Architecture (updated by IG-085)
+- RFC-400: Daemon Communication Protocol (updated by IG-085)
+- RFC-501: Event Display Architecture (alignment needed)
 
 **Related IGs**:
 - IG-084: CLI UX Optimization (merged into this)

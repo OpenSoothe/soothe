@@ -1,4 +1,4 @@
-# Implementation Guide: Unified Daemon Communication Protocol (RFC-0013)
+# Implementation Guide: Unified Daemon Communication Protocol (RFC-400)
 
 **RFC**: 0013
 **Status**: Draft
@@ -8,7 +8,7 @@
 
 ## Overview
 
-This implementation guide translates RFC-0013 (Unified Daemon Communication Protocol) into concrete implementation tasks for adding multi-transport support to the Soothe daemon.
+This implementation guide translates RFC-400 (Unified Daemon Communication Protocol) into concrete implementation tasks for adding multi-transport support to the Soothe daemon.
 
 ### Goals
 
@@ -200,7 +200,7 @@ websocket:
 
 **Purpose**: Implement REST API for CRUD operations
 
-**Key Endpoints** (per RFC-0013):
+**Key Endpoints** (per RFC-400):
 - `GET /api/v1/threads` - List threads
 - `GET /api/v1/threads/{id}` - Get thread details
 - `POST /api/v1/threads` - Create thread
@@ -567,7 +567,7 @@ def revoke_key(key_id: str):
 **Task 3.1: HTTP REST Transport Server** (12h)
 - [ ] Add `fastapi>=0.104.0` and `uvicorn[standard]>=0.24.0` to dependencies
 - [ ] Create `src/soothe/cli/daemon/transports/http_rest.py`
-- [ ] Implement all REST endpoints per RFC-0013
+- [ ] Implement all REST endpoints per RFC-400
 - [ ] Add OpenAPI documentation
 - [ ] Write unit tests
 
@@ -596,7 +596,7 @@ def revoke_key(key_id: str):
 - [ ] Test ReDoc at `/redoc`
 
 **Phase 3 Exit Criteria**:
-- ✅ All RFC-0013 REST endpoints implemented
+- ✅ All RFC-400 REST endpoints implemented
 - ✅ API key CLI commands work
 - ✅ OpenAPI docs accessible
 - ✅ File upload/download functional
@@ -624,7 +624,7 @@ def revoke_key(key_id: str):
 **Task 4.4: Documentation** (6h)
 - [ ] Write migration guide
 - [ ] Write security best practices
-- [ ] Update RFC-0013 status to "Implemented"
+- [ ] Update RFC-400 status to "Implemented"
 - [ ] Create user-facing docs
 
 **Task 4.5: Security Review** (4h)
@@ -982,7 +982,7 @@ class SootheConfig(BaseModel):
 
 - [ ] Unix socket transport works exactly as before
 - [ ] WebSocket transport connects and streams events
-- [ ] HTTP REST API implements all RFC-0013 endpoints
+- [ ] HTTP REST API implements all RFC-400 endpoints
 - [ ] Authentication system works for API keys and JWT
 - [ ] Rate limiting prevents abuse
 - [ ] CORS validation blocks unauthorized origins
@@ -1005,8 +1005,8 @@ class SootheConfig(BaseModel):
 
 ## References
 
-- [RFC-0013: Unified Daemon Communication Protocol](../specs/RFC-0013.md)
-- [RFC-0003: CLI TUI Architecture Design](../specs/RFC-0003.md)
+- [RFC-400: Unified Daemon Communication Protocol](../specs/RFC-400.md)
+- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500.md)
 - [Implementation Plan](../../.claude/plans/jolly-growing-moon.md)
 
 ---

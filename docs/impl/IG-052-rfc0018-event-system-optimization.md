@@ -1,14 +1,14 @@
-# RFC-0018 Event System Optimization Implementation Guide
+# RFC-600 Event System Optimization Implementation Guide
 
 **Guide**: 052
-**Title**: RFC-0018 Event System Optimization
+**Title**: RFC-600 Event System Optimization
 **Status**: In Progress
 **Created**: 2026-03-25
-**Dependencies**: RFC-0018, IG-047
+**Dependencies**: RFC-600, IG-047
 
 ## Objective
 
-Optimize the event system architecture to support RFC-0018's plugin extension system by:
+Optimize the event system architecture to support RFC-600's plugin extension system by:
 1. Creating a decentralized event registration API
 2. Enabling third-party plugins to register custom events
 3. Achieving module self-containment for event definitions
@@ -16,7 +16,7 @@ Optimize the event system architecture to support RFC-0018's plugin extension sy
 
 ## Background
 
-RFC-0018 introduces a plugin extension system that allows third-party developers to create custom tools and subagents. The current event system has two critical issues:
+RFC-600 introduces a plugin extension system that allows third-party developers to create custom tools and subagents. The current event system has two critical issues:
 
 1. **Inconsistency**: Plugin lifecycle events are not registered in the event catalog
 2. **Centralization**: All events must be registered in `core/event_catalog.py`, preventing third-party plugins from adding custom events
@@ -205,7 +205,7 @@ wc -l src/soothe/core/event_catalog.py
 **Goal**: Document the new pattern for plugin developers.
 
 **Changes**:
-1. Update `docs/specs/RFC-0018.md`:
+1. Update `docs/specs/RFC-600.md`:
    - Add "Event Registration" section
    - Document `register_event()` API
    - Show examples for third-party plugins
@@ -224,7 +224,7 @@ wc -l src/soothe/core/event_catalog.py
    - Reference the new pattern
 
 **Files Created/Modified**:
-- `docs/specs/RFC-0018.md`
+- `docs/specs/RFC-600.md`
 - `docs/plugin_development.md` (new)
 - `examples/plugins/custom_events/` (new)
 - `CLAUDE.md`
@@ -310,7 +310,7 @@ for event_type in expected_events:
 
 ## References
 
-- RFC-0018: Plugin Extension Specification
+- RFC-600: Plugin Extension Specification
 - IG-047: Module Self-Containment Refactoring
 - `docs/impl/IG-047-module-self-containment-refactoring-FINAL.md`
 

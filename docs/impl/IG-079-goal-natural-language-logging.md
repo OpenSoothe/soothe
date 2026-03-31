@@ -3,7 +3,7 @@
 **Status**: ✅ Completed
 **Date**: 2026-03-28
 **Completed**: 2026-03-28 01:10 UTC
-**RFC References**: RFC-0007 (Goal Lifecycle), RFC-0009 (DAG Execution)
+**RFC References**: RFC-200 (Goal Lifecycle), RFC-202 (DAG Execution)
 
 ---
 
@@ -109,7 +109,7 @@ Goal DAG:
 
 ## References
 
-- **RFC-0007**: Goal Lifecycle Management
-- **RFC-0009**: DAG-based Execution with Dependencies
+- **RFC-200**: Goal Lifecycle Management
+- **RFC-202**: DAG-based Execution with Dependencies
 - **Source**: `src/soothe/cognition/goal_engine.py`
 - **Tests**: `tests/unit/test_goal_engine.py`

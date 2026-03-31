@@ -2,8 +2,8 @@
 
 **Status**: Draft
 **Created**: 2026-03-30
-**RFC**: RFC-0020 (CLI Stream Display Pipeline section)
-**Dependencies**: RFC-0024 (VerbosityTier)
+**RFC**: RFC-501 (CLI Stream Display Pipeline section)
+**Dependencies**: RFC-501 (VerbosityTier)
 
 ## Overview
 

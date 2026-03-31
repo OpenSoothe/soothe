@@ -3,7 +3,7 @@
 **Document**: `032-unified-complexity-classification.md`
 **Date**: 2026-03-18
 **Status**: Completed
-**RFC Reference**: RFC-0010 (Complexity Classification)
+**RFC Reference**: RFC-202 (Complexity Classification)
 
 ## Summary
 
@@ -424,14 +424,14 @@ Key changes to review:
 - Deploy to production
 
 ### Week 3: Documentation
-- Update RFC-0010 with unified architecture
+- Update RFC-202 with unified architecture
 - Update code comments and docstrings
 - Close bug report
 
 ## Related Documents
 
-- RFC-0010: Complexity Classification System
-- RFC-0008: Adaptive Planner Architecture
+- RFC-202: Complexity Classification System
+- RFC-201: Adaptive Planner Architecture
 - Bug Report: Query Classifier Misclassification
 
 ## Conclusion

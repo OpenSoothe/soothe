@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Created**: 2026-03-28
-**Related RFC**: RFC-0009 (DAG-Based Execution and Unified Concurrency)
+**Related RFC**: RFC-202 (DAG-Based Execution and Unified Concurrency)
 
 ## Overview
 
@@ -24,7 +24,7 @@ Implement "0 = unlimited" semantics:
 2. **Controller Layer**: Skip semaphore acquisition when limit is 0 (unlimited mode)
 3. **Config Layer**: Update defaults and documentation
 4. **Test Coverage**: Add tests for unlimited mode
-5. **Documentation**: Update RFC-0009 and user guide
+5. **Documentation**: Update RFC-202 and user guide
 
 ## Implementation Plan
 
@@ -179,12 +179,12 @@ async def test_unlimited_step_concurrent_execution() -> None:
 ### Phase 6: Documentation
 
 **Files to Update**:
-1. `docs/specs/RFC-0009-dag-based-execution.md` - Add 0=unlimited semantics section
+1. `docs/specs/RFC-202-dag-based-execution.md` - Add 0=unlimited semantics section
 2. `docs/user_guide.md` - Update concurrency configuration section
 3. `config/env.example` - Add comments for 0=unlimited
 4. `src/soothe/config/config.yml` - Enhance inline comments
 
-**RFC-0009 Addition** (in Configuration section):
+**RFC-202 Addition** (in Configuration section):
 ```markdown
 ### Unlimited Concurrency (Special Value: 0)
 
@@ -228,7 +228,7 @@ Manual verification:
 3. ✓ Unlimited acquisition passes through immediately (no blocking)
 4. ✓ Tests pass for unlimited scenarios
 5. ✓ Config defaults updated with 0 semantics documentation
-6. ✓ RFC-0009 updated with unlimited semantics section
+6. ✓ RFC-202 updated with unlimited semantics section
 7. ✓ User guide updated with configuration examples
 
 ## Backward Compatibility

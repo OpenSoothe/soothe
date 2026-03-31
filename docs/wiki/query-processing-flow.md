@@ -127,7 +127,7 @@ response    mode         execution
 - `src/soothe/core/runner/_runner_agentic.py` - Agentic loop
 - `src/soothe/core/runner/_runner_autonomous.py` - Autonomous mode
 
-## 4. Agentic Loop (RFC-0008)
+## 4. Agentic Loop (RFC-201)
 
 The default execution mode follows an iterative observe-act-verify cycle:
 
@@ -358,7 +358,7 @@ async for event in daemon_client.subscribe_thread(thread_id):
             # Render based on event type
 ```
 
-## 9. Autonomous Mode (RFC-0007)
+## 9. Autonomous Mode (RFC-200)
 
 When `autonomous=True`, the system uses explicit goal-driven execution:
 
@@ -458,7 +458,7 @@ User Query
 
 ### RFC References
 
-- [RFC-0008](../specs/RFC-0008.md) - Agentic Loop Execution
-- [RFC-0007](../specs/RFC-0007.md) - Autonomous Iteration Loop
-- [RFC-0009](../specs/RFC-0009.md) - Step Execution
-- [RFC-0013](../specs/RFC-0013.md) - Daemon Communication Protocol
+- [RFC-201](../specs/RFC-201.md) - Agentic Loop Execution
+- [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
+- [RFC-202](../specs/RFC-202.md) - Step Execution
+- [RFC-400](../specs/RFC-400.md) - Daemon Communication Protocol

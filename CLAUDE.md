@@ -8,7 +8,7 @@
 
 **Soothe** is a protocol-driven orchestration framework for building 24/7 long-running autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interop while remaining langchain-ecosystem-friendly.
 
-**Key Architecture**: See [RFC-0001](docs/specs/RFC-0001.md) for the full conceptual design.
+**Key Architecture**: See [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for the full conceptual design.
 
 ---
 
@@ -154,12 +154,12 @@ All RFCs are in `docs/specs/`. Key specifications:
 
 | RFC | Title | Purpose |
 |-----|-------|---------|
-| [RFC-0001](docs/specs/RFC-0001.md) | System Conceptual Design | Overall architecture |
-| [RFC-0002](docs/specs/RFC-0002.md) | Core Modules Architecture | Module interactions |
-| [RFC-0008](docs/specs/RFC-0008.md) | Agentic Loop Execution | Iteration patterns |
-| [RFC-0013](docs/specs/RFC-0013.md) | Daemon Communication Protocol | Multi-transport daemon |
-| [RFC-0015](docs/specs/RFC-0015.md) | Authentication and Security | Security model |
-| [RFC-0018](docs/specs/RFC-0018.md) | Plugin Extension System | Plugin architecture |
+| [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) | System Conceptual Design | Overall architecture |
+| [RFC-001](docs/specs/RFC-001-core-modules-architecture.md) | Core Modules Architecture | Module interactions |
+| [RFC-201](docs/specs/RFC-201-agentic-goal-execution.md) | Agentic Goal Execution (Layer 2) | Iteration patterns |
+| [RFC-400](docs/specs/RFC-400-daemon-communication.md) | Daemon Communication Protocol | Multi-transport daemon |
+| [RFC-401](docs/specs/RFC-401-event-processing.md) | Event Processing & Filtering | Event system |
+| [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | Plugin architecture |
 
 **See all RFCs**: Check `docs/specs/` directory.
 
@@ -173,13 +173,13 @@ All implementation guides are in `docs/impl/`. Recent guides:
 |-------|-------|--------|
 | IG-047 | Module Self-Containment Refactoring | ✅ Completed |
 | IG-051 | Plugin API Implementation | ✅ Completed |
-| IG-052 | RFC-0018 Event System Optimization | ✅ Completed |
+| IG-052 | RFC-600 Event System Optimization | ✅ Completed |
 
 **See all guides**: Check `docs/impl/` directory.
 
 ---
 
-## 🔌 Plugin System (RFC-0018)
+## 🔌 Plugin System (RFC-600)
 
 ### Event Registration (NEW!)
 Each module registers its own events using `register_event()`:
@@ -406,7 +406,7 @@ The `thirdparty/` directory contains source code of upstream dependencies for **
 
 ## 💡 Key Design Principles
 
-From RFC-0001:
+From RFC-000:
 
 1. **Protocol-first, runtime-second** - Every module is a protocol; implementations are swappable
 2. **Extend deepagents, don't fork it** - Use deepagents as-is

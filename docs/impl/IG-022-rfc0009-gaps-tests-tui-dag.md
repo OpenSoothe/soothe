@@ -1,40 +1,40 @@
-# IG-022: RFC-0009 Polish -- Tests, TUI DAG Visualization, and Spec Fixes
+# IG-022: RFC-202 Polish -- Tests, TUI DAG Visualization, and Spec Fixes
 
-**Implements**: RFC-0009 (gap closure and polish), cross-RFC consistency
+**Implements**: RFC-202 (gap closure and polish), cross-RFC consistency
 **Status**: Completed
 **Created**: 2026-03-18
 **Completed**: 2026-03-18
 
 ## Overview
 
-Closes minor implementation gaps between RFC-0009 spec and code, fixes cross-RFC
+Closes minor implementation gaps between RFC-202 spec and code, fixes cross-RFC
 consistency issues, adds comprehensive unit tests for all new DAG modules,
 and enhances the TUI plan panel with DAG dependency visualization.
 
-**Note**: Core RFC-0009 functionality (DAG execution, concurrency control, GoalReport assembly) is fully implemented. This guide addresses polish items only.
+**Note**: Core RFC-202 functionality (DAG execution, concurrency control, GoalReport assembly) is fully implemented. This guide addresses polish items only.
 
 ## Phase 1: RFC Consistency Fixes
 
-### 1.1 RFC-0001
+### 1.1 RFC-000
 
-Add RFC-0009 to Related Documents.
+Add RFC-202 to Related Documents.
 
-### 1.2 RFC-0003
+### 1.2 RFC-500
 
 - Update protocol events table: replace `index`-based `step_started`/`step_completed`
   with `step_id`-based schemas; add `batch_started`, `step_failed`,
   `goal.batch_started`, `goal.report`.
-- Add RFC-0009 to Related Documents.
+- Add RFC-202 to Related Documents.
 - Note step loop in three-phase execution model.
 
-### 1.3 RFC-0007
+### 1.3 RFC-200
 
 - Update execution flow: `next_goal()` → `ready_goals()` with parallel dispatch.
 - Add `parallel_goals` to `soothe.iteration.started` event description.
 
-### 1.4 RFC-0008
+### 1.4 RFC-201
 
-- Add RFC-0009 to Related Documents.
+- Add RFC-202 to Related Documents.
 - Update Phase 2 to mention step loop for multi-step plans.
 - Clarify reflection covers all steps.
 
@@ -123,7 +123,7 @@ Add `depends_on` to step dict in plan created events:
 
 ### 2.5 LOW -- `ConcurrencyController.available_*`
 
-Remove from RFC-0009 spec (semaphores don't cleanly expose available count
+Remove from RFC-202 spec (semaphores don't cleanly expose available count
 in async context). Keep the properties that exist (`max_parallel_*`).
 
 ## Phase 3: TUI DAG Visualization

@@ -24,7 +24,7 @@ RFCs typically move through this lifecycle:
 
 | Draft | Title | Kind | Created |
 |-------|-------|------|---------|
-| [RFC-0001](../specs/RFC-0001.md) | System Conceptual Design | Conceptual Design | 2026-03-12 |
+| [RFC-000](../specs/RFC-000.md) | System Conceptual Design | Conceptual Design | 2026-03-12 |
 
 ## Moving from Draft to Proposed
 

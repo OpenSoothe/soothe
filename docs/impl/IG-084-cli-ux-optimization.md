@@ -333,8 +333,8 @@ $ soothe -p "2+2" --no-tui --verbosity minimal
 
 ## Related
 
-- RFC-0013: Daemon Communication Protocol
-- RFC-0020: Event Display Architecture
+- RFC-400: Daemon Communication Protocol
+- RFC-501: Event Display Architecture
 - IG-053: CLI Command Nesting
 - IG-082: TUI Event Display Polish
 

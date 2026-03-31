@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Kind**: Conceptual Design  
 **Created**: YYYY-MM-DD  
-**Dependencies**: RFC-0001 (if this is not RFC-0001)
+**Dependencies**: RFC-000 (if this is not RFC-000)
 
 ## Overview
 

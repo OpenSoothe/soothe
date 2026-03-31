@@ -85,5 +85,5 @@ soothe -p "search weather" --no-tui
 ## References
 
 - Plan: `/Users/chenxm/.claude/plans/adaptive-stirring-rabin.md`
-- RFC-0019: Unified Event Processing
-- RFC-0020: Registry-Driven Display
+- RFC-401: Unified Event Processing
+- RFC-501: Registry-Driven Display

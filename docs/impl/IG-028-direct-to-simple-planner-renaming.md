@@ -223,14 +223,14 @@ This naming pattern makes it immediately clear which planner to use for each com
 
 ### Pre-existing Test Issues
 
-Note: `test_auto_planner.py` contains pre-existing test failures unrelated to this renaming. These tests use an outdated `routing_mode` parameter that was removed in RFC-0012's unified classification refactoring. These tests need separate fixing.
+Note: `test_auto_planner.py` contains pre-existing test failures unrelated to this renaming. These tests use an outdated `routing_mode` parameter that was removed in RFC-102's unified classification refactoring. These tests need separate fixing.
 
 ## Related Documents
 
 - Implementation Plan: See conversation transcript
-- RFC-0012: Unified complexity classification
-- RFC-0010: Enhanced reflection with dependency awareness
-- RFC-0008: Template matching optimization
+- RFC-102: Unified complexity classification
+- RFC-202: Enhanced reflection with dependency awareness
+- RFC-201: Template matching optimization
 
 ---
 

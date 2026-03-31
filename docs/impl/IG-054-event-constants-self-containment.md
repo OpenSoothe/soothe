@@ -3,7 +3,7 @@
 **Implementation Guide**
 **Created**: 2026-03-25
 **Status**: Completed
-**Related**: RFC-0018, IG-052
+**Related**: RFC-600, IG-052
 
 ## Summary
 
@@ -21,7 +21,7 @@ After IG-052, event **classes** were properly located in their respective module
 1. Adding a new tool required modifying `core/events.py` to add constants
 2. Developers had to look in TWO places to understand a tool's events (module for classes, core for constants)
 3. Third-party plugins couldn't be fully self-contained without modifying core files
-4. Contradicted RFC-0018's goal of zero-coupling extensibility
+4. Contradicted RFC-600's goal of zero-coupling extensibility
 
 ### Solution
 
@@ -141,7 +141,7 @@ The separate `events.py` file was redundant after Phase 3. All core event consta
 - `ux/shared/message_processing.py`
 - `utils/error_format.py`
 - `tests/unit/test_fixes.py`
-- Documentation files (IG-054.md, RFC-0018.md)
+- Documentation files (IG-054.md, RFC-600.md)
 
 **Deleted**:
 - `src/soothe/core/events.py` - No longer needed
@@ -223,7 +223,7 @@ if event_type == MY_PLUGIN_CUSTOM_EVENT:
 2. **Zero Coupling**: Adding new tools/subagents requires ZERO changes to core files
 3. **Plugin Extensibility**: Third-party plugins can be fully self-contained
 4. **Developer Clarity**: Developers look in ONE place for a module's events
-5. **RFC-0018 Compliance**: Fully aligned with the self-contained principle
+5. **RFC-600 Compliance**: Fully aligned with the self-contained principle
 
 ## Verification
 
@@ -282,7 +282,7 @@ tools/web_search/events.py
 
 ## Related Documentation
 
-- [RFC-0018: Plugin Extension Specification](../specs/RFC-0018.md)
+- [RFC-600: Plugin Extension Specification](../specs/RFC-600.md)
 - [IG-052: Event System Optimization](052-rfc0018-event-system-optimization.md)
 - [CLAUDE.md](../../CLAUDE.md) - Updated with event constant location guidelines
 
@@ -298,4 +298,4 @@ tools/web_search/events.py
 
 This refactoring completes the self-containment principle for Soothe's event system. All tool and subagent modules now fully own their events without any coupling to the core module. Third-party plugins can follow the same pattern to create fully self-contained extensions.
 
-The zero-coupling architecture ensures that the plugin ecosystem can grow without requiring modifications to core framework files, fully realizing RFC-0018's extensibility goals.
+The zero-coupling architecture ensures that the plugin ecosystem can grow without requiring modifications to core framework files, fully realizing RFC-600's extensibility goals.

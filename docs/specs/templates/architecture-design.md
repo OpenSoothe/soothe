@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: YYYY-MM-DD  
-**Dependencies**: RFC-0001, [other Conceptual Design RFCs]
+**Dependencies**: RFC-000, [other Conceptual Design RFCs]
 
 ## Overview
 
@@ -113,7 +113,7 @@ Entity {
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-0001](./RFC-0001.md) - Conceptual Design
+- [RFC-000](./RFC-000.md) - Conceptual Design
 - [Related RFC-XXXX](./RFC-XXXX.md)
 
 ---

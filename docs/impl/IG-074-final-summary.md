@@ -1,4 +1,4 @@
-# RFC-0008 Implementation Summary
+# RFC-201 Implementation Summary
 
 ## ✅ COMPLETED - Incremental Implementation
 
@@ -16,7 +16,7 @@
 1. LoopAgent events already existed in `loop_agent/core/events.py`
 2. Added self-registration function `_register_events()`
 3. Added import to `event_catalog.py` for auto-registration
-4. Events use `soothe.cognition.loop.*` namespace (per RFC-0008)
+4. Events use `soothe.cognition.loop.*` namespace (per RFC-201)
 
 **Files Modified:**
 - `src/soothe/cognition/loop_agent/core/events.py` - Added self-registration
@@ -39,7 +39,7 @@
 - **Config Flag**: `agentic.use_judge_engine: false` (default: legacy mode)
 - **Routing**: `_run_agentic_loop()` branches based on flag
 - **Legacy Mode**: OBSERVE → ACT → VERIFY (existing code, unchanged)
-- **RFC-0008 Mode**: PLAN → ACT → JUDGE (new implementation)
+- **RFC-201 Mode**: PLAN → ACT → JUDGE (new implementation)
 
 **Files Created:**
 - `src/soothe/core/runner/_runner_agentic_v2.py` - New PLAN→ACT→JUDGE loop
@@ -78,7 +78,7 @@ Loop: OBSERVE → ACT → VERIFY
 Final Answer
 ```
 
-### RFC-0008 Mode (Opt-In) - PLAN → ACT → JUDGE
+### RFC-201 Mode (Opt-In) - PLAN → ACT → JUDGE
 
 ```
 User Request
@@ -109,7 +109,7 @@ Final Answer
 
 ## Configuration
 
-### Enable RFC-0008 Mode
+### Enable RFC-201 Mode
 
 ```yaml
 # config.yml
@@ -167,7 +167,7 @@ soothe -p "What is 2+2?"
 # Should work exactly as before
 ```
 
-### 2. Test RFC-0008 Mode (New)
+### 2. Test RFC-201 Mode (New)
 
 ```yaml
 # config.dev.yml
@@ -216,7 +216,7 @@ judge = JudgeEngine(model=model)
 5. `src/soothe/core/runner/_runner_agentic.py.backup` - Backup of original
 
 ### Created Files (3)
-1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-0008 implementation
+1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-201 implementation
 2. `docs/impl/IG-074-implementation-plan.md` - Implementation plan
 3. `docs/impl/IG-074-implementation-progress.md` - Progress tracking
 
@@ -227,7 +227,7 @@ judge = JudgeEngine(model=model)
 ### Immediate (Testing)
 1. Run `./scripts/verify_finally.sh` to ensure no regressions
 2. Test legacy mode (default)
-3. Test RFC-0008 mode (opt-in)
+3. Test RFC-201 mode (opt-in)
 4. Verify event emission
 5. Compare old vs new behavior
 
@@ -245,10 +245,10 @@ judge = JudgeEngine(model=model)
 4. Update documentation
 
 ### Long Term (Migration)
-1. Validate RFC-0008 mode in production
+1. Validate RFC-201 mode in production
 2. Collect metrics on judge accuracy
 3. Tune prompts for better judgment
-4. Switch default to RFC-0008 mode
+4. Switch default to RFC-201 mode
 5. Remove legacy code (future release)
 
 ---
@@ -279,7 +279,7 @@ judge = JudgeEngine(model=model)
 
 ## References
 
-- **RFC**: `docs/specs/RFC-0008-agentic-loop-execution.md`
+- **RFC**: `docs/specs/RFC-201-agentic-loop-execution.md`
 - **Implementation Guide**: `docs/impl/IG-074-claude-like-agentic-loop.md`
 - **Implementation Plan**: `docs/impl/IG-074-implementation-plan.md`
 - **Progress Tracking**: `docs/impl/IG-074-implementation-progress.md`
@@ -288,7 +288,7 @@ judge = JudgeEngine(model=model)
 
 ## Conclusion
 
-RFC-0008 has been successfully implemented using an **incremental, low-risk approach**. The new PLAN → ACT → JUDGE execution mode is available via config flag, while the legacy OBSERVE → ACT → VERIFY mode remains the default.
+RFC-201 has been successfully implemented using an **incremental, low-risk approach**. The new PLAN → ACT → JUDGE execution mode is available via config flag, while the legacy OBSERVE → ACT → VERIFY mode remains the default.
 
 **Ready for**: Testing and validation
 **Not ready for**: Production deployment (needs testing first)

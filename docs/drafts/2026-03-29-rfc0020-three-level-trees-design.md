@@ -1,16 +1,16 @@
-# Design: RFC-0020 Three-Level Tree Extension
+# Design: RFC-501 Three-Level Tree Extension
 
 **Date**: 2026-03-29
 **Status**: Draft
-**Extends**: RFC-0020 Event Display Architecture
+**Extends**: RFC-501 Event Display Architecture
 
 ## Summary
 
-Extend RFC-0020's two-level tree display to support three levels, enabling proper display of agentic loop execution progress with goal → step → result hierarchy.
+Extend RFC-501's two-level tree display to support three levels, enabling proper display of agentic loop execution progress with goal → step → result hierarchy.
 
 ## Motivation
 
-RFC-0020 defines a two-level tree structure:
+RFC-501 defines a two-level tree structure:
 ```
 Level 1 (Summary):  ● EventSummary
 Level 2 (Details):    └ Additional context
@@ -28,7 +28,7 @@ Current implementation only emits `AgenticLoopStartedEvent` and `AgenticLoopComp
 ● Goal completed
 ```
 
-This design extends RFC-0020 to display meaningful progress during execution.
+This design extends RFC-501 to display meaningful progress during execution.
 
 ## Design Principle: Maximum Three Levels
 
@@ -251,12 +251,12 @@ def on_step_completed(self, icon: str, summary: str, duration_ms: int) -> None:
 ## Success Criteria
 
 1. **Progress visibility**: Users see step-by-step progress during execution
-2. **RFC-0020 compliance**: Display follows three-level tree pattern
+2. **RFC-501 compliance**: Display follows three-level tree pattern
 3. **Verbosity respect**: quiet/normal/detailed work correctly
 4. **No hang perception**: Progress events prevent appearance of frozen state
 5. **Clean output**: Internal details (iterations, IDs) hidden from users
 
 ## Related Documents
 
-- [RFC-0020 Event Display Architecture](../specs/RFC-0020-event-display-architecture.md)
-- [RFC-0008 Agentic Loop Execution](../specs/RFC-0008-agentic-loop-execution.md)
+- [RFC-501 Event Display Architecture](../specs/RFC-501-event-display-architecture.md)
+- [RFC-201 Agentic Loop Execution](../specs/RFC-201-agentic-loop-execution.md)

@@ -1,11 +1,11 @@
-# RFC-0023: Layer 1 - CoreAgent Runtime Architecture
+# RFC-100: Layer 1 - CoreAgent Runtime Architecture
 
 **RFC**: 0023
 **Title**: Layer 1: CoreAgent Runtime Architecture
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002
+**Dependencies**: RFC-000, RFC-001
 
 ## Abstract
 
@@ -16,8 +16,8 @@ This RFC defines Layer 1 of Soothe's three-layer execution architecture: the Cor
 ### Three-Layer Model
 
 ```
-Layer 3: Autonomous Goal Management (RFC-0007) → Layer 2 (PERFORM stage)
-Layer 2: Agentic Goal Execution (RFC-0008) → Layer 1 (ACT phase)
+Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
+Layer 2: Agentic Goal Execution (RFC-201) → Layer 1 (ACT phase)
 Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 ```
 
@@ -95,11 +95,11 @@ Isolated threads: `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])
 
 ### Tools
 
-**Execution** (RFC-0016): `execute`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
+**Execution** (RFC-101): `execute`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
 
 **Websearch**: `TavilySearchResults`, `DuckDuckGoSearchRun`.
 
-**Research** (RFC-0021): `ArxivQueryRun`, `WikipediaQueryRun`, `GitHubAPIWrapper`.
+**Research** (RFC-601): `ArxivQueryRun`, `WikipediaQueryRun`, `GitHubAPIWrapper`.
 
 **Other**: langchain ecosystem tools, custom tools via configuration.
 
@@ -109,9 +109,9 @@ Isolated threads: `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])
 
 **Claude** (deepagents): Claude CLI integration.
 
-**Skillify** (RFC-0004): Skill discovery and execution.
+**Skillify** (RFC-601): Skill discovery and execution.
 
-**Weaver** (RFC-0005): Code weaving and synthesis.
+**Weaver** (RFC-601): Code weaving and synthesis.
 
 ### MCP Servers
 
@@ -167,7 +167,7 @@ await core_agent.astream(
 
 **Status**: ✅ Implemented
 
-Factory assembles tools (`soothe.tools.*`), subagents (`soothe.subagents.*`), MCP servers, middlewares, protocols (`soothe.protocols.*`). Uses `create_deep_agent()` from deepagents, wires protocols as middleware, attaches instances to graph. Follows RFC-0001 Principle 2: "Extend deepagents, don't fork it".
+Factory assembles tools (`soothe.tools.*`), subagents (`soothe.subagents.*`), MCP servers, middlewares, protocols (`soothe.protocols.*`). Uses `create_deep_agent()` from deepagents, wires protocols as middleware, attaches instances to graph. Follows RFC-000 Principle 2: "Extend deepagents, don't fork it".
 
 ## Configuration
 
@@ -198,14 +198,14 @@ mcp_servers:
 
 ## References
 
-- RFC-0001: System conceptual design
-- RFC-0002: Core modules architecture
-- RFC-0007: Layer 3 autonomous goal management
-- RFC-0008: Layer 2 agentic goal execution
-- RFC-0004: Skillify subagent
-- RFC-0005: Weaver subagent
-- RFC-0016: Tool interface
-- RFC-0021: Research tools
+- RFC-000: System conceptual design
+- RFC-001: Core modules architecture
+- RFC-200: Layer 3 autonomous goal management
+- RFC-201: Layer 2 agentic goal execution
+- RFC-601: Skillify subagent
+- RFC-601: Weaver subagent
+- RFC-101: Tool interface
+- RFC-601: Research tools
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-29
 **Status:** Phase 0 Draft
-**Related RFCs:** RFC-0013 (Daemon Communication Protocol)
+**Related RFCs:** RFC-400 (Daemon Communication Protocol)
 
 ---
 
@@ -78,7 +78,7 @@ Before:                           After:
 
 | File | Change |
 |------|--------|
-| `docs/specs/RFC-0013.md` | Update transport layer section, remove Unix socket from wire format and client sections |
+| `docs/specs/RFC-400.md` | Update transport layer section, remove Unix socket from wire format and client sections |
 | `docs/user_guide.md` | Update daemon connection instructions |
 
 ---
@@ -159,7 +159,7 @@ Same behavior as before - client retries with exponential backoff, then fails wi
 
 ---
 
-## RFC-0013 Updates
+## RFC-400 Updates
 
 ### Sections to Modify
 
@@ -202,7 +202,7 @@ This change affects:
 - Daemon transport layer
 - CLI/TUI connection code
 - Configuration schema
-- RFC-0013 documentation
+- RFC-400 documentation
 
 Not affected:
 - HTTP REST transport (retained)
@@ -216,5 +216,5 @@ Not affected:
 
 After approval, proceed to Platonic Coding Phase 1:
 1. Create RFC amendment or new RFC section for transport simplification
-2. Update RFC-0013 with WebSocket-only specification
+2. Update RFC-400 with WebSocket-only specification
 3. Generate implementation guide in `docs/impl/`

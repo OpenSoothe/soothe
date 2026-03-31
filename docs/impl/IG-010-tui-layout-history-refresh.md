@@ -3,18 +3,18 @@
 **Guide**: IG-010
 **Title**: Textual TUI and Daemon Implementation
 **Created**: 2026-03-13
-**Related RFCs**: RFC-0003
+**Related RFCs**: RFC-500
 **Supersedes**: Original IG-010 (TUI Layout, Streaming, and Reviewable History Refresh)
 
 ## Overview
 
-This guide documents the implementation of the new Textual-based TUI and daemon architecture for Soothe, as specified in RFC-0003. The implementation replaces the Rich Live-based stack with a daemon process that serves events over a Unix domain socket, a Textual TUI client that connects to the daemon, and a headless client for single-prompt execution.
+This guide documents the implementation of the new Textual-based TUI and daemon architecture for Soothe, as specified in RFC-500. The implementation replaces the Rich Live-based stack with a daemon process that serves events over a Unix domain socket, a Textual TUI client that connects to the daemon, and a headless client for single-prompt execution.
 
 ## Prerequisites
 
-- [x] RFC-0001 accepted (System Conceptual Design)
-- [x] RFC-0002 accepted (Core Modules Architecture Design)
-- [x] RFC-0003 accepted (CLI TUI Architecture Design)
+- [x] RFC-000 accepted (System Conceptual Design)
+- [x] RFC-001 accepted (Core Modules Architecture Design)
+- [x] RFC-500 accepted (CLI TUI Architecture Design)
 - [x] IG-007 completed (CLI TUI Implementation)
 
 ## Module Scope
@@ -200,7 +200,7 @@ Textual application with a vertical three-row layout.
 
 ## Related Documents
 
-- [RFC-0003](../specs/RFC-0003.md) - CLI TUI Architecture Design
-- [RFC-0001](../specs/RFC-0001.md) - System Conceptual Design
-- [RFC-0002](../specs/RFC-0002.md) - Core Modules Architecture Design
+- [RFC-500](../specs/RFC-500.md) - CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
 - [IG-007](./007-cli-tui-implementation.md) - CLI TUI Implementation

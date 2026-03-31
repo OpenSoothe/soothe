@@ -3,7 +3,7 @@
 **Guide**: IG-009
 **Title**: Ollama Provider Support
 **Created**: 2026-03-12
-**Related RFCs**: RFC-0002
+**Related RFCs**: RFC-001
 
 ## Overview
 
@@ -52,4 +52,4 @@ Add `OLLAMA_BASE_URL` to `config/env.example` and document the `ollama` extra in
 ## Related Documents
 
 - [IG-008](./008-config-docs-revision.md) - Config and Docs Revision
-- [RFC-0002](../specs/RFC-0002.md) - Core Modules Architecture Design
+- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design

@@ -1,12 +1,12 @@
 # CoreAgent Layer 1 Interface Design
 
 **Date**: 2026-03-29
-**RFC**: RFC-0023 (Layer 1 CoreAgent Runtime Architecture)
+**RFC**: RFC-100 (Layer 1 CoreAgent Runtime Architecture)
 **Status**: Draft
 
 ## Problem Statement
 
-`create_soothe_agent()` returns a raw `CompiledStateGraph` with ad-hoc protocol attachments (`agent.soothe_context`, `agent.soothe_memory`, etc.). This violates RFC-0023's requirement for a self-contained Layer 1 module with a clear exposed interface.
+`create_soothe_agent()` returns a raw `CompiledStateGraph` with ad-hoc protocol attachments (`agent.soothe_context`, `agent.soothe_memory`, etc.). This violates RFC-100's requirement for a self-contained Layer 1 module with a clear exposed interface.
 
 **Specific issues:**
 1. No type safety for protocol access - magic string attributes
@@ -22,7 +22,7 @@ A wrapper class with explicit typed properties, delegating execution to the unde
 
 ```python
 class CoreAgent:
-    """Layer 1 CoreAgent runtime (RFC-0023).
+    """Layer 1 CoreAgent runtime (RFC-100).
 
     Self-contained module wrapping CompiledStateGraph with explicit
     typed protocol properties. Pure execution runtime - no goal
@@ -202,14 +202,14 @@ __all__ = ["CoreAgent", "create_soothe_agent", "SootheRunner"]
 After this change, the layer boundaries are clean:
 
 ```
-Layer 3: Autonomous Goal Management (RFC-0007)
+Layer 3: Autonomous Goal Management (RFC-200)
   └─ GoalEngine, goal_tools, SootheRunner orchestration
 
-Layer 2: Agentic Goal Execution (RFC-0008)
+Layer 2: Agentic Goal Execution (RFC-201)
   └─ LoopAgent with ACT/VERIFY/DECIDE phases
   └─ Calls CoreAgent.astream() for ACT phase
 
-Layer 1: CoreAgent Runtime (RFC-0023) ← This design
+Layer 1: CoreAgent Runtime (RFC-100) ← This design
   └─ CompiledStateGraph + typed protocols
   └─ Pure execution: tools, subagents, middlewares
   └─ NO goal infrastructure

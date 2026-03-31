@@ -3,7 +3,7 @@
 **Guide**: IG-012
 **Title**: Weaver Agent Implementation
 **Created**: 2026-03-13
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003, RFC-0004, RFC-0005
+**Related RFCs**: RFC-000, RFC-001, RFC-500, RFC-601, RFC-601
 
 ## Overview
 
@@ -11,7 +11,7 @@ This guide describes implementation of Weaver, a generative subagent framework t
 
 ## Prerequisites
 
-- [x] RFC-0005 (Weaver Architecture Design)
+- [x] RFC-601 (Weaver Architecture Design)
 - [x] Skillify subagent implemented (IG-011)
 - [x] VectorStoreProtocol implemented (IG-006)
 - [x] SootheConfig with WeaverConfig section (Phase 5 wiring)
@@ -368,6 +368,6 @@ Generate bridge instructions (markdown) that fill the gaps.
 
 ## Related Documents
 
-- [RFC-0005](../specs/RFC-0005.md) -- Weaver Architecture Design
-- [RFC-0004](../specs/RFC-0004.md) -- Skillify Architecture Design
+- [RFC-601](../specs/RFC-601.md) -- Weaver Architecture Design
+- [RFC-601](../specs/RFC-601.md) -- Skillify Architecture Design
 - [IG-011](./011-skillify-agent-implementation.md) -- Skillify Implementation

@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-26
 **Status**: Completed
-**Related**: RFC-0015 (Event Classification), RFC-0019 (Unified Event Processing)
+**Related**: RFC-401 (Event Classification), RFC-401 (Unified Event Processing)
 
 ## Overview
 
@@ -124,7 +124,7 @@ All existing unit tests pass with this change:
 
 ## References
 
-- RFC-0015: Event Classification and Verbosity
-- RFC-0019: Unified Event Processing Architecture
+- RFC-401: Event Classification and Verbosity
+- RFC-401: Unified Event Processing Architecture
 - IG-064: Unified Display Policy and Internal Event Filtering
 - `src/soothe/ux/core/progress_verbosity.py`: Verbosity level definitions

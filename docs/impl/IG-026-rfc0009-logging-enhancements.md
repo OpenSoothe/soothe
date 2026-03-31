@@ -1,13 +1,13 @@
-# IG-026: RFC-0009 Logging Enhancements -- Step, Goal, and DAG Progress Visibility
+# IG-026: RFC-202 Logging Enhancements -- Step, Goal, and DAG Progress Visibility
 
-**Implements**: RFC-0009 (logging improvements)
+**Implements**: RFC-202 (logging improvements)
 **Status**: Completed
 **Created**: 2026-03-18
 **Completed**: 2026-03-18
 
 ## Overview
 
-Enhances logging verbosity for step execution, goal progress, and DAG-based execution flow. The core RFC-0009 functionality is complete, but logs lack sufficient context for debugging and monitoring. This guide adds concise, informative logging without making output verbose.
+Enhances logging verbosity for step execution, goal progress, and DAG-based execution flow. The core RFC-202 functionality is complete, but logs lack sufficient context for debugging and monitoring. This guide adds concise, informative logging without making output verbose.
 
 **Analysis of current logs** (from latest run 2026-03-18):
 - ✅ Good: Tool progress (wizsearch), subagent progress (research agent)
@@ -15,7 +15,7 @@ Enhances logging verbosity for step execution, goal progress, and DAG-based exec
 - ⚠️ **Poor**: Step execution only shows "Step X completed" without description or context
 - ❌ **Missing**: Batch execution info, DAG dependencies, step durations, step descriptions
 
-**Key Finding**: Most RFC-0009 event fields (batch_index, blocked_steps, parallel_goals, depends_on) are **already implemented**. The gap is logging, not functionality.
+**Key Finding**: Most RFC-202 event fields (batch_index, blocked_steps, parallel_goals, depends_on) are **already implemented**. The gap is logging, not functionality.
 
 ## Problem Statement
 
@@ -241,7 +241,7 @@ async def _execute_step(...):
 
 **File**: `tests/unit_tests/test_progress_rendering.py`
 
-Add tests for RFC-0009 event rendering (events already work, tests missing):
+Add tests for RFC-202 event rendering (events already work, tests missing):
 
 ```python
 def test_plan_batch_started_renders(self) -> None:
@@ -283,7 +283,7 @@ def test_plan_step_failed_with_blocked_steps(self) -> None:
 | `src/soothe/core/step_scheduler.py` | Add step lifecycle logging |
 | `src/soothe/core/runner.py` | Add batch/DAG logging, step duration |
 | `src/soothe/core/goal_engine.py` | Add goal progress logging |
-| `tests/unit_tests/test_progress_rendering.py` | Add RFC-0009 event tests |
+| `tests/unit_tests/test_progress_rendering.py` | Add RFC-202 event tests |
 
 ## Verification
 

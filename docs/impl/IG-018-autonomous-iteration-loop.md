@@ -2,7 +2,7 @@
 
 ## Objective
 
-Implement the autonomous iteration loop (RFC-0007) enabling Soothe to run
+Implement the autonomous iteration loop (RFC-200) enabling Soothe to run
 multi-iteration, self-driven agent sessions. The agent executes a plan, reflects,
 revises, and continues without human input at each step.
 

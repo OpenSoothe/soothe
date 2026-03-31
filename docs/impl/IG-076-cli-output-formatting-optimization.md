@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Created**: 2026-03-27
-**Related RFCs**: RFC-0020 (Event Display Architecture)
+**Related RFCs**: RFC-501 (Event Display Architecture)
 
 ## Context and Motivation
 
@@ -47,7 +47,7 @@ Instead of reactive content filtering, implement **event-level filtering** by:
 
 3. Consuming event in message processing (use pre-computed display content)
 
-This follows RFC-0020 architecture and eliminates need for `_filter_search_data_tags()`.
+This follows RFC-501 architecture and eliminates need for `_filter_search_data_tags()`.
 
 ## Technical Design
 
@@ -169,7 +169,7 @@ Analyzes whitespace context before removing content:
 
 - [ ] Update tool development guide with ToolResultEvent
 - [ ] Document LLM content vs display content separation
-- [ ] Update RFC-0020 with event-based filtering pattern
+- [ ] Update RFC-501 with event-based filtering pattern
 
 ## Verification
 
@@ -255,7 +255,7 @@ All 900+ tests must pass.
 
 ## References
 
-- [RFC-0020: Event Display Architecture](../specs/RFC-0020-event-display-architecture.md)
+- [RFC-501: Event Display Architecture](../specs/RFC-501-event-display-architecture.md)
 - [IG-075: Tool Output Formatter](IG-075-tool-output-formatter.md)
 - `src/soothe/ux/core/tool_output_formatter.py` - ToolBrief definition
 - `src/soothe/ux/core/tool_formatters/` - Tool-specific formatters

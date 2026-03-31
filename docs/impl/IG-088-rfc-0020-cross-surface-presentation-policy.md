@@ -1,15 +1,15 @@
-# IG-088: RFC-0020 Cross-Surface Presentation Policy
+# IG-088: RFC-501 Cross-Surface Presentation Policy
 
 **Status**: In Progress
 **Created**: 2026-03-28
 **Scope**: Implement shared verbosity presentation semantics for both headless CLI and TUI
-**RFC References**: RFC-0020, RFC-0003, RFC-0013
+**RFC References**: RFC-501, RFC-500, RFC-400
 
 ---
 
 ## Overview
 
-This guide implements the approved RFC-0020 presentation redesign across both headless CLI and TUI surfaces.
+This guide implements the approved RFC-501 presentation redesign across both headless CLI and TUI surfaces.
 
 Goals:
 1. Make `normal` the clean default mode

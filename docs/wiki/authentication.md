@@ -4,7 +4,7 @@
 
 ## Authentication Architecture
 
-As of RFC-0013 and RFC-0017, Soothe follows a "security by delegation" model:
+As of RFC-400 and RFC-0017, Soothe follows a "security by delegation" model:
 
 - **No built-in authentication**: Soothe daemon does not validate API keys, JWT tokens, or user credentials
 - **No authorization layer**: All clients that can reach the daemon are trusted
@@ -279,5 +279,5 @@ If you were using the removed `soothe auth` commands:
 - [Multi-Transport Setup](multi-transport.md) - Enable WebSocket and HTTP REST
 - [Configuration Guide](configuration.md) - Daemon configuration
 - [Troubleshooting](troubleshooting.md) - Connection issues
-- [RFC-0013](../specs/RFC-0013.md) - Daemon communication protocol
+- [RFC-400](../specs/RFC-400.md) - Daemon communication protocol
 - [RFC-0017](../specs/RFC-0017.md) - Unified thread management

@@ -2,7 +2,7 @@
 
 **Implementation Guide**: 047
 **Title**: Plugin API Implementation
-**RFC**: RFC-0018 (Plugin Extension Specification)
+**RFC**: RFC-600 (Plugin Extension Specification)
 **Created**: 2026-03-24
 **Status**: Draft
 
@@ -220,7 +220,7 @@ class PluginRegistry:
         priority: int | None = None,
     ) -> None:
         """Register a plugin manifest."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 
     def get(self, name: str) -> RegistryEntry | None:
@@ -280,17 +280,17 @@ class PluginLoader:
 
     def _discover_entry_points(self) -> list[str]:
         """Discover plugins from Python entry points."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 
     def _discover_config_declared(self, config: "SootheConfig") -> list[str]:
         """Discover plugins declared in configuration."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 
     def _discover_filesystem(self) -> list[str]:
         """Discover plugins from filesystem."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 
     def load_plugin(
@@ -334,12 +334,12 @@ class PluginLifecycleManager:
 
     async def load_all(self, config: "SootheConfig") -> dict[str, Any]:
         """Load all discovered and validated plugins."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 
     async def shutdown_all(self) -> None:
         """Shutdown all loaded plugins."""
-        # Implementation from RFC-0018
+        # Implementation from RFC-600
         pass
 ```
 
@@ -858,9 +858,9 @@ soothe run "Use test_tool with query='hello'"
 
 ## References
 
-- RFC-0018: Plugin Extension Specification
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture Design
+- RFC-600: Plugin Extension Specification
+- RFC-000: System Conceptual Design
+- RFC-001: Core Modules Architecture Design
 - FastAPI decorator patterns
 - Click decorator patterns
 - Python entry points documentation

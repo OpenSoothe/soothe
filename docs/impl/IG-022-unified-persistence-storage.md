@@ -3,7 +3,7 @@
 > Implementation guide for unified PostgreSQL-based persistence across all Soothe components.
 >
 > **Module**: `soothe.backends.persistence`, `soothe.backends.durability`, `soothe.config`, `soothe.core.resolver`
-> **Related**: RFC-0002 (Core Protocols), RFC-0003 (CLI/TUI Architecture), RFC-0006 (Context/Memory Architecture), RFC-0008 (Performance Optimization)
+> **Related**: RFC-001 (Core Protocols), RFC-500 (CLI/TUI Architecture), RFC-300 (Context/Memory Architecture), RFC-201 (Performance Optimization)
 > **Created**: 2026-03-16
 > **Updated**: 2026-03-16
 
@@ -85,7 +85,7 @@ Unify all persistence with PostgreSQL as the default:
 
 3. **ThreadLogger** (`src/soothe/cli/thread_logger.py`):
    - Add retention/cleanup logic
-   - Keep logs in `SOOTHE_HOME/threads/` (per RFC-0003)
+   - Keep logs in `SOOTHE_HOME/threads/` (per RFC-500)
 
 4. **Daemon** (`src/soothe/cli/daemon.py`):
    - Add periodic cleanup task
@@ -613,5 +613,5 @@ Not in initial scope:
 - `src/soothe/backends/durability/langgraph.py` - Reference implementation (JSON-based)
 - `src/soothe/config.py` - Configuration model
 - `src/soothe/core/resolver.py` - Backend resolution logic
-- `docs/specs/RFC-0003.md` - CLI/TUI Architecture (defines thread terminology)
-- `docs/specs/RFC-0008.md` - Performance Optimization
+- `docs/specs/RFC-500.md` - CLI/TUI Architecture (defines thread terminology)
+- `docs/specs/RFC-201.md` - Performance Optimization

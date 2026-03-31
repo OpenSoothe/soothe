@@ -2,12 +2,12 @@
 
 **Status**: Completed
 **Date**: 2026-03-21
-**RFC**: RFC-0016
-**Dependencies**: RFC-0001, RFC-0002, RFC-0008
+**RFC**: RFC-101
+**Dependencies**: RFC-000, RFC-001, RFC-201
 
 ## Overview
 
-This implementation guide provides step-by-step instructions for the tool interface optimization described in RFC-0016. The optimization replaces unified dispatch tools with single-purpose tools, adds surgical editing capabilities, and implements Python session persistence.
+This implementation guide provides step-by-step instructions for the tool interface optimization described in RFC-101. The optimization replaces unified dispatch tools with single-purpose tools, adds surgical editing capabilities, and implements Python session persistence.
 
 ## Implementation Summary
 
@@ -754,8 +754,8 @@ All tests pass:
 
 ## References
 
-- RFC-0016: Tool Interface Optimization Implementation Guide
-- RFC-0008: Unified Classification and System Prompt Optimization
+- RFC-101: Tool Interface Optimization Implementation Guide
+- RFC-201: Unified Classification and System Prompt Optimization
 - OpenAI Function Calling Best Practices
 - Anthropic Tool Use Guidelines
 - IPython InteractiveShell Documentation

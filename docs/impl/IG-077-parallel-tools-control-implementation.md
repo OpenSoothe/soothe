@@ -200,7 +200,7 @@ Rejected: External dependency timing, can't implement now.
 
 ## References
 
-- RFC-0009: DAG-based Execution
+- RFC-202: DAG-based Execution
 - Investigation: LangGraph ToolNode implementation
 - LangChain middleware patterns: ToolRetryMiddleware, FilesystemMiddleware
 - Plan file: `/Users/chenxm/.claude/plans/cryptic-orbiting-kazoo.md`

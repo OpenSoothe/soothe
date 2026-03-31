@@ -63,7 +63,7 @@ This project recognizes three kinds of RFC specifications:
 ## RFC Numbering
 
 - RFCs are numbered sequentially starting from 0001
-- RFC-0001 is always the system-wide Conceptual Design
+- RFC-000 is always the system-wide Conceptual Design
 - Subsequent RFCs are Architecture Design or Impl Interface Design
 - Each RFC depends on all previous RFCs unless explicitly stated otherwise
 

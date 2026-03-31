@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Kind**: Implementation Interface Design  
 **Created**: YYYY-MM-DD  
-**Dependencies**: RFC-0001, [Architecture Design RFCs]
+**Dependencies**: RFC-000, [Architecture Design RFCs]
 
 ## Overview
 
@@ -153,7 +153,7 @@ const result = await instance.method(params)
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-0001](./RFC-0001.md) - Conceptual Design
+- [RFC-000](./RFC-000.md) - Conceptual Design
 - [RFC-XXXX](./RFC-XXXX.md) - Architecture Design
 
 ---

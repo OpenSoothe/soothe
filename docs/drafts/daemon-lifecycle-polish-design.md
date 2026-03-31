@@ -136,12 +136,12 @@ Interactive session:
 
 ### Phase 1: Update RFCs
 
-1. **RFC-0013**: Add daemon lifecycle semantics section
+1. **RFC-400**: Add daemon lifecycle semantics section
    - Define daemon persistence behavior
    - Clarify client vs daemon shutdown
    - Update protocol messages if needed
 
-2. **RFC-0003**: Update CLI/TUI architecture
+2. **RFC-500**: Update CLI/TUI architecture
    - Clarify `/exit`/`/quit` semantics
    - Define double Ctrl+C behavior
    - Update slash command documentation
@@ -219,7 +219,7 @@ Interactive session:
 
 ## Next Steps
 
-1. Proceed to Phase 1: Update RFC-0013 and RFC-0003
+1. Proceed to Phase 1: Update RFC-400 and RFC-500
 2. Create implementation guide IG-XXX
 3. Implement changes following guide
 4. Test all scenarios

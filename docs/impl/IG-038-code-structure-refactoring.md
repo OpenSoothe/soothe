@@ -4,7 +4,7 @@
 **Title**: Code Structure Refactoring for AI-Agent Processability
 **Status**: In Progress
 **Created**: 2026-03-19
-**Related**: RFC-0001, RFC-0002, IG-014, IG-034
+**Related**: RFC-000, RFC-001, IG-014, IG-034
 
 ## Overview
 

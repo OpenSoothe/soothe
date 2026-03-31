@@ -4,12 +4,12 @@
 **Title**: Performance Optimization Implementation
 **Status**: Draft
 **Created**: 2026-03-16
-**Related**: RFC-0008
+**Related**: RFC-201
 **Target Performance**: < 2 seconds average latency
 
 ## Overview
 
-This guide implements the performance optimizations defined in RFC-0008. The implementation is organized into three phases:
+This guide implements the performance optimizations defined in RFC-201. The implementation is organized into three phases:
 
 1. **Phase 1**: Foundation (query classification, conditional execution)
 2. **Phase 2**: Advanced optimizations (parallel execution, caching)
@@ -430,7 +430,7 @@ class ComplexityThresholds(BaseModel):
 
 
 class PerformanceConfig(BaseModel):
-    """Performance optimization configuration (RFC-0008)."""
+    """Performance optimization configuration (RFC-201)."""
     enabled: bool = True
     complexity_detection: bool = True
     skip_memory_for_simple: bool = True
@@ -446,7 +446,7 @@ class PerformanceConfig(BaseModel):
 class SootheConfig(BaseModel):
     # ... existing fields ...
 
-    # Performance optimization settings (RFC-0008)
+    # Performance optimization settings (RFC-201)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
 ```
 
@@ -882,7 +882,7 @@ performance:
 class SootheConfig(BaseModel):
     # ... existing ...
 
-    # Performance optimization (RFC-0008)
+    # Performance optimization (RFC-201)
     performance: PerformanceConfig = Field(default_factory=PerformanceConfig)
 ```
 
@@ -1136,7 +1136,7 @@ If issues arise:
 
 ## References
 
-- RFC-0008: Request Processing Workflow and Performance Optimization
-- RFC-0003: CLI TUI Architecture Design
+- RFC-201: Request Processing Workflow and Performance Optimization
+- RFC-500: CLI TUI Architecture Design
 - Performance benchmarks: `scripts/benchmark_performance.py`
 - Monitoring dashboard: `scripts/performance_dashboard.py` (optional)

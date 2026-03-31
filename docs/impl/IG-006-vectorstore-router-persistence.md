@@ -3,7 +3,7 @@
 **Guide**: IG-006
 **Title**: Multi-Provider Model Router, VectorStoreProtocol, RocksDB Persistence, Vector-based Context/Memory
 **Created**: 2026-03-12
-**Related RFCs**: RFC-0001, RFC-0002
+**Related RFCs**: RFC-000, RFC-001
 
 ## Overview
 

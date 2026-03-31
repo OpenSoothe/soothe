@@ -25,13 +25,13 @@ a set of out-of-box default tools that work without API keys.
    wizsearch becomes the single search tool with multi-engine defaults.
 10. **Default tools**: Out-of-box `["datetime", "arxiv", "wikipedia", "wizsearch"]`.
 11. **Dependency cleanup**: Move `langchain-tavily` from core to optional deps.
-12. **Spec update**: Align RFC-0003 and AGENTS.md with changes.
+12. **Spec update**: Align RFC-500 and AGENTS.md with changes.
 13. **Tests**: Update verbosity, tools, and config test suites.
 
 ## References
 
-- [RFC-0003](../specs/RFC-0003.md) — CLI TUI Architecture Design
-- [RFC-0001](../specs/RFC-0001.md) — System Conceptual Design
+- [RFC-500](../specs/RFC-500.md) — CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000.md) — System Conceptual Design
 
 ## Design Decisions
 
@@ -92,7 +92,7 @@ for basic operation:
 | `src/soothe/config.py` | Default tools list |
 | `config/config.yml` | Update tools section |
 | `pyproject.toml` | Move langchain-tavily to optional |
-| `docs/specs/RFC-0003.md` | Align event names and logging docs |
+| `docs/specs/RFC-500.md` | Align event names and logging docs |
 | `AGENTS.md` | Add IG-017 to table |
 | `tests/unit_tests/test_progress_verbosity.py` | Update event classification tests |
 | `tests/unit_tests/test_tools.py` | Add datetime tool tests, update wizsearch defaults |
@@ -112,5 +112,5 @@ for basic operation:
 - [ ] Wizsearch default engines updated
 - [ ] Default tools set in config
 - [ ] `langchain-tavily` moved to optional deps
-- [ ] RFC-0003 updated
+- [ ] RFC-500 updated
 - [ ] Tests passing

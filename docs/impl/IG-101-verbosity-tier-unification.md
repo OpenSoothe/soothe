@@ -1,17 +1,17 @@
 # IG-101: VerbosityTier Unification Implementation
 
-**RFC**: RFC-0024
+**RFC**: RFC-501
 **Status**: Draft
 **Created**: 2026-03-29
-**Dependencies**: RFC-0015
+**Dependencies**: RFC-401
 
 ## Overview
 
-This guide implements RFC-0024, replacing the two-layer event classification system with a unified `VerbosityTier` enum. The implementation eliminates duplicate enums (`ProgressCategory`, `EventCategory`), simplifies classification logic, and uses integer comparison for visibility checks.
+This guide implements RFC-501, replacing the two-layer event classification system with a unified `VerbosityTier` enum. The implementation eliminates duplicate enums (`ProgressCategory`, `EventCategory`), simplifies classification logic, and uses integer comparison for visibility checks.
 
 ## Requirements Checklist
 
-From RFC-0024:
+From RFC-501:
 
 - [ ] `VerbosityTier` IntEnum with five tiers: `QUIET=0`, `NORMAL=1`, `DETAILED=2`, `DEBUG=3`, `INTERNAL=99`
 - [ ] `should_show(tier, verbosity)` using integer comparison

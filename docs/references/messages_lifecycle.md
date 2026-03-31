@@ -55,7 +55,7 @@ Soothe uses a **daemon-based client-server architecture** with three key layers:
 
 ### Transport Layer
 
-Soothe daemon supports **three simultaneous transports** (RFC-0013):
+Soothe daemon supports **three simultaneous transports** (RFC-400):
 
 ```mermaid
 graph LR
@@ -85,7 +85,7 @@ graph LR
 | **WebSocket** | ❌ Opt-in | 8765 | Web applications, remote clients |
 | **HTTP REST** | ❌ Opt-in | 8766 | CRUD operations, health checks |
 
-**Note on Authentication (RFC-0013, RFC-0017):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
+**Note on Authentication (RFC-400, RFC-0017):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
 
 ### Message Protocol
 
@@ -747,7 +747,7 @@ class ContextProtocol(Protocol):
         ...
 ```
 
-**Key Insight:** "Unbounded ledger, bounded projection" (RFC-0001 principle #4)
+**Key Insight:** "Unbounded ledger, bounded projection" (RFC-000 principle #4)
 
 - **Ledger:** Unlimited storage of knowledge entries
 - **Projection:** Limited subset retrieved for LLM context window
@@ -1140,9 +1140,9 @@ sequenceDiagram
 
 ## References
 
-- [RFC-0001: System Conceptual Design](../specs/RFC-0001.md)
-- [RFC-0006: Context and Memory Architecture Design](../specs/RFC-0006.md)
-- [RFC-0008: Protocol Specification](../specs/RFC-0008.md)
-- [RFC-0010: Failure Recovery, Progressive Persistence](../specs/RFC-0010.md)
-- [RFC-0013: Unified Daemon Communication Protocol](../specs/RFC-0013.md)
+- [RFC-000: System Conceptual Design](../specs/RFC-000.md)
+- [RFC-300: Context and Memory Architecture Design](../specs/RFC-300.md)
+- [RFC-201: Protocol Specification](../specs/RFC-201.md)
+- [RFC-202: Failure Recovery, Progressive Persistence](../specs/RFC-202.md)
+- [RFC-400: Unified Daemon Communication Protocol](../specs/RFC-400.md)
 - [RFC-0017: Unified Thread Management Architecture](../specs/RFC-0017.md)

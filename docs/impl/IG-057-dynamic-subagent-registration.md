@@ -2,7 +2,7 @@
 
 **Status**: 🚧 In Progress
 **Created**: 2026-03-25
-**RFC**: RFC-0018 (Plugin Extension System)
+**RFC**: RFC-600 (Plugin Extension System)
 **Related**: IG-056 (PaperScout Community Plugin)
 
 ## Problem
@@ -278,11 +278,11 @@ subagents:
 - [ ] No hardcoded subagent list in Soothe core
 - [ ] Builtin subagents work unchanged
 - [ ] Plugin subagents appear in `soothe checkhealth`
-- [ ] Full RFC-0018 compliance
+- [ ] Full RFC-600 compliance
 
 ## References
 
-- RFC-0018: Plugin Extension System
+- RFC-600: Plugin Extension System
 - IG-056: PaperScout Community Plugin
 - Current subagent config: `src/soothe/config/settings.py`
 - Current plugin discovery: `src/soothe/plugin/discovery.py`

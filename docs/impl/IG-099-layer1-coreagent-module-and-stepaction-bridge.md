@@ -1,7 +1,7 @@
 # IG-099: Layer 1 CoreAgent Module + StepAction Integration Bridge
 
 **Implementation Guide**: IG-099
-**RFC**: RFC-0023 (Layer 1), RFC-0008 (Layer 2)
+**RFC**: RFC-100 (Layer 1), RFC-201 (Layer 2)
 **Status**: Draft
 **Created**: 2026-03-29
 **Related**: IG-097 (Layer 2 LoopAgent)
@@ -37,7 +37,7 @@ stream = await self.core_agent.astream(
 2. **Create StepAction integration contract** - structured input format that includes tool/subagent hints
 3. **Implement hint propagation** - Executor passes hints to CoreAgent via config or input structure
 4. **Test integration bridge** - verify hints influence CoreAgent execution appropriately
-5. **Update RFC-0023** - document the integration contract formally
+5. **Update RFC-100** - document the integration contract formally
 
 ## Architecture Design
 
@@ -142,7 +142,7 @@ Option C: **LLM prompt includes hints**
 3. Create `core/agent_doc.md` with Layer 1 architecture explanation
 4. Update `create_soothe_agent()` to explicitly state "Layer 1 factory"
 5. Add type hints for protocol attachments
-6. Update RFC-0023 reference in code comments
+6. Update RFC-100 reference in code comments
 
 **Files Modified**:
 - `src/soothe/core/agent.py` - Enhanced docstrings
@@ -153,7 +153,7 @@ Option C: **LLM prompt includes hints**
 - ✅ `create_soothe_agent()` explicitly documented as Layer 1 factory
 - ✅ Protocol attachments clearly documented
 - ✅ Execution interface documented with hint support (future)
-- ✅ Code comments reference RFC-0023
+- ✅ Code comments reference RFC-100
 
 ### Phase 2: Create ExecutionHintsMiddleware (Days 2-3)
 
@@ -372,10 +372,10 @@ step = StepAction(
 
 ### Phase 5: Documentation and RFC Updates (Day 8)
 
-**Objective**: Document integration contract in RFC-0023 and user guide
+**Objective**: Document integration contract in RFC-100 and user guide
 
 **Tasks**:
-1. Update RFC-0023 §4 "Integration Contract" with StepAction hints
+1. Update RFC-100 §4 "Integration Contract" with StepAction hints
 2. Add section: "Layer 2 → Layer 1 Execution Hints"
 3. Document hint fields: `soothe_step_tools`, `soothe_step_subagent`, `soothe_step_expected_output`
 4. Document ExecutionHintsMiddleware behavior
@@ -383,7 +383,7 @@ step = StepAction(
 6. Update user guide with Layer 1/2 integration explanation
 7. Create architecture diagram showing hint flow
 
-**RFC-0023 Update**:
+**RFC-100 Update**:
 
 Add section:
 
@@ -437,12 +437,12 @@ stream = await core_agent.astream(
 ```
 
 **Files Modified**:
-- `docs/specs/RFC-0023-coreagent-runtime.md` - Add integration contract section
+- `docs/specs/RFC-100-coreagent-runtime.md` - Add integration contract section
 - `docs/user_guide.md` - Add Layer 1/2 integration explanation
 - `docs/core_agent_layer1.md` - Architecture documentation
 
 **Success Criteria**:
-- ✅ RFC-0023 updated with integration contract
+- ✅ RFC-100 updated with integration contract
 - ✅ Hint fields documented with examples
 - ✅ Architecture diagram created
 - ✅ User guide updated
@@ -562,11 +562,11 @@ This implementation is **additive**:
 ## Success Metrics
 
 ✅ **Layer 1 CoreAgent formalized** with clear documentation and boundaries
-✅ **Integration contract defined** in RFC-0023 with examples
+✅ **Integration contract defined** in RFC-100 with examples
 ✅ **ExecutionHintsMiddleware implemented** and tested
 ✅ **Executor passes hints** from StepAction to CoreAgent
 ✅ **Integration tests verify** hint propagation and influence
-✅ **RFC-0023 updated** with Layer 2 → Layer 1 contract
+✅ **RFC-100 updated** with Layer 2 → Layer 1 contract
 ✅ **All tests passing** (unit + integration)
 ✅ **Documentation complete** (code, RFC, user guide)
 
@@ -582,8 +582,8 @@ This implementation is **additive**:
 
 ## Related Documents
 
-- [RFC-0023](../specs/RFC-0023-coreagent-runtime.md) - Layer 1 Specification
-- [RFC-0008](../specs/RFC-0008-agentic-goal-execution-loop.md) - Layer 2 Specification
+- [RFC-100](../specs/RFC-100-coreagent-runtime.md) - Layer 1 Specification
+- [RFC-201](../specs/RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
 - [IG-097](./IG-097-layer2-loopagent-implementation.md) - Layer 2 Implementation Guide
 
 ## Changelog

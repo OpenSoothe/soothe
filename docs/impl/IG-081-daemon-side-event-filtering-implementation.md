@@ -2,14 +2,14 @@
 
 **IG Number**: 081
 **Title**: Daemon-Side Event Filtering Implementation
-**RFC**: RFC-0022
+**RFC**: RFC-401
 **Status**: Completed
 **Created**: 2026-03-28
-**Dependencies**: RFC-0013, RFC-0015, RFC-0022
+**Dependencies**: RFC-400, RFC-401, RFC-401
 
 ## Overview
 
-This guide implements RFC-0022: Daemon-Side Event Filtering Protocol. The implementation extends RFC-0013's subscription protocol to support daemon-side event filtering based on client verbosity preferences, reducing network bandwidth and client processing overhead by an estimated 60-70%.
+This guide implements RFC-401: Daemon-Side Event Filtering Protocol. The implementation extends RFC-400's subscription protocol to support daemon-side event filtering based on client verbosity preferences, reducing network bandwidth and client processing overhead by an estimated 60-70%.
 
 **Key Changes**:
 1. Extend `subscribe_thread` protocol message with optional `verbosity` field
@@ -78,7 +78,7 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from soothe.core.event_catalog import EventMeta
 
-# Type alias for verbosity levels (from RFC-0015)
+# Type alias for verbosity levels (from RFC-401)
 VerbosityLevel = Literal["minimal", "normal", "detailed", "debug"]
 ```
 
@@ -167,9 +167,9 @@ async def _sender_loop(self, session: ClientSession) -> None:
                 # Legacy format: event dict without metadata
                 event = event_data
 
-            # Daemon-side filtering (RFC-0022)
+            # Daemon-side filtering (RFC-401)
             if event_meta:
-                # Import should_show from RFC-0015's progress_verbosity
+                # Import should_show from RFC-401's progress_verbosity
                 from soothe.ux.core.progress_verbosity import should_show
 
                 # Check if event should be shown at client's verbosity level
@@ -258,7 +258,7 @@ async def publish(
     Args:
         topic: Topic identifier (e.g., "thread:abc123")
         event: Event dictionary to broadcast
-        event_meta: Optional EventMeta for filtering (RFC-0022)
+        event_meta: Optional EventMeta for filtering (RFC-401)
     """
     async with self._lock:
         queues = self._subscribers.get(topic, set()).copy()
@@ -769,7 +769,7 @@ No breaking changes required for rollback.
 
 After implementation:
 
-1. **Update RFC-0013 reference**: Add verbosity field to protocol documentation
+1. **Update RFC-400 reference**: Add verbosity field to protocol documentation
 2. **Update client migration guide**: Document new verbosity parameter
 3. **Update API documentation**: Document subscribe_thread verbosity parameter
 4. **Update TUI/CLI help**: Document verbosity preferences
@@ -786,7 +786,7 @@ After implementation:
 - [ ] Manual testing complete
 - [ ] Performance metrics validated
 - [ ] Documentation updated
-- [ ] RFC-0022 status changed to "Implemented"
+- [ ] RFC-401 status changed to "Implemented"
 - [ ] IG-081 status changed to "Completed"
 
 ---

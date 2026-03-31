@@ -3,18 +3,18 @@
 **Guide**: IG-005  
 **Title**: Core Protocols Implementation  
 **Created**: 2026-03-12  
-**Related RFCs**: RFC-0001, RFC-0002
+**Related RFCs**: RFC-000, RFC-001
 
 ## Overview
 
-This guide covers the implementation of Soothe's seven core modules defined in RFC-0002:
+This guide covers the implementation of Soothe's seven core modules defined in RFC-001:
 ContextProtocol, MemoryProtocol, PlannerProtocol, PolicyProtocol, DurabilityProtocol,
 RemoteAgentProtocol, and ConcurrencyPolicy.
 
 ## Prerequisites
 
-- [x] RFC-0001 accepted (System Conceptual Design)
-- [x] RFC-0002 accepted (Core Modules Architecture Design)
+- [x] RFC-000 accepted (System Conceptual Design)
+- [x] RFC-001 accepted (Core Modules Architecture Design)
 - [x] IG-004 completed (Ecosystem Capability Analysis)
 - [x] Development environment setup (deepagents >= 0.4.10, langgraph >= 1.1.1)
 
@@ -169,7 +169,7 @@ src/soothe/
 
 ## Related Documents
 
-- [RFC-0001](../specs/RFC-0001.md) - System Conceptual Design
-- [RFC-0002](../specs/RFC-0002.md) - Core Modules Architecture Design
+- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
 - [IG-004](./004-ecosystem-capability-analysis.md) - Ecosystem Capability Analysis
 - [RFC Index](../specs/rfc-index.md)

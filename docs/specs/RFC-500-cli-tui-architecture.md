@@ -1,11 +1,11 @@
-# RFC-0003: CLI TUI Architecture Design
+# RFC-500: CLI TUI Architecture Design
 
 **RFC**: 0003
 **Title**: CLI TUI Architecture Design
 **Status**: Implemented
 **Created**: 2026-03-12
 **Updated**: 2026-03-28
-**Related**: RFC-0001, RFC-0002, RFC-0006
+**Related**: RFC-000, RFC-001, RFC-300
 
 ## Abstract
 
@@ -80,14 +80,14 @@ For detailed rendering (two-level tool call trees, special tool behaviors, plan 
 Thread management → Context restoration → Policy check → Context projection → Memory recall → Plan creation → Enriched input assembly.
 
 **Phase 2: LangGraph Stream**
-`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. HITL interrupt loop: collect `__interrupt__`, auto-approve, resume with `Command(resume=...)`. See RFC-0009 for StepScheduler multi-step execution.
+`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. HITL interrupt loop: collect `__interrupt__`, auto-approve, resume with `Command(resume=...)`. See RFC-202 for StepScheduler multi-step execution.
 
 **Phase 3: Protocol Post-processing**
 Context ingestion → Context persistence → Memory storage → Plan reflection → Thread persistence via `ThreadContextManager`.
 
 ## IPC Protocol
 
-See **RFC-0013: Unified Daemon Communication Protocol**.
+See **RFC-400: Unified Daemon Communication Protocol**.
 
 ### Transports
 
@@ -166,13 +166,13 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 **ConversationPanel**: User turns, final assistant response text. No partial tokens, protocol events, tool activity, subagent text.
 
-**ActivityInfo**: Last 5 lines of activity (protocol events, tool calls, subagent events). `VerbosityTier` filtering (RFC-0024). Browser progress via `soothe.browser.step` events.
+**ActivityInfo**: Last 5 lines of activity (protocol events, tool calls, subagent events). `VerbosityTier` filtering (RFC-501). Browser progress via `soothe.browser.step` events.
 
 ## Subagent Routing
 
 **Primary**: LLM-driven via deepagents `task` tool. Main LLM decides delegation based on request and subagent descriptions.
 
-**Available**: Main (orchestrator), Planner, Scout, Research (RFC-0021), Browser, Claude, Skillify (RFC-0004), Weaver (RFC-0005).
+**Available**: Main (orchestrator), Planner, Scout, Research (RFC-601), Browser, Claude, Skillify (RFC-601), Weaver (RFC-601).
 
 **Deprecated**: Numeric prefix routing (e.g., `4 search...` → Research). Retained for compatibility but not used in main flow. Use natural language routing.
 
@@ -200,12 +200,12 @@ TUI inherits `PolicyProtocol` enforcement. HITL interrupts from `HumanInTheLoopM
 
 ## References
 
-- RFC-0001: System conceptual design
-- RFC-0002: Core modules architecture
-- RFC-0006: Context and memory architecture
-- RFC-0009: DAG-based execution
-- RFC-0013: Unified daemon communication
-- RFC-0024: VerbosityTier unification
+- RFC-000: System conceptual design
+- RFC-001: Core modules architecture
+- RFC-300: Context and memory architecture
+- RFC-202: DAG-based execution
+- RFC-400: Unified daemon communication
+- RFC-501: VerbosityTier unification
 
 ---
 

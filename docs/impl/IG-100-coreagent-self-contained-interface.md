@@ -1,14 +1,14 @@
 # IG-100: CoreAgent Self-Contained Module with Clear Interface
 
 **Implementation Guide**: IG-100
-**RFC**: RFC-0023 (Layer 1 CoreAgent Runtime Architecture)
+**RFC**: RFC-100 (Layer 1 CoreAgent Runtime Architecture)
 **Status**: Approved
 **Created**: 2026-03-29
 **Design Draft**: [2026-03-29-coreagent-layer1-interface-design.md](../drafts/2026-03-29-coreagent-layer1-interface-design.md)
 
 ## Overview
 
-Implement CoreAgent as a self-contained Layer 1 module per RFC-0023. The current factory returns a raw `CompiledStateGraph` with ad-hoc `soothe_*` attributes. This guide formalizes a proper CoreAgent class with explicit typed properties and removes goal infrastructure (Layer 3 responsibility).
+Implement CoreAgent as a self-contained Layer 1 module per RFC-100. The current factory returns a raw `CompiledStateGraph` with ad-hoc `soothe_*` attributes. This guide formalizes a proper CoreAgent class with explicit typed properties and removes goal infrastructure (Layer 3 responsibility).
 
 ## Design Summary
 
@@ -27,7 +27,7 @@ Add `CoreAgent` class to `src/soothe/core/agent.py`:
 
 ```python
 class CoreAgent:
-    """Layer 1 CoreAgent runtime (RFC-0023)."""
+    """Layer 1 CoreAgent runtime (RFC-100)."""
 
     def __init__(
         self,

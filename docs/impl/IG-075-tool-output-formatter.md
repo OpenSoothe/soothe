@@ -2,14 +2,14 @@
 
 **Implementation Guide**: 075
 **Title**: Tool Output Formatter - Semantic Result Summarization
-**RFC**: RFC-0020 (Event Display Architecture - Tool Output Enhancement)
+**RFC**: RFC-501 (Event Display Architecture - Tool Output Enhancement)
 **Status**: In Progress
 **Created**: 2026-03-27
-**Dependencies**: RFC-0020, IG-074
+**Dependencies**: RFC-501, IG-074
 
 ## Overview
 
-This guide tracks the implementation of semantic tool output formatting for RFC-0020. The goal is to replace verbose, meaningless tool result truncation with concise, tool-specific summaries that show meaningful metrics.
+This guide tracks the implementation of semantic tool output formatting for RFC-501. The goal is to replace verbose, meaningless tool result truncation with concise, tool-specific summaries that show meaningful metrics.
 
 ## Problem Statement
 
@@ -36,7 +36,7 @@ This guide tracks the implementation of semantic tool output formatting for RFC-
 ### Formatter-Based Pipeline
 
 ```
-Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RFC-0020 Display
+Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RFC-501 Display
 ```
 
 ### Key Components
@@ -141,7 +141,7 @@ Tool Result → Tool Classifier → Tool-Specific Formatter → ToolBrief → RF
   - Large output (truncation)
   - Errors (failed commands, missing files)
   - Formatter errors (fallback handling)
-- [ ] Test RFC-0020 compliance (50/80 char limits)
+- [ ] Test RFC-501 compliance (50/80 char limits)
 - [ ] Run verification suite: `./scripts/verify_finally.sh`
 
 ## Tool Summary Patterns
@@ -253,7 +253,7 @@ Both `src/soothe/ux/cli/renderer.py` and `src/soothe/ux/cli/execution/standalone
 
 - [ ] **Semantic Summaries**: Tool outputs show meaningful metrics instead of raw truncation
 - [ ] **Tool-Specific**: Each tool type has customized summary format
-- [ ] **RFC-0020 Compliance**: Summaries respect 50/80 char limits
+- [ ] **RFC-501 Compliance**: Summaries respect 50/80 char limits
 - [ ] **Backward Compatible**: Unknown tools still work with fallback formatter
 - [ ] **Error Resilient**: Formatter errors don't crash the system
 - [ ] **Tested**: All formatters have unit tests
@@ -275,7 +275,7 @@ Both `src/soothe/ux/cli/renderer.py` and `src/soothe/ux/cli/execution/standalone
 7. StructuredFormatter tests
 8. FallbackFormatter tests
 9. Edge case tests
-10. RFC-0020 compliance tests
+10. RFC-501 compliance tests
 
 ### Manual Testing
 
@@ -294,21 +294,21 @@ uv run soothe --no-tui -p "run: ls -la"
 
 ## Dependencies
 
-- **RFC-0020**: Event Display Architecture
-- **RFC-0008**: Agentic Loop Execution (ToolOutput schema)
+- **RFC-501**: Event Display Architecture
+- **RFC-201**: Agentic Loop Execution (ToolOutput schema)
 - **IG-074**: Claude-like Agentic Loop (ToolOutput implementation)
 
 ## Related Documents
 
-- [RFC-0020](../specs/RFC-0020-event-display-architecture.md) - Event display specification
-- [RFC-0008](../specs/RFC-0008-agentic-loop-execution.md) - ToolOutput schema
+- [RFC-501](../specs/RFC-501-event-display-architecture.md) - Event display specification
+- [RFC-201](../specs/RFC-201-agentic-loop-execution.md) - ToolOutput schema
 - [Plan](../../.claude/plans/eager-wibbling-crystal.md) - Implementation plan
 
 ## Progress Log
 
 ### 2026-03-27
 
-- Created RFC-0020 enhancement specification
+- Created RFC-501 enhancement specification
 - Created IG-075 implementation guide
 - ✅ Completed Phase 1: Foundation
   - Created `tool_output_formatter.py` with ToolBrief, classifier, main formatter
@@ -343,4 +343,4 @@ glob: ✓ Found 2 files
 
 ---
 
-*This implementation guide tracks the progress of semantic tool output formatting for RFC-0020.*
+*This implementation guide tracks the progress of semantic tool output formatting for RFC-501.*

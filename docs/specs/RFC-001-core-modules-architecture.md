@@ -1,11 +1,11 @@
-# RFC-0002: Architecture Design for Core Protocol Modules
+# RFC-001: Architecture Design for Core Protocol Modules
 
 **RFC**: 0002
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
 **Created**: 2026-03-12
 **Updated**: 2026-03-27
-**Related**: RFC-0001, RFC-0006, RFC-0009
+**Related**: RFC-000, RFC-300, RFC-202
 
 ## Abstract
 
@@ -122,7 +122,7 @@ class PlannerProtocol(Protocol):
 - `PlanContext(recent_messages, available_capabilities, completed_steps)`
 - `Reflection(assessment, should_revise, feedback)`
 
-**Note**: RFC-0009 introduces `StepScheduler` for DAG-based step execution using `PlanStep.depends_on`. Plans with multiple steps are iterated via a runner-driven step loop. `StepReport` and `GoalReport` models are added for progressive result recording.
+**Note**: RFC-202 introduces `StepScheduler` for DAG-based step execution using `PlanStep.depends_on`. Plans with multiple steps are iterated via a runner-driven step loop. `StepReport` and `GoalReport` models are added for progressive result recording.
 
 ### Implementations
 
@@ -168,7 +168,7 @@ class DurabilityProtocol(Protocol):
     async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
 ```
 
-State persistence for checkpoints, artifacts, and recovery data is handled by the RFC-0010 persistence components rather than by `DurabilityProtocol` directly.
+State persistence for checkpoints, artifacts, and recovery data is handled by the RFC-202 persistence components rather than by `DurabilityProtocol` directly.
 
 ### Data Models
 
@@ -211,7 +211,7 @@ class ConcurrencyPolicy(BaseModel):
 
 Steps declare dependencies via `depends_on`, forming a DAG. The orchestrator schedules independent steps in parallel within configured limits.
 
-**Note**: RFC-0009 introduces `ConcurrencyController` in `core/concurrency.py` that enforces these limits via `asyncio.Semaphore` at goal, step, and global LLM call levels.
+**Note**: RFC-202 introduces `ConcurrencyController` in `core/concurrency.py` that enforces these limits via `asyncio.Semaphore` at goal, step, and global LLM call levels.
 
 ## Module 8: VectorStoreProtocol
 

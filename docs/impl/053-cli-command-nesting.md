@@ -162,7 +162,7 @@ No structural changes needed - functions already properly separated.
 
 ### Phase 2: Documentation Updates
 
-#### RFC-0003: CLI Architecture
+#### RFC-500: CLI Architecture
 
 Update command table (lines 200-226) with nested structure.
 
@@ -243,7 +243,7 @@ IG-050 created inconsistency by flattening most commands while keeping daemon ne
 
 ## Related Documents
 
-- [RFC-0003: CLI TUI Architecture Design](../specs/RFC-0003.md)
+- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500.md)
 - [IG-050: CLI Subcommand Flattening](./050-cli-subcommand-flattening.md) (reverted by this guide)
 - [User Guide](../user_guide.md)
 - [CLI Reference](../wiki/cli-reference.md)
@@ -254,7 +254,7 @@ IG-050 created inconsistency by flattening most commands while keeping daemon ne
 - [ ] Update docstrings in `thread_cmd.py`
 - [ ] Update docstrings in `config_cmd.py`
 - [ ] Update docstrings in `status_cmd.py`
-- [ ] Update RFC-0003 command table
+- [ ] Update RFC-500 command table
 - [ ] Rewrite `docs/wiki/cli-reference.md`
 - [ ] Update `docs/wiki/thread-management.md`
 - [ ] Update `docs/wiki/getting-started.md`

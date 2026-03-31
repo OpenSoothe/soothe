@@ -4,7 +4,7 @@
 >
 > **Module**: `src/soothe/cli/`, `src/soothe/tools/`
 > **Source**: Derived from user requirements and gap analysis
-> **Related RFCs**: RFC-0003 (CLI TUI Architecture), RFC-0015 (Event Catalog)
+> **Related RFCs**: RFC-500 (CLI TUI Architecture), RFC-401 (Event Catalog)
 > **Language**: Python 3.13
 > **Framework**: Rich (TUI), LangChain (tools)
 
@@ -48,7 +48,7 @@ Tool events currently have three key issues affecting user experience:
 
 ### 1.4 Spec Compliance
 
-This implementation follows the existing event classification system defined in RFC-0015 (Event Catalog) and RFC-0003 (CLI TUI Architecture). The changes:
+This implementation follows the existing event classification system defined in RFC-401 (Event Catalog) and RFC-500 (CLI TUI Architecture). The changes:
 
 - **Preserve** the existing verbosity category system
 - **Preserve** the event emission patterns
@@ -208,7 +208,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
 
 **Design Rationale**:
 - Follows pattern from `src/soothe/cli/commands/subagent_names.py`
-- Covers all tools defined in RFC-0016 (Tool Consolidation)
+- Covers all tools defined in RFC-101 (Tool Consolidation)
 - Alphabetically organized by category for maintainability
 
 ### 4.2 Argument Mapping Dictionary
@@ -730,7 +730,7 @@ def test_display_name_unknown_tool():
 
 
 def test_all_tool_names_covered():
-    """Test that all tool names from RFC-0016 have mappings."""
+    """Test that all tool names from RFC-101 have mappings."""
     # Import tool lists from tool modules
     from soothe.tools.file_ops import ReadFileTool
     from soothe.tools.execution import RunCommandTool
@@ -958,10 +958,10 @@ def emit_tool_call(
 
 | RFC Requirement | Guide Section | Implementation |
 |-----------------|---------------|----------------|
-| RFC-0015: Event classification | Section 6.1 | `progress_verbosity.py` domain mapping |
-| RFC-0003: TUI rendering | Section 6.2, 6.3 | `tui/renderers.py` display name usage |
-| RFC-0003: CLI rendering | Section 6.6 | `cli_event_renderer.py` display name usage |
-| RFC-0016: Tool consolidation | Section 4.1 | `display_names.py` covers all consolidated tools |
+| RFC-401: Event classification | Section 6.1 | `progress_verbosity.py` domain mapping |
+| RFC-500: TUI rendering | Section 6.2, 6.3 | `tui/renderers.py` display name usage |
+| RFC-500: CLI rendering | Section 6.6 | `cli_event_renderer.py` display name usage |
+| RFC-101: Tool consolidation | Section 4.1 | `display_names.py` covers all consolidated tools |
 
 ---
 

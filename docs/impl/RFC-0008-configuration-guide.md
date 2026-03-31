@@ -1,9 +1,9 @@
-# RFC-0008 Configuration Guide
+# RFC-201 Configuration Guide
 
-## ✅ RFC-0008 is Now Enabled by Default
+## ✅ RFC-201 is Now Enabled by Default
 
 **Status**: Production-ready (all tests passing)
-**Default Mode**: PLAN → ACT → JUDGE (RFC-0008)
+**Default Mode**: PLAN → ACT → JUDGE (RFC-201)
 **Fallback**: Legacy OBSERVE → ACT → VERIFY still available
 
 ---
@@ -20,7 +20,7 @@ agentic:
   # Enable agentic loop mode
   enabled: true
 
-  # Use RFC-0008 PLAN → ACT → JUDGE (now default!)
+  # Use RFC-201 PLAN → ACT → JUDGE (now default!)
   use_judge_engine: true  # ← ENABLED BY DEFAULT
 
   # Maximum loop iterations
@@ -37,7 +37,7 @@ agentic:
 
 ## Execution Modes
 
-### RFC-0008 Mode (Default) - PLAN → ACT → JUDGE
+### RFC-201 Mode (Default) - PLAN → ACT → JUDGE
 
 ```yaml
 agentic:
@@ -70,7 +70,7 @@ agentic:
 
 ## How to Switch Modes
 
-### Enable RFC-0008 (Default)
+### Enable RFC-201 (Default)
 ```yaml
 # config.yml
 agentic:
@@ -115,7 +115,7 @@ export SOOTHE_AGENTIC__USE_JUDGE_ENGINE=false
 
 ## Architecture
 
-### RFC-0008 Execution Flow
+### RFC-201 Execution Flow
 
 ```
 User Request
@@ -155,7 +155,7 @@ Final Answer
 
 ## Events
 
-### RFC-0008 Namespace: `soothe.cognition.loop.*`
+### RFC-201 Namespace: `soothe.cognition.loop.*`
 
 **Lifecycle Events:**
 - `LoopStartedEvent` - Loop starts
@@ -191,7 +191,7 @@ Events for legacy mode (backward compatibility).
 ### Manual Testing
 
 ```bash
-# Test with RFC-0008 mode (default)
+# Test with RFC-201 mode (default)
 soothe -p "What is 2+2?"
 
 # Test with legacy mode
@@ -221,7 +221,7 @@ soothe -p "What is 2+2?"
 
 ### Files Created
 
-1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-0008 implementation
+1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-201 implementation
 2. `docs/impl/IG-074-*.md` - Implementation documentation
 
 ---
@@ -263,12 +263,12 @@ soothe -p "What is 2+2?"
 
 ## Migration Guide
 
-### From Legacy to RFC-0008
+### From Legacy to RFC-201
 
 1. **Update config** (already done):
    ```yaml
    agentic:
-     use_judge_engine: true  # Enable RFC-0008
+     use_judge_engine: true  # Enable RFC-201
    ```
 
 2. **Test thoroughly**:
@@ -332,7 +332,7 @@ agentic:
 
 ## Support
 
-- **RFC**: `docs/specs/RFC-0008-agentic-loop-execution.md`
+- **RFC**: `docs/specs/RFC-201-agentic-loop-execution.md`
 - **Implementation**: `docs/impl/IG-074-final-summary.md`
 - **Progress**: `docs/impl/IG-074-implementation-progress.md`
 
@@ -340,7 +340,7 @@ agentic:
 
 ## Summary
 
-✅ **RFC-0008 is production-ready and enabled by default**
+✅ **RFC-201 is production-ready and enabled by default**
 
 - All 923 tests passing
 - Zero linting errors

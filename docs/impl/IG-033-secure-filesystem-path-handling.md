@@ -1,6 +1,6 @@
 # Implementation Guide: Secure Filesystem Path Handling and Security Policy
 
-**RFC Reference**: RFC-0012
+**RFC Reference**: RFC-102
 **Implementation Date**: 2026-03-18
 **Status**: Completed
 

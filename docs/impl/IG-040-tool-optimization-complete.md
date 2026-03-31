@@ -1,16 +1,16 @@
 # Tool Interface Optimization - Implementation Complete
 
-**RFC:** RFC-0016 (Tool Interface Optimization)
+**RFC:** RFC-101 (Tool Interface Optimization)
 **Status:** Fully Implemented & Polished
 **Date:** 2026-03-21
 
 ## Overview
 
-RFC-0016 transformed Soothe's tool interface from unified dispatch tools (RFC-0014) to single-purpose tools with surgical editing capabilities. This implementation guide documents the complete architecture, including the final polish phase that eliminated wrapper duplication and achieved 100% RFC-0016 compliance.
+RFC-101 transformed Soothe's tool interface from unified dispatch tools (RFC-0014) to single-purpose tools with surgical editing capabilities. This implementation guide documents the complete architecture, including the final polish phase that eliminated wrapper duplication and achieved 100% RFC-101 compliance.
 
 ## Architecture Evolution
 
-### Phase 1: From Unified to Single-Purpose (Initial RFC-0016)
+### Phase 1: From Unified to Single-Purpose (Initial RFC-101)
 
 **Before (RFC-0014):**
 ```
@@ -19,7 +19,7 @@ tools/
 └── workspace.py    # Unified read/write/delete/search dispatch
 ```
 
-**After RFC-0016 Phase 1-3:**
+**After RFC-101 Phase 1-3:**
 ```
 tools/
 ├── execution.py    # Consolidated: run_command, run_python, run_background, kill_process
@@ -35,11 +35,11 @@ tools/
     └── ...                    # Backends
 ```
 
-### Phase 2: Polish & RFC-0016 Compliance (Final)
+### Phase 2: Polish & RFC-101 Compliance (Final)
 
 **Issues Addressed:**
 1. **Wrapper Duplication**: Public tools just wrapped _internal classes
-2. **Remaining Dispatch Tools**: data.py and goals.py violated RFC-0016
+2. **Remaining Dispatch Tools**: data.py and goals.py violated RFC-101
 3. **Naming Inconsistencies**: websearch didn't follow underscore convention
 4. **_internal Confusion**: Mixed tool classes and backends
 
@@ -160,7 +160,7 @@ class DataTool(BaseTool):
             return self._do_tabular(file_path, "summary")
         # ... more dispatch
 
-# AFTER (single-purpose - RFC-0016)
+# AFTER (single-purpose - RFC-101)
 class InspectDataTool(BaseTool):
     name = "inspect_data"
     def _run(self, file_path: str) -> str:
@@ -321,7 +321,7 @@ if name in ("tool_a", "tool_b"):
 
 ## Success Criteria
 
-✅ All tool files follow RFC-0016 single-purpose principle
+✅ All tool files follow RFC-101 single-purpose principle
 ✅ No dispatch patterns (operation/action parameters)
 ✅ No wrapper duplication (implementations in public files)
 ✅ Consistent naming (underscore convention)
@@ -339,7 +339,7 @@ if name in ("tool_a", "tool_b"):
 
 ## References
 
-- RFC-0016: Tool Interface Optimization (full specification)
+- RFC-101: Tool Interface Optimization (full specification)
 - RFC-0014: Unified Tool Interface (superseded)
 - tests/tools/: Complete test suite
 - src/soothe/tools/_internal/: Backend implementations

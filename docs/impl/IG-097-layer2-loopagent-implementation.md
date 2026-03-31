@@ -1,14 +1,14 @@
-# IG-097: RFC-0008 (Layer 2) Implementation - LoopAgent System
+# IG-097: RFC-201 (Layer 2) Implementation - LoopAgent System
 
 **Implementation Guide**: IG-097
-**RFC**: RFC-0008 - Layer 2: Agentic Goal Execution Loop
+**RFC**: RFC-201 - Layer 2: Agentic Goal Execution Loop
 **Status**: In Progress
 **Created**: 2026-03-29
-**Related**: RFC-0007, RFC-0023, RFC-0001, RFC-0002
+**Related**: RFC-200, RFC-100, RFC-000, RFC-001
 
 ## Overview
 
-This implementation guide addresses the major gaps in RFC-0008 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture defined in the revised RFC-0008.
+This implementation guide addresses the major gaps in RFC-201 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture defined in the revised RFC-201.
 
 ### Objectives
 
@@ -572,9 +572,9 @@ agentic:
 
 ## Related Documents
 
-- [RFC-0008](../specs/RFC-0008-agentic-goal-execution-loop.md) - Layer 2 Specification
-- [RFC-0007](../specs/RFC-0007-autonomous-goal-management-loop.md) - Layer 3 Specification
-- [RFC-0023](../specs/RFC-0023-coreagent-runtime.md) - Layer 1 Specification
+- [RFC-201](../specs/RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
+- [RFC-200](../specs/RFC-200-autonomous-goal-management-loop.md) - Layer 3 Specification
+- [RFC-100](../specs/RFC-100-coreagent-runtime.md) - Layer 1 Specification
 - [Design Draft](../drafts/2026-03-29-rfc-0008-layer2-implementation-design.md) - Implementation Design
 
 ## Changelog

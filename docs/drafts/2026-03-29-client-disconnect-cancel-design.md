@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-29
 **Status**: Approved
-**Related**: IG-085 Phase 7 (Daemon Lifecycle Polish), RFC-0013 Section "Client Disconnect Query Cancellation"
+**Related**: IG-085 Phase 7 (Daemon Lifecycle Polish), RFC-400 Section "Client Disconnect Query Cancellation"
 **Implementation Target**: `src/soothe/daemon/client_session.py`, `src/soothe/daemon/_handlers.py`, `src/soothe/daemon/server.py`
 
 ## Problem Statement

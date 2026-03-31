@@ -79,7 +79,7 @@ User Query → PLAN (LLM decides action) → ACT (execute tools) → JUDGE (eval
 - Sub-second responses for simple queries
 - Intelligent iteration for complex tasks
 
-Learn more: [RFC-0008: Agentic Loop Execution](../specs/RFC-0008-agentic-loop-execution.md)
+Learn more: [RFC-201: Agentic Loop Execution](../specs/RFC-201-agentic-loop-execution.md)
 
 ### Plugin System
 
@@ -95,7 +95,7 @@ class MyPlugin:
         return f"Result: {arg}"
 ```
 
-Learn more: [RFC-0018: Plugin Extension System](../specs/RFC-0018-plugin-extension-system.md)
+Learn more: [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension-system.md)
 
 ---
 
@@ -103,12 +103,12 @@ Learn more: [RFC-0018: Plugin Extension System](../specs/RFC-0018-plugin-extensi
 
 | Feature | Status | Documentation |
 |---------|--------|---------------|
-| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-0008](../specs/RFC-0008-agentic-loop-execution.md) |
+| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-201](../specs/RFC-201-agentic-loop-execution.md) |
 | **Research Subagent** | ✅ Production Ready | [Subagents Guide](subagents.md#research-subagent) |
-| **Plugin System** | ✅ Production Ready | [RFC-0018](../specs/RFC-0018-plugin-extension-system.md) |
+| **Plugin System** | ✅ Production Ready | [RFC-600](../specs/RFC-600-plugin-extension-system.md) |
 | **Multi-Transport Daemon** | ✅ Production Ready | [Multi-Transport Setup](multi-transport.md) |
 | **Thread Management** | ✅ Production Ready | [Thread Management](thread-management.md) |
-| **Security Policies** | ✅ Production Ready | [RFC-0012](../specs/RFC-0012-secure-filesystem-policy.md) |
+| **Security Policies** | ✅ Production Ready | [RFC-102](../specs/RFC-102-secure-filesystem-policy.md) |
 | **Autonomous Mode** | 🚧 Experimental | [Autonomous Mode](autonomous-mode.md) |
 
 ---

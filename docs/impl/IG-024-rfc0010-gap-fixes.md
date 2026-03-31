@@ -1,13 +1,13 @@
-# IG-024: RFC-0010 Gap Fixes
+# IG-024: RFC-202 Gap Fixes
 
-**Implements**: RFC-0010 (Gap Remediation)
+**Implements**: RFC-202 (Gap Remediation)
 **Status**: Completed
 **Created**: 2026-03-18
 **Related**: IG-023
 
 ## Overview
 
-This implementation guide addresses gaps identified in the RFC-0010 spec-to-code review:
+This implementation guide addresses gaps identified in the RFC-202 spec-to-code review:
 1. Missing `soothe.checkpoint.saved` stream event emission
 2. Thread deletion cleanup verification and implementation
 
@@ -15,7 +15,7 @@ This implementation guide addresses gaps identified in the RFC-0010 spec-to-code
 
 ### Problem
 
-RFC-0010 specifies two stream events for observability:
+RFC-202 specifies two stream events for observability:
 - `soothe.recovery.resumed` ✅ (already implemented)
 - `soothe.checkpoint.saved` ❌ (not emitted)
 
@@ -147,7 +147,7 @@ async def test_checkpoint_saved_event_emitted():
 
 ### Problem
 
-RFC-0010 specifies that thread deletion should remove the entire `runs/{thread_id}/` directory, but this behavior has not been verified in the implementation.
+RFC-202 specifies that thread deletion should remove the entire `runs/{thread_id}/` directory, but this behavior has not been verified in the implementation.
 
 ### Investigation Needed
 

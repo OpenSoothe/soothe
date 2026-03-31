@@ -3,7 +3,7 @@
 **Guide**: IG-013
 **Title**: Comprehensive Soothe Polish Pass
 **Created**: 2026-03-13
-**Related RFCs**: RFC-0001, RFC-0002, RFC-0003, RFC-0004, RFC-0005
+**Related RFCs**: RFC-000, RFC-001, RFC-500, RFC-601, RFC-601
 **Related IGs**: IG-010 (superseded for TUI), IG-011 (Skillify), IG-012 (Weaver)
 
 ## Overview
@@ -18,7 +18,7 @@ This guide covers a comprehensive polish pass across several Soothe subsystems:
 
 ## Prerequisites
 
-- [x] RFC-0001 through RFC-0005 accepted
+- [x] RFC-000 through RFC-601 accepted
 - [x] IG-011 (Skillify) and IG-012 (Weaver) implemented
 - [x] IG-010 (TUI layout refresh) implemented (will be superseded)
 
@@ -49,7 +49,7 @@ This guide covers a comprehensive polish pass across several Soothe subsystems:
 - `config/config.yml`
 - `config/env.example`
 - `pyproject.toml`
-- `docs/specs/RFC-0003.md`
+- `docs/specs/RFC-500.md`
 - `docs/impl/IG-010-tui-layout-history-refresh.md`
 
 ### Files deleted
@@ -169,7 +169,7 @@ Update `config/env.example`.
 
 ### 5.3 Update specs
 
-Update RFC-0003 for Textual + daemon architecture.
+Update RFC-500 for Textual + daemon architecture.
 Rewrite IG-010 as the TUI implementation guide.
 
 ## Testing Strategy

@@ -1,4 +1,4 @@
-# RFC-0022 Compliance Review Report
+# RFC-401 Compliance Review Report
 
 **RFC**: 0022 - Daemon-Side Event Filtering Protocol
 **Review Date**: 2026-03-28
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The implementation of RFC-0022 is **fully compliant** with the specification. All mandatory requirements have been implemented, tested, and verified. The implementation achieves the stated goals of 60-70% event reduction while maintaining backward compatibility.
+The implementation of RFC-401 is **fully compliant** with the specification. All mandatory requirements have been implemented, tested, and verified. The implementation achieves the stated goals of 60-70% event reduction while maintaining backward compatibility.
 
 ---
 
@@ -37,7 +37,7 @@ The implementation of RFC-0022 is **fully compliant** with the specification. Al
 |-------------|-------------|--------|------------------------|-------|
 | **R7**: EventBus passes event metadata | Event Metadata Propagation | ✅ COMPLIANT | `daemon/event_bus.py:37-70` | `publish(event, event_meta)` |
 | **R8**: Filter in `_sender_loop` | Filtering Implementation | ✅ COMPLIANT | `daemon/client_session.py:243-272` | Filters using `should_show()` |
-| **R9**: Use RFC-0015 `should_show` | Filtering Implementation | ✅ COMPLIANT | `daemon/client_session.py:260` | Imports from `progress_verbosity` |
+| **R9**: Use RFC-401 `should_show` | Filtering Implementation | ✅ COMPLIANT | `daemon/client_session.py:260` | Imports from `progress_verbosity` |
 | **R10**: Log filtered events | Filtering Implementation | ✅ COMPLIANT | `daemon/client_session.py:265-272` | Debug logging for filtered events |
 
 ### Event Emission Requirements
@@ -261,7 +261,7 @@ await client.wait_for_subscription_confirmed(actual_thread_id, verbosity=verbosi
 
 ### Immediate Actions
 
-1. ✅ **Update RFC-0022 status** to "Implemented"
+1. ✅ **Update RFC-401 status** to "Implemented"
 2. ✅ **Update RFC index** with new status
 3. ✅ **Mark IG-081 as completed**
 
@@ -277,11 +277,11 @@ The RFC left these as "non-goals" but they could be future enhancements:
 
 ## Conclusion
 
-**The implementation is FULLY COMPLIANT with RFC-0022.**
+**The implementation is FULLY COMPLIANT with RFC-401.**
 
 All mandatory requirements have been implemented, tested, and verified. The implementation:
 - ✅ Extends the protocol with optional `verbosity` field
-- ✅ Implements daemon-side filtering using RFC-0015 classification
+- ✅ Implements daemon-side filtering using RFC-401 classification
 - ✅ Maintains backward compatibility with old clients
 - ✅ Updates all client applications
 - ✅ Passes all tests

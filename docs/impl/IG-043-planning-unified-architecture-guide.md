@@ -1,6 +1,6 @@
 # Unified Planning Architecture - Implementation Guide
 
-**RFC**: RFC-0016
+**RFC**: RFC-101
 **Status**: Draft
 **Created**: 2026-03-21
 **Estimated Duration**: 5-7 days
@@ -1143,7 +1143,7 @@ parts.extend([
 - **Planning protocol**: `src/soothe/protocols/planner.py`
 - **Runner flow**: `src/soothe/core/runner.py`
 - **Unified classifier**: `src/soothe/cognition/unified_classifier.py`
-- **RFC document**: `docs/specs/RFC-0016.md`
+- **RFC document**: `docs/specs/RFC-101.md`
 
 ## Changelog
 

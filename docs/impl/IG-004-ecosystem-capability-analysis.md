@@ -3,7 +3,7 @@
 **Guide**: IG-004
 **Title**: Gap Analysis -- deepagents + langchain + langgraph vs Soothe TARGET
 **Created**: 2026-03-12
-**Related RFCs**: RFC-0001, RFC-0002
+**Related RFCs**: RFC-000, RFC-001
 
 ## Overview
 

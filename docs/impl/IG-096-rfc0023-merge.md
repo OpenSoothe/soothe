@@ -1,31 +1,31 @@
-# IG-096: RFC-0023 Merge into RFC-0013 and RFC-0008
+# IG-096: RFC-100 Merge into RFC-400 and RFC-201
 
 **Status**: Completed
 **Created**: 2026-03-29
-**Related**: RFC-0013, RFC-0008
+**Related**: RFC-400, RFC-201
 
 ## Summary
 
-RFC-0023 (Daemon Query Performance and Readiness Architecture) was a standalone spec covering daemon readiness reliability and agentic loop performance optimizations. Its content has been merged into the appropriate owning RFCs and the standalone spec deleted.
+RFC-100 (Daemon Query Performance and Readiness Architecture) was a standalone spec covering daemon readiness reliability and agentic loop performance optimizations. Its content has been merged into the appropriate owning RFCs and the standalone spec deleted.
 
 ## Merge Distribution
 
 | Content | Destination RFC | Reason |
 |---------|-----------------|--------|
-| Daemon lifecycle phases (starting → warming → ready → degraded → error) | RFC-0013 | Daemon protocol ownership |
-| Staged startup architecture | RFC-0013 | Daemon startup ownership |
-| Readiness handshake protocol | RFC-0013 | Client-server protocol ownership |
-| Stale daemon cleanup | RFC-0013 | Daemon lifecycle ownership |
-| DAEMON_BUSY rejection | RFC-0013 | Error code ownership |
-| Query execution tiers (fast, light-agentic, full-agentic) | RFC-0008 | Agentic loop execution ownership |
-| Query-scoped observation reuse | RFC-0008 | Observation phase ownership |
-| Token-count planning strategy | RFC-0008 | Planning strategy ownership |
-| Early termination optimization | RFC-0008 | Verification phase ownership |
-| Query timing instrumentation | RFC-0008 (partial) and RFC-0013 (startup) | Distributed by phase |
+| Daemon lifecycle phases (starting → warming → ready → degraded → error) | RFC-400 | Daemon protocol ownership |
+| Staged startup architecture | RFC-400 | Daemon startup ownership |
+| Readiness handshake protocol | RFC-400 | Client-server protocol ownership |
+| Stale daemon cleanup | RFC-400 | Daemon lifecycle ownership |
+| DAEMON_BUSY rejection | RFC-400 | Error code ownership |
+| Query execution tiers (fast, light-agentic, full-agentic) | RFC-201 | Agentic loop execution ownership |
+| Query-scoped observation reuse | RFC-201 | Observation phase ownership |
+| Token-count planning strategy | RFC-201 | Planning strategy ownership |
+| Early termination optimization | RFC-201 | Verification phase ownership |
+| Query timing instrumentation | RFC-201 (partial) and RFC-400 (startup) | Distributed by phase |
 
 ## Implementation Work Completed
 
-### Phase 1: Daemon Readiness (RFC-0013 domain)
+### Phase 1: Daemon Readiness (RFC-400 domain)
 
 Files modified:
 - `src/soothe/daemon/server.py` — Added daemon-level readiness state/event
@@ -42,7 +42,7 @@ Key behaviors:
 - DAEMON_BUSY rejection for overlapping requests on same thread
 - Stale daemon cleanup before restart
 
-### Phase 2: Observation Reuse (RFC-0008 domain)
+### Phase 2: Observation Reuse (RFC-201 domain)
 
 Files modified:
 - `src/soothe/core/runner/_types.py` — Extended `RunnerState` with query-scoped observation metadata
@@ -55,7 +55,7 @@ Key behaviors:
 - Refresh only on replan, materially changed scope, or explicit escalation
 - Step execution inherits parent observation by default
 
-### Phase 3: Planning Strategy Optimization (RFC-0008 domain)
+### Phase 3: Planning Strategy Optimization (RFC-201 domain)
 
 Files modified:
 - `src/soothe/core/runner/_runner_agentic.py` — Reuse `state.plan` across iterations
@@ -87,22 +87,22 @@ Test behaviors verified:
 
 ## Post-Merge Actions
 
-1. Deleted RFC-0023 standalone file
-2. Updated RFC-0013 with daemon readiness sections
-3. Updated RFC-0008 with observation reuse and planning optimization sections
-4. Updated RFC index to remove RFC-0023 entry
+1. Deleted RFC-100 standalone file
+2. Updated RFC-400 with daemon readiness sections
+3. Updated RFC-201 with observation reuse and planning optimization sections
+4. Updated RFC index to remove RFC-100 entry
 5. Updated RFC history to document merger
 
 ## Files Changed
 
 ```
-docs/specs/RFC-0013-daemon-communication-protocol.md  # Merged daemon readiness
-docs/specs/RFC-0008-agentic-loop-execution.md          # Merged observation reuse, planning
-docs/specs/rfc-index.md                                # Removed RFC-0023 entry
+docs/specs/RFC-400-daemon-communication-protocol.md  # Merged daemon readiness
+docs/specs/RFC-201-agentic-loop-execution.md          # Merged observation reuse, planning
+docs/specs/rfc-index.md                                # Removed RFC-100 entry
 docs/specs/rfc-history.md                              # Documented merger
-docs/specs/RFC-0023-daemon-query-performance-and-readiness.md  # DELETED
+docs/specs/RFC-100-daemon-query-performance-and-readiness.md  # DELETED
 ```
 
 ## Conclusion
 
-RFC-0023 content now lives in its proper owning specs. The daemon reliability fixes and agentic loop optimizations are documented where they belong architecturally.
+RFC-100 content now lives in its proper owning specs. The daemon reliability fixes and agentic loop optimizations are documented where they belong architecturally.

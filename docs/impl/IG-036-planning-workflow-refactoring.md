@@ -1,7 +1,7 @@
 # Implementation Guide: Planning Workflow Refactoring
 
 **Date**: 2026-03-19
-**RFCs**: RFC-0008, RFC-0012
+**RFCs**: RFC-201, RFC-102
 **Status**: Complete
 **Impact**: Major architecture simplification
 
@@ -9,7 +9,7 @@
 
 This implementation refactored Soothe's planning workflow to:
 1. Simplify architecture by removing SubagentPlanner indirection
-2. Integrate RFC-0012 unified classification system
+2. Integrate RFC-102 unified classification system
 3. Add chitchat fast path for sub-second responses
 4. Modularize planning backends for better maintainability
 5. Remove dead code (planner subagent)
@@ -43,7 +43,7 @@ This implementation refactored Soothe's planning workflow to:
 - ✅ Add fast path for chitchat queries (< 30 tokens)
 - ✅ Modularize planning backends
 - ✅ Remove planner subagent dead code
-- ✅ Polish RFC-0008 with comprehensive diagrams
+- ✅ Polish RFC-201 with comprehensive diagrams
 
 ## Architecture Changes
 
@@ -68,7 +68,7 @@ User Query
 ```
 User Query
     │
-    ├─► UnifiedClassifier (RFC-0012)
+    ├─► UnifiedClassifier (RFC-102)
     │   └─► task_complexity (chitchat/medium/complex)
     │
     └─► SootheRunner
@@ -81,7 +81,7 @@ User Query
 
 ### 1. Unified Classification Refactoring
 
-**RFC**: RFC-0012
+**RFC**: RFC-102
 **Files Modified**: `src/soothe/core/unified_classifier.py`
 
 #### Changes
@@ -414,9 +414,9 @@ noisy_third_party = (
 
 **Benefit**: Framework internals (langchain, langgraph, deepagents) now visible for debugging.
 
-### 8. RFC-0008 Documentation Polish
+### 8. RFC-201 Documentation Polish
 
-**File**: `docs/specs/RFC-0008.md`
+**File**: `docs/specs/RFC-201.md`
 
 #### Major Changes
 
@@ -433,7 +433,7 @@ noisy_third_party = (
    - Performance Optimization Strategies
    - Metrics & Configuration
 
-4. **Integrated RFC-0012**:
+4. **Integrated RFC-102**:
    - Unified classification throughout
    - Removed dual complexity references
    - Updated examples
@@ -490,7 +490,7 @@ noisy_third_party = (
 
 | File | Lines Changed | Description |
 |------|--------------|-------------|
-| `RFC-0008.md` | ~200 | Complete rewrite with diagrams |
+| `RFC-201.md` | ~200 | Complete rewrite with diagrams |
 
 ## Testing
 
@@ -639,9 +639,9 @@ If issues arise:
 
 ## References
 
-- **RFC-0008**: Request Processing Workflow and Performance Optimization
-- **RFC-0012**: Unified LLM-Based Classification System
-- **RFC-0009**: DAG-Based Execution and Unified Concurrency
+- **RFC-201**: Request Processing Workflow and Performance Optimization
+- **RFC-102**: Unified LLM-Based Classification System
+- **RFC-202**: DAG-Based Execution and Unified Concurrency
 - **Previous Implementation**: `029-planner-refactoring.md`, `032-unified-complexity-classification.md`
 
 ## Lessons Learned
@@ -650,7 +650,7 @@ If issues arise:
 
 1. **Incremental Refactoring**: Breaking into phases (classification → chitchat → cleanup) reduced risk
 2. **Comprehensive Testing**: Updating tests first prevented regressions
-3. **Documentation**: Polishing RFC-0008 with diagrams clarified design decisions
+3. **Documentation**: Polishing RFC-201 with diagrams clarified design decisions
 
 ### What Could Improve
 
@@ -662,7 +662,7 @@ If issues arise:
 
 This refactoring successfully:
 - ✅ Simplified architecture (removed SubagentPlanner)
-- ✅ Integrated RFC-0012 unified classification
+- ✅ Integrated RFC-102 unified classification
 - ✅ Added chitchat fast path (80% latency improvement)
 - ✅ Modularized planning backends
 - ✅ Removed ~110 lines of code

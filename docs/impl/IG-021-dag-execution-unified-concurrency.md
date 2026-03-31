@@ -1,6 +1,6 @@
 # IG-021: DAG-Based Execution and Unified Concurrency
 
-**Implements**: RFC-0009
+**Implements**: RFC-202
 **Status**: In Progress
 **Created**: 2026-03-18
 
@@ -91,7 +91,7 @@ execution:
 ### 2.1 Create `core/concurrency.py`
 
 ```python
-"""ConcurrencyController -- hierarchical concurrency enforcement (RFC-0009)."""
+"""ConcurrencyController -- hierarchical concurrency enforcement (RFC-202)."""
 
 from __future__ import annotations
 
@@ -166,7 +166,7 @@ class ConcurrencyController:
 ### 2.2 Create `core/step_scheduler.py`
 
 ```python
-"""StepScheduler -- DAG-based plan step scheduling (RFC-0009)."""
+"""StepScheduler -- DAG-based plan step scheduling (RFC-202)."""
 
 from __future__ import annotations
 
@@ -503,7 +503,7 @@ async def _run_single_pass(
     *,
     thread_id: str | None = None,
 ) -> AsyncGenerator[StreamChunk, None]:
-    """Single-pass execution with step-loop (RFC-0009)."""
+    """Single-pass execution with step-loop (RFC-202)."""
     state = RunnerState()
     state.thread_id = thread_id or self._current_thread_id or ""
     self._current_thread_id = state.thread_id or None
@@ -691,17 +691,17 @@ elif event_type == "soothe.plan.step_failed":
 
 ## Phase 6: Spec Updates
 
-### 6.1 Update RFC-0007
+### 6.1 Update RFC-200
 
-Add "Superseded by RFC-0009" note for goal scheduling. Reference DAG-based goal management.
+Add "Superseded by RFC-202" note for goal scheduling. Reference DAG-based goal management.
 
-### 6.2 Update RFC-0002
+### 6.2 Update RFC-001
 
 Update Module 7 (ConcurrencyPolicy) with new fields. Add ConcurrencyController reference. Update Module 3 with step DAG execution note.
 
 ### 6.3 Update AGENTS.md
 
-Add RFC-0009 to the RFC table.
+Add RFC-202 to the RFC table.
 
 ## Testing Checklist
 

@@ -65,21 +65,21 @@ Technical documentation for developers and system architects.
 
 | RFC | Title |
 |-----|-------|
-| [RFC-0001](specs/RFC-0001.md) | System Conceptual Design |
-| [RFC-0002](specs/RFC-0002.md) | Core Modules Architecture |
-| [RFC-0003](specs/RFC-0003.md) | CLI TUI Architecture |
-| [RFC-0004](specs/RFC-0004.md) | Skillify Agent Architecture |
-| [RFC-0005](specs/RFC-0005.md) | Weaver Agent Architecture |
-| [RFC-0006](specs/RFC-0006.md) | Context and Memory Architecture |
-| [RFC-0007](specs/RFC-0007.md) | Autonomous Iteration Loop |
-| [RFC-0008](specs/RFC-0008.md) | Protocol Specification |
-| [RFC-0009](specs/RFC-0009.md) | DAG-Based Execution and Unified Concurrency |
-| [RFC-0010](specs/RFC-0010.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
-| [RFC-0012](specs/RFC-0012.md) | Unified Complexity Classification |
-| [RFC-0013](specs/RFC-0013.md) | Unified Daemon Communication Protocol |
-| [RFC-0015](specs/RFC-0015.md) | Progress Event Protocol |
-| [RFC-0015](specs/RFC-0015.md) | Authentication and Security Model |
-| [RFC-0016](specs/RFC-0016.md) | HTTP REST API Specification |
+| [RFC-000](specs/RFC-000.md) | System Conceptual Design |
+| [RFC-001](specs/RFC-001.md) | Core Modules Architecture |
+| [RFC-500](specs/RFC-500.md) | CLI TUI Architecture |
+| [RFC-601](specs/RFC-601.md) | Skillify Agent Architecture |
+| [RFC-601](specs/RFC-601.md) | Weaver Agent Architecture |
+| [RFC-300](specs/RFC-300.md) | Context and Memory Architecture |
+| [RFC-200](specs/RFC-200.md) | Autonomous Iteration Loop |
+| [RFC-201](specs/RFC-201.md) | Protocol Specification |
+| [RFC-202](specs/RFC-202.md) | DAG-Based Execution and Unified Concurrency |
+| [RFC-202](specs/RFC-202.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
+| [RFC-102](specs/RFC-102.md) | Unified Complexity Classification |
+| [RFC-400](specs/RFC-400.md) | Unified Daemon Communication Protocol |
+| [RFC-401](specs/RFC-401.md) | Progress Event Protocol |
+| [RFC-401](specs/RFC-401.md) | Authentication and Security Model |
+| [RFC-101](specs/RFC-101.md) | HTTP REST API Specification |
 
 ### Implementation Guides
 
@@ -110,7 +110,7 @@ Technical documentation for developers and system architects.
 | [IG-023](impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence |
 | [IG-024](impl/024-existing-browser-connection.md) | Existing Browser Connection |
 | [IG-025](impl/025-subagent-progress-visibility.md) | Subagent Progress Visibility |
-| [IG-026](impl/026-rfc0009-logging-enhancements.md) | RFC-0009 Logging Enhancements |
+| [IG-026](impl/026-rfc0009-logging-enhancements.md) | RFC-202 Logging Enhancements |
 | [IG-027](impl/027-final-report-cli-output.md) | Final Report CLI Output |
 | [IG-028](impl/028-direct-to-simple-planner-renaming.md) | Direct to Simple Planner Renaming |
 | [IG-029](impl/029-planner-refactoring.md) | Planner Refactoring |

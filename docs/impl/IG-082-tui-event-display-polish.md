@@ -1032,7 +1032,7 @@ Git commits will be made after each phase for safe rollback.
 ## References
 
 - **Plan**: `/Users/chenxm/.claude/plans/vectorized-squishing-octopus.md`
-- **RFC-0003**: CLI/TUI Architecture
-- **RFC-0019**: Unified Event Processing
-- **RFC-0020**: Duration Display
+- **RFC-500**: CLI/TUI Architecture
+- **RFC-401**: Unified Event Processing
+- **RFC-501**: Duration Display
 - **IG-053**: CLI/TUI Event Progress Implementation

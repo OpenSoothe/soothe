@@ -1,6 +1,6 @@
-# RFC-0001: System Conceptual Design
+# RFC-000: System Conceptual Design
 
-**RFC**: RFC-0001
+**RFC**: RFC-000
 **Title**: System Conceptual Design
 **Status**: Draft
 **Kind**: Conceptual Design
@@ -25,21 +25,21 @@ Soothe operates through a hierarchical execution model with three distinct layer
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 3: Autonomous Goal Management (RFC-0007)               │
+│ Layer 3: Autonomous Goal Management (RFC-200)               │
 │ • Scope: Long-running complex workflows, multi-goal DAGs      │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update       │
 │ • Delegation: PERFORM invokes Layer 2's full loop             │
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Agentic Goal Execution (RFC-0008)                   │
+│ Layer 2: Agentic Goal Execution (RFC-201)                   │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: PLAN → ACT → JUDGE (max iterations: ~8)              │
 │ • Delegation: ACT invokes Layer 1 CoreAgent for execution    │
 └─────────────────────────────────────────────────────────────┘
                           ↓ ACT (step execution)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: CoreAgent Runtime (RFC-0023)                        │
+│ Layer 1: CoreAgent Runtime (RFC-100)                        │
 │ • Foundation: create_soothe_agent() → CompiledStateGraph     │
 │ • Execution: Model → Tools → Model loop (LangGraph native)   │
 └─────────────────────────────────────────────────────────────┘
@@ -201,5 +201,5 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
-- [RFC-0002](./RFC-0002.md) - Core Modules Architecture Design
-- [RFC-0009](./RFC-0009.md) - DAG-Based Execution and Unified Concurrency
+- [RFC-001](./RFC-001.md) - Core Modules Architecture Design
+- [RFC-202](./RFC-202.md) - DAG-Based Execution and Unified Concurrency

@@ -4,7 +4,7 @@
 **Title**: Code Structure Revision for Future Extensibility
 **Status**: Implemented
 **Created**: 2026-03-14
-**Related**: RFC-0001, RFC-0002
+**Related**: RFC-000, RFC-001
 
 ## Overview
 

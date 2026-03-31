@@ -592,10 +592,10 @@ def create_soothe_agent(config: SootheConfig) -> CompiledStateGraph:
 
 ### 6.3 Code Comments
 
-Add inline comments referencing RFC-0023:
+Add inline comments referencing RFC-100:
 
 ```python
-# Layer 1 CoreAgent factory (RFC-0023)
+# Layer 1 CoreAgent factory (RFC-100)
 # Creates runtime with built-in tools, subagents, middlewares
 # Receives execution hints from Layer 2 via config.configurable
 agent = create_deep_agent(
@@ -613,7 +613,7 @@ agent = create_deep_agent(
     debug=config.debug,
 )
 
-# Attach protocol instances for Layer 1 access (RFC-0023)
+# Attach protocol instances for Layer 1 access (RFC-100)
 agent.soothe_context = resolved_context
 agent.soothe_memory = resolved_memory
 agent.soothe_planner = resolved_planner
@@ -839,7 +839,7 @@ class ExecutionHintsMiddleware(AgentMiddleware):
 
 ## 10. RFC Updates
 
-### 10.1 RFC-0023 Updates
+### 10.1 RFC-100 Updates
 
 **Add Section**: "Layer 2 Integration Contract"
 
@@ -902,7 +902,7 @@ await core_agent.astream(
 - Layer 1 handles **how to execute** (runtime decisions with hints as context)
 ```
 
-### 10.2 RFC-0008 Updates
+### 10.2 RFC-201 Updates
 
 **Update Section**: "ACT Phase" to mention hint propagation
 
@@ -939,7 +939,7 @@ stream = await core_agent.astream(
 ### 11.1 Phase 1: CoreAgent Documentation (Day 1)
 
 - [ ] Update `core/agent.py` docstring with Layer 1 responsibilities
-- [ ] Add code comments referencing RFC-0023
+- [ ] Add code comments referencing RFC-100
 - [ ] Document protocol attachments
 - [ ] Document execution interface with hints support
 - [ ] Create `docs/core_agent_layer1.md` architecture overview
@@ -974,8 +974,8 @@ stream = await core_agent.astream(
 
 ### 11.5 Phase 5: Documentation & RFC (Day 3-4)
 
-- [ ] Update RFC-0023 with integration contract
-- [ ] Update RFC-0008 with hint propagation
+- [ ] Update RFC-100 with integration contract
+- [ ] Update RFC-201 with hint propagation
 - [ ] Create architecture diagrams
 - [ ] Update user guide
 - [ ] Run `./scripts/verify_finally.sh`
@@ -989,7 +989,7 @@ stream = await core_agent.astream(
 - Clear documentation of Layer 1 responsibilities
 - Public interface documented
 - Protocol attachments documented
-- RFC-0023 references in code
+- RFC-100 references in code
 
 ✅ **Integration Bridge Implemented**:
 - ExecutionHintsMiddleware created and wired
@@ -1004,8 +1004,8 @@ stream = await core_agent.astream(
 - Backward compatibility verified
 
 ✅ **Documentation Updated**:
-- RFC-0023 updated with integration contract
-- RFC-0008 updated with hint propagation
+- RFC-100 updated with integration contract
+- RFC-201 updated with hint propagation
 - Code comments reference RFCs
 - User guide updated
 
@@ -1029,9 +1029,9 @@ stream = await core_agent.astream(
 
 ## 14. Related Documents
 
-- [RFC-0023](../specs/RFC-0023-coreagent-runtime.md) - Layer 1 Specification
-- [RFC-0008](../specs/RFC-0008-agentic-goal-execution-loop.md) - Layer 2 Specification
-- [RFC-0007](../specs/RFC-0007-autonomous-goal-management-loop.md) - Layer 3 Specification
+- [RFC-100](../specs/RFC-100-coreagent-runtime.md) - Layer 1 Specification
+- [RFC-201](../specs/RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
+- [RFC-200](../specs/RFC-200-autonomous-goal-management-loop.md) - Layer 3 Specification
 - [IG-097](./IG-097-layer2-loopagent-implementation.md) - Layer 2 Implementation Guide
 
 ---

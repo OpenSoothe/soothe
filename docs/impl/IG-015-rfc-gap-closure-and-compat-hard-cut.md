@@ -2,16 +2,16 @@
 
 ## Objective
 
-Polish Soothe by removing backward-compatibility code paths, fixing shutdown resource leaks, and closing implementation gaps against RFC-0001 through RFC-0006.
+Polish Soothe by removing backward-compatibility code paths, fixing shutdown resource leaks, and closing implementation gaps against RFC-000 through RFC-300.
 
 ## Scope
 
 1. Hard-cut backward compatibility paths and legacy re-export modules.
 2. Fix `bug1.md` TUI shutdown issue (`AsyncConnectionPool` workers pending on exit).
-3. Close RFC-0006 gaps, including:
+3. Close RFC-300 gaps, including:
    - rename config value `memory_backend: store` to `memory_backend: keyword`
    - ingest recalled memories into context ledger during pre-stream
-4. Close RFC-0001 through RFC-0005 gaps (critical/high/medium), including:
+4. Close RFC-000 through RFC-601 gaps (critical/high/medium), including:
    - middleware-based policy checks for tool/subagent actions
    - subagent context projection injection
    - configurable durability backend with LangGraph checkpointer targets (SQLite/Postgres)
@@ -60,14 +60,14 @@ Polish Soothe by removing backward-compatibility code paths, fixing shutdown res
 - Ensure `cleanup()` runs before loop shutdown in Rich TUI and daemon stop paths.
 - Add explicit closers where required (e.g., Weaver `ReuseIndex.close()`).
 
-### Phase 3: RFC-0006 Closure
+### Phase 3: RFC-300 Closure
 
 - Rename `memory_backend` enum/config/docs/tests from `store` to `keyword`.
 - Update resolver fallback messaging and semantics.
 - In pre-stream flow, ingest recalled memories into context before projection/enrichment.
 - Correct user docs for memory persistence path and keyword semantics.
 
-### Phase 4: RFC-0001..0005 Closure
+### Phase 4: RFC-000..0005 Closure
 
 - Add policy middleware that checks tool calls and delegation actions.
 - Add subagent projection middleware/hook for `task` delegations.

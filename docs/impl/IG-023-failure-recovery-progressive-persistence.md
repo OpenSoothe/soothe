@@ -1,6 +1,6 @@
 # IG-023: Failure Recovery, Progressive Persistence, and Artifact Storage
 
-**Implements**: RFC-0010
+**Implements**: RFC-202
 **Status**: Draft
 **Created**: 2026-03-18
 

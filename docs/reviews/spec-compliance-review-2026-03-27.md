@@ -20,7 +20,7 @@
 | **Medium Priority Issues** | 7 |
 | **Low Priority Items** | 12 |
 
-**Overall Assessment**: The Soothe codebase demonstrates excellent spec compliance for RFCs marked as "Implemented". The architecture closely follows RFC-0001's vision of protocol-driven orchestration. Minor gaps exist in documentation completeness and some Draft RFCs have partial implementations that exceed their spec status.
+**Overall Assessment**: The Soothe codebase demonstrates excellent spec compliance for RFCs marked as "Implemented". The architecture closely follows RFC-000's vision of protocol-driven orchestration. Minor gaps exist in documentation completeness and some Draft RFCs have partial implementations that exceed their spec status.
 
 ---
 
@@ -30,46 +30,46 @@
 
 | RFC | Title | Consistency | Notes |
 |-----|-------|-------------|-------|
-| RFC-0002 | Core Modules Architecture | 100% | All 8 protocols implemented with backends |
-| RFC-0003 | CLI TUI Architecture | 98% | Minor: Draft status but fully implemented |
-| RFC-0004 | Skillify Agent Architecture | 95% | Implementation complete, needs status update |
-| RFC-0005 | Weaver Agent Architecture | 95% | Implementation complete, needs status update |
-| RFC-0006 | Context and Memory Architecture | 100% | Backends match spec exactly |
-| RFC-0007 | Autonomous Iteration Loop | 90% | Core implemented, some features deferred |
-| RFC-0012 | Secure Filesystem Policy | 100% | Fully implemented with IG-033 |
-| RFC-0016 | Tool Interface Optimization | 100% | Consolidation complete per spec |
-| RFC-0018 | Plugin Extension System | 95% | Decorator API in soothe_sdk, minor gaps |
-| RFC-0019 | Unified Event Processing | 100% | EventProcessor architecture matches spec |
+| RFC-001 | Core Modules Architecture | 100% | All 8 protocols implemented with backends |
+| RFC-500 | CLI TUI Architecture | 98% | Minor: Draft status but fully implemented |
+| RFC-601 | Skillify Agent Architecture | 95% | Implementation complete, needs status update |
+| RFC-601 | Weaver Agent Architecture | 95% | Implementation complete, needs status update |
+| RFC-300 | Context and Memory Architecture | 100% | Backends match spec exactly |
+| RFC-200 | Autonomous Iteration Loop | 90% | Core implemented, some features deferred |
+| RFC-102 | Secure Filesystem Policy | 100% | Fully implemented with IG-033 |
+| RFC-101 | Tool Interface Optimization | 100% | Consolidation complete per spec |
+| RFC-600 | Plugin Extension System | 95% | Decorator API in soothe_sdk, minor gaps |
+| RFC-401 | Unified Event Processing | 100% | EventProcessor architecture matches spec |
 
 ### ⚠️ Draft Status But Partially Implemented (7)
 
 | RFC | Title | Implementation % | Gap |
 |-----|-------|------------------|-----|
-| RFC-0001 | System Conceptual Design | 85% | Some principles not fully documented in code |
-| RFC-0008 | Agentic Loop Execution | 70% | Core loop implemented, verification phase partial |
-| RFC-0009 | DAG-Based Execution | 75% | StepScheduler implemented, full DAG incomplete |
-| RFC-0010 | Failure Recovery & Persistence | 60% | Checkpointing works, progressive persistence partial |
+| RFC-000 | System Conceptual Design | 85% | Some principles not fully documented in code |
+| RFC-201 | Agentic Loop Execution | 70% | Core loop implemented, verification phase partial |
+| RFC-202 | DAG-Based Execution | 75% | StepScheduler implemented, full DAG incomplete |
+| RFC-202 | Failure Recovery & Persistence | 60% | Checkpointing works, progressive persistence partial |
 | RFC-0011 | Dynamic Goal Management | 50% | Basic reflection works, dynamic revision partial |
-| RFC-0013 | Daemon Communication Protocol | 90% | Multi-transport implemented, HTTP REST partial |
-| RFC-0015 | Progress Event Protocol | 95% | Events defined and emitted, minor gaps |
+| RFC-400 | Daemon Communication Protocol | 90% | Multi-transport implemented, HTTP REST partial |
+| RFC-401 | Progress Event Protocol | 95% | Events defined and emitted, minor gaps |
 
 ### ⏸️ Draft Status, Not Yet Implemented (4)
 
 | RFC | Title | Status |
 |-----|-------|--------|
 | RFC-0017 | Unified Thread Management | Planning phase |
-| RFC-0020 | Event Display Architecture | Partial implementation |
-| RFC-0021 | Research Subagent | Recently implemented, needs status update |
+| RFC-501 | Event Display Architecture | Partial implementation |
+| RFC-601 | Research Subagent | Recently implemented, needs status update |
 
 ---
 
 ## Detailed Findings
 
-### Category 1: Core Protocols (RFC-0001, RFC-0002)
+### Category 1: Core Protocols (RFC-000, RFC-001)
 
 #### ✅ FULLY IMPLEMENTED: Protocol-First Architecture
 
-**Spec**: RFC-0001 Principle 1 - "Every Soothe module is defined as a protocol"
+**Spec**: RFC-000 Principle 1 - "Every Soothe module is defined as a protocol"
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/protocols/`
 - `context.py`: `ContextProtocol` with 6 methods ✅
@@ -81,7 +81,7 @@
 - `persistence.py`: `PersistStore` abstract interface ✅
 - `vector_store.py`: `VectorStoreProtocol` for embeddings ✅
 
-**Evidence**: All 8 protocols from RFC-0002 are implemented as `Protocol` classes with `@runtime_checkable` decorator. Method signatures match spec exactly.
+**Evidence**: All 8 protocols from RFC-001 are implemented as `Protocol` classes with `@runtime_checkable` decorator. Method signatures match spec exactly.
 
 **Backend Implementations**:
 - `backends/context/keyword.py`: `KeywordContext` implementation ✅
@@ -97,7 +97,7 @@
 
 #### ✅ FULLY IMPLEMENTED: Orchestration Layer
 
-**Spec**: RFC-0001 Section "Orchestrator" - "The top-level agent created by `create_soothe_agent()`"
+**Spec**: RFC-000 Section "Orchestrator" - "The top-level agent created by `create_soothe_agent()`"
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/core/agent.py:78-93`
 ```python
@@ -125,11 +125,11 @@ def create_soothe_agent(
 
 ---
 
-### Category 2: Plugin System (RFC-0018)
+### Category 2: Plugin System (RFC-600)
 
 #### ✅ FULLY IMPLEMENTED: Decorator-Based API
 
-**Spec**: RFC-0018 Section "Decorator-Based Simplicity" - "Plugins use Python decorators (`@plugin`, `@tool`, `@subagent`)"
+**Spec**: RFC-600 Section "Decorator-Based Simplicity" - "Plugins use Python decorators (`@plugin`, `@tool`, `@subagent`)"
 
 **Code**:
 - `sdk/src/soothe_sdk/decorators/plugin.py` - `@plugin` decorator ✅
@@ -159,7 +159,7 @@ class MyPlugin:
 
 #### ✅ FULLY IMPLEMENTED: Plugin Lifecycle Management
 
-**Spec**: RFC-0018 Section "Loading Sequence" - 5-phase lifecycle
+**Spec**: RFC-600 Section "Loading Sequence" - 5-phase lifecycle
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/plugin/lifecycle.py:52-80`
 ```python
@@ -174,7 +174,7 @@ class PluginLifecycleManager:
         # Phase 5: Registration
 ```
 
-**Evidence**: All 5 phases from RFC-0018 Figure "Loading Sequence" are implemented:
+**Evidence**: All 5 phases from RFC-600 Figure "Loading Sequence" are implemented:
 1. Discovery ✅ (`discover_all_plugins()`)
 2. Dependency Resolution ✅ (`_build_dependency_graph()`)
 3. Validation ✅ (in `PluginLoader`)
@@ -187,7 +187,7 @@ class PluginLifecycleManager:
 
 #### ⚠️ PARTIAL: Security Model Implementation
 
-**Spec**: RFC-0018 Section "Security by Default" - "Third-party plugins run with restricted permissions based on trust levels"
+**Spec**: RFC-600 Section "Security by Default" - "Third-party plugins run with restricted permissions based on trust levels"
 
 **Code**: Found trust_level in `PluginManifest` but no enforcement logic found.
 
@@ -199,11 +199,11 @@ class PluginLifecycleManager:
 
 ---
 
-### Category 3: Daemon Communication (RFC-0013)
+### Category 3: Daemon Communication (RFC-400)
 
 #### ✅ FULLY IMPLEMENTED: Multi-Transport Architecture
 
-**Spec**: RFC-0013 Section "Component Overview" - Unix Socket, WebSocket, HTTP REST
+**Spec**: RFC-400 Section "Component Overview" - Unix Socket, WebSocket, HTTP REST
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/daemon/transports/`
 - `unix_socket.py` ✅ (Unix domain socket server)
@@ -211,7 +211,7 @@ class PluginLifecycleManager:
 - `http_rest.py` ✅ (HTTP REST API)
 - `base.py` ✅ (Transport abstraction)
 
-**Evidence**: All three transports specified in RFC-0013 are implemented with clear separation of concerns.
+**Evidence**: All three transports specified in RFC-400 are implemented with clear separation of concerns.
 
 **Consistency**: 90% - HTTP REST implementation incomplete (see below)
 
@@ -219,7 +219,7 @@ class PluginLifecycleManager:
 
 #### ⚠️ PARTIAL: HTTP REST API
 
-**Spec**: RFC-0013 Section "HTTP REST" - Full CRUD operations for threads, health, etc.
+**Spec**: RFC-400 Section "HTTP REST" - Full CRUD operations for threads, health, etc.
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/daemon/transports/http_rest.py`
 
@@ -236,11 +236,11 @@ class PluginLifecycleManager:
 
 ---
 
-### Category 4: Event Processing (RFC-0019)
+### Category 4: Event Processing (RFC-401)
 
 #### ✅ FULLY IMPLEMENTED: Unified EventProcessor Architecture
 
-**Spec**: RFC-0019 - "Unify CLI and TUI event processing with a single `EventProcessor` class"
+**Spec**: RFC-401 - "Unify CLI and TUI event processing with a single `EventProcessor` class"
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/ux/core/event_processor.py:44-72`
 
@@ -257,7 +257,7 @@ class EventProcessor:
         self._state = ProcessorState()
 ```
 
-**Evidence**: Architecture matches RFC-0019 Figure exactly:
+**Evidence**: Architecture matches RFC-401 Figure exactly:
 - Single `EventProcessor` class ✅
 - `RendererProtocol` abstraction ✅
 - `CliRenderer` and `TuiRenderer` implementations ✅
@@ -269,7 +269,7 @@ class EventProcessor:
 
 #### ✅ FULLY IMPLEMENTED: RendererProtocol Interface
 
-**Spec**: RFC-0019 Section "RendererProtocol Interface" - Core callbacks
+**Spec**: RFC-401 Section "RendererProtocol Interface" - Core callbacks
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/ux/core/renderer_protocol.py`
 
@@ -287,11 +287,11 @@ class EventProcessor:
 
 ---
 
-### Category 5: Tool Interface Optimization (RFC-0016)
+### Category 5: Tool Interface Optimization (RFC-101)
 
 #### ✅ FULLY IMPLEMENTED: Single-Purpose Tools
 
-**Spec**: RFC-0016 - "Replace unified dispatch tools with single-purpose tools"
+**Spec**: RFC-101 - "Replace unified dispatch tools with single-purpose tools"
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/tools/`
 
@@ -309,7 +309,7 @@ tools/
 └── datetime.py          # 1 tool: current_datetime ✅
 ```
 
-**Results** (from RFC-0016):
+**Results** (from RFC-101):
 - Tool files reduced from 24 to 14 ✅
 - Backward compatible via resolver ✅
 - Tool call success rate improved from 60% to 96% ✅
@@ -318,11 +318,11 @@ tools/
 
 ---
 
-### Category 6: CLI/TUI Architecture (RFC-0003)
+### Category 6: CLI/TUI Architecture (RFC-500)
 
 #### ✅ FULLY IMPLEMENTED: Three Interaction Modes
 
-**Spec**: RFC-0003 Section "Overview" - TUI, Headless, Daemon
+**Spec**: RFC-500 Section "Overview" - TUI, Headless, Daemon
 
 **Code**:
 - TUI: `/Users/chenxm/Workspace/Soothe/src/soothe/ux/tui/` ✅
@@ -337,7 +337,7 @@ tools/
 
 #### ✅ FULLY IMPLEMENTED: SootheRunner Orchestration
 
-**Spec**: RFC-0003 Section "Orchestration-layer runner"
+**Spec**: RFC-500 Section "Orchestration-layer runner"
 
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/core/runner/__init__.py:70-80`
 
@@ -351,7 +351,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
     """
 ```
 
-**Evidence**: Runner implements all RFC-0003 responsibilities:
+**Evidence**: Runner implements all RFC-500 responsibilities:
 - Protocol orchestration (pre/post-stream) ✅
 - LangGraph astream() pass-through ✅
 - HITL interrupt loop ✅
@@ -384,10 +384,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 **Severity**: Low (documentation issue, not code issue)
 
 **Findings**:
-1. **RFC-0003**: Status "Accepted" but should be "Implemented" - fully working CLI/TUI
-2. **RFC-0004**: Status "Implemented" correctly
-3. **RFC-0005**: Status "Implemented" correctly
-4. **RFC-0021**: Status "Draft" but `research` subagent is implemented in `/src/soothe/subagents/research/`
+1. **RFC-500**: Status "Accepted" but should be "Implemented" - fully working CLI/TUI
+2. **RFC-601**: Status "Implemented" correctly
+3. **RFC-601**: Status "Implemented" correctly
+4. **RFC-601**: Status "Draft" but `research` subagent is implemented in `/src/soothe/subagents/research/`
 
 **Recommendation**: Update RFC statuses to reflect actual implementation state. Use `platonic-coding specs-refine` to update.
 
@@ -397,7 +397,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 **Finding 1: Plugin Trust Level Enforcement**
 
-**Spec**: RFC-0018 Section "Security by Default"
+**Spec**: RFC-600 Section "Security by Default"
 **Code**: Not found in runtime
 **Issue**: `trust_level` defined in manifest but not enforced during tool/subagent execution
 **Impact**: Medium - Security feature specified but not enforced
@@ -407,7 +407,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 **Finding 2: HTTP REST API Completeness**
 
-**Spec**: RFC-0013 Section "HTTP REST" + `rest-api-spec.md`
+**Spec**: RFC-400 Section "HTTP REST" + `rest-api-spec.md`
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/daemon/transports/http_rest.py`
 **Issue**: Some REST endpoints from spec not fully implemented
 **Impact**: Low - Secondary transport, not critical path
@@ -417,11 +417,11 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 **Finding 3: Progressive Persistence**
 
-**Spec**: RFC-0010 Section "Progressive Persistence"
+**Spec**: RFC-202 Section "Progressive Persistence"
 **Code**: `/Users/chenxm/Workspace/Soothe/src/soothe/core/runner/_runner_checkpoint.py`
 **Issue**: Basic checkpointing works, but progressive artifact storage and incremental reports partial
 **Impact**: Medium - Useful for long-running tasks
-**Recommendation**: Complete progressive persistence per RFC-0010 spec
+**Recommendation**: Complete progressive persistence per RFC-202 spec
 
 ---
 
@@ -429,20 +429,20 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 ### Excellent Traceability Examples
 
-1. **ContextProtocol** (RFC-0002 Module 1)
+1. **ContextProtocol** (RFC-001 Module 1)
    - Spec: `protocols/context.py:45-113`
    - Implementation: `backends/context/keyword.py`
    - Guide: `IG-005-core-protocols-implementation.md`
    - Status: ✅ Complete traceability chain
 
-2. **EventProcessor** (RFC-0019)
-   - Spec: `RFC-0019-unified-event-processing.md`
+2. **EventProcessor** (RFC-401)
+   - Spec: `RFC-401-unified-event-processing.md`
    - Implementation: `ux/core/event_processor.py`
    - Guide: `IG-061-unified-event-processing.md`
    - Status: ✅ Complete traceability chain
 
-3. **Plugin System** (RFC-0018)
-   - Spec: `RFC-0018-plugin-extension-system.md`
+3. **Plugin System** (RFC-600)
+   - Spec: `RFC-600-plugin-extension-system.md`
    - Implementation: `plugin/` package + `soothe_sdk`
    - Guide: `IG-051-plugin-api-implementation.md`
    - Status: ✅ Complete traceability chain
@@ -456,9 +456,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 **Action**: Run `platonic-coding specs-refine` to update RFC statuses to match implementation reality.
 
 **RFCs to update**:
-- RFC-0003: "Accepted" → "Implemented"
-- RFC-0021: "Draft" → "Implemented"
-- RFC-0019: Already "Implemented" ✅
+- RFC-500: "Accepted" → "Implemented"
+- RFC-601: "Draft" → "Implemented"
+- RFC-401: Already "Implemented" ✅
 
 ---
 
@@ -479,7 +479,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 ### Priority 3: Complete Progressive Persistence (Effort: Medium, Impact: Medium)
 
-**Action**: Implement full RFC-0010 progressive persistence features.
+**Action**: Implement full RFC-202 progressive persistence features.
 
 **Features to add**:
 1. Incremental checkpoint saving (not just final checkpoint)
@@ -497,9 +497,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 **Action**: Add inline code comments referencing RFCs for architectural decisions.
 
 **Examples**:
-- `core/agent.py:create_soothe_agent()` - Reference RFC-0001 Section "Orchestrator"
-- `core/runner/__init__.py:SootheRunner` - Reference RFC-0003, RFC-0007, RFC-0008, RFC-0009
-- `protocols/*.py` - Reference RFC-0002 modules
+- `core/agent.py:create_soothe_agent()` - Reference RFC-000 Section "Orchestrator"
+- `core/runner/__init__.py:SootheRunner` - Reference RFC-500, RFC-200, RFC-201, RFC-202
+- `protocols/*.py` - Reference RFC-001 modules
 
 ---
 
@@ -507,13 +507,13 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 ### 🌟 Exemplary Spec Compliance
 
-1. **Protocol-First Design**: Codebase perfectly implements RFC-0001's vision of protocol-driven architecture. All 8 core protocols are abstract interfaces with swappable backends.
+1. **Protocol-First Design**: Codebase perfectly implements RFC-000's vision of protocol-driven architecture. All 8 core protocols are abstract interfaces with swappable backends.
 
-2. **Decorator-Based Plugin API**: Clean implementation matching RFC-0018 specification. `soothe_sdk` package provides developer-friendly API as designed.
+2. **Decorator-Based Plugin API**: Clean implementation matching RFC-600 specification. `soothe_sdk` package provides developer-friendly API as designed.
 
-3. **Unified Event Processing**: RFC-0019's architecture is implemented exactly as specified, with clean separation between `EventProcessor` and `RendererProtocol`.
+3. **Unified Event Processing**: RFC-401's architecture is implemented exactly as specified, with clean separation between `EventProcessor` and `RendererProtocol`.
 
-4. **Tool Consolidation**: RFC-0016's tool optimization delivered promised results (42% file reduction, 96% success rate).
+4. **Tool Consolidation**: RFC-101's tool optimization delivered promised results (42% file reduction, 96% success rate).
 
 5. **Implementation Guide Coverage**: 69 implementation guides in `docs/impl/` provide excellent traceability from specs to code.
 
@@ -527,7 +527,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 - `/Users/chenxm/Workspace/Soothe/tests/unit/` - 900+ unit tests (from CLAUDE.md)
 - Test files found for: protocols, plugins, daemon, event processing, tools, memory
 
-**Gap**: Some newer RFCs (RFC-0010, RFC-0011) may have lower test coverage for advanced features.
+**Gap**: Some newer RFCs (RFC-202, RFC-0011) may have lower test coverage for advanced features.
 
 **Recommendation**: Add integration tests for:
 - Multi-transport daemon communication
@@ -552,11 +552,11 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
 ## Conclusion
 
-The Soothe codebase demonstrates **excellent spec compliance** with a 97% implementation rate for functionality items. The architecture faithfully implements RFC-0001's vision of protocol-driven orchestration, extending deepagents as specified.
+The Soothe codebase demonstrates **excellent spec compliance** with a 97% implementation rate for functionality items. The architecture faithfully implements RFC-000's vision of protocol-driven orchestration, extending deepagents as specified.
 
 ### Strengths
 - ✅ All core protocols implemented with swappable backends
-- ✅ Plugin system matches RFC-0018 specification
+- ✅ Plugin system matches RFC-600 specification
 - ✅ Unified event processing architecture as designed
 - ✅ Tool optimization delivered promised results
 - ✅ Excellent spec-to-code traceability

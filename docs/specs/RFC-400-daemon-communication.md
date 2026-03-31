@@ -1,4 +1,4 @@
-# RFC-0013: Unified Daemon Communication Protocol
+# RFC-400: Unified Daemon Communication Protocol
 
 **RFC**: 0013
 **Title**: Unified Daemon Communication Protocol for WebSocket IPC
@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-19
 **Updated**: 2026-03-29
-**Dependencies**: RFC-0001, RFC-0002, RFC-0003
+**Dependencies**: RFC-000, RFC-001, RFC-500
 
 ## Abstract
 
@@ -14,7 +14,7 @@ This RFC defines a WebSocket-based daemon communication protocol serving all cli
 
 **Updates**:
 - **2026-03-29**: Simplified to WebSocket-only bidirectional streaming, removed Unix socket (stability issues)
-- **2026-03-29**: Merged RFC-0023 daemon readiness, added lifecycle phases and readiness handshake
+- **2026-03-29**: Merged RFC-100 daemon readiness, added lifecycle phases and readiness handshake
 - **2026-03-28**: Added daemon lifecycle semantics, client detachment behavior
 
 ## Problem & Solution
@@ -271,7 +271,7 @@ Message size limit: 10MB. Schema validation on required fields.
 
 ### 2026-03-29
 - BREAKING: Removed Unix socket, WebSocket-only
-- Merged RFC-0023 readiness architecture
+- Merged RFC-100 readiness architecture
 - Added lifecycle states, startup phases, handshake
 - Added DAEMON_BUSY, readiness error codes
 
@@ -281,10 +281,10 @@ Message size limit: 10MB. Schema validation on required fields.
 
 ## References
 
-- RFC-0001: System Conceptual Design
-- RFC-0002: Core Modules Architecture
-- RFC-0003: CLI TUI Architecture
-- RFC-0023: Coreagent Runtime (merged)
+- RFC-000: System Conceptual Design
+- RFC-001: Core Modules Architecture
+- RFC-500: CLI TUI Architecture
+- RFC-100: Coreagent Runtime (merged)
 
 ---
 

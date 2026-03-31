@@ -2,13 +2,13 @@
 
 **Implementation Guide**: IG-102
 **Title**: Remove Unix Domain Socket, Use WebSocket-Only Transport
-**Related RFC**: RFC-0013 (Unified Daemon Communication Protocol)
+**Related RFC**: RFC-400 (Unified Daemon Communication Protocol)
 **Created**: 2026-03-29
 **Status**: In Progress
 
 ## Overview
 
-This guide implements the WebSocket-only transport architecture defined in RFC-0013. The Unix domain socket transport is removed due to stability issues (stale socket files, large payload disconnects). WebSocket becomes the sole bidirectional transport for all clients.
+This guide implements the WebSocket-only transport architecture defined in RFC-400. The Unix domain socket transport is removed due to stability issues (stale socket files, large payload disconnects). WebSocket becomes the sole bidirectional transport for all clients.
 
 ## Scope
 
@@ -17,7 +17,7 @@ This guide implements the WebSocket-only transport architecture defined in RFC-0
 | Transport layer | Remove Unix socket, WebSocket required |
 | Client connection | CLI/TUI use WebSocket client to localhost |
 | Configuration | Remove UnixSocketConfig section |
-| Documentation | Update RFC-0013, user guide |
+| Documentation | Update RFC-400, user guide |
 
 ## Files to Delete
 

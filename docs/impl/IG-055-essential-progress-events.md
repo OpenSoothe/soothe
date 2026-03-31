@@ -3,11 +3,11 @@
 **Implementation Guide**
 **Created**: 2026-03-25
 **Status**: In Progress
-**Related**: RFC-0018, IG-052, IG-054
+**Related**: RFC-600, IG-052, IG-054
 
 ## Summary
 
-This guide tracks the addition of essential progress events to all builtin tools that currently have empty `events.py` files. Per RFC-0018, all tools should expose started/completed/failed events to enable observability and user feedback.
+This guide tracks the addition of essential progress events to all builtin tools that currently have empty `events.py` files. Per RFC-600, all tools should expose started/completed/failed events to enable observability and user feedback.
 
 ## Motivation
 
@@ -16,7 +16,7 @@ This guide tracks the addition of essential progress events to all builtin tools
 9 builtin tools have empty `events.py` files with no custom events defined:
 - audio/, code_edit/, data/, datetime/, execution/, file_ops/, goals/, image/, video/
 
-This violates RFC-0018's requirement for plugin extensibility and observability.
+This violates RFC-600's requirement for plugin extensibility and observability.
 
 ### Solution
 
@@ -177,6 +177,6 @@ After each tool:
 
 ## Related Documentation
 
-- [RFC-0018: Plugin Extension Specification](../specs/RFC-0018.md)
+- [RFC-600: Plugin Extension Specification](../specs/RFC-600.md)
 - [IG-052: Event System Optimization](IG-052.md)
 - [IG-054: Event Constants Self-Containment](054-event-constants-self-containment.md)

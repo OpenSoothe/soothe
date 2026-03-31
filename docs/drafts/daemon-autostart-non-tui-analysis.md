@@ -2,7 +2,7 @@
 
 **Created**: 2026-03-28
 **Status**: Critical Bug
-**Related**: RFC-0013, IG-085
+**Related**: RFC-400, IG-085
 
 ## Problem Statement
 
@@ -11,7 +11,7 @@ When running `soothe -p "prompt"` in non-TUI mode and the daemon is NOT running:
 - Ctrl+C kills the entire process
 - **No daemon persists** because it was never started
 
-This violates RFC-0013 daemon lifecycle semantics which state:
+This violates RFC-400 daemon lifecycle semantics which state:
 > "If daemon not running: Start daemon, connect, create thread, execute request"
 
 ## Current Behavior (INCORRECT)
@@ -37,7 +37,7 @@ def run_headless(cfg, prompt, ...):
 3. Standalone = single process, killed by Ctrl+C
 4. No daemon persistence
 
-## Expected Behavior (RFC-0013)
+## Expected Behavior (RFC-400)
 
 ```
 User runs: soothe -p "query"
@@ -61,7 +61,7 @@ The code was designed with the assumption that:
 - TUI mode auto-starts daemon
 - Non-TUI mode should use standalone if daemon not running
 
-**This is incorrect** according to RFC-0013:
+**This is incorrect** according to RFC-400:
 - **Both TUI and non-TUI should auto-start daemon**
 - Daemon should ALWAYS persist after request
 - Only `soothe daemon stop` should kill daemon
@@ -85,14 +85,14 @@ def run_headless(
     """Run a single prompt with streaming output and progress events.
 
     Connects to running daemon if available to avoid RocksDB lock conflicts.
-    Auto-starts daemon if not running (RFC-0013 daemon lifecycle).
+    Auto-starts daemon if not running (RFC-400 daemon lifecycle).
     """
     import asyncio
     import time
 
     from soothe.ux.cli.execution.daemon import run_headless_via_daemon
 
-    # Auto-start daemon if not running (RFC-0013)
+    # Auto-start daemon if not running (RFC-400)
     if not SootheDaemon.is_running():
         typer.echo("[lifecycle] Starting daemon...", err=True)
         from soothe.ux.cli.commands.daemon_cmd import daemon_start
@@ -142,7 +142,7 @@ def run_headless(
 **Recommendation**: **Option A** - Remove standalone mode entirely
 
 **Rationale**:
-- RFC-0013 specifies daemon-centric architecture
+- RFC-400 specifies daemon-centric architecture
 - Daemon provides thread persistence, multi-client support
 - Standalone mode defeats the purpose of daemon lifecycle
 - Simpler mental model: "Daemon always runs"
@@ -185,7 +185,7 @@ def run_headless(
 - Test multiple sequential queries
 
 ### Phase 3: Documentation
-- Update RFC-0013 if needed
+- Update RFC-400 if needed
 - Update user guide
 - Add to changelog
 
@@ -214,7 +214,7 @@ soothe daemon stop
 
 ## References
 
-- RFC-0013: Daemon Lifecycle Semantics
+- RFC-400: Daemon Lifecycle Semantics
 - IG-085: Daemon Lifecycle Polish Implementation
 - `src/soothe/ux/cli/execution/headless.py`
 - `src/soothe/ux/cli/execution/standalone.py`

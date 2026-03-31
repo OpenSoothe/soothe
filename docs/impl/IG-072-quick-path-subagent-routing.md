@@ -255,7 +255,7 @@ Same pattern can be used for other explicit routing scenarios:
 ## Related Work
 
 - **IG-036**: Unified classifier implementation (created the classifier we're bypassing)
-- **RFC-0016**: Routing architecture (established the two-tier system)
+- **RFC-101**: Routing architecture (established the two-tier system)
 - **IG-071**: Research subagent slash command integration (added `/research` command)
 
 ## Lessons Learned
