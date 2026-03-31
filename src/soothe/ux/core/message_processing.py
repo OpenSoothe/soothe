@@ -605,6 +605,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     """
     from soothe.utils.path_display import convert_and_abbreviate_path, is_path_argument
 
+    max_value_length = 40  # Max length for displayed values
+
     args = coerce_tool_call_args_to_dict(tool_call.get("args"))
     internal = _normalize_tool_name_for_arg_map(tool_name)
     key_args = _ARG_DISPLAY_MAP.get(internal)
@@ -623,10 +625,27 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     # If args are still empty but tool is known, show placeholder
     if not args:
         if key_args:
-            # Try to show truncated raw args as fallback
+            # Try to extract value from partial raw args string
             if raw_args_str:
-                max_len = 40
-                return raw_args_str[:max_len] + "..." if len(raw_args_str) > max_len else raw_args_str
+                # Try regex extraction for common patterns like "path": "value" or "path":"value"
+                for key_arg in key_args:
+                    # Match patterns like "key": "value" or "key":"value"
+                    pattern = '"' + key_arg + '"\\s*:\\s*"([^"]+)"'
+                    match = re.search(pattern, raw_args_str)
+                    if match:
+                        value = match.group(1)
+                        if is_path_argument(key_arg):
+                            value = convert_and_abbreviate_path(value, max_length=max_value_length)
+                        return value
+                    # Also match non-string values like "key": 123 or "key": true
+                    pattern2 = '"' + key_arg + '"\\s*:\\s*([^,\\}]+)'
+                    match2 = re.search(pattern2, raw_args_str)
+                    if match2:
+                        val = match2.group(1).strip()
+                        # Truncate if too long
+                        if len(val) > max_value_length:
+                            val = val[: max_value_length - 3] + "..."
+                        return val
             return "..."
         return ""
 
@@ -635,7 +654,6 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
 
     # Extract values for all configured argument keys
     values = []
-    max_value_length = 40  # Increased for 120-char terminal width
     for key_arg in key_args:
         if key_arg in args:
             value = str(args[key_arg])
@@ -651,7 +669,11 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         # Model may use different arg names than _ARG_DISPLAY_MAP; still show something useful.
         if args:
             parts: list[str] = []
+            # Skip internal keys like _raw, _internal, etc.
+            skip_keys = {"_raw", "_internal", "raw_args_str"}
             for k, v in list(args.items())[:3]:
+                if k in skip_keys:
+                    continue
                 s = str(v)
                 # Convert and abbreviate path arguments
                 if is_path_argument(k):
@@ -659,7 +681,20 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                 elif len(s) > max_value_length:
                     s = s[: max_value_length - 3] + "..."
                 parts.append(s)
-            return ", ".join(parts)
+            if parts:
+                return ", ".join(parts)
+            # All args were internal keys, check for raw_args_str
+            raw = args.get("_raw") or args.get("raw_args_str", "")
+            if raw:
+                # Try to extract from raw JSON
+                for key_arg in key_args:
+                    pattern = '"' + key_arg + '"\\s*:\\s*"([^"]+)"'
+                    match = re.search(pattern, raw)
+                    if match:
+                        value = match.group(1)
+                        if is_path_argument(key_arg):
+                            value = convert_and_abbreviate_path(value, max_value_length)
+                        return value
         # Known tool but no matching args found
         return "..."
 

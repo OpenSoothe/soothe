@@ -51,6 +51,7 @@ class PipelineContext:
     current_step_description: str | None = None
     step_start_time: float | None = None
     step_header_emitted: bool = False  # Track if step header was emitted
+    _active_step_ids: list[str] = field(default_factory=list)  # Track parallel steps in progress
 
     # Parallel tool tracking
     pending_tool_calls: dict[str, ToolCallInfo] = field(default_factory=dict)
@@ -67,6 +68,7 @@ class PipelineContext:
         self.goal_start_time = None
         self.steps_total = 0
         self.steps_completed = 0
+        self._active_step_ids.clear()
         self.reset_step()
 
     def reset_step(self) -> None:
@@ -80,6 +82,19 @@ class PipelineContext:
         self.parallel_header_emitted = False
         self.subagent_name = None
         self.subagent_milestones.clear()
+        # Don't clear _active_step_ids here - it's cleared when steps complete
+
+    def complete_step(self, step_id: str) -> None:
+        """Mark a step as completed and update tracking.
+
+        Args:
+            step_id: Step identifier to mark complete.
+        """
+        # Remove from active steps
+        if step_id in self._active_step_ids:
+            self._active_step_ids.remove(step_id)
+        # Increment completed count
+        self.steps_completed += 1
 
     def start_tool_call(self, tool_call_id: str, name: str, args_summary: str, start_time: float) -> None:
         """Register a tool call as started.

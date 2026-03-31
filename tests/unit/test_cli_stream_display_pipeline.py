@@ -99,15 +99,16 @@ class TestFormatters:
         assert line.icon == "●"
 
     def test_format_step_header_sequential(self) -> None:
-        line = format_step_header(1, "Read files", parallel=False)
+        line = format_step_header("Read files", parallel=False)
         assert line.level == 2
-        assert line.content == "Step 1: Read files"
-        assert line.icon == ""  # Connector is in indent, not icon
+        assert line.content == "Read files"
+        assert line.icon == "○"  # Hollow circle for in-progress
         assert line.status is None
 
     def test_format_step_header_parallel(self) -> None:
-        line = format_step_header(1, "Read files", parallel=True)
-        assert line.content == "Step 1: Read files (parallel)"
+        line = format_step_header("Read files", parallel=True)
+        assert line.content == "Read files (parallel)"
+        assert line.icon == "○"
 
     def test_format_tool_call_sequential(self) -> None:
         line = format_tool_call("read_file", '"config.yml"', running=False)
@@ -142,9 +143,10 @@ class TestFormatters:
         assert line.duration_ms == 45200
 
     def test_format_step_done(self) -> None:
-        line = format_step_done(1, 3.2)
+        line = format_step_done("Read files", 3.2)
         assert line.level == 2
-        assert line.content == "Step 1 done"
+        assert line.content == "Read files"
+        assert line.icon == "●"  # Solid circle for completed
         assert line.duration_ms == 3200
 
     def test_format_goal_done(self) -> None:
@@ -227,7 +229,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Step 1" in lines[0].content
+        assert lines[0].icon == "○"  # Hollow circle for started step
         assert "Read config" in lines[0].content
 
     def test_subagent_dispatched(self) -> None:

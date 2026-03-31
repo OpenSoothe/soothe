@@ -33,6 +33,10 @@ STEP_START_EVENTS = {
     "soothe.agentic.step.started",
 }
 
+# Batch step events for parallel execution
+BATCH_STEP_STARTED = "soothe.cognition.plan.batch_step_started"
+BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch_step_completed"
+
 STEP_COMPLETE_EVENTS = {
     "soothe.cognition.plan.step_completed",
     "soothe.agentic.step.completed",
@@ -203,17 +207,17 @@ class StreamDisplayPipeline:
         if not description:
             return []
 
-        # Reset step context
-        self._context.reset_step()
+        # Track step by ID for parallel execution
+        if step_id and step_id not in self._context._active_step_ids:
+            self._context._active_step_ids.append(step_id)
+
+        # Reset step context for this specific step
         self._context.current_step_id = step_id
         self._context.current_step_description = description
         self._context.step_start_time = time.time()
         self._context.step_header_emitted = True
 
-        # Calculate step number
-        step_num = self._context.steps_completed + 1
-
-        return [format_step_header(step_num, description)]
+        return [format_step_header(description)]
 
     def _on_subagent_dispatched(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle subagent dispatched event.
@@ -305,6 +309,7 @@ class StreamDisplayPipeline:
         Returns:
             Display lines for step completion.
         """
+        step_id = event.get("step_id", "")
         duration_s = event.get("duration_s", event.get("duration_seconds", 0))
         if duration_s == 0:
             duration_ms = event.get("duration_ms", 0)
@@ -314,13 +319,19 @@ class StreamDisplayPipeline:
         if duration_s == 0 and self._context.step_start_time:
             duration_s = time.time() - self._context.step_start_time
 
-        step_num = self._context.steps_completed + 1
-        self._context.steps_completed = step_num
+        # Get description from context or event
+        description = self._context.current_step_description or event.get("description", "")
 
-        # Reset step context
-        self._context.reset_step()
+        # Mark step complete (updates _active_step_ids and steps_completed)
+        if step_id:
+            self._context.complete_step(step_id)
 
-        return [format_step_done(step_num, duration_s)]
+        # Reset current step context (but not _active_step_ids)
+        self._context.current_step_id = None
+        self._context.current_step_description = None
+        self._context.step_start_time = None
+
+        return [format_step_done(description, duration_s)]
 
     def _on_goal_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle goal completed event.

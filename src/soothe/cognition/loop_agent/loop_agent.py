@@ -135,8 +135,6 @@ class LoopAgent:
                 },
             )
 
-            logger.info("=== Iteration %d ===", state.iteration)
-
             # PLAN Phase
             decision = await self.planner_phase.plan(
                 goal=goal,

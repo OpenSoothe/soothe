@@ -22,22 +22,21 @@ def format_goal_header(goal: str) -> DisplayLine:
     )
 
 
-def format_step_header(step_num: int, description: str, *, parallel: bool = False) -> DisplayLine:
-    """Format a step header line.
+def format_step_header(description: str, *, parallel: bool = False) -> DisplayLine:
+    """Format a step header line with checkbox style.
 
     Args:
-        step_num: Step number (1-indexed).
         description: Step description.
         parallel: Whether step has parallel tools.
 
     Returns:
-        DisplayLine for step header.
+        DisplayLine for step header with hollow circle icon.
     """
     suffix = " (parallel)" if parallel else ""
     return DisplayLine(
         level=2,
-        content=f"Step {step_num}: {description}{suffix}",
-        icon="",  # No icon - connector is in indent
+        content=f"{description}{suffix}",
+        icon="○",  # Hollow circle for in-progress step
         indent=indent_for_level(2),
     )
 
@@ -119,21 +118,21 @@ def format_subagent_done(summary: str, duration_s: float) -> DisplayLine:
     )
 
 
-def format_step_done(step_num: int, duration_s: float) -> DisplayLine:
-    """Format a step completion line.
+def format_step_done(description: str, duration_s: float) -> DisplayLine:
+    """Format a step completion line with solid checkbox.
 
     Args:
-        step_num: Step number.
+        description: Step description (same as header).
         duration_s: Duration in seconds.
 
     Returns:
-        DisplayLine for step done.
+        DisplayLine for step done with solid circle icon.
     """
     duration_ms = int(duration_s * 1000)
     return DisplayLine(
         level=2,
-        content=f"Step {step_num} done",
-        icon="✓",
+        content=description,
+        icon="●",  # Solid circle for completed step
         indent=indent_for_level(2),
         duration_ms=duration_ms,
     )
