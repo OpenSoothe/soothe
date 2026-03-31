@@ -114,7 +114,6 @@ class CliRenderer:
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        is_first_chunk = len(self._state.full_response) == 0
         self._state.full_response.append(text)
 
         if not self._state.multi_step_active:
@@ -123,12 +122,10 @@ class CliRenderer:
             if had_stderr_output:
                 self._state.stderr_just_written = False
 
-            # Only add spacing before assistant text if:
-            # 1. There was prior stderr output (needs separation), OR
-            # 2. This is NOT the first chunk (continuation of response)
-            # Skip extra newlines for first chunk to avoid double blank lines
-            # after external stdout output like daemon startup messages.
-            if had_stderr_output or not is_first_chunk:
+            # Add spacing before assistant text only when:
+            # - There was prior stderr output (progress/tool events need separation)
+            # For streaming chunks after the first, just continue without extra newlines.
+            if had_stderr_output:
                 sys.stdout.write("\n\n")
             sys.stdout.write(text)
             sys.stdout.flush()
