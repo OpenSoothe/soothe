@@ -68,10 +68,6 @@ class TransportConfig(BaseModel):
     http_rest: HttpRestConfig = Field(default_factory=HttpRestConfig)
 
 
-# Backward compatibility alias (deprecated - WebSocket is the only transport now)
-UnixSocketConfig = WebSocketConfig
-
-
 class DaemonConfig(BaseModel):
     """Daemon configuration for WebSocket transport (RFC-0013).
 

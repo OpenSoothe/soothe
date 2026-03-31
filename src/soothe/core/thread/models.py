@@ -46,7 +46,12 @@ class EnhancedThreadInfo(BaseModel):
 
 
 class ThreadFilter(BaseModel):
-    """Thread filtering criteria."""
+    """Thread filtering criteria.
+
+    Note: This is a duplicate of soothe.protocols.durability.ThreadFilter.
+    Prefer importing from protocols.durability for canonical usage.
+    This model exists for compatibility with existing daemon imports.
+    """
 
     status: Literal["idle", "running", "suspended", "archived", "error"] | None = None
     tags: list[str] | None = None

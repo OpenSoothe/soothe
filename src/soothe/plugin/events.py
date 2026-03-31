@@ -64,24 +64,6 @@ class PluginUnloadedEvent(SootheEvent):
     name: str
 
 
-class PluginHealthCheckedEvent(SootheEvent):
-    """Emitted when a plugin health check completes.
-
-    This event signals the result of a plugin's health_check() call.
-
-    Attributes:
-        type: Event type identifier ("soothe.plugin.health_checked").
-        name: Plugin name.
-        status: Health status (healthy, degraded, unhealthy).
-        message: Optional message with additional details.
-    """
-
-    type: Literal["soothe.plugin.health_checked"] = "soothe.plugin.health_checked"
-    name: str
-    status: Literal["healthy", "degraded", "unhealthy"]
-    message: str = ""
-
-
 # Register all plugin events with the global registry
 # This happens at module load time
 from soothe.core.event_catalog import register_event  # noqa: E402
@@ -100,14 +82,9 @@ register_event(
     PluginUnloadedEvent,
     summary_template="Plugin {name} unloaded",
 )
-register_event(
-    PluginHealthCheckedEvent,
-    summary_template="Plugin {name} health: {status}",
-)
 
 __all__ = [
     "PluginFailedEvent",
-    "PluginHealthCheckedEvent",
     "PluginLoadedEvent",
     "PluginUnloadedEvent",
 ]

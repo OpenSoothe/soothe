@@ -336,11 +336,11 @@ performance:
 
 execution:
   concurrency:
-    max_parallel_goals: 0         # Max goals running simultaneously (autonomous mode)
-    max_parallel_steps: 0         # Max parallel plan steps (DAG-aware)
-    max_parallel_subagents: 0     # Max subagents running simultaneously (reserved)
+    max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode)
+    max_parallel_steps: 1         # Max parallel plan steps (DAG-aware)
+    max_parallel_subagents: 3     # Max subagents running simultaneously (reserved)
     max_parallel_tools: 0         # Max tools in parallel per step (reserved)
-    global_max_llm_calls: 0       # Cross-level LLM call circuit breaker
+    global_max_llm_calls: 9       # Cross-level LLM call circuit breaker
     step_parallelism: dependency  # sequential | dependency | max
   recovery:
     progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)

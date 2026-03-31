@@ -21,7 +21,7 @@ This document provides an index of all RFCs in this project.
 | [RFC-0006](./RFC-0006-context-memory-architecture.md) | Context and Memory Architecture Design | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0007](./RFC-0007-autonomous-goal-management-loop.md) | Layer 3: Autonomous Goal Management Loop | Revised | **Layer 3** | RFC-0001, RFC-0002, RFC-0003, RFC-0008 |
 | [RFC-0008](./RFC-0008-agentic-goal-execution-loop.md) | Layer 2: Agentic Goal Execution Loop | Revised | **Layer 2** | RFC-0001, RFC-0002, RFC-0007, RFC-0023 |
-| [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007 |
+| [RFC-0009](./RFC-0009-dag-based-execution.md) | DAG-Based Execution and Unified Concurrency | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0007 |
 | [RFC-0010](./RFC-0010-failure-recovery-persistence.md) | Failure Recovery, Progressive Persistence, and Artifact Storage | Draft | Foundation | RFC-0001, RFC-0002, RFC-0007, RFC-0009 |
 | [RFC-0013](./RFC-0013-daemon-communication-protocol.md) | Unified Daemon Communication Protocol for WebSocket IPC | Implemented | Foundation | RFC-0001, RFC-0002, RFC-0003 |
 | [RFC-0015](./RFC-0015-progress-event-protocol.md) | Progress Event Protocol | Implemented | Foundation | RFC-0003, RFC-0013 |
@@ -30,8 +30,8 @@ This document provides an index of all RFCs in this project.
 | [RFC-0020](./RFC-0020-event-display-architecture.md) | Event Display Architecture | Draft | Foundation | RFC-0001, RFC-0002, RFC-0003, RFC-0013, RFC-0015 |
 | [RFC-0021](./RFC-0021-research-subagent.md) | Research Subagent | Implemented | Foundation | RFC-0018, RFC-0019 |
 | [RFC-0022](./RFC-0022-daemon-side-event-filtering.md) | Daemon-Side Event Filtering Protocol | Implemented | Foundation | RFC-0013, RFC-0015 |
-| [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Draft | **Layer 1** | RFC-0001, RFC-0002 |
-| [RFC-0024](./RFC-0024-verbosity-tier-unification.md) | VerbosityTier Unification | Draft | Foundation | RFC-0015 |
+| [RFC-0023](./RFC-0023-coreagent-runtime.md) | Layer 1: CoreAgent Runtime Architecture | Implemented | **Layer 1** | RFC-0001, RFC-0002 |
+| [RFC-0024](./RFC-0024-verbosity-tier-unification.md) | VerbosityTier Unification | Implemented | Foundation | RFC-0015 |
 | [RFC-0025](./RFC-0025-tool-event-naming-unification.md) | Tool Event Naming Unification | Draft | Foundation | RFC-0015 |
 
 ### Implementation Interface Design
@@ -90,9 +90,9 @@ RFC-0001 (System Conceptual Design)
 ## RFC Status Summary
 
 - **Total RFCs**: 23
-- **Implemented**: 16
+- **Implemented**: 19
 - **Revised**: 2 (RFC-0007, RFC-0008)
-- **Draft**: 6 (RFC-0009, RFC-0010, RFC-0020, RFC-0023, RFC-0024, RFC-0025)
+- **Draft**: 3 (RFC-0010, RFC-0020, RFC-0025)
 - **Deprecated**: 0 (RFC-0011 merged into RFC-0007 and removed)
 
 ## Line Count Summary (After Compaction)

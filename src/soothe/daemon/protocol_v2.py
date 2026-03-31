@@ -181,6 +181,16 @@ def validate_message_size(msg: dict[str, Any], max_size_bytes: int = 10 * 1024 *
         return False
 
 
+# Error code constants per RFC-0013
+ERROR_INVALID_MESSAGE = "INVALID_MESSAGE"
+ERROR_INVALID_JSON = "INVALID_JSON"
+ERROR_AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
+ERROR_AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
+ERROR_RATE_LIMITED = "RATE_LIMITED"
+ERROR_INTERNAL_ERROR = "INTERNAL_ERROR"
+ERROR_UNKNOWN_MESSAGE_TYPE = "UNKNOWN_MESSAGE_TYPE"
+
+
 def create_error_response(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create an error message response.
 
@@ -194,13 +204,3 @@ def create_error_response(code: str, message: str, details: dict[str, Any] | Non
     """
     error = ProtocolError(code, message, details)
     return error.to_dict()
-
-
-# Error code constants per RFC-0013
-ERROR_INVALID_MESSAGE = "INVALID_MESSAGE"
-ERROR_INVALID_JSON = "INVALID_JSON"
-ERROR_AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
-ERROR_AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
-ERROR_RATE_LIMITED = "RATE_LIMITED"
-ERROR_INTERNAL_ERROR = "INTERNAL_ERROR"
-ERROR_UNKNOWN_MESSAGE_TYPE = "UNKNOWN_MESSAGE_TYPE"

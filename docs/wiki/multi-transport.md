@@ -1,16 +1,15 @@
 # Multi-Transport Setup
 
-Configure Unix Socket, WebSocket, and HTTP REST transports for the Soothe daemon.
+Configure WebSocket and HTTP REST transports for the Soothe daemon.
 
 ## Transport Overview
 
-The Soothe daemon supports three transport protocols simultaneously:
+The Soothe daemon supports two transport protocols:
 
 | Transport | Status | Use Case | Performance |
 |-----------|--------|----------|-------------|
-| **Unix Socket** | ✅ Default | Local CLI/TUI clients | ~0.1ms latency |
-| **WebSocket** | ⚙️ Opt-in | Web applications, remote clients | ~1-5ms latency |
-| **HTTP REST** | ⚙️ Opt-in | CRUD operations, file management | ~5-20ms latency |
+| **WebSocket** | ✅ Default | All clients (CLI, TUI, web apps) | ~1-5ms latency |
+| **HTTP REST** | ⚙️ Opt-in | CRUD operations, health checks | ~5-20ms latency |
 
 All transports share the same:
 - Authentication system
@@ -18,34 +17,9 @@ All transports share the same:
 - Thread management
 - Event streaming
 
-## Unix Socket (Default)
+## WebSocket (Default)
 
 **Status**: ✅ Enabled by default
-
-**Configuration**:
-```yaml
-daemon:
-  transports:
-    unix_socket:
-      enabled: true
-      path: "~/.soothe/soothe.sock"
-```
-
-**Features**:
-- Local IPC via Unix domain socket
-- No authentication required (filesystem permissions)
-- Sub-millisecond latency (~0.1ms)
-- Used by CLI and TUI clients
-- Backward compatible with existing clients
-
-**Use When**:
-- Running Soothe locally
-- Using CLI or TUI clients
-- Maximum performance needed
-
-## WebSocket (Opt-in)
-
-**Status**: ❌ Disabled by default
 
 **Configuration**:
 ```yaml
@@ -60,41 +34,20 @@ daemon:
 ```
 
 **Features**:
-- Real-time streaming for web applications
+- Real-time bidirectional streaming
 - CORS validation
 - TLS support for remote connections
+- Used by CLI, TUI, and web clients
 
 **Note**: Authentication is handled by reverse proxy (see [Authentication Guide](authentication.md))
 
 **Use When**:
+- Running Soothe locally or remotely
+- Using CLI or TUI clients
 - Building web-based UIs (React, Vue, etc.)
 - Remote monitoring dashboards
 - Mobile app backends
 - Desktop applications (Tauri, Electron)
-
-### Enable WebSocket
-
-1. **Update configuration** (`~/.soothe/config.yml`):
-```yaml
-daemon:
-  transports:
-    websocket:
-      enabled: true
-      host: "127.0.0.1"
-      port: 8765
-```
-
-2. **Restart daemon**:
-```bash
-soothe daemon stop
-soothe daemon start
-```
-
-3. **Verify**:
-```bash
-soothe daemon status
-# Should show: WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
-```
 
 ### Web Application Integration
 
@@ -229,17 +182,13 @@ curl -X POST \
   http://localhost:8766/api/v1/threads/abc123/input
 ```
 
-## Enabling Multiple Transports
+## Enabling Both Transports
 
-You can enable all three transports simultaneously:
+You can enable both transports simultaneously:
 
 ```yaml
 daemon:
   transports:
-    unix_socket:
-      enabled: true
-      path: "~/.soothe/soothe.sock"
-
     websocket:
       enabled: true
       host: "127.0.0.1"
@@ -258,7 +207,6 @@ Daemon Status: running
 PID: 12345
 Uptime: 2 hours
 Transports:
-  - Unix Socket: ✅ Enabled (~/.soothe/soothe.sock)
   - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
   - HTTP REST: ✅ Enabled (http://127.0.0.1:8766)
 Active Threads: 3
@@ -268,7 +216,6 @@ Active Threads: 3
 
 ### Localhost Connections
 
-- **Unix Socket**: No authentication (filesystem permissions)
 - **WebSocket localhost**: No built-in authentication
 - **HTTP REST localhost**: No built-in authentication
 
@@ -286,8 +233,7 @@ See [Authentication Guide](authentication.md) for deployment patterns with nginx
 
 | Transport | Latency | Throughput | Best For |
 |-----------|---------|------------|----------|
-| Unix Socket | ~0.1ms | Highest | Local CLI/TUI |
-| WebSocket | ~1-5ms | High | Web apps, streaming |
+| WebSocket | ~1-5ms | High | All clients, streaming |
 | HTTP REST | ~5-20ms | Medium | CRUD operations |
 
 ## Related Guides

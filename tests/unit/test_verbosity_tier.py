@@ -69,7 +69,6 @@ class TestClassifyEventToTier:
         # RFC-0020: Step descriptions visible at NORMAL verbosity
         assert classify_event_to_tier("soothe.agentic.step.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.agentic.iteration.started") == VerbosityTier.DEBUG
 
     def test_classify_lifecycle_events(self) -> None:
         """Lifecycle events classify to DETAILED by default."""

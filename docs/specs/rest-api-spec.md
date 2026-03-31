@@ -239,8 +239,7 @@ GET /api/v1/config
     "planner": {"enabled": true}
   },
   "transports": {
-    "unix_socket": {"enabled": true},
-    "websocket": {"enabled": false, "port": 8765},
+    "websocket": {"enabled": true, "port": 8765},
     "http_rest": {"enabled": false, "port": 8766}
   }
 }
@@ -365,8 +364,7 @@ GET /api/v1/health
   "uptime_seconds": 3600,
   "active_threads": 3,
   "connected_clients": {
-    "unix_socket": 1,
-    "websocket": 0,
+    "websocket": 2,
     "http_rest": 0
   }
 }

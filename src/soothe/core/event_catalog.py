@@ -33,7 +33,6 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from soothe.core.base_events import (
-    ErrorEvent,
     LifecycleEvent,
     OutputEvent,
     ProtocolEvent,
@@ -94,7 +93,6 @@ PLAN_STEP_FAILED = "soothe.cognition.plan.step_failed"
 PLAN_BATCH_STARTED = "soothe.cognition.plan.batch_started"
 PLAN_REFLECTED = "soothe.cognition.plan.reflected"
 PLAN_DAG_SNAPSHOT = "soothe.cognition.plan.dag_snapshot"
-PLAN_ONLY = "soothe.cognition.plan.plan_only"
 POLICY_CHECKED = "soothe.protocol.policy.checked"
 POLICY_DENIED = "soothe.protocol.policy.denied"
 GOAL_CREATED = "soothe.cognition.goal.created"
@@ -117,7 +115,6 @@ ERROR = "soothe.error.general"
 PLUGIN_LOADED = "soothe.plugin.loaded"
 PLUGIN_FAILED = "soothe.plugin.failed"
 PLUGIN_UNLOADED = "soothe.plugin.unloaded"
-PLUGIN_HEALTH_CHECKED = "soothe.plugin.health_checked"
 
 
 # ---------------------------------------------------------------------------
@@ -236,55 +233,6 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     duration_ms: int
 
 
-class AgenticIterationStartedEvent(LifecycleEvent):
-    type: Literal["soothe.agentic.iteration.started"] = "soothe.agentic.iteration.started"
-    iteration: int
-    planning_strategy: str
-
-
-class AgenticIterationCompletedEvent(LifecycleEvent):
-    type: Literal["soothe.agentic.iteration.completed"] = "soothe.agentic.iteration.completed"
-    iteration: int
-    planning_strategy: str
-    outcome: str
-    duration_ms: int
-
-
-class AgenticObservationStartedEvent(ProtocolEvent):
-    type: Literal["soothe.agentic.observation.started"] = "soothe.agentic.observation.started"
-    iteration: int
-    strategy: str
-
-
-class AgenticObservationCompletedEvent(ProtocolEvent):
-    type: Literal["soothe.agentic.observation.completed"] = "soothe.agentic.observation.completed"
-    iteration: int
-    context_entries: int
-    memories_recalled: int
-    planning_strategy: str
-
-
-class AgenticVerificationStartedEvent(ProtocolEvent):
-    type: Literal["soothe.agentic.verification.started"] = "soothe.agentic.verification.started"
-    iteration: int
-    strictness: str
-
-
-class AgenticVerificationCompletedEvent(ProtocolEvent):
-    type: Literal["soothe.agentic.verification.completed"] = "soothe.agentic.verification.completed"
-    iteration: int
-    should_continue: bool
-    assessment: str
-
-
-class AgenticPlanningStrategyDeterminedEvent(ProtocolEvent):
-    type: Literal["soothe.agentic.planning.strategy_determined"] = "soothe.agentic.planning.strategy_determined"
-    iteration: int
-    complexity: str
-    strategy: str
-    reason: str
-
-
 # ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
@@ -365,13 +313,6 @@ class PlanReflectedEvent(ProtocolEvent):
 class PlanDagSnapshotEvent(ProtocolEvent):
     type: Literal["soothe.cognition.plan.dag_snapshot"] = "soothe.cognition.plan.dag_snapshot"
     steps: list[dict[str, Any]] = []  # noqa: RUF012
-
-
-class PlanOnlyEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.plan_only"] = "soothe.cognition.plan.plan_only"
-    thread_id: str = ""
-    goal: str = ""
-    step_count: int = 0
 
 
 class PolicyCheckedEvent(ProtocolEvent):
@@ -477,16 +418,6 @@ class FinalReportEvent(OutputEvent):
     description: str = ""
     status: str = ""
     summary: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Error events
-# ---------------------------------------------------------------------------
-
-
-class GeneralErrorEvent(ErrorEvent):
-    type: Literal["soothe.error.general"] = "soothe.error.general"
-    error: str
 
 
 # ---------------------------------------------------------------------------
@@ -719,47 +650,6 @@ _reg(
     verbosity=VerbosityTier.NORMAL,
     summary_template="{summary} ({duration_ms}ms)",
 )
-_reg(
-    "soothe.agentic.iteration.started",
-    AgenticIterationStartedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Iteration {iteration} ({planning_strategy} planning)",
-)
-_reg(
-    "soothe.agentic.iteration.completed",
-    AgenticIterationCompletedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Iteration {iteration}: {outcome} ({duration_ms}ms)",
-)
-_reg(
-    "soothe.agentic.observation.started",
-    AgenticObservationStartedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Observation started (strategy={strategy})",
-)
-_reg(
-    "soothe.agentic.observation.completed",
-    AgenticObservationCompletedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Observed: {context_entries} context, {memories_recalled} memories → {planning_strategy}",
-)
-_reg(
-    "soothe.agentic.verification.started",
-    AgenticVerificationStartedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Verification started (strictness={strictness})",
-)
-_reg(
-    "soothe.agentic.verification.completed",
-    AgenticVerificationCompletedEvent,
-    verbosity=VerbosityTier.DEBUG,
-    summary_template="Verified: {'continue' if should_continue else 'stop'}",
-)
-_reg(
-    "soothe.agentic.planning.strategy_determined",
-    AgenticPlanningStrategyDeterminedEvent,
-    summary_template="Planning strategy: {strategy} (complexity={complexity}, reason={reason})",
-)
 
 # -- Protocol: context -------------------------------------------------------
 _reg(CONTEXT_PROJECTED, ContextProjectedEvent, summary_template="{entries} entries, {tokens} tokens")
@@ -778,7 +668,6 @@ _reg(PLAN_STEP_FAILED, PlanStepFailedEvent, summary_template="Step {step_id}: FA
 _reg(PLAN_BATCH_STARTED, PlanBatchStartedEvent, summary_template="Batch: {parallel_count} steps in parallel")
 _reg(PLAN_REFLECTED, PlanReflectedEvent, summary_template="Reflected: {assessment}")
 _reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.DEBUG)
-_reg(PLAN_ONLY, PlanOnlyEvent, summary_template="Plan only: {step_count} steps")
 
 # -- Protocol: policy --------------------------------------------------------
 _reg(POLICY_CHECKED, PolicyCheckedEvent, summary_template="Policy: {verdict}")
@@ -801,9 +690,6 @@ _reg(GOAL_DEFERRED, GoalDeferredEvent, summary_template="Goal {goal_id} deferred
 _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
-
-# -- Error -------------------------------------------------------------------
-_reg(ERROR, GeneralErrorEvent, verbosity=VerbosityTier.QUIET, summary_template="{error}")
 
 
 # ---------------------------------------------------------------------------
