@@ -93,6 +93,7 @@ class DaemonHandlersMixin:
             msg: Message dict from the client.
         """
         msg_type = msg.get("type", "")
+        logger.debug("[IG-109] Received message type=%s from client=%s", msg_type, client_id[:8])
         if msg_type == "input":
             text = msg.get("text", "").strip()
             if text:
@@ -121,6 +122,7 @@ class DaemonHandlersMixin:
                 )
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
+                logger.debug("[IG-109] Putting input in queue: text=%s, client=%s", text[:30], client_id[:8])
                 await self._current_input_queue.put(
                     {
                         "type": "input",
@@ -131,6 +133,7 @@ class DaemonHandlersMixin:
                         "client_id": client_id,  # RFC-0013: track query ownership
                     }
                 )
+                logger.debug("[IG-109] Input put in queue successfully")
         elif msg_type == "command":
             cmd = msg.get("cmd", "")
             await self._current_input_queue.put({"type": "command", "cmd": cmd})
@@ -680,8 +683,32 @@ class DaemonHandlersMixin:
             # Silently ignore - TUI will handle the UX
             return
 
-        if self._current_query_task and not self._current_query_task.done():
-            logger.info("Cancelling current query task")
+        # IG-109: Handle both multithreaded mode (_active_threads) and single-threaded mode
+        # In multithreaded mode, _current_query_task is NOT set - tasks are in _active_threads
+        cancelled_any = False
+
+        # First check _active_threads (multithreaded mode)
+        if hasattr(self, "_active_threads") and self._active_threads:
+            # Cancel all active threads
+            thread_ids = list(self._active_threads.keys())
+            for thread_id in thread_ids:
+                task = self._active_threads.pop(thread_id, None)
+                if task and not task.done():
+                    task.cancel()
+                    logger.info("Cancelling thread %s (multithreaded mode)", thread_id)
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+                    cancelled_any = True
+                    # Reset runner thread_id so next query starts fresh (IG-109)
+                    self._runner.set_current_thread_id(None)
+
+            # Clear state after cancelling all threads
+            self._query_running = False
+            self._current_query_task = None
+
+        # Fallback: single-threaded mode with _current_query_task
+        elif self._current_query_task and not self._current_query_task.done():
+            logger.info("Cancelling current query task (single-threaded mode)")
             self._current_query_task.cancel()
 
             # Wait for the task to actually be cancelled
@@ -693,7 +720,9 @@ class DaemonHandlersMixin:
 
             # Reset runner thread_id so next query starts fresh (IG-109)
             self._runner.set_current_thread_id(None)
+            cancelled_any = True
 
+        if cancelled_any:
             await self._broadcast(
                 {
                     "type": "command_response",
@@ -782,11 +811,13 @@ class DaemonHandlersMixin:
         else:
             self._query_running = True
 
-        await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
-
-        # RFC-0013: Claim thread ownership for cancel-on-disconnect
+        # RFC-0013: Claim thread ownership and subscribe to thread events FIRST
+        # This must happen before _broadcast so client receives the "running" status (IG-109)
         if client_id:
             await self._session_manager.claim_thread_ownership(client_id, thread_id)
+            await self._session_manager.subscribe_thread(client_id, thread_id)
+
+        await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
 
         full_response: list[str] = []
 
@@ -972,15 +1003,17 @@ class DaemonHandlersMixin:
         if self._input_history:
             self._input_history.add(text)
 
+        # RFC-0013: Claim thread ownership and subscribe to thread events FIRST
+        # This must happen before _broadcast so client receives the "running" status (IG-109)
+        if client_id:
+            await self._session_manager.claim_thread_ownership(client_id, thread_id)
+            await self._session_manager.subscribe_thread(client_id, thread_id)
+
         # Mark thread as running
         self._query_running = True
         if hasattr(self, "_active_threads"):
             self._active_threads[thread_id] = asyncio.current_task()
         await self._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
-
-        # RFC-0013: Claim thread ownership for cancel-on-disconnect
-        if client_id:
-            await self._session_manager.claim_thread_ownership(client_id, thread_id)
 
         full_response: list[str] = []
 
