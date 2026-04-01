@@ -379,7 +379,6 @@ execution:
     max_parallel_goals: 1         # Max goals running simultaneously (autonomous mode, 0 = unlimited)
     max_parallel_steps: 3         # Max parallel plan steps (DAG-aware, 0 = unlimited)
     max_parallel_subagents: 3     # Max subagents running simultaneously (0 = unlimited, reserved)
-    max_parallel_tools: 9         # Max tools in parallel per step (0 = unlimited, reserved)
     global_max_llm_calls: 9       # Cross-level LLM call circuit breaker (0 = unlimited)
     step_parallelism: dependency  # sequential | dependency | max
   recovery:

@@ -309,7 +309,6 @@ async def test_zero_policy_initialization() -> None:
         max_parallel_goals=0,
         max_parallel_steps=0,
         max_parallel_subagents=0,
-        max_parallel_tools=0,
         global_max_llm_calls=0,
     )
     controller = ConcurrencyController(policy)
@@ -318,13 +317,11 @@ async def test_zero_policy_initialization() -> None:
     assert controller._goal_sem is None
     assert controller._step_sem is None
     assert controller._llm_sem is None
-    assert controller._tool_sem is None
 
     # Verify all has_*_limit properties return False
     assert controller.has_goal_limit is False
     assert controller.has_step_limit is False
     assert controller.has_llm_limit is False
-    assert controller.has_tool_limit is False
 
     # Verify acquisition passes through without blocking
     async with controller.acquire_goal():
@@ -333,34 +330,3 @@ async def test_zero_policy_initialization() -> None:
         pass
     async with controller.acquire_llm_call():
         pass
-    async with controller.acquire_tool():
-        pass
-
-
-async def test_unlimited_tool_concurrent_execution() -> None:
-    """Unlimited tools (limit=0) should allow any number of concurrent executions."""
-    policy = ConcurrencyPolicy(max_parallel_tools=0)  # Unlimited
-    controller = ConcurrencyController(policy)
-
-    # Verify no semaphore created for unlimited
-    assert controller._tool_sem is None
-    assert controller.has_tool_limit is False
-
-    acquired = 0
-    release = asyncio.Event()
-
-    async def acquire_and_hold() -> None:
-        nonlocal acquired
-        async with controller.acquire_tool():
-            acquired += 1
-            await release.wait()
-
-    # Launch many concurrent tasks
-    tasks = [asyncio.create_task(acquire_and_hold()) for _ in range(25)]
-    await asyncio.sleep(0.05)
-
-    # All should acquire immediately
-    assert acquired == 25
-
-    release.set()
-    await asyncio.gather(*tasks)

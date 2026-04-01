@@ -130,13 +130,13 @@ class TestCoreAgentClass:
         from soothe.config import SootheConfig
         from soothe.core.agent import CoreAgent, create_soothe_agent
 
-        with patch("soothe.core.agent.resolve_tools", return_value=[]):
-            with patch("soothe.core.agent.resolve_subagents", return_value=[]):
-                with patch("soothe.core.agent.resolve_context", return_value=None):
-                    with patch("soothe.core.agent.resolve_memory", return_value=None):
-                        with patch("soothe.core.agent.resolve_planner", return_value=None):
-                            with patch("soothe.core.agent.resolve_policy", return_value=None):
-                                with patch("soothe.core.agent.create_deep_agent") as mock_create:
+        with patch("soothe.core.resolver.resolve_tools", return_value=[]):
+            with patch("soothe.core.resolver.resolve_subagents", return_value=[]):
+                with patch("soothe.core.resolver.resolve_context", return_value=None):
+                    with patch("soothe.core.resolver.resolve_memory", return_value=None):
+                        with patch("soothe.core.resolver.resolve_planner", return_value=None):
+                            with patch("soothe.core.resolver.resolve_policy", return_value=None):
+                                with patch("deepagents.create_deep_agent") as mock_create:
                                     mock_graph = _mock_graph()
                                     mock_create.return_value = mock_graph
 
@@ -205,8 +205,9 @@ class TestCoreAgentModuleExports:
     def test_core_agent_create_factory_method(self) -> None:
         """CoreAgent.create() factory method works."""
         from soothe.core.agent import CoreAgent
+        from soothe.core.agent._builder import create_soothe_agent
 
-        with patch("soothe.core.agent.create_soothe_agent") as mock_factory:
+        with patch("soothe.core.agent._builder.create_soothe_agent") as mock_factory:
             mock_agent = MagicMock(spec=CoreAgent)
             mock_factory.return_value = mock_agent
 
