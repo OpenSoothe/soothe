@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import contextvars
 
-_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "current_thread_id", default=None
-)
+_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_thread_id", default=None)
 
 
 def set_thread_id(thread_id: str | None) -> None:

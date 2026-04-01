@@ -145,7 +145,7 @@ class QueryEngine:
                 logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
-                from soothe.core.safety import FrameworkFilesystem
+                from soothe.core import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
                 await d._broadcast(
@@ -215,7 +215,11 @@ class QueryEngine:
         subagent: str | None = None,
         client_id: str | None = None,
     ) -> None:
-        """Execute query using ``ThreadExecutor``."""
+        """Execute query using ``ThreadExecutor``.
+
+        Wraps the streaming work in its own ``asyncio.Task`` so that
+        cancellation targets the query — **not** the ``_input_loop`` task.
+        """
         d = self._daemon
         thread_id = await self.ensure_active_thread_id()
 
@@ -245,88 +249,98 @@ class QueryEngine:
             await d._session_manager.subscribe_thread(client_id, thread_id)
 
         d._query_running = True
-        d._active_threads[thread_id] = asyncio.current_task()
         await d._broadcast({"type": "status", "state": "running", "thread_id": thread_id})
 
         full_response: list[str] = []
 
+        async def _run_stream() -> None:
+            try:
+                stream_kwargs: dict[str, Any] = {}
+                thread_workspace = d._thread_registry.get_workspace(thread_id)
+                if thread_workspace:
+                    stream_kwargs["workspace"] = str(thread_workspace)
+                if autonomous:
+                    stream_kwargs["autonomous"] = True
+                    if max_iterations is not None:
+                        stream_kwargs["max_iterations"] = max_iterations
+                if subagent is not None:
+                    stream_kwargs["subagent"] = subagent
+
+                stream_tuple_length = 3
+                msg_pair_length = 2
+                async for chunk in d._thread_executor.execute_thread(thread_id, text, **stream_kwargs):
+                    if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
+                        continue
+                    namespace, mode, data = chunk
+
+                    d._thread_logger.log(tuple(namespace), mode, data)
+
+                    if (
+                        not namespace
+                        and mode == "custom"
+                        and isinstance(data, dict)
+                        and (output_text := self.extract_custom_output_text(data))
+                    ):
+                        full_response.append(output_text)
+
+                    is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
+                    if not namespace and mode == "messages" and is_msg_pair:
+                        msg, _metadata = data
+                        from soothe.ux.core.rendering import extract_text_from_ai_message
+
+                        full_response.extend(extract_text_from_ai_message(msg))
+
+                    event_msg = {
+                        "type": "event",
+                        "thread_id": thread_id,
+                        "namespace": list(namespace),
+                        "mode": mode,
+                        "data": data,
+                    }
+                    await d._broadcast(event_msg)
+
+            except asyncio.CancelledError:
+                logger.info("Query cancelled by user in thread %s", thread_id)
+                from soothe.core import FrameworkFilesystem
+
+                FrameworkFilesystem.clear_current_workspace()
+                await d._broadcast(
+                    {
+                        "type": "event",
+                        "thread_id": thread_id,
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": {"type": ERROR, "error": f"Query cancelled in thread {thread_id}"},
+                    }
+                )
+                raise
+            except Exception as exc:
+                logger.exception("Multi-threaded query error in thread %s", thread_id)
+                from soothe.utils.error_format import emit_error_event
+
+                await d._broadcast(
+                    {
+                        "type": "event",
+                        "thread_id": thread_id,
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": emit_error_event(exc),
+                    }
+                )
+            finally:
+                d._query_running = False
+                d._active_threads.pop(thread_id, None)
+
         try:
-            stream_kwargs: dict[str, Any] = {}
-            thread_workspace = d._thread_registry.get_workspace(thread_id)
-            if thread_workspace:
-                stream_kwargs["workspace"] = str(thread_workspace)
-            if autonomous:
-                stream_kwargs["autonomous"] = True
-                if max_iterations is not None:
-                    stream_kwargs["max_iterations"] = max_iterations
-            if subagent is not None:
-                stream_kwargs["subagent"] = subagent
-
-            stream_tuple_length = 3
-            msg_pair_length = 2
-            async for chunk in d._thread_executor.execute_thread(thread_id, text, **stream_kwargs):
-                if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
-                    continue
-                namespace, mode, data = chunk
-
-                d._thread_logger.log(tuple(namespace), mode, data)
-
-                if (
-                    not namespace
-                    and mode == "custom"
-                    and isinstance(data, dict)
-                    and (output_text := self.extract_custom_output_text(data))
-                ):
-                    full_response.append(output_text)
-
-                is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
-                if not namespace and mode == "messages" and is_msg_pair:
-                    msg, _metadata = data
-                    from soothe.ux.core.rendering import extract_text_from_ai_message
-
-                    full_response.extend(extract_text_from_ai_message(msg))
-
-                event_msg = {
-                    "type": "event",
-                    "thread_id": thread_id,
-                    "namespace": list(namespace),
-                    "mode": mode,
-                    "data": data,
-                }
-                await d._broadcast(event_msg)
-
+            task = asyncio.create_task(_run_stream())
+            d._current_query_task = task
+            d._active_threads[thread_id] = task
+            await task
         except asyncio.CancelledError:
-            logger.info("Query cancelled by user in thread %s", thread_id)
+            logger.info("Query task cancelled for thread %s", thread_id)
             d._runner.set_current_thread_id(None)
-            from soothe.core.safety import FrameworkFilesystem
-
-            FrameworkFilesystem.clear_current_workspace()
-            await d._broadcast(
-                {
-                    "type": "event",
-                    "thread_id": thread_id,
-                    "namespace": [],
-                    "mode": "custom",
-                    "data": {"type": ERROR, "error": f"Query cancelled in thread {thread_id}"},
-                }
-            )
-            raise
-        except Exception as exc:
-            logger.exception("Multi-threaded query error in thread %s", thread_id)
-            from soothe.utils.error_format import emit_error_event
-
-            await d._broadcast(
-                {
-                    "type": "event",
-                    "thread_id": thread_id,
-                    "namespace": [],
-                    "mode": "custom",
-                    "data": emit_error_event(exc),
-                }
-            )
         finally:
-            d._query_running = False
-            d._active_threads.pop(thread_id, None)
+            d._current_query_task = None
             if client_id:
                 await d._session_manager.release_thread_ownership(client_id)
 
@@ -351,7 +365,11 @@ class QueryEngine:
     async def cancel_current_query(self) -> None:
         """Cancel the currently running query if any."""
         d = self._daemon
-        if not d._query_running:
+        active_thread_tasks = bool(
+            d._active_threads and any(t is not None and not t.done() for t in d._active_threads.values())
+        )
+        has_current_task = bool(d._current_query_task and not d._current_query_task.done())
+        if not d._query_running and not active_thread_tasks and not has_current_task:
             return
 
         cancelled_any = False
@@ -368,10 +386,11 @@ class QueryEngine:
                     cancelled_any = True
                     d._runner.set_current_thread_id(None)
 
-            d._query_running = False
-            d._current_query_task = None
+            if cancelled_any:
+                d._query_running = False
+                d._current_query_task = None
 
-        elif d._current_query_task and not d._current_query_task.done():
+        if not cancelled_any and d._current_query_task and not d._current_query_task.done():
             logger.info("Cancelling current query task (single-threaded mode)")
             d._current_query_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

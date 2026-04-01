@@ -69,9 +69,7 @@ def setup_logging(config: SootheConfig | None = None) -> None:
             backupCount=cfg.logging.file.backup_count,
             encoding="utf-8",
         )
-        file_handler.setFormatter(
-            ThreadFormatter("%(asctime)s %(levelname)-8s %(thread_id)s %(name)s %(message)s")
-        )
+        file_handler.setFormatter(ThreadFormatter("%(asctime)s %(levelname)-8s %(thread_id)s %(name)s %(message)s"))
         file_handler.setLevel(file_level)
         root_logger.addHandler(file_handler)
 

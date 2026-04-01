@@ -168,9 +168,7 @@ async def test_daemon_handles_resume_thread_message() -> None:
             self.current_thread_id = ""
             self.set_thread_id_calls: list[str] = []
             self._durability = MagicMock()
-            self.resume_persisted_thread = AsyncMock(
-                return_value=SimpleNamespace(thread_id="thread-456")
-            )
+            self.resume_persisted_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-456"))
 
         def set_current_thread_id(self, thread_id: str) -> None:
             self.set_thread_id_calls.append(thread_id)
@@ -220,6 +218,9 @@ async def test_daemon_run_query_persists_assistant_from_custom_output() -> None:
 
         async def astream(self, _text: str, **_kwargs: Any):
             yield ((), "custom", {"type": CHITCHAT_RESPONSE, "content": "hello from custom output"})
+
+        async def touch_thread_activity_timestamp(self, _thread_id: str) -> None:
+            return None
 
     daemon._runner = FakeRunner()  # type: ignore[assignment]
 

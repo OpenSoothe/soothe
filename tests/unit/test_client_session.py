@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.daemon.client_session import ClientSession, ClientSessionManager
+from soothe.core.event_catalog import EventMeta
+from soothe.core.foundation.base_events import SootheEvent
+from soothe.core.foundation.verbosity_tier import VerbosityTier
+from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
 
 
@@ -185,6 +188,57 @@ async def test_multiple_subscriptions():
     assert "thread-def456" in session.subscriptions
 
     # Cleanup
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_subscribe_thread_accepts_minimal_verbosity() -> None:
+    """Test `minimal` is accepted as a client verbosity level."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+
+    session = await manager.get_session(client_id)
+    assert session is not None
+    assert session.verbosity == "minimal"
+
+    await manager.remove_session(client_id)
+
+
+@pytest.mark.asyncio
+async def test_sender_loop_filters_detailed_event_for_minimal_verbosity() -> None:
+    """Test daemon-side filtering treats `minimal` like `normal`."""
+    bus = EventBus()
+    manager = ClientSessionManager(bus)
+
+    transport = MagicMock()
+    transport.transport_type = "test"
+    transport.send = AsyncMock()
+
+    client_id = await manager.create_session(transport, None)
+    await manager.subscribe_thread(client_id, "thread-abc123", verbosity="minimal")
+
+    class TestEvent(SootheEvent):
+        type: str = "soothe.lifecycle.thread.created"
+
+    event = {"type": "event", "data": {"type": "soothe.lifecycle.thread.created"}}
+    event_meta = EventMeta(
+        type_string="soothe.lifecycle.thread.created",
+        model=TestEvent,
+        domain="lifecycle",
+        component="thread",
+        action="created",
+        verbosity=VerbosityTier.DETAILED,
+    )
+    await bus.publish("thread:thread-abc123", event, event_meta=event_meta)
+    await asyncio.sleep(0.05)
+
+    transport.send.assert_not_called()
     await manager.remove_session(client_id)
 
 

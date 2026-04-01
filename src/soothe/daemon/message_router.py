@@ -16,11 +16,13 @@ from soothe.logging import InputHistory, ThreadLogger
 
 logger = logging.getLogger(__name__)
 
+_CLIENT_LABEL_LEN = 8
+
 
 def _client_label(client_id: Any) -> str:
     """Short label for logs when ``client_id`` may be a legacy connection object."""
     if isinstance(client_id, str):
-        return client_id[:8] if len(client_id) >= 8 else client_id
+        return client_id[:_CLIENT_LABEL_LEN] if len(client_id) >= _CLIENT_LABEL_LEN else client_id
     return f"obj:{id(client_id) & 0xFFFF_FFFF:x}"
 
 

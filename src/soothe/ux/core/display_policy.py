@@ -48,6 +48,8 @@ from soothe.core.foundation.verbosity_tier import (
 
 def normalize_verbosity(verbosity: str) -> VerbosityLevel:
     """Normalize external verbosity values to canonical internal names."""
+    if verbosity == "minimal":
+        return "normal"
     if verbosity in {"quiet", "normal", "detailed", "debug"}:
         return verbosity
     return "normal"

@@ -9,8 +9,11 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import Literal
 
-VerbosityLevel = Literal["quiet", "normal", "detailed", "debug"]
-"""User-configured verbosity level for filtering display content."""
+VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
+"""User-configured verbosity level for filtering display content.
+
+`minimal` is accepted as a compatibility alias for `normal`.
+"""
 
 
 class VerbosityTier(IntEnum):
@@ -25,15 +28,16 @@ class VerbosityTier(IntEnum):
         False
     """
 
-    QUIET = 0     # Always visible (errors, assistant text, final reports)
-    NORMAL = 1    # Standard progress (plan updates, milestones, agentic loop)
+    QUIET = 0  # Always visible (errors, assistant text, final reports)
+    NORMAL = 1  # Standard progress (plan updates, milestones, agentic loop)
     DETAILED = 2  # Detailed internals (protocol events, tool calls, subagent activity)
-    DEBUG = 3     # Everything including internals (thinking, heartbeats)
-    INTERNAL = 99 # Never shown at any level (implementation details)
+    DEBUG = 3  # Everything including internals (thinking, heartbeats)
+    INTERNAL = 99  # Never shown at any level (implementation details)
 
 
 _VERBOSITY_LEVEL_VALUES: dict[VerbosityLevel, int] = {
     "quiet": 0,
+    "minimal": 1,
     "normal": 1,
     "detailed": 2,
     "debug": 3,

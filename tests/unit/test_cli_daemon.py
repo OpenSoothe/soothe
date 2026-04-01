@@ -33,10 +33,14 @@ class _FakeRunner:
     def __init__(self) -> None:
         self.current_thread_id = "thread-1"
         self.calls: list[dict] = []
+        self.touched_thread_ids: list[str] = []
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         self.calls.append({"text": text, **kwargs})
         yield ((), "custom", {"type": "soothe.lifecycle.thread.started"})
+
+    async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
+        self.touched_thread_ids.append(thread_id)
 
 
 class _FakeRunnerWithMessages:
@@ -45,6 +49,7 @@ class _FakeRunnerWithMessages:
     def __init__(self) -> None:
         self.current_thread_id = "thread-test"
         self.calls: list[dict] = []
+        self.touched_thread_ids: list[str] = []
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         from langchain_core.messages import AIMessage
@@ -61,6 +66,9 @@ class _FakeRunnerWithMessages:
         ai_msg = AIMessage(content="Hello from assistant", id="msg-1")
         yield ((), "messages", (ai_msg, {}))
 
+    async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
+        self.touched_thread_ids.append(thread_id)
+
 
 class _FakeRunnerThatSwapsThread:
     """Runner stub that changes current_thread_id mid-query."""
@@ -68,11 +76,15 @@ class _FakeRunnerThatSwapsThread:
     def __init__(self) -> None:
         self.current_thread_id = "thread-start"
         self.calls: list[dict] = []
+        self.touched_thread_ids: list[str] = []
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         self.calls.append({"text": text, **kwargs})
         yield ((), "custom", {"type": "soothe.plan.created", "goal": text, "steps": []})
         self.current_thread_id = "thread-final"
+
+    async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
+        self.touched_thread_ids.append(thread_id)
 
 
 @pytest.mark.asyncio

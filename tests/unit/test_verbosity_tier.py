@@ -39,6 +39,13 @@ class TestShouldShow:
         assert should_show(VerbosityTier.NORMAL, "detailed")
         assert should_show(VerbosityTier.NORMAL, "debug")
 
+    def test_should_show_minimal_alias(self) -> None:
+        """`minimal` is accepted as an alias for `normal`."""
+        assert should_show(VerbosityTier.QUIET, "minimal")
+        assert should_show(VerbosityTier.NORMAL, "minimal")
+        assert not should_show(VerbosityTier.DETAILED, "minimal")
+        assert not should_show(VerbosityTier.DEBUG, "minimal")
+
     def test_should_show_detailed(self) -> None:
         """DETAILED tier is visible at detailed and above."""
         assert not should_show(VerbosityTier.DETAILED, "quiet")
