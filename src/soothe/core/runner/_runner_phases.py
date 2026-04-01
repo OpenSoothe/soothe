@@ -415,6 +415,7 @@ class PhasesMixin:
                     available_capabilities=capabilities,
                     completed_steps=[],
                     unified_classification=state.unified_classification,
+                    workspace=state.workspace,  # Pass workspace for planning context
                 )
 
                 plan = await self._planner.create_plan(user_input, context)

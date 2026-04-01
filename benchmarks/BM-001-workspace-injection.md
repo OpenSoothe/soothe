@@ -294,6 +294,8 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | Run Date | TC-001 | TC-002 | TC-003 | TC-004 | TC-005 | TC-006 | Notes |
 |----------|--------|--------|--------|--------|--------|--------|-------|
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Initial verification |
+| 2026-04-01 | ✅ | ✅ | ✅ | ❌ | ✅ | ⚠️ | Evaluation before fix: TC-004 explored root filesystem, TC-006 timeout |
+| 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | - | After fix: Planner workspace context properly injected |
 
 ---
 
@@ -315,3 +317,5 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | 2026-04-01 | Fixed: `ListFilesTool` and `SearchFilesTool` now use `_get_effective_work_dir()` |
 | 2026-04-01 | Fixed: Added `_resolve_directory()` to treat absolute paths outside workspace as relative |
 | 2026-04-01 | Fixed: All code edit tools now use `_get_effective_work_dir()` for dynamic workspace resolution |
+| 2026-04-01 | Fixed: `PlanContext` now receives `workspace` field from `state.workspace` in `_runner_phases.py` and `_runner_autonomous.py` |
+| 2026-04-01 | Fixed: Planner prompt now emphasizes workspace context prominently with explicit instructions to NOT search system directories |

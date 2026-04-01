@@ -263,24 +263,25 @@ class SimplePlanner:
             f"Create a plan to accomplish this goal: {goal}\n",
         ]
 
-        # Add workspace context if available
+        # Add workspace context prominently at the top if available
         if context.workspace:
             logger.debug("Planner: using workspace=%s", context.workspace)
-            parts.append(f"\nCurrent working directory: {context.workspace}\n")
             parts.append(
-                "NOTE: For local file operations (reading files, listing directories), "
-                "use file tools (read_file, list_files, etc.), NOT the browser subagent. "
-                "Browser is for web navigation only.\n"
+                "\n**IMPORTANT: Workspace Context**\n"
+                f"You are operating in this workspace directory: {context.workspace}\n"
+                "All file operations, searches, and commands should be relative to this workspace.\n"
+                "DO NOT search in system directories (/etc, /Library, /usr, etc.) or root filesystem.\n"
+                "DO NOT use browser subagent for local file operations - use file tools instead.\n\n"
             )
 
         parts.extend(
             [
                 "\nFirst, classify the intent:",
                 "- question: Who/what/how questions needing research",
-                "- search: Find/lookup information",
-                "- analysis: Analyze/review/examine content",
-                "- implementation: Create/build/write code",
-                "- debugging: Fix/troubleshoot issues",
+                "- search: Find/lookup information IN THE WORKSPACE",
+                "- analysis: Analyze/review/examine content IN THE WORKSPACE",
+                "- implementation: Create/build/write code IN THE WORKSPACE",
+                "- debugging: Fix/troubleshoot issues IN THE WORKSPACE",
                 "- compose: Generate custom agent/skill\n",
             ]
         )
