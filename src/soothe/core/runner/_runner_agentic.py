@@ -53,9 +53,8 @@ class AgenticMixin:
         Yields:
             StreamChunk events during execution
         """
-        # Ensure thread_id is always a string
+        # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
-        self._current_thread_id = tid or None
 
         # First, classify the query to check for chitchat
         if self._unified_classifier:

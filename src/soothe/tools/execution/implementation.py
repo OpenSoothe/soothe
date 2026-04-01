@@ -123,7 +123,7 @@ class RunCommandTool(BaseTool):
             pass  # Not in LangGraph context - expected for non-LangGraph tool calls
 
         # Priority 2: Try ContextVar
-        from soothe.safety import FrameworkFilesystem
+        from soothe.core import FrameworkFilesystem
 
         dynamic_workspace = FrameworkFilesystem.get_current_workspace()
         if dynamic_workspace:

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
-from soothe.core.agent.middleware import SystemPromptOptimizationMiddleware
+from soothe.core.middleware import SystemPromptOptimizationMiddleware
 
 
 class TestKnowledgeCutoff:
@@ -295,7 +295,7 @@ class TestGitStatusHelper:
     @pytest.mark.asyncio
     async def test_non_git_directory_returns_none(self, tmp_path: Path) -> None:
         """Non-git directory returns None."""
-        from soothe.safety.workspace import get_git_status
+        from soothe.core.workspace import get_git_status
 
         result = await get_git_status(tmp_path)
         assert result is None
@@ -305,7 +305,7 @@ class TestGitStatusHelper:
         """Git directory returns status dict."""
         import subprocess
 
-        from soothe.safety.workspace import get_git_status
+        from soothe.core.workspace import get_git_status
 
         # Initialize a git repo
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=False)

@@ -29,16 +29,25 @@ class CheckpointMixin:
     on the concrete class.
     """
 
-    def _ensure_artifact_store(self, thread_id: str) -> RunArtifactStore:
-        """Lazily create the artifact store when thread_id is known."""
+    def _ensure_artifact_store(self, state: Any) -> RunArtifactStore | None:
+        """Lazily create the artifact store on *state* when thread_id is known."""
         from soothe.core.artifact_store import RunArtifactStore
         from soothe.utils.runtime import current_run_dir
 
-        if self._artifact_store is None or self._artifact_store._thread_id != thread_id:
-            self._artifact_store = RunArtifactStore(thread_id, config=self._config)
-            current_run_dir.set(self._artifact_store.run_dir)
+        thread_id = getattr(state, "thread_id", None) or ""
+        if not thread_id:
+            return None
+
+        existing = getattr(state, "artifact_store", None)
+        if existing is None or getattr(existing, "_thread_id", None) != thread_id:
+            store = RunArtifactStore(thread_id, config=self._config)
+            state.artifact_store = store
+            current_run_dir.set(store.run_dir)
+            self._artifact_store = store  # last-known for CLI / debugging (IG-110)
             logger.info("Artifact store initialized for thread %s", thread_id)
-        return self._artifact_store
+            return store
+        self._artifact_store = existing
+        return existing
 
     async def _save_checkpoint(
         self,
@@ -55,7 +64,7 @@ class CheckpointMixin:
         """
         from datetime import UTC, datetime
 
-        store = self._artifact_store
+        store = getattr(state, "artifact_store", None)
         if not store:
             return
 
@@ -108,7 +117,7 @@ class CheckpointMixin:
 
     def _write_step_report_and_checkpoint(
         self,
-        state: Any,  # noqa: ARG002
+        state: Any,
         step: PlanStep,
         duration_ms: int,
         *,
@@ -124,7 +133,7 @@ class CheckpointMixin:
             duration_ms: Step execution time in milliseconds.
             goal_id: Goal identifier for directory placement.
         """
-        store = self._artifact_store
+        store = getattr(state, "artifact_store", None)
         if not store:
             return
         logger.debug(
@@ -163,7 +172,8 @@ class CheckpointMixin:
         Yields:
             Recovery stream events.
         """
-        store = self._artifact_store
+        self._ensure_artifact_store(state)
+        store = getattr(state, "artifact_store", None)
         if not store:
             return
 

@@ -2,7 +2,16 @@
 
 from typing import Any
 
-__all__ = ["CoreAgent", "SootheRunner", "create_soothe_agent"]
+__all__ = [
+    "INVALID_WORKSPACE_DIRS",
+    "ConfigDrivenPolicy",
+    "CoreAgent",
+    "FrameworkFilesystem",
+    "SootheRunner",
+    "create_soothe_agent",
+    "resolve_daemon_workspace",
+    "validate_client_workspace",
+]
 
 
 def __getattr__(name: str) -> Any:
@@ -19,6 +28,26 @@ def __getattr__(name: str) -> Any:
         from soothe.core.runner import SootheRunner
 
         return SootheRunner
+    if name == "ConfigDrivenPolicy":
+        from soothe.core.config_driven import ConfigDrivenPolicy
+
+        return ConfigDrivenPolicy
+    if name == "INVALID_WORKSPACE_DIRS":
+        from soothe.core.types import INVALID_WORKSPACE_DIRS
+
+        return INVALID_WORKSPACE_DIRS
+    if name == "resolve_daemon_workspace":
+        from soothe.core.workspace import resolve_daemon_workspace
+
+        return resolve_daemon_workspace
+    if name == "validate_client_workspace":
+        from soothe.core.workspace import validate_client_workspace
+
+        return validate_client_workspace
+    if name == "FrameworkFilesystem":
+        from soothe.core.filesystem import FrameworkFilesystem
+
+        return FrameworkFilesystem
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)

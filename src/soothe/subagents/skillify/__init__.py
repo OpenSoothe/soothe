@@ -189,7 +189,7 @@ def create_skillify_subagent(
         ``CompiledSubAgent`` dict compatible with deepagents.
     """
     from soothe.config import SOOTHE_HOME, SootheConfig
-    from soothe.safety.config_driven import ConfigDrivenPolicy
+    from soothe.core.config_driven import ConfigDrivenPolicy
 
     cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
 

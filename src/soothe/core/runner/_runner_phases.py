@@ -270,7 +270,6 @@ class PhasesMixin:
                 )
                 yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
             state.thread_id = thread_info.thread_id
-            self._current_thread_id = thread_info.thread_id
         except KeyError:
             logger.debug("Thread resume failed, creating a new thread", exc_info=True)
             try:
@@ -279,7 +278,6 @@ class PhasesMixin:
                 )
                 yield _custom(ThreadCreatedEvent(thread_id=thread_info.thread_id).to_dict())
                 state.thread_id = thread_info.thread_id
-                self._current_thread_id = thread_info.thread_id
             except Exception:
                 logger.debug("Thread creation failed after resume fallback", exc_info=True)
         except Exception:
@@ -287,16 +285,16 @@ class PhasesMixin:
 
         if not state.thread_id:
             state.thread_id = requested_thread_id or _generate_thread_id()
-            self._current_thread_id = state.thread_id
 
-        store = self._ensure_artifact_store(state.thread_id)
+        store = self._ensure_artifact_store(state)
         if store and not store.manifest.query:
             store._manifest.query = user_input[:200]
             store.save_manifest()
 
         if self._context and hasattr(self._context, "restore") and requested_thread_id:
             try:
-                restored = await self._context.restore(state.thread_id)
+                async with self._context_restore_lock:
+                    restored = await self._context.restore(state.thread_id)
                 if restored:
                     logger.info("Context restored for thread %s", state.thread_id)
             except Exception:
@@ -430,7 +428,7 @@ class PhasesMixin:
                     plan.id = f"P_{state._plan_count}"
 
                 state.plan = plan
-                self._current_plan = plan
+                self._current_plan = plan  # mirror for CLI / current_plan property (IG-110)
                 yield _custom(
                     PlanCreatedEvent(
                         plan_id=plan.id,
@@ -591,8 +589,8 @@ class PhasesMixin:
         Args:
             state: Mutable RunnerState to attach context to.
         """
-        from soothe.safety import FrameworkFilesystem
-        from soothe.safety.workspace import get_git_status
+        from soothe.core import FrameworkFilesystem
+        from soothe.core.workspace import get_git_status
 
         # Workspace from ContextVar (set by WorkspaceContextMiddleware)
         workspace = FrameworkFilesystem.get_current_workspace()

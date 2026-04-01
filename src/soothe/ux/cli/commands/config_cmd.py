@@ -165,7 +165,7 @@ def config_init(
     if not template_found:
         # Use FrameworkFilesystem for consistency
         try:
-            from soothe.safety import FrameworkFilesystem
+            from soothe.core import FrameworkFilesystem
 
             backend = FrameworkFilesystem.get()
             backend.write(str(target), "# Soothe configuration\n# See docs/user_guide.md for options\n")

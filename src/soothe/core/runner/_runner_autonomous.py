@@ -54,6 +54,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         user_input: str,
         *,
         thread_id: str | None = None,
+        workspace: str | None = None,
         max_iterations: int = 10,
     ) -> AsyncGenerator[StreamChunk]:
         """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009).
@@ -71,7 +72,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         state = RunnerState()
         state.thread_id = thread_id or self._current_thread_id or ""
-        self._current_thread_id = state.thread_id or None
+        state.workspace = workspace
 
         # Two-tier classification for proper routing
         if self._unified_classifier:
@@ -209,8 +210,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                 status="completed",
             ):
                 yield chunk
-            if self._artifact_store:
-                self._artifact_store.update_status("completed")
+            if state.artifact_store:
+                state.artifact_store.update_status("completed")
             yield _custom(ThreadSavedEvent(thread_id=state.thread_id).to_dict())
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
@@ -253,6 +254,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         try:
             iter_state = RunnerState()
             iter_state.thread_id = thread_id
+            self._ensure_artifact_store(iter_state)
             iter_state.unified_classification = parent_state.unified_classification
             iter_state.context_projection = getattr(parent_state, "context_projection", None)
             iter_state.recalled_memories = list(getattr(parent_state, "recalled_memories", []) or [])
@@ -543,9 +545,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                         ).to_dict()
                     )
 
-                if self._artifact_store and goal_report:
+                if iter_state.artifact_store and goal_report:
                     try:
-                        self._artifact_store.write_goal_report(goal_report)
+                        iter_state.artifact_store.write_goal_report(goal_report)
                         logger.debug("Goal report artifact written for %s", goal.id)
                     except Exception:
                         logger.debug("Goal report write failed", exc_info=True)

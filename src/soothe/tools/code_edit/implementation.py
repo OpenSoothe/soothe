@@ -48,7 +48,7 @@ def _get_effective_work_dir(fallback_work_dir: str) -> str:
         pass
 
     # Priority 2: Try ContextVar
-    from soothe.safety import FrameworkFilesystem
+    from soothe.core import FrameworkFilesystem
 
     dynamic_workspace = FrameworkFilesystem.get_current_workspace()
     if dynamic_workspace:

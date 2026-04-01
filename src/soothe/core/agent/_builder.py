@@ -14,7 +14,7 @@ from soothe.config import SootheConfig
 
 # Import and apply deepagents patches
 from soothe.core.agent._patch import *  # noqa: F403
-from soothe.core.agent.middleware import build_soothe_middleware_stack
+from soothe.core.middleware import build_soothe_middleware_stack
 from soothe.core.resolver import (
     resolve_context,
     resolve_memory,
@@ -323,7 +323,7 @@ class AgentBuilder:
         policy: PolicyProtocol | None,
     ) -> BackendProtocol | BackendFactory:
         """Initialize FrameworkFilesystem backend."""
-        from soothe.safety import FrameworkFilesystem
+        from soothe.core import FrameworkFilesystem
 
         return FrameworkFilesystem.initialize(
             config=self._config,

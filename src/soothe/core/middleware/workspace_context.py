@@ -52,7 +52,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         """
         from langgraph.config import get_config
 
-        from soothe.safety import FrameworkFilesystem
+        from soothe.core import FrameworkFilesystem
 
         # Get config from langgraph context
         try:
@@ -94,7 +94,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         Returns:
             None.
         """
-        from soothe.safety import FrameworkFilesystem
+        from soothe.core import FrameworkFilesystem
 
         FrameworkFilesystem.clear_current_workspace()
         logger.debug("Workspace context cleared")

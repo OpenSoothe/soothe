@@ -258,7 +258,7 @@ class StepLoopMixin:
                 step.result = f"Stream error: {step_state.stream_error}"
                 blocked = [
                     s.id
-                    for s in (self._current_plan.steps if self._current_plan else [])
+                    for s in (state.plan.steps if state.plan else [])
                     if step.id in s.depends_on and s.status == "pending"
                 ]
                 yield _custom(
@@ -285,7 +285,7 @@ class StepLoopMixin:
                 step.result = "No response from agent"
                 blocked = [
                     s.id
-                    for s in (self._current_plan.steps if self._current_plan else [])
+                    for s in (state.plan.steps if state.plan else [])
                     if step.id in s.depends_on and s.status == "pending"
                 ]
                 yield _custom(

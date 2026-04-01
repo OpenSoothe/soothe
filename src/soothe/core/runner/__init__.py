@@ -26,6 +26,7 @@ Implementation is decomposed into five mixins:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -153,8 +154,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
-        self._artifact_store: Any | None = None
+        self._artifact_store: Any | None = None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
         self._concurrency = ConcurrencyController(self._config.execution.concurrency)
+        self._context_restore_lock = asyncio.Lock()
 
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
@@ -183,6 +185,106 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             thread_id: Thread ID to reuse, or ``None`` to clear.
         """
         self._current_thread_id = thread_id
+
+    def _clear_query_scoped_runner_state(self) -> None:
+        """Clear per-query mirrors on this singleton runner (IG-110).
+
+        Authoritative plan and artifact data live on ``RunnerState`` per call;
+        this resets CLI/debug pointers so cancelled or completed runs do not
+        leak into the next ``astream`` invocation.
+        """
+        self._current_plan = None
+        self._artifact_store = None
+
+    def thread_context_manager(self) -> Any:
+        """Return ``ThreadContextManager`` for durability/thread operations (IG-110).
+
+        Callers outside core (e.g. daemon) should use this instead of reading
+        ``runner._durability`` directly.
+        """
+        from soothe.core.thread import ThreadContextManager
+
+        return ThreadContextManager(self._durability, self._config, self._context)
+
+    async def resume_persisted_thread(self, thread_id: str) -> Any:
+        """Resume thread metadata from durability (wrapper for daemon/CLI)."""
+        return await self.thread_context_manager().resume_thread(thread_id)
+
+    async def create_persisted_thread(
+        self,
+        *,
+        thread_id: str | None = None,
+        initial_message: Any = None,
+        metadata: Any = None,
+    ) -> Any:
+        """Create a persisted thread (wrapper for daemon/CLI)."""
+        return await self.thread_context_manager().create_thread(
+            thread_id=thread_id,
+            initial_message=initial_message,
+            metadata=metadata,
+        )
+
+    async def list_persisted_threads(
+        self,
+        thread_filter: Any | None = None,
+        *,
+        include_stats: bool = False,
+        include_last_message: bool = False,
+    ) -> list[Any]:
+        """List threads with optional filtering."""
+        return await self.thread_context_manager().list_threads(
+            thread_filter,
+            include_stats=include_stats,
+            include_last_message=include_last_message,
+        )
+
+    async def get_persisted_thread(self, thread_id: str) -> Any:
+        """Return enhanced thread info."""
+        return await self.thread_context_manager().get_thread(thread_id)
+
+    async def archive_persisted_thread(self, thread_id: str) -> None:
+        """Archive a thread."""
+        await self.thread_context_manager().archive_thread(thread_id)
+
+    async def delete_persisted_thread(self, thread_id: str) -> None:
+        """Delete a thread."""
+        await self.thread_context_manager().delete_thread(thread_id)
+
+    async def get_persisted_thread_messages(
+        self,
+        thread_id: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Any]:
+        """Load thread messages."""
+        return await self.thread_context_manager().get_thread_messages(
+            thread_id,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def get_persisted_thread_artifacts(self, thread_id: str) -> list[Any]:
+        """List thread artifacts."""
+        return await self.thread_context_manager().get_thread_artifacts(thread_id)
+
+    async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
+        """Refresh ``updated_at`` on thread metadata (activity ping)."""
+        from datetime import UTC, datetime
+
+        if not thread_id:
+            return
+        try:
+            thread_data = self._durability._store.load(f"thread:{thread_id}")
+            if thread_data:
+                from soothe.protocols.durability import ThreadInfo
+
+                thread_info = ThreadInfo.model_validate(thread_data)
+                thread_info = thread_info.model_copy(update={"updated_at": datetime.now(UTC)})
+                self._durability._store.save(f"thread:{thread_id}", thread_info.model_dump(mode="json"))
+                logger.debug("Thread %s updated_at refreshed", thread_id)
+        except Exception:
+            logger.debug("touch_thread_activity_timestamp failed", exc_info=True)
 
     def protocol_summary(self) -> dict[str, str]:
         """Return a summary of active protocol implementations."""
@@ -218,6 +320,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """List all threads via DurabilityProtocol."""
         threads = await self._durability.list_threads()
         return [t.model_dump() for t in threads]
+
+    async def list_durability_threads(self, thread_filter: Any | None = None) -> list[Any]:
+        """List threads with optional ``ThreadFilter`` (daemon / tooling)."""
+        return await self._durability.list_threads(thread_filter)
 
     async def cleanup(self) -> None:
         """Clean up resources during shutdown.
@@ -363,35 +469,38 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         elif self._current_thread_id:
             set_thread_id(self._current_thread_id)
 
-        # Quick path: direct subagent routing (bypasses classifier)
-        if subagent:
-            from ._types import RunnerState
+        try:
+            # Quick path: direct subagent routing (bypasses classifier)
+            if subagent:
+                from ._types import RunnerState
 
-            state = RunnerState()
-            state.thread_id = str(thread_id or self._current_thread_id or "")
-            state.workspace = workspace
+                state = RunnerState()
+                state.thread_id = str(thread_id or self._current_thread_id or "")
+                state.workspace = workspace
 
-            logger.info("Quick path: routing directly to subagent '%s'", subagent)
-            async for chunk in self._run_direct_subagent(user_input, subagent, state):
-                yield chunk
-            return
+                logger.info("Quick path: routing directly to subagent '%s'", subagent)
+                async for chunk in self._run_direct_subagent(user_input, subagent, state):
+                    yield chunk
+                return
 
-        # Autonomous mode
-        if autonomous and self._goal_engine:
-            async for chunk in self._run_autonomous(
+            # Autonomous mode
+            if autonomous and self._goal_engine:
+                async for chunk in self._run_autonomous(
+                    user_input,
+                    thread_id=thread_id,
+                    workspace=workspace,
+                    max_iterations=max_iterations or self._config.autonomous.max_iterations,
+                ):
+                    yield chunk
+                return
+
+            # Default: agentic loop (RFC-0008)
+            async for chunk in self._run_agentic_loop(
                 user_input,
                 thread_id=thread_id,
                 workspace=workspace,
-                max_iterations=max_iterations or self._config.autonomous.max_iterations,
+                max_iterations=max_iterations or self._config.agentic.max_iterations,
             ):
                 yield chunk
-            return
-
-        # Default: agentic loop (RFC-0008)
-        async for chunk in self._run_agentic_loop(
-            user_input,
-            thread_id=thread_id,
-            workspace=workspace,
-            max_iterations=max_iterations or self._config.agentic.max_iterations,
-        ):
-            yield chunk
+        finally:
+            self._clear_query_scoped_runner_state()

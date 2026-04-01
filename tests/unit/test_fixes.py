@@ -298,9 +298,11 @@ async def test_daemon_handles_new_thread_message_creates_thread() -> None:
 
     await daemon._handle_client_message("test-client-id", {"type": "new_thread"})
 
-    # Verify draft thread was created (not persisted yet)
-    assert daemon._draft_thread_id is not None
-    assert daemon._runner.current_thread_id == daemon._draft_thread_id
+    # Verify draft thread was created (not persisted yet) — IG-110: tracked in registry
+    tid = daemon._runner.current_thread_id
+    assert tid
+    reg = daemon._thread_registry.get(tid)
+    assert reg is not None and reg.is_draft
 
     # Note: Status is not broadcast when no session exists
     # (It would be sent directly to the session if one existed)

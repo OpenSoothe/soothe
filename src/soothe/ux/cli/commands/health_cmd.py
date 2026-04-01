@@ -90,7 +90,7 @@ def checkhealth(
 
             # Use FrameworkFilesystem for consistency
             try:
-                from soothe.safety import FrameworkFilesystem
+                from soothe.core import FrameworkFilesystem
 
                 backend = FrameworkFilesystem.get()
                 backend.write(str(report_path), report_content)

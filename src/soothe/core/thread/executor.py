@@ -51,8 +51,7 @@ class ThreadExecutor:
         Yields:
             Stream chunks from runner
         """
-        # Set thread context
-        self._runner.set_current_thread_id(thread_id)
+        # Thread id is passed to astream(); do not mutate runner._current_thread_id (IG-110).
 
         # Create isolated logger
         ThreadLogger(thread_id=thread_id)

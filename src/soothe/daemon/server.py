@@ -14,19 +14,22 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.core import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
+from soothe.daemon.message_router import MessageRouter
 from soothe.daemon.paths import pid_path
 from soothe.daemon.protocol import encode
+from soothe.daemon.query_engine import QueryEngine
 from soothe.daemon.singleton import (
     acquire_pid_lock,
     cleanup_pid,
     release_pid_lock,
 )
 from soothe.daemon.thread_logger import InputHistory, ThreadLogger
+from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
-from soothe.safety import resolve_daemon_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +128,13 @@ class SootheDaemon(DaemonHandlersMixin):
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
         self._query_state_lock = asyncio.Lock()
-        # Draft thread tracking for lazy creation
-        self._draft_thread_id: str | None = None  # Thread ID created but not yet persisted
         # Daemon readiness state for explicit startup handshake (RFC-0023)
         self._readiness_state: str = "starting"
         self._readiness_message: str | None = None
+        # Per-thread isolation (IG-110): populated when runner exists
+        self._thread_registry: ThreadStateRegistry = ThreadStateRegistry()
+        self._query_engine: QueryEngine | None = None
+        self._message_router: MessageRouter = MessageRouter(self)
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -162,6 +167,8 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._readiness_message = str(exc)
                 raise
 
+            self._query_engine = QueryEngine(self)
+
             # Initialize persistent input history
             self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
             logger.debug("Input history initialized with %d entries", len(self._input_history.history))
@@ -171,11 +178,9 @@ class SootheDaemon(DaemonHandlersMixin):
 
             # Initialize transport manager (RFC-0013)
             # Create ThreadContextManager for HTTP REST transport (RFC-0017)
-            from soothe.core.thread import ThreadContextManager, ThreadExecutor
+            from soothe.core.thread import ThreadExecutor
 
-            thread_manager = ThreadContextManager(
-                self._runner._durability, self._config, getattr(self._runner, "_context", None)
-            )
+            thread_manager = self._runner.thread_context_manager()
 
             # Initialize ThreadExecutor for multi-threading support (RFC-0017)
             max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
@@ -436,7 +441,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
     async def _suspend_inactive_threads(self) -> None:
         """Suspend threads that have been inactive for longer than the configured timeout."""
-        if not self._runner or not hasattr(self._runner, "_durability"):
+        if not self._runner:
             return
 
         from datetime import datetime, timedelta
@@ -448,7 +453,7 @@ class SootheDaemon(DaemonHandlersMixin):
         timeout_threshold = datetime.now(tz=None) - timedelta(hours=timeout_hours)
 
         # Get all active threads
-        active_threads = await self._runner._durability.list_threads(ThreadFilter(status="active"))
+        active_threads = await self._runner.list_durability_threads(ThreadFilter(status="active"))
 
         suspended_count = 0
         for thread in active_threads:
@@ -468,13 +473,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
             if updated_at < threshold_with_tz:
                 try:
-                    from soothe.core.thread import ThreadContextManager
-
-                    thread_manager = ThreadContextManager(
-                        self._runner._durability,
-                        self._config,
-                        getattr(self._runner, "_context", None),
-                    )
+                    thread_manager = self._runner.thread_context_manager()
                     await thread_manager.suspend_thread(thread.thread_id)
                     suspended_count += 1
                     logger.info(
@@ -624,7 +623,7 @@ class SootheDaemon(DaemonHandlersMixin):
             msg: Message dict from a transport client.
         """
         # Create a task to handle the message asynchronously
-        task = asyncio.create_task(self._handle_client_message(client_id, msg))
+        task = asyncio.create_task(self._message_router.dispatch(client_id, msg))
         _ = task  # Suppress RUF006 warning - we intentionally don't track the task
 
     # -- static helpers -----------------------------------------------------

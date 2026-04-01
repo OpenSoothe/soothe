@@ -191,7 +191,7 @@ class WorkspaceAwareBackend:
             logger.debug("get_config() failed, falling back to ContextVar")
 
         # Fallback to ContextVar (for non-tool operations)
-        from soothe.safety.filesystem import FrameworkFilesystem
+        from soothe.core.filesystem import FrameworkFilesystem
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:
@@ -212,7 +212,7 @@ class WorkspaceAwareBackend:
         Returns:
             NormalizedPathBackend for current context.
         """
-        from soothe.safety.filesystem import FrameworkFilesystem
+        from soothe.core.filesystem import FrameworkFilesystem
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:

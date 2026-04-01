@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from soothe.safety.workspace import (
+from soothe.core.workspace import (
     resolve_daemon_workspace,
     validate_client_workspace,
 )
