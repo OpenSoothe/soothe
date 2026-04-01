@@ -337,4 +337,5 @@ class LoopAgent:
             available_capabilities=available_tools + available_subagents,
             recent_messages=[],  # Placeholder for conversation context
             completed_steps=completed_steps,  # Pass executed steps to avoid repetition
+            workspace=state.workspace,  # Pass workspace for context-aware planning
         )

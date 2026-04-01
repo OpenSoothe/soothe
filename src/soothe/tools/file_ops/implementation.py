@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 
 
 def _get_effective_work_dir(fallback_work_dir: str) -> str:
-    """Get effective work directory, checking ContextVar first (RFC-103).
+    """Get effective work directory, checking LangGraph config first (RFC-103).
+
+    Priority:
+    1. workspace from LangGraph configurable (passed through execution)
+    2. ContextVar (for same-async-context operations)
+    3. fallback_work_dir (daemon default)
 
     Args:
         fallback_work_dir: Fallback directory if no dynamic workspace set.
@@ -38,10 +43,32 @@ def _get_effective_work_dir(fallback_work_dir: str) -> str:
     Returns:
         Effective workspace directory path as string.
     """
+    # Priority 1: Try to get workspace from LangGraph configurable
+    # This works even when tool execution is in a different async context
+    try:
+        from langgraph.config import get_config
+
+        config = get_config()
+        configurable = config.get("configurable", {})
+        workspace = configurable.get("workspace")
+        if workspace:
+            logger.debug("Using workspace from LangGraph configurable: %s", workspace)
+            return str(workspace)
+    except Exception:  # noqa: S110
+        # Not in LangGraph context - this is expected for non-LangGraph tool calls
+        pass
+
+    # Priority 2: Try ContextVar (same async context)
     from soothe.safety import FrameworkFilesystem
 
     dynamic_workspace = FrameworkFilesystem.get_current_workspace()
-    return str(dynamic_workspace) if dynamic_workspace else fallback_work_dir
+    if dynamic_workspace:
+        logger.debug("Using dynamic workspace from ContextVar: %s", dynamic_workspace)
+        return str(dynamic_workspace)
+
+    # Priority 3: Use fallback
+    logger.debug("No dynamic workspace, using fallback: %s", fallback_work_dir)
+    return fallback_work_dir
 
 
 class ReadFileTool(BaseTool):
@@ -72,7 +99,10 @@ class ReadFileTool(BaseTool):
 
         This handles LLM convention where /file.txt means "relative to workspace root".
         """
-        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        # Use dynamic workspace from ContextVar if available (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+
+        normalized_input = _normalize_workspace_relative_input(file_path, effective_work_dir)
 
         # Log if normalization changed the path
         if normalized_input != file_path:
@@ -83,8 +113,8 @@ class ReadFileTool(BaseTool):
         if path.is_absolute():
             # If absolute path exists, use it
             if path.exists():
-                if self.work_dir and not self.allow_outside_workdir:
-                    work = expand_path(self.work_dir)
+                if effective_work_dir and not self.allow_outside_workdir:
+                    work = expand_path(effective_work_dir)
                     try:
                         path.resolve().relative_to(work)
                     except ValueError as err:
@@ -94,8 +124,8 @@ class ReadFileTool(BaseTool):
 
             # If absolute path doesn't exist, try as workspace-relative
             # This handles LLM convention where /file means "relative to workspace root"
-            if self.work_dir:
-                base = expand_path(self.work_dir)
+            if effective_work_dir:
+                base = expand_path(effective_work_dir)
                 # Strip leading slash to make it relative
                 relative_path = path.relative_to("/") if path.is_absolute() else path
                 resolved = (base / relative_path).resolve()
@@ -122,7 +152,7 @@ class ReadFileTool(BaseTool):
             return path
 
         # Relative path - resolve relative to workspace
-        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+        base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
         return (base / path).resolve()
 
     def _run(self, path: str, start_line: int | None = None, end_line: int | None = None, **kwargs: Any) -> str:
@@ -208,7 +238,10 @@ class WriteFileTool(BaseTool):
         Raises:
             ValueError: If path is outside work directory and not allowed.
         """
-        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        # Use dynamic workspace from ContextVar if available (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+
+        normalized_input = _normalize_workspace_relative_input(file_path, effective_work_dir)
 
         # Log if normalization changed the path
         if normalized_input != file_path:
@@ -219,8 +252,8 @@ class WriteFileTool(BaseTool):
         if path.is_absolute():
             # If absolute path exists or parent exists, use it
             if path.exists() or path.parent.exists():
-                if self.work_dir and not self.allow_outside_workdir:
-                    work = expand_path(self.work_dir)
+                if effective_work_dir and not self.allow_outside_workdir:
+                    work = expand_path(effective_work_dir)
                     try:
                         path.resolve().relative_to(work)
                     except ValueError as err:
@@ -230,8 +263,8 @@ class WriteFileTool(BaseTool):
 
             # If absolute path doesn't exist, treat as workspace-relative
             # This handles LLM convention where /file means "relative to workspace root"
-            if self.work_dir:
-                base = expand_path(self.work_dir)
+            if effective_work_dir:
+                base = expand_path(effective_work_dir)
                 relative_path = path.relative_to("/") if path.is_absolute() else path
                 resolved = (base / relative_path).resolve()
                 logger.debug(
@@ -244,7 +277,7 @@ class WriteFileTool(BaseTool):
             # No workspace, return the absolute path
             return path
 
-        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+        base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
 
         return (base / path).resolve()
 
@@ -358,7 +391,10 @@ class DeleteFileTool(BaseTool):
 
         This handles LLM convention where /file.txt means "relative to workspace root".
         """
-        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        # Use dynamic workspace from ContextVar if available (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+
+        normalized_input = _normalize_workspace_relative_input(file_path, effective_work_dir)
 
         # Log if normalization changed the path
         if normalized_input != file_path:
@@ -369,8 +405,8 @@ class DeleteFileTool(BaseTool):
         if path.is_absolute():
             # If absolute path exists, use it
             if path.exists():
-                if self.work_dir and not self.allow_outside_workdir:
-                    work = expand_path(self.work_dir)
+                if effective_work_dir and not self.allow_outside_workdir:
+                    work = expand_path(effective_work_dir)
                     try:
                         path.resolve().relative_to(work)
                     except ValueError as err:
@@ -380,8 +416,8 @@ class DeleteFileTool(BaseTool):
 
             # If absolute path doesn't exist, try as workspace-relative
             # This handles LLM convention where /file means "relative to workspace root"
-            if self.work_dir:
-                base = expand_path(self.work_dir)
+            if effective_work_dir:
+                base = expand_path(effective_work_dir)
                 # Strip leading slash to make it relative
                 relative_path = path.relative_to("/") if path.is_absolute() else path
                 resolved = (base / relative_path).resolve()
@@ -408,7 +444,7 @@ class DeleteFileTool(BaseTool):
             return path
 
         # Relative path - resolve relative to workspace
-        base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+        base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
         return (base / path).resolve()
 
     def _create_backup(self, file_path: Path) -> Path | None:
@@ -610,7 +646,10 @@ class FileInfoTool(BaseTool):
 
     def _resolve_path(self, file_path: str) -> Path:
         """Resolve file path relative to work directory."""
-        normalized_input = _normalize_workspace_relative_input(file_path, self.work_dir)
+        # Use dynamic workspace from ContextVar if available (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+
+        normalized_input = _normalize_workspace_relative_input(file_path, effective_work_dir)
 
         # Log if normalization changed the path
         if normalized_input != file_path:

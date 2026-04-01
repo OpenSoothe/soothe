@@ -691,15 +691,16 @@ class DaemonHandlersMixin:
             self._query_running = False
             self._current_query_task = None
 
+            # Reset runner thread_id so next query starts fresh (IG-109)
+            self._runner.set_current_thread_id(None)
+
             await self._broadcast(
                 {
                     "type": "command_response",
                     "content": "[green]Query cancelled.[/green]",
                 }
             )
-            await self._broadcast(
-                {"type": "status", "state": "idle", "thread_id": self._runner.current_thread_id or ""}
-            )
+            await self._broadcast({"type": "status", "state": "idle", "thread_id": ""})
 
     async def _run_query(
         self,
@@ -848,6 +849,10 @@ class DaemonHandlersMixin:
                 logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
+                # Clear workspace context to prevent stale state (IG-109)
+                from soothe.safety import FrameworkFilesystem
+
+                FrameworkFilesystem.clear_current_workspace()
                 await self._broadcast(
                     {
                         "type": "event",
@@ -886,6 +891,8 @@ class DaemonHandlersMixin:
             await task
         except asyncio.CancelledError:
             logger.info("Query task cancelled")
+            # Reset runner thread_id so next query starts fresh (IG-109)
+            self._runner.set_current_thread_id(None)
         finally:
             self._current_query_task = None
             # RFC-0013: Release thread ownership on query completion

@@ -261,14 +261,23 @@ class SimplePlanner:
         """Build unified planning prompt with embedded classification."""
         parts = [
             f"Create a plan to accomplish this goal: {goal}\n",
-            "\nFirst, classify the intent:",
-            "- question: Who/what/how questions needing research",
-            "- search: Find/lookup information",
-            "- analysis: Analyze/review/examine content",
-            "- implementation: Create/build/write code",
-            "- debugging: Fix/troubleshoot issues",
-            "- compose: Generate custom agent/skill\n",
         ]
+
+        # Add workspace context if available
+        if context.workspace:
+            parts.append(f"\nCurrent working directory: {context.workspace}\n")
+
+        parts.extend(
+            [
+                "\nFirst, classify the intent:",
+                "- question: Who/what/how questions needing research",
+                "- search: Find/lookup information",
+                "- analysis: Analyze/review/examine content",
+                "- implementation: Create/build/write code",
+                "- debugging: Fix/troubleshoot issues",
+                "- compose: Generate custom agent/skill\n",
+            ]
+        )
 
         if context.available_capabilities:
             parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}\n")

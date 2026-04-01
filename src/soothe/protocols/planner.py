@@ -81,12 +81,14 @@ class PlanContext(BaseModel):
         available_capabilities: Names of available tools and subagents.
         completed_steps: Results from already-completed steps.
         unified_classification: Pre-computed unified classification (RFC-0012).
+        workspace: Current workspace directory path.
     """
 
     recent_messages: list[str] = Field(default_factory=list)
     available_capabilities: list[str] = Field(default_factory=list)
     completed_steps: list[StepResult] = Field(default_factory=list)
     unified_classification: Any | None = None  # Type: UnifiedClassification
+    workspace: str | None = None  # Current workspace directory
 
 
 class StepReport(BaseModel):
