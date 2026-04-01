@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import contextlib
-from pathlib import Path
+# Load environment variables from .env file BEFORE any langchain imports
+# This is required for LangSmith tracing to be activated at import time
+from dotenv import load_dotenv
 
-from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.daemon.server import SootheDaemon
+load_dotenv()
+
+import argparse  # noqa: E402
+import asyncio  # noqa: E402
+import contextlib  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from soothe.config import SOOTHE_HOME, SootheConfig  # noqa: E402
+from soothe.daemon.server import SootheDaemon  # noqa: E402
 
 
 def run_daemon(

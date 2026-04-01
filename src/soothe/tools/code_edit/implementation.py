@@ -20,6 +20,44 @@ from soothe.utils import expand_path
 logger = logging.getLogger(__name__)
 
 
+def _get_effective_work_dir(fallback_work_dir: str) -> str:
+    """Get effective work directory, checking LangGraph config first (RFC-103).
+
+    Priority:
+    1. workspace from LangGraph configurable (passed through execution)
+    2. ContextVar (for same-async-context operations)
+    3. fallback_work_dir (daemon default)
+
+    Args:
+        fallback_work_dir: Fallback directory if no dynamic workspace set.
+
+    Returns:
+        Effective workspace directory path as string.
+    """
+    # Priority 1: Try to get workspace from LangGraph configurable
+    try:
+        from langgraph.config import get_config
+
+        config = get_config()
+        configurable = config.get("configurable", {})
+        workspace = configurable.get("workspace")
+        if workspace:
+            logger.debug("Using workspace from LangGraph configurable: %s", workspace)
+            return str(workspace)
+    except Exception:  # noqa: S110
+        pass
+
+    # Priority 2: Try ContextVar
+    from soothe.safety import FrameworkFilesystem
+
+    dynamic_workspace = FrameworkFilesystem.get_current_workspace()
+    if dynamic_workspace:
+        return str(dynamic_workspace)
+
+    # Priority 3: Use fallback
+    return fallback_work_dir
+
+
 class EditFileLinesTool(BaseTool):
     """Replace specific line range in a file.
 
@@ -42,17 +80,19 @@ class EditFileLinesTool(BaseTool):
 
     def _resolve_path(self, path: str) -> Path:
         """Resolve and validate file path."""
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
         file_path = Path(path)
 
         # Handle relative paths
         if not file_path.is_absolute():
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+            base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
             file_path = (base / file_path).resolve()
 
         # Security check
-        if not self.allow_outside_workdir and self.work_dir:
+        if not self.allow_outside_workdir and effective_work_dir:
             try:
-                file_path.relative_to(expand_path(self.work_dir))
+                file_path.relative_to(expand_path(effective_work_dir))
             except ValueError as err:
                 msg = f"Path {path} is outside work directory"
                 raise ValueError(msg) from err
@@ -154,15 +194,17 @@ class InsertLinesTool(BaseTool):
 
     def _resolve_path(self, path: str) -> Path:
         """Resolve and validate file path."""
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
         file_path = Path(path)
 
         if not file_path.is_absolute():
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+            base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
             file_path = (base / file_path).resolve()
 
-        if not self.allow_outside_workdir and self.work_dir:
+        if not self.allow_outside_workdir and effective_work_dir:
             try:
-                file_path.relative_to(expand_path(self.work_dir))
+                file_path.relative_to(expand_path(effective_work_dir))
             except ValueError as err:
                 msg = f"Path {path} is outside work directory"
                 raise ValueError(msg) from err
@@ -247,15 +289,17 @@ class DeleteLinesTool(BaseTool):
 
     def _resolve_path(self, path: str) -> Path:
         """Resolve and validate file path."""
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
         file_path = Path(path)
 
         if not file_path.is_absolute():
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+            base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
             file_path = (base / file_path).resolve()
 
-        if not self.allow_outside_workdir and self.work_dir:
+        if not self.allow_outside_workdir and effective_work_dir:
             try:
-                file_path.relative_to(expand_path(self.work_dir))
+                file_path.relative_to(expand_path(effective_work_dir))
             except ValueError as err:
                 msg = f"Path {path} is outside work directory"
                 raise ValueError(msg) from err
@@ -339,15 +383,17 @@ class ApplyDiffTool(BaseTool):
 
     def _resolve_path(self, path: str) -> Path:
         """Resolve and validate file path."""
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
         file_path = Path(path)
 
         if not file_path.is_absolute():
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
+            base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
             file_path = (base / file_path).resolve()
 
-        if not self.allow_outside_workdir and self.work_dir:
+        if not self.allow_outside_workdir and effective_work_dir:
             try:
-                file_path.relative_to(expand_path(self.work_dir))
+                file_path.relative_to(expand_path(effective_work_dir))
             except ValueError as err:
                 msg = f"Path {path} is outside work directory"
                 raise ValueError(msg) from err

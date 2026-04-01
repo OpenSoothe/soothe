@@ -518,6 +518,47 @@ class SearchFilesTool(BaseTool):
 
     work_dir: str = Field(default="", description="Working directory")
 
+    def _resolve_directory(self, path: str) -> Path:
+        """Resolve directory path, ensuring it's within workspace.
+
+        Args:
+            path: Directory path (relative or absolute).
+
+        Returns:
+            Resolved path within workspace.
+        """
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+        base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
+
+        if path == "." or not path:
+            return base
+
+        path_obj = Path(path)
+
+        # If absolute path, check if it's within workspace
+        if path_obj.is_absolute():
+            resolved = path_obj.resolve()
+            try:
+                # Check if this absolute path is within the workspace
+                resolved.relative_to(base)
+            except ValueError:
+                # Path is outside workspace - treat as relative to workspace
+                logger.info(
+                    "Absolute path '%s' is outside workspace '%s', treating as relative",
+                    path,
+                    base,
+                )
+                # Remove leading slash and join with workspace
+                relative_part = path.lstrip("/")
+                return (base / relative_part).resolve()
+            else:
+                # Path is within workspace, use it
+                return resolved
+
+        # Relative path - resolve relative to workspace
+        return (base / path_obj).resolve()
+
     def _run(self, pattern: str, path: str = ".", file_pattern: str = "*") -> str:
         """Search for regex pattern in files.
 
@@ -530,9 +571,7 @@ class SearchFilesTool(BaseTool):
             Matching files and lines
         """
         try:
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
-
-            target = (base / path).resolve() if path != "." else base
+            target = self._resolve_directory(path)
 
             if not target.exists():
                 return f"Error: Directory not found: {target}"
@@ -586,6 +625,48 @@ class ListFilesTool(BaseTool):
 
     work_dir: str = Field(default="", description="Working directory")
 
+    def _resolve_directory(self, path: str) -> Path:
+        """Resolve directory path, ensuring it's within workspace.
+
+        Args:
+            path: Directory path (relative or absolute).
+
+        Returns:
+            Resolved path within workspace.
+        """
+        # Use dynamic workspace from LangGraph configurable (RFC-103)
+        effective_work_dir = _get_effective_work_dir(self.work_dir)
+        base = expand_path(effective_work_dir) if effective_work_dir else Path.cwd()
+
+        if path == "." or not path:
+            return base
+
+        path_obj = Path(path)
+
+        # If absolute path, check if it's within workspace
+        if path_obj.is_absolute():
+            resolved = path_obj.resolve()
+            try:
+                # Check if this absolute path is within the workspace
+                resolved.relative_to(base)
+            except ValueError:
+                # Path is outside workspace - treat as relative to workspace
+                # Strip leading slash and resolve relative to base
+                logger.info(
+                    "Absolute path '%s' is outside workspace '%s', treating as relative",
+                    path,
+                    base,
+                )
+                # Remove leading slash and join with workspace
+                relative_part = path.lstrip("/")
+                return (base / relative_part).resolve()
+            else:
+                # Path is within workspace, use it
+                return resolved
+
+        # Relative path - resolve relative to workspace
+        return (base / path_obj).resolve()
+
     def _run(self, pattern: str = "*", path: str = ".", recursive: bool = False) -> str:  # noqa: FBT001, FBT002
         """List files matching glob pattern.
 
@@ -598,9 +679,7 @@ class ListFilesTool(BaseTool):
             List of matching file paths
         """
         try:
-            base = expand_path(self.work_dir) if self.work_dir else Path.cwd()
-
-            target = (base / path).resolve() if path != "." else base
+            target = self._resolve_directory(path)
 
             if not target.exists():
                 return f"Error: Directory not found: {target}"

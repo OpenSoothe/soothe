@@ -265,7 +265,13 @@ class SimplePlanner:
 
         # Add workspace context if available
         if context.workspace:
+            logger.debug("Planner: using workspace=%s", context.workspace)
             parts.append(f"\nCurrent working directory: {context.workspace}\n")
+            parts.append(
+                "NOTE: For local file operations (reading files, listing directories), "
+                "use file tools (read_file, list_files, etc.), NOT the browser subagent. "
+                "Browser is for web navigation only.\n"
+            )
 
         parts.extend(
             [

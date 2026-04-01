@@ -86,6 +86,7 @@ class RunCommandTool(BaseTool):
     )
 
     _shell_initialized: bool = False
+    _last_workspace: str | None = None
 
     def __init__(self, **data: Any) -> None:
         """Initialize the CLI tool.
@@ -95,7 +96,41 @@ class RunCommandTool(BaseTool):
         """
         super().__init__(**data)
         self._shell_initialized = False
+        self._last_workspace = None
         self.custom_prompt = ""
+
+    def _get_effective_workspace(self) -> str | None:
+        """Get effective workspace, checking LangGraph config first (RFC-103).
+
+        Priority:
+        1. workspace from LangGraph configurable
+        2. ContextVar (for same-async-context)
+        3. self.workspace_root (static fallback)
+
+        Returns:
+            Effective workspace path or None.
+        """
+        # Priority 1: Try LangGraph configurable
+        try:
+            from langgraph.config import get_config
+
+            config = get_config()
+            configurable = config.get("configurable", {})
+            workspace = configurable.get("workspace")
+            if workspace:
+                return str(workspace)
+        except Exception:  # noqa: S110
+            pass  # Not in LangGraph context - expected for non-LangGraph tool calls
+
+        # Priority 2: Try ContextVar
+        from soothe.safety import FrameworkFilesystem
+
+        dynamic_workspace = FrameworkFilesystem.get_current_workspace()
+        if dynamic_workspace:
+            return str(dynamic_workspace)
+
+        # Priority 3: Use static fallback
+        return self.workspace_root or None
 
     def _ensure_shell_initialized(self) -> None:
         """Lazy initialization guard - initializes shell on first use."""
@@ -340,6 +375,16 @@ class RunCommandTool(BaseTool):
         if self._is_banned(command):
             logger.warning("Banned command attempted: %s", command)
             return "Error: Command not allowed for security reasons."
+
+        # Get dynamic workspace and change to it before running command (RFC-103)
+        effective_workspace = self._get_effective_workspace()
+        if effective_workspace and effective_workspace != self._last_workspace:
+            child = _shell_instances.get("default")
+            if child:
+                child.sendline(f"cd '{effective_workspace}'")
+                child.expect(self.custom_prompt, timeout=self.quick_timeout)
+                self._last_workspace = effective_workspace
+                logger.debug("Changed to workspace: %s", effective_workspace)
 
         # Use provided timeout or fall back to instance default
         actual_timeout = timeout if timeout is not None else self.timeout

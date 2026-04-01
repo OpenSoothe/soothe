@@ -299,8 +299,9 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 
 ## Related Files
 
-- `src/soothe/tools/file_ops/implementation.py` - `_get_effective_work_dir()`
+- `src/soothe/tools/file_ops/implementation.py` - `_get_effective_work_dir()`, `ListFilesTool._resolve_directory()`, `SearchFilesTool._resolve_directory()`
 - `src/soothe/tools/execution/implementation.py` - `_get_effective_workspace()`
+- `src/soothe/tools/code_edit/implementation.py` - `_get_effective_work_dir()`
 - `src/soothe/backends/planning/simple.py` - `_build_plan_prompt()`
 - `src/soothe/protocols/planner.py` - `PlanContext.workspace`
 
@@ -311,3 +312,6 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | Date | Change |
 |------|--------|
 | 2026-04-01 | Initial benchmark creation |
+| 2026-04-01 | Fixed: `ListFilesTool` and `SearchFilesTool` now use `_get_effective_work_dir()` |
+| 2026-04-01 | Fixed: Added `_resolve_directory()` to treat absolute paths outside workspace as relative |
+| 2026-04-01 | Fixed: All code edit tools now use `_get_effective_work_dir()` for dynamic workspace resolution |
