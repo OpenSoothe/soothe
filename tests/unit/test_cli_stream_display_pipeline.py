@@ -390,3 +390,80 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 1
         assert "Done: 5 papers" in lines[0].content
         assert lines[0].duration_ms == 45200
+
+    def test_loop_agent_judgment_shown_at_normal(self) -> None:
+        """Loop agent judgment visible at normal verbosity with reasoning."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.cognition.loop_agent.judgment",
+            "status": "continue",
+            "progress": 0.5,
+            "confidence": 0.8,
+            "reasoning": "Found initial structure, need to check config files",
+            "iteration": 1,
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert "Found initial structure" in lines[0].content
+        assert "50% done" in lines[0].content
+        assert "80% confident" in lines[0].content
+        assert lines[0].icon == "→"  # Arrow for continue action
+
+    def test_loop_agent_judgment_done_shows_checkmark(self) -> None:
+        """Loop agent judgment with status=done shows checkmark icon."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        event = {
+            "type": "soothe.cognition.loop_agent.judgment",
+            "status": "done",
+            "progress": 1.0,
+            "confidence": 0.95,
+            "reasoning": "Goal achieved, all files analyzed",
+            "iteration": 3,
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert lines[0].icon == "✓"  # Checkmark for done action
+
+    def test_step_completed_with_tool_call_count(self) -> None:
+        """Step completion shows tool call count when > 0."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline._context.current_step_description = "Explore project structure"
+
+        event = {
+            "type": "soothe.agentic.step.completed",
+            "step_id": "step_1",
+            "success": True,
+            "summary": "Done",
+            "duration_ms": 1500,
+            "tool_call_count": 5,
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert "Explore project structure" in lines[0].content
+        assert "[5 tools]" in lines[0].content
+        assert lines[0].icon == "●"  # Solid circle for completed
+        assert lines[0].duration_ms == 1500
+
+    def test_step_completed_without_tool_calls(self) -> None:
+        """Step completion without tool calls shows just description."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        pipeline._context.current_step_description = "Analyze config"
+
+        event = {
+            "type": "soothe.agentic.step.completed",
+            "step_id": "step_2",
+            "success": True,
+            "summary": "Done",
+            "duration_ms": 800,
+            "tool_call_count": 0,
+        }
+        lines = pipeline.process(event)
+
+        assert len(lines) == 1
+        assert "Analyze config" in lines[0].content
+        assert "[0 tools]" not in lines[0].content  # Should not show when 0

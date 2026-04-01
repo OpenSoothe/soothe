@@ -10,7 +10,7 @@ from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.judge import JudgePhase
 from soothe.cognition.loop_agent.planner import PlannerPhase
 from soothe.cognition.loop_agent.schemas import JudgeResult, LoopState
-from soothe.protocols.planner import PlanContext
+from soothe.protocols.planner import PlanContext, StepResult
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -97,6 +97,7 @@ class LoopAgent:
         self,
         goal: str,
         thread_id: str,
+        workspace: str | None = None,
         max_iterations: int = 8,
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
@@ -106,6 +107,7 @@ class LoopAgent:
         Args:
             goal: Goal description to execute
             thread_id: Thread context for execution
+            workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
 
         Yields:
@@ -114,13 +116,15 @@ class LoopAgent:
         state = LoopState(
             goal=goal,
             thread_id=thread_id,
+            workspace=workspace,
             max_iterations=max_iterations,
         )
 
         logger.info(
-            "[Goal] %s (max_iterations=%d)",
+            "[Goal] %s (max_iterations=%d, workspace=%s)",
             goal[:80],
             max_iterations,
+            workspace or "default",
         )
 
         while state.iteration < state.max_iterations:
@@ -139,7 +143,7 @@ class LoopAgent:
             decision = await self.planner_phase.plan(
                 goal=goal,
                 state=state,
-                context=self._build_plan_context(),
+                context=self._build_plan_context(state),
             )
 
             # Yield plan decision
@@ -205,6 +209,7 @@ class LoopAgent:
                         "output_preview": result.output[:100] if result.output else None,
                         "error": result.error or None,
                         "duration_ms": result.duration_ms,
+                        "tool_call_count": result.tool_call_count,
                     },
                 )
 
@@ -299,11 +304,14 @@ class LoopAgent:
         )
         yield ("completed", result)
 
-    def _build_plan_context(self) -> PlanContext:
-        """Build planning context with available capabilities.
+    def _build_plan_context(self, state: LoopState) -> PlanContext:
+        """Build planning context with available capabilities and completed steps.
+
+        Args:
+            state: Current loop state with step results
 
         Returns:
-            PlanContext with tools and subagents
+            PlanContext with tools, subagents, and completed steps for planner
         """
         # Get available tools from CoreAgent
         available_tools = []
@@ -313,7 +321,20 @@ class LoopAgent:
         # Get enabled subagents from config
         available_subagents = [name for name, cfg in self.config.subagents.items() if cfg.enabled]
 
+        # Convert LoopState.step_results to planner's StepResult format
+        # This ensures planner knows what was already executed (fixes repetitive loop)
+        completed_steps = [
+            StepResult(
+                step_id=r.step_id,
+                output=r.output or r.error or "",
+                success=r.success,
+                duration_ms=r.duration_ms,
+            )
+            for r in state.step_results
+        ]
+
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
             recent_messages=[],  # Placeholder for conversation context
+            completed_steps=completed_steps,  # Pass executed steps to avoid repetition
         )

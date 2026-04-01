@@ -793,6 +793,18 @@ class DaemonHandlersMixin:
             chunk_count = 0  # Track chunks inside the function
             try:
                 stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
+                # RFC-103: Pass thread-specific workspace to runner
+                thread_workspace = (
+                    self._thread_workspaces.get(thread_id) if hasattr(self, "_thread_workspaces") else None
+                )
+                logger.debug(
+                    "Thread %s workspace lookup: _thread_workspaces=%s, found=%s",
+                    thread_id,
+                    list(self._thread_workspaces.keys()) if hasattr(self, "_thread_workspaces") else "N/A",
+                    thread_workspace,
+                )
+                if thread_workspace:
+                    stream_kwargs["workspace"] = str(thread_workspace)
                 if autonomous:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
@@ -968,6 +980,10 @@ class DaemonHandlersMixin:
         try:
             # Build kwargs for runner.astream (excluding thread_id which is positional)
             stream_kwargs: dict[str, Any] = {}
+            # RFC-103: Pass thread-specific workspace to runner
+            thread_workspace = self._thread_workspaces.get(thread_id) if hasattr(self, "_thread_workspaces") else None
+            if thread_workspace:
+                stream_kwargs["workspace"] = str(thread_workspace)
             if autonomous:
                 stream_kwargs["autonomous"] = True
                 if max_iterations is not None:

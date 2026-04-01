@@ -411,6 +411,14 @@ class SimplePlanner:
         """Build prompt for step decision."""
         parts = [f"Goal: {goal}\n"]
 
+        # Include completed steps to avoid repetitive planning
+        if context.completed_steps:
+            parts.append("\nAlready executed steps (DO NOT repeat these):")
+            for step in context.completed_steps:
+                status = "✓" if step.success else "✗"
+                output_preview = step.output[:100] if step.output else "no output"
+                parts.append(f"- {step.step_id}: {status} {output_preview}")
+
         if previous_judgment:
             parts.append("\nPrevious judgment:")
             parts.append(f"- Status: {previous_judgment.status}")
@@ -425,6 +433,9 @@ class SimplePlanner:
         parts.extend(
             [
                 "\n\nDecide what steps to execute next:",
+                "\n**IMPORTANT**: Do NOT repeat steps that were already executed.",
+                " Look at 'Already executed steps' above and plan NEW steps that",
+                " build on what was learned/done.\n",
                 "\n1. Choose granularity: 'atomic' (many small steps) or 'semantic' (fewer large steps)",
                 "   - Use 'atomic' for uncertain/exploratory goals",
                 "   - Use 'semantic' for clear goals with well-known procedures",

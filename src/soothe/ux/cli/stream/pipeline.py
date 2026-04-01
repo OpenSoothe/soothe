@@ -119,19 +119,16 @@ class StreamDisplayPipeline:
         if event_type in GOAL_START_EVENTS:
             return VerbosityTier.NORMAL
 
-        # Step events - NORMAL for start, DETAILED for completion
+        # Step start events - NORMAL (user-visible step descriptions)
         if event_type in STEP_START_EVENTS:
             return VerbosityTier.NORMAL
-        if event_type in STEP_COMPLETE_EVENTS:
-            return VerbosityTier.DETAILED
 
         # Goal completion - QUIET (always visible)
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
 
         # soothe.* events: defer to registry classification (RFC-0020)
-        # Tool events are INTERNAL (displayed via LangChain tool_calls, not custom events)
-        # Subagent events are NORMAL/DETAILED based on registration
+        # Step completion, tool events, subagent events all use registry
         if event_type.startswith("soothe."):
             return REGISTRY.get_verbosity(event_type)
 
@@ -175,6 +172,10 @@ class StreamDisplayPipeline:
 
         if event_type in GOAL_COMPLETE_EVENTS:
             return self._on_goal_completed(event)
+
+        # Handle loop agent judgment events
+        if event_type == "soothe.cognition.loop_agent.judgment":
+            return self._on_loop_agent_judgment(event)
 
         return []
 
@@ -390,6 +391,9 @@ class StreamDisplayPipeline:
         # Get description from context or event
         description = self._context.current_step_description or event.get("description", "")
 
+        # Get tool call count from event
+        tool_call_count = event.get("tool_call_count", 0)
+
         # Mark step complete (updates _active_step_ids and steps_completed)
         if step_id:
             self._context.complete_step(step_id)
@@ -403,6 +407,7 @@ class StreamDisplayPipeline:
             format_step_done(
                 description,
                 duration_s,
+                tool_call_count=tool_call_count,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
@@ -432,6 +437,42 @@ class StreamDisplayPipeline:
                 goal,
                 steps,
                 total_s,
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
+
+    def _on_loop_agent_judgment(self, event: dict[str, Any]) -> list[DisplayLine]:
+        """Handle loop agent judgment event.
+
+        Shows the agent's reasoning about goal progress - whether to continue,
+        replan, or complete.
+
+        Args:
+            event: Event dictionary with status, progress, confidence, reasoning.
+
+        Returns:
+            Display lines for judgment.
+        """
+        status = event.get("status", "")
+        progress = event.get("progress", 0.0)
+        confidence = event.get("confidence", 0.0)
+        reasoning = event.get("reasoning", "")
+
+        # Format the judgment message
+        if reasoning:
+            # Show full reasoning without truncation
+            judgement = f"{reasoning} ({progress:.0%} done, {confidence:.0%} confident)"
+        else:
+            judgement = f"Progress: {progress:.0%}, Confidence: {confidence:.0%}"
+
+        # Map status to action for icon selection
+        action = "complete" if status == "done" else "continue"
+
+        return [
+            format_judgement(
+                judgement,
+                action,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )

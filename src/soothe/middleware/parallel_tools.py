@@ -78,7 +78,7 @@ class ParallelToolsMiddleware(AgentMiddleware):
 
         # If no semaphore (unlimited mode), execute directly
         if self._semaphore is None:
-            logger.info("Tool %s: executing (unlimited parallelism)", tool_name)
+            logger.debug("Tool %s: executing (unlimited parallelism)", tool_name)
             return await handler(request)
 
         # Calculate active slots for logging

@@ -733,3 +733,52 @@ class SecurityConfig(BaseModel):
     require_approval_for_file_types: list[str] = Field(
         default_factory=lambda: [".env", ".pem", ".key", ".p12", ".pfx", ".crt"]
     )
+
+
+# ---------------------------------------------------------------------------
+# Model Knowledge Cutoff Constants (RFC-104)
+# ---------------------------------------------------------------------------
+
+MODEL_KNOWLEDGE_CUTOFFS: dict[str, str] = {
+    # Claude 4.x family
+    "claude-opus-4-6": "2025-05",
+    "claude-sonnet-4-6": "2025-05",
+    "claude-haiku-4-5": "2025-10",
+    # Claude 3.5 family
+    "claude-3-5-sonnet": "2025-04",
+    "claude-3-5-haiku": "2025-04",
+    # Claude 3 family
+    "claude-3-opus": "2025-02",
+    "claude-3-sonnet": "2024-08",
+    "claude-3-haiku": "2024-08",
+    # OpenAI models
+    "gpt-4o": "2025-03",
+    "gpt-4o-mini": "2025-03",
+    "gpt-4-turbo": "2025-01",
+    "gpt-4": "2025-01",
+    "o1": "2025-04",
+    "o1-mini": "2025-04",
+    "o3-mini": "2025-04",
+    # DeepSeek
+    "deepseek-chat": "2025-02",
+    "deepseek-reasoner": "2025-02",
+    # Default fallback
+    "default": "2025-01",
+}
+"""Knowledge cutoff dates for known models (YYYY-MM format)."""
+
+
+def get_knowledge_cutoff(model_id: str) -> str:
+    """Get knowledge cutoff date for a model.
+
+    Args:
+        model_id: Model identifier string (e.g., "claude-opus-4-6" or "openai:claude-opus-4-6").
+
+    Returns:
+        Knowledge cutoff date string in YYYY-MM format.
+    """
+    # Handle provider:model format
+    if ":" in model_id:
+        model_id = model_id.rsplit(":", maxsplit=1)[-1]
+
+    return MODEL_KNOWLEDGE_CUTOFFS.get(model_id, MODEL_KNOWLEDGE_CUTOFFS["default"])

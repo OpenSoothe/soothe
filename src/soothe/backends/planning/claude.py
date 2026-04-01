@@ -192,6 +192,14 @@ class ClaudePlanner:
         """Build prompt for step decision."""
         parts = [f"Goal: {goal}\n"]
 
+        # Include completed steps to avoid repetitive planning
+        if context.completed_steps:
+            parts.append("\nAlready executed steps (DO NOT repeat these):")
+            for step in context.completed_steps:
+                status = "✓" if step.success else "✗"
+                output_preview = step.output[:100] if step.output else "no output"
+                parts.append(f"- {step.step_id}: {status} {output_preview}")
+
         if previous_judgment:
             parts.append("\nPrevious judgment:")
             parts.append(f"- Status: {getattr(previous_judgment, 'status', 'unknown')}")
@@ -202,7 +210,8 @@ class ClaudePlanner:
             parts.append(f"\nAvailable capabilities: {', '.join(context.available_capabilities)}")
 
         parts.append(
-            "\nDecide what steps to execute next. Output JSON format:\n"
+            "\nDecide what steps to execute next. **Do NOT repeat already executed steps.**\n"
+            "Output JSON format:\n"
             '{"steps": [{"id": "S_1", "description": "...", "execution_hint": "auto"}], '
             '"execution_mode": "sequential", "reasoning": "..."}'
         )

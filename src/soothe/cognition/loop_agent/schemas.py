@@ -130,6 +130,7 @@ class StepResult(BaseModel):
         error_type: Error classification
         duration_ms: Execution duration in milliseconds
         thread_id: Thread used for execution
+        tool_call_count: Number of tool calls made during execution
     """
 
     step_id: str
@@ -139,6 +140,7 @@ class StepResult(BaseModel):
     error_type: Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None = None
     duration_ms: int
     thread_id: str
+    tool_call_count: int = 0
 
     def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.
@@ -164,6 +166,7 @@ class LoopState(BaseModel):
     Attributes:
         goal: Goal description
         thread_id: Thread context
+        workspace: Thread-specific workspace path (RFC-103)
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
@@ -177,6 +180,7 @@ class LoopState(BaseModel):
 
     goal: str
     thread_id: str
+    workspace: str | None = None  # Thread-specific workspace (RFC-103)
     iteration: int = 0
     max_iterations: int = 8
 

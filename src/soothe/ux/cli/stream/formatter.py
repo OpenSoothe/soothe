@@ -238,6 +238,7 @@ def format_step_done(
     description: str,
     duration_s: float,
     *,
+    tool_call_count: int = 0,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
@@ -246,6 +247,7 @@ def format_step_done(
     Args:
         description: Step description (same as header).
         duration_s: Duration in seconds.
+        tool_call_count: Number of tool calls made during step execution.
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -253,9 +255,11 @@ def format_step_done(
         DisplayLine for step done with solid circle icon.
     """
     duration_ms = int(duration_s * 1000)
+    # Add tool call count to content if > 0
+    content = f"{description} [{tool_call_count} tools]" if tool_call_count > 0 else description
     return DisplayLine(
         level=2,
-        content=description,
+        content=content,
         icon="●",  # Solid circle for completed step
         indent=indent_for_level(2),
         duration_ms=duration_ms,

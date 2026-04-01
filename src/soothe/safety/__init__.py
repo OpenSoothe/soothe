@@ -17,9 +17,10 @@ __all__ = [
 
 
 # Lazy import for FrameworkFilesystem to avoid circular dependencies
-def __getattr__(name: str):
+def __getattr__(name: str) -> object:
     if name == "FrameworkFilesystem":
         from soothe.safety.filesystem import FrameworkFilesystem
 
         return FrameworkFilesystem
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

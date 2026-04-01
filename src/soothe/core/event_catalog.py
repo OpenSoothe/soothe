@@ -231,6 +231,7 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     success: bool
     summary: str
     duration_ms: int
+    tool_call_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -647,7 +648,7 @@ _reg(
 _reg(
     "soothe.agentic.step.completed",
     AgenticStepCompletedEvent,
-    verbosity=VerbosityTier.DETAILED,
+    verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
 )
 

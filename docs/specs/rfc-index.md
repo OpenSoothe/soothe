@@ -34,6 +34,8 @@ RFCs are organized by numeric prefix:
 | [RFC-100](./RFC-100-coreagent-runtime.md) | CoreAgent Runtime (Layer 1) | Implemented | Architecture Design | RFC-000, RFC-001 |
 | [RFC-101](./RFC-101-tool-interface.md) | Tool Interface & Event Naming | Implemented | Impl Interface | RFC-100, RFC-401 |
 | [RFC-102](./RFC-102-security-filesystem-policy.md) | Security & Filesystem Policy | Implemented | Impl Interface | RFC-001 |
+| [RFC-103](./RFC-103-thread-aware-workspace.md) | Thread-Aware Workspace | Draft | Impl Interface | RFC-102, RFC-400, RFC-0017 |
+| [RFC-104](./RFC-104-dynamic-system-context.md) | Dynamic System Context Injection | Draft | Impl Interface | RFC-100, RFC-101, RFC-103 |
 
 ### 2xx — Cognition Loop (Goal & Planning)
 
@@ -119,6 +121,8 @@ RFC-000 (System Conceptual Design)
     │       └── RFC-200 (Autonomous Goal Management) [Layer 3]
     │           └── RFC-202 (DAG Execution)
     ├── RFC-102 (Security Policy)
+    │   └── RFC-103 (Thread-Aware Workspace)
+    │       └── RFC-104 (Dynamic System Context)
     ├── RFC-300 (Context & Memory)
     │   └── RFC-301 (Protocol Registry)
     ├── RFC-400 (Daemon Communication)
@@ -136,13 +140,13 @@ RFC-000 (System Conceptual Design)
 | Category | Implemented | Draft | Total |
 |----------|-------------|-------|-------|
 | Foundation (0xx) | 2 | 0 | 2 |
-| Core Agent (1xx) | 3 | 0 | 3 |
+| Core Agent (1xx) | 3 | 2 | 5 |
 | Cognition Loop (2xx) | 2 | 1 | 3 |
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 0 | 2 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
 | Plugin System (6xx) | 2 | 0 | 2 |
-| **Total** | **14** | **2** | **16** |
+| **Total** | **14** | **4** | **18** |
 
 ---
 
@@ -152,7 +156,7 @@ RFC-000 (System Conceptual Design)
 |------|-------|---------|
 | Conceptual Design | 1 | Principles, abstractions, taxonomy |
 | Architecture Design | 10 | Components, diagrams, data flow |
-| Impl Interface Design | 5 | Contracts, naming, data structures |
+| Impl Interface Design | 6 | Contracts, naming, data structures |
 
 ---
 

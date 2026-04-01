@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware import AgentMiddleware
 
 if TYPE_CHECKING:
-    from langchain.agents.types import AgentState
-    from langchain_core.runnables import RunnableConfig
+    from langchain.agents.middleware.types import AgentState
+    from langgraph.runtime import Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -46,44 +46,61 @@ class ExecutionHintsMiddleware(AgentMiddleware):
     Reference: RFC-0023 Layer 1 CoreAgent Runtime Architecture
     """
 
-    async def process_agent_input(
+    async def abefore_agent(
         self,
         state: AgentState,
-        config: RunnableConfig,
-    ) -> None:
+        runtime: Runtime,  # noqa: ARG002
+    ) -> dict[str, Any] | None:
         """Process hints and inject into agent state.
 
         Args:
-            state: Agent state (will be modified)
-            config: Runnable config with hints in configurable
+            state: Agent state (will be modified).
+            runtime: The runtime context.
+
+        Returns:
+            State updates with execution hints if present.
         """
+        from langgraph.config import get_config
+
+        # Get config from langgraph context
+        try:
+            config = get_config()
+        except Exception:
+            return None
+
         hints = self._extract_hints(config)
 
         if not hints:
-            # No hints present, skip processing
-            return
+            return None
 
         # Format hints for LLM consumption
         hint_text = self._format_hints(hints)
 
-        # Inject into system prompt
+        # Inject into system prompt (state may have system_prompt key)
+        updates: dict[str, Any] = {}
         if "system_prompt" in state:
             state["system_prompt"] += f"\n\nExecution hints: {hint_text}"
             logger.debug("Injected execution hints into system prompt: %s", hint_text)
 
         # Also add to state for potential logging/inspection
-        state["execution_hints_received"] = hints
+        updates["execution_hints_received"] = hints
+        return updates
 
-    def _extract_hints(self, config: RunnableConfig) -> dict | None:
-        """Extract Layer 2 hints from config.configurable.
+    def _extract_hints(self, config: dict) -> dict | None:
+        """Extract Layer 2 hints from config.
 
         Args:
-            config: Runnable config
+            config: Either a full config dict with "configurable" key,
+                    or just the configurable dict itself.
 
         Returns:
-            Hints dict if any hints present, None otherwise
+            Hints dict if any hints present, None otherwise.
         """
-        configurable = config.get("configurable", {})
+        # Handle both full config and just configurable
+        configurable = config.get("configurable", config)
+
+        if not isinstance(configurable, dict):
+            return None
 
         tools = configurable.get("soothe_step_tools")
         subagent = configurable.get("soothe_step_subagent")
@@ -103,10 +120,10 @@ class ExecutionHintsMiddleware(AgentMiddleware):
         """Format hints for system prompt injection.
 
         Args:
-            hints: Hints dict from _extract_hints
+            hints: Hints dict from _extract_hints.
 
         Returns:
-            Formatted hint text for LLM
+            Formatted hint text for LLM.
         """
         parts = []
 

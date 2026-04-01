@@ -328,6 +328,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         user_input: str,
         *,
         thread_id: str | None = None,
+        workspace: str | None = None,
         autonomous: bool = False,
         max_iterations: int | None = None,
         subagent: str | None = None,
@@ -348,6 +349,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
+            workspace: Thread-specific workspace path (RFC-103). Falls back to config default.
             autonomous: Enable autonomous iteration loop (explicit goals).
             max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
@@ -367,6 +369,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
             state = RunnerState()
             state.thread_id = str(thread_id or self._current_thread_id or "")
+            state.workspace = workspace
 
             logger.info("Quick path: routing directly to subagent '%s'", subagent)
             async for chunk in self._run_direct_subagent(user_input, subagent, state):
@@ -378,6 +381,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             async for chunk in self._run_autonomous(
                 user_input,
                 thread_id=thread_id,
+                workspace=workspace,
                 max_iterations=max_iterations or self._config.autonomous.max_iterations,
             ):
                 yield chunk
@@ -387,6 +391,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         async for chunk in self._run_agentic_loop(
             user_input,
             thread_id=thread_id,
+            workspace=workspace,
             max_iterations=max_iterations or self._config.agentic.max_iterations,
         ):
             yield chunk

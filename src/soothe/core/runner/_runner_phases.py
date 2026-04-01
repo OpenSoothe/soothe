@@ -148,7 +148,19 @@ class PhasesMixin:
                 state.unified_classification.task_complexity,
             )
 
+        # Inject context for system prompt XML sections (RFC-104)
+        if hasattr(state, "workspace") and state.workspace:
+            stream_input["workspace"] = state.workspace
+        if hasattr(state, "git_status"):
+            stream_input["git_status"] = state.git_status
+        if hasattr(state, "thread_context"):
+            stream_input["thread_context"] = state.thread_context
+        if hasattr(state, "protocol_summary"):
+            stream_input["protocol_summary"] = state.protocol_summary
+
         config = {"configurable": {"thread_id": state.thread_id}}
+        if state.workspace:
+            config["configurable"]["workspace"] = state.workspace
 
         if not self._checkpointer_initialized and self._checkpointer_pool is not None:
             try:
@@ -381,6 +393,10 @@ class PhasesMixin:
                     except Exception:
                         logger.debug("Context projection failed", exc_info=True)
 
+        # Collect context for system prompt XML injection (RFC-104)
+        if complexity in ("medium", "complex"):
+            await self._collect_context_for_injection(state)
+
     async def _pre_stream_planning(
         self,
         user_input: str,
@@ -564,6 +580,55 @@ class PhasesMixin:
         enriched = "\n\n".join(parts) + f"\n\n{user_input}" if parts else user_input
 
         return [HumanMessage(content=enriched)]
+
+    async def _collect_context_for_injection(self, state: Any) -> None:
+        """Collect context for system prompt XML injection (RFC-104).
+
+        Gathers workspace, git status, thread context, and protocol summary
+        for injection into system prompt via SOOTHE_ XML tags.
+
+        Args:
+            state: Mutable RunnerState to attach context to.
+        """
+        from soothe.safety import FrameworkFilesystem
+        from soothe.safety.workspace import get_git_status
+
+        # Workspace from ContextVar (set by WorkspaceContextMiddleware)
+        workspace = FrameworkFilesystem.get_current_workspace()
+        if workspace:
+            state.workspace = workspace
+
+            # Git status (async collection)
+            try:
+                git_status = await get_git_status(workspace)
+                state.git_status = git_status
+            except Exception:
+                logger.debug("Git status collection failed", exc_info=True)
+                state.git_status = None
+
+        # Thread context
+        state.thread_context = {
+            "thread_id": state.thread_id,
+            "active_goals": getattr(state, "active_goals", []),
+            "conversation_turns": len(state.seen_message_ids) if hasattr(state, "seen_message_ids") else 0,
+            "current_plan": str(state.plan)[:100] if hasattr(state, "plan") and state.plan else None,
+        }
+
+        # Protocol summary
+        context_stats = None
+        if self._context and hasattr(self._context, "_entries"):
+            context_stats = f"{len(self._context._entries)} entries"
+
+        memory_stats = None
+        if self._memory and hasattr(state, "recalled_memories"):
+            memory_stats = f"{len(state.recalled_memories or [])} recalled"
+
+        state.protocol_summary = {
+            "context": {"type": type(self._context).__name__, "stats": context_stats} if self._context else None,
+            "memory": {"type": type(self._memory).__name__, "stats": memory_stats} if self._memory else None,
+            "planner": {"type": type(self._planner).__name__} if self._planner else None,
+            "policy": {"type": type(self._policy).__name__} if self._policy else None,
+        }
 
     def _accumulate_response(self, data: Any, state: Any) -> None:
         """Extract AI text from a messages-mode chunk."""

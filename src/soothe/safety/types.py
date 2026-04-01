@@ -3,6 +3,7 @@
 from typing import Final
 
 # System directories that should never be used as workspace
+# Note: /tmp is intentionally included here to prevent using it as a workspace
 INVALID_WORKSPACE_DIRS: Final[frozenset[str]] = frozenset(
     {
         "/",
@@ -13,7 +14,7 @@ INVALID_WORKSPACE_DIRS: Final[frozenset[str]] = frozenset(
         "/Applications",
         "/usr",
         "/var",
-        "/tmp",
+        "/tmp",  # noqa: S108
         "/etc",
     }
 )

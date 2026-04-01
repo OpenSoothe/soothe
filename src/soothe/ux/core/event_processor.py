@@ -245,6 +245,14 @@ class EventProcessor:
                             is_main=is_main,
                         )
                         tool_call_emitted_from_blocks = True
+                        # Log tool invocation for audit trail
+                        logger.info(
+                            "tool_call name=%s id=%s args=%s is_main=%s",
+                            name,
+                            tool_call_id,
+                            str(coerced)[:200] if coerced else "{}",
+                            is_main,
+                        )
         elif is_main and isinstance(msg.content, str) and msg.content:
             # Always pass to renderer for accumulation, let renderer decide display
             cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
@@ -281,6 +289,14 @@ class EventProcessor:
                     if tool_call_id:
                         self._state.emitted_tool_call_ids.add(tool_call_id)
                     self._renderer.on_tool_call(name, tc_args, tool_call_id, is_main=is_main)
+                    # Log tool invocation for audit trail
+                    logger.info(
+                        "tool_call name=%s id=%s args=%s is_main=%s",
+                        name,
+                        tool_call_id,
+                        str(tc_args)[:200] if tc_args else "{}",
+                        is_main,
+                    )
 
     def _handle_tool_message(
         self,
@@ -322,6 +338,16 @@ class EventProcessor:
 
         # Determine if error
         is_error = any(indicator in content.lower() for indicator in ["error", "failed", "exception", "traceback"])
+
+        # Log tool result for audit trail
+        logger.info(
+            "tool_result name=%s id=%s status=%s result=%s is_main=%s",
+            tool_name,
+            tool_call_id,
+            "error" if is_error else "success",
+            brief[:300] if brief else "",
+            is_main,
+        )
 
         self._renderer.on_tool_result(
             tool_name,
@@ -405,6 +431,14 @@ class EventProcessor:
                     if tool_call_id:
                         self._state.emitted_tool_call_ids.add(tool_call_id)
                     self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+                    # Log tool invocation for audit trail
+                    logger.info(
+                        "tool_call name=%s id=%s args=%s is_main=%s",
+                        name,
+                        tool_call_id,
+                        str(args)[:200] if args else "{}",
+                        is_main,
+                    )
 
         # Handle tool_calls from serialized AIMessage (model_dump produces tool_calls not tool_call_chunks)
         # IMPORTANT: Only emit if we have non-empty args. Otherwise, let the accumulation
@@ -429,6 +463,14 @@ class EventProcessor:
                         if tool_call_id:
                             self._state.emitted_tool_call_ids.add(tool_call_id)
                         self._renderer.on_tool_call(name, args, tool_call_id, is_main=is_main)
+                        # Log tool invocation for audit trail
+                        logger.info(
+                            "tool_call name=%s id=%s args=%s is_main=%s",
+                            name,
+                            tool_call_id,
+                            str(args)[:200] if args else "{}",
+                            is_main,
+                        )
 
     def _handle_tool_message_dict(
         self,
@@ -477,6 +519,16 @@ class EventProcessor:
 
         # Determine if error
         is_error = any(indicator in content.lower() for indicator in ["error", "failed", "exception", "traceback"])
+
+        # Log tool result for audit trail
+        logger.info(
+            "tool_result name=%s id=%s status=%s result=%s is_main=%s",
+            tool_name,
+            tool_call_id,
+            "error" if is_error else "success",
+            brief[:300] if brief else "",
+            is_main,
+        )
 
         self._renderer.on_tool_result(
             tool_name,

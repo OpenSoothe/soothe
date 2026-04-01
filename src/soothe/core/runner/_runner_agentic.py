@@ -37,6 +37,7 @@ class AgenticMixin:
         user_input: str,
         *,
         thread_id: str | None = None,
+        workspace: str | None = None,
         max_iterations: int = 8,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
@@ -46,6 +47,7 @@ class AgenticMixin:
         Args:
             user_input: Goal description to execute
             thread_id: Thread context for execution
+            workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
 
         Yields:
@@ -88,6 +90,7 @@ class AgenticMixin:
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,
+            workspace=workspace,
             max_iterations=max_iterations,
         ):
             if event_type == "iteration_started":
@@ -122,6 +125,7 @@ class AgenticMixin:
                         success=success,
                         summary=summary[:100],
                         duration_ms=event_data["duration_ms"],
+                        tool_call_count=event_data.get("tool_call_count", 0),
                     ).to_dict()
                 )
 

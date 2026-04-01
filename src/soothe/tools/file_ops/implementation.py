@@ -29,6 +29,21 @@ from soothe.utils import expand_path
 logger = logging.getLogger(__name__)
 
 
+def _get_effective_work_dir(fallback_work_dir: str) -> str:
+    """Get effective work directory, checking ContextVar first (RFC-103).
+
+    Args:
+        fallback_work_dir: Fallback directory if no dynamic workspace set.
+
+    Returns:
+        Effective workspace directory path as string.
+    """
+    from soothe.safety import FrameworkFilesystem
+
+    dynamic_workspace = FrameworkFilesystem.get_current_workspace()
+    return str(dynamic_workspace) if dynamic_workspace else fallback_work_dir
+
+
 class ReadFileTool(BaseTool):
     """Read file contents.
 

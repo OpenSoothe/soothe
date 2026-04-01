@@ -169,6 +169,7 @@ ignore = [
     "PLW0603",  # Global state for CLI commands
     "S324",     # Probabilistic hash comparison
     "S603",     # Subprocess with trusted input
+    "S607",     # Partial executable path (git from PATH is intentional)
     "TRY003",   # Long exception messages
     "EM101",    # Exception with f-string
     "TC001",    # Move application import into type-checking block (false positive for Pydantic)

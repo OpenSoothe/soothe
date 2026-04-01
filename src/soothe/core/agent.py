@@ -30,6 +30,7 @@ from soothe.middleware.parallel_tools import ParallelToolsMiddleware
 from soothe.middleware.policy import SoothePolicyMiddleware
 from soothe.middleware.subagent_context import SubagentContextMiddleware
 from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 from soothe.skills import get_built_in_skills_paths
 
 
@@ -470,6 +471,10 @@ def create_soothe_agent(
     # Add execution hints middleware for Layer 2 → Layer 1 integration (RFC-0023)
     default_middleware.append(ExecutionHintsMiddleware())
     logger.debug("[Init] Execution hints middleware enabled")
+
+    # Add workspace context middleware for thread-aware workspace (RFC-103)
+    default_middleware.append(WorkspaceContextMiddleware())
+    logger.debug("[Init] Workspace context middleware enabled")
 
     if resolved_context:
         default_middleware.append(SubagentContextMiddleware(context=resolved_context))

@@ -66,9 +66,9 @@ class TestClassifyEventToTier:
         """Agentic loop events classify to correct tiers."""
         assert classify_event_to_tier("soothe.agentic.loop.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.agentic.loop.completed") == VerbosityTier.QUIET
-        # Step descriptions visible at NORMAL, step completion at DETAILED (optimization)
+        # Step descriptions and completion both visible at NORMAL for progress visibility
         assert classify_event_to_tier("soothe.agentic.step.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.DETAILED
+        assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.NORMAL
 
     def test_classify_lifecycle_events(self) -> None:
         """Lifecycle events classify to DETAILED by default."""
@@ -119,3 +119,8 @@ class TestClassifyEventToTier:
         # Dispatch and completed visible at normal
         assert classify_event_to_tier("soothe.subagent.browser.dispatched") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.subagent.research.completed") == VerbosityTier.NORMAL
+
+    def test_classify_loop_agent_events(self) -> None:
+        """Loop agent judgment events classify to NORMAL (user-visible progress)."""
+        # Judgment events show agent reasoning about goal progress
+        assert classify_event_to_tier("soothe.cognition.loop_agent.judgment") == VerbosityTier.NORMAL

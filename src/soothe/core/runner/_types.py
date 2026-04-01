@@ -67,6 +67,7 @@ class RunnerState:
     """Mutable state accumulated during a single query execution."""
 
     thread_id: str = ""
+    workspace: str | None = None  # Thread-specific workspace (RFC-103)
     full_response: list[str] = field(default_factory=list)
     plan: Any = None  # Type: Plan | None
     context_projection: Any = None
@@ -78,3 +79,7 @@ class RunnerState:
     iteration_records: list[Any] = field(default_factory=list)  # AgenticIterationRecord list
     observation_refresh_needed: bool = False
     observation_scope_key: str = ""
+    # Context for system prompt XML injection (RFC-104)
+    git_status: dict[str, Any] | None = None
+    thread_context: dict[str, Any] = field(default_factory=dict)
+    protocol_summary: dict[str, Any] = field(default_factory=dict)

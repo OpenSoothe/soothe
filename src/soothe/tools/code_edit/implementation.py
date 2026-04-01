@@ -383,7 +383,7 @@ class ApplyDiffTool(BaseTool):
             try:
                 # Apply patch using patch command
                 result = subprocess.run(
-                    ["patch", "-p0", "-i", patch_path, str(file_path)],  # noqa: S607
+                    ["patch", "-p0", "-i", patch_path, str(file_path)],
                     capture_output=True,
                     text=True,
                     timeout=10,

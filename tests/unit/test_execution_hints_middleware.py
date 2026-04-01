@@ -125,12 +125,17 @@ class TestExecutionHintsMiddleware:
             }
         }
 
-        await middleware.process_agent_input(state, config)
+        # Test via abefore_agent with mocked get_config
+        from unittest.mock import patch
+
+        with patch("langgraph.config.get_config", return_value=config):
+            result = await middleware.abefore_agent(state, runtime=None)
 
         assert "Execution hints:" in state["system_prompt"]
         assert "Suggested tools: read_file" in state["system_prompt"]
         assert "Expected output: File contents" in state["system_prompt"]
-        assert "execution_hints_received" in state
+        assert result is not None
+        assert "execution_hints_received" in result
 
     @pytest.mark.asyncio
     async def test_no_injection_when_no_hints(self):
@@ -144,7 +149,11 @@ class TestExecutionHintsMiddleware:
             }
         }
 
-        await middleware.process_agent_input(state, config)
+        # Test via abefore_agent with mocked get_config
+        from unittest.mock import patch
+
+        with patch("langgraph.config.get_config", return_value=config):
+            result = await middleware.abefore_agent(state, runtime=None)
 
         assert state["system_prompt"] == original_prompt
-        assert "execution_hints_received" not in state
+        assert result is None

@@ -105,7 +105,8 @@ class Executor:
         """
         # Create tasks that collect events
         tasks = [
-            self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}") for i, step in enumerate(steps)
+            self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}", state.workspace)
+            for i, step in enumerate(steps)
         ]
 
         # Execute concurrently
@@ -158,29 +159,36 @@ class Executor:
         output = ""
         event_count = 0  # Track events for debugging
         try:
+            configurable: dict[str, Any] = {"thread_id": state.thread_id}
+            if state.workspace:
+                configurable["workspace"] = state.workspace
+                logger.debug("Executor: passing workspace to configurable: %s", state.workspace)
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
-                config={"configurable": {"thread_id": state.thread_id}},
+                config={"configurable": configurable},
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             )
 
             # Stream events immediately as they arrive
-            async for final_output, event in self._stream_and_collect(stream):
+            tool_call_count = 0
+            async for final_output, event, tc_count in self._stream_and_collect(stream):
                 if event is not None:
                     # Yield events immediately for real-time display
                     event_count += 1
                     yield event
                 elif final_output is not None:
                     output = final_output
+                    tool_call_count = tc_count
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Sequential execution completed in %dms - output length: %d, events yielded: %d",
+                "Sequential execution completed in %dms - output length: %d, events yielded: %d, tool_calls: %d",
                 duration_ms,
                 len(output),
                 event_count,
+                tool_call_count,
             )
 
             yield StepResult(
@@ -189,6 +197,7 @@ class Executor:
                 output=output,
                 duration_ms=duration_ms,
                 thread_id=state.thread_id,
+                tool_call_count=tool_call_count,
             )
 
         except Exception as e:
@@ -228,6 +237,7 @@ class Executor:
         self,
         step: StepAction,
         thread_id: str,
+        workspace: str | None = None,
     ) -> tuple[list[StreamEvent], StepResult]:
         """Execute single step, collecting events for later yielding.
 
@@ -237,6 +247,7 @@ class Executor:
         Args:
             step: StepAction with description and optional hints
             thread_id: Thread ID for execution
+            workspace: Thread-specific workspace path (RFC-103)
 
         Returns:
             Tuple of (collected events, StepResult)
@@ -256,14 +267,15 @@ class Executor:
                 step.subagent,
             )
 
-            config = {
-                "configurable": {
-                    "thread_id": thread_id,
-                    "soothe_step_tools": step.tools,
-                    "soothe_step_subagent": step.subagent,
-                    "soothe_step_expected_output": step.expected_output,
-                }
+            configurable: dict[str, Any] = {
+                "thread_id": thread_id,
+                "soothe_step_tools": step.tools,
+                "soothe_step_subagent": step.subagent,
+                "soothe_step_expected_output": step.expected_output,
             }
+            if workspace:
+                configurable["workspace"] = workspace
+            config = {"configurable": configurable}
 
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
@@ -273,19 +285,22 @@ class Executor:
             )
 
             # Stream events and collect for parallel execution
-            async for final_output, event in self._stream_and_collect(stream):
+            tool_call_count = 0
+            async for final_output, event, tc_count in self._stream_and_collect(stream):
                 if event is not None:
                     events.append(event)
                 elif final_output is not None:
                     output = final_output
+                    tool_call_count = tc_count
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Step %s completed successfully in %dms (hints: tools=%s)",
+                "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d)",
                 step.id,
                 duration_ms,
                 step.tools or "none",
+                tool_call_count,
             )
 
             return events, StepResult(
@@ -294,6 +309,7 @@ class Executor:
                 output=output,
                 duration_ms=duration_ms,
                 thread_id=thread_id,
+                tool_call_count=tool_call_count,
             )
 
         except Exception as e:
@@ -320,8 +336,8 @@ class Executor:
     async def _stream_and_collect(
         self,
         stream: AsyncGenerator,
-    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None], None]:
-        """Stream events immediately while accumulating output.
+    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None, int], None]:
+        """Stream events immediately while accumulating output and counting tool calls.
 
         This is the canonical streaming method that yields events as they arrive
         for real-time display, while also collecting output content for the final
@@ -331,13 +347,14 @@ class Executor:
             stream: Async iterator from agent.astream()
 
         Yields:
-            Tuple of (output, event):
-            - When event is not None: yield (None, event) for immediate display
-            - At end: yield (combined_output, None) for final result
+            Tuple of (output, event, tool_call_count):
+            - When event is not None: yield (None, event, 0) for immediate display
+            - At end: yield (combined_output, None, tool_call_count) for final result
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
         chunks: list[str] = []
+        tool_call_count = 0
 
         async for chunk in stream:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
@@ -346,7 +363,7 @@ class Executor:
 
                 # Yield event immediately for real-time display
                 # EventProcessor will handle filtering and rendering
-                yield None, chunk
+                yield None, chunk, 0
 
                 # Also extract content for output collection
                 if mode == "messages" and not namespace:
@@ -354,6 +371,8 @@ class Executor:
                     if isinstance(data, tuple) and len(data) >= _MSG_TUPLE_LEN:
                         msg, _metadata = data
                         if isinstance(msg, ToolMessage):
+                            # Count tool calls
+                            tool_call_count += 1
                             # Extract tool result content
                             content = msg.content
                             if isinstance(content, str) and content:
@@ -377,6 +396,8 @@ class Executor:
                     # Handle list format [msg, metadata] (legacy compatibility)
                     elif isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
                         msg_chunk = data[0]
+                        if isinstance(msg_chunk, ToolMessage):
+                            tool_call_count += 1
                         if hasattr(msg_chunk, "content"):
                             content = msg_chunk.content
                             if isinstance(content, str):
@@ -393,6 +414,8 @@ class Executor:
                     model_data = chunk["model"]
                     if isinstance(model_data, dict) and "messages" in model_data:
                         for msg in model_data["messages"]:
+                            if isinstance(msg, ToolMessage):
+                                tool_call_count += 1
                             if hasattr(msg, "content"):
                                 content = msg.content
                                 if isinstance(content, str) and content:
@@ -412,8 +435,8 @@ class Executor:
             elif hasattr(chunk, "content"):
                 chunks.append(str(chunk.content))
 
-        # Final yield with combined output
-        yield "".join(chunks), None
+        # Final yield with combined output and tool call count
+        yield "".join(chunks), None, tool_call_count
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

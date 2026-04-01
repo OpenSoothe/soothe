@@ -193,12 +193,9 @@ class WebSocketClient:
             thread_id: The thread ID to resume.
             workspace: Optional workspace override. Defaults to client's cwd.
         """
-        from pathlib import Path
+        from anyio import Path as AsyncPath
 
-        if workspace is None:
-            workspace = str(Path.cwd())
-        else:
-            workspace = str(Path(workspace).resolve())
+        workspace = str(await AsyncPath.cwd()) if workspace is None else str(await AsyncPath(workspace).resolve())
 
         await self.send(
             {
@@ -214,12 +211,9 @@ class WebSocketClient:
         Args:
             workspace: Optional workspace path. Defaults to client's cwd.
         """
-        from pathlib import Path
+        from anyio import Path as AsyncPath
 
-        if workspace is None:
-            workspace = str(Path.cwd())
-        else:
-            workspace = str(Path(workspace).resolve())
+        workspace = str(await AsyncPath.cwd()) if workspace is None else str(await AsyncPath(workspace).resolve())
 
         await self.send(
             {
