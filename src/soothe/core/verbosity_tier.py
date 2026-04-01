@@ -155,7 +155,6 @@ __all__ = [
     "ProgressCategory",
     "VerbosityLevel",
     "VerbosityTier",
-    "classify_custom_event",
     "classify_event_to_tier",
     "should_show",
 ]

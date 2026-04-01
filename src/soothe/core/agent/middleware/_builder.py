@@ -64,11 +64,11 @@ def build_soothe_middleware_stack(
     Returns:
         Tuple of middleware instances in execution order.
     """
-    from soothe.middleware.execution_hints import ExecutionHintsMiddleware
-    from soothe.middleware.policy import SoothePolicyMiddleware
-    from soothe.middleware.subagent_context import SubagentContextMiddleware
-    from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
-    from soothe.middleware.workspace_context import WorkspaceContextMiddleware
+    from .execution_hints import ExecutionHintsMiddleware
+    from .policy import SoothePolicyMiddleware
+    from .subagent_context import SubagentContextMiddleware
+    from .system_prompt_optimization import SystemPromptOptimizationMiddleware
+    from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
 

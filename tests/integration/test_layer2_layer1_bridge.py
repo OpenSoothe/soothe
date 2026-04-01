@@ -6,7 +6,7 @@ import pytest
 
 from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
-from soothe.middleware.execution_hints import ExecutionHintsMiddleware
+from soothe.core.agent.middleware import ExecutionHintsMiddleware
 
 
 class TestLayer2Layer1Bridge:

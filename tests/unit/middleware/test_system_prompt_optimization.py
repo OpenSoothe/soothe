@@ -5,8 +5,8 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.messages import SystemMessage
 
 from soothe.config import SootheConfig
+from soothe.core.agent.middleware import SystemPromptOptimizationMiddleware
 from soothe.core.unified_classifier import UnifiedClassification
-from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
 
 
 class MockModelRequest(ModelRequest[dict]):

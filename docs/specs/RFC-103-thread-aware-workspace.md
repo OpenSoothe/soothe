@@ -196,7 +196,7 @@ def resolve_path_dynamic(cls, file_path: str) -> Path:
 
 ### 3. WorkspaceContextMiddleware (New)
 
-**Location**: `src/soothe/middleware/workspace_context.py`
+**Location**: `src/soothe/core/agent/middleware/workspace_context.py`
 
 ```python
 from langchain.agents.middleware import AgentMiddleware
@@ -338,7 +338,7 @@ Register WorkspaceContextMiddleware in the middleware stack:
 
 ```python
 # After ExecutionHintsMiddleware (line ~471)
-from soothe.middleware.workspace_context import WorkspaceContextMiddleware
+from soothe.core.agent.middleware import WorkspaceContextMiddleware
 default_middleware.append(WorkspaceContextMiddleware())
 logger.debug("[Init] Workspace context middleware enabled")
 ```

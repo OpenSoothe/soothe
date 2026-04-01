@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
-from soothe.middleware.system_prompt_optimization import SystemPromptOptimizationMiddleware
+from soothe.core.agent.middleware import SystemPromptOptimizationMiddleware
 
 
 class TestKnowledgeCutoff:
