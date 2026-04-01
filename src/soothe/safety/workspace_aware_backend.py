@@ -18,15 +18,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Global cache for workspace backends (shared across all instances)
-_backend_cache: dict[str, FilesystemBackend] = {}
+_backend_cache: dict[str, "NormalizedPathBackend"] = {}
+
+
+class NormalizedPathBackend(FilesystemBackend):
+    """FilesystemBackend wrapper that normalizes paths to workspace-relative.
+
+    When virtual_mode=False (allow_paths_outside_workspace=True), the underlying
+    FilesystemBackend would interpret '/' as the actual root filesystem.
+    This wrapper ensures such paths are treated as workspace-relative.
+    """
+
+    def _normalize_path(self, path: str) -> str:
+        """Normalize path to be workspace-relative (RFC-103).
+
+        Args:
+            path: Input path (may be '/', absolute, or relative).
+
+        Returns:
+            Normalized path that's safe for the backend.
+        """
+        # Empty, '.', or root '/' -> use workspace root
+        if not path or path == "." or path == "/":
+            return "."
+
+        # Absolute path outside workspace -> make relative
+        if path.startswith("/"):
+            workspace = Path(self.cwd)
+            abs_path = Path(path)
+            try:
+                abs_path.relative_to(workspace)
+                # Path is within workspace, use as-is
+                return path
+            except ValueError:
+                # Path is outside workspace - treat as workspace-relative
+                relative = path.lstrip("/")
+                logger.debug(
+                    "Path '%s' is outside workspace '%s', treating as relative: '%s'",
+                    path,
+                    workspace,
+                    relative or ".",
+                )
+                return relative or "."
+
+        # Already relative
+        return path
+
+    def ls_info(self, path: str) -> list[dict[str, Any]]:
+        """List directory with file info, normalizing path first."""
+        return super().ls_info(self._normalize_path(path))
+
+    async def als_info(self, path: str) -> list[dict[str, Any]]:
+        """Async list directory with file info, normalizing path first."""
+        return await super().als_info(self._normalize_path(path))
+
+    def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
+        """Glob with file info, normalizing path first."""
+        normalized = self._normalize_path(path)
+        logger.debug("glob_info: pattern=%s, path=%s (normalized=%s)", pattern, path, normalized)
+        return super().glob_info(pattern, normalized)
+
+    async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
+        """Async glob with file info, normalizing path first."""
+        normalized = self._normalize_path(path)
+        logger.debug("aglob_info: pattern=%s, path=%s (normalized=%s)", pattern, path, normalized)
+        return await super().aglob_info(pattern, normalized)
 
 
 def get_workspace_backend(
     workspace: Path | str,
     virtual_mode: bool = False,  # noqa: FBT001, FBT002
     max_file_size_mb: int = 10,
-) -> FilesystemBackend:
-    """Get or create a FilesystemBackend for the given workspace.
+) -> NormalizedPathBackend:
+    """Get or create a NormalizedPathBackend for the given workspace.
 
     Args:
         workspace: Workspace directory path.
@@ -34,11 +98,11 @@ def get_workspace_backend(
         max_file_size_mb: Maximum file size in MB.
 
     Returns:
-        FilesystemBackend instance for the workspace.
+        NormalizedPathBackend instance for the workspace.
     """
     workspace_str = str(workspace)
     if workspace_str not in _backend_cache:
-        _backend_cache[workspace_str] = FilesystemBackend(
+        _backend_cache[workspace_str] = NormalizedPathBackend(
             root_dir=workspace,
             virtual_mode=virtual_mode,
             max_file_size_mb=max_file_size_mb,
@@ -82,7 +146,7 @@ class WorkspaceAwareBackend:
             max_file_size_mb,
         )
 
-    def __call__(self, runtime: Any) -> FilesystemBackend:
+    def __call__(self, runtime: Any) -> NormalizedPathBackend:
         """Called by FilesystemMiddleware to get backend for tool execution.
 
         This is the factory interface used by deepagents. It reads workspace
@@ -92,7 +156,7 @@ class WorkspaceAwareBackend:
             runtime: ToolRuntime with config containing workspace.
 
         Returns:
-            FilesystemBackend for the tool's workspace.
+            NormalizedPathBackend for the tool's workspace.
         """
         # Try to get workspace from runtime.config (ToolRuntime case)
         if hasattr(runtime, "config") and runtime.config:
@@ -141,11 +205,11 @@ class WorkspaceAwareBackend:
         logger.debug("Backend factory: using default workspace=%s", self._default_root_dir)
         return self._default_backend
 
-    def _get_backend(self) -> FilesystemBackend:
+    def _get_backend(self) -> NormalizedPathBackend:
         """Get backend for direct method calls (non-tool operations).
 
         Returns:
-            FilesystemBackend for current context.
+            NormalizedPathBackend for current context.
         """
         from soothe.safety.filesystem import FrameworkFilesystem
 
@@ -194,21 +258,61 @@ class WorkspaceAwareBackend:
         """Async apply edits to file."""
         return await self._get_backend().aedit(path, edits, path_edits)
 
+    def _normalize_path(self, path: str) -> str:
+        """Normalize path to be workspace-relative (RFC-103).
+
+        When the backend uses virtual_mode=False (allow_paths_outside_workspace=True),
+        absolute paths like '/' would resolve to the actual root filesystem.
+        This method ensures such paths are treated as workspace-relative.
+
+        Args:
+            path: Input path (may be '/', absolute, or relative).
+
+        Returns:
+            Normalized path that's safe for the backend.
+        """
+        # Empty, '.', or root '/' -> use workspace root
+        if not path or path == "." or path == "/":
+            return "."
+
+        # Absolute path outside workspace -> make relative
+        if path.startswith("/"):
+            backend = self._get_backend()
+            workspace = Path(backend.cwd)
+            abs_path = Path(path)
+            try:
+                abs_path.relative_to(workspace)
+                # Path is within workspace, use as-is
+                return path
+            except ValueError:
+                # Path is outside workspace - treat as workspace-relative
+                relative = path.lstrip("/")
+                logger.debug(
+                    "Path '%s' is outside workspace '%s', treating as relative: '%s'",
+                    path,
+                    workspace,
+                    relative or ".",
+                )
+                return relative or "."
+
+        # Already relative
+        return path
+
     def ls(self, path: str) -> list[str]:
         """List directory contents."""
-        return self._get_backend().ls(path)
+        return self._get_backend().ls(self._normalize_path(path))
 
     async def als(self, path: str) -> list[str]:
         """Async list directory contents."""
-        return await self._get_backend().als(path)
+        return await self._get_backend().als(self._normalize_path(path))
 
     def ls_info(self, path: str) -> list[dict[str, Any]]:
         """List directory with file info."""
-        return self._get_backend().ls_info(path)
+        return self._get_backend().ls_info(self._normalize_path(path))
 
     async def als_info(self, path: str) -> list[dict[str, Any]]:
         """Async list directory with file info."""
-        return await self._get_backend().als_info(path)
+        return await self._get_backend().als_info(self._normalize_path(path))
 
     def glob(self, pattern: str) -> list[str]:
         """Glob pattern matching."""
@@ -221,14 +325,16 @@ class WorkspaceAwareBackend:
     def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Glob pattern matching with file info."""
         backend = self._get_backend()
-        logger.debug("glob_info: pattern=%s, path=%s, backend.cwd=%s", pattern, path, backend.cwd)
-        return backend.glob_info(pattern, path)
+        normalized_path = self._normalize_path(path)
+        logger.debug("glob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s", pattern, path, normalized_path, backend.cwd)
+        return backend.glob_info(pattern, normalized_path)
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Async glob pattern matching with file info."""
         backend = self._get_backend()
-        logger.debug("aglob_info: pattern=%s, path=%s, backend.cwd=%s", pattern, path, backend.cwd)
-        result = await backend.aglob_info(pattern, path)
+        normalized_path = self._normalize_path(path)
+        logger.debug("aglob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s", pattern, path, normalized_path, backend.cwd)
+        result = await backend.aglob_info(pattern, normalized_path)
         logger.debug("aglob_info result: %d files found", len(result))
         return result
 

@@ -88,31 +88,38 @@ subagents:
       disable_telemetry: true  # Disable anonymous usage telemetry
       enable_existing_browser: true  # Allow connecting to existing Chrome via CDP
       profile_mode: ephemeral  # for concurrent browser tasks
+
   claude:
-    enabled: false
+    enabled: true
     # Claude subagent uses ANTHROPIC_API_KEY and model from environment
     # Set environment variables: ANTHROPIC_API_KEY, ANTHROPIC_MODEL (optional)
     # No model configuration needed here
 
+  research:
+    enabled: true
+    # Research subagent for deep multi-source iterative research
+    # Uses the InquiryEngine for comprehensive investigation
+    # No additional configuration needed - uses web_search tool settings
+
   skillify:
     enabled: false
     # config:
-    #   warehouse_paths: []
-    #   index_interval_seconds: 300
-    #   index_collection: soothe_skillify
-    #   retrieval_top_k: 10
+    #   warehouse_paths: []  # Additional warehouse paths beyond defaults
+    #   index_interval_seconds: 300  # Background indexing interval (5 min)
+    #   index_collection: soothe_skillify  # Vector store collection name
+    #   retrieval_top_k: 10  # Number of results for retrieval queries
 
   weaver:
     enabled: false
     # config:
-    #   generated_agents_dir: ~/.soothe/generated_agents
-    #   reuse_threshold: 0.85
-    #   reuse_collection: soothe_weaver_reuse
-    #   max_generation_attempts: 2
-    #   allowed_tool_groups: []
-    #   allowed_mcp_servers: []
-    #   cleanup_old_agents_days: 30
-    #   max_generated_agents: 100
+    #   generated_agents_dir: ~/.soothe/generated_agents  # Directory for generated agents
+    #   reuse_threshold: 0.85  # Minimum confidence for reuse-first matching
+    #   reuse_collection: soothe_weaver_reuse  # Vector store collection for reuse index
+    #   max_generation_attempts: 2  # Maximum retries for agent generation
+    #   allowed_tool_groups: []  # Tool groups available to generated agents (empty = all)
+    #   allowed_mcp_servers: []  # MCP servers available to generated agents (empty = all)
+    #   cleanup_old_agents_days: 100  # Auto-delete agents older than N days
+    #   max_generated_agents: 100  # Maximum number of generated agents to keep
 
 # =============================================================================
 # Tools Configuration
