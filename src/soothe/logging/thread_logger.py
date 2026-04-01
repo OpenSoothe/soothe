@@ -1,4 +1,4 @@
-"""Thread logging and input history for the Soothe TUI."""
+"""Thread logging and input history for Soothe."""
 
 from __future__ import annotations
 
@@ -22,11 +22,6 @@ def _truncate_for_log(text: str, limit: int = _LOG_CONTENT_LIMIT) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
-
-
-# ---------------------------------------------------------------------------
-# Thread logger
-# ---------------------------------------------------------------------------
 
 
 class ThreadLogger:
@@ -74,7 +69,11 @@ class ThreadLogger:
         return self._thread_dir / "conversation.jsonl"
 
     def set_thread_id(self, thread_id: str | int) -> None:
-        """Update the thread ID (and thus the log file)."""
+        """Update the thread ID (and thus the log file).
+
+        Args:
+            thread_id: New thread ID.
+        """
         tid = str(thread_id)
         self._thread_id = tid
         default_dir = Path(SOOTHE_HOME) / "runs" / tid
@@ -96,7 +95,7 @@ class ThreadLogger:
             data: Stream data payload.
         """
         if mode == "custom" and isinstance(data, dict):
-            from soothe.core.verbosity_tier import classify_event_to_tier
+            from soothe.core.foundation.verbosity_tier import classify_event_to_tier
 
             record: dict[str, Any] = {
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -259,7 +258,6 @@ class ThreadLogger:
             self._ensure_dir()
             for thread_file in self._thread_dir.glob("*.jsonl"):
                 try:
-                    # Check file modification time
                     mtime = datetime.fromtimestamp(thread_file.stat().st_mtime, tz=UTC)
                     if mtime < cutoff:
                         thread_file.unlink()
@@ -272,11 +270,6 @@ class ThreadLogger:
             logger.warning("Thread cleanup failed", exc_info=True)
 
         return deleted
-
-
-# ---------------------------------------------------------------------------
-# Input history
-# ---------------------------------------------------------------------------
 
 
 class InputHistory:

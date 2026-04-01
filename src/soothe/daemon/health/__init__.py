@@ -5,7 +5,7 @@ including configuration, daemon, persistence, providers, and external services.
 
 Example usage:
 
-    from soothe.core.health import HealthChecker
+    from soothe.daemon.health import HealthChecker
     from soothe.ux.core import load_config
 
     # With config
@@ -23,13 +23,13 @@ Example usage:
     )
 
     # Get JSON output
-    from soothe.core.health import format_json
+    from soothe.daemon.health import format_json
     json_output = format_json(report)
 """
 
-from soothe.core.health.checker import HealthChecker
-from soothe.core.health.formatters import format_json, format_markdown, format_text
-from soothe.core.health.models import CategoryResult, CheckResult, CheckStatus, HealthReport
+from soothe.daemon.health.checker import HealthChecker
+from soothe.daemon.health.formatters import format_json, format_markdown, format_text
+from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus, HealthReport
 
 __all__ = [
     "CategoryResult",

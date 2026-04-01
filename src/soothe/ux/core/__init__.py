@@ -8,11 +8,12 @@ This module provides:
 - Shared message processing and utilities
 """
 
-from soothe.core.verbosity_tier import (
+from soothe.core.foundation.verbosity_tier import (
     VerbosityTier,
     classify_event_to_tier,
     should_show,
 )
+from soothe.logging import setup_logging
 from soothe.ux.core.config_loader import load_config
 from soothe.ux.core.display_policy import (
     INTERNAL_EVENT_TYPES,
@@ -23,7 +24,6 @@ from soothe.ux.core.display_policy import (
     create_display_policy,
 )
 from soothe.ux.core.event_processor import EventProcessor
-from soothe.ux.core.logging_setup import setup_logging
 from soothe.ux.core.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,

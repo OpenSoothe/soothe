@@ -30,7 +30,7 @@ from textual.containers import Container
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
-from soothe.daemon.thread_logger import ThreadLogger
+from soothe.logging import ThreadLogger
 from soothe.ux.core import EventProcessor
 from soothe.ux.core.display_policy import normalize_verbosity
 from soothe.ux.core.rendering import render_plan_tree

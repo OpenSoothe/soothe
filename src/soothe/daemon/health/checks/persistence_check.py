@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.core.health.formatters import aggregate_status
-from soothe.core.health.models import CategoryResult, CheckResult, CheckStatus
+from soothe.daemon.health.formatters import aggregate_status
+from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
 def _check_postgresql_import() -> CheckResult:

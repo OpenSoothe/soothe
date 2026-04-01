@@ -17,7 +17,7 @@ from soothe.core.thread.models import (
     ThreadMessage,
     ThreadStats,
 )
-from soothe.daemon.thread_logger import ThreadLogger
+from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig

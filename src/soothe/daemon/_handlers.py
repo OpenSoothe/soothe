@@ -171,3 +171,21 @@ class DaemonHandlersMixin:
                     "content": response_text,
                 }
             )
+
+    async def _run_query(
+        self,
+        text: str,
+        *,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+        subagent: str | None = None,
+        client_id: str | None = None,
+    ) -> None:
+        """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
+        await self._query_engine.run_query(
+            text,
+            autonomous=autonomous,
+            max_iterations=max_iterations,
+            subagent=subagent,
+            client_id=client_id,
+        )

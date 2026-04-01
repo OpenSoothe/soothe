@@ -34,7 +34,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from soothe.core.verbosity_tier import (
+from soothe.core.foundation.verbosity_tier import (
     VerbosityLevel,
     VerbosityTier,
     classify_event_to_tier,

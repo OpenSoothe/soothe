@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from soothe.core.event_catalog import ERROR
-from soothe.daemon.thread_logger import ThreadLogger
+from soothe.logging import ThreadLogger
 
 logger = logging.getLogger(__name__)
 

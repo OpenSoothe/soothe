@@ -6,8 +6,8 @@ from importlib.metadata import version as get_version
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core.health.formatters import aggregate_status
-from soothe.core.health.models import CategoryResult, CheckStatus, HealthReport
+from soothe.daemon.health.formatters import aggregate_status
+from soothe.daemon.health.models import CategoryResult, CheckStatus, HealthReport
 
 
 class HealthChecker:
@@ -130,7 +130,7 @@ class HealthChecker:
         Returns:
             CategoryResult with config check results
         """
-        from soothe.core.health.checks.config_check import check_config
+        from soothe.daemon.health.checks.config_check import check_config
 
         return await check_config(self.config)
 
@@ -140,7 +140,7 @@ class HealthChecker:
         Returns:
             CategoryResult with daemon check results
         """
-        from soothe.core.health.checks.daemon_check import check_daemon
+        from soothe.daemon.health.checks.daemon_check import check_daemon
 
         return await check_daemon(self.config)
 
@@ -150,7 +150,7 @@ class HealthChecker:
         Returns:
             CategoryResult with persistence check results
         """
-        from soothe.core.health.checks.persistence_check import check_persistence
+        from soothe.daemon.health.checks.persistence_check import check_persistence
 
         return await check_persistence(self.config)
 
@@ -160,7 +160,7 @@ class HealthChecker:
         Returns:
             CategoryResult with protocol check results
         """
-        from soothe.core.health.checks.protocols_check import check_protocols
+        from soothe.daemon.health.checks.protocols_check import check_protocols
 
         return await check_protocols(self.config)
 
@@ -170,7 +170,7 @@ class HealthChecker:
         Returns:
             CategoryResult with vector store check results
         """
-        from soothe.core.health.checks.vector_stores_check import check_vector_stores
+        from soothe.daemon.health.checks.vector_stores_check import check_vector_stores
 
         return await check_vector_stores(self.config)
 
@@ -180,7 +180,7 @@ class HealthChecker:
         Returns:
             CategoryResult with provider check results
         """
-        from soothe.core.health.checks.providers_check import check_providers
+        from soothe.daemon.health.checks.providers_check import check_providers
 
         return await check_providers(self.config)
 
@@ -190,7 +190,7 @@ class HealthChecker:
         Returns:
             CategoryResult with MCP server check results
         """
-        from soothe.core.health.checks.mcp_check import check_mcp_servers
+        from soothe.daemon.health.checks.mcp_check import check_mcp_servers
 
         return await check_mcp_servers(self.config)
 
@@ -200,7 +200,7 @@ class HealthChecker:
         Returns:
             CategoryResult with external API check results
         """
-        from soothe.core.health.checks.external_apis_check import check_external_apis
+        from soothe.daemon.health.checks.external_apis_check import check_external_apis
 
         return await check_external_apis(self.config)
 
@@ -210,6 +210,6 @@ class HealthChecker:
         Returns:
             CategoryResult with observability check results
         """
-        from soothe.core.health.checks.observability_check import check_observability
+        from soothe.daemon.health.checks.observability_check import check_observability
 
         return await check_observability(self.config)

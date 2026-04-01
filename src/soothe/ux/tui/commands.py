@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from soothe.core.runner import SootheRunner
-    from soothe.daemon.thread_logger import InputHistory, ThreadLogger
+    from soothe.logging import InputHistory, ThreadLogger
     from soothe.protocols.planner import Plan
 
 # ---------------------------------------------------------------------------

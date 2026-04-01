@@ -168,6 +168,9 @@ async def test_daemon_handles_resume_thread_message() -> None:
             self.current_thread_id = ""
             self.set_thread_id_calls: list[str] = []
             self._durability = MagicMock()
+            self.resume_persisted_thread = AsyncMock(
+                return_value=SimpleNamespace(thread_id="thread-456")
+            )
 
         def set_current_thread_id(self, thread_id: str) -> None:
             self.set_thread_id_calls.append(thread_id)
@@ -185,13 +188,9 @@ async def test_daemon_handles_resume_thread_message() -> None:
     # Mock session manager to return None (no active session)
     daemon._session_manager.get_session = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
-    with patch("soothe.core.thread.ThreadContextManager") as manager_cls:
-        manager = MagicMock()
-        manager.resume_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-456"))
-        manager_cls.return_value = manager
-        await daemon._handle_client_message("test-client-id", {"type": "resume_thread", "thread_id": "thread-456"})
+    await daemon._handle_client_message("test-client-id", {"type": "resume_thread", "thread_id": "thread-456"})
 
-    manager.resume_thread.assert_awaited_once_with("thread-456")
+    daemon._runner.resume_persisted_thread.assert_awaited_once_with("thread-456")  # type: ignore[attr-defined]
 
     # Verify runner's thread_id was set
     assert "thread-456" in daemon._runner.set_thread_id_calls  # type: ignore[attr-defined]

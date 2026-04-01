@@ -4,8 +4,8 @@ import asyncio
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.core.health.formatters import aggregate_status
-from soothe.core.health.models import CategoryResult, CheckResult, CheckStatus
+from soothe.daemon.health.formatters import aggregate_status
+from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
 async def _check_provider(provider_name: str, config: SootheConfig | None) -> CheckResult:

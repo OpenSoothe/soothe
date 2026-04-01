@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from rich.console import Console
 
-from soothe.daemon.thread_logger import InputHistory, ThreadLogger
+from soothe.logging import InputHistory, ThreadLogger
 from soothe.ux.tui.commands import handle_slash_command
 
 

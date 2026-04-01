@@ -55,8 +55,8 @@ def checkhealth(
     """
     from pathlib import Path
 
-    from soothe.core.health import HealthChecker, format_json, format_markdown, format_text
-    from soothe.core.health.models import CheckStatus
+    from soothe.daemon.health import HealthChecker, format_json, format_markdown, format_text
+    from soothe.daemon.health.models import CheckStatus
 
     try:
         # Load config if provided

@@ -1,8 +1,8 @@
 """Vector store backends health check implementation."""
 
 from soothe.config import SootheConfig
-from soothe.core.health.formatters import aggregate_status
-from soothe.core.health.models import CategoryResult, CheckResult, CheckStatus
+from soothe.daemon.health.formatters import aggregate_status
+from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
 def _check_inmemory_vectorstore() -> CheckResult:

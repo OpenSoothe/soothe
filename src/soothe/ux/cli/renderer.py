@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe.core.verbosity_tier import VerbosityTier, should_show
+from soothe.core.foundation.verbosity_tier import VerbosityTier, should_show
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe.ux.cli.utils import make_tool_block

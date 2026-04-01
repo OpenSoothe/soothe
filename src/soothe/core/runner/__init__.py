@@ -461,7 +461,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             subagent: Optional subagent name to route the query to directly.
         """
         # Update thread_id for logging if one is provided
-        from soothe.ux.core.logging_setup import set_thread_id
+        from soothe.logging import set_thread_id
 
         # Only set thread_id if explicitly provided
         if thread_id:

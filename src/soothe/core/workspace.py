@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from soothe.core.types import INVALID_WORKSPACE_DIRS
+from soothe.core.foundation.types import INVALID_WORKSPACE_DIRS
 
 logger = logging.getLogger(__name__)
 

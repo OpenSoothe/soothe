@@ -1,8 +1,8 @@
 """Base event classes for Soothe events.
 
 This module provides the base event classes that all specific events inherit from.
-Module-specific events are defined in their respective modules and imported here
-only for the event registry.
+Module-specific events are defined in their respective modules and registered via
+``register_event()``.
 
 RFC-0015: All progress events use 4-segment type strings
 ``soothe.<domain>.<component>.<action>`` with six domains:

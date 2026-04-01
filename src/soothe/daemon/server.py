@@ -27,9 +27,9 @@ from soothe.daemon.singleton import (
     cleanup_pid,
     release_pid_lock,
 )
-from soothe.daemon.thread_logger import InputHistory, ThreadLogger
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
+from soothe.logging import InputHistory, ThreadLogger
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +133,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_message: str | None = None
         # Per-thread isolation (IG-110): populated when runner exists
         self._thread_registry: ThreadStateRegistry = ThreadStateRegistry()
-        self._query_engine: QueryEngine | None = None
+        self._query_engine: QueryEngine = QueryEngine(self)
         self._message_router: MessageRouter = MessageRouter(self)
 
     # -- lifecycle ----------------------------------------------------------
@@ -167,7 +167,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 self._readiness_message = str(exc)
                 raise
 
-            self._query_engine = QueryEngine(self)
+            # QueryEngine is created in __init__; runner is now available for queries
 
             # Initialize persistent input history
             self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)

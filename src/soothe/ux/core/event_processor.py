@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
-from soothe.core.verbosity_tier import (
+from soothe.core.foundation.verbosity_tier import (
     VerbosityTier,
     classify_event_to_tier,
     should_show,

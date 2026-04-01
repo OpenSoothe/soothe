@@ -5,13 +5,13 @@ import os
 import socket
 
 from soothe.config import SootheConfig
-from soothe.core.health.formatters import aggregate_status
-from soothe.core.health.models import CategoryResult, CheckResult, CheckStatus
+from soothe.daemon.health.formatters import aggregate_status
+from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
 def _check_pid_file() -> CheckResult:
     """Check PID file validity."""
-    from soothe.daemon import pid_path
+    from soothe.daemon.paths import pid_path
 
     pf = pid_path()
     if not pf.exists():
@@ -78,7 +78,7 @@ def _check_process_alive(pid: int) -> CheckResult:
 
 def _check_socket_connectivity() -> CheckResult:
     """Check Unix socket connectivity."""
-    from soothe.daemon import socket_path
+    from soothe.daemon.paths import socket_path
 
     sock = socket_path()
     if not sock.exists():
@@ -116,7 +116,7 @@ def _check_socket_responsiveness() -> CheckResult:
     When a client connects, the daemon immediately sends a status message.
     This test verifies we can connect and receive a valid daemon response.
     """
-    from soothe.daemon import socket_path
+    from soothe.daemon.paths import socket_path
 
     sock = socket_path()
     if not sock.exists():
@@ -205,7 +205,7 @@ def _check_socket_responsiveness() -> CheckResult:
 
 def _check_stale_locks() -> CheckResult:
     """Check for stale lock files."""
-    from soothe.daemon import pid_path, socket_path
+    from soothe.daemon.paths import pid_path, socket_path
 
     pf = pid_path()
     issues = []

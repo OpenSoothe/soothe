@@ -2,7 +2,7 @@
 
 import json
 
-from soothe.core.health.models import CheckStatus, HealthReport
+from soothe.daemon.health.models import CheckStatus, HealthReport
 
 
 def format_text(report: HealthReport, use_color: bool = True) -> str:  # noqa: FBT001, FBT002

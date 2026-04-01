@@ -21,15 +21,16 @@ class TestCheckpointEventEmission:
     @pytest.mark.asyncio
     async def test_checkpoint_saved_event_emitted(self, tmp_path: Path) -> None:
         """Verify soothe.lifecycle.checkpoint.saved event is emitted on successful save."""
-        # Create a minimal runner with artifact store
+        # Create a minimal runner with artifact store on state (IG-110)
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
-        runner._artifact_store = RunArtifactStore("test-thread-123", soothe_home=str(tmp_path))
+        runner._config = config
         runner._goal_engine = None
         runner._logger = MagicMock()
 
         state = RunnerState()
         state.thread_id = "test-thread-123"
+        state.artifact_store = RunArtifactStore("test-thread-123", soothe_home=str(tmp_path))
 
         events = [
             chunk
@@ -57,10 +58,10 @@ class TestCheckpointEventEmission:
     @pytest.mark.asyncio
     async def test_checkpoint_event_not_emitted_without_artifact_store(self, tmp_path: Path) -> None:
         """Verify no event is emitted if artifact store is not initialized."""
-        # Create runner without artifact store
+        # Create runner without artifact store on state
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
-        runner._artifact_store = None
+        runner._config = config
         runner._goal_engine = None
         runner._logger = MagicMock()
 
@@ -83,10 +84,10 @@ class TestCheckpointEventEmission:
     @pytest.mark.asyncio
     async def test_checkpoint_event_counts_steps(self, tmp_path: Path) -> None:
         """Verify completed_steps count is accurate."""
-        # Create a minimal runner with artifact store
+        # Create a minimal runner with artifact store on state (IG-110)
         config = SootheConfig()
         runner = object.__new__(SootheRunner)
-        runner._artifact_store = RunArtifactStore("test-thread-789", soothe_home=str(tmp_path))
+        runner._config = config
         runner._goal_engine = None
         runner._logger = MagicMock()
 
@@ -103,6 +104,7 @@ class TestCheckpointEventEmission:
         state = RunnerState()
         state.thread_id = "test-thread-789"
         state.plan = plan
+        state.artifact_store = RunArtifactStore("test-thread-789", soothe_home=str(tmp_path))
 
         events = [
             chunk
@@ -194,7 +196,7 @@ class TestAutonomousObservationReuse:
         runner._goal_engine = AsyncMock()
         runner._artifact_store = None
         runner._current_plan = None
-        runner._config = SimpleNamespace(subagents={})
+        runner._config = SootheConfig()
         runner._concurrency = SimpleNamespace(acquire_llm_call=_noop_acquire_llm_call)
         runner._store_iteration_record = AsyncMock()
         runner._save_checkpoint = _empty_async_generator

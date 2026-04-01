@@ -12,9 +12,16 @@ from typing import Any
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
-from soothe.daemon.thread_logger import InputHistory, ThreadLogger
+from soothe.logging import InputHistory, ThreadLogger
 
 logger = logging.getLogger(__name__)
+
+
+def _client_label(client_id: Any) -> str:
+    """Short label for logs when ``client_id`` may be a legacy connection object."""
+    if isinstance(client_id, str):
+        return client_id[:8] if len(client_id) >= 8 else client_id
+    return f"obj:{id(client_id) & 0xFFFF_FFFF:x}"
 
 
 class MessageRouter:
@@ -24,11 +31,11 @@ class MessageRouter:
         """Keep a reference to the daemon for config, runner, and session access."""
         self._daemon = daemon
 
-    async def dispatch(self, client_id: str, msg: dict[str, Any]) -> None:
+    async def dispatch(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle a single client message."""
         d = self._daemon
         msg_type = msg.get("type", "")
-        logger.debug("[IG-110] Received message type=%s from client=%s", msg_type, client_id[:8])
+        logger.debug("[IG-110] Received message type=%s from client=%s", msg_type, _client_label(client_id))
 
         if msg_type == "input":
             text = msg.get("text", "").strip()
@@ -57,7 +64,7 @@ class MessageRouter:
                 )
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
-                logger.debug("[IG-110] Putting input in queue: text=%s, client=%s", text[:30], client_id[:8])
+                logger.debug("[IG-110] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id))
                 await d._current_input_queue.put(
                     {
                         "type": "input",
@@ -197,7 +204,7 @@ class MessageRouter:
                 thread_workspace = validate_client_workspace(client_workspace)
                 logger.info(
                     "Client %s requested workspace: %s",
-                    client_id[:8],
+                    _client_label(client_id),
                     thread_workspace,
                 )
             except ValueError as e:

@@ -2,8 +2,6 @@
 
 RFC-0024: Events and message components classify directly to a VerbosityTier,
 which represents the minimum verbosity level at which content is visible.
-
-This module is placed in soothe.core to avoid circular imports with soothe.ux.core.
 """
 
 from __future__ import annotations
@@ -11,25 +9,14 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import Literal
 
-# =============================================================================
-# Type Definitions
-# =============================================================================
-
 VerbosityLevel = Literal["quiet", "normal", "detailed", "debug"]
 """User-configured verbosity level for filtering display content."""
-
-
-# =============================================================================
-# VerbosityTier Enum
-# =============================================================================
 
 
 class VerbosityTier(IntEnum):
     """Minimum verbosity level at which content is visible.
 
     Values are ordered so comparison works: tier <= verbosity means visible.
-    This replaces the two-layer classification (ProgressCategory → VerbosityLevel)
-    with direct classification to visibility tier.
 
     Usage:
         >>> should_show(VerbosityTier.NORMAL, "normal")
@@ -38,16 +25,12 @@ class VerbosityTier(IntEnum):
         False
     """
 
-    QUIET = 0  # Always visible (errors, assistant text, final reports)
-    NORMAL = 1  # Standard progress (plan updates, milestones, agentic loop)
+    QUIET = 0     # Always visible (errors, assistant text, final reports)
+    NORMAL = 1    # Standard progress (plan updates, milestones, agentic loop)
     DETAILED = 2  # Detailed internals (protocol events, tool calls, subagent activity)
-    DEBUG = 3  # Everything including internals (thinking, heartbeats)
-    INTERNAL = 99  # Never shown at any level (implementation details)
+    DEBUG = 3     # Everything including internals (thinking, heartbeats)
+    INTERNAL = 99 # Never shown at any level (implementation details)
 
-
-# =============================================================================
-# Visibility Check
-# =============================================================================
 
 _VERBOSITY_LEVEL_VALUES: dict[VerbosityLevel, int] = {
     "quiet": 0,
@@ -59,9 +42,6 @@ _VERBOSITY_LEVEL_VALUES: dict[VerbosityLevel, int] = {
 
 def should_show(tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
     """Return True if tier is visible at the given verbosity.
-
-    Uses integer comparison: a tier of NORMAL (1) is visible at verbosity
-    normal (1), detailed (2), and debug (3), but not at quiet (0).
 
     Args:
         tier: The minimum verbosity level for this content.
@@ -83,11 +63,6 @@ def should_show(tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
     if tier == VerbosityTier.INTERNAL:
         return False
     return tier <= _VERBOSITY_LEVEL_VALUES[verbosity]
-
-
-# =============================================================================
-# Event Classification
-# =============================================================================
 
 
 def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> VerbosityTier:
@@ -113,48 +88,34 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     """
     from soothe.core.event_catalog import REGISTRY
 
-    # Registry lookup for soothe.* events
     if event_type.startswith("soothe."):
         return REGISTRY.get_verbosity(event_type)
 
-    # Non-soothe events (from subagents like deepagents)
     if namespace:
-        # Subagent-originated events
         if "thinking" in event_type or "heartbeat" in event_type:
             return VerbosityTier.DEBUG
         return VerbosityTier.DETAILED
 
-    # Unknown external events
     if "thinking" in event_type or "heartbeat" in event_type:
         return VerbosityTier.DEBUG
     return VerbosityTier.DEBUG
 
 
-# =============================================================================
-# Backward Compatibility (temporary, for migration)
-# =============================================================================
-
-# Type alias for migration - will be removed
+# Backward compatibility alias
 ProgressCategory = VerbosityTier
 
 
 def classify_custom_event(namespace: tuple, data: dict) -> VerbosityTier:
-    """Deprecated: Use classify_event_to_tier instead.
-
-    Kept for backward compatibility during migration.
-    """
+    """Deprecated: Use `classify_event_to_tier` instead."""
     event_type = str(data.get("type", ""))
     return classify_event_to_tier(event_type, namespace)
 
-
-# =============================================================================
-# Exports
-# =============================================================================
 
 __all__ = [
     "ProgressCategory",
     "VerbosityLevel",
     "VerbosityTier",
+    "classify_custom_event",
     "classify_event_to_tier",
     "should_show",
 ]

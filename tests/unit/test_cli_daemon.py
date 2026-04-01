@@ -171,7 +171,7 @@ async def test_daemon_client_send_input_includes_options() -> None:
 @pytest.mark.asyncio
 async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     """Test that daemon logs user input and assistant responses to thread file."""
-    from soothe.daemon.thread_logger import ThreadLogger
+    from soothe.logging import ThreadLogger
 
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunnerWithMessages()  # type: ignore[attr-defined]
@@ -337,7 +337,7 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     from asyncio import StreamWriter
 
-    from soothe.daemon.thread_logger import InputHistory
+    from soothe.logging import InputHistory
 
     daemon = SootheDaemon(SootheConfig())
     # Set up a runner with an existing thread_id (simulating previous session)

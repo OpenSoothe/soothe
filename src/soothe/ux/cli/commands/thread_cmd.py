@@ -265,7 +265,7 @@ def thread_show(
         soothe thread show abc123
     """
     from soothe.core.runner import SootheRunner
-    from soothe.daemon.thread_logger import ThreadLogger
+    from soothe.logging import ThreadLogger
     from soothe.ux.core import load_config
 
     cfg = load_config(config)
@@ -364,7 +364,7 @@ def thread_export(
     Example:
         soothe thread export abc123 --output out.json
     """
-    from soothe.daemon.thread_logger import ThreadLogger
+    from soothe.logging import ThreadLogger
 
     logger = ThreadLogger(thread_id=thread_id)
     records = logger.read_recent_records(limit=10000)
