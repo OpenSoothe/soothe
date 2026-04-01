@@ -521,6 +521,10 @@ def resolve_subagents(
             extra_kwargs["config"] = config
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
+        if name == "research":
+            extra_kwargs["config"] = config
+            if "context" not in extra_kwargs:
+                extra_kwargs["context"] = {"work_dir": resolved_cwd}
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 

@@ -18,7 +18,6 @@ from .protocol import ResearchConfig
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-    from langgraph.graph import CompiledStateGraph
 
     from soothe.config import SootheConfig
 
@@ -41,7 +40,7 @@ def create_research_subagent(
     model: BaseChatModel,
     config: SootheConfig,
     context: dict[str, Any],
-) -> CompiledStateGraph:
+) -> dict[str, Any]:
     """Create research subagent.
 
     Args:
@@ -50,7 +49,7 @@ def create_research_subagent(
         context: Context with work_dir and settings.
 
     Returns:
-        Compiled LangGraph subagent implementing research workflow.
+        CompiledSubAgent dict with name, description, and runnable.
     """
     work_dir = context.get("work_dir", "")
     max_loops = context.get("max_loops", 3)
@@ -62,8 +61,19 @@ def create_research_subagent(
     # Create research config
     research_config = ResearchConfig(max_loops=max_loops)
 
-    # Build and return the engine
-    return build_research_engine(model, sources, research_config, _domain=domain)
+    # Build the engine (CompiledStateGraph)
+    runnable = build_research_engine(model, sources, research_config, _domain=domain)
+
+    return {
+        "name": "research",
+        "description": (
+            "Deep research subagent that iteratively searches, analyses, and synthesizes "
+            "information from multiple sources. Use when a question requires thorough "
+            "investigation, cross-validation, or multi-step research beyond a single "
+            "web search."
+        ),
+        "runnable": runnable,
+    }
 
 
 def _build_sources(

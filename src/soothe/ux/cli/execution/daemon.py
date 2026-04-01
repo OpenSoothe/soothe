@@ -132,12 +132,18 @@ async def run_headless_via_daemon(
             actual_thread_id, verbosity=verbosity, timeout=_SESSION_BOOTSTRAP_TIMEOUT_S
         )
 
+        # Parse slash commands for subagent routing (e.g. /browser, /research)
+        from soothe.ux.cli.commands.subagent_names import parse_subagent_from_input
+
+        subagent_name, cleaned_prompt = parse_subagent_from_input(prompt)
+
         # Send the input
         await asyncio.wait_for(
             client.send_input(
-                prompt,
+                cleaned_prompt if subagent_name else prompt,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
+                subagent=subagent_name,
             ),
             timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
