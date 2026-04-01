@@ -219,11 +219,12 @@ class TestSimplePlanner:
         context = PlanContext()
         prompt = planner._build_plan_prompt("test goal", context)
 
+        # XML section format (RFC-104)
         assert "test goal" in prompt
-        assert "plan" in prompt.lower()
-        assert "Prefer the fewest useful steps" in prompt
-        assert "use 1 step when planning is unnecessary" in prompt
-        assert "small, fast-verifiable steps" in prompt
+        assert "<PLANNING_GOAL>" in prompt
+        assert "<PLANNING_OUTPUT>" in prompt
+        assert "<PLANNING_RULES>" in prompt
+        assert "Return 1 step for trivial tasks" in prompt
 
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""
@@ -233,6 +234,8 @@ class TestSimplePlanner:
         context = PlanContext(available_capabilities=["tool1", "tool2", "agent1"])
         prompt = planner._build_plan_prompt("test goal", context)
 
+        # XML section format (RFC-104)
+        assert "<PLANNING_CAPABILITIES>" in prompt
         assert "tool1" in prompt
         assert "tool2" in prompt
         assert "agent1" in prompt
@@ -249,6 +252,8 @@ class TestSimplePlanner:
         context = PlanContext(completed_steps=completed)
         prompt = planner._build_plan_prompt("test goal", context)
 
+        # XML section format (RFC-104)
+        assert "<PLANNING_COMPLETED>" in prompt
         assert "S_1" in prompt
         assert "S_2" in prompt
 

@@ -90,9 +90,11 @@ Examples:
 
 
 BROWSER_DESCRIPTION = (
-    "Browser automation specialist for web tasks. Can navigate pages, click "
-    "elements, fill forms, extract content, and take screenshots. Use for "
-    "web scraping, form automation, and browser-based testing."
+    "Browser automation specialist for WEB tasks ONLY. "
+    "Can navigate pages, click elements, fill forms, extract content, and take screenshots. "
+    "Use ONLY for: web URLs (http/https), web scraping, form automation, browser-based testing. "
+    "DO NOT use for: local files (pwd, ls, cat), directory listing, file reading, local commands. "
+    "For local files, use: list_files, read_file, run_command tools instead."
 )
 
 

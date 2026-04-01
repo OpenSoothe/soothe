@@ -109,15 +109,10 @@ class ResearchPlugin:
         name="research",
         description=(
             "Deep research subagent that iteratively searches, analyses, and synthesizes "
-            "information from multiple sources. Use when a question requires thorough "
-            "investigation, cross-validation, or multi-step research beyond a single "
-            "web search. "
-            "Inputs: `topic` (required, the research question), "
-            "`domain` (optional, one of 'auto', 'web', 'code', 'deep'; default 'auto'). "
-            "- 'web': Internet research (web search + academic papers). "
-            "- 'code': Codebase exploration (filesystem + CLI tools). "
-            "- 'deep': All sources combined for comprehensive research. "
-            "- 'auto': Automatically selects sources based on the topic. "
+            "information from multiple sources. "
+            "Use for: thorough investigation, cross-validation, multi-step research. "
+            "DO NOT use for: simple file listing (list_files), single file reads (read_file). "
+            "Inputs: `topic` (required), `domain` (optional: 'web', 'code', 'deep', 'auto'). "
             "Returns a comprehensive answer with citations."
         ),
     )

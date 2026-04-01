@@ -258,81 +258,85 @@ class SimplePlanner:
             )
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
-        """Build unified planning prompt with embedded classification."""
-        parts = [
-            f"Create a plan to accomplish this goal: {goal}\n",
-        ]
+        """Build unified planning prompt with XML sections (RFC-104 alignment)."""
+        sections = []
 
-        # Add workspace context prominently at the top if available
+        # Goal section
+        sections.append(f"<PLANNING_GOAL>\n{goal}\n</PLANNING_GOAL>")
+
+        # Workspace context as XML section
         if context.workspace:
             logger.debug("Planner: using workspace=%s", context.workspace)
-            parts.append(
-                "\n**IMPORTANT: Workspace Context**\n"
-                f"You are operating in this workspace directory: {context.workspace}\n"
-                "All file operations, searches, and commands should be relative to this workspace.\n"
-                "DO NOT search in system directories (/etc, /Library, /usr, etc.) or root filesystem.\n"
-                "DO NOT use browser subagent for local file operations - use file tools instead.\n\n"
-            )
-
-        parts.extend(
-            [
-                "\nFirst, classify the intent:",
-                "- question: Who/what/how questions needing research",
-                "- search: Find/lookup information IN THE WORKSPACE",
-                "- analysis: Analyze/review/examine content IN THE WORKSPACE",
-                "- implementation: Create/build/write code IN THE WORKSPACE",
-                "- debugging: Fix/troubleshoot issues IN THE WORKSPACE",
-                "- compose: Generate custom agent/skill\n",
+            workspace_content = [
+                f"Primary working directory: {context.workspace}",
+                "",
+                "<TOOL_ROUTING_RULES>",
+                "- listing files/directories → list_files tool or run_command with 'ls'",
+                "- reading files → read_file tool",
+                "- searching files → search_files tool",
+                "- shell commands (pwd, ls, cat) → run_command tool",
+                "- web URLs/sites → browser subagent (ONLY for http/https URLs)",
+                "</TOOL_ROUTING_RULES>",
+                "",
+                "<FORBIDDEN_ACTIONS>",
+                "- using ANY subagent (browser, claude, research) for local file operations",
+                "- browser/claude for: pwd, ls, cat, file read, directory listing",
+                "- searching system directories (/etc, /Library, /usr, /System, /Applications)",
+                "- listing root filesystem (/)",
+                "</FORBIDDEN_ACTIONS>",
             ]
-        )
+            sections.append("<PLANNING_WORKSPACE>\n" + "\n".join(workspace_content) + "\n</PLANNING_WORKSPACE>")
 
+        # Available capabilities
         if context.available_capabilities:
-            parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}\n")
+            caps = ", ".join(context.available_capabilities)
+            sections.append(f"<PLANNING_CAPABILITIES>\n{caps}\n</PLANNING_CAPABILITIES>")
 
-        parts.extend(
-            [
-                "\nSpecial routing rules:",
-                "- If user explicitly requests a subagent (e.g., 'use browser to...', 'with weaver create...'), ",
-                "set execution_hint='subagent' and mention the subagent name in step description",
-                "- If goal mentions 'just plan' or 'only planning', set is_plan_only=true\n",
-                "\nReturn a JSON object with this exact structure:",
-                "{\n",
-                '  "goal": "<goal text>",\n',
-                '  "is_plan_only": false,\n',
-                '  "reasoning": "<brief intent classification>",\n',
-                '  "steps": [\n',
-                "    {\n",
-                '      "id": "S_1",\n',
-                '      "description": "<concrete action>",\n',
-                '      "execution_hint": "auto"\n',
-                "    },\n",
-                "    {\n",
-                '      "id": "S_2",\n',
-                '      "description": "Using the browser subagent, navigate to...",\n',
-                '      "execution_hint": "subagent",\n',
-                '      "depends_on": ["S_1"]\n',
-                "    }\n",
-                "  ]\n",
-                "}\n\n",
-                "Rules:",
-                "- Prefer the fewest useful steps; use 1 step when planning is unnecessary",
-                "- Usually return 1-3 concrete, actionable steps; only use 4-5 if strictly necessary",
-                "- Prefer small, fast-verifiable steps that gather evidence before broad synthesis",
-                "- Make each step independently checkable and avoid redundant setup/research steps",
-                "- Use depends_on only when a later step truly requires an earlier result",
-                "- execution_hint: 'tool' for tool calls, 'subagent' when delegating, 'auto' for LLM reasoning",
-                "- Return ONLY valid JSON, no markdown code blocks\n",
-            ]
-        )
-
+        # Completed steps context
         if context.completed_steps:
-            completed_info = "\n".join(
-                f"- {step.step_id}: {'success' if step.success else 'failed'} - {step.output}"
-                for step in context.completed_steps
+            completed_lines = []
+            for step in context.completed_steps:
+                status = "✓" if step.success else "✗"
+                output_preview = step.output[:80] if step.output else "no output"
+                completed_lines.append(f"{step.step_id}: {status} {output_preview}")
+            sections.append(
+                "<PLANNING_COMPLETED>\n" + "\n".join(completed_lines) + "\n</PLANNING_COMPLETED>"
             )
-            parts.append(f"\nPreviously completed steps:\n{completed_info}\n")
 
-        return "".join(parts)
+        # Output format specification
+        output_spec = [
+            "Return JSON with this structure:",
+            "{",
+            '  "goal": "<goal text>",',
+            '  "is_plan_only": false,',
+            '  "reasoning": "<brief classification>",',
+            '  "steps": [',
+            "    {",
+            '      "id": "S_1",',
+            '      "description": "<concrete action>",',
+            '      "execution_hint": "tool"',
+            "    }",
+            "  ]",
+            "}",
+            "",
+            "<PLANNING_RULES>",
+            "- Return 1 step for trivial tasks, 2-3 for normal, 4-5 only if essential",
+            "- Each step must be independently executable",
+            "- execution_hint: 'tool' (direct tool), 'subagent' (delegate), 'auto' (LLM reasoning)",
+            "- If user requests specific subagent, set execution_hint='subagent'",
+            "- Return ONLY valid JSON (no markdown blocks)",
+            "</PLANNING_RULES>",
+            "",
+            "<EFFICIENCY_RULES>",
+            "- For exploration/analysis: use 1 step with list_files + selective read_file",
+            "- For project structure: single step listing top-level directories",
+            "- Avoid redundant steps (listing then reading same files)",
+            "- Batch related operations in one step when possible",
+            "</EFFICIENCY_RULES>",
+        ]
+        sections.append("<PLANNING_OUTPUT>\n" + "\n".join(output_spec) + "\n</PLANNING_OUTPUT>")
+
+        return "\n\n".join(sections)
 
     def _build_revision_prompt(self, plan: Plan, reflection: str) -> str:
         """Build plan revision prompt."""

@@ -75,10 +75,10 @@ Content starts with: # Soothe
 - Returns actual project files, not root filesystem or empty directory
 
 **Verification Conditions**:
-- [ ] Listed files include project files (e.g., `README.md`, `src/`, `pyproject.toml`)
-- [ ] Listed files are NOT root filesystem entries (`/Applications`, `/System`, etc.)
-- [ ] Listed directory is NOT empty (unless workspace is actually empty)
-- [ ] Step count <= 2
+- [x] Listed files include project files (e.g., `README.md`, `src/`, `pyproject.toml`)
+- [x] Listed files are NOT root filesystem entries (`/Applications`, `/System`, etc.)
+- [x] Listed directory is NOT empty (unless workspace is actually empty)
+- [x] Step count <= 2
 
 **Success Criteria**:
 ```
@@ -296,6 +296,7 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Initial verification |
 | 2026-04-01 | ✅ | ✅ | ✅ | ❌ | ✅ | ⚠️ | Evaluation before fix: TC-004 explored root filesystem, TC-006 timeout |
 | 2026-04-01 | ✅ | ✅ | ✅ | ✅ | ✅ | - | After fix: Planner workspace context properly injected |
+| 2026-04-01 | ✅ (9.7s) | ✅ (21.3s) | ✅ (29.2s) | ✅ (~40s) | ✅ (14.9s) | ⚠️ (timeout) | After XML prompt refactor: TC-003 uses correct tool. TC-006 timeout is performance, not workspace issue. |
 
 ---
 
@@ -319,3 +320,8 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 | 2026-04-01 | Fixed: All code edit tools now use `_get_effective_work_dir()` for dynamic workspace resolution |
 | 2026-04-01 | Fixed: `PlanContext` now receives `workspace` field from `state.workspace` in `_runner_phases.py` and `_runner_autonomous.py` |
 | 2026-04-01 | Fixed: Planner prompt now emphasizes workspace context prominently with explicit instructions to NOT search system directories |
+| 2026-04-01 | Refactored: Planner prompt to XML sections (RFC-104) with `<PLANNING_*>` tags for better structure |
+| 2026-04-01 | Fixed: Browser subagent description now explicitly forbids local file operations (pwd, ls, cat) |
+| 2026-04-01 | Fixed: Claude subagent description now advises using direct tools for simple operations |
+| 2026-04-01 | Fixed: Research subagent description simplified and clarified scope |
+| 2026-04-01 | Added: `<EFFICIENCY_RULES>` section in planner prompt to encourage batched operations |

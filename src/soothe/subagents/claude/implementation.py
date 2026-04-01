@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_DESCRIPTION = (
     "Claude Code agent with full capabilities: file read/write/edit, bash execution, "
-    "web search/fetch, MCP server integration, and subagent spawning. Runs via the "
-    "Claude Code CLI subprocess. Use for complex code analysis, generation, refactoring, "
-    "and any task benefiting from Claude's full tool suite. Requires the 'claude' extra "
-    "and ANTHROPIC_API_KEY."
+    "web search/fetch, MCP server integration, and subagent spawning. "
+    "Use for: complex code analysis, multi-file refactoring, sophisticated generation tasks. "
+    "DO NOT use for: simple file listing (list_files), single file reads (read_file), "
+    "basic shell commands (run_command). Use direct tools instead for those operations. "
+    "Requires the 'claude' extra and ANTHROPIC_API_KEY."
 )
 
 
