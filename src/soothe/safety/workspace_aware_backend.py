@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Global cache for workspace backends (shared across all instances)
-_backend_cache: dict[str, "NormalizedPathBackend"] = {}
+_backend_cache: dict[str, NormalizedPathBackend] = {}
 
 
 class NormalizedPathBackend(FilesystemBackend):
@@ -39,7 +39,7 @@ class NormalizedPathBackend(FilesystemBackend):
             Normalized path that's safe for the backend.
         """
         # Empty, '.', or root '/' -> use workspace root
-        if not path or path == "." or path == "/":
+        if not path or path in {".", "/"}:
             return "."
 
         # Absolute path outside workspace -> make relative
@@ -48,8 +48,6 @@ class NormalizedPathBackend(FilesystemBackend):
             abs_path = Path(path)
             try:
                 abs_path.relative_to(workspace)
-                # Path is within workspace, use as-is
-                return path
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = path.lstrip("/")
@@ -60,6 +58,9 @@ class NormalizedPathBackend(FilesystemBackend):
                     relative or ".",
                 )
                 return relative or "."
+            else:
+                # Path is within workspace, use as-is
+                return path
 
         # Already relative
         return path
@@ -272,7 +273,7 @@ class WorkspaceAwareBackend:
             Normalized path that's safe for the backend.
         """
         # Empty, '.', or root '/' -> use workspace root
-        if not path or path == "." or path == "/":
+        if not path or path in {".", "/"}:
             return "."
 
         # Absolute path outside workspace -> make relative
@@ -282,8 +283,6 @@ class WorkspaceAwareBackend:
             abs_path = Path(path)
             try:
                 abs_path.relative_to(workspace)
-                # Path is within workspace, use as-is
-                return path
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = path.lstrip("/")
@@ -294,6 +293,9 @@ class WorkspaceAwareBackend:
                     relative or ".",
                 )
                 return relative or "."
+            else:
+                # Path is within workspace, use as-is
+                return path
 
         # Already relative
         return path
@@ -326,14 +328,26 @@ class WorkspaceAwareBackend:
         """Glob pattern matching with file info."""
         backend = self._get_backend()
         normalized_path = self._normalize_path(path)
-        logger.debug("glob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s", pattern, path, normalized_path, backend.cwd)
+        logger.debug(
+            "glob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s",
+            pattern,
+            path,
+            normalized_path,
+            backend.cwd,
+        )
         return backend.glob_info(pattern, normalized_path)
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Async glob pattern matching with file info."""
         backend = self._get_backend()
         normalized_path = self._normalize_path(path)
-        logger.debug("aglob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s", pattern, path, normalized_path, backend.cwd)
+        logger.debug(
+            "aglob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s",
+            pattern,
+            path,
+            normalized_path,
+            backend.cwd,
+        )
         result = await backend.aglob_info(pattern, normalized_path)
         logger.debug("aglob_info result: %d files found", len(result))
         return result

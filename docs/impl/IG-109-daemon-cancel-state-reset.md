@@ -25,7 +25,10 @@ On the second query:
 |------|------|-------|
 | `_handlers.py` | 673-702 | `_cancel_current_query()` doesn't reset thread_id |
 | `_handlers.py` | 886-893 | `_run_query()` outer CancelledError handler doesn't reset |
+| `_handlers.py` | 1039-1050 | `_run_query_multithreaded()` CancelledError handler doesn't reset |
+| `_handlers.py` | 1110-1160 | `_cancel_thread_locked()` doesn't reset thread_id |
 | `_handlers.py` | 1195-1206 | `_ensure_active_thread_id()` reuses stale thread_id |
+| `executor.py` | 90-138 | Parallel executor doesn't propagate cancel to child tasks |
 | `runner/__init__.py` | 154-185 | `_current_thread_id` persists across cancellations |
 | `filesystem.py` | 20 | `_current_workspace` ContextVar not cleared on cancel |
 | `workspace_context.py` | 83-100 | `aafter_agent()` may not run on cancellation |
@@ -53,6 +56,49 @@ except asyncio.CancelledError:
 except asyncio.CancelledError:
     from soothe.safety import FrameworkFilesystem
     FrameworkFilesystem.clear_current_workspace()
+```
+
+### Fix 4: Clear thread_id in _run_query_multithreaded handler
+
+```python
+except asyncio.CancelledError:
+    logger.info("Query cancelled by user in thread %s", thread_id)
+    # Reset runner thread_id so next query starts fresh (IG-109)
+    self._runner.set_current_thread_id(None)
+    # Clear workspace context to prevent stale state (IG-109)
+    from soothe.safety import FrameworkFilesystem
+    FrameworkFilesystem.clear_current_workspace()
+```
+
+### Fix 5: Clear thread_id in _cancel_thread_locked
+
+```python
+# After task handling block, ALWAYS reset thread_id
+# This must be outside the if block to handle edge cases
+self._runner.set_current_thread_id(None)
+```
+
+### Fix 6: Safety net for edge cases
+
+```python
+# At end of _cancel_thread_locked, if thread not found or already complete:
+if self._runner and self._runner.current_thread_id == thread_id:
+    self._runner.set_current_thread_id(None)
+```
+
+### Fix 7: Fast cancellation for parallel executor
+
+```python
+# In _execute_parallel:
+try:
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+except asyncio.CancelledError:
+    # Cancel all child tasks immediately on cancellation (IG-109)
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    raise
 ```
 
 ## Verification

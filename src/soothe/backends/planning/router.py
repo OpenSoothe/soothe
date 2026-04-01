@@ -100,8 +100,15 @@ class AutoPlanner:
         context: PlanContext,
         previous_judgment: Any | None = None,
     ) -> Any:
-        """Delegate step decision to the best available planner (RFC-0008)."""
-        planner = self._best_available()
+        """Delegate step decision to the best available planner (RFC-0008).
+
+        ``decide_steps`` only needs a short JSON planning signal (which steps
+        to run and in what mode), NOT a full agentic execution.  ClaudePlanner
+        runs a real tool-calling agent and returns work results, which breaks
+        the JSON parser.  Always route to SimplePlanner so we get a fast,
+        lightweight LLM call that produces the expected JSON structure.
+        """
+        planner = self._simple or self._best_available()
         return await planner.decide_steps(goal, context, previous_judgment)
 
     async def _invoke(self, prompt: str) -> str:

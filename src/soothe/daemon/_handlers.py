@@ -1038,6 +1038,12 @@ class DaemonHandlersMixin:
 
         except asyncio.CancelledError:
             logger.info("Query cancelled by user in thread %s", thread_id)
+            # Reset runner thread_id so next query starts fresh (IG-109)
+            self._runner.set_current_thread_id(None)
+            # Clear workspace context to prevent stale state (IG-109)
+            from soothe.safety import FrameworkFilesystem
+
+            FrameworkFilesystem.clear_current_workspace()
             await self._broadcast(
                 {
                     "type": "event",
@@ -1122,6 +1128,9 @@ class DaemonHandlersMixin:
                 # Await task cancellation to ensure cleanup completes
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
+            # Reset runner thread_id so next query starts fresh (IG-109)
+            # This must be outside the if block to handle edge cases
+            self._runner.set_current_thread_id(None)
             # Clear legacy state flags for consistency
             self._query_running = False
             self._current_query_task = None
@@ -1144,6 +1153,8 @@ class DaemonHandlersMixin:
                 # Await task cancellation
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._current_query_task
+                # Reset runner thread_id so next query starts fresh (IG-109)
+                self._runner.set_current_thread_id(None)
                 # Clear all state
                 self._query_running = False
                 self._current_query_task = None
@@ -1151,6 +1162,10 @@ class DaemonHandlersMixin:
                 return
 
         logger.debug("Thread %s not found or already complete", thread_id)
+        # Safety net: always clear thread_id when cancel is requested (IG-109)
+        # This handles edge cases where the thread completed just before cancel
+        if self._runner and self._runner.current_thread_id == thread_id:
+            self._runner.set_current_thread_id(None)
 
     def _get_active_threads(self) -> list[str]:
         """Get list of currently active thread IDs.

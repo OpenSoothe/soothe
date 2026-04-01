@@ -105,12 +105,23 @@ class Executor:
         """
         # Create tasks that collect events
         tasks = [
-            self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}", state.workspace)
+            asyncio.create_task(
+                self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}", state.workspace)
+            )
             for i, step in enumerate(steps)
         ]
 
-        # Execute concurrently
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            # Execute concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        except asyncio.CancelledError:
+            # Cancel all child tasks immediately on cancellation (IG-109)
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            # Wait briefly for tasks to acknowledge cancellation
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
         # Process results
         for i, result in enumerate(results):

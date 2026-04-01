@@ -19,6 +19,31 @@ from soothe.protocols.planner import (
 logger = logging.getLogger(__name__)
 
 
+def _extract_text_content(content: Any) -> str:
+    """Normalise LLM response content to a plain string.
+
+    Handles both the simple string case and the Anthropic-style list-of-blocks
+    case (e.g. ``[{'type': 'text', 'text': '...'}, {'type': 'tool_use', ...}]``).
+
+    Args:
+        content: The ``content`` attribute from a LangChain AIMessage.
+
+    Returns:
+        Plain text, joining all ``text``-type blocks when content is a list.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "\n".join(parts)
+    return str(content)
+
+
 def _parse_step_decision_text(response: str, goal: str) -> Any:
     """Parse LLM response into AgentDecision.
 
@@ -53,6 +78,16 @@ def _parse_step_decision_text(response: str, goal: str) -> Any:
             end = json_str.find("```", start)
             if end > start:
                 json_str = json_str[start:end].strip()
+
+        # Guard: empty string after extraction
+        if not json_str:
+            raise ValueError("Empty LLM response — cannot parse step decision")
+
+        # Regex fallback: find first bare {...} JSON object when no code block found
+        if not json_str.startswith("{"):
+            match = re.search(r"(\{.*\})", json_str, re.DOTALL)
+            if match:
+                json_str = match.group(1).strip()
 
         data = json.loads(json_str)
 
@@ -201,7 +236,7 @@ class SimplePlanner:
         try:
             response = await self._model.ainvoke([HumanMessage(content=prompt)])
             content = getattr(response, "content", str(response))
-            return content if isinstance(content, str) else str(content)
+            return _extract_text_content(content)
         except Exception as e:
             logger.warning("SimplePlanner._invoke failed: %s", e)
             return ""
@@ -223,7 +258,7 @@ class SimplePlanner:
         try:
             response = await self._model.ainvoke(prompt)
             content = getattr(response, "content", str(response))
-            return self._parse_json_from_response(content, goal)
+            return self._parse_json_from_response(_extract_text_content(content), goal)
         except Exception as e:
             logger.warning("Fallback parsing failed: %s", e)
             return Plan(
@@ -299,9 +334,7 @@ class SimplePlanner:
                 status = "✓" if step.success else "✗"
                 output_preview = step.output[:80] if step.output else "no output"
                 completed_lines.append(f"{step.step_id}: {status} {output_preview}")
-            sections.append(
-                "<PLANNING_COMPLETED>\n" + "\n".join(completed_lines) + "\n</PLANNING_COMPLETED>"
-            )
+            sections.append("<PLANNING_COMPLETED>\n" + "\n".join(completed_lines) + "\n</PLANNING_COMPLETED>")
 
         # Output format specification
         output_spec = [
