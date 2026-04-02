@@ -1,4 +1,4 @@
-"""In-memory loop working memory with optional workspace spill (RFC-203)."""
+"""In-memory loop working memory with spill under SOOTHE_HOME (RFC-203)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from soothe.config import SOOTHE_HOME
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +22,29 @@ def _thread_slug(thread_id: str) -> str:
     return cleaned or "default"
 
 
+def _spill_subdir_under_home(spill_subdir: str) -> Path:
+    """Normalize config path to a directory relative to ``SOOTHE_HOME``."""
+    s = (spill_subdir or "loop").strip().strip("/")
+    if s.startswith(".soothe/"):
+        s = s[len(".soothe/") :]
+    elif s == ".soothe":
+        s = "loop"
+    return Path(s) if s else Path("loop")
+
+
 @dataclass
 class LoopWorkingMemory:
-    """Accumulate agentic-loop facts for Reason prompts; spill large outputs to workspace files.
+    """Accumulate agentic-loop facts for Reason prompts; spill large outputs under SOOTHE_HOME.
 
     Args:
         max_inline_chars: Cap for ``render_for_reason`` aggregate text.
-        max_entry_chars_before_spill: Spill raw step output when longer than this (requires workspace).
-        spill_subdir: Relative directory under workspace for spill files.
+        max_entry_chars_before_spill: Spill raw step output when longer than this.
+        spill_subdir: Directory under ``SOOTHE_HOME`` for spill files.
     """
 
     max_inline_chars: int = 4000
     max_entry_chars_before_spill: int = 1500
-    spill_subdir: str = ".soothe/loop"
+    spill_subdir: str = "loop"
     _lines: list[str] = field(default_factory=list)
     _spill_seq: dict[tuple[str, str], int] = field(default_factory=dict)
 
@@ -47,13 +59,14 @@ class LoopWorkingMemory:
         self._spill_seq[key] = n
         return n
 
-    def _write_spill(self, workspace: Path, thread_slug: str, step_id: str, body: str) -> str:
-        """Write spill file; return relative POSIX path from workspace root."""
+    def _write_spill(self, thread_slug: str, step_id: str, body: str) -> str:
+        """Write spill file under SOOTHE_HOME; return path relative to SOOTHE_HOME (posix)."""
         seq = self._next_spill_seq(thread_slug, step_id)
         safe_step = re.sub(r"[^a-zA-Z0-9._-]+", "_", step_id)[:64] or "step"
-        rel_dir = Path(self.spill_subdir) / thread_slug
+        home = Path(SOOTHE_HOME).expanduser()
+        rel_dir = _spill_subdir_under_home(self.spill_subdir) / thread_slug
         name = f"step-{safe_step}-{seq}.md"
-        abs_dir = (workspace / rel_dir).resolve()
+        abs_dir = (home / rel_dir).resolve()
         abs_dir.mkdir(parents=True, exist_ok=True)
         path = abs_dir / name
         header = f"# Loop working memory spill: step `{step_id}`\n\n"
@@ -74,6 +87,7 @@ class LoopWorkingMemory:
         thread_id: str,
     ) -> None:
         """Record one Act step outcome."""
+        _ = workspace  # Spill files live under SOOTHE_HOME (IG-124); arg kept for API stability.
         desc = (description or "").strip().replace("\n", " ")
         if len(desc) > _DESC_INLINE_MAX:
             desc = desc[: _DESC_INLINE_MAX - 3] + "…"
@@ -82,10 +96,10 @@ class LoopWorkingMemory:
         slug = _thread_slug(thread_id)
         line: str
         if success:
-            if workspace and body and len(body) > self.max_entry_chars_before_spill:
+            if body and len(body) > self.max_entry_chars_before_spill:
                 try:
-                    rel = self._write_spill(Path(workspace).expanduser().resolve(), slug, step_id, body)
-                    line = f"[{step_id}] ✓ {desc} — full output in `{rel}` (use read_file)"
+                    rel = self._write_spill(slug, step_id, body)
+                    line = f"[{step_id}] ✓ {desc} — full output in `{rel}` (under SOOTHE_HOME; use read_file)"
                 except OSError:
                     logger.exception("Working memory spill failed; truncating inline")
                     line = f"[{step_id}] ✓ {desc} — {body[: self.max_entry_chars_before_spill]}…"

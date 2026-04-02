@@ -253,7 +253,9 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         try:
             iter_state = RunnerState()
-            iter_state.thread_id = thread_id
+            canonical_tid = parent_state.thread_id
+            iter_state.thread_id = canonical_tid
+            iter_state.langgraph_thread_id = thread_id if thread_id != canonical_tid else None
             iter_state.workspace = getattr(parent_state, "workspace", None)
             self._ensure_runner_state_workspace(iter_state)
             self._ensure_artifact_store(iter_state)
@@ -361,7 +363,11 @@ class AutonomousMixin(GoalDirectivesMixin):
                     from soothe.protocols.memory import MemoryItem
 
                     await self._memory.remember(
-                        MemoryItem(content=response_text[:500], tags=["agent_response"], source_thread=thread_id)
+                        MemoryItem(
+                            content=response_text[:500],
+                            tags=["agent_response"],
+                            source_thread=canonical_tid,
+                        )
                     )
                 except Exception:
                     logger.debug("Memory storage failed", exc_info=True)
@@ -465,7 +471,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 outcome="continue" if should_continue else "goal_complete",
             )
             iteration_records.append(record)
-            await self._store_iteration_record(record, thread_id)
+            await self._store_iteration_record(record, canonical_tid)
 
             duration_ms = int((perf_counter() - iter_start) * 1000)
             yield _custom(

@@ -159,7 +159,10 @@ class PhasesMixin:
         if hasattr(state, "protocol_summary"):
             stream_input["protocol_summary"] = state.protocol_summary
 
-        config = {"configurable": {"thread_id": state.thread_id}}
+        lg_tid = state.thread_id
+        if getattr(state, "langgraph_thread_id", None):
+            lg_tid = state.langgraph_thread_id
+        config = {"configurable": {"thread_id": lg_tid}}
         if state.workspace:
             config["configurable"]["workspace"] = state.workspace
 

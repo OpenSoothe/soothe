@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from soothe.core.runner._runner_agentic import (
     _AGENTIC_REPORT_FULL_DISPLAY_MAX,
@@ -125,17 +125,18 @@ def test_exact_threshold_prints_full_without_spool() -> None:
 def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
     root = tmp_path
     body = "y" * (_AGENTIC_REPORT_FULL_DISPLAY_MAX + 50)
-    out = _agentic_final_stdout_text(
-        user_summary="summary",
-        full_output=body,
-        thread_id="thread-a",
-        workspace=str(root),
-        config=_mock_config(sandboxed=True),
-    )
+    with patch("soothe.config.SOOTHE_HOME", str(root)):
+        out = _agentic_final_stdout_text(
+            user_summary="summary",
+            full_output=body,
+            thread_id="thread-a",
+            workspace=str(root),
+            config=_mock_config(sandboxed=True),
+        )
     assert out is not None
     assert out.startswith("y" * _AGENTIC_REPORT_PREVIEW_MAX)
     assert "Full report saved to:" in out
-    run_dir = root / ".soothe" / "runs" / "thread-a"
+    run_dir = root / "runs" / "thread-a"
     saved = list(run_dir.glob("final_report_*.md"))
     assert len(saved) == 1
     assert saved[0].read_text(encoding="utf-8") == body

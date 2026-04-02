@@ -67,6 +67,7 @@ class RunnerState:
     """Mutable state accumulated during a single query execution."""
 
     thread_id: str = ""
+    langgraph_thread_id: str | None = None  # LangGraph id when parallel goals/steps need isolation
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     full_response: list[str] = field(default_factory=list)
     plan: Any = None  # Type: Plan | None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 from soothe.cognition.loop_working_memory import LoopWorkingMemory
 from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
@@ -13,22 +14,23 @@ def test_render_empty() -> None:
     assert wm.render_for_reason() == ""
 
 
-def test_spill_large_output_to_workspace(tmp_path: Path) -> None:
+def test_spill_large_output_to_soothe_home(tmp_path: Path) -> None:
     wm = LoopWorkingMemory(
         max_entry_chars_before_spill=20,
-        spill_subdir=".soothe/loop",
+        spill_subdir="loop",
     )
     body = "line\n" * 50
-    wm.record_step_result(
-        step_id="s1",
-        description="List files",
-        output=body,
-        error=None,
-        success=True,
-        workspace=str(tmp_path),
-        thread_id="thread-1",
-    )
-    spill_root = tmp_path / ".soothe" / "loop"
+    with patch("soothe.cognition.loop_working_memory.memory.SOOTHE_HOME", str(tmp_path)):
+        wm.record_step_result(
+            step_id="s1",
+            description="List files",
+            output=body,
+            error=None,
+            success=True,
+            workspace=str(tmp_path),
+            thread_id="thread-1",
+        )
+    spill_root = tmp_path / "loop"
     assert spill_root.is_dir()
     files = list(spill_root.rglob("step-s1-*.md"))
     assert len(files) == 1

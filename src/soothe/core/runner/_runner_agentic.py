@@ -57,9 +57,7 @@ def _resolve_agentic_report_run_dir(*, thread_id: str, workspace: str, config: S
     """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123)."""
     from soothe.config import SOOTHE_HOME
 
-    ws = Path(workspace).expanduser().resolve()
-    if not config.security.allow_paths_outside_workspace:
-        return ws / ".soothe" / "runs" / thread_id
+    _ = workspace, config  # Spool location is always under SOOTHE_HOME (IG-124).
     return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
 
 
