@@ -25,7 +25,6 @@ from soothe.foundation.verbosity_tier import (
     ProgressCategory,
     VerbosityLevel,
     VerbosityTier,
-    classify_custom_event,
     classify_event_to_tier,
     should_show,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "SubagentEvent",
     "VerbosityLevel",
     "VerbosityTier",
-    "classify_custom_event",
     "classify_event_to_tier",
     "extract_text_from_ai_message",
     "handle_slash_command",

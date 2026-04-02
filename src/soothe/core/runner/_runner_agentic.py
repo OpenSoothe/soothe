@@ -1,6 +1,6 @@
 """Layer 2 Agentic Loop Runner (RFC-0008).
 
-Implements PLAN → ACT → JUDGE loop using LoopAgent.
+Implements Reason → Act (ReAct) loop using LoopAgent.
 """
 
 from __future__ import annotations
@@ -8,9 +8,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.backends.judgment.llm_judge import LLMJudgeEngine
 from soothe.cognition.loop_agent import LoopAgent
-from soothe.cognition.loop_agent.events import LoopAgentJudgmentEvent
+from soothe.cognition.loop_agent.events import LoopAgentReasonEvent
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -42,7 +41,7 @@ class AgenticMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
-        Implements PLAN → ACT → JUDGE via LoopAgent with RFC-0020 progress events.
+        Implements Reason → Act via LoopAgent with RFC-0020 progress events.
 
         Args:
             user_input: Goal description to execute
@@ -75,14 +74,13 @@ class AgenticMixin:
             ).to_dict()
         )
 
-        # Create judge instance
-        judge = self._create_judge()
+        if self._planner is None:
+            logger.error("[Runner] Agentic loop requires a planner that implements LoopReasonerProtocol.reason")
+            return
 
-        # Create LoopAgent
         loop_agent = LoopAgent(
             core_agent=self._agent,
-            planner=self._planner,
-            judge=judge,
+            loop_reasoner=self._planner,
             config=self._config,
         )
 
@@ -133,14 +131,15 @@ class AgenticMixin:
                 # event_data is a StreamChunk tuple
                 yield event_data
 
-            elif event_type == "judgment":
-                # Emit judgment event (visible to user)
+            elif event_type == "reason":
                 yield _custom(
-                    LoopAgentJudgmentEvent(
+                    LoopAgentReasonEvent(
                         status=event_data["status"],
                         progress=event_data["progress"],
                         confidence=event_data["confidence"],
-                        reasoning=event_data["reasoning"],
+                        user_summary=event_data.get("user_summary", ""),
+                        soothe_next_action=event_data.get("soothe_next_action", ""),
+                        progress_detail=event_data.get("progress_detail"),
                         iteration=event_data["iteration"],
                     ).to_dict()
                 )
@@ -155,39 +154,25 @@ class AgenticMixin:
                 )
 
             elif event_type == "completed":
-                # Final result
-                judge_result = event_data
+                final_result = event_data
 
-                # Emit final assistant response if goal is done with full output
-                if judge_result.is_done() and hasattr(judge_result, "full_output") and judge_result.full_output:
-                    # Emit the full output as assistant text using proper format
-                    # Format: (namespace: tuple, mode: str, data)
+                if final_result.is_done() and final_result.full_output:
                     from langchain_core.messages import AIMessage
 
-                    yield ((), "messages", [AIMessage(content=judge_result.full_output), {}])
+                    yield ((), "messages", [AIMessage(content=final_result.full_output), {}])
 
-                # Emit loop completed event (Level 1)
+                evidence = (final_result.evidence_summary or "")[:500]
                 yield _custom(
                     AgenticLoopCompletedEvent(
                         thread_id=tid,
-                        status=judge_result.status,
-                        goal_progress=judge_result.goal_progress,
-                        evidence_summary=judge_result.evidence_summary[:500],
+                        status=final_result.status,
+                        goal_progress=final_result.goal_progress,
+                        evidence_summary=evidence,
                     ).to_dict()
                 )
 
                 logger.info(
                     "[Runner] Agentic loop completed (status=%s, progress=%.0f%%)",
-                    judge_result.status,
-                    judge_result.goal_progress * 100,
+                    final_result.status,
+                    final_result.goal_progress * 100,
                 )
-
-    def _create_judge(self) -> LLMJudgeEngine:
-        """Create judge instance from config.
-
-        Returns:
-            LLMJudgeEngine instance
-        """
-        # Use 'fast' model for judgment (can be configured)
-        model = self._config.create_chat_model("fast")
-        return LLMJudgeEngine(model)

@@ -13,6 +13,12 @@ from soothe.backends.planning._shared import (
     reflect_heuristic,
     reflect_with_llm,
 )
+from soothe.backends.planning.simple import (
+    _default_agent_decision,
+    build_loop_reason_prompt,
+    parse_reason_response_text,
+)
+from soothe.cognition.loop_agent.schemas import LoopState
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -145,77 +151,29 @@ class ClaudePlanner:
             return await reflect_with_llm(self._reflection_model, plan, step_results, goal_context)
         return reflect_heuristic(plan, step_results, goal_context)
 
-    async def decide_steps(
+    async def reason(
         self,
         goal: str,
+        state: LoopState,
         context: PlanContext,
-        previous_judgment: object | None = None,
     ) -> object:
-        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
+        """Layer 2 Reason phase via Claude subagent (same JSON contract as SimplePlanner)."""
+        from soothe.cognition.loop_agent.schemas import ReasonResult
 
-        Uses Claude CLI to determine step execution strategy.
-
-        Args:
-            goal: Goal description
-            context: Planning context
-            previous_judgment: Previous JudgeResult if replanning
-
-        Returns:
-            AgentDecision with steps to execute
-        """
-        # Build prompt for step decision
-        prompt = self._build_step_decision_prompt(goal, context, previous_judgment)
-
+        prompt = build_loop_reason_prompt(goal, state, context)
         try:
             text = await self._invoke(prompt)
-            # Import here to avoid circular imports
-            from soothe.backends.planning.simple import _parse_step_decision_text
-
-            return _parse_step_decision_text(text, goal)
+            return parse_reason_response_text(text, goal)
         except Exception:
-            logger.warning("ClaudePlanner decide_steps failed", exc_info=True)
-            # Fallback to single-step decision
-            from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
-
-            return AgentDecision(
-                steps=[StepAction(id="S_1", description=goal, expected_output="complete goal")],
-                execution_mode="sequential",
-                reasoning="Claude planner failed, fallback to single step",
+            logger.warning("ClaudePlanner.reason failed", exc_info=True)
+            return ReasonResult(
+                status="replan",
+                plan_action="new",
+                decision=_default_agent_decision(goal),
+                reasoning="Claude planner failed",
+                user_summary="Switching to a minimal plan after a planner error",
+                soothe_next_action="I'll fall back to a minimal plan and continue.",
             )
-
-    def _build_step_decision_prompt(
-        self,
-        goal: str,
-        context: PlanContext,
-        previous_judgment: object | None,
-    ) -> str:
-        """Build prompt for step decision."""
-        parts = [f"Goal: {goal}\n"]
-
-        # Include completed steps to avoid repetitive planning
-        if context.completed_steps:
-            parts.append("\nAlready executed steps (DO NOT repeat these):")
-            for step in context.completed_steps:
-                status = "✓" if step.success else "✗"
-                output_preview = step.output[:100] if step.output else "no output"
-                parts.append(f"- {step.step_id}: {status} {output_preview}")
-
-        if previous_judgment:
-            parts.append("\nPrevious judgment:")
-            parts.append(f"- Status: {getattr(previous_judgment, 'status', 'unknown')}")
-            parts.append(f"- Progress: {getattr(previous_judgment, 'goal_progress', 0):.0%}")
-            parts.append(f"- Evidence: {getattr(previous_judgment, 'evidence_summary', 'none')[:200]}")
-
-        if context.available_capabilities:
-            parts.append(f"\nAvailable capabilities: {', '.join(context.available_capabilities)}")
-
-        parts.append(
-            "\nDecide what steps to execute next. **Do NOT repeat already executed steps.**\n"
-            "Output JSON format:\n"
-            '{"steps": [{"id": "S_1", "description": "...", "execution_hint": "auto"}], '
-            '"execution_mode": "sequential", "reasoning": "..."}'
-        )
-        return "\n".join(parts)
 
     async def _invoke(self, prompt: str) -> str:
         """Run the compiled Claude graph and extract final response."""

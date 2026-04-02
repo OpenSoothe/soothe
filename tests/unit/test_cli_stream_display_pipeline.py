@@ -391,42 +391,48 @@ class TestStreamDisplayPipeline:
         assert "Done: 5 papers" in lines[0].content
         assert lines[0].duration_ms == 45200
 
-    def test_loop_agent_judgment_shown_at_normal(self) -> None:
-        """Loop agent judgment visible at normal verbosity with reasoning."""
+    def test_loop_agent_reason_shown_at_normal(self) -> None:
+        """Loop agent Reason event shows user_summary and optional detail."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.loop_agent.judgment",
+            "type": "soothe.cognition.loop_agent.reason",
             "status": "continue",
             "progress": 0.5,
             "confidence": 0.8,
-            "reasoning": "Found initial structure, need to check config files",
+            "soothe_next_action": "I'll check your config files next.",
+            "user_summary": "Found structure; checking config files next",
+            "progress_detail": "Still need to validate settings.",
             "iteration": 1,
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Found initial structure" in lines[0].content
-        assert "50% done" in lines[0].content
-        assert "80% confident" in lines[0].content
-        assert lines[0].icon == "→"  # Arrow for continue action
+        assert "I'll check your config files next." in lines[0].content
+        assert "Found structure" in lines[0].content
+        assert "80% sure" in lines[0].content
+        assert "validate settings" in lines[0].content
+        assert lines[0].icon == "→"
 
-    def test_loop_agent_judgment_done_shows_checkmark(self) -> None:
-        """Loop agent judgment with status=done shows checkmark icon."""
+    def test_loop_agent_reason_done_shows_checkmark(self) -> None:
+        """Reason event with status=done shows checkmark icon."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.loop_agent.judgment",
+            "type": "soothe.cognition.loop_agent.reason",
             "status": "done",
             "progress": 1.0,
             "confidence": 0.95,
-            "reasoning": "Goal achieved, all files analyzed",
+            "soothe_next_action": "I'm sharing the final result now.",
+            "user_summary": "Goal achieved",
+            "progress_detail": "",
             "iteration": 3,
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].icon == "✓"  # Checkmark for done action
+        assert "I'm sharing the final result now." in lines[0].content
+        assert lines[0].icon == "✓"
 
     def test_step_completed_with_tool_call_count(self) -> None:
         """Step completion shows tool call count when > 0."""

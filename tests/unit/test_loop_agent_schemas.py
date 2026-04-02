@@ -6,8 +6,8 @@ import pytest
 
 from soothe.cognition.loop_agent.schemas import (
     AgentDecision,
-    JudgeResult,
     LoopState,
+    ReasonResult,
     StepAction,
     StepResult,
 )
@@ -152,14 +152,15 @@ class TestAgentDecision:
         assert len(ready) == 0
 
 
-class TestJudgeResult:
-    """Tests for JudgeResult schema."""
+class TestReasonResult:
+    """Tests for ReasonResult schema."""
 
-    def test_judge_result_creation(self):
-        """Test basic JudgeResult creation."""
-        result = JudgeResult(
+    def test_reason_result_done_keep(self) -> None:
+        """Test done result with plan_action keep."""
+        result = ReasonResult(
             status="done",
-            evidence_summary="Task completed",
+            plan_action="keep",
+            user_summary="Task completed",
             goal_progress=1.0,
             confidence=0.95,
             reasoning="Goal achieved",
@@ -168,12 +169,14 @@ class TestJudgeResult:
         assert result.status == "done"
         assert result.goal_progress == 1.0
         assert result.confidence == 0.95
+        assert result.is_done() is True
 
-    def test_status_methods(self):
+    def test_status_methods(self) -> None:
         """Test status check methods."""
-        done = JudgeResult(
+        done = ReasonResult(
             status="done",
-            evidence_summary="",
+            plan_action="keep",
+            user_summary="Done",
             goal_progress=1.0,
             reasoning="Done",
         )
@@ -181,39 +184,78 @@ class TestJudgeResult:
         assert done.should_continue() is False
         assert done.should_replan() is False
 
-        continue_result = JudgeResult(
+        cont = ReasonResult(
             status="continue",
-            evidence_summary="",
+            plan_action="new",
+            decision=AgentDecision(
+                type="execute_steps",
+                steps=[StepAction(description="s", expected_output="o")],
+                execution_mode="sequential",
+                reasoning="x",
+            ),
+            user_summary="Going",
             goal_progress=0.5,
             reasoning="Continue",
         )
-        assert continue_result.should_continue() is True
-        assert continue_result.is_done() is False
+        assert cont.should_continue() is True
+        assert cont.is_done() is False
 
-        replan = JudgeResult(
+        replan = ReasonResult(
             status="replan",
-            evidence_summary="",
+            plan_action="new",
+            decision=AgentDecision(
+                type="execute_steps",
+                steps=[StepAction(description="s", expected_output="o")],
+                execution_mode="sequential",
+                reasoning="r",
+            ),
+            user_summary="Replanning",
             goal_progress=0.3,
             reasoning="Replan",
         )
         assert replan.should_replan() is True
 
-    def test_progress_validation(self):
+    def test_plan_action_validation(self) -> None:
+        """Keep must not carry a decision; new requires decision when not done."""
+        with pytest.raises(ValueError):
+            ReasonResult(
+                status="continue",
+                plan_action="keep",
+                decision=AgentDecision(
+                    type="execute_steps",
+                    steps=[StepAction(description="s", expected_output="o")],
+                    execution_mode="sequential",
+                    reasoning="bad",
+                ),
+                user_summary="bad",
+                reasoning="bad",
+            )
+
+        with pytest.raises(ValueError):
+            ReasonResult(
+                status="continue",
+                plan_action="new",
+                decision=None,
+                user_summary="bad",
+                reasoning="bad",
+            )
+
+    def test_progress_validation(self) -> None:
         """Test goal_progress validation."""
-        # Valid range
-        JudgeResult(
+        ReasonResult(
             status="done",
-            evidence_summary="",
+            plan_action="keep",
+            user_summary="x",
             goal_progress=0.5,
             reasoning="Test",
         )
 
-        # Out of range
         with pytest.raises(ValueError):
-            JudgeResult(
+            ReasonResult(
                 status="done",
-                evidence_summary="",
-                goal_progress=1.5,  # Invalid
+                plan_action="keep",
+                user_summary="x",
+                goal_progress=1.5,
                 reasoning="Test",
             )
 

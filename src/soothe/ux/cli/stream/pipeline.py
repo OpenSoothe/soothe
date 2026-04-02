@@ -173,9 +173,8 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return self._on_goal_completed(event)
 
-        # Handle loop agent judgment events
-        if event_type == "soothe.cognition.loop_agent.judgment":
-            return self._on_loop_agent_judgment(event)
+        if event_type == "soothe.cognition.loop_agent.reason":
+            return self._on_loop_agent_reason(event)
 
         return []
 
@@ -442,32 +441,38 @@ class StreamDisplayPipeline:
             )
         ]
 
-    def _on_loop_agent_judgment(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle loop agent judgment event.
-
-        Shows the agent's reasoning about goal progress - whether to continue,
-        replan, or complete.
-
-        Args:
-            event: Event dictionary with status, progress, confidence, reasoning.
-
-        Returns:
-            Display lines for judgment.
-        """
+    def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
+        """Handle Layer 2 Reason progress (first-person next action + summary; no internal reasoning)."""
         status = event.get("status", "")
         progress = event.get("progress", 0.0)
         confidence = event.get("confidence", 0.0)
-        reasoning = event.get("reasoning", "")
+        soothe_next_action = (event.get("soothe_next_action") or "").strip()
+        user_summary = (event.get("user_summary") or "").strip()
+        progress_detail = (event.get("progress_detail") or "").strip()
 
-        # Format the judgment message
-        if reasoning:
-            # Show full reasoning without truncation
-            judgement = f"{reasoning} ({progress:.0%} done, {confidence:.0%} confident)"
+        if status == "done":
+            label = "Done"
+            action = "complete"
+        elif status == "replan":
+            label = "Trying a new approach"
+            action = "continue"
         else:
-            judgement = f"Progress: {progress:.0%}, Confidence: {confidence:.0%}"
+            label = "Continuing"
+            action = "continue"
 
-        # Map status to action for icon selection
-        action = "complete" if status == "done" else "continue"
+        lines: list[str] = []
+        if soothe_next_action:
+            lines.append(soothe_next_action)
+        if user_summary:
+            lines.append(f"{user_summary} ({confidence:.0%} sure)")
+        elif soothe_next_action:
+            lines.append(f"({confidence:.0%} sure)")
+        if not lines:
+            lines.append(f"{label} — about {progress:.0%} toward the goal ({confidence:.0%} sure)")
+        if progress_detail:
+            lines.append(progress_detail)
+
+        judgement = "\n".join(lines)
 
         return [
             format_judgement(

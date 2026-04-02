@@ -8,24 +8,21 @@ from soothe.core.event_catalog import VerbosityTier, register_event
 from soothe.foundation.base_events import ProtocolEvent
 
 
-class LoopAgentJudgmentEvent(ProtocolEvent):
-    """Event emitted when loop agent makes a judgment about goal progress.
+class LoopAgentReasonEvent(ProtocolEvent):
+    """User-visible progress after the Reason phase (ReAct Layer 2)."""
 
-    This event shows the user the reasoning behind the agent's decision
-    to continue, replan, or complete the goal.
-    """
-
-    type: Literal["soothe.cognition.loop_agent.judgment"] = "soothe.cognition.loop_agent.judgment"
-    status: str  # "done", "replan", "continue"
-    progress: float  # 0.0 to 1.0
-    confidence: float  # 0.0 to 1.0
-    reasoning: str
+    type: Literal["soothe.cognition.loop_agent.reason"] = "soothe.cognition.loop_agent.reason"
+    status: str
+    progress: float
+    confidence: float
+    user_summary: str
+    soothe_next_action: str
+    progress_detail: str | None
     iteration: int
 
 
-# Register the event with NORMAL verbosity (visible to users)
 register_event(
-    LoopAgentJudgmentEvent,
+    LoopAgentReasonEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Judgment: status={status} progress={progress:.0%} confidence={confidence:.0%} - {reasoning}",
+    summary_template="{user_summary}",
 )

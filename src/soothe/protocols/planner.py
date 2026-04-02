@@ -275,29 +275,3 @@ class PlannerProtocol(Protocol):
             A reflection with assessment, revision recommendation, and goal directives.
         """
         ...
-
-    async def decide_steps(
-        self,
-        goal: str,
-        context: PlanContext,
-        previous_judgment: Any | None = None,
-    ) -> Any:
-        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
-
-        This method is used by Layer 2 (Agentic Goal Execution Loop) to determine
-        what steps to execute in the upcoming ACT phase. It supports hybrid
-        multi-step decisions (1 or N steps) with adaptive granularity.
-
-        Args:
-            goal: Goal description to execute.
-            context: Planning context (available tools, subagents, etc.).
-            previous_judgment: Previous JudgeResult if replanning.
-
-        Returns:
-            AgentDecision with steps to execute.
-
-        Note:
-            AgentDecision and JudgeResult types are imported from
-            cognition.loop_agent.schemas to avoid circular imports.
-        """
-        ...

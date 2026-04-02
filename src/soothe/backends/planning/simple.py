@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from soothe.backends.planning._shared import reflect_heuristic
+from soothe.cognition.loop_agent.schemas import LoopState
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -44,76 +45,63 @@ def _extract_text_content(content: Any) -> str:
     return str(content)
 
 
-def _parse_step_decision_text(response: str, goal: str) -> Any:
-    """Parse LLM response into AgentDecision.
+def _load_llm_json_dict(response: str) -> dict[str, Any]:
+    """Extract the first JSON object from an LLM response string."""
+    json_str = response.strip()
 
-    Shared helper function for parsing step decisions.
+    if "```json" in json_str:
+        start = json_str.find("```json") + 7
+        end = json_str.find("```", start)
+        if end > start:
+            json_str = json_str[start:end].strip()
+    elif "```" in json_str:
+        start = json_str.find("```") + 3
+        newline_pos = json_str.find("\n", start)
+        if newline_pos > start:
+            start = newline_pos + 1
+        end = json_str.find("```", start)
+        if end > start:
+            json_str = json_str[start:end].strip()
 
-    Args:
-        response: LLM response text
-        goal: Goal description for fallback
+    if not json_str:
+        raise ValueError("Empty LLM response — cannot parse JSON")
 
-    Returns:
-        AgentDecision with steps to execute
-    """
+    if not json_str.startswith("{"):
+        match = re.search(r"(\{.*\})", json_str, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+
+    loaded = json.loads(json_str)
+    if not isinstance(loaded, dict):
+        raise TypeError("LLM JSON root must be an object")
+    return loaded
+
+
+def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
+    """Build AgentDecision from a parsed JSON object (step list at top level)."""
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
 
-    try:
-        # Try to extract JSON from markdown code blocks first
-        json_str = response.strip()
+    known_subagents = {"browser", "weaver", "skillify", "claude", "research"}
 
-        # Handle ```json ... ``` blocks
-        if "```json" in json_str:
-            start = json_str.find("```json") + 7
-            end = json_str.find("```", start)
-            if end > start:
-                json_str = json_str[start:end].strip()
-        elif "```" in json_str:
-            # Try generic code block
-            start = json_str.find("```") + 3
-            # Skip language identifier if present
-            newline_pos = json_str.find("\n", start)
-            if newline_pos > start:
-                start = newline_pos + 1
-            end = json_str.find("```", start)
-            if end > start:
-                json_str = json_str[start:end].strip()
+    steps = []
+    for i, step_data in enumerate(data.get("steps", [])):
+        if not isinstance(step_data, dict):
+            continue
+        deps = step_data.get("dependencies")
+        deps = [] if deps is None or not isinstance(deps, list) else [str(d) for d in deps if d is not None]
 
-        # Guard: empty string after extraction
-        if not json_str:
-            raise ValueError("Empty LLM response — cannot parse step decision")
+        tools = step_data.get("tools") or []
+        if tools:
+            subagent_tools = [t for t in tools if t in known_subagents]
+            if subagent_tools:
+                if not step_data.get("subagent"):
+                    step_data["subagent"] = subagent_tools[0]
+                    logger.debug("Normalized subagent '%s' from tools to subagent field", subagent_tools[0])
+                remaining_tools = [t for t in tools if t not in known_subagents]
+                step_data["tools"] = remaining_tools or None
 
-        # Regex fallback: find first bare {...} JSON object when no code block found
-        if not json_str.startswith("{"):
-            match = re.search(r"(\{.*\})", json_str, re.DOTALL)
-            if match:
-                json_str = match.group(1).strip()
-
-        data = json.loads(json_str)
-
-        # Known subagent names (from _SIMPLE_PLANNER_HINT_MAP keys)
-        known_subagents = {"browser", "weaver", "skillify", "claude", "research"}
-
-        # Build StepAction objects
-        steps = []
-        for i, step_data in enumerate(data.get("steps", [])):
-            # Handle dependencies - ensure it's a list of strings
-            deps = step_data.get("dependencies")
-            deps = [] if deps is None or not isinstance(deps, list) else [str(d) for d in deps if d is not None]
-
-            # Normalize: move subagent names from tools to subagent field
-            tools = step_data.get("tools") or []
-            if tools:
-                subagent_tools = [t for t in tools if t in known_subagents]
-                if subagent_tools:
-                    if not step_data.get("subagent"):
-                        step_data["subagent"] = subagent_tools[0]
-                        logger.debug("Normalized subagent '%s' from tools to subagent field", subagent_tools[0])
-                    # Remove subagent names from tools list
-                    remaining_tools = [t for t in tools if t not in known_subagents]
-                    step_data["tools"] = remaining_tools or None
-
-            step = StepAction(
+        steps.append(
+            StepAction(
                 id=f"step_{i}",
                 description=step_data.get("description", ""),
                 tools=step_data.get("tools"),
@@ -121,32 +109,228 @@ def _parse_step_decision_text(response: str, goal: str) -> Any:
                 expected_output=step_data.get("expected_output", ""),
                 dependencies=deps,
             )
-            steps.append(step)
-
-        # Build AgentDecision
-        return AgentDecision(
-            type=data.get("type", "execute_steps"),
-            steps=steps,
-            execution_mode=data.get("execution_mode", "sequential"),
-            reasoning=data.get("reasoning", ""),
-            adaptive_granularity=data.get("adaptive_granularity"),
         )
 
+    return AgentDecision(
+        type=data.get("type", "execute_steps"),
+        steps=steps,
+        execution_mode=data.get("execution_mode", "sequential"),
+        reasoning=data.get("reasoning", ""),
+        adaptive_granularity=data.get("adaptive_granularity"),
+    )
+
+
+def _default_agent_decision(goal: str) -> Any:
+    """Minimal single-step decision used when parsing fails."""
+    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+
+    return AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(
+                id="step_0",
+                description=goal,
+                expected_output="Task completion",
+            )
+        ],
+        execution_mode="sequential",
+        reasoning="Default decision due to parse error",
+    )
+
+
+def parse_reason_response_text(response: str, goal: str) -> Any:
+    """Parse unified Reason JSON into ReasonResult."""
+    from soothe.cognition.loop_agent.schemas import ReasonResult
+
+    try:
+        data = _load_llm_json_dict(response)
+    except Exception:
+        logger.exception("Failed to parse reason response")
+        return ReasonResult(
+            status="replan",
+            plan_action="new",
+            decision=_default_agent_decision(goal),
+            reasoning="Failed to parse model response",
+            user_summary="Could not read the model plan — trying a fresh approach",
+            soothe_next_action="I'll try again with a simpler plan.",
+            progress_detail=None,
+        )
+
+    # Legacy flat plan (steps at root, no reason fields)
+    if "status" not in data and "steps" in data:
+        try:
+            decision = agent_decision_from_dict(data, goal)
+        except Exception:
+            logger.exception("Failed to parse legacy plan shape")
+            decision = _default_agent_decision(goal)
+        return ReasonResult(
+            status="continue",
+            plan_action="new",
+            decision=decision,
+            reasoning=decision.reasoning,
+            user_summary="Planned next steps",
+            soothe_next_action="I'll run the steps in this plan next.",
+            progress_detail=None,
+        )
+
+    status = data.get("status", "replan")
+    if status not in ("continue", "replan", "done"):
+        status = "replan"
+
+    plan_action = data.get("plan_action", "new")
+    if plan_action not in ("keep", "new"):
+        plan_action = "new"
+
+    reasoning = str(data.get("reasoning", "") or "")
+    user_summary = str(data.get("user_summary", "") or "").strip()
+    if not user_summary:
+        user_summary = "Working toward the goal"
+
+    soothe_next_action = str(data.get("soothe_next_action", "") or "").strip()
+
+    progress_detail = data.get("progress_detail")
+    if progress_detail is not None:
+        progress_detail = str(progress_detail).strip() or None
+
+    decision = None
+    if plan_action == "new":
+        raw_decision = data.get("decision")
+        if isinstance(raw_decision, dict):
+            try:
+                decision = agent_decision_from_dict(raw_decision, goal)
+            except Exception:
+                logger.exception("Failed to parse nested decision")
+                decision = _default_agent_decision(goal) if status != "done" else None
+        elif status != "done":
+            decision = _default_agent_decision(goal)
+
+    if plan_action == "keep":
+        decision = None
+
+    try:
+        return ReasonResult(
+            status=status,
+            plan_action=plan_action,
+            decision=decision,
+            goal_progress=float(data.get("goal_progress", 0.0)),
+            confidence=float(data.get("confidence", 0.8)),
+            reasoning=reasoning,
+            user_summary=user_summary,
+            soothe_next_action=soothe_next_action,
+            progress_detail=progress_detail,
+            evidence_summary=str(data.get("evidence_summary", "") or ""),
+            next_steps_hint=data.get("next_steps_hint"),
+        )
+    except Exception:
+        logger.exception("Invalid ReasonResult fields")
+        return ReasonResult(
+            status="replan",
+            plan_action="new",
+            decision=_default_agent_decision(goal),
+            reasoning="Invalid reason payload",
+            user_summary="Adjusting the plan after an invalid model response",
+            soothe_next_action="I'll adjust and try a cleaner plan.",
+        )
+
+
+def _parse_step_decision_text(response: str, goal: str) -> Any:
+    """Parse LLM response into AgentDecision (legacy JSON shape)."""
+    try:
+        return agent_decision_from_dict(_load_llm_json_dict(response), goal)
     except Exception:
         logger.exception("Failed to parse step decision")
-        # Return minimal default decision
-        return AgentDecision(
-            type="execute_steps",
-            steps=[
-                StepAction(
-                    id="step_0",
-                    description=goal,
-                    expected_output="Task completion",
-                )
-            ],
-            execution_mode="sequential",
-            reasoning="Default decision due to parse error",
+        return _default_agent_decision(goal)
+
+
+def build_loop_reason_prompt(goal: str, state: LoopState, context: PlanContext) -> str:
+    """Shared Reason-phase prompt for Layer 2 (SimplePlanner / ClaudePlanner)."""
+    parts = [
+        f"Goal: {goal}\n",
+        f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
+    ]
+
+    if state.step_results:
+        parts.append("\nEvidence from steps run so far in this goal:")
+        parts.extend(r.to_evidence_string() for r in state.step_results)
+
+    if context.completed_steps:
+        parts.append("\nPlanner context — completed step summaries (do not repeat work):")
+        for step in context.completed_steps:
+            status = "✓" if step.success else "✗"
+            output_preview = step.output[:100] if step.output else "no output"
+            parts.append(f"- {step.step_id}: {status} {output_preview}")
+
+    prev = state.previous_reason
+    if prev:
+        parts.append("\nYour previous assessment (for continuity):")
+        parts.append(f"- Status: {prev.status}")
+        parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
+        parts.append(f"- Summary: {prev.user_summary or prev.reasoning[:200]}")
+        if prev.next_steps_hint:
+            parts.append(f"- Hint: {prev.next_steps_hint}")
+
+    if state.current_decision and prev and prev.should_continue():
+        parts.append(
+            "\nCurrent plan is still active. If the strategy remains valid and "
+            'dependencies allow, you may set plan_action to "keep" and omit "decision" '
+            "to run the next ready steps of the existing plan. "
+            'Otherwise set plan_action to "new" and supply a full replacement decision.'
         )
+
+    if context.available_capabilities:
+        parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
+
+    parts.extend(
+        [
+            "\n\nYou are the Reason step in a ReAct loop. In ONE response you must:",
+            "\n1. Estimate how complete the goal is (goal_progress 0.0-1.0) and your confidence.",
+            '\n2. Choose status: "done" (goal fully achieved), "continue" (more work with same or adjusted plan),',
+            '   or "replan" (abandon current approach).',
+            "\n3. Write user_summary: one short, friendly sentence for the user (no jargon).",
+            "\n4. Write soothe_next_action: ONE sentence in first person as the assistant Soothe",
+            '   (use "I" / "I will" / "I\'ll"), describing the immediate next action you will take.',
+            "   If status is done, say you are finishing or presenting the result (still first person).",
+            "\n5. Optionally write progress_detail: 1-2 sentences explaining what's left or what changed.",
+            "\n6. reasoning: INTERNAL ONLY - concise technical analysis, third person or neutral,",
+            "   NOT first person, NOT shown to the user. Never put user-facing text only in reasoning.",
+            '\n7. Choose plan_action: "keep" only if an existing multi-step plan should continue unchanged;',
+            '   otherwise "new" and include a full "decision" object.',
+            '\n8. For "decision" when plan_action is "new", use the same shape as before:',
+            "   type, steps[], execution_mode, adaptive_granularity, reasoning (plan-focused).",
+            "\n9. Do NOT repeat work already shown in evidence or completed summaries.",
+            "\n\nReturn JSON:",
+            "{",
+            '  "status": "done" | "continue" | "replan",',
+            '  "goal_progress": 0.0,',
+            '  "confidence": 0.0,',
+            '  "reasoning": "internal technical analysis, not first person, not for user UI",',
+            '  "user_summary": "Short friendly line for the user",',
+            '  "soothe_next_action": "I will ... (first person, Soothe)",',
+            '  "progress_detail": "Optional extra context for the user",',
+            '  "plan_action": "keep" | "new",',
+            '  "next_steps_hint": null,',
+            '  "decision": {',
+            '    "type": "execute_steps",',
+            '    "steps": [',
+            "      {",
+            '        "description": "...",',
+            '        "tools": [],',
+            '        "subagent": null,',
+            '        "expected_output": "...",',
+            '        "dependencies": []',
+            "      }",
+            "    ],",
+            '    "execution_mode": "sequential" | "parallel" | "dependency",',
+            '    "adaptive_granularity": "atomic" | "semantic",',
+            '    "reasoning": "why these steps"',
+            "  }",
+            "}",
+            '\nWhen status is "done", you may omit "decision" or set plan_action to "keep" with no decision.',
+            '\nWhen plan_action is "keep", omit "decision" entirely.',
+        ]
+    )
+
+    return "\n".join(parts)
 
 
 _SIMPLE_PLANNER_HINT_MAP = {
@@ -425,101 +609,30 @@ class SimplePlanner:
                         step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
         return data
 
-    async def decide_steps(
+    async def reason(
         self,
         goal: str,
+        state: LoopState,
         context: PlanContext,
-        previous_judgment: Any | None = None,
     ) -> Any:
-        """Decide what steps to execute for Layer 2 goal execution (RFC-0008).
+        """Layer 2 Reason phase: assess progress and plan the next act in one LLM call."""
+        from soothe.cognition.loop_agent.schemas import ReasonResult
 
-        Uses LLM to determine:
-        - How many steps to execute (1 or N)
-        - Execution mode (parallel, sequential, dependency)
-        - Step granularity (atomic vs semantic)
+        prompt = self._build_reason_prompt(goal, state, context)
+        try:
+            response = await self._invoke(prompt)
+            return parse_reason_response_text(response, goal)
+        except Exception:
+            logger.exception("SimplePlanner.reason failed")
+            return ReasonResult(
+                status="replan",
+                plan_action="new",
+                decision=_default_agent_decision(goal),
+                reasoning="Reason call failed",
+                user_summary="Retrying with a simpler plan after a model error",
+                soothe_next_action="I'll retry with a simpler next step.",
+            )
 
-        Args:
-            goal: Goal description
-            context: Planning context
-            previous_judgment: Previous JudgeResult if replanning
-
-        Returns:
-            AgentDecision with steps to execute
-        """
-        # Build prompt for step decision
-        prompt = self._build_step_decision_prompt(goal, context, previous_judgment)
-
-        # Get LLM response
-        response = await self._invoke(prompt)
-
-        # Parse structured output
-        return self._parse_step_decision(response, goal)
-
-    def _build_step_decision_prompt(
-        self,
-        goal: str,
-        context: PlanContext,
-        previous_judgment: Any | None,
-    ) -> str:
-        """Build prompt for step decision."""
-        parts = [f"Goal: {goal}\n"]
-
-        # Include completed steps to avoid repetitive planning
-        if context.completed_steps:
-            parts.append("\nAlready executed steps (DO NOT repeat these):")
-            for step in context.completed_steps:
-                status = "✓" if step.success else "✗"
-                output_preview = step.output[:100] if step.output else "no output"
-                parts.append(f"- {step.step_id}: {status} {output_preview}")
-
-        if previous_judgment:
-            parts.append("\nPrevious judgment:")
-            parts.append(f"- Status: {previous_judgment.status}")
-            parts.append(f"- Progress: {previous_judgment.goal_progress:.0%}")
-            parts.append(f"- Reasoning: {previous_judgment.reasoning}")
-            if previous_judgment.next_steps_hint:
-                parts.append(f"- Hint: {previous_judgment.next_steps_hint}")
-
-        if context.available_capabilities:
-            parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
-
-        parts.extend(
-            [
-                "\n\nDecide what steps to execute next:",
-                "\n**IMPORTANT**: Do NOT repeat steps that were already executed.",
-                " Look at 'Already executed steps' above and plan NEW steps that",
-                " build on what was learned/done.\n",
-                "\n1. Choose granularity: 'atomic' (many small steps) or 'semantic' (fewer large steps)",
-                "   - Use 'atomic' for uncertain/exploratory goals",
-                "   - Use 'semantic' for clear goals with well-known procedures",
-                "\n2. Choose execution mode:",
-                "   - 'parallel': Execute steps concurrently (faster, independent steps)",
-                "   - 'sequential': Execute steps one-by-one (safer, dependent steps)",
-                "   - 'dependency': Use step dependencies for DAG execution",
-                "\n3. Decide how many steps to execute now (1 or more):",
-                "   - Single step: Focused execution, clear feedback",
-                "   - Multiple steps: Efficient batching, parallel work",
-                "\nReturn JSON:",
-                "{",
-                '  "type": "execute_steps",',
-                '  "steps": [',
-                "    {",
-                '      "description": "What this step does",',
-                '      "tools": ["optional", "list"],',
-                '      "subagent": "optional subagent name",',
-                '      "expected_output": "What we expect",',
-                '      "dependencies": []',
-                "    }",
-                "  ],",
-                '  "execution_mode": "parallel" | "sequential" | "dependency",',
-                '  "adaptive_granularity": "atomic" | "semantic",',
-                '  "reasoning": "Why these steps now"',
-                "}",
-            ]
-        )
-
-        return "\n".join(parts)
-
-    def _parse_step_decision(self, response: str, goal: str) -> Any:
-        """Parse LLM response into AgentDecision."""
-        return _parse_step_decision_text(response, goal)
+    def _build_reason_prompt(self, goal: str, state: LoopState, context: PlanContext) -> str:
+        """Build unified Reason prompt (assessment + next steps)."""
+        return build_loop_reason_prompt(goal, state, context)

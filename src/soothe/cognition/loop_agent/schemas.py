@@ -85,33 +85,53 @@ class AgentDecision(BaseModel):
         return ready
 
 
-class JudgeResult(BaseModel):
-    """LLM's judgment after evaluating goal progress.
+class ReasonResult(BaseModel):
+    """Single Reason-phase output: assessment plus optional new plan (ReAct Layer 2).
 
     Attributes:
-        status: "continue", "replan", or "done"
-        evidence_summary: Accumulated from all step results
-        goal_progress: Progress toward goal (0.0-1.0)
-        confidence: Judge's confidence (0.0-1.0)
-        reasoning: Why this judgment was made
-        next_steps_hint: Hint for next iteration (optional)
-        full_output: Full output for final response (when goal is done)
+        status: Whether to finish, continue current plan, or replan.
+        goal_progress: Estimated progress toward the goal (0.0-1.0).
+        confidence: Model confidence in the assessment (0.0-1.0).
+        reasoning: Internal analysis for tooling/LLM context only - not shown in CLI/TUI.
+        user_summary: Short headline for user-facing progress (CLI/TUI).
+        soothe_next_action: One first-person sentence as Soothe (e.g. I will / I'll) for the
+            immediate next action; primary line in CLI/TUI. Empty when omitted by the model.
+        progress_detail: Optional friendly explanation of distance-to-goal.
+        plan_action: Reuse the in-flight ``AgentDecision`` or supply a new one.
+        decision: New steps to run when ``plan_action`` is ``new``; None when ``keep``.
+        evidence_summary: Accumulated evidence text (often filled after parsing).
+        next_steps_hint: Optional hint for the next cycle.
+        full_output: Final user-visible answer when status is ``done``.
     """
 
     status: Literal["continue", "replan", "done"]
-    evidence_summary: str
-    goal_progress: float = Field(ge=0.0, le=1.0)
+    evidence_summary: str = ""
+    goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
-    reasoning: str
+    reasoning: str = ""
+    user_summary: str = ""
+    soothe_next_action: str = ""
+    progress_detail: str | None = None
+    plan_action: Literal["keep", "new"] = "new"
+    decision: AgentDecision | None = None
     next_steps_hint: str | None = None
     full_output: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_plan_action(self) -> ReasonResult:
+        """Ensure keep/new and decision align when status requires execution."""
+        if self.plan_action == "keep" and self.decision is not None:
+            raise ValueError("plan_action 'keep' requires decision to be None")
+        if self.status != "done" and self.plan_action == "new" and self.decision is None:
+            raise ValueError("plan_action 'new' requires decision when status is not done")
+        return self
 
     def should_continue(self) -> bool:
         """Check if loop should continue with current strategy."""
         return self.status == "continue"
 
     def should_replan(self) -> bool:
-        """Check if loop should create new strategy."""
+        """Check if loop should replace the current plan."""
         return self.status == "replan"
 
     def is_done(self) -> bool:
@@ -171,7 +191,7 @@ class LoopState(BaseModel):
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
         completed_step_ids: Set of completed step IDs
-        previous_judgment: Previous JUDGE phase result
+        previous_reason: Previous Reason phase result
         step_results: All step results from execution
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
@@ -186,7 +206,7 @@ class LoopState(BaseModel):
 
     current_decision: AgentDecision | None = None
     completed_step_ids: set[str] = Field(default_factory=set)
-    previous_judgment: JudgeResult | None = None
+    previous_reason: ReasonResult | None = None
     step_results: list[StepResult] = []
     evidence_summary: str = ""
 

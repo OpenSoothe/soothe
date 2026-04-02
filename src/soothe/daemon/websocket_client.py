@@ -143,8 +143,6 @@ class WebSocketClient:
         """
         return self._connected
 
-    # Convenience methods matching DaemonClient interface
-
     async def send_input(
         self,
         text: str,

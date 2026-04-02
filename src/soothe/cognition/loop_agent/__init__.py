@@ -3,17 +3,17 @@
 from .loop_agent import LoopAgent
 from .schemas import (
     AgentDecision,
-    JudgeResult,
     LoopState,
+    ReasonResult,
     StepAction,
     StepResult,
 )
 
 __all__ = [
     "AgentDecision",
-    "JudgeResult",
     "LoopAgent",
     "LoopState",
+    "ReasonResult",
     "StepAction",
     "StepResult",
 ]

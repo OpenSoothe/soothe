@@ -109,17 +109,10 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
 ProgressCategory = VerbosityTier
 
 
-def classify_custom_event(namespace: tuple, data: dict) -> VerbosityTier:
-    """Deprecated: Use `classify_event_to_tier` instead."""
-    event_type = str(data.get("type", ""))
-    return classify_event_to_tier(event_type, namespace)
-
-
 __all__ = [
     "ProgressCategory",
     "VerbosityLevel",
     "VerbosityTier",
-    "classify_custom_event",
     "classify_event_to_tier",
     "should_show",
 ]
