@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
+from textual.geometry import Size
 from textual.reactive import reactive
 from textual.widgets import RichLog, Static, TextArea
 
@@ -19,31 +20,48 @@ class ConversationPanel(RichLog):
     Supports Claude Code-style continuous event stream with colored dot prefixes.
     """
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Create panel and initialize streaming line bookkeeping."""
+        super().__init__(*args, **kwargs)
+        # Index in ``lines`` where the last ``append_entry`` / streaming block began.
+        # RichLog stores one Strip per terminal row; a single write() may add many rows.
+        self._last_entry_line_start: int = 0
+
     def append_entry(self, renderable: RenderableType) -> None:
         """Append a new entry to the conversation log.
 
         Args:
             renderable: Rich renderable content to append (Text, Markdown, etc.).
         """
+        if self._size_known:
+            self._last_entry_line_start = len(self.lines)
         self.write(renderable)
         self.scroll_end(animate=False)
 
     def update_last_entry(self, renderable: RenderableType) -> None:
         """Update the last entry in the conversation log (for streaming updates).
 
-        Removes the last line and writes the new renderable.
-        Useful for live-updating streaming assistant text.
+        Removes every terminal row belonging to the last logical entry, then writes
+        the new renderable. Required because ``RichLog.write`` expands one renderable
+        to multiple internal lines.
 
         Args:
             renderable: Rich renderable content to replace the last entry with.
         """
-        # Access internal lines list to remove last entry
-        if self.lines:
+        start = min(self._last_entry_line_start, len(self.lines))
+        while len(self.lines) > start:
             self.lines.pop()
-            # Trigger refresh after modifying lines
-            self.refresh()
+        self._line_cache.clear()
+        self._widest_line_width = max((s.cell_length for s in self.lines), default=0)
+        self.virtual_size = Size(self._widest_line_width, len(self.lines))
+        self.refresh()
         self.write(renderable)
         self.scroll_end(animate=False)
+
+    def clear(self) -> RichLog:
+        """Clear log and streaming entry bookkeeping."""
+        self._last_entry_line_start = 0
+        return super().clear()
 
     def append_separator(self) -> None:
         """Append a blank line separator between conversation turns."""
@@ -223,8 +241,10 @@ class ChatInput(TextArea):
                 await app.submit_chat_input()
             return
 
-        # Up arrow for history navigation (newest first, then older)
-        if event.key == "up" and self.cursor_location[0] == 0:
+        # Up arrow for history navigation (newest first, then older).
+        # Must stop propagation: TextArea binds "up" to cursor_up; if the event bubbles,
+        # the binding runs after we set ``text`` and breaks history recall.
+        if event.key == "up" and self.cursor_at_first_line:
             event.prevent_default()
             if not self._history:
                 return
@@ -238,11 +258,11 @@ class ChatInput(TextArea):
             # Map index to reversed history: 0 = newest, 1 = second newest, etc.
             self.text = self._history[-(self._history_index + 1)]
             self.cursor_location = (0, 0)
+            event.stop()
             return
 
         # Down arrow for history navigation (newer messages, then back to current)
-        line_count = len(self.text.split("\n"))
-        if event.key == "down" and self.cursor_location[0] == line_count - 1:
+        if event.key == "down" and self.cursor_at_last_line:
             event.prevent_default()
             if self._history_index == -1:
                 # No history active, do nothing
@@ -256,6 +276,7 @@ class ChatInput(TextArea):
                 self._history_index = -1
                 self.text = self._saved_input
             self.cursor_location = (0, 0)
+            event.stop()
             return
 
         # Let parent TextArea handle all other keys

@@ -178,6 +178,23 @@ class WebSocketClient:
         """
         await self.send({"type": "command", "cmd": cmd})
 
+    async def send_thread_list(
+        self,
+        filter_dict: dict[str, Any] | None = None,
+        *,
+        include_stats: bool = False,
+        include_last_message: bool = True,
+    ) -> None:
+        """Request persisted threads (RFC-0017 ``thread_list`` / ``thread_list_response``)."""
+        payload: dict[str, Any] = {
+            "type": "thread_list",
+            "include_stats": include_stats,
+            "include_last_message": include_last_message,
+        }
+        if filter_dict:
+            payload["filter"] = filter_dict
+        await self.send(payload)
+
     async def send_detach(self) -> None:
         """Notify the daemon that this client is detaching."""
         await self.send({"type": "detach"})

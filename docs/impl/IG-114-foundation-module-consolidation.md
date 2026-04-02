@@ -8,7 +8,7 @@
 
 ## Verification
 
-`./scripts/verify_finally.sh`
+`./scripts/verify_finally.sh` (includes `scripts/check_module_import_boundaries.sh`).
 
 ## Status
 

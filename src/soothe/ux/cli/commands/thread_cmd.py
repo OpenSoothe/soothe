@@ -19,6 +19,36 @@ _THREAD_ID_DISPLAY_WIDTH = 20  # Max width for thread IDs
 _THREAD_ID_TRUNCATE_KEEP = 17  # Leave room for "..."
 
 
+def _thread_status_matches_cli_filter(thread_status: str | None, status_filter: str | None) -> bool:
+    """Match CLI ``--status`` against persisted thread status strings."""
+    if not status_filter:
+        return True
+    s = (thread_status or "").lower()
+    f = status_filter.lower()
+    if f == "active":
+        return s in ("idle", "running", "active")
+    return s == f
+
+
+def _echo_thread_table(rows: list[dict[str, object]]) -> None:
+    """Print thread table rows (from ``model_dump`` JSON or API dicts)."""
+    if not rows:
+        typer.echo("No threads.")
+        return
+    typer.echo(f"{'ID':<20}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
+    typer.echo("─" * 104)
+    for raw in rows:
+        tid_raw = str(raw.get("thread_id", ""))
+        tid = tid_raw if len(tid_raw) <= _THREAD_ID_DISPLAY_WIDTH else tid_raw[:_THREAD_ID_TRUNCATE_KEEP] + "..."
+        t_status = str(raw.get("status", ""))
+        created = str(raw.get("created_at", ""))[:19]
+        last_msg = str(raw.get("updated_at", ""))[:19]
+        last_human = raw.get("last_human_message")
+        topic_raw = str(last_human) if last_human is not None else ""
+        topic = topic_raw[:_TOPIC_TRUNCATE_KEEP] + "..." if len(topic_raw) > _TOPIC_DISPLAY_LIMIT else topic_raw
+        typer.echo(f"{tid:<20}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
+
+
 def thread_list(
     config: Annotated[
         str | None,
@@ -54,7 +84,12 @@ def thread_list(
 
 
 def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = None, limit: int | None = None) -> None:
-    """List threads by connecting to a running daemon via WebSocket."""
+    """List threads by connecting to a running daemon via WebSocket.
+
+    Uses the ``thread_list`` / ``thread_list_response`` protocol. The legacy path
+    read ``command_response`` but exited on the first ``status`` event, which is
+    always sent during the WebSocket handshake (idle), so the table never printed.
+    """
     from soothe.daemon import WebSocketClient
 
     host = cfg.daemon.transports.websocket.host
@@ -65,32 +100,37 @@ def _thread_list_via_daemon(cfg: SootheConfig, *, status_filter: str | None = No
         client = WebSocketClient(url=ws_url)
         try:
             await client.connect()
-            command = "/thread list"
-            if limit:
-                command += f" --limit {limit}"
-            await client.send_command(command)
-            # Read command response
-            while True:
-                event = await client.read_event()
-                if not event:
-                    break
-                event_type = event.get("type", "")
-                if event_type == "command_response":
-                    content = event.get("content", "")
-                    if content.strip():
-                        # Filter by status if needed
-                        if status_filter:
-                            lines = content.split("\n")
-                            for line in lines:
-                                if status_filter in line or "ID" in line or "──" in line:
-                                    typer.echo(line)
-                        else:
-                            typer.echo(content.strip())
-                    break  # Always break after command_response, even if empty
-                if event_type == "status":
-                    state = event.get("state", "")
-                    if state in ("idle", "stopped"):
-                        break
+            filter_payload: dict[str, str] | None = None
+            if status_filter and status_filter.lower() != "active":
+                sf = status_filter.lower()
+                if sf in ("archived", "suspended", "idle", "running", "error"):
+                    filter_payload = {"status": sf}
+
+            await client.send_thread_list(filter_payload, include_last_message=True)
+
+            async with asyncio.timeout(60.0):
+                while True:
+                    event = await client.read_event()
+                    if not event:
+                        typer.echo("No response from daemon.", err=True)
+                        return
+                    if event.get("type") != "thread_list_response":
+                        continue
+                    threads = event.get("threads", [])
+                    if not isinstance(threads, list):
+                        threads = []
+                    filtered = [
+                        t
+                        for t in threads
+                        if isinstance(t, dict) and _thread_status_matches_cli_filter(t.get("status"), status_filter)
+                    ]
+                    filtered.sort(key=lambda x: str(x.get("updated_at", "")), reverse=True)
+                    if limit is not None and limit > 0:
+                        filtered = filtered[:limit]
+                    _echo_thread_table(filtered)
+                    return
+        except TimeoutError:
+            typer.echo("Timed out waiting for thread list from daemon.", err=True)
         finally:
             await client.close()
 
@@ -109,35 +149,12 @@ def _thread_list_direct(cfg: SootheConfig, *, status_filter: str | None = None, 
             manager = ThreadContextManager(runner._durability, cfg, getattr(runner, "_context", None))
             threads = await manager.list_threads(include_last_message=True)
             if status_filter:
-                threads = [t for t in threads if t.status == status_filter]
-            # Apply limit (show most recent N threads)
-            if limit:
-                threads = threads[:limit]
-            if not threads:
-                typer.echo("No threads.")
-                return
-            # Sort by updated_at in descending order (most recent first)
+                threads = [t for t in threads if _thread_status_matches_cli_filter(t.status, status_filter)]
             threads.sort(key=lambda x: x.updated_at, reverse=True)
-            # Print header - use 20-char ID width (fits 12-char new IDs and truncated old UUIDs)
-            typer.echo(f"{'ID':<20}  {'Status':<10}  {'Created':<19}  {'Last Message':<19}  {'Topic':<30}")
-            typer.echo("─" * 104)
-            for t in threads:
-                # Truncate thread IDs
-                tid = (
-                    t.thread_id
-                    if len(t.thread_id) <= _THREAD_ID_DISPLAY_WIDTH
-                    else t.thread_id[:_THREAD_ID_TRUNCATE_KEEP] + "..."
-                )
-                t_status = t.status
-                created = str(t.created_at)[:19]
-                last_msg = str(t.updated_at)[:19]
-                # Truncate last human message
-                topic = (
-                    (t.last_human_message or "")[:_TOPIC_TRUNCATE_KEEP] + "..."
-                    if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT
-                    else (t.last_human_message or "")
-                )
-                typer.echo(f"{tid:<20}  {t_status:<10}  {created:<19}  {last_msg:<19}  {topic:<30}")
+            if limit is not None and limit > 0:
+                threads = threads[:limit]
+            rows = [t.model_dump(mode="json") for t in threads]
+            _echo_thread_table(rows)
         finally:
             await runner.cleanup()
 

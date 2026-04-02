@@ -88,44 +88,26 @@ async def test_show_context_calls_await() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_thread_list_breaks_on_empty_response() -> None:
-    """Test that thread list doesn't hang on empty command response."""
-    import asyncio
-
+def test_thread_list_via_daemon_uses_thread_list_protocol() -> None:
+    """Daemon-backed list must not exit on handshake ``status`` idle (see IG / thread_cmd)."""
     from soothe.ux.cli.commands.thread_cmd import _thread_list_via_daemon
 
-    # Track if we complete in reasonable time
-    completed = False
-
-    async def mock_daemon_interaction():
-        """Simulate daemon that returns empty response."""
-        nonlocal completed
-        # We can't easily mock the full daemon, but we verified the fix
-        # by checking the code structure
-        completed = True
-
-    # The fix is that 'break' is now outside the 'if content.strip():' block
-    # This means it always breaks after command_response, even if empty
-    # We verify this by checking the source code
-    import ast
-
     source = inspect.getsource(_thread_list_via_daemon)
-    tree = ast.parse(source)
+    assert "thread_list_response" in source
+    assert "send_thread_list" in source
+    assert "asyncio.timeout" in source
+    # Regression: first WS message is often status idle; breaking there printed nothing.
+    assert 'if state in ("idle", "stopped")' not in source
 
-    # Find the _list function and check break statement placement
-    found_correct_break = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_list":
-            # Look for the if event_type == "command_response" block
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.If):
-                    # Check if there's a break at the right level
-                    for child in ast.iter_child_nodes(stmt):
-                        if isinstance(child, ast.Break):
-                            found_correct_break = True
 
-    assert found_correct_break, "Break should be present in command_response handler"
+def test_thread_status_matches_cli_filter() -> None:
+    from soothe.ux.cli.commands.thread_cmd import _thread_status_matches_cli_filter
+
+    assert _thread_status_matches_cli_filter("idle", None) is True
+    assert _thread_status_matches_cli_filter("idle", "active") is True
+    assert _thread_status_matches_cli_filter("running", "active") is True
+    assert _thread_status_matches_cli_filter("archived", "active") is False
+    assert _thread_status_matches_cli_filter("archived", "archived") is True
 
 
 # ---------------------------------------------------------------------------

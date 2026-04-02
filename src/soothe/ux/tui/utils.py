@@ -6,6 +6,8 @@ used by the TUI. Event processing is handled by EventProcessor (RFC-0019).
 
 from __future__ import annotations
 
+from rich import box
+from rich.panel import Panel
 from rich.text import Text
 
 # Claude Code-style dot prefix colors for different event types
@@ -278,6 +280,84 @@ def make_tool_block(
         tool_text.append(" ⏳", style="dim yellow")
 
     return make_dot_line(color, tool_text, output, icon=icon_category, unicode_supported=unicode_supported)
+
+
+# Minimum segment length when ellipsizing paths (PLR2004).
+_MIN_PATH_SEGMENT_LEN = 4
+
+# Left column width for welcome panel key/value rows.
+_WELCOME_LABEL_WIDTH = 18
+_WELCOME_RULE_WIDTH = 44
+
+# Soothe wordmark (Unicode box drawing) shown on TUI startup.
+_WELCOME_LOGO_LINES: tuple[str, ...] = (
+    "     ╭────────╮",
+    "   ╭╯          ╰╮",
+    "  │              │",
+    "  │              │",
+    "   ╰╮          ╭╯",
+    "     ╰───▶────╯",
+)
+
+
+def shorten_display_path(path: str, max_len: int = 76) -> str:
+    """Ellipsize a long filesystem path for single-line display.
+
+    Args:
+        path: Full path string.
+        max_len: Maximum character length before shortening.
+
+    Returns:
+        Original path or head + "..." + tail.
+    """
+    if len(path) <= max_len:
+        return path
+    head = max_len // 2 - 2
+    tail = max_len - head - 3
+    if head < _MIN_PATH_SEGMENT_LEN or tail < _MIN_PATH_SEGMENT_LEN:
+        return path[: max_len - 3] + "..."
+    return path[:head] + "..." + path[-tail:]
+
+
+def make_welcome_banner(*, workspace: str, provider: str, model_name: str) -> Panel:
+    """Build a bordered welcome panel: logo, workspace, provider, and model.
+
+    Args:
+        workspace: Current working directory (or client workspace) as a string.
+        provider: Resolved LLM provider name (router segment before ``:``).
+        model_name: Resolved model id (segment after ``:``), may be empty.
+
+    Returns:
+        Rich ``Panel`` suitable for ``ConversationPanel.append_entry``.
+    """
+    stripped_model = model_name.strip()
+    display_model = stripped_model or "(default)"
+    ws = shorten_display_path(workspace)
+    lw = _WELCOME_LABEL_WIDTH
+
+    inner = Text()
+    for line in _WELCOME_LOGO_LINES:
+        inner.append(line + "\n", style="dim cyan")
+    inner.append("\n")
+    inner.append("─" * _WELCOME_RULE_WIDTH + "\n", style="dim")
+    inner.append(f"{'Workspace':<{lw}}", style="dim")
+    inner.append(ws + "\n", style="bright_white")
+    inner.append(f"{'Model provider':<{lw}}", style="dim")
+    inner.append(provider + "\n", style="bright_white")
+    inner.append(f"{'Model':<{lw}}", style="dim")
+    inner.append(display_model + "\n", style="bright_white")
+
+    return Panel(
+        inner,
+        title=Text("Welcome aboard", style="bold cyan"),
+        title_align="center",
+        subtitle=Text("Soothe · type a message or /help · ↑↓ for input history", style="dim italic"),
+        subtitle_align="center",
+        border_style="dim cyan",
+        box=box.ROUNDED,
+        padding=(0, 1),
+        highlight=True,
+    )
 
 
 def make_status_line(text: str, elapsed: str = "") -> Text:

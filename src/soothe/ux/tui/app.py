@@ -40,7 +40,7 @@ from soothe.ux.tui.commands import parse_autonomous_command
 from soothe.ux.tui.modals import ThreadSelectionModal
 from soothe.ux.tui.renderer import TuiRenderer
 from soothe.ux.tui.state import TuiState
-from soothe.ux.tui.utils import DOT_COLORS, make_dot_line, make_user_prompt_line
+from soothe.ux.tui.utils import DOT_COLORS, make_dot_line, make_user_prompt_line, make_welcome_banner
 from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTree
 
 logger = logging.getLogger(__name__)
@@ -199,6 +199,9 @@ class SootheApp(App):
             self._update_status_bar("Idle")
 
         self._refresh_plan()
+        # Welcome banner is shown after daemon bootstrap (see _apply_thread_status):
+        # on_mount runs before RichLog knows its size, so writes go to _deferred_renders;
+        # new_thread then calls panel.clear(), which drops deferred content and removes the banner.
         # Initialize RFC-0019 unified event processor
         self._renderer = TuiRenderer(
             on_panel_write=self._on_panel_write,
@@ -214,6 +217,20 @@ class SootheApp(App):
             # Wait a brief moment for connection to establish
             await asyncio.sleep(0.5)
             await self.submit_chat_input_with_text(self._initial_prompt)
+
+    def _show_welcome_banner(self) -> None:
+        """Render startup banner with logo, cwd, and resolved default model."""
+        try:
+            workspace = str(Path.cwd())
+            resolved = self._config.resolve_model("default")
+            if ":" in resolved:
+                provider, model_name = resolved.split(":", 1)
+            else:
+                provider, model_name = resolved, ""
+            panel = self.query_one("#conversation", ConversationPanel)
+            panel.append_entry(make_welcome_banner(workspace=workspace, provider=provider, model_name=model_name))
+        except Exception:
+            logger.debug("Failed to show welcome banner", exc_info=True)
 
     def _on_panel_write(self, renderable: Any) -> None:
         """Append a renderable to the conversation panel.
@@ -251,6 +268,7 @@ class SootheApp(App):
             # Clear existing content before showing history
             panel.clear()
 
+            self._show_welcome_banner()
             # Add header to indicate this is resumed conversation
             self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Resuming conversation..."))
 
@@ -294,6 +312,8 @@ class SootheApp(App):
             with contextlib.suppress(Exception):
                 panel = self.query_one("#conversation", ConversationPanel)
                 panel.clear()
+            # After clear: layout/size are known, so RichLog persists the banner (unlike on_mount).
+            self._show_welcome_banner()
         elif current_tid and (
             current_tid != previous_thread_id or thread_resumed or current_tid != self._history_loaded_thread_id
         ):
@@ -315,6 +335,11 @@ class SootheApp(App):
                 conversation_history = event.get("conversation_history", [])
                 if conversation_history:
                     self._display_conversation_history(conversation_history)
+                else:
+                    with contextlib.suppress(Exception):
+                        panel = self.query_one("#conversation", ConversationPanel)
+                        panel.clear()
+                    self._show_welcome_banner()
 
         if state_str == "running":
             self._was_running = True
@@ -440,8 +465,8 @@ class SootheApp(App):
             if event.get("type") == "command_response":
                 content = event.get("content", "")
                 if content:
-                    # Display command output in panel
-                    self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], content[:200]))
+                    # Full text (e.g. /help table); do not truncate — RichLog scrolls.
+                    self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], content.rstrip("\n")))
 
             # Handle clear event
             if event.get("type") == "clear":

@@ -12,7 +12,7 @@ Eliminate all `soothe.ux` imports from `soothe.daemon`. Shared text filtering, A
 - New `soothe/slash_commands/`: moved from `ux/tui/commands.py`; daemon `_handlers` imports from here.
 - `daemon/query_engine.py`: imports from `soothe.foundation` only (for text helpers).
 - `daemon/health/__init__.py`: docstring examples without UX.
-- Optional: `scripts/check_daemon_no_ux_imports.sh` for regression guard.
+- Regression guard: `scripts/check_module_import_boundaries.sh` (wired into `verify_finally.sh`).
 
 ## Verification
 
