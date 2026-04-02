@@ -37,3 +37,32 @@ def test_build_loop_reason_prompt_omits_workspace_rules_without_workspace() -> N
     ctx = PlanContext(workspace=None)
     text = build_loop_reason_prompt("hi", state, ctx)
     assert "<SOOTHE_REASON_WORKSPACE_RULES>" not in text
+
+
+def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
+    state = LoopState(goal="g", thread_id="t1", max_iterations=8)
+    ctx = PlanContext(
+        workspace=None,
+        working_memory_excerpt="[step_0] ✓ listed src/",
+    )
+    text = build_loop_reason_prompt("g", state, ctx)
+    assert "<SOOTHE_LOOP_WORKING_MEMORY>" in text
+    assert "listed src/" in text
+
+
+def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
+    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+
+    state = LoopState(goal="g", thread_id="t1", max_iterations=8)
+    state.current_decision = AgentDecision(
+        type="execute_steps",
+        steps=[
+            StepAction(id="a", description="x", expected_output="o"),
+            StepAction(id="b", description="y", expected_output="o"),
+        ],
+        execution_mode="sequential",
+        reasoning="r",
+    )
+    state.completed_step_ids = {"a"}
+    text = build_loop_reason_prompt("g", state, PlanContext())
+    assert "PLAN_CONTINUE_POLICY" in text

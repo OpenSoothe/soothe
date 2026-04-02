@@ -28,20 +28,22 @@ class Executor:
     """ACT phase: Execute steps via Layer 1 CoreAgent.
 
     This component handles step execution with three modes:
-    - parallel: Execute all ready steps concurrently with isolated threads
-    - sequential: Execute steps one at a time in one agent turn
-    - dependency: Execute steps respecting dependency DAG
+    - parallel: Execute ready steps concurrently with isolated threads (chunked)
+    - sequential: Execute ready steps in combined LLM turns (chunked)
+    - dependency: Execute steps respecting dependency DAG (chunked parallel waves)
 
     Events from CoreAgent are propagated through for upstream consumption.
     """
 
-    def __init__(self, core_agent: CoreAgent) -> None:
+    def __init__(self, core_agent: CoreAgent, *, max_parallel_steps: int = 1) -> None:
         """Initialize ACT phase.
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution
+            max_parallel_steps: Max steps per wave; ``0`` means unlimited (RFC-201 / concurrency).
         """
         self.core_agent = core_agent
+        self._max_parallel_steps = max_parallel_steps
 
     async def execute(
         self,
@@ -67,16 +69,17 @@ class Executor:
             return
 
         logger.info(
-            "Executing %d steps in mode: %s (streaming should be immediate for sequential, batched for parallel)",
+            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
             len(ready_steps),
             decision.execution_mode,
+            self._max_parallel_steps,
         )
 
         if decision.execution_mode == "parallel":
-            async for item in self._execute_parallel(ready_steps, state):
+            async for item in self._execute_parallel_waves(ready_steps, state):
                 yield item
         elif decision.execution_mode == "sequential":
-            async for item in self._execute_sequential(ready_steps, state):
+            async for item in self._execute_sequential_waves(ready_steps, state):
                 yield item
         elif decision.execution_mode == "dependency":
             async for item in self._execute_dependency(decision, state):
@@ -84,6 +87,77 @@ class Executor:
         else:
             msg = f"Unknown execution mode: {decision.execution_mode}"
             raise ValueError(msg)
+
+    def _wave_size(self, remaining: int) -> int:
+        """Steps to schedule in the next wave (``0`` config = unlimited)."""
+        if remaining <= 0:
+            return 0
+        if self._max_parallel_steps <= 0:
+            return remaining
+        return min(self._max_parallel_steps, remaining)
+
+    async def _execute_parallel_waves(
+        self,
+        ready_steps: list,
+        state: LoopState,
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+        """Run parallel mode in waves bounded by ``max_parallel_steps``."""
+        idx = 0
+        n = len(ready_steps)
+        while idx < n:
+            w = self._wave_size(n - idx)
+            chunk = ready_steps[idx : idx + w]
+            idx += w
+            async for item in self._execute_parallel(chunk, state):
+                yield item
+
+    def _step_results_for_chunk(
+        self,
+        steps: list[StepAction],
+        *,
+        success: bool,
+        output: str | None,
+        error: str | None,
+        error_type: str | None,
+        duration_ms: int,
+        tool_call_count: int,
+        thread_id: str,
+    ) -> list[StepResult]:
+        """One ``StepResult`` per step in a combined sequential turn (scheme B)."""
+        n = len(steps)
+        if n == 0:
+            return []
+        base, rem = divmod(max(duration_ms, 0), n)
+        durations = [base + (1 if i < rem else 0) for i in range(n)]
+        tool_counts = [0] * n
+        if n > 0:
+            tool_counts[0] = tool_call_count
+        results: list[StepResult] = []
+        for i, step in enumerate(steps):
+            if success:
+                results.append(
+                    StepResult(
+                        step_id=step.id,
+                        success=True,
+                        output=output,
+                        duration_ms=durations[i],
+                        thread_id=thread_id,
+                        tool_call_count=tool_counts[i],
+                    )
+                )
+            else:
+                results.append(
+                    StepResult(
+                        step_id=step.id,
+                        success=False,
+                        error=error or "",
+                        error_type=error_type,
+                        duration_ms=durations[i],
+                        thread_id=thread_id,
+                        tool_call_count=0,
+                    )
+                )
+        return results
 
     async def _execute_parallel(
         self,
@@ -148,19 +222,34 @@ class Executor:
                 # Then yield the result
                 yield step_result
 
-    async def _execute_sequential(
+    async def _execute_sequential_waves(
+        self,
+        ready_steps: list,
+        state: LoopState,
+    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+        """Run sequential mode in waves; each wave yields one result per step (scheme B)."""
+        idx = 0
+        n = len(ready_steps)
+        while idx < n:
+            w = self._wave_size(n - idx)
+            chunk = ready_steps[idx : idx + w]
+            idx += w
+            async for item in self._execute_sequential_chunk(chunk, state):
+                yield item
+
+    async def _execute_sequential_chunk(
         self,
         steps: list,
         state: LoopState,
     ) -> AsyncGenerator[StreamEvent | StepResult, None]:
-        """Execute steps sequentially in one agent turn.
+        """Execute a wave of steps in one Layer 1 turn; credit every step in the wave.
 
         Args:
-            steps: Steps to execute
+            steps: Non-empty slice of ready steps
             state: Loop state
 
         Yields:
-            StreamEvent during execution (immediate streaming), then StepResult.
+            StreamEvent during execution, then one StepResult per step in ``steps``.
         """
         from langchain_core.messages import HumanMessage
 
@@ -180,11 +269,9 @@ class Executor:
                 subgraphs=True,
             )
 
-            # Stream events immediately as they arrive
             tool_call_count = 0
             async for final_output, event, tc_count in self._stream_and_collect(stream):
                 if event is not None:
-                    # Yield events immediately for real-time display
                     event_count += 1
                     yield event
                 elif final_output is not None:
@@ -194,36 +281,44 @@ class Executor:
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Sequential execution completed in %dms - output length: %d, events yielded: %d, tool_calls: %d",
+                "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d",
+                len(steps),
                 duration_ms,
                 len(output),
                 event_count,
                 tool_call_count,
             )
 
-            yield StepResult(
-                step_id=steps[0].id,
+            for sr in self._step_results_for_chunk(
+                steps,
                 success=True,
                 output=output,
+                error=None,
+                error_type=None,
                 duration_ms=duration_ms,
-                thread_id=state.thread_id,
                 tool_call_count=tool_call_count,
-            )
+                thread_id=state.thread_id,
+            ):
+                yield sr
 
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
             logger.exception("Sequential execution failed")
 
             error_msg = self._extract_error_message(e, "Sequential execution failed")
+            et = self._classify_error_severity(e)
 
-            yield StepResult(
-                step_id=steps[0].id,
+            for sr in self._step_results_for_chunk(
+                steps,
                 success=False,
+                output=None,
                 error=error_msg,
-                error_type=self._classify_error_severity(e),
+                error_type=et,
                 duration_ms=duration_ms,
+                tool_call_count=0,
                 thread_id=state.thread_id,
-            )
+            ):
+                yield sr
 
     async def _execute_dependency(
         self,
@@ -239,9 +334,23 @@ class Executor:
         Yields:
             StreamEvent during execution, then StepResult.
         """
-        ready_steps = decision.get_ready_steps(state.completed_step_ids)
-        async for item in self._execute_parallel(ready_steps, state):
-            yield item
+        local_done = set(state.completed_step_ids)
+        failed_sticky: set[str] = set()
+
+        while True:
+            ready_all = decision.get_ready_steps(local_done)
+            ready = [s for s in ready_all if s.id not in failed_sticky]
+            if not ready:
+                break
+            w = self._wave_size(len(ready))
+            chunk = ready[:w]
+            async for item in self._execute_parallel(chunk, state):
+                yield item
+                if isinstance(item, StepResult):
+                    if item.success:
+                        local_done.add(item.step_id)
+                    else:
+                        failed_sticky.add(item.step_id)
 
     async def _execute_step_collecting_events(
         self,

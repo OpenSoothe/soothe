@@ -10,6 +10,7 @@ from soothe.backends.planning.simple import _default_agent_decision
 from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.reason import ReasonPhase
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
+from soothe.cognition.loop_working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
 if TYPE_CHECKING:
@@ -52,7 +53,10 @@ class LoopAgent:
         self.config = config
 
         self.reason_phase = ReasonPhase(loop_reasoner)
-        self.executor = Executor(core_agent)
+        self.executor = Executor(
+            core_agent,
+            max_parallel_steps=config.execution.concurrency.max_parallel_steps,
+        )
 
     async def run(
         self,
@@ -115,6 +119,13 @@ class LoopAgent:
             git_status=git_status,
             max_iterations=max_iterations,
         )
+        wm_cfg = self.config.agentic.working_memory
+        if wm_cfg.enabled:
+            state.working_memory = LoopWorkingMemory(
+                max_inline_chars=wm_cfg.max_inline_chars,
+                max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
+                spill_subdir=wm_cfg.spill_subdir,
+            )
 
         logger.info("[Goal] %s (max_iterations=%d)", goal[:80], max_iterations)
 
@@ -221,8 +232,19 @@ class LoopAgent:
                 )
                 return
 
+            step_desc = {s.id: s.description for s in decision.steps}
             for result in step_results:
                 state.add_step_result(result)
+                if state.working_memory is not None:
+                    state.working_memory.record_step_result(
+                        step_id=result.step_id,
+                        description=step_desc.get(result.step_id, ""),
+                        output=result.output,
+                        error=result.error,
+                        success=result.success,
+                        workspace=state.workspace,
+                        thread_id=state.thread_id,
+                    )
                 yield (
                     "step_completed",
                     {
@@ -320,10 +342,17 @@ class LoopAgent:
             for r in state.step_results
         ]
 
+        wm_excerpt: str | None = None
+        if state.working_memory is not None:
+            rendered = state.working_memory.render_for_reason().strip()
+            if rendered:
+                wm_excerpt = rendered
+
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
             recent_messages=[],
             completed_steps=completed_steps,
             workspace=state.workspace,
             git_status=state.git_status,
+            working_memory_excerpt=wm_excerpt,
         )

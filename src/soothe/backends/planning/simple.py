@@ -20,6 +20,9 @@ from soothe.protocols.planner import (
 
 logger = logging.getLogger(__name__)
 
+_LAYER2_GOAL_ALIGN_SNIP_LEN = 400
+_DEFAULT_DECISION_GOAL_SNIP_LEN = 350
+
 
 def _strip_leading_bom(text: str) -> str:
     """Remove UTF-8 BOM if present."""
@@ -217,6 +220,26 @@ def _load_llm_json_dict(response: str) -> dict[str, Any]:
     raise TypeError("LLM JSON root must be an object")
 
 
+def _align_layer2_step_descriptions(goal: str, steps: list[Any]) -> None:
+    """Rewrite step text that only echoes the user goal (Layer 1/Layer 2 alignment)."""
+    from soothe.cognition.loop_agent.schemas import StepAction
+
+    g = (goal or "").strip().casefold()
+    if not g:
+        return
+    for s in steps:
+        if not isinstance(s, StepAction):
+            continue
+        d = (s.description or "").strip()
+        if d.casefold() == g:
+            lim = _LAYER2_GOAL_ALIGN_SNIP_LEN
+            tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
+            s.description = (
+                "Using tools in the open workspace, take concrete actions toward this goal "
+                f"(do not use the goal text alone as the step): {tail}"
+            )
+
+
 def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     """Build AgentDecision from a parsed JSON object (step list at top level)."""
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
@@ -251,6 +274,8 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
             )
         )
 
+    _align_layer2_step_descriptions(_goal, steps)
+
     return AgentDecision(
         type=data.get("type", "execute_steps"),
         steps=steps,
@@ -264,13 +289,18 @@ def _default_agent_decision(goal: str) -> Any:
     """Minimal single-step decision used when parsing fails."""
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
 
+    lim = _DEFAULT_DECISION_GOAL_SNIP_LEN
+    tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
     return AgentDecision(
         type="execute_steps",
         steps=[
             StepAction(
                 id="step_0",
-                description=goal,
-                expected_output="Task completion",
+                description=(
+                    "Use file and shell tools in the workspace to gather facts and deliver "
+                    f"a direct result; context: {tail}"
+                ),
+                expected_output="Concrete findings or artifacts that satisfy the goal",
             )
         ],
         execution_mode="sequential",
@@ -440,6 +470,15 @@ def build_loop_reason_prompt(
             output_preview = step.output[:100] if step.output else "no output"
             parts.append(f"- {step.step_id}: {status} {output_preview}")
 
+    if context.working_memory_excerpt:
+        parts.append("\n<SOOTHE_LOOP_WORKING_MEMORY>")
+        parts.append(
+            "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
+            "Prefer read_file on referenced paths instead of repeating large listings.\n"
+        )
+        parts.append(context.working_memory_excerpt)
+        parts.append("</SOOTHE_LOOP_WORKING_MEMORY>\n")
+
     prev = state.previous_reason
     if prev:
         parts.append("\nYour previous assessment (for continuity):")
@@ -449,16 +488,27 @@ def build_loop_reason_prompt(
         if prev.next_steps_hint:
             parts.append(f"- Hint: {prev.next_steps_hint}")
 
-    if state.current_decision and prev and prev.should_continue():
+    if state.has_remaining_steps():
         parts.append(
-            "\nCurrent plan is still active. If the strategy remains valid and "
-            'dependencies allow, you may set plan_action to "keep" and omit "decision" '
-            "to run the next ready steps of the existing plan. "
-            'Otherwise set plan_action to "new" and supply a full replacement decision.'
+            "\n<PLAN_CONTINUE_POLICY>\n"
+            "The current AgentDecision still has unfinished steps. If the latest Act results fit the plan, "
+            'you MUST prefer plan_action "keep" and omit "decision" so the executor runs the remaining '
+            'steps in the next wave. Use plan_action "new" only when evidence proves the plan is wrong, '
+            "blocked, or obsolete.\n"
+            "</PLAN_CONTINUE_POLICY>\n"
         )
 
     if context.available_capabilities:
         parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
+
+    parts.append(
+        "\n<STEP_GRANULARITY_AND_LAYER_ALIGNMENT>\n"
+        "- Prefer 1-3 concrete steps per decision; each step must have a checkable expected_output.\n"
+        "- Step descriptions are imperative, tool-facing actions; never use only the raw user goal string as "
+        "the entire step (Layer 2 plans steps; Layer 1 executes them).\n"
+        "- Merge related filesystem lists/reads into a single step when practical.\n"
+        "</STEP_GRANULARITY_AND_LAYER_ALIGNMENT>\n"
+    )
 
     parts.extend(
         [
@@ -473,8 +523,8 @@ def build_loop_reason_prompt(
             "\n5. Optionally write progress_detail: 1-2 sentences explaining what's left or what changed.",
             "\n6. reasoning: INTERNAL ONLY - concise technical analysis, third person or neutral,",
             "   NOT first person, NOT shown to the user. Never put user-facing text only in reasoning.",
-            '\n7. Choose plan_action: "keep" only if an existing multi-step plan should continue unchanged;',
-            '   otherwise "new" and include a full "decision" object.',
+            '\n7. Choose plan_action: "keep" when the in-flight plan still applies and unfinished steps remain',
+            '   (see PLAN_CONTINUE_POLICY); otherwise "new" with a full "decision".',
             '\n8. For "decision" when plan_action is "new", use the same shape as before:',
             "   type, steps[], execution_mode, adaptive_granularity, reasoning (plan-focused).",
             "\n9. Do NOT repeat work already shown in evidence or completed summaries.",

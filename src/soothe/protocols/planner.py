@@ -83,6 +83,7 @@ class PlanContext(BaseModel):
         unified_classification: Pre-computed unified classification (RFC-0012).
         workspace: Current workspace directory path.
         git_status: Optional git snapshot from runner (same shape as ``get_git_status``).
+        working_memory_excerpt: Optional pre-rendered loop working memory (RFC-203).
     """
 
     recent_messages: list[str] = Field(default_factory=list)
@@ -91,6 +92,7 @@ class PlanContext(BaseModel):
     unified_classification: Any | None = None  # Type: UnifiedClassification
     workspace: str | None = None  # Current workspace directory
     git_status: dict[str, Any] | None = None
+    working_memory_excerpt: str | None = None
 
 
 class StepReport(BaseModel):

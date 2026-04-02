@@ -197,6 +197,7 @@ class LoopState(BaseModel):
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
+        working_memory: Loop working-memory instance (RFC-203) when enabled.
     """
 
     goal: str
@@ -211,6 +212,7 @@ class LoopState(BaseModel):
     previous_reason: ReasonResult | None = None
     step_results: list[StepResult] = []
     evidence_summary: str = ""
+    working_memory: Any | None = None
 
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0

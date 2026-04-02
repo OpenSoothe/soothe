@@ -9,6 +9,7 @@ from soothe.protocols.durability import (
     ThreadMetadata,
 )
 from soothe.protocols.loop_reasoner import LoopReasonerProtocol
+from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
 from soothe.protocols.memory import MemoryItem, MemoryProtocol
 from soothe.protocols.persistence import PersistStore
 from soothe.protocols.planner import (
@@ -44,6 +45,7 @@ __all__ = [
     "DurabilityProtocol",
     "GoalReport",
     "LoopReasonerProtocol",
+    "LoopWorkingMemoryProtocol",
     "MemoryItem",
     "MemoryProtocol",
     "Permission",

@@ -37,7 +37,7 @@ class MessageRouter:
         """Handle a single client message."""
         d = self._daemon
         msg_type = msg.get("type", "")
-        logger.debug("[IG-110] Received message type=%s from client=%s", msg_type, _client_label(client_id))
+        logger.debug("[MsgRouter] Received message type=%s from client=%s", msg_type, _client_label(client_id))
 
         if msg_type == "input":
             text = msg.get("text", "").strip()
@@ -66,7 +66,7 @@ class MessageRouter:
                 )
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
-                logger.debug("[IG-110] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id))
+                logger.debug("[MsgRouter] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id))
                 await d._current_input_queue.put(
                     {
                         "type": "input",
@@ -77,7 +77,7 @@ class MessageRouter:
                         "client_id": client_id,
                     }
                 )
-                logger.debug("[IG-110] Input put in queue successfully")
+                logger.debug("[MsgRouter] Input put in queue successfully")
             return
 
         if msg_type == "command":

@@ -1,0 +1,58 @@
+"""Loop working memory (RFC-203)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from soothe.cognition.loop_working_memory import LoopWorkingMemory
+from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
+
+
+def test_render_empty() -> None:
+    wm = LoopWorkingMemory()
+    assert wm.render_for_reason() == ""
+
+
+def test_spill_large_output_to_workspace(tmp_path: Path) -> None:
+    wm = LoopWorkingMemory(
+        max_entry_chars_before_spill=20,
+        spill_subdir=".soothe/loop",
+    )
+    body = "line\n" * 50
+    wm.record_step_result(
+        step_id="s1",
+        description="List files",
+        output=body,
+        error=None,
+        success=True,
+        workspace=str(tmp_path),
+        thread_id="thread-1",
+    )
+    spill_root = tmp_path / ".soothe" / "loop"
+    assert spill_root.is_dir()
+    files = list(spill_root.rglob("step-s1-*.md"))
+    assert len(files) == 1
+    text = wm.render_for_reason()
+    assert "read_file" in text
+    assert "step-s1-" in text
+
+
+def test_failed_step_recorded_inline() -> None:
+    wm = LoopWorkingMemory()
+    wm.record_step_result(
+        step_id="x",
+        description="fail",
+        output=None,
+        error="boom",
+        success=False,
+        workspace=None,
+        thread_id="t",
+    )
+    assert "✗" in wm.render_for_reason()
+    assert "boom" in wm.render_for_reason()
+
+
+def test_loop_working_memory_is_structural_protocol() -> None:
+    wm = LoopWorkingMemory()
+    accept: LoopWorkingMemoryProtocol = wm
+    assert accept is wm

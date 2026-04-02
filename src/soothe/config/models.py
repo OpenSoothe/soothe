@@ -507,6 +507,37 @@ class PlanningConfig(BaseModel):
     )
 
 
+class LoopWorkingMemoryConfig(BaseModel):
+    """Agentic loop working memory (RFC-203).
+
+    In-memory scratchpad for the agentic loop; large entries spill under the workspace.
+
+    Args:
+        enabled: Enable working memory for Layer 2 Reason prompts.
+        max_inline_chars: Max size of the aggregated block injected into Reason.
+        max_entry_chars_before_spill: Per-step output larger than this is written to disk.
+        spill_subdir: Directory under workspace root for spill files.
+    """
+
+    enabled: bool = Field(default=True, description="Enable RFC-203 working memory")
+    max_inline_chars: int = Field(
+        default=4000,
+        ge=400,
+        le=100_000,
+        description="Max chars for working-memory block in Reason prompt",
+    )
+    max_entry_chars_before_spill: int = Field(
+        default=1500,
+        ge=200,
+        le=50_000,
+        description="Spill step output to workspace when longer than this",
+    )
+    spill_subdir: str = Field(
+        default=".soothe/loop",
+        description="Spill root relative to workspace (RFC-103)",
+    )
+
+
 class EarlyTerminationConfig(BaseModel):
     """Early termination configuration (RFC-0008).
 
@@ -540,6 +571,7 @@ class AgenticLoopConfig(BaseModel):
         verification_strictness: Strictness level for verification phase.
         planning: Planning configuration.
         early_termination: Early termination configuration.
+        working_memory: Working memory / spill configuration (RFC-203).
     """
 
     enabled: bool = Field(
@@ -577,6 +609,11 @@ class AgenticLoopConfig(BaseModel):
     early_termination: EarlyTerminationConfig = Field(
         default_factory=EarlyTerminationConfig,
         description="Early termination configuration",
+    )
+
+    working_memory: LoopWorkingMemoryConfig = Field(
+        default_factory=LoopWorkingMemoryConfig,
+        description="Loop working memory (RFC-203)",
     )
 
 
