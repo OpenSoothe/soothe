@@ -37,6 +37,11 @@ class CliRendererState:
     # Suppress step text during multi-step plans
     multi_step_active: bool = False
 
+    # Agentic loop (max_iterations>1): keep suppressing main stdout until loop.completed even if
+    # status idle/on_turn_end cleared multi_step_active first (avoids late AIMessage leaks).
+    agentic_stdout_suppressed: bool = False
+    agentic_final_stdout_emitted: bool = False
+
     # Accumulated response text
     full_response: list[str] = field(default_factory=list)
 
@@ -168,6 +173,8 @@ class CliRenderer:
         # Suppress intermediate assistant/body text for multi-step runs.
         # Keep CLI output focused on progress judgements + final completion summary.
         if self._state.multi_step_active:
+            return
+        if self._state.agentic_stdout_suppressed and not self._state.agentic_final_stdout_emitted:
             return
 
         self._state.full_response.append(text)
@@ -301,8 +308,23 @@ class CliRenderer:
             namespace: Subagent namespace.
         """
         # Track multi-step state from agentic loop start
-        if event_type == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
-            self._state.multi_step_active = True
+        if event_type == "soothe.agentic.loop.started":
+            if data.get("max_iterations", 1) > 1:
+                self._state.multi_step_active = True
+                self._state.agentic_stdout_suppressed = True
+                self._state.agentic_final_stdout_emitted = False
+            else:
+                self._state.agentic_stdout_suppressed = False
+                self._state.agentic_final_stdout_emitted = False
+
+        # Backup if loop.started was filtered on the wire: suppress after iteration 1+.
+        if event_type == "soothe.cognition.loop_agent.reason":
+            try:
+                it = int(data.get("iteration", 0))
+            except (TypeError, ValueError):
+                it = 0
+            if it >= 1 and not self._state.agentic_final_stdout_emitted:
+                self._state.agentic_stdout_suppressed = True
 
         payload = dict(data)
         final_stdout = (payload.pop("final_stdout_message", None) or "").strip()
@@ -312,8 +334,12 @@ class CliRenderer:
         lines = self._pipeline.process(event)
         self.write_lines(lines)
 
-        if event_type == "soothe.agentic.loop.completed" and final_stdout and self._state.multi_step_active:
-            self._write_stdout_final_report(final_stdout)
+        if event_type == "soothe.agentic.loop.completed":
+            want_final = final_stdout and (self._state.multi_step_active or self._state.agentic_stdout_suppressed)
+            if want_final and not self._state.agentic_final_stdout_emitted:
+                self._write_stdout_final_report(final_stdout)
+            self._state.agentic_final_stdout_emitted = True
+            self._state.agentic_stdout_suppressed = False
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -323,6 +349,11 @@ class CliRenderer:
         """
         self._state.current_plan = plan
         self._state.multi_step_active = len(plan.steps) > 1
+        # max_iterations==1 does not arm agentic_stdout_suppressed in loop.started; multi-step
+        # plans still clear multi_step_active on on_turn_end before loop.completed (test-case1).
+        if len(plan.steps) > 1:
+            self._state.agentic_stdout_suppressed = True
+            self._state.agentic_final_stdout_emitted = False
 
         # Use pipeline for consistent formatting
         event = {

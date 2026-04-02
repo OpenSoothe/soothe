@@ -73,7 +73,7 @@ class LoopAgent:
         final_result = None
         async for event_type, event_data in self.run_with_progress(goal, thread_id, max_iterations=max_iterations):
             if event_type == "completed":
-                final_result = event_data
+                final_result = event_data["result"] if isinstance(event_data, dict) else event_data
         return final_result or ReasonResult(
             status="replan",
             plan_action="new",
@@ -158,7 +158,13 @@ class LoopAgent:
                     state.iteration,
                     state.total_duration_ms,
                 )
-                yield ("completed", reason_result)
+                yield (
+                    "completed",
+                    {
+                        "result": reason_result,
+                        "step_results_count": len(state.step_results),
+                    },
+                )
                 return
 
             decision = self._resolve_decision(reason_result, state)
@@ -268,7 +274,13 @@ class LoopAgent:
             user_summary="Stopped after maximum iterations",
             soothe_next_action="I've hit the iteration limit; I'll pause here.",
         )
-        yield ("completed", result)
+        yield (
+            "completed",
+            {
+                "result": result,
+                "step_results_count": len(state.step_results),
+            },
+        )
 
     def _resolve_decision(
         self,

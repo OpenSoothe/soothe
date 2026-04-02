@@ -119,7 +119,36 @@ async def run_headless_via_daemon(
                 if state == "running":
                     query_started = True
                 elif (state == "idle" and query_started) or state == "stopped":
-                    processor.process_event(event)  # Finalize
+                    # loop.completed (and stray message chunks) may arrive *after* idle on the
+                    # WebSocket stream; draining avoids dropping completion + final stdout (test-case1).
+                    loop_clock = asyncio.get_event_loop()
+                    drain_deadline = loop_clock.time() + 2.5
+                    while loop_clock.time() < drain_deadline:
+                        try:
+                            nxt = await asyncio.wait_for(client.read_event(), timeout=0.25)
+                        except TimeoutError:
+                            break
+                        if not nxt:
+                            break
+                        nt = nxt.get("type", "")
+                        if nt == "event":
+                            nd = nxt.get("data")
+                            if isinstance(nd, dict) and nd.get("type") == "soothe.lifecycle.daemon.heartbeat":
+                                last_heartbeat = loop_clock.time()
+                                continue
+                        if output_format == "jsonl":
+                            namespace = nxt.get("namespace", [])
+                            mode = nxt.get("mode", "")
+                            data = nxt.get("data")
+                            sys.stdout.write(
+                                json.dumps({"namespace": list(namespace), "mode": mode, "data": data}, default=str)
+                                + "\n"
+                            )
+                            sys.stdout.flush()
+                            continue
+                        processor.process_event(nxt)
+
+                    processor.process_event(event)  # Finalize (on_turn_end after drain)
                     break
 
             # Detect errors before query started as a hard failure

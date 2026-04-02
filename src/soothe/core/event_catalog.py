@@ -215,6 +215,8 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     status: str
     goal_progress: float
     evidence_summary: str
+    # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
+    total_steps: int = 0
     # Headless CLI: when max_iterations>1, main assistant stdout is suppressed; surface this once at done.
     final_stdout_message: str | None = None
 
