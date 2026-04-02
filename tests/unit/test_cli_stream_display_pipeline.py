@@ -95,7 +95,7 @@ class TestFormatters:
     def test_format_goal_header(self) -> None:
         line = format_goal_header("Analyze codebase")
         assert line.level == 1
-        assert line.content == "Goal: Analyze codebase"
+        assert line.content == "Analyze codebase"
         assert line.icon == "●"
 
     def test_format_step_header_sequential(self) -> None:
@@ -214,7 +214,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].content == "Goal: Analyze codebase"
+        assert lines[0].content == "Analyze codebase"
         assert lines[0].icon == "●"
 
     def test_step_started(self) -> None:
@@ -392,7 +392,7 @@ class TestStreamDisplayPipeline:
         assert lines[0].duration_ms == 45200
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
-        """Loop agent Reason event shows user_summary and optional detail."""
+        """Loop agent Reason event emits one concise summary line."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -407,14 +407,10 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 3
-        assert "I'll check your config files next." in lines[0].content
+        assert len(lines) == 1
+        assert "Found structure" in lines[0].content
+        assert "80% sure" in lines[0].content
         assert lines[0].icon == "→"
-        assert "Found structure" in lines[1].content
-        assert "80% sure" in lines[1].content
-        assert lines[1].icon == "→"
-        assert "validate settings" in lines[2].content
-        assert lines[2].icon == "→"
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
         """Reason event with status=done shows checkmark icon."""
@@ -432,12 +428,10 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 2
-        assert "I'm sharing the final result now." in lines[0].content
+        assert len(lines) == 1
+        assert "Goal achieved" in lines[0].content
+        assert "95% sure" in lines[0].content
         assert lines[0].icon == "✓"
-        assert "Goal achieved" in lines[1].content
-        assert "95% sure" in lines[1].content
-        assert lines[1].icon == "✓"
 
     def test_step_completed_with_tool_call_count(self) -> None:
         """Step completion shows tool call count when > 0."""
@@ -478,3 +472,51 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 1
         assert "Analyze config" in lines[0].content
         assert "[0 tools]" not in lines[0].content  # Should not show when 0
+
+    def test_step_completed_uses_tracked_description_by_step_id(self) -> None:
+        """Step completion keeps description when current step context has moved."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+
+        pipeline.process(
+            {
+                "type": "soothe.cognition.plan.step_started",
+                "step_id": "step_a",
+                "description": "Search root directory",
+            }
+        )
+        pipeline.process(
+            {
+                "type": "soothe.cognition.plan.step_started",
+                "step_id": "step_b",
+                "description": "Search src directory",
+            }
+        )
+
+        lines = pipeline.process(
+            {
+                "type": "soothe.agentic.step.completed",
+                "step_id": "step_a",
+                "duration_ms": 2000,
+                "tool_call_count": 2,
+            }
+        )
+
+        assert len(lines) == 1
+        assert "Search root directory" in lines[0].content
+        assert "[2 tools]" in lines[0].content
+
+    def test_loop_agent_reason_deduped_in_short_window(self) -> None:
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        event = {
+            "type": "soothe.cognition.loop_agent.reason",
+            "status": "continue",
+            "progress": 0.4,
+            "confidence": 0.8,
+            "user_summary": "Searching for README files",
+            "iteration": 1,
+        }
+
+        lines1 = pipeline.process(event)
+        lines2 = pipeline.process(event)
+        assert len(lines1) == 1
+        assert lines2 == []

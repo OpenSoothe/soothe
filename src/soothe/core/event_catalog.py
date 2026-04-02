@@ -215,6 +215,8 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     status: str
     goal_progress: float
     evidence_summary: str
+    # Headless CLI: when max_iterations>1, main assistant stdout is suppressed; surface this once at done.
+    final_stdout_message: str | None = None
 
 
 class AgenticStepStartedEvent(LifecycleEvent):

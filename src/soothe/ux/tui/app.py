@@ -36,6 +36,7 @@ from soothe.logging import ThreadLogger
 from soothe.ux.client import bootstrap_thread_session, connect_websocket_with_retries, websocket_url_from_config
 from soothe.ux.shared import EventProcessor
 from soothe.ux.shared.display_policy import normalize_verbosity
+from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.ux.shared.rendering import render_plan_tree
 from soothe.ux.shared.subagent_routing import parse_subagent_from_input
 from soothe.ux.tui.commands import parse_autonomous_command
@@ -186,6 +187,7 @@ class SootheApp(App):
         # Display is now via direct panel writes only
         self._history_loaded_thread_id: str | None = None
         self._progress_verbosity = normalize_verbosity(self._config.logging.verbosity)
+        self._presentation = PresentationEngine()
         self._thread_logger: ThreadLogger | None = None
         self._was_running = False
         self._typing_indicator_task: asyncio.Task | None = None
@@ -238,8 +240,13 @@ class SootheApp(App):
             on_panel_update_last=self._on_panel_update_last,
             on_status_update=self._update_status,
             on_plan_refresh=self._refresh_plan,
+            presentation_engine=self._presentation,
         )
-        self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
+        self._processor = EventProcessor(
+            self._renderer,
+            verbosity=self._progress_verbosity,
+            presentation_engine=self._presentation,
+        )
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
         # Send initial prompt if provided
@@ -435,9 +442,14 @@ class SootheApp(App):
                 on_panel_update_last=self._on_panel_update_last,
                 on_status_update=self._update_status,
                 on_plan_refresh=self._refresh_plan,
+                presentation_engine=self._presentation,
             )
         if not self._processor:
-            self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
+            self._processor = EventProcessor(
+                self._renderer,
+                verbosity=self._progress_verbosity,
+                presentation_engine=self._presentation,
+            )
         self._processor.process_event(status_event)
         self._state.thread_id = self._processor.thread_id
         if self._processor.current_plan:

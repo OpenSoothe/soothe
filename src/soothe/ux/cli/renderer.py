@@ -12,12 +12,13 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.verbosity_tier import VerbosityTier, should_show
+from soothe.foundation.verbosity_tier import VerbosityTier
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.cli.stream import DisplayLine, StreamDisplayPipeline
 from soothe.ux.cli.utils import make_tool_block
 from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.shared.message_processing import format_tool_call_args
+from soothe.ux.shared.presentation_engine import PresentationEngine
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -45,9 +46,6 @@ class CliRendererState:
     # Track tool call start times for duration display (RFC-0020)
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
-    # Track if final response was already emitted via custom event (deduplication)
-    final_response_emitted: bool = False
-
     # After LLM text on stdout, next stderr icon block gets one leading blank line
     stderr_blank_before_next_icon_block: bool = False
 
@@ -71,15 +69,33 @@ class CliRenderer:
         processor = EventProcessor(renderer, verbosity="normal")
     """
 
-    def __init__(self, *, verbosity: VerbosityLevel = "normal") -> None:
+    def __init__(
+        self,
+        *,
+        verbosity: VerbosityLevel = "normal",
+        presentation_engine: PresentationEngine | None = None,
+    ) -> None:
         """Initialize CLI renderer.
 
         Args:
             verbosity: Progress visibility level.
+            presentation_engine: Shared presentation engine (optional).
         """
         self._verbosity = normalize_verbosity(verbosity)
         self._state = CliRendererState()
-        self._pipeline = StreamDisplayPipeline(verbosity=verbosity)
+        self._presentation = presentation_engine or PresentationEngine()
+        self._pipeline = StreamDisplayPipeline(
+            verbosity=verbosity,
+            presentation_engine=self._presentation,
+        )
+
+    def _rebind_presentation(self, engine: PresentationEngine) -> None:
+        """Attach a shared presentation engine (used by EventProcessor wiring)."""
+        self._presentation = engine
+        self._pipeline = StreamDisplayPipeline(
+            verbosity=self._verbosity,
+            presentation_engine=engine,
+        )
 
     @property
     def full_response(self) -> list[str]:
@@ -91,13 +107,10 @@ class CliRenderer:
         """Whether multi-step plan is active."""
         return self._state.multi_step_active
 
-    def mark_final_response_emitted(self) -> None:
-        """Mark that final response was emitted via custom event.
-
-        Prevents duplicate output when the same content comes through
-        the AIMessage stream.
-        """
-        self._state.final_response_emitted = True
+    @property
+    def presentation_engine(self) -> PresentationEngine:
+        """Shared presentation policy used with StreamDisplayPipeline and EventProcessor."""
+        return self._presentation
 
     def write_lines(self, lines: list[DisplayLine]) -> None:
         """Write display lines to stderr.
@@ -116,6 +129,25 @@ class CliRenderer:
         sys.stderr.flush()
         self._state.stderr_just_written = True
 
+    def _write_stdout_final_report(self, text: str) -> None:
+        """Write aggregated final answer to stdout (multi-step headless mode only)."""
+        stripped = text.strip()
+        if not stripped:
+            return
+
+        self._state.full_response.append(stripped)
+
+        if self._state.stderr_just_written:
+            self._state.stderr_just_written = False
+
+        sys.stdout.write(stripped)
+        if not stripped.endswith("\n"):
+            sys.stdout.write("\n")
+        sys.stdout.flush()
+        self._state.needs_stdout_newline = True
+        self._state.stderr_blank_before_next_icon_block = True
+        self._presentation.mark_final_answer_locked()
+
     def on_assistant_text(
         self,
         text: str,
@@ -133,22 +165,22 @@ class CliRenderer:
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        # Skip if final response was already emitted via custom event
-        if self._state.final_response_emitted:
+        # Suppress intermediate assistant/body text for multi-step runs.
+        # Keep CLI output focused on progress judgements + final completion summary.
+        if self._state.multi_step_active:
             return
 
         self._state.full_response.append(text)
 
-        if not self._state.multi_step_active:
-            if self._state.stderr_just_written:
-                self._state.stderr_just_written = False
+        if self._state.stderr_just_written:
+            self._state.stderr_just_written = False
 
-            # LLM stream: do not inject extra blank lines (spacing before icon stderr
-            # is handled in _stderr_begin_icon_block when progress resumes).
-            sys.stdout.write(text)
-            sys.stdout.flush()
-            self._state.needs_stdout_newline = True
-            self._state.stderr_blank_before_next_icon_block = True
+        # LLM stream: do not inject extra blank lines (spacing before icon stderr
+        # is handled in _stderr_begin_icon_block when progress resumes).
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self._state.needs_stdout_newline = True
+        self._state.stderr_blank_before_next_icon_block = True
 
     def on_tool_call(
         self,
@@ -166,7 +198,7 @@ class CliRenderer:
             tool_call_id: Tool call identifier.
             is_main: True if from main agent.
         """
-        if not should_show(VerbosityTier.NORMAL, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
         self._stderr_begin_icon_block()
@@ -206,7 +238,7 @@ class CliRenderer:
             is_error: True if result indicates error.
             is_main: True if from main agent.
         """
-        if not should_show(VerbosityTier.NORMAL, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
         self._stderr_begin_icon_block()
@@ -218,6 +250,7 @@ class CliRenderer:
             duration_ms = int((time.time() - start_time) * 1000)
 
         # Note: extract_tool_brief() may already include ✓/✗ icon
+        result = self._presentation.summarize_tool_result(result)
         result_stripped = result.lstrip()
         if result_stripped.startswith(("✓", "✗")):
             result_line = result
@@ -271,10 +304,16 @@ class CliRenderer:
         if event_type == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
             self._state.multi_step_active = True
 
+        payload = dict(data)
+        final_stdout = (payload.pop("final_stdout_message", None) or "").strip()
+
         # Build event dict for pipeline
-        event = {"type": event_type, **data}
+        event = {"type": event_type, **payload}
         lines = self._pipeline.process(event)
         self.write_lines(lines)
+
+        if event_type == "soothe.agentic.loop.completed" and final_stdout and self._state.multi_step_active:
+            self._write_stdout_final_report(final_stdout)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -361,18 +400,10 @@ class CliRenderer:
         self._state.needs_stdout_newline = False
         self._state.multi_step_active = False
         self._state.full_response = []
-        self._state.final_response_emitted = False
 
-        # Output any accumulated response that was suppressed during multi-step plan
-        # Use captured state, not current state (which is now reset)
-        if was_multi_step and accumulated_response:
-            # Single newline before deferred answer; avoid extra blank lines in LLM output
-            sys.stdout.write("\n")
-            sys.stdout.write("".join(accumulated_response))
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-            self._state.stderr_blank_before_next_icon_block = True
-        elif accumulated_response:
+        # Multi-step mode intentionally suppresses step body output in headless CLI.
+        # For single-step mode, keep existing newline flush behavior.
+        if (not was_multi_step) and accumulated_response:
             sys.stdout.write("\n")
             sys.stdout.flush()
 

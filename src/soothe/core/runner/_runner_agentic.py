@@ -170,18 +170,29 @@ class AgenticMixin:
             elif event_type == "completed":
                 final_result = event_data
 
-                if final_result.is_done() and final_result.full_output:
-                    from langchain_core.messages import AIMessage
-
-                    yield ((), "messages", [AIMessage(content=final_result.full_output), {}])
+                # Do not re-yield full_output as AIMessage: Executor already streamed the same
+                # AI + tool content via messages mode; replaying it duplicates stdout (IG-119).
+                # When max_iterations>1, headless CLI suppresses main assistant stdout (multi_step);
+                # attach a one-shot final line/block so the user still sees the outcome (IG-119 follow-up).
 
                 evidence = (final_result.evidence_summary or "")[:500]
+                final_stdout: str | None = None
+                if final_result.status == "done":
+                    body = (final_result.full_output or "").strip()
+                    summary = (final_result.user_summary or "").strip()
+                    text = body or summary
+                    # Multi-iteration loop: headless CLI suppresses assistant stdout (IG-119 removed replay).
+                    # Multi-step plan with max_iterations=1 still sets multi_step_active via plan.created.
+                    if text and (max_iterations > 1 or body):
+                        final_stdout = text
+
                 yield _custom(
                     AgenticLoopCompletedEvent(
                         thread_id=tid,
                         status=final_result.status,
                         goal_progress=final_result.goal_progress,
                         evidence_summary=evidence,
+                        final_stdout_message=final_stdout,
                     ).to_dict()
                 )
 

@@ -20,6 +20,7 @@ from soothe.ux.cli.stream.formatter import (
     format_tool_call,
 )
 from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
+from soothe.ux.shared.presentation_engine import PresentationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +70,22 @@ class StreamDisplayPipeline:
             renderer.write_lines(lines)
     """
 
-    def __init__(self, verbosity: VerbosityLevel = "normal") -> None:
+    def __init__(
+        self,
+        verbosity: VerbosityLevel = "normal",
+        *,
+        presentation_engine: PresentationEngine | None = None,
+    ) -> None:
         """Initialize the pipeline.
 
         Args:
             verbosity: Verbosity level for filtering.
+            presentation_engine: Shared engine (defaults to a new instance).
         """
         self._verbosity = normalize_verbosity(verbosity)
         self._verbosity_tier = _VERBOSITY_TO_TIER.get(self._verbosity, VerbosityTier.NORMAL)
         self._context = PipelineContext()
+        self._presentation = presentation_engine or PresentationEngine()
         self._current_namespace: tuple[str, ...] = ()  # Track current namespace
 
     def process(self, event: dict[str, Any]) -> list[DisplayLine]:
@@ -226,6 +234,8 @@ class StreamDisplayPipeline:
         # Track step by ID for parallel execution
         if step_id and step_id not in self._context._active_step_ids:
             self._context._active_step_ids.append(step_id)
+        if step_id:
+            self._context.step_descriptions[step_id] = description
 
         # Reset step context for this specific step
         self._context.current_step_id = step_id
@@ -387,8 +397,13 @@ class StreamDisplayPipeline:
         if duration_s == 0 and self._context.step_start_time:
             duration_s = time.time() - self._context.step_start_time
 
-        # Get description from context or event
-        description = self._context.current_step_description or event.get("description", "")
+        # Resolve description robustly for parallel/async step completions
+        description = (
+            self._context.step_descriptions.get(step_id, "")
+            or self._context.current_step_description
+            or event.get("description", "")
+            or "Completed action"
+        )
 
         # Get tool call count from event
         tool_call_count = event.get("tool_call_count", 0)
@@ -396,6 +411,7 @@ class StreamDisplayPipeline:
         # Mark step complete (updates _active_step_ids and steps_completed)
         if step_id:
             self._context.complete_step(step_id)
+            self._context.step_descriptions.pop(step_id, None)
 
         # Reset current step context (but not _active_step_ids)
         self._context.current_step_id = None
@@ -442,13 +458,12 @@ class StreamDisplayPipeline:
         ]
 
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle Layer 2 Reason progress (first-person next action + summary; no internal reasoning)."""
+        """Handle Layer 2 Reason progress as a single concise status line."""
         status = event.get("status", "")
         progress = event.get("progress", 0.0)
         confidence = event.get("confidence", 0.0)
         soothe_next_action = (event.get("soothe_next_action") or "").strip()
         user_summary = (event.get("user_summary") or "").strip()
-        progress_detail = (event.get("progress_detail") or "").strip()
 
         if status == "done":
             label = "Done"
@@ -460,30 +475,28 @@ class StreamDisplayPipeline:
             label = "Continuing"
             action = "continue"
 
-        lines: list[str] = []
-        if soothe_next_action:
-            lines.append(soothe_next_action)
+        # Emit only one line per reason event to avoid repeated arrow lines.
         if user_summary:
-            lines.append(f"{user_summary} ({confidence:.0%} sure)")
+            content = f"{user_summary} ({confidence:.0%} sure)"
         elif soothe_next_action:
-            lines.append(f"({confidence:.0%} sure)")
-        if not lines:
-            lines.append(f"{label} — about {progress:.0%} toward the goal ({confidence:.0%} sure)")
-        if progress_detail:
-            lines.append(progress_detail)
+            content = f"{soothe_next_action} ({confidence:.0%} sure)"
+        else:
+            content = f"{label} — about {progress:.0%} toward the goal ({confidence:.0%} sure)"
 
-        judgement_lines = [ln for ln in ("\n".join(lines)).split("\n") if ln.strip()]
-        if not judgement_lines:
+        if not content.strip():
+            return []
+
+        step_id = str(event.get("step_id", "") or event.get("iteration", "") or "")
+        if not self._presentation.should_emit_reason(content=content, step_id=step_id or None):
             return []
 
         return [
             format_judgement(
-                fragment,
+                content.strip(),
                 action,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
-            for fragment in judgement_lines
         ]
 
 

@@ -18,6 +18,7 @@ from rich.text import Text
 from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.shared.event_formatter import build_event_summary
 from soothe.ux.shared.message_processing import format_tool_call_args
+from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.ux.tui.utils import (
     DOT_COLORS,
     format_duration_enhanced,
@@ -57,9 +58,6 @@ class TuiRendererState:
     # Track tool call start times for duration display (RFC-0020)
     tool_call_start_times: dict[str, float] = field(default_factory=dict)
 
-    # Track if final response was already emitted via custom event (deduplication)
-    final_response_emitted: bool = False
-
 
 class TuiRenderer:
     """TUI renderer for Rich panel widgets.
@@ -71,13 +69,17 @@ class TuiRenderer:
     - Plan updates -> Refresh plan tree widget
 
     Usage:
+        presentation = PresentationEngine()
         renderer = TuiRenderer(
             on_panel_write=panel.append_entry,
             on_panel_update_last=panel.update_last_entry,
             on_status_update=update_status_bar,
             on_plan_refresh=refresh_plan_tree,
+            presentation_engine=presentation,
         )
-        processor = EventProcessor(renderer, verbosity="normal")
+        processor = EventProcessor(
+            renderer, verbosity="normal", presentation_engine=presentation
+        )
     """
 
     def __init__(
@@ -87,6 +89,7 @@ class TuiRenderer:
         on_panel_update_last: PanelUpdateCallback = None,
         on_status_update: StatusUpdateCallback = None,
         on_plan_refresh: PlanRefreshCallback = None,
+        presentation_engine: PresentationEngine | None = None,
     ) -> None:
         """Initialize TUI renderer.
 
@@ -95,12 +98,23 @@ class TuiRenderer:
             on_panel_update_last: Callback to update last panel entry.
             on_status_update: Callback for status bar updates.
             on_plan_refresh: Callback to refresh plan tree widget.
+            presentation_engine: Shared engine with EventProcessor (RFC-502).
         """
         self._on_panel_write = on_panel_write
         self._on_panel_update_last = on_panel_update_last
         self._on_status_update = on_status_update
         self._on_plan_refresh = on_plan_refresh
+        self._presentation = presentation_engine or PresentationEngine()
         self._state = TuiRendererState()
+
+    def _rebind_presentation(self, engine: PresentationEngine) -> None:
+        """Attach a shared presentation engine (used by EventProcessor wiring)."""
+        self._presentation = engine
+
+    @property
+    def presentation_engine(self) -> PresentationEngine:
+        """Shared presentation policy with EventProcessor."""
+        return self._presentation
 
     @property
     def last_assistant_output(self) -> str:
@@ -111,14 +125,6 @@ class TuiRenderer:
     def streaming_active(self) -> bool:
         """Whether currently streaming assistant text."""
         return self._state.streaming_active
-
-    def mark_final_response_emitted(self) -> None:
-        """Mark that final response was emitted via custom event.
-
-        Prevents duplicate output when the same content comes through
-        the AIMessage stream.
-        """
-        self._state.final_response_emitted = True
 
     def on_assistant_text(
         self,
@@ -134,10 +140,6 @@ class TuiRenderer:
             is_main: True if from main agent.
             is_streaming: True if partial chunk.
         """
-        # Skip if final response was already emitted via custom event
-        if self._state.final_response_emitted:
-            return
-
         if is_main:
             self._stream_main_text(text)
         else:
@@ -263,11 +265,13 @@ class TuiRenderer:
         icon = get_icon(icon_category)
         color = DOT_COLORS[icon_category]
 
+        brief = self._presentation.summarize_tool_result(result)
+
         # Create result line
         result_line = Text()
         result_line.append("  └ ", style="dim")
         result_line.append(icon + " ", style=color)
-        result_line.append(result[:80], style="dim")  # RFC-0020 compliance: 80 char limit
+        result_line.append(brief[:80], style="dim")  # RFC-0020 compliance: 80 char limit
 
         # Add duration with appropriate styling
         if duration_ms > 0:
@@ -409,8 +413,6 @@ class TuiRenderer:
             self._state.streaming_active = False
             self._state.last_assistant_output = self._state.streaming_text_buffer
             self._state.streaming_text_buffer = ""
-        # Reset deduplication flag for next turn
-        self._state.final_response_emitted = False
 
     def _is_long_running_tool(self, name: str) -> bool:
         """Detect if tool typically takes >5 seconds.

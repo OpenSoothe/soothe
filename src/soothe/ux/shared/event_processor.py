@@ -13,11 +13,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
-from soothe.foundation.verbosity_tier import (
-    VerbosityTier,
-    classify_event_to_tier,
-    should_show,
-)
+from soothe.foundation.verbosity_tier import VerbosityTier, classify_event_to_tier
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
 from soothe.ux.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe.ux.shared.message_processing import (
@@ -30,6 +26,7 @@ from soothe.ux.shared.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
+from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.ux.shared.processor_state import ProcessorState
 from soothe.ux.shared.rendering import update_name_map_from_tool_calls
 
@@ -61,15 +58,31 @@ class EventProcessor:
         renderer: RendererProtocol,
         *,
         verbosity: VerbosityLevel = "normal",
+        presentation_engine: PresentationEngine | None = None,
     ) -> None:
         """Initialize processor with renderer and verbosity level.
 
         Args:
             renderer: Callback interface for display.
             verbosity: Progress visibility level.
+            presentation_engine: Shared engine; if omitted, uses renderer's
+                ``presentation_engine`` when present, else a new instance.
         """
         self._renderer = renderer
         self._verbosity = normalize_verbosity(verbosity)
+
+        rebind = getattr(renderer, "_rebind_presentation", None)
+        shared_from_renderer = getattr(renderer, "presentation_engine", None)
+        if presentation_engine is not None:
+            self._presentation = presentation_engine
+            # Avoid rebuilding StreamDisplayPipeline when renderer already uses this engine.
+            if callable(rebind) and shared_from_renderer is not presentation_engine:
+                rebind(presentation_engine)
+        elif isinstance(shared_from_renderer, PresentationEngine):
+            self._presentation = shared_from_renderer
+        else:
+            self._presentation = PresentationEngine()
+
         self._policy = DisplayPolicy(verbosity=self._verbosity)
         self._state = ProcessorState()
 
@@ -92,6 +105,22 @@ class EventProcessor:
     def multi_step_active(self) -> bool:
         """Whether multi-step plan is active (suppress intermediate text)."""
         return self._state.multi_step_active
+
+    def _emit_assistant_text(
+        self,
+        text: str,
+        *,
+        is_main: bool,
+        is_streaming: bool,
+    ) -> None:
+        """Forward assistant text unless a custom final response already locked the stream."""
+        if is_main and self._presentation.final_answer_locked:
+            return
+        self._renderer.on_assistant_text(
+            self._maybe_extract_quiet_answer(text),
+            is_main=is_main,
+            is_streaming=is_streaming,
+        )
 
     def process_event(self, event: dict[str, Any]) -> None:
         """Main entry point - routes event to appropriate handler.
@@ -122,12 +151,14 @@ class EventProcessor:
         # Clear session state on thread change
         if tid and tid != previous_thread_id:
             self._state.clear_session()
+            self._presentation.reset_session()
 
         self._renderer.on_status_change(state_str)
 
         # On turn end, finalize streaming and call hook
         if state_str in {"idle", "stopped"}:
             self._state.reset_turn()
+            self._presentation.reset_turn()
             self._renderer.on_turn_end()
 
     def _handle_stream_event(self, event: dict[str, Any]) -> None:
@@ -223,8 +254,8 @@ class EventProcessor:
                     if text:
                         cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
                         if cleaned:
-                            self._renderer.on_assistant_text(
-                                self._maybe_extract_quiet_answer(cleaned),
+                            self._emit_assistant_text(
+                                cleaned,
                                 is_main=is_main,
                                 is_streaming=is_chunk,
                             )
@@ -232,7 +263,7 @@ class EventProcessor:
                     if has_tc_args:
                         continue
                     name = block.get("name", "")
-                    if name and should_show(VerbosityTier.DETAILED, self._verbosity):
+                    if name and self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         # Skip if no args - will be emitted when tool result arrives
                         if not coerced:
@@ -257,8 +288,8 @@ class EventProcessor:
             # Always pass to renderer for accumulation, let renderer decide display
             cleaned = self._clean_assistant_text(msg.content, is_streaming=is_chunk)
             if cleaned:
-                self._renderer.on_assistant_text(
-                    self._maybe_extract_quiet_answer(cleaned),
+                self._emit_assistant_text(
+                    cleaned,
                     is_main=is_main,
                     is_streaming=is_chunk,
                 )
@@ -269,7 +300,7 @@ class EventProcessor:
         if tcs:
             for tc in tcs:
                 name = tc.get("name", "")
-                if not name or not should_show(VerbosityTier.DETAILED, self._verbosity):
+                if not name or not self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
 
@@ -306,7 +337,7 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle ToolMessage objects."""
-        if not should_show(VerbosityTier.DETAILED, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -399,8 +430,8 @@ class EventProcessor:
                 # Always pass to renderer for accumulation, let renderer decide display
                 cleaned = self._clean_assistant_text(content, is_streaming=is_chunk)
                 if cleaned:
-                    self._renderer.on_assistant_text(
-                        self._maybe_extract_quiet_answer(cleaned),
+                    self._emit_assistant_text(
+                        cleaned,
                         is_main=is_main,
                         is_streaming=is_chunk,
                     )
@@ -415,14 +446,14 @@ class EventProcessor:
                 if text:
                     cleaned = self._clean_assistant_text(text, is_streaming=is_chunk)
                     if cleaned:
-                        self._renderer.on_assistant_text(
-                            self._maybe_extract_quiet_answer(cleaned),
+                        self._emit_assistant_text(
+                            cleaned,
                             is_main=is_main,
                             is_streaming=is_chunk,
                         )
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
-                if name and should_show(VerbosityTier.NORMAL, self._verbosity):
+                if name and self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
                     args = coerce_tool_call_args_to_dict(block.get("args", {}))
                     tool_call_id = block.get("id", "")
                     # Deduplicate tool calls
@@ -448,7 +479,7 @@ class EventProcessor:
             for tc in tool_calls:
                 if isinstance(tc, dict):
                     name = tc.get("name", "")
-                    if name and should_show(VerbosityTier.NORMAL, self._verbosity):
+                    if name and self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
                         args = coerce_tool_call_args_to_dict(tc.get("args", {}))
                         tool_call_id = tc.get("id", "")
 
@@ -484,7 +515,7 @@ class EventProcessor:
             msg: ToolMessage serialized as dict.
             is_main: True if from main agent.
         """
-        if not should_show(VerbosityTier.DETAILED, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
             return
 
         tool_name = msg.get("name", "tool")
@@ -548,7 +579,7 @@ class EventProcessor:
                 pending["emitted"] = True
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
-            if parsed_args is not None and should_show(VerbosityTier.DETAILED, self._verbosity):
+            if parsed_args is not None and self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
                 self._state.emitted_tool_call_ids.add(tc_id)
                 self._renderer.on_tool_call(
                     pending["name"],
@@ -581,17 +612,15 @@ class EventProcessor:
         # Handle chitchat/final responses through shared cleaner path
         if etype in {"soothe.output.chitchat.response", "soothe.output.autonomous.final_report"}:
             content = data.get("content", data.get("summary", ""))
-            if content and should_show(VerbosityTier.QUIET, self._verbosity):
+            if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
                 cleaned = self._clean_assistant_text(content)
                 if cleaned:
-                    self._renderer.on_assistant_text(
-                        self._maybe_extract_quiet_answer(cleaned),
+                    self._emit_assistant_text(
+                        cleaned,
                         is_main=True,
                         is_streaming=False,
                     )
-                    # Mark that final response was emitted (prevent duplicate from AIMessage stream)
-                    if hasattr(self._renderer, "mark_final_response_emitted"):
-                        self._renderer.mark_final_response_emitted()
+                    self._presentation.mark_final_answer_locked()
             return
 
         category = classify_event_to_tier(etype, namespace)
@@ -615,7 +644,7 @@ class EventProcessor:
         elif category == VerbosityTier.QUIET and "error" in etype:
             error_text = data.get("error", data.get("message", str(etype)))
             self._renderer.on_error(error_text)
-        elif should_show(category, self._verbosity):
+        elif self._presentation.tier_visible(category, self._verbosity):
             self._renderer.on_progress_event(etype, data, namespace=namespace)
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:

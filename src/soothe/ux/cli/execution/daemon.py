@@ -19,6 +19,7 @@ from soothe.ux.client import (
     websocket_url_from_config,
 )
 from soothe.ux.shared import EventProcessor
+from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.ux.shared.subagent_routing import parse_subagent_from_input
 
 logger = logging.getLogger(__name__)
@@ -79,10 +80,11 @@ async def run_headless_via_daemon(
             timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
         )
 
-        # Initialize RFC-0019 unified event processor
-        # Note: verbosity already determined above for subscription
-        renderer = CliRenderer(verbosity=verbosity)
-        processor = EventProcessor(renderer, verbosity=verbosity)
+        # Initialize RFC-0019 unified event processor with one PresentationEngine
+        # for pipeline + message gating (RFC-502).
+        presentation = PresentationEngine()
+        renderer = CliRenderer(verbosity=verbosity, presentation_engine=presentation)
+        processor = EventProcessor(renderer, verbosity=verbosity, presentation_engine=presentation)
 
         has_error = False
         query_started = False  # Track if we've seen the query start running

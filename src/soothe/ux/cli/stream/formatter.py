@@ -55,7 +55,7 @@ def format_goal_header(
     """
     return DisplayLine(
         level=1,
-        content=f"Goal: {goal}",
+        content=goal,
         icon="●",
         indent=indent_for_level(1),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -290,7 +290,7 @@ def format_goal_done(
     duration_ms = int(total_s * 1000)
     return DisplayLine(
         level=1,
-        content=f"Goal: {goal} (complete, {steps} steps)",
+        content=f"{goal} (complete, {steps} steps)",
         icon="●",
         indent=indent_for_level(1),
         duration_ms=duration_ms,

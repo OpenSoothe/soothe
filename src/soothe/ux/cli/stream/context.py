@@ -52,6 +52,7 @@ class PipelineContext:
     step_start_time: float | None = None
     step_header_emitted: bool = False  # Track if step header was emitted
     _active_step_ids: list[str] = field(default_factory=list)  # Track parallel steps in progress
+    step_descriptions: dict[str, str] = field(default_factory=dict)  # Track descriptions by step ID
 
     # Parallel tool tracking
     pending_tool_calls: dict[str, ToolCallInfo] = field(default_factory=dict)
@@ -69,6 +70,7 @@ class PipelineContext:
         self.steps_total = 0
         self.steps_completed = 0
         self._active_step_ids.clear()
+        self.step_descriptions.clear()
         self.reset_step()
 
     def reset_step(self) -> None:

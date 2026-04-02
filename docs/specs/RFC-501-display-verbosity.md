@@ -4,7 +4,7 @@
 **Authors**: Soothe Team
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing)
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0020, RFC-0024
 **Kind**: Implementation Interface Design
 
@@ -12,7 +12,7 @@
 
 ## 1. Abstract
 
-This RFC defines the interface contracts for Soothe's display system, establishing the three-level tree display architecture, verbosity tier classification, and formatting rules. It consolidates the event display architecture (RFC-0020) and verbosity tier unification (RFC-0024) into a single implementation interface specification.
+This RFC defines the interface contracts for Soothe's display system, establishing verbosity tier classification and icon-first formatting rules. It consolidates the event display architecture (RFC-0020) and verbosity tier unification (RFC-0024) into a single implementation interface specification.
 
 ---
 
@@ -199,39 +199,34 @@ class EventMeta:
 
 ## 7. Display Architecture
 
-### 7.1 Three-Level Tree Structure
+### 7.1 Icon-First Structure
 
-| Level | Name | Indent | Icons | Content |
-|-------|------|--------|-------|---------|
-| 1 | Goal | `""` | `●` | Goal/phase start or completion |
-| 2 | Step/Tool | `"  "` | `└`, `⚙`, `✓` | Step description, tool call |
-| 3 | Result | `"     "` | `└ ✓/✗` | Outcome, metrics, status |
+| Level | Name | Icons | Content |
+|-------|------|-------|---------|
+| 1 | Primary progress | `●` | top-level action / completion |
+| 2 | Pending action | `○` | next action or in-progress action |
+| 3 | Reason/result | `→`, `✓`, `✗` | concise progress judgement or outcome |
 
 ### 7.2 Icon Reference
 
-| Icon | Meaning | Level |
-|------|---------|-------|
-| `●` | Goal/phase marker | 1 |
-| `└` | Step/action connector | 2, 3 |
-| `⚙` | Tool or subagent execution | 2 |
-| `✓` | Success indicator | 2, 3 |
-| `✗` | Error indicator | 2, 3 |
+| Icon | Meaning |
+|------|---------|
+| `○` | pending/running |
+| `●` | completed |
+| `→` | progress reasoning |
+| `✓` | success confirmation |
+| `✗` | error/failure |
 
 ### 7.3 Canonical Display Format
 
 ```
-● Goal: {description}
-  └ Step 1: {step_description}
-  ⚙ ToolName("argument")
-     └ ✓ Result summary (150ms)
-  ✓ Step 1 done (3.2s)
-  └ Step 2: {step_description}
-  ⚙ AnotherTool("args")
-     └ ✓ Result (80ms)
-  ✓ Step 2 done (1.8s)
-● Goal: {description} (complete, 2 steps, 5.0s)
+● {description}
+○ {step_description}
+→ {progress_summary} (80% sure)
+● {step_description} [2 tools] (3.2s)
+● {description} (complete, 2 steps, 5.0s)
 
-{assistant response}
+{assistant_final_response}
 ```
 
 ---

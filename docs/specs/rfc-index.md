@@ -65,6 +65,7 @@ RFCs are organized by numeric prefix:
 |-----|-------|--------|------|--------------|
 | [RFC-500](./RFC-500-cli-tui-architecture.md) | CLI/TUI Architecture | Implemented | Architecture Design | RFC-000, RFC-001 |
 | [RFC-501](./RFC-501-display-verbosity.md) | Display & Verbosity | Draft | Impl Interface | RFC-500, RFC-401 |
+| [RFC-502](./RFC-502-unified-presentation-engine.md) | Unified Presentation Engine | Draft | Impl Interface | RFC-401, RFC-501 |
 
 ### 6xx — Plugin System
 

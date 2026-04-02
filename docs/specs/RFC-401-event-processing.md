@@ -4,7 +4,7 @@
 **Authors**: Soothe Team
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-400 (Daemon Communication), RFC-500 (CLI/TUI Architecture)
+**Depends on**: RFC-400 (Daemon Communication), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
 
@@ -28,6 +28,7 @@ This RFC defines:
 * RendererProtocol for mode-agnostic display
 * Daemon-side filtering protocol with verbosity integration
 * EventProcessor unified processing architecture
+* Integration boundary with PresentationEngine
 
 ### 2.2 Non-Goals
 
@@ -59,6 +60,7 @@ This RFC does **not** define:
 3. Type-safe emission with Pydantic validation
 4. Unified processing across CLI and TUI modes
 5. Daemon-side filtering to reduce network overhead
+6. Keep display strategy out of transport/event routing paths
 
 ---
 
@@ -267,6 +269,15 @@ class EventProcessor:
     @property
     def current_plan(self) -> Plan | None: ...
 ```
+
+EventProcessor responsibilities are limited to:
+
+1. Parse incoming daemon stream envelopes (`status` / `event` / `error`).
+2. Normalize message/custom payload shape.
+3. Dispatch normalized data to renderer callbacks.
+
+Display strategy responsibilities (dedup/rate-limit/summarization/icon policy)
+belong to PresentationEngine (RFC-502), not EventProcessor.
 
 ### 6.4 EventBus
 
