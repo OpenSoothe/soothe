@@ -19,12 +19,12 @@
 
 Soothe is a protocol-driven AI orchestration framework that transforms how you work with AI. Unlike traditional chatbots that merely answer questions, Soothe acts as your intelligent digital colleague that:
 
-✨ **Thinks Ahead** - Automatically plans multi-step workflows and adapts strategies based on results
-🚀 **Acts Autonomously** - Executes complex tasks spanning web research, code execution, file operations, and browser automation
-🧠 **Learns & Remembers** - Maintains persistent memory across sessions, so you never repeat yourself
-🔒 **Stays Secure** - Enforces least-privilege policies and keeps your data under your control
-🔌 **Extends Easily** - Plugin architecture lets you add custom tools and specialized subagents
-🌐 **Works Anywhere** - Multi-transport daemon supports Unix, WebSocket, and HTTP REST connections
+- ✨ **Thinks Ahead** - Automatically plans multi-step workflows and adapts strategies based on results
+- 🚀 **Acts Autonomously** - Executes complex tasks spanning web research, code execution, file operations, and browser automation
+- 🧠 **Learns & Remembers** - Maintains persistent memory across sessions, so you never repeat yourself
+- 🔒 **Stays Secure** - Enforces least-privilege policies and keeps your data under your control
+- 🔌 **Extends Easily** - Plugin architecture lets you add custom tools and specialized subagents
+- 🌐 **Works Anywhere** - Multi-transport daemon supports Unix, WebSocket, and HTTP REST connections
 
 ## Architecture
 
