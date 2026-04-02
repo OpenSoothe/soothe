@@ -4,10 +4,16 @@ Runs a series of diverse tasks sequentially using the Soothe CLI in headless
 mode, demonstrating auto-routing to different subagents.
 
 Usage:
+    # From project root with venv activated:
+    source .venv/bin/activate && python examples/batch_tasks_example.py
+
+    # Or run directly with venv path:
     python examples/batch_tasks_example.py
 """
 
 import subprocess
+import sys
+from pathlib import Path
 
 TASKS = [
     "Create a plan to implement a REST API for user management with authentication.",
@@ -24,10 +30,29 @@ TASK_LABELS = [
 ]
 
 
+def find_soothe_cli() -> str:
+    """Find the soothe CLI executable.
+
+    Returns:
+        Path to soothe CLI (either in venv or system PATH).
+    """
+    # Check if running from project root with venv
+    project_root = Path(__file__).parent.parent
+    venv_soothe = project_root / ".venv" / "bin" / "soothe"
+    if venv_soothe.is_file():
+        return str(venv_soothe)
+
+    # Fall back to system PATH
+    return "soothe"
+
+
 def main() -> None:
     print("=" * 60)
     print("Soothe Batch Tasks Example (Headless Mode)")
     print("=" * 60)
+
+    soothe_cli = find_soothe_cli()
+    print(f"[CLI] Using: {soothe_cli}")
 
     for i, (task, label) in enumerate(zip(TASKS, TASK_LABELS), 1):
         print(f"\n--- Task {i}/{len(TASKS)}: {label} ---")
@@ -35,7 +60,7 @@ def main() -> None:
         print()
 
         result = subprocess.run(
-            ["soothe", "run", "--no-tui", task],
+            [soothe_cli, "run", "--no-tui", task],
             capture_output=False,
             text=True,
         )
