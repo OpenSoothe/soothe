@@ -6,10 +6,14 @@ Implements Reason → Act (ReAct) loop using LoopAgent.
 from __future__ import annotations
 
 import logging
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.cognition.loop_agent import LoopAgent
 from soothe.cognition.loop_agent.events import LoopAgentReasonEvent
+from soothe.config import SootheConfig
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -24,31 +28,93 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _AGENTIC_FINAL_STDOUT_CAP = 12000
+# Full normalized body at or below this length is printed to stdout in full (IG-123).
+_AGENTIC_REPORT_FULL_DISPLAY_MAX = 8000
+# When spooling to disk, keep the on-screen preview strictly below the threshold above.
+_AGENTIC_REPORT_PREVIEW_MAX = 7800
 
 
-def _agentic_final_stdout_text(*, user_summary: str, full_output: str | None) -> str | None:
-    """Pick a concise final line for headless CLI (avoid raw glob/list tool dumps).
+def _strip_leading_python_list_reprs(text: str, *, max_strips: int = 24) -> str:
+    """Remove repeated ``[...]`` prefixes (common tool list dumps) from the start."""
+    t = text
+    for _ in range(max_strips):
+        if not t.startswith("[") or "]" not in t:
+            break
+        t = t[t.index("]") + 1 :].lstrip()
+    return t.strip()
 
-    When ``user_summary`` is set, use it. Otherwise strip leading Python list reprs
-    (common glob output) from ``full_output`` so prose after ``]`` is shown.
+
+def _normalize_agentic_body(full_output: str | None) -> str | None:
+    """Return user-facing body text from raw ``full_output``, or None if only list noise."""
+    body = (full_output or "").strip()
+    if not body:
+        return None
+    t = _strip_leading_python_list_reprs(body)
+    return t or None
+
+
+def _resolve_agentic_report_run_dir(*, thread_id: str, workspace: str, config: SootheConfig) -> Path:
+    """Run root aligned with ``RunArtifactStore`` (RFC-0010 / IG-123)."""
+    from soothe.config import SOOTHE_HOME
+
+    ws = Path(workspace).expanduser().resolve()
+    if not config.security.allow_paths_outside_workspace:
+        return ws / ".soothe" / "runs" / thread_id
+    return Path(SOOTHE_HOME).expanduser() / "runs" / thread_id
+
+
+def _spool_agentic_overflow_report(body: str, *, run_dir: Path) -> Path | None:
+    """Write full report to a unique file under ``run_dir``; return path or None on failure."""
+    try:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        unique = uuid.uuid4().hex[:10]
+        out = run_dir / f"final_report_{stamp}_{unique}.md"
+        out.write_text(body, encoding="utf-8")
+        return out.resolve()
+    except OSError:
+        logger.exception("Failed to spool agentic final report to %s", run_dir)
+        return None
+
+
+def _agentic_final_stdout_text(
+    *,
+    user_summary: str,
+    full_output: str | None,
+    thread_id: str,
+    workspace: str | None,
+    config: SootheConfig | None,
+) -> str | None:
+    """Build final stdout for headless CLI after an agentic loop (IG-123).
+
+    Prefers normalized ``full_output`` (full report) when present. Long reports are
+    truncated on stdout and spooled to the thread run directory.
     """
+    body = _normalize_agentic_body(full_output)
+    if body:
+        if len(body) <= _AGENTIC_REPORT_FULL_DISPLAY_MAX:
+            return body
+        preview = body[:_AGENTIC_REPORT_PREVIEW_MAX].rstrip()
+        notice = (
+            f"\n\n[Output truncated for stdout — full text exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters.]\n\n"
+        )
+        saved: Path | None = None
+        if workspace and config and thread_id.strip():
+            run_dir = _resolve_agentic_report_run_dir(
+                thread_id=thread_id.strip(),
+                workspace=workspace,
+                config=config,
+            )
+            saved = _spool_agentic_overflow_report(body, run_dir=run_dir)
+        if saved is not None:
+            return f"{preview}{notice}Full report saved to: {saved}"
+        return f"{preview}{notice}Full report could not be written to disk (see logs for details)."
+
     summary = (user_summary or "").strip()
     if summary:
         cap = _AGENTIC_FINAL_STDOUT_CAP
         return summary[:cap] if len(summary) > cap else summary
-    body = (full_output or "").strip()
-    if not body:
-        return None
-    t = body
-    for _ in range(24):
-        if not t.startswith("[") or "]" not in t:
-            break
-        t = t[t.index("]") + 1 :].lstrip()
-    t = t.strip()
-    if not t:
-        return None
-    cap = _AGENTIC_FINAL_STDOUT_CAP
-    return t[:cap] if len(t) > cap else t
+    return None
 
 
 class AgenticMixin:
@@ -215,6 +281,9 @@ class AgenticMixin:
                     text = _agentic_final_stdout_text(
                         user_summary=final_result.user_summary,
                         full_output=final_result.full_output,
+                        thread_id=tid,
+                        workspace=workspace,
+                        config=self._config,
                     )
                     used_evidence_fallback = False
                     if text is None:

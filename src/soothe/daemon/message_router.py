@@ -66,7 +66,9 @@ class MessageRouter:
                 )
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
-                logger.debug("[MsgRouter] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id))
+                logger.debug(
+                    "[MsgRouter] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id)
+                )
                 await d._current_input_queue.put(
                     {
                         "type": "input",
