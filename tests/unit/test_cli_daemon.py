@@ -12,7 +12,7 @@ import pytest
 import typer
 
 from soothe.config import SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon
+from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.server import _ClientConn
 from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
 from soothe.ux.client import session as ux_client_session
@@ -159,14 +159,13 @@ async def test_daemon_input_message_returns_busy_error_while_query_running() -> 
 
 
 @pytest.mark.asyncio
-async def test_daemon_client_send_input_includes_options() -> None:
-    client = DaemonClient()
+async def test_websocket_client_send_input_includes_options() -> None:
+    client = WebSocketClient()
     captured: list[dict] = []
 
     async def _fake_send(payload: dict) -> None:
         captured.append(payload)
 
-    # Set connected state for WebSocketClient
     client._connected = True
     client.send = _fake_send  # type: ignore[method-assign]
     await client.send_input("run task", autonomous=True, max_iterations=9)
@@ -310,25 +309,31 @@ async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_daemon_client_wait_for_daemon_ready_returns_ready_event() -> None:
-    client = _SequencedClient(
+async def test_websocket_client_wait_for_daemon_ready_returns_ready_event() -> None:
+    seq = _SequencedClient(
         events=[
             {"type": "status", "state": "idle", "thread_id": ""},
             {"type": "daemon_ready", "state": "ready"},
         ]
     )
+    client = WebSocketClient()
+    client._connected = True
+    client.read_event = seq.read_event  # type: ignore[method-assign]
 
-    event = await DaemonClient.wait_for_daemon_ready(client, ready_timeout_s=0.5)
+    event = await client.wait_for_daemon_ready(ready_timeout_s=0.5)
 
     assert event == {"type": "daemon_ready", "state": "ready"}
 
 
 @pytest.mark.asyncio
-async def test_daemon_client_wait_for_daemon_ready_raises_on_error_state() -> None:
-    client = _SequencedClient(events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}])
+async def test_websocket_client_wait_for_daemon_ready_raises_on_error_state() -> None:
+    seq = _SequencedClient(events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}])
+    client = WebSocketClient()
+    client._connected = True
+    client.read_event = seq.read_event  # type: ignore[method-assign]
 
     with pytest.raises(RuntimeError, match="startup failed"):
-        await DaemonClient.wait_for_daemon_ready(client, ready_timeout_s=0.5)
+        await client.wait_for_daemon_ready(ready_timeout_s=0.5)
 
 
 @pytest.mark.asyncio

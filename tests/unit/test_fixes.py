@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE
-from soothe.daemon import DaemonClient, SootheDaemon
+from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.foundation.slash_commands import (
     _show_context,
     _show_memory,
@@ -227,15 +227,14 @@ async def test_daemon_run_query_persists_assistant_from_custom_output() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_client_send_resume_thread() -> None:
-    """Test that DaemonClient has send_resume_thread method."""
-    client = DaemonClient()
+async def test_websocket_client_send_resume_thread() -> None:
+    """Test that WebSocketClient sends resume_thread with workspace (replaces deprecated DaemonClient)."""
+    client = WebSocketClient()
     captured: list[dict] = []
 
     async def _fake_send(payload: dict) -> None:
         captured.append(payload)
 
-    # Set connected state for WebSocketClient
     client._connected = True
     client.send = _fake_send  # type: ignore[method-assign]
     await client.send_resume_thread("thread-789")

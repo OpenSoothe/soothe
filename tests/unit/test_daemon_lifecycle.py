@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.daemon import DaemonClient, SootheDaemon
+from soothe.daemon import SootheDaemon
 from soothe.daemon.server import _ClientConn
 
 

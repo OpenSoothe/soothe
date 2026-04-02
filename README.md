@@ -1,10 +1,17 @@
 # Soothe
 
-[![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
-[![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
-[![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
+<div align="center">
+  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="350" />
+
+  #
+
+  [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
+  [![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
+  [![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
+  [![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
+  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
+
+</div>
 
 **Your 24/7 Autonomous AI Agent that Plans, Acts, and Delivers Results**
 
