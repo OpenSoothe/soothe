@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.core.event_catalog import EventMeta
-from soothe.core.foundation.base_events import SootheEvent
-from soothe.core.foundation.verbosity_tier import VerbosityTier
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
+from soothe.foundation.base_events import SootheEvent
+from soothe.foundation.verbosity_tier import VerbosityTier
 
 
 @pytest.mark.asyncio

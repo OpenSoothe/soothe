@@ -1,6 +1,6 @@
-"""UX core module - shared infrastructure for CLI and TUI.
+"""Shared UX presentation layer for CLI and TUI (not Typer/Textual).
 
-This module provides:
+This package provides:
 - Configuration loading and logging setup
 - Unified event processing (RFC-0019)
 - Unified display policy for event/content filtering
@@ -8,14 +8,14 @@ This module provides:
 - Shared message processing and utilities
 """
 
-from soothe.core.foundation.verbosity_tier import (
+from soothe.foundation.verbosity_tier import (
     VerbosityTier,
     classify_event_to_tier,
     should_show,
 )
 from soothe.logging import setup_logging
-from soothe.ux.core.config_loader import load_config
-from soothe.ux.core.display_policy import (
+from soothe.ux.shared.config_loader import load_config
+from soothe.ux.shared.display_policy import (
     INTERNAL_EVENT_TYPES,
     INTERNAL_JSON_KEYS,
     SKIP_EVENT_TYPES,
@@ -23,8 +23,8 @@ from soothe.ux.core.display_policy import (
     VerbosityLevel,
     create_display_policy,
 )
-from soothe.ux.core.event_processor import EventProcessor
-from soothe.ux.core.message_processing import (
+from soothe.ux.shared.event_processor import EventProcessor
+from soothe.ux.shared.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     extract_tool_brief,
@@ -36,9 +36,9 @@ from soothe.ux.core.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe.ux.core.processor_state import ProcessorState
-from soothe.ux.core.renderer_protocol import RendererProtocol
-from soothe.ux.core.rendering import (
+from soothe.ux.shared.processor_state import ProcessorState
+from soothe.ux.shared.renderer_protocol import RendererProtocol
+from soothe.ux.shared.rendering import (
     extract_text_from_ai_message,
     render_plan_tree,
     resolve_namespace_label,

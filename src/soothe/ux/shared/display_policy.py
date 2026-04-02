@@ -16,7 +16,7 @@ Design Principles:
 - Easy to extend without modifying multiple files
 
 Usage:
-    from soothe.ux.core.display_policy import DisplayPolicy
+    from soothe.ux.shared.display_policy import DisplayPolicy
 
     policy = DisplayPolicy(verbosity="normal")
 
@@ -29,12 +29,19 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from soothe.core.foundation.verbosity_tier import (
+from soothe.foundation.internal_assistant import (
+    INTERNAL_JSON_KEYS,
+    filter_confused_responses,
+    filter_json_code_blocks,
+    filter_plain_json,
+    filter_search_data_tags,
+    normalize_internal_whitespace,
+)
+from soothe.foundation.verbosity_tier import (
     VerbosityLevel,
     VerbosityTier,
     classify_event_to_tier,
@@ -59,17 +66,6 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
 # Policy Configuration Constants
 # =============================================================================
 
-# Internal JSON keys that indicate research/inquiry engine responses
-INTERNAL_JSON_KEYS = frozenset(
-    {
-        "sub_questions",
-        "queries",
-        "is_sufficient",
-        "knowledge_gap",
-        "follow_up_queries",
-    }
-)
-
 # Event types that should NEVER be shown (internal implementation details)
 INTERNAL_EVENT_TYPES = frozenset(
     {
@@ -90,14 +86,6 @@ SKIP_EVENT_TYPES = frozenset(
         "soothe.policy.denied",
     }
 )
-
-# Keywords that indicate confused LLM meta-responses
-CONFUSED_RESPONSE_INDICATORS = [
-    ("sub-questions", ["provide", "share", "empty", "not provided", "actually provided"]),
-    ("sub_questions", ["provide", "share", "empty", "not provided", "actually provided"]),
-    ("section appears to be empty", []),
-    ("once you share them", ["json format"]),
-]
 
 PLAN_EVENT_TYPES = frozenset(
     {
@@ -276,12 +264,12 @@ class DisplayPolicy:
             lead = text[:leading_ws]
             trail = text[len(text) - trailing_ws :] if trailing_ws > 0 else ""
 
-        text = self._filter_json_code_blocks(text)
-        text = self._filter_plain_json(text)
-        text = self._filter_confused_responses(text)
-        text = self._filter_search_data_tags(text)
+        text = filter_json_code_blocks(text)
+        text = filter_plain_json(text)
+        text = filter_confused_responses(text)
+        text = filter_search_data_tags(text)
         text = self._filter_decorative_filler(text)
-        text = self._normalize_whitespace(text)
+        text = normalize_internal_whitespace(text)
         text = self._strip_sentence_embellishment(text)
         text = self._normalize_factual_ending(text)
 
@@ -289,135 +277,6 @@ class DisplayPolicy:
             # Restore boundary whitespace for streaming concatenation
             return lead + text.strip() + trail
         return text.strip()
-
-    def _filter_json_code_blocks(self, text: str) -> str:
-        """Remove JSON code blocks containing internal keys."""
-        result_parts = []
-        i = 0
-
-        while i < len(text):
-            # Find ```json marker
-            json_start = text.find("```json", i)
-            if json_start == -1:
-                result_parts.append(text[i:])
-                break
-
-            result_parts.append(text[i:json_start])
-
-            # Find closing ```
-            content_start = json_start + 7
-            json_end = text.find("```", content_start)
-
-            if json_end == -1:
-                result_parts.append(text[json_start:])
-                break
-
-            # Try to parse and check if internal
-            json_content = text[content_start:json_end].strip()
-            should_remove = self._is_internal_json_content(json_content)
-
-            if should_remove:
-                i = json_end + 3
-            else:
-                result_parts.append(text[json_start : json_end + 3])
-                i = json_end + 3
-
-        return "".join(result_parts)
-
-    def _filter_plain_json(self, text: str) -> str:
-        """Remove plain JSON objects containing internal keys."""
-        result_parts = []
-        i = 0
-
-        while i < len(text):
-            # Find opening brace at line start or after whitespace
-            brace_pos = -1
-            for j in range(i, len(text)):
-                if text[j] == "{" and (j == 0 or text[j - 1] in " \t\n\r"):
-                    brace_pos = j
-                    break
-
-            if brace_pos == -1:
-                result_parts.append(text[i:])
-                break
-
-            result_parts.append(text[i:brace_pos])
-
-            # Find matching closing brace
-            json_end = self._find_matching_brace(text, brace_pos)
-
-            if json_end == -1:
-                result_parts.append(text[brace_pos:])
-                break
-
-            json_text = text[brace_pos:json_end]
-            should_remove = self._is_internal_json_content(json_text)
-
-            if should_remove:
-                i = json_end
-            else:
-                result_parts.append(json_text)
-                i = json_end
-
-        return "".join(result_parts)
-
-    def _find_matching_brace(self, text: str, start: int) -> int:
-        """Find the position after the matching closing brace."""
-        brace_count = 0
-        for j in range(start, len(text)):
-            if text[j] == "{":
-                brace_count += 1
-            elif text[j] == "}":
-                brace_count -= 1
-                if brace_count == 0:
-                    return j + 1
-        return -1
-
-    def _is_internal_json_content(self, content: str) -> bool:
-        """Check if JSON content contains internal keys."""
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict):
-                return bool(INTERNAL_JSON_KEYS & set(parsed.keys()))
-        except json.JSONDecodeError:
-            pass
-        return False
-
-    def _filter_confused_responses(self, text: str) -> str:
-        """Remove confused LLM meta-responses about missing data."""
-        text_lower = text.lower()
-
-        for primary_indicator, secondary_indicators in CONFUSED_RESPONSE_INDICATORS:
-            if primary_indicator in text_lower and (
-                not secondary_indicators or any(s in text_lower for s in secondary_indicators)
-            ):
-                # Filter line by line
-                lines = text.split("\n")
-                filtered = [line for line in lines if primary_indicator not in line.lower()]
-                text = "\n".join(filtered)
-
-        return text
-
-    def _filter_search_data_tags(self, text: str) -> str:
-        """Remove <search_data> blocks and synthesis instructions."""
-        # Remove search_data blocks
-        while "<search_data>" in text and "</search_data>" in text:
-            start = text.find("<search_data>")
-            end = text.find("</search_data>") + len("</search_data>")
-            text = text[:start] + text[end:]
-
-        # Remove leftover tags
-        text = text.replace("<search_data>", "").replace("</search_data>", "")
-
-        # Remove synthesis instructions
-        synthesis_markers = [
-            "Synthesize the search data into a clear answer.",
-            "Do NOT reproduce raw results, source listings, or URLs.",
-        ]
-        for marker in synthesis_markers:
-            text = text.replace(marker, "")
-
-        return text
 
     def _filter_decorative_filler(self, text: str) -> str:
         """Remove polite trailing filler that adds no user value."""
@@ -485,11 +344,7 @@ class DisplayPolicy:
 
     def _normalize_whitespace(self, text: str) -> str:
         """Normalize excessive whitespace."""
-        text = re.sub(r"[ \t]+[🇦-🇿✨🎉👍😊😄😃😀😉🙌]+(?=\s*$)", "", text)
-        text = re.sub(r"\s+([,.;:!?])", r"\1", text)
-        text = re.sub(r"([.?!]),", r"\1", text)
-        text = re.sub(r" {2,}", " ", text)
-        return re.sub(r"\n{3,}", "\n\n", text)
+        return normalize_internal_whitespace(text)
 
     # ==========================================================================
     # Event Type Helpers

@@ -145,7 +145,7 @@ class DaemonHandlersMixin:
 
         from rich.console import Console
 
-        from soothe.ux.tui.commands import handle_slash_command
+        from soothe.foundation.slash_commands import handle_slash_command
 
         if cmd.strip().lower() == "/clear":
             await self._broadcast({"type": "clear"})

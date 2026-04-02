@@ -5,11 +5,11 @@ including configuration, daemon, persistence, providers, and external services.
 
 Example usage:
 
+    from soothe.config import SootheConfig
     from soothe.daemon.health import HealthChecker
-    from soothe.ux.core import load_config
 
     # With config
-    config = load_config()
+    config = SootheConfig()
     checker = HealthChecker(config)
     report = await checker.run_all_checks()
 

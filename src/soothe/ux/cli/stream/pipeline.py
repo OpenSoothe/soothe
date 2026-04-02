@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any
 
-from soothe.core.foundation.verbosity_tier import VerbosityTier
+from soothe.foundation.verbosity_tier import VerbosityTier
 from soothe.ux.cli.stream.context import PipelineContext
 from soothe.ux.cli.stream.display_line import DisplayLine
 from soothe.ux.cli.stream.formatter import (
@@ -19,7 +19,7 @@ from soothe.ux.cli.stream.formatter import (
     format_subagent_milestone,
     format_tool_call,
 )
-from soothe.ux.core.display_policy import VerbosityLevel, normalize_verbosity
+from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
 
 logger = logging.getLogger(__name__)
 

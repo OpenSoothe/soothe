@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 import typer
 
-from soothe.ux.core import load_config
+from soothe.ux.shared import load_config
 
 
 def checkhealth(

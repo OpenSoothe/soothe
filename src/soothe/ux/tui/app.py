@@ -7,9 +7,9 @@ Full-viewport layout with footer stack:
     - Info bar (thread, events, status)
     - Chat input with UP/DOWN history navigation
 
-Connects to the Soothe daemon over a Unix domain socket for event
-streaming and user input. When the daemon is not already running,
-``run_textual_tui`` starts it as an external process.
+Connects to the Soothe daemon over WebSocket for event streaming and user
+input. When the daemon is not already running, ``run_textual_tui`` starts
+it as an external process.
 """
 
 from __future__ import annotations
@@ -31,9 +31,11 @@ from textual.containers import Container
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.logging import ThreadLogger
-from soothe.ux.core import EventProcessor
-from soothe.ux.core.display_policy import normalize_verbosity
-from soothe.ux.core.rendering import render_plan_tree
+from soothe.ux.client import bootstrap_thread_session, connect_websocket_with_retries, websocket_url_from_config
+from soothe.ux.shared import EventProcessor
+from soothe.ux.shared.display_policy import normalize_verbosity
+from soothe.ux.shared.rendering import render_plan_tree
+from soothe.ux.shared.subagent_routing import parse_subagent_from_input
 from soothe.ux.tui.commands import parse_autonomous_command
 from soothe.ux.tui.modals import ThreadSelectionModal
 from soothe.ux.tui.renderer import TuiRenderer
@@ -321,100 +323,81 @@ class SootheApp(App):
 
     async def _connect_and_listen(self) -> None:
         """Connect to daemon and process events via WebSocket."""
-        host = self._config.daemon.transports.websocket.host
-        port = self._config.daemon.transports.websocket.port
-        ws_url = f"ws://{host}:{port}"
+        ws_url = websocket_url_from_config(self._config)
         self._client = WebSocketClient(url=ws_url)
-        max_retries = 40
-        for attempt in range(max_retries):
-            try:
-                await self._client.connect()
-                self._connected = True
-                logger.info("Connected to daemon via WebSocket at %s", ws_url)
-                self._update_status("Connected")
-                break
-            except (OSError, ConnectionRefusedError, ConnectionError):
-                if attempt == max_retries - 1:
-                    self._on_panel_write(
-                        make_dot_line(
-                            DOT_COLORS["error"],
-                            f"Failed to connect to daemon after retries. Is the daemon running at {ws_url}?",
-                        )
-                    )
-                    return
-                await asyncio.sleep(0.25)
-
-        # Request thread resumption if thread_id was provided, otherwise request new thread
-        requested_resume = False
-        if self._requested_thread_id:
-            await self._client.send_resume_thread(self._requested_thread_id)
-            requested_resume = True
-        else:
-            await self._client.send_new_thread()
-
-        # Wait for status message with thread_id
         try:
-            status_event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
-
-            # Handle error response for thread resumption (thread not found)
-            if status_event and status_event.get("type") == "error":
-                error_code = status_event.get("code", "")
-                error_message = status_event.get("message", "Unknown error")
-                if error_code == "THREAD_NOT_FOUND" and requested_resume:
-                    logger.warning("Thread %s not found during resume: %s", self._requested_thread_id, error_message)
-                    self._on_panel_write(make_dot_line(DOT_COLORS["error"], error_message))
-                    return
-                # Other error - report and return
-                self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Daemon error: {error_message}"))
-                return
-
-            if not status_event or status_event.get("type") != "status":
-                self._on_panel_write(
-                    make_dot_line(DOT_COLORS["error"], f"Expected status message from daemon, got: {status_event}")
+            await connect_websocket_with_retries(self._client)
+        except (OSError, ConnectionError, TimeoutError):
+            self._on_panel_write(
+                make_dot_line(
+                    DOT_COLORS["error"],
+                    f"Failed to connect to daemon after retries. Is the daemon running at {ws_url}?",
                 )
-                return
+            )
+            return
 
-            pre_status_thread_id = self._state.thread_id
-            # RFC-0019: Use unified event processor (lazy init for testing)
-            if not self._renderer:
-                self._renderer = TuiRenderer(
-                    on_panel_write=self._on_panel_write,
-                    on_panel_update_last=self._on_panel_update_last,
-                    on_status_update=self._update_status,
-                    on_plan_refresh=self._refresh_plan,
-                )
-            if not self._processor:
-                self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
-            self._processor.process_event(status_event)
-            # Sync state from processor
-            self._state.thread_id = self._processor.thread_id
-            if self._processor.current_plan:
-                self._state.current_plan = self._processor.current_plan
-            self._flush_new_activity()
+        self._connected = True
+        logger.info("Connected to daemon via WebSocket at %s", ws_url)
+        self._update_status("Connected")
 
-            # Extract thread_id and client_id
-            thread_id = self._state.thread_id
-            client_id = status_event.get("client_id")
-            if not thread_id:
-                self._on_panel_write(make_dot_line(DOT_COLORS["error"], "No thread_id in status message"))
-                return
-
-            self._state.client_id = client_id
-            self._apply_thread_status(status_event, previous_thread_id=pre_status_thread_id)
-            logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
-
-            # Subscribe to thread with configured verbosity preference
-            verbosity = self._progress_verbosity
-            await self._client.subscribe_thread(thread_id, verbosity=verbosity)
-            await self._client.wait_for_subscription_confirmed(thread_id, verbosity=verbosity)
-            logger.info("Subscribed to thread %s with verbosity=%s", thread_id, verbosity)
-
+        requested_resume = bool(self._requested_thread_id)
+        try:
+            status_event = await bootstrap_thread_session(
+                self._client,
+                resume_thread_id=self._requested_thread_id,
+                verbosity=self._progress_verbosity,
+            )
         except TimeoutError:
             self._on_panel_write(make_dot_line(DOT_COLORS["error"], "Timeout waiting for status from daemon"))
             return
         except ValueError as e:
             self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Subscription failed: {e}"))
             return
+        except RuntimeError as e:
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], str(e)))
+            return
+
+        if status_event.get("type") == "error":
+            error_code = status_event.get("code", "")
+            error_message = status_event.get("message", "Unknown error")
+            if error_code == "THREAD_NOT_FOUND" and requested_resume:
+                logger.warning("Thread %s not found during resume: %s", self._requested_thread_id, error_message)
+                self._on_panel_write(make_dot_line(DOT_COLORS["error"], str(error_message)))
+                return
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], f"Daemon error: {error_message}"))
+            return
+
+        if status_event.get("type") != "status":
+            self._on_panel_write(
+                make_dot_line(DOT_COLORS["error"], f"Expected status message from daemon, got: {status_event}")
+            )
+            return
+
+        pre_status_thread_id = self._state.thread_id
+        if not self._renderer:
+            self._renderer = TuiRenderer(
+                on_panel_write=self._on_panel_write,
+                on_panel_update_last=self._on_panel_update_last,
+                on_status_update=self._update_status,
+                on_plan_refresh=self._refresh_plan,
+            )
+        if not self._processor:
+            self._processor = EventProcessor(self._renderer, verbosity=self._progress_verbosity)
+        self._processor.process_event(status_event)
+        self._state.thread_id = self._processor.thread_id
+        if self._processor.current_plan:
+            self._state.current_plan = self._processor.current_plan
+        self._flush_new_activity()
+
+        thread_id = self._state.thread_id
+        client_id = status_event.get("client_id")
+        if not thread_id:
+            self._on_panel_write(make_dot_line(DOT_COLORS["error"], "No thread_id in status message"))
+            return
+
+        self._state.client_id = client_id
+        self._apply_thread_status(status_event, previous_thread_id=pre_status_thread_id)
+        logger.info("Connected to daemon, thread=%s, client=%s", thread_id, client_id)
 
         while self._connected:
             try:
@@ -657,8 +640,6 @@ class SootheApp(App):
                 # Don't return - let the user input be logged above
                 return
             # Check for subagent subcommands
-            from soothe.ux.cli.commands.subagent_names import parse_subagent_from_input
-
             subagent_name, cleaned_text = parse_subagent_from_input(text)
             if subagent_name:
                 # Route to subagent

@@ -11,7 +11,7 @@ import pytest
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE
 from soothe.daemon import DaemonClient, SootheDaemon
-from soothe.ux.tui.commands import (
+from soothe.foundation.slash_commands import (
     _show_context,
     _show_memory,
     handle_slash_command,
@@ -310,26 +310,13 @@ async def test_daemon_handles_new_thread_message_creates_thread() -> None:
 
 @pytest.mark.asyncio
 async def test_tui_sends_thread_id_on_connection() -> None:
-    """Test that TUI sends resume_thread message when thread_id is provided."""
-    # We verify this by checking the TUI code calls send_resume_thread
-    import ast
-    import textwrap
-
+    """Test that TUI passes requested thread id into shared daemon session bootstrap."""
     from soothe.ux.tui import SootheApp
 
     source = inspect.getsource(SootheApp._connect_and_listen)
-    # Dedent the source since inspect.getsource returns indented method
-    tree = ast.parse(textwrap.dedent(source))
-
-    # Check for send_resume_thread call
-    found_call = False
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Attribute):
-                if node.func.attr == "send_resume_thread":
-                    found_call = True
-
-    assert found_call, "TUI should call send_resume_thread in _connect_and_listen"
+    assert "bootstrap_thread_session" in source, "TUI should bootstrap via ux.client.session"
+    normalized = "".join(source.split())
+    assert "resume_thread_id=self._requested_thread_id" in normalized
 
 
 def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
@@ -337,7 +324,7 @@ def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
     from dataclasses import dataclass, field
     from typing import Any
 
-    from soothe.ux.core.event_processor import EventProcessor
+    from soothe.ux.shared.event_processor import EventProcessor
 
     @dataclass
     class MockRenderer:

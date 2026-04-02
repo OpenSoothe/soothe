@@ -16,8 +16,8 @@ from rich.console import RenderableType
 from rich.text import Text
 
 from soothe.tools.display_names import get_tool_display_name
-from soothe.ux.core.event_formatter import build_event_summary
-from soothe.ux.core.message_processing import format_tool_call_args
+from soothe.ux.shared.event_formatter import build_event_summary
+from soothe.ux.shared.message_processing import format_tool_call_args
 from soothe.ux.tui.utils import (
     DOT_COLORS,
     format_duration_enhanced,

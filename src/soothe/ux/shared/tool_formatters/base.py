@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from soothe.ux.core.tool_output_formatter import ToolBrief
+from soothe.ux.shared.tool_output_formatter import ToolBrief
 
 # Byte size thresholds
 _KB = 1024

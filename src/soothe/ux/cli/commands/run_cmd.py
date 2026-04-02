@@ -9,7 +9,7 @@ import typer
 
 from soothe.utils.postgres import check_postgres_available
 from soothe.ux.cli.execution import run_headless, run_tui
-from soothe.ux.core import load_config, setup_logging
+from soothe.ux.shared import load_config, setup_logging
 
 logger = logging.getLogger(__name__)
 

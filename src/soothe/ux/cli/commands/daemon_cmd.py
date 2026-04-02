@@ -11,7 +11,7 @@ from typing import Annotated
 import typer
 
 from soothe.config import SOOTHE_HOME
-from soothe.ux.core import load_config, setup_logging
+from soothe.ux.shared import load_config, setup_logging
 
 
 def _get_websocket_url(cfg: object) -> str:
@@ -24,13 +24,13 @@ def _get_websocket_url(cfg: object) -> str:
 def _wait_for_daemon_ready(cfg: object, timeout: float = 20.0) -> bool:
     """Wait for protocol-level daemon readiness via WebSocket."""
     from soothe.daemon import WebSocketClient
-    from soothe.ux.cli.execution.daemon import _connect_with_retries
+    from soothe.ux.client import connect_websocket_with_retries
 
     async def _wait() -> bool:
         ws_url = _get_websocket_url(cfg)
         client = WebSocketClient(url=ws_url)
         try:
-            await _connect_with_retries(client)
+            await connect_websocket_with_retries(client)
             await client.request_daemon_ready()
             await client.wait_for_daemon_ready(ready_timeout_s=timeout)
         except Exception:

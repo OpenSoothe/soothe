@@ -30,7 +30,7 @@ def agent_list(
         soothe agent list --enabled
         soothe agent list --disabled
     """
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     try:
         cfg = load_config(config)
@@ -94,7 +94,7 @@ def agent_status(
     Examples:
         soothe agent status
     """
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     try:
         cfg = load_config(config)

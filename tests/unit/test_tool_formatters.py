@@ -2,12 +2,12 @@
 
 import pytest
 
-from soothe.ux.core.tool_formatters import (
+from soothe.ux.shared.tool_formatters import (
     ExecutionFormatter,
     FileOpsFormatter,
     WebFormatter,
 )
-from soothe.ux.core.tool_output_formatter import ToolBrief
+from soothe.ux.shared.tool_output_formatter import ToolBrief
 
 
 class TestWebFormatter:
@@ -159,7 +159,7 @@ class TestFormatterRouting:
 
     def test_file_ops_route_to_file_formatter(self) -> None:
         """Test that file_ops tools route to FileOpsFormatter."""
-        from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+        from soothe.ux.shared.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -170,7 +170,7 @@ class TestFormatterRouting:
 
     def test_web_tools_route_to_web_formatter(self) -> None:
         """Test that web tools are routed to WebFormatter."""
-        from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+        from soothe.ux.shared.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -186,7 +186,7 @@ class TestFormatterRouting:
 
     def test_execution_tools_route_to_execution_formatter(self) -> None:
         """Test that execution tools route to ExecutionFormatter."""
-        from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+        from soothe.ux.shared.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 
@@ -196,7 +196,7 @@ class TestFormatterRouting:
 
     def test_unknown_category_falls_back(self) -> None:
         """Test that unknown tool category uses FallbackFormatter."""
-        from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+        from soothe.ux.shared.tool_output_formatter import ToolOutputFormatter
 
         formatter = ToolOutputFormatter()
 

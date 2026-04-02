@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from soothe.ux.core import load_config
+from soothe.ux.shared import load_config
 
 logger = logging.getLogger(__name__)
 

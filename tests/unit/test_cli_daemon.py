@@ -15,6 +15,7 @@ from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.daemon.server import _ClientConn
 from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
+from soothe.ux.client import session as ux_client_session
 
 
 class _SequencedClient:
@@ -287,7 +288,7 @@ async def test_connect_with_retries_succeeds_after_transient_refusal(monkeypatch
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
 
-    await daemon_exec._connect_with_retries(_RetryClient())
+    await ux_client_session.connect_websocket_with_retries(_RetryClient())
 
     assert attempts["count"] == 3
 
@@ -302,10 +303,10 @@ async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None
         return None
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-    monkeypatch.setattr(daemon_exec, "_CONNECT_RETRY_COUNT", 2)
+    monkeypatch.setattr(ux_client_session, "_CONNECT_RETRY_COUNT", 2)
 
     with pytest.raises(FileNotFoundError):
-        await daemon_exec._connect_with_retries(_FailingClient())
+        await ux_client_session.connect_websocket_with_retries(_FailingClient())
 
 
 @pytest.mark.asyncio
@@ -339,7 +340,7 @@ async def test_wait_for_thread_status_skips_empty_handshake_status() -> None:
         ]
     )
 
-    event = await daemon_exec._wait_for_thread_status(client, timeout_s=0.5)
+    event = await ux_client_session._wait_for_thread_status(client, timeout_s=0.5)
 
     assert event["thread_id"] == "thread-123"
 

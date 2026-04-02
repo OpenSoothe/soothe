@@ -13,74 +13,19 @@ import typer
 
 from soothe.config import SootheConfig
 from soothe.ux.cli.renderer import CliRenderer
-from soothe.ux.core import EventProcessor
+from soothe.ux.client import (
+    bootstrap_thread_session,
+    connect_websocket_with_retries,
+    websocket_url_from_config,
+)
+from soothe.ux.shared import EventProcessor
+from soothe.ux.shared.subagent_routing import parse_subagent_from_input
 
 logger = logging.getLogger(__name__)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
-_CONNECT_RETRY_COUNT = 40
-_CONNECT_RETRY_DELAY_S = 0.25
-_CONNECT_TIMEOUT_S = 5.0
-_DAEMON_READY_TIMEOUT_S = 20.0
 _SESSION_BOOTSTRAP_TIMEOUT_S = 5.0
 _QUERY_START_TIMEOUT_S = 20.0
-
-
-def _get_websocket_url(cfg: SootheConfig) -> str:
-    """Get WebSocket URL from configuration.
-
-    Args:
-        cfg: Soothe configuration.
-
-    Returns:
-        WebSocket URL string.
-    """
-    host = cfg.daemon.transports.websocket.host
-    port = cfg.daemon.transports.websocket.port
-    return f"ws://{host}:{port}"
-
-
-async def _connect_with_retries(client: object) -> None:
-    """Connect to the daemon with bounded retries for cold-start races."""
-    last_error: OSError | ConnectionError | TimeoutError | None = None
-    for attempt in range(_CONNECT_RETRY_COUNT):
-        try:
-            await asyncio.wait_for(client.connect(), timeout=_CONNECT_TIMEOUT_S)
-        except (ConnectionRefusedError, OSError, ConnectionError, TimeoutError) as exc:
-            last_error = exc
-            if attempt == _CONNECT_RETRY_COUNT - 1:
-                raise
-            await asyncio.sleep(_CONNECT_RETRY_DELAY_S)
-        else:
-            return
-
-    if last_error is not None:
-        raise last_error
-
-
-async def _wait_for_thread_status(client: object, *, timeout_s: float = 5.0) -> dict[str, object]:
-    """Wait for the post-bootstrap thread status, ignoring empty handshake status."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout_s
-
-    while True:
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            raise TimeoutError("Timed out waiting for thread status from daemon")
-
-        event = await asyncio.wait_for(client.read_event(), timeout=remaining)
-        if not event:
-            raise ValueError("No event received")
-
-        if event.get("type") == "error":
-            return event
-
-        if event.get("type") != "status":
-            continue
-
-        thread_id = event.get("thread_id")
-        if thread_id:
-            return event
 
 
 async def run_headless_via_daemon(
@@ -99,23 +44,19 @@ async def run_headless_via_daemon(
     """
     from soothe.daemon.websocket_client import WebSocketClient
 
-    _ = thread_id
-    ws_url = _get_websocket_url(cfg)
+    ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
+    verbosity = cfg.logging.verbosity
 
     try:
-        await _connect_with_retries(client)
-        await client.request_daemon_ready()
-        await client.wait_for_daemon_ready(ready_timeout_s=_DAEMON_READY_TIMEOUT_S)
-
-        # Request thread creation or resumption
-        if thread_id:
-            await client.send_resume_thread(thread_id)
-        else:
-            await client.send_new_thread()
-
-        # Wait for actual thread status, skipping initial empty handshake status
-        status_event = await _wait_for_thread_status(client, timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S)
+        await connect_websocket_with_retries(client)
+        status_event = await bootstrap_thread_session(
+            client,
+            resume_thread_id=thread_id,
+            verbosity=verbosity,
+            thread_status_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
+            subscription_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
+        )
         if status_event.get("type") == "error":
             typer.echo(f"Daemon error: {status_event.get('message', 'unknown')}", err=True)
             return 1
@@ -124,16 +65,6 @@ async def run_headless_via_daemon(
         if not actual_thread_id:
             typer.echo("Error: No thread_id in status message", err=True)
             return 1
-
-        # Subscribe to the thread with verbosity preference (RFC-0013, RFC-0022)
-        verbosity = cfg.logging.verbosity
-        await client.subscribe_thread(actual_thread_id, verbosity=verbosity)
-        await client.wait_for_subscription_confirmed(
-            actual_thread_id, verbosity=verbosity, timeout=_SESSION_BOOTSTRAP_TIMEOUT_S
-        )
-
-        # Parse slash commands for subagent routing (e.g. /browser, /research)
-        from soothe.ux.cli.commands.subagent_names import parse_subagent_from_input
 
         subagent_name, cleaned_prompt = parse_subagent_from_input(prompt)
 

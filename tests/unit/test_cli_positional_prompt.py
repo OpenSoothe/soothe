@@ -9,8 +9,8 @@ def test_prompt_option_works(monkeypatch) -> None:
     """Test that prompt can be passed via -p option."""
     # Mock the implementation to prevent actually running the agent
     captured = {}
-    monkeypatch.setattr("soothe.ux.core.load_config", lambda _config: None)
-    monkeypatch.setattr("soothe.ux.core.setup_logging", lambda _cfg: None)
+    monkeypatch.setattr("soothe.ux.shared.load_config", lambda _config: None)
+    monkeypatch.setattr("soothe.ux.shared.setup_logging", lambda _cfg: None)
     monkeypatch.setattr(
         "soothe.ux.cli.commands.run_cmd.run_impl",
         lambda **kwargs: captured.update(kwargs),
@@ -26,8 +26,8 @@ def test_prompt_long_option_works(monkeypatch) -> None:
     """Test that prompt can be passed via --prompt option."""
     # Mock the implementation to prevent actually running the agent
     captured = {}
-    monkeypatch.setattr("soothe.ux.core.load_config", lambda _config: None)
-    monkeypatch.setattr("soothe.ux.core.setup_logging", lambda _cfg: None)
+    monkeypatch.setattr("soothe.ux.shared.load_config", lambda _config: None)
+    monkeypatch.setattr("soothe.ux.shared.setup_logging", lambda _cfg: None)
     monkeypatch.setattr(
         "soothe.ux.cli.commands.run_cmd.run_impl",
         lambda **kwargs: captured.update(kwargs),

@@ -42,7 +42,7 @@ def thread_list(
         soothe thread list --limit 20 --status idle
     """
     from soothe.daemon import SootheDaemon
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     cfg = load_config(config)
 
@@ -170,7 +170,7 @@ def thread_continue(
     """
     from soothe.daemon import SootheDaemon
     from soothe.ux.cli.execution import run_tui
-    from soothe.ux.core import load_config, setup_logging
+    from soothe.ux.shared import load_config, setup_logging
 
     cfg = load_config(config)
     setup_logging(cfg)
@@ -234,7 +234,7 @@ def thread_archive(
         soothe thread archive abc123
     """
     from soothe.core.runner import SootheRunner
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -266,7 +266,7 @@ def thread_show(
     """
     from soothe.core.runner import SootheRunner
     from soothe.logging import ThreadLogger
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -319,7 +319,7 @@ def thread_delete(
     """
     from soothe.config import SOOTHE_HOME
     from soothe.core.runner import SootheRunner
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     if not yes:
         confirm = typer.confirm(f"Permanently delete thread {thread_id}?")
@@ -407,7 +407,7 @@ def thread_stats(
     """
     from soothe.core.runner import SootheRunner
     from soothe.core.thread import ThreadContextManager
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -454,7 +454,7 @@ def thread_tag(
     """
     from soothe.core.runner import SootheRunner
     from soothe.core.thread import ThreadContextManager
-    from soothe.ux.core import load_config
+    from soothe.ux.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)

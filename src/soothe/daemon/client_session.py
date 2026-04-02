@@ -347,7 +347,7 @@ class ClientSessionManager:
 
                     if not is_heartbeat:
                         # Import should_show from RFC-0024's verbosity_tier
-                        from soothe.core.foundation.verbosity_tier import should_show
+                        from soothe.foundation.verbosity_tier import should_show
 
                         # Check if event should be shown at client's verbosity level
                         if not should_show(event_meta.verbosity, session.verbosity):

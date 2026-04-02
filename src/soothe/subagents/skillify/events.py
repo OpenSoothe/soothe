@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe.core.foundation.base_events import SubagentEvent
+from soothe.foundation.base_events import SubagentEvent
 
 
 class SkillifyDispatchedEvent(SubagentEvent):
@@ -110,7 +110,7 @@ class SkillifyIndexFailedEvent(SubagentEvent):
 
 # Register all skillify events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
-from soothe.core.foundation.verbosity_tier import VerbosityTier  # noqa: E402
+from soothe.foundation.verbosity_tier import VerbosityTier  # noqa: E402
 
 # Dispatch/Complete events visible at NORMAL
 register_event(

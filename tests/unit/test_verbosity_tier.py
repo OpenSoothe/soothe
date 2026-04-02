@@ -1,6 +1,6 @@
 """Tests for VerbosityTier classification (RFC-0024)."""
 
-from soothe.core.foundation.verbosity_tier import (
+from soothe.foundation.verbosity_tier import (
     VerbosityTier,
     classify_event_to_tier,
     should_show,

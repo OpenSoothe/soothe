@@ -231,6 +231,20 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Check 2b: Daemon must not import UX
+# ─────────────────────────────────────────────────────────────────────────────
+
+VERIFY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+print_header "Check 2b: Module import boundaries"
+if bash "$VERIFY_SCRIPT_DIR/check_module_import_boundaries.sh"; then
+    print_success "Module import boundary checks passed"
+else
+    print_failure "Module import boundaries violated (see script output)"
+    OVERALL_STATUS=1
+    FAILED_CHECKS+=("import-boundaries")
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Check 3: Unit Tests
 # ─────────────────────────────────────────────────────────────────────────────
 

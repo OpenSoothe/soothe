@@ -41,7 +41,7 @@ def run_daemon(
 
 def main() -> None:
     """CLI entry point for the daemon module."""
-    from soothe.ux.core import setup_logging
+    from soothe.logging import setup_logging
 
     parser = argparse.ArgumentParser(description="Soothe daemon")
     parser.add_argument("--config", type=str, default=None, help="Config file path")

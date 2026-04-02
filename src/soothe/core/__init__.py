@@ -33,7 +33,7 @@ def __getattr__(name: str) -> Any:
 
         return ConfigDrivenPolicy
     if name == "INVALID_WORKSPACE_DIRS":
-        from soothe.core.foundation.types import INVALID_WORKSPACE_DIRS
+        from soothe.foundation.types import INVALID_WORKSPACE_DIRS
 
         return INVALID_WORKSPACE_DIRS
     if name == "resolve_daemon_workspace":

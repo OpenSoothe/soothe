@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe.ux.core.tool_formatters.base import BaseFormatter
-from soothe.ux.core.tool_output_formatter import ToolBrief
+from soothe.ux.shared.tool_formatters.base import BaseFormatter
+from soothe.ux.shared.tool_output_formatter import ToolBrief
 
 
 class GoalFormatter(BaseFormatter):

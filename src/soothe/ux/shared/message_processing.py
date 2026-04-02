@@ -11,6 +11,8 @@ import json
 import re
 from typing import Any
 
+from soothe.foundation.internal_assistant import strip_internal_tags  # noqa: F401 — re-exported via shared.__init__
+
 # ============================================================================
 # Shared Tool Call Streaming Helpers (IG-053)
 # ============================================================================
@@ -119,39 +121,6 @@ def finalize_pending_tool_call(
     return parsed_args, pending, needs_emit, raw_args_str
 
 
-# Shared utilities
-
-
-def strip_internal_tags(text: str) -> str:
-    """Strip internal tool tags from assistant text for clean display.
-
-    Removes `<search_data>...</search_data>` blocks and associated
-    synthesis instructions that should not be shown to users.
-    Also filters out internal LLM JSON responses from research/inquiry engine.
-
-    This function delegates to DisplayPolicy.filter_content() for unified
-    content filtering logic using JSON parsing (not regex).
-
-    Note: This function preserves leading/trailing whitespace to support
-    streaming text chunks (e.g., " the" should keep its leading space).
-
-    Args:
-        text: The text to strip tags from.
-
-    Returns:
-        Cleaned text with internal tags removed, or empty string if
-        the text is an internal LLM response that should be suppressed.
-    """
-    from soothe.ux.core.display_policy import DisplayPolicy
-
-    policy = DisplayPolicy()
-    text = policy._filter_json_code_blocks(text)
-    text = policy._filter_plain_json(text)
-    text = policy._filter_confused_responses(text)
-    text = policy._filter_search_data_tags(text)
-    return policy._normalize_whitespace(text)
-
-
 def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: int = 120) -> str:
     r"""Extract a concise one-line summary from tool result content.
 
@@ -173,7 +142,7 @@ def extract_tool_brief(tool_name: str, content: str | dict | Any, max_length: in
         "✓ Done (6 chars output)"
     """
     # Use semantic formatter for tool-specific summarization
-    from soothe.ux.core.tool_output_formatter import ToolOutputFormatter
+    from soothe.ux.shared.tool_output_formatter import ToolOutputFormatter
 
     try:
         formatter = ToolOutputFormatter()

@@ -13,6 +13,7 @@ import logging
 from typing import Any
 
 from soothe.core.event_catalog import ERROR
+from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
 from soothe.logging import ThreadLogger
 
 logger = logging.getLogger(__name__)
@@ -130,8 +131,6 @@ class QueryEngine:
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
                     if not namespace and mode == "messages" and is_msg_pair:
                         msg, _metadata = data
-                        from soothe.ux.core.rendering import extract_text_from_ai_message
-
                         full_response.extend(extract_text_from_ai_message(msg))
 
                     event_msg = {
@@ -286,8 +285,6 @@ class QueryEngine:
                     is_msg_pair = isinstance(data, (tuple, list)) and len(data) == msg_pair_length
                     if not namespace and mode == "messages" and is_msg_pair:
                         msg, _metadata = data
-                        from soothe.ux.core.rendering import extract_text_from_ai_message
-
                         full_response.extend(extract_text_from_ai_message(msg))
 
                     event_msg = {
@@ -475,7 +472,6 @@ class QueryEngine:
     def extract_custom_output_text(data: dict[str, Any]) -> str | None:
         """Extract assistant-visible output text from custom protocol events."""
         from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
-        from soothe.ux.core.message_processing import strip_internal_tags
 
         event_type = str(data.get("type", ""))
         if event_type == CHITCHAT_RESPONSE:

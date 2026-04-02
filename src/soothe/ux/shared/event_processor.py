@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
-from soothe.core.foundation.verbosity_tier import (
+from soothe.foundation.verbosity_tier import (
     VerbosityTier,
     classify_event_to_tier,
     should_show,
 )
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
-from soothe.ux.core.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
-from soothe.ux.core.message_processing import (
+from soothe.ux.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
+from soothe.ux.shared.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     extract_tool_brief,
@@ -30,12 +30,12 @@ from soothe.ux.core.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe.ux.core.processor_state import ProcessorState
-from soothe.ux.core.rendering import update_name_map_from_tool_calls
+from soothe.ux.shared.processor_state import ProcessorState
+from soothe.ux.shared.rendering import update_name_map_from_tool_calls
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
-    from soothe.ux.core.renderer_protocol import RendererProtocol
+    from soothe.ux.shared.renderer_protocol import RendererProtocol
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.core.foundation.verbosity_tier import VerbosityTier
+from soothe.foundation.verbosity_tier import VerbosityTier
 from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
 
 
