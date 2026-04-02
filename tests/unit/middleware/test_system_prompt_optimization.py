@@ -107,7 +107,7 @@ def test_medium_query_gets_medium_prompt():
     # Should have medium prompt with guidelines
     assert "proactive AI assistant" in modified.system_message.content
     assert "Be direct and concise" in modified.system_message.content
-    assert 300 < len(modified.system_message.content) < 800  # Medium prompt with creator info
+    assert 300 < len(modified.system_message.content) < 950  # Medium + nested RFC-104 XML + date
 
 
 def test_complex_query_gets_full_prompt():

@@ -48,15 +48,23 @@ class CliRendererState:
     # Track if final response was already emitted via custom event (deduplication)
     final_response_emitted: bool = False
 
+    # After LLM text on stdout, next stderr icon block gets one leading blank line
+    stderr_blank_before_next_icon_block: bool = False
+
 
 class CliRenderer:
     """CLI renderer for headless stdout/stderr output.
 
     Implements RendererProtocol callbacks for CLI mode:
     - Assistant text -> stdout (streaming)
-    - Tool calls/results -> stderr (tree format)
+    - Tool calls/results -> stderr (flat stream)
     - Progress events -> stderr via StreamDisplayPipeline
     - Errors -> stderr
+
+    Spacing: Soothe-originated stderr lines (icons from the pipeline, tools, results,
+    errors) call `_stderr_begin_icon_block()`, which inserts one blank stderr line only
+    after LLM text was written to stdout, so icon blocks separate from answers without
+    extra blank lines inside the LLM stream or between consecutive stderr lines.
 
     Usage:
         renderer = CliRenderer(verbosity="normal")
@@ -100,7 +108,7 @@ class CliRenderer:
         if not lines:
             return
 
-        self._ensure_newline()
+        self._stderr_begin_icon_block()
 
         for line in lines:
             sys.stderr.write(line.format() + "\n")
@@ -132,19 +140,15 @@ class CliRenderer:
         self._state.full_response.append(text)
 
         if not self._state.multi_step_active:
-            # Capture stderr state before resetting
-            had_stderr_output = self._state.stderr_just_written
-            if had_stderr_output:
+            if self._state.stderr_just_written:
                 self._state.stderr_just_written = False
 
-            # Add spacing before assistant text only when:
-            # - There was prior stderr output (progress/tool events need separation)
-            # For streaming chunks after the first, just continue without extra newlines.
-            if had_stderr_output:
-                sys.stdout.write("\n\n")
+            # LLM stream: do not inject extra blank lines (spacing before icon stderr
+            # is handled in _stderr_begin_icon_block when progress resumes).
             sys.stdout.write(text)
             sys.stdout.flush()
             self._state.needs_stdout_newline = True
+            self._state.stderr_blank_before_next_icon_block = True
 
     def on_tool_call(
         self,
@@ -154,7 +158,7 @@ class CliRenderer:
         *,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool call to stderr in tree format.
+        """Write tool call to stderr as a flat stream line.
 
         Args:
             name: Tool name.
@@ -165,7 +169,7 @@ class CliRenderer:
         if not should_show(VerbosityTier.NORMAL, self._verbosity):
             return
 
-        self._ensure_newline()
+        self._stderr_begin_icon_block()
 
         display_name = get_tool_display_name(name)
 
@@ -179,7 +183,7 @@ class CliRenderer:
         if tool_call_id:
             self._state.tool_call_start_times[tool_call_id] = time.time()
 
-        sys.stderr.write(f"\n{tool_block}\n")
+        sys.stderr.write(f"{tool_block}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -193,7 +197,7 @@ class CliRenderer:
         is_error: bool,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool result to stderr in tree format with duration.
+        """Write tool result to stderr as a flat stream line with duration.
 
         Args:
             name: Tool name.
@@ -205,7 +209,7 @@ class CliRenderer:
         if not should_show(VerbosityTier.NORMAL, self._verbosity):
             return
 
-        self._ensure_newline()
+        self._stderr_begin_icon_block()
 
         # Calculate duration (RFC-0020)
         duration_ms = 0
@@ -213,15 +217,13 @@ class CliRenderer:
             start_time = self._state.tool_call_start_times.pop(tool_call_id)
             duration_ms = int((time.time() - start_time) * 1000)
 
-        # Format as child line with duration (RFC-0020 two-level tree)
         # Note: extract_tool_brief() may already include ✓/✗ icon
         result_stripped = result.lstrip()
         if result_stripped.startswith(("✓", "✗")):
-            # Result already has icon, don't add another
-            result_line = f"  └ {result}"
+            result_line = result
         else:
             icon = "✗" if is_error else "✓"
-            result_line = f"  └ {icon} {result}"
+            result_line = f"{icon} {result}"
         if duration_ms > 0:
             result_line += f" ({duration_ms}ms)"
 
@@ -244,9 +246,9 @@ class CliRenderer:
             error: Error message.
             context: Optional error context.
         """
-        self._ensure_newline()
+        self._stderr_begin_icon_block()
         prefix = f"[{context}] " if context else ""
-        sys.stderr.write(f"\n{prefix}ERROR: {error}\n")
+        sys.stderr.write(f"{prefix}ERROR: {error}\n")
         sys.stderr.flush()
         # Mark that stderr was just written
         self._state.stderr_just_written = True
@@ -364,15 +366,27 @@ class CliRenderer:
         # Output any accumulated response that was suppressed during multi-step plan
         # Use captured state, not current state (which is now reset)
         if was_multi_step and accumulated_response:
-            # Add separation after stderr progress output
-            sys.stdout.write("\n\n")
-            # Output the accumulated response
+            # Single newline before deferred answer; avoid extra blank lines in LLM output
+            sys.stdout.write("\n")
             sys.stdout.write("".join(accumulated_response))
             sys.stdout.write("\n")
             sys.stdout.flush()
+            self._state.stderr_blank_before_next_icon_block = True
         elif accumulated_response:
             sys.stdout.write("\n")
             sys.stdout.flush()
+
+    def _stderr_begin_icon_block(self) -> None:
+        """Prepare stderr for Soothe icon lines (progress, tools, tool results).
+
+        Ensures stdout ends with a newline, then inserts one blank stderr line
+        only after LLM content was written to stdout so icon streams stay visually
+        separated without double-spacing consecutive stderr lines.
+        """
+        self._ensure_newline()
+        if self._state.stderr_blank_before_next_icon_block:
+            sys.stderr.write("\n")
+            self._state.stderr_blank_before_next_icon_block = False
 
     def _ensure_newline(self) -> None:
         """Ensure stdout has newline before stderr output.

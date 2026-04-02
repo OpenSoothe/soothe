@@ -84,10 +84,24 @@ class AgenticMixin:
             config=self._config,
         )
 
+        git_status = None
+        if workspace:
+            from pathlib import Path
+
+            from soothe.core.workspace import get_git_status
+
+            try:
+                git_status = await get_git_status(
+                    Path(workspace).expanduser().resolve(),  # noqa: ASYNC240
+                )
+            except Exception:
+                logger.debug("Git status collection failed for agentic loop", exc_info=True)
+
         async for event_type, event_data in loop_agent.run_with_progress(
             goal=user_input,
             thread_id=tid,
             workspace=workspace,
+            git_status=git_status,
             max_iterations=max_iterations,
         ):
             if event_type == "iteration_started":

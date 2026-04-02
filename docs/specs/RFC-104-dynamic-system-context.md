@@ -63,7 +63,7 @@ This multi-layered approach ensures the LLM can correctly generate tool argument
 
 ### Principle 1: XML Tagging for LLM Comprehension
 
-Structured `<SOOTHE_*>` XML tags provide clear boundaries and semantic meaning. The LLM can parse and reference context explicitly: "Based on `<SOOTHE_WORKSPACE>`, the current branch is develop."
+Structured `<SOOTHE_*>` **outer** tags (with a numeric `version` attribute) provide stable boundaries for providers that cache prompt prefixes. **Inner** elements carry semantics (e.g. `<platform>`, `<root>`, `<vcs>`). The LLM can parse and reference context explicitly: "Based on `<SOOTHE_WORKSPACE>`, the current branch is develop."
 
 ### Principle 2: Classification-Driven Adaptation
 
@@ -83,46 +83,59 @@ SystemPromptOptimizationMiddleware already selects prompts based on complexity. 
 
 Runner assembles context during pre-stream and injects into `request.state`. Middleware reads from state and builds XML sections. Clean separation of concerns.
 
+### Principle 5: Prompt-cache ordering (IG-117)
+
+To maximize prefix-cache hits on supported providers:
+
+1. **Static first**: behavioral system instructions (templates without per-request volatile lines).
+2. **Structured context next**: `<SOOTHE_ENVIRONMENT>`, then `<SOOTHE_WORKSPACE>`, then (complex only) `<SOOTHE_THREAD>`, `<SOOTHE_PROTOCOLS>`.
+3. **Most volatile last**: lines that change every request (e.g. current date) are appended **after** all `<SOOTHE_*>` blocks.
+
+Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent**, **SimplePlanner**, and **ClaudePlanner** emit the same ENV+WORKSPACE shape where config is available.
+
 ## Architecture
 
-### XML Tag Structure
+### XML Tag Structure (version 1 — nested)
 
-Four context sections with dedicated tags:
+Four context sections with dedicated **outer** tags. Each outer tag includes `version="1"` for forward-compatible evolution. **Inner** elements encode fields; text is XML-escaped.
 
 ```xml
-<SOOTHE_ENVIRONMENT>
-  Platform: darwin
-  Shell: zsh
-  OS Version: Darwin 25.2.0
-  Model: claude-opus-4-6
-  Knowledge cutoff: 2025-05
+<SOOTHE_ENVIRONMENT version="1">
+<platform>darwin</platform>
+<shell>/bin/zsh</shell>
+<os_version>Darwin 25.2.0</os_version>
+<model>claude-opus-4-6</model>
+<knowledge_cutoff>2025-05</knowledge_cutoff>
 </SOOTHE_ENVIRONMENT>
 
-<SOOTHE_WORKSPACE>
-  Primary working directory: /Users/chenxm/Workspace/Soothe
-  Is a git repository: true
-  Current branch: develop
-  Main branch: main
-  Status: M src/soothe/core/agent.py
-  Recent commits:
-    7f7d076 fix: replace os.getcwd()
-    878c1ad fix: convert logging f-strings
+<SOOTHE_WORKSPACE version="1">
+<root>/Users/chenxm/Workspace/Soothe</root>
+<vcs present="true">
+  <branch>develop</branch>
+  <main_branch>main</main_branch>
+  <status>M src/soothe/core/agent.py</status>
+  <recent_commits>7f7d076 fix: replace os.getcwd()
+878c1ad fix: convert logging f-strings</recent_commits>
+</vcs>
+<!-- Optional when enabled for planners: layout_preview, readme_excerpt -->
 </SOOTHE_WORKSPACE>
 
-<SOOTHE_THREAD>
-  Thread ID: thread-abc123
-  Active goals: ["Implement RFC-103", "Write tests"]
-  Conversation turns: 5
-  Current plan: Phase 2 - Implementation
+<SOOTHE_THREAD version="1">
+<thread_id>thread-abc123</thread_id>
+<conversation_turns>5</conversation_turns>
+<active_goals>["Implement RFC-103", "Write tests"]</active_goals>
+<current_plan>Phase 2 - Implementation</current_plan>
 </SOOTHE_THREAD>
 
-<SOOTHE_PROTOCOLS>
-  Context: VectorContext (8 entries, 1200 tokens)
-  Memory: KeywordMemory (3 items recalled)
-  Planner: ClaudePlanner (active)
-  Policy: ConfigDrivenPolicy (profile: default)
+<SOOTHE_PROTOCOLS version="1">
+<protocol id="context" type="VectorContext" stats="8 entries"/>
+<protocol id="memory" type="KeywordMemory" stats="3 recalled"/>
+<protocol id="planner" type="ClaudePlanner"/>
+<protocol id="policy" type="ConfigDrivenPolicy"/>
 </SOOTHE_PROTOCOLS>
 ```
+
+**Migration note (flat → nested)**: Earlier implementations used flat `Key: value` lines inside `<SOOTHE_*>` blocks. Runtime output is now nested as above; consumers should key off outer tag names and inner element names, not legacy line prefixes.
 
 ### Section Content Specifications
 

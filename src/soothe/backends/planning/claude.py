@@ -19,6 +19,7 @@ from soothe.backends.planning.simple import (
     parse_reason_response_text,
 )
 from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.config import SootheConfig
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -78,6 +79,7 @@ class ClaudePlanner:
         reflection_model: Optional LLM for LLM-assisted reflection. Claude CLI
             is used for planning but a standard chat model is more efficient
             for reflection analysis.
+        config: Optional Soothe config for RFC-104-aligned planning/reason prefixes.
 
     Raises:
         RuntimeError: If Claude CLI or ANTHROPIC_ env vars are missing.
@@ -87,12 +89,14 @@ class ClaudePlanner:
         self,
         cwd: str | None = None,
         reflection_model: object | None = None,
+        config: SootheConfig | None = None,
     ) -> None:
         """Initialize the Claude planner.
 
         Args:
             cwd: Working directory for the Claude CLI.
             reflection_model: Optional chat model for LLM-assisted reflection.
+            config: Optional configuration for shared context XML in prompts.
 
         Raises:
             RuntimeError: If Claude CLI or ANTHROPIC_ env vars are missing.
@@ -108,6 +112,7 @@ class ClaudePlanner:
         )
         self._runnable = spec["runnable"]
         self._reflection_model = reflection_model
+        self._config = config
         self._call_count = 0
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
@@ -160,7 +165,7 @@ class ClaudePlanner:
         """Layer 2 Reason phase via Claude subagent (same JSON contract as SimplePlanner)."""
         from soothe.cognition.loop_agent.schemas import ReasonResult
 
-        prompt = build_loop_reason_prompt(goal, state, context)
+        prompt = build_loop_reason_prompt(goal, state, context, config=self._config)
         try:
             text = await self._invoke(prompt)
             return parse_reason_response_text(text, goal)
@@ -188,7 +193,19 @@ class ClaudePlanner:
         return ""
 
     def _build_prompt(self, goal: str, context: PlanContext) -> str:
-        parts = [f"Create a detailed, structured plan for this goal:\n\n{goal}"]
+        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
+
+        parts: list[str] = []
+        if self._config is not None:
+            parts.append(
+                build_shared_environment_workspace_prefix(
+                    self._config,
+                    context.workspace,
+                    context.git_status,
+                    include_workspace_extras=True,
+                ).rstrip()
+            )
+        parts.append(f"Create a detailed, structured plan for this goal:\n\n{goal}")
         if context.available_capabilities:
             parts.append(f"Available capabilities: {', '.join(context.available_capabilities)}")
         if context.completed_steps:

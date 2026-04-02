@@ -36,44 +36,44 @@ class TestDisplayLine:
         )
         assert line.format() == "● Goal: test"
 
-    def test_format_level2_with_indent(self) -> None:
+    def test_format_level2_flat(self) -> None:
         line = DisplayLine(
             level=2,
             content="Step 1: test",
-            icon="●",  # Icon is separate from tree connector in indent
-            indent="  └ ",
+            icon="●",
+            indent="",
         )
-        assert line.format() == "  └ ● Step 1: test"
+        assert line.format() == "● Step 1: test"
 
     def test_format_with_status(self) -> None:
         line = DisplayLine(
             level=2,
             content="tool()",
             icon="⚙",
-            indent="  └ ",
+            indent="",
             status="running",
         )
-        assert line.format() == "  └ ⚙ tool() [running]"
+        assert line.format() == "⚙ tool() [running]"
 
     def test_format_with_duration_ms(self) -> None:
         line = DisplayLine(
             level=3,
             content="Done",
             icon="✓",
-            indent="     └ ",
+            indent="",
             duration_ms=150,
         )
-        assert line.format() == "     └ ✓ Done (150ms)"
+        assert line.format() == "✓ Done (150ms)"
 
     def test_format_with_duration_seconds(self) -> None:
         line = DisplayLine(
             level=3,
             content="Done",
             icon="✓",
-            indent="     └ ",
+            indent="",
             duration_ms=1500,
         )
-        assert line.format() == "     └ ✓ Done (1.5s)"
+        assert line.format() == "✓ Done (1.5s)"
 
 
 class TestIndentForLevel:
@@ -82,11 +82,11 @@ class TestIndentForLevel:
     def test_level1_empty(self) -> None:
         assert indent_for_level(1) == ""
 
-    def test_level2_step_indent(self) -> None:
-        assert indent_for_level(2) == "  └ "
+    def test_level2_flat_indent(self) -> None:
+        assert indent_for_level(2) == ""
 
-    def test_level3_result_indent(self) -> None:
-        assert indent_for_level(3) == "     └ "
+    def test_level3_flat_indent(self) -> None:
+        assert indent_for_level(3) == ""
 
 
 class TestFormatters:
@@ -407,12 +407,14 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
+        assert len(lines) == 3
         assert "I'll check your config files next." in lines[0].content
-        assert "Found structure" in lines[0].content
-        assert "80% sure" in lines[0].content
-        assert "validate settings" in lines[0].content
         assert lines[0].icon == "→"
+        assert "Found structure" in lines[1].content
+        assert "80% sure" in lines[1].content
+        assert lines[1].icon == "→"
+        assert "validate settings" in lines[2].content
+        assert lines[2].icon == "→"
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
         """Reason event with status=done shows checkmark icon."""
@@ -430,9 +432,12 @@ class TestStreamDisplayPipeline:
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
+        assert len(lines) == 2
         assert "I'm sharing the final result now." in lines[0].content
         assert lines[0].icon == "✓"
+        assert "Goal achieved" in lines[1].content
+        assert "95% sure" in lines[1].content
+        assert lines[1].icon == "✓"
 
     def test_step_completed_with_tool_call_count(self) -> None:
         """Step completion shows tool call count when > 0."""

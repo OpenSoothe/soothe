@@ -82,6 +82,7 @@ class PlanContext(BaseModel):
         completed_steps: Results from already-completed steps.
         unified_classification: Pre-computed unified classification (RFC-0012).
         workspace: Current workspace directory path.
+        git_status: Optional git snapshot from runner (same shape as ``get_git_status``).
     """
 
     recent_messages: list[str] = Field(default_factory=list)
@@ -89,6 +90,7 @@ class PlanContext(BaseModel):
     completed_steps: list[StepResult] = Field(default_factory=list)
     unified_classification: Any | None = None  # Type: UnifiedClassification
     workspace: str | None = None  # Current workspace directory
+    git_status: dict[str, Any] | None = None
 
 
 class StepReport(BaseModel):

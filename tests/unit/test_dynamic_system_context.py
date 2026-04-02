@@ -9,6 +9,13 @@ import pytest
 
 from soothe.config.models import MODEL_KNOWLEDGE_CUTOFFS, get_knowledge_cutoff
 from soothe.core.middleware import SystemPromptOptimizationMiddleware
+from soothe.core.prompts.context_xml import (
+    build_context_sections_for_complexity,
+    build_soothe_environment_section,
+    build_soothe_protocols_section,
+    build_soothe_thread_section,
+    build_soothe_workspace_section,
+)
 
 
 class TestKnowledgeCutoff:
@@ -41,56 +48,41 @@ class TestKnowledgeCutoff:
 
 
 class TestEnvironmentSection:
-    """Tests for <SOOTHE_ENVIRONMENT> section building."""
+    """Tests for nested <SOOTHE_ENVIRONMENT> (context_xml)."""
 
-    @pytest.fixture
-    def middleware(self) -> SystemPromptOptimizationMiddleware:
-        """Create middleware instance for testing."""
-        config = MagicMock()
-        config.assistant_name = "Soothe"
-        config.resolve_model.return_value = "claude-opus-4-6"
-        return SystemPromptOptimizationMiddleware(config)
+    def test_environment_section_format(self) -> None:
+        """Environment section has nested XML structure."""
+        section = build_soothe_environment_section(model="claude-opus-4-6")
 
-    def test_environment_section_format(self, middleware: SystemPromptOptimizationMiddleware) -> None:
-        """Environment section has correct XML structure."""
-        section = middleware._build_environment_section()
-
-        assert "<SOOTHE_ENVIRONMENT>" in section
+        assert '<SOOTHE_ENVIRONMENT version="1">' in section
         assert "</SOOTHE_ENVIRONMENT>" in section
-        assert "Platform:" in section
-        assert "Shell:" in section
-        assert "OS Version:" in section
-        assert "Model:" in section
-        assert "Knowledge cutoff:" in section
+        assert "<platform>" in section
+        assert "<shell>" in section
+        assert "<os_version>" in section
+        assert "<model>" in section
+        assert "<knowledge_cutoff>" in section
 
-    def test_environment_section_contains_model(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_environment_section_contains_model(self) -> None:
         """Environment section contains configured model."""
-        section = middleware._build_environment_section()
+        section = build_soothe_environment_section(model="claude-opus-4-6")
         assert "claude-opus-4-6" in section
 
 
 class TestWorkspaceSection:
-    """Tests for <SOOTHE_WORKSPACE> section building."""
+    """Tests for nested <SOOTHE_WORKSPACE> (context_xml)."""
 
-    @pytest.fixture
-    def middleware(self) -> SystemPromptOptimizationMiddleware:
-        """Create middleware instance for testing."""
-        config = MagicMock()
-        config.assistant_name = "Soothe"
-        config.resolve_model.return_value = "claude-opus-4-6"
-        return SystemPromptOptimizationMiddleware(config)
-
-    def test_workspace_section_non_git(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_workspace_section_non_git(self) -> None:
         """Workspace section handles non-git directory."""
-        section = middleware._build_workspace_section(Path("/tmp/test"), None)
+        section = build_soothe_workspace_section(Path("/tmp/test"), None)
 
-        assert "<SOOTHE_WORKSPACE>" in section
+        assert '<SOOTHE_WORKSPACE version="1">' in section
         assert "</SOOTHE_WORKSPACE>" in section
-        assert "Primary working directory: /tmp/test" in section
-        assert "Is a git repository: False" in section
-        assert "Current branch:" not in section
+        assert "<root>" in section
+        assert "/tmp/test" in section
+        assert 'present="false"' in section
+        assert "<branch>" not in section
 
-    def test_workspace_section_with_git(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_workspace_section_with_git(self) -> None:
         """Workspace section includes git status when available."""
         git_status = {
             "branch": "feature/test",
@@ -99,46 +91,39 @@ class TestWorkspaceSection:
             "recent_commits": "abc123 fix: something",
         }
 
-        section = middleware._build_workspace_section(Path("/project"), git_status)
+        section = build_soothe_workspace_section(Path("/project"), git_status)
 
-        assert "Is a git repository: True" in section
-        assert "Current branch: feature/test" in section
-        assert "Main branch: main" in section
-        assert "Status:" in section
-        assert "Recent commits:" in section
+        assert 'present="true"' in section
+        assert "feature/test" in section
+        assert "main" in section
+        assert "M src/file.py" in section
+        assert "abc123" in section
 
-    def test_workspace_section_no_workspace_uses_cwd(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_workspace_section_no_workspace_uses_cwd(self) -> None:
         """Workspace section uses cwd when workspace is None."""
         with patch.object(Path, "cwd", return_value=Path("/current/working/dir")):
-            section = middleware._build_workspace_section(None, None)
-            assert "Primary working directory: /current/working/dir" in section
+            section = build_soothe_workspace_section(None, None)
+            assert "/current/working/dir" in section
 
 
 class TestThreadSection:
-    """Tests for <SOOTHE_THREAD> section building."""
+    """Tests for <SOOTHE_THREAD> (context_xml)."""
 
-    @pytest.fixture
-    def middleware(self) -> SystemPromptOptimizationMiddleware:
-        """Create middleware instance for testing."""
-        config = MagicMock()
-        config.assistant_name = "Soothe"
-        return SystemPromptOptimizationMiddleware(config)
-
-    def test_thread_section_basic(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_thread_section_basic(self) -> None:
         """Thread section has basic fields."""
         thread_context = {
             "thread_id": "abc123",
             "conversation_turns": 3,
         }
 
-        section = middleware._build_thread_section(thread_context)
+        section = build_soothe_thread_section(thread_context)
 
-        assert "<SOOTHE_THREAD>" in section
+        assert '<SOOTHE_THREAD version="1">' in section
         assert "</SOOTHE_THREAD>" in section
-        assert "Thread ID: abc123" in section
-        assert "Conversation turns: 3" in section
+        assert "abc123" in section
+        assert "<conversation_turns>3</conversation_turns>" in section
 
-    def test_thread_section_with_goals(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_thread_section_with_goals(self) -> None:
         """Thread section includes active goals."""
         thread_context = {
             "thread_id": "abc123",
@@ -146,12 +131,12 @@ class TestThreadSection:
             "active_goals": ["Implement feature", "Write tests"],
         }
 
-        section = middleware._build_thread_section(thread_context)
+        section = build_soothe_thread_section(thread_context)
 
-        assert "Active goals:" in section
+        assert "active_goals" in section
         assert "Implement feature" in section
 
-    def test_thread_section_with_plan(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_thread_section_with_plan(self) -> None:
         """Thread section includes current plan."""
         thread_context = {
             "thread_id": "abc123",
@@ -159,11 +144,11 @@ class TestThreadSection:
             "current_plan": "Phase 1: Design the API",
         }
 
-        section = middleware._build_thread_section(thread_context)
+        section = build_soothe_thread_section(thread_context)
 
-        assert "Current plan: Phase 1: Design the API" in section
+        assert "Phase 1: Design the API" in section
 
-    def test_thread_section_limits_goals(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_thread_section_limits_goals(self) -> None:
         """Thread section limits goals to 5 items."""
         thread_context = {
             "thread_id": "abc123",
@@ -171,25 +156,16 @@ class TestThreadSection:
             "active_goals": [f"Goal {i}" for i in range(10)],
         }
 
-        section = middleware._build_thread_section(thread_context)
+        section = build_soothe_thread_section(thread_context)
 
-        # Should only include first 5 goals
         assert "Goal 0" in section
         assert "Goal 4" in section
-        # The section is truncated in the JSON representation
 
 
 class TestProtocolsSection:
-    """Tests for <SOOTHE_PROTOCOLS> section building."""
+    """Tests for <SOOTHE_PROTOCOLS> (context_xml)."""
 
-    @pytest.fixture
-    def middleware(self) -> SystemPromptOptimizationMiddleware:
-        """Create middleware instance for testing."""
-        config = MagicMock()
-        config.assistant_name = "Soothe"
-        return SystemPromptOptimizationMiddleware(config)
-
-    def test_protocols_section_with_all(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_protocols_section_with_all(self) -> None:
         """Protocols section shows all active protocols."""
         protocol_summary = {
             "context": {"type": "VectorContext", "stats": "8 entries"},
@@ -198,21 +174,22 @@ class TestProtocolsSection:
             "policy": {"type": "ConfigDrivenPolicy"},
         }
 
-        section = middleware._build_protocols_section(protocol_summary)
+        section = build_soothe_protocols_section(protocol_summary)
 
-        assert "<SOOTHE_PROTOCOLS>" in section
-        assert "Context: VectorContext" in section
-        assert "Memory: KeywordMemory" in section
-        assert "Planner: ClaudePlanner" in section
-        assert "Policy: ConfigDrivenPolicy" in section
+        assert '<SOOTHE_PROTOCOLS version="1">' in section
+        assert 'id="context"' in section
+        assert "VectorContext" in section
+        assert 'id="memory"' in section
+        assert 'id="planner"' in section
+        assert 'id="policy"' in section
 
-    def test_protocols_section_empty(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_protocols_section_empty(self) -> None:
         """Empty protocol summary returns empty string."""
-        section = middleware._build_protocols_section({})
+        section = build_soothe_protocols_section({})
 
         assert section == ""
 
-    def test_protocols_section_partial(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_protocols_section_partial(self) -> None:
         """Protocols section handles partial availability."""
         protocol_summary = {
             "context": {"type": "VectorContext"},
@@ -221,15 +198,30 @@ class TestProtocolsSection:
             "policy": None,
         }
 
-        section = middleware._build_protocols_section(protocol_summary)
+        section = build_soothe_protocols_section(protocol_summary)
 
-        assert "Context: VectorContext" in section
-        assert "Planner: ClaudePlanner" in section
-        assert "Memory" not in section
+        assert 'id="context"' in section
+        assert 'id="planner"' in section
+        assert 'id="memory"' not in section
+
+
+class TestBuildContextSectionsForComplexity:
+    """Sanity checks for ordered block builder."""
+
+    def test_medium_order(self) -> None:
+        config = MagicMock()
+        config.resolve_model.return_value = "m"
+        state = {"workspace": "/tmp", "git_status": None}
+        blocks = build_context_sections_for_complexity(
+            config=config, complexity="medium", state=state, include_workspace_extras=False
+        )
+        assert len(blocks) == 2
+        assert "SOOTHE_ENVIRONMENT" in blocks[0]
+        assert "SOOTHE_WORKSPACE" in blocks[1]
 
 
 class TestComplexityMapping:
-    """Tests for complexity-to-sections mapping."""
+    """Tests for complexity-to-sections mapping (middleware)."""
 
     @pytest.fixture
     def middleware(self) -> SystemPromptOptimizationMiddleware:
@@ -237,13 +229,18 @@ class TestComplexityMapping:
         config = MagicMock()
         config.assistant_name = "Soothe"
         config.resolve_model.return_value = "claude-opus-4-6"
+        config.system_prompt = None
+        config.performance.enabled = True
+        config.performance.optimize_system_prompts = True
+        config.performance.unified_classification = True
         return SystemPromptOptimizationMiddleware(config)
 
     def test_chitchat_no_sections(self, middleware: SystemPromptOptimizationMiddleware) -> None:
-        """Chitchat complexity gets no XML sections."""
+        """Chitchat complexity gets no XML context sections."""
         prompt = middleware._get_prompt_for_complexity("chitchat", {})
 
         assert "<SOOTHE_" not in prompt
+        assert "Today's date is" in prompt
 
     def test_medium_gets_environment_workspace(self, middleware: SystemPromptOptimizationMiddleware) -> None:
         """Medium complexity gets ENVIRONMENT and WORKSPACE sections."""
@@ -254,10 +251,11 @@ class TestComplexityMapping:
 
         prompt = middleware._get_prompt_for_complexity("medium", state)
 
-        assert "<SOOTHE_ENVIRONMENT>" in prompt
-        assert "<SOOTHE_WORKSPACE>" in prompt
-        assert "<SOOTHE_THREAD>" not in prompt
-        assert "<SOOTHE_PROTOCOLS>" not in prompt
+        assert "<SOOTHE_ENVIRONMENT" in prompt
+        assert "<SOOTHE_WORKSPACE" in prompt
+        assert "<SOOTHE_THREAD" not in prompt
+        assert "<SOOTHE_PROTOCOLS" not in prompt
+        assert prompt.strip().endswith(middleware._current_date_line())
 
     def test_complex_gets_all_sections(self, middleware: SystemPromptOptimizationMiddleware) -> None:
         """Complex complexity gets all four sections."""
@@ -270,13 +268,13 @@ class TestComplexityMapping:
 
         prompt = middleware._get_prompt_for_complexity("complex", state)
 
-        assert "<SOOTHE_ENVIRONMENT>" in prompt
-        assert "<SOOTHE_WORKSPACE>" in prompt
-        assert "<SOOTHE_THREAD>" in prompt
-        assert "<SOOTHE_PROTOCOLS>" in prompt
+        assert "<SOOTHE_ENVIRONMENT" in prompt
+        assert "<SOOTHE_WORKSPACE" in prompt
+        assert "<SOOTHE_THREAD" in prompt
+        assert "<SOOTHE_PROTOCOLS" in prompt
 
     def test_base_prompt_preserved(self, middleware: SystemPromptOptimizationMiddleware) -> None:
-        """Base prompt content is preserved."""
+        """Base prompt content is preserved before context blocks."""
         state = {
             "workspace": Path("/project"),
             "git_status": None,
@@ -284,9 +282,10 @@ class TestComplexityMapping:
 
         prompt = middleware._get_prompt_for_complexity("medium", state)
 
-        # Should contain base prompt elements
-        assert "Soothe" in prompt  # assistant name
+        assert "Soothe" in prompt
         assert "Today's date is" in prompt
+        core = middleware._get_base_prompt_core("medium")
+        assert core in prompt
 
 
 class TestGitStatusHelper:
@@ -307,7 +306,6 @@ class TestGitStatusHelper:
 
         from soothe.core.workspace import get_git_status
 
-        # Initialize a git repo
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=False)
         subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True, check=False)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=False)

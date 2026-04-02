@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -187,6 +187,7 @@ class LoopState(BaseModel):
         goal: Goal description
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
+        git_status: Optional git snapshot for planner/reason prompts (RFC-104)
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
@@ -201,6 +202,7 @@ class LoopState(BaseModel):
     goal: str
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
+    git_status: dict[str, Any] | None = None
     iteration: int = 0
     max_iterations: int = 8
 

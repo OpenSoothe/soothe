@@ -439,6 +439,7 @@ class PhasesMixin:
                     completed_steps=[],
                     unified_classification=state.unified_classification,
                     workspace=state.workspace,  # Pass workspace for planning context
+                    git_status=getattr(state, "git_status", None),
                 )
 
                 plan = await self._planner.create_plan(user_input, context)

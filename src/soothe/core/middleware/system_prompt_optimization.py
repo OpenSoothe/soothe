@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
-import os
-import platform as platform_module
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
@@ -67,144 +63,22 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         """
         self._config = config
 
-    # -----------------------------------------------------------------------
-    # XML Section Builders (RFC-104)
-    # -----------------------------------------------------------------------
-
-    def _build_environment_section(self) -> str:
-        """Build <SOOTHE_ENVIRONMENT> section.
-
-        Returns:
-            Formatted XML section string with platform/shell/model info.
-        """
-        from soothe.config.models import get_knowledge_cutoff
-
-        platform_name = platform_module.system()
-        shell = os.environ.get("SHELL", "unknown")
-        os_version = platform_module.platform()
-        model = self._config.resolve_model("default")
-        cutoff = get_knowledge_cutoff(model)
-
-        content = [
-            f"Platform: {platform_name}",
-            f"Shell: {shell}",
-            f"OS Version: {os_version}",
-            f"Model: {model}",
-            f"Knowledge cutoff: {cutoff}",
-        ]
-        return "<SOOTHE_ENVIRONMENT>\n" + "\n".join(content) + "\n</SOOTHE_ENVIRONMENT>"
-
-    def _build_workspace_section(self, workspace: Path | None, git_status: dict[str, Any] | None) -> str:
-        """Build <SOOTHE_WORKSPACE> section.
-
-        Args:
-            workspace: Current workspace path (from ContextVar or cwd).
-            git_status: Git repository status dict (from runner).
-
-        Returns:
-            Formatted XML section string.
-        """
-        cwd = str(workspace or Path.cwd())
-        is_git = git_status is not None
-
-        content = [
-            f"Primary working directory: {cwd}",
-            f"Is a git repository: {is_git}",
-        ]
-
-        if git_status:
-            content.append(f"Current branch: {git_status.get('branch', 'unknown')}")
-            content.append(f"Main branch: {git_status.get('main_branch', 'main')}")
-            status = git_status.get("status", "")
-            if status:
-                content.append(f"Status:\n{status}")
-            commits = git_status.get("recent_commits", "")
-            if commits:
-                content.append(f"Recent commits:\n{commits}")
-
-        return "<SOOTHE_WORKSPACE>\n" + "\n".join(content) + "\n</SOOTHE_WORKSPACE>"
-
-    def _build_thread_section(self, thread_context: dict[str, Any]) -> str:
-        """Build <SOOTHE_THREAD> section.
-
-        Args:
-            thread_context: Thread state dict from runner.
-
-        Returns:
-            Formatted XML section string.
-        """
-        thread_id = thread_context.get("thread_id", "unknown")
-        goals = thread_context.get("active_goals", [])
-        turns = thread_context.get("conversation_turns", 0)
-        plan = thread_context.get("current_plan")
-
-        content = [
-            f"Thread ID: {thread_id}",
-            f"Conversation turns: {turns}",
-        ]
-
-        if goals:
-            # Limit goals to 5 items for token budget
-            goals_preview = goals[:5]
-            content.append(f"Active goals: {json.dumps(goals_preview)}")
-        if plan:
-            # Truncate plan to 100 chars
-            plan_preview = str(plan)[:100]
-            content.append(f"Current plan: {plan_preview}")
-
-        return "<SOOTHE_THREAD>\n" + "\n".join(content) + "\n</SOOTHE_THREAD>"
-
-    def _build_protocols_section(self, protocol_summary: dict[str, Any]) -> str:
-        """Build <SOOTHE_PROTOCOLS> section.
-
-        Args:
-            protocol_summary: Protocol state dict from runner.
-
-        Returns:
-            Formatted XML section string, or empty string if no protocols active.
-        """
-        content = []
-
-        proto_names = ["context", "memory", "planner", "policy"]
-        for proto_name in proto_names:
-            proto_info = protocol_summary.get(proto_name)
-            if proto_info:
-                proto_type = proto_info.get("type", "unknown")
-                stats = proto_info.get("stats", "")
-                if stats:
-                    content.append(f"{proto_name.capitalize()}: {proto_type} ({stats})")
-                else:
-                    content.append(f"{proto_name.capitalize()}: {proto_type}")
-
-        if not content:
-            return ""  # Skip empty section
-
-        return "<SOOTHE_PROTOCOLS>\n" + "\n".join(content) + "\n</SOOTHE_PROTOCOLS>"
-
-    def _get_base_prompt_for_complexity(self, complexity: str) -> str:
-        """Get base prompt template for complexity level (without XML sections).
-
-        Args:
-            complexity: One of "chitchat", "medium", "complex" (from LLM classification).
-
-        Returns:
-            Formatted base prompt string with assistant_name and current date.
-        """
+    def _get_base_prompt_core(self, complexity: str) -> str:
+        """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
         from soothe.config import _DEFAULT_SYSTEM_PROMPT, _MEDIUM_SYSTEM_PROMPT, _SIMPLE_SYSTEM_PROMPT
 
         if complexity == "chitchat":
-            base_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        elif complexity == "medium":
-            base_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
-        elif self._config.system_prompt:
-            base_prompt = self._config.system_prompt.format(assistant_name=self._config.assistant_name)
-        else:
-            base_prompt = _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+            return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+        if complexity == "medium":
+            return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
+        if self._config.system_prompt:
+            return self._config.system_prompt.format(assistant_name=self._config.assistant_name)
+        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.assistant_name)
 
+    @staticmethod
+    def _current_date_line() -> str:
         now = dt.datetime.now(dt.UTC).astimezone()
-        current_date = now.strftime("%Y-%m-%d")
-
-        return f"{base_prompt}\n\nToday's date is {current_date}."
+        return f"Today's date is {now.strftime('%Y-%m-%d')}."
 
     def _get_prompt_for_complexity(self, complexity: str, state: dict[str, Any] | None = None) -> str:
         """Get prompt with XML context sections for complexity level.
@@ -216,37 +90,23 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Base prompt with appended XML sections for medium/complex.
         """
-        base_prompt = self._get_base_prompt_for_complexity(complexity)
+        from soothe.core.prompts.context_xml import build_context_sections_for_complexity
+
+        base_core = self._get_base_prompt_core(complexity)
+        date_line = self._current_date_line()
 
         # Chitchat: no context injection
         if complexity == "chitchat":
-            return base_prompt
+            return f"{base_core}\n\n{date_line}"
 
-        # Medium and complex: inject context sections
-        state = state or {}
-        sections = []
-
-        # Environment section (always for medium/complex)
-        sections.append(self._build_environment_section())
-
-        # Workspace section
-        workspace = state.get("workspace")
-        git_status = state.get("git_status")
-        sections.append(self._build_workspace_section(workspace, git_status))
-
-        # Thread and protocols only for complex
-        if complexity == "complex":
-            thread_context = state.get("thread_context", {})
-            if thread_context:
-                sections.append(self._build_thread_section(thread_context))
-
-            protocol_summary = state.get("protocol_summary", {})
-            if protocol_summary:
-                proto_section = self._build_protocols_section(protocol_summary)
-                if proto_section:
-                    sections.append(proto_section)
-
-        return base_prompt + "\n\n" + "\n\n".join(sections)
+        sections = build_context_sections_for_complexity(
+            config=self._config,
+            complexity=complexity,  # type: ignore[arg-type]
+            state=state or {},
+            include_workspace_extras=False,
+        )
+        body = "\n\n".join(sections)
+        return f"{base_core}\n\n{body}\n\n{date_line}"
 
     def _get_domain_scoped_prompt(
         self, classification: UnifiedClassification, state: dict[str, Any] | None = None

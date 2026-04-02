@@ -12,10 +12,10 @@ class DisplayLine:
     """Structured output unit for CLI stream display.
 
     Attributes:
-        level: Display level (1=goal, 2=step/tool, 3=result).
+        level: Semantic level (1=goal, 2=step/tool, 3=result); indent is flat for all.
         content: Text content to display.
-        icon: Icon prefix ("●", "└", "⚙", "✓", "✗").
-        indent: Indentation string computed from level.
+        icon: Icon prefix ("●", "○", "⚙", "✓", "✗", "→", etc.).
+        indent: Indentation string (headless stream uses no tree indent).
         status: Optional status suffix ("running" for parallel tools).
         duration_ms: Optional duration in milliseconds.
         source_prefix: Optional source identifier for debug mode (e.g., "[main]", "[subagent:research]").
@@ -60,21 +60,18 @@ class DisplayLine:
         return "".join(parts)
 
 
-def indent_for_level(level: int) -> str:
+def indent_for_level(_level: int) -> str:
     """Get indentation string for a display level.
 
+    Headless CLI uses a flat information stream (no tree connectors).
+
     Args:
-        level: Display level (1, 2, or 3).
+        _level: Display level (1, 2, or 3); retained for API compatibility.
 
     Returns:
-        Indentation string.
+        Indentation string (always empty for stream layout).
     """
-    mapping = {
-        1: "",
-        2: "  └ ",
-        3: "     └ ",
-    }
-    return mapping.get(level, "")
+    return ""
 
 
 __all__ = ["DisplayLine", "indent_for_level"]

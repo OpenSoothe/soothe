@@ -472,15 +472,18 @@ class StreamDisplayPipeline:
         if progress_detail:
             lines.append(progress_detail)
 
-        judgement = "\n".join(lines)
+        judgement_lines = [ln for ln in ("\n".join(lines)).split("\n") if ln.strip()]
+        if not judgement_lines:
+            return []
 
         return [
             format_judgement(
-                judgement,
+                fragment,
                 action,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
+            for fragment in judgement_lines
         ]
 
 

@@ -91,6 +91,7 @@ class LoopAgent:
         goal: str,
         thread_id: str,
         workspace: str | None = None,
+        git_status: dict[str, Any] | None = None,
         max_iterations: int = 8,
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
@@ -101,6 +102,7 @@ class LoopAgent:
             goal: Goal description to execute
             thread_id: Thread context for execution
             workspace: Thread-specific workspace path (RFC-103)
+            git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
 
         Yields:
@@ -110,6 +112,7 @@ class LoopAgent:
             goal=goal,
             thread_id=thread_id,
             workspace=workspace,
+            git_status=git_status,
             max_iterations=max_iterations,
         )
 
@@ -310,4 +313,5 @@ class LoopAgent:
             recent_messages=[],
             completed_steps=completed_steps,
             workspace=state.workspace,
+            git_status=state.git_status,
         )

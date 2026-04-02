@@ -305,6 +305,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         completed_steps=completed,
                         unified_classification=parent_state.unified_classification,
                         workspace=parent_state.workspace if parent_state else None,
+                        git_status=getattr(parent_state, "git_status", None) if parent_state else None,
                     )
                     plan = await self._planner.create_plan(current_input, context)
                     # Assign plan ID from goal counter

@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 from typing import Any
 
 from soothe.backends.planning._shared import reflect_heuristic
 from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.config import SootheConfig
 from soothe.protocols.planner import (
     GoalContext,
     Plan,
@@ -242,24 +244,51 @@ def _parse_step_decision_text(response: str, goal: str) -> Any:
         return _default_agent_decision(goal)
 
 
-def build_loop_reason_prompt(goal: str, state: LoopState, context: PlanContext) -> str:
+def build_loop_reason_prompt(
+    goal: str,
+    state: LoopState,
+    context: PlanContext,
+    *,
+    config: SootheConfig | None = None,
+) -> str:
     """Shared Reason-phase prompt for Layer 2 (SimplePlanner / ClaudePlanner)."""
-    parts = [
-        f"Goal: {goal}\n",
-        f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
-    ]
+    from soothe.core.prompts.context_xml import (
+        build_shared_environment_workspace_prefix,
+        build_soothe_workspace_section,
+    )
+
+    parts: list[str] = []
+
+    if config is not None:
+        parts.append(
+            build_shared_environment_workspace_prefix(
+                config,
+                context.workspace,
+                context.git_status,
+                include_workspace_extras=False,
+            )
+        )
+    elif context.workspace:
+        parts.append(build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n\n")
+
+    parts.extend(
+        [
+            f"Goal: {goal}\n",
+            f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
+        ]
+    )
 
     if context.workspace:
         parts.append(
-            "\n<WORKING_DIRECTORY>\n"
-            f"The open project root (absolute path) is:\n{context.workspace}\n\n"
+            "\n<SOOTHE_REASON_WORKSPACE_RULES>\n"
+            "The open project root (absolute path) is under <SOOTHE_WORKSPACE><root> above.\n\n"
             "Rules:\n"
             "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
             "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
             "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
             "a different project outside this directory.\n"
             "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-            "</WORKING_DIRECTORY>\n"
+            "</SOOTHE_REASON_WORKSPACE_RULES>\n"
         )
 
     if state.step_results:
@@ -366,18 +395,22 @@ class SimplePlanner:
 
     Args:
         model: Langchain BaseChatModel supporting structured output.
+        config: Optional Soothe config for RFC-104-aligned planning/reason prefixes.
     """
 
     def __init__(
         self,
         model: Any,
+        config: SootheConfig | None = None,
     ) -> None:
         """Initialize SimplePlanner.
 
         Args:
             model: Langchain BaseChatModel supporting structured output.
+            config: Optional configuration for shared context XML in prompts.
         """
         self._model = model
+        self._config = config
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output."""
@@ -491,6 +524,8 @@ class SimplePlanner:
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
         """Build unified planning prompt with XML sections (RFC-104 alignment)."""
+        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
+
         sections = []
 
         # Goal section
@@ -565,7 +600,16 @@ class SimplePlanner:
         ]
         sections.append("<PLANNING_OUTPUT>\n" + "\n".join(output_spec) + "\n</PLANNING_OUTPUT>")
 
-        return "\n\n".join(sections)
+        body = "\n\n".join(sections)
+        if self._config is not None:
+            prefix = build_shared_environment_workspace_prefix(
+                self._config,
+                context.workspace,
+                context.git_status,
+                include_workspace_extras=True,
+            )
+            return f"{prefix}{body}"
+        return body
 
     def _build_revision_prompt(self, plan: Plan, reflection: str) -> str:
         """Build plan revision prompt."""
@@ -647,4 +691,4 @@ class SimplePlanner:
 
     def _build_reason_prompt(self, goal: str, state: LoopState, context: PlanContext) -> str:
         """Build unified Reason prompt (assessment + next steps)."""
-        return build_loop_reason_prompt(goal, state, context)
+        return build_loop_reason_prompt(goal, state, context, config=self._config)

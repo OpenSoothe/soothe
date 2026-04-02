@@ -197,10 +197,10 @@ def resolve_planner(
 
     # Use fast model for unified planning (structured output generation)
     simple_planner_model = fast_model or planner_model
-    simple = SimplePlanner(model=simple_planner_model) if simple_planner_model else None
+    simple = SimplePlanner(model=simple_planner_model, config=config) if simple_planner_model else None
 
     if config.protocols.planner.routing == "always_direct":
-        return simple or SimplePlanner(model=planner_model)
+        return simple or SimplePlanner(model=planner_model, config=config)
 
     # Check if we're running inside Claude Code (nested session not allowed)
     import os
@@ -216,7 +216,7 @@ def resolve_planner(
         try:
             from soothe.backends.planning.claude import ClaudePlanner
 
-            claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model)
+            claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model, config=config)
         except Exception:
             logger.info("Claude CLI not available for planning")
     else:
