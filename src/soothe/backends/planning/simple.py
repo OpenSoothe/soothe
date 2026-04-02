@@ -249,6 +249,19 @@ def build_loop_reason_prompt(goal: str, state: LoopState, context: PlanContext) 
         f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
     ]
 
+    if context.workspace:
+        parts.append(
+            "\n<WORKING_DIRECTORY>\n"
+            f"The open project root (absolute path) is:\n{context.workspace}\n\n"
+            "Rules:\n"
+            "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
+            "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
+            "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
+            "a different project outside this directory.\n"
+            "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+            "</WORKING_DIRECTORY>\n"
+        )
+
     if state.step_results:
         parts.append("\nEvidence from steps run so far in this goal:")
         parts.extend(r.to_evidence_string() for r in state.step_results)
@@ -485,7 +498,6 @@ class SimplePlanner:
 
         # Workspace context as XML section
         if context.workspace:
-            logger.debug("Planner: using workspace=%s", context.workspace)
             workspace_content = [
                 f"Primary working directory: {context.workspace}",
                 "",

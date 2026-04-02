@@ -173,7 +173,6 @@ class Executor:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
             if state.workspace:
                 configurable["workspace"] = state.workspace
-                logger.debug("Executor: passing workspace to configurable: %s", state.workspace)
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": configurable},

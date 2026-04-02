@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -101,9 +102,9 @@ async def bootstrap_thread_session(
     await client.wait_for_daemon_ready(ready_timeout_s=daemon_ready_timeout_s)
 
     if resume_thread_id:
-        await client.send_resume_thread(resume_thread_id)
+        await client.send_resume_thread(resume_thread_id, workspace=str(Path.cwd().resolve()))
     else:
-        await client.send_new_thread()
+        await client.send_new_thread(workspace=str(Path.cwd().resolve()))
 
     status_event = await _wait_for_thread_status(client, timeout_s=thread_status_timeout_s)
 

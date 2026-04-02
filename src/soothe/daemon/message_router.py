@@ -140,13 +140,11 @@ class MessageRouter:
 
         logger.info("Received resume_thread request for thread_id=%r from client=%s", thread_id, client_id)
 
+        validated_resume_ws: Path | None = None
         if client_workspace:
             try:
-                validated = validate_client_workspace(client_workspace)
-                logger.info(
-                    "Client workspace %s provided for resume, thread will use persisted workspace",
-                    validated,
-                )
+                validated_resume_ws = validate_client_workspace(client_workspace)
+                logger.info("Resume with client workspace: %s", validated_resume_ws)
             except ValueError as e:
                 logger.warning("Invalid client workspace on resume: %s", e)
 
@@ -161,6 +159,10 @@ class MessageRouter:
 
             d._thread_registry.set_client_thread(client_id, resumed_thread_id)
             reg = d._thread_registry.ensure(resumed_thread_id, is_draft=False)
+            if validated_resume_ws is not None:
+                d._thread_registry.set_workspace(resumed_thread_id, validated_resume_ws)
+            elif d._thread_registry.get_workspace(resumed_thread_id) is None:
+                d._thread_registry.set_workspace(resumed_thread_id, Path(d._daemon_workspace))
             reg.thread_logger = ThreadLogger(
                 thread_id=resumed_thread_id,
                 retention_days=d._config.logging.thread_logging.retention_days,

@@ -447,10 +447,10 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
         async def wait_for_daemon_ready(self, ready_timeout_s: float = 10.0) -> dict[str, Any]:
             return {"type": "daemon_ready", "state": "ready"}
 
-        async def send_new_thread(self) -> None:
+        async def send_new_thread(self, workspace: str | None = None) -> None:
             return None
 
-        async def send_resume_thread(self, thread_id: str) -> None:
+        async def send_resume_thread(self, thread_id: str, workspace: str | None = None) -> None:
             return None
 
         async def subscribe_thread(self, thread_id: str, verbosity: str = "normal") -> None:

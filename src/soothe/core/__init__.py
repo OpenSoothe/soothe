@@ -7,9 +7,11 @@ __all__ = [
     "ConfigDrivenPolicy",
     "CoreAgent",
     "FrameworkFilesystem",
+    "ResolvedWorkspace",
     "SootheRunner",
     "create_soothe_agent",
     "resolve_daemon_workspace",
+    "resolve_workspace_for_stream",
     "validate_client_workspace",
 ]
 
@@ -44,6 +46,14 @@ def __getattr__(name: str) -> Any:
         from soothe.core.workspace import validate_client_workspace
 
         return validate_client_workspace
+    if name == "ResolvedWorkspace":
+        from soothe.core.workspace_resolution import ResolvedWorkspace
+
+        return ResolvedWorkspace
+    if name == "resolve_workspace_for_stream":
+        from soothe.core.workspace_resolution import resolve_workspace_for_stream
+
+        return resolve_workspace_for_stream
     if name == "FrameworkFilesystem":
         from soothe.core.filesystem import FrameworkFilesystem
 

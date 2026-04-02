@@ -6,7 +6,7 @@ from the ToolRuntime.config at operation time, enabling per-thread workspace iso
 
 from __future__ import annotations
 
-import logging
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,8 +14,6 @@ from deepagents.backends.filesystem import FilesystemBackend
 
 if TYPE_CHECKING:
     from deepagents.backends.protocol import BackendProtocol
-
-logger = logging.getLogger(__name__)
 
 # Global cache for workspace backends (shared across all instances)
 _backend_cache: dict[str, NormalizedPathBackend] = {}
@@ -51,12 +49,6 @@ class NormalizedPathBackend(FilesystemBackend):
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = path.lstrip("/")
-                logger.debug(
-                    "Path '%s' is outside workspace '%s', treating as relative: '%s'",
-                    path,
-                    workspace,
-                    relative or ".",
-                )
                 return relative or "."
             else:
                 # Path is within workspace, use as-is
@@ -76,13 +68,11 @@ class NormalizedPathBackend(FilesystemBackend):
     def glob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Glob with file info, normalizing path first."""
         normalized = self._normalize_path(path)
-        logger.debug("glob_info: pattern=%s, path=%s (normalized=%s)", pattern, path, normalized)
         return super().glob_info(pattern, normalized)
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Async glob with file info, normalizing path first."""
         normalized = self._normalize_path(path)
-        logger.debug("aglob_info: pattern=%s, path=%s (normalized=%s)", pattern, path, normalized)
         return await super().aglob_info(pattern, normalized)
 
 
@@ -164,7 +154,6 @@ class WorkspaceAwareBackend:
             configurable = runtime.config.get("configurable", {})
             workspace = configurable.get("workspace")
             if workspace:
-                logger.debug("Backend factory (ToolRuntime): workspace=%s", workspace)
                 return get_workspace_backend(
                     Path(workspace),
                     self._virtual_mode,
@@ -173,7 +162,7 @@ class WorkspaceAwareBackend:
 
         # For Runtime (middleware), use get_config() from langgraph.config
         # Runtime does NOT have a config attribute - see langgraph.runtime docs
-        try:
+        with contextlib.suppress(Exception):
             from langgraph.config import get_config
 
             config = get_config()
@@ -181,21 +170,17 @@ class WorkspaceAwareBackend:
                 configurable = config.get("configurable", {})
                 workspace = configurable.get("workspace")
                 if workspace:
-                    logger.debug("Backend factory (Runtime): workspace=%s", workspace)
                     return get_workspace_backend(
                         Path(workspace),
                         self._virtual_mode,
                         self._max_file_size_mb,
                     )
-        except Exception:
-            logger.debug("get_config() failed, falling back to ContextVar")
 
         # Fallback to ContextVar (for non-tool operations)
         from soothe.core.filesystem import FrameworkFilesystem
 
         current_workspace = FrameworkFilesystem.get_current_workspace()
         if current_workspace:
-            logger.debug("Backend factory (ContextVar): workspace=%s", current_workspace)
             return get_workspace_backend(
                 current_workspace,
                 self._virtual_mode,
@@ -203,7 +188,6 @@ class WorkspaceAwareBackend:
             )
 
         # Use default
-        logger.debug("Backend factory: using default workspace=%s", self._default_root_dir)
         return self._default_backend
 
     def _get_backend(self) -> NormalizedPathBackend:
@@ -286,12 +270,6 @@ class WorkspaceAwareBackend:
             except ValueError:
                 # Path is outside workspace - treat as workspace-relative
                 relative = path.lstrip("/")
-                logger.debug(
-                    "Path '%s' is outside workspace '%s', treating as relative: '%s'",
-                    path,
-                    workspace,
-                    relative or ".",
-                )
                 return relative or "."
             else:
                 # Path is within workspace, use as-is
@@ -328,29 +306,13 @@ class WorkspaceAwareBackend:
         """Glob pattern matching with file info."""
         backend = self._get_backend()
         normalized_path = self._normalize_path(path)
-        logger.debug(
-            "glob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s",
-            pattern,
-            path,
-            normalized_path,
-            backend.cwd,
-        )
         return backend.glob_info(pattern, normalized_path)
 
     async def aglob_info(self, pattern: str, path: str = "/") -> list[dict[str, Any]]:
         """Async glob pattern matching with file info."""
         backend = self._get_backend()
         normalized_path = self._normalize_path(path)
-        logger.debug(
-            "aglob_info: pattern=%s, path=%s (normalized=%s), backend.cwd=%s",
-            pattern,
-            path,
-            normalized_path,
-            backend.cwd,
-        )
-        result = await backend.aglob_info(pattern, normalized_path)
-        logger.debug("aglob_info result: %d files found", len(result))
-        return result
+        return await backend.aglob_info(pattern, normalized_path)
 
     def grep(
         self,

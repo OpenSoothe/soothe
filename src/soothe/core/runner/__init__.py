@@ -31,6 +31,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
+from soothe.core.workspace_resolution import resolve_workspace_for_stream
 from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -455,7 +456,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         Args:
             user_input: The user's query text.
             thread_id: Thread ID for persistence. Generated if not provided.
-            workspace: Thread-specific workspace path (RFC-103). Falls back to config default.
+            workspace: Thread-specific workspace path (RFC-103). When omitted, resolved via
+                ``resolve_workspace_for_stream`` (config ``workspace_dir``, then cwd). The
+                resolved path is always a non-empty absolute directory string for this call.
             autonomous: Enable autonomous iteration loop (explicit goals).
             max_iterations: Override max iterations from config.
             subagent: Optional subagent name to route the query to directly.
@@ -469,6 +472,19 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         elif self._current_thread_id:
             set_thread_id(self._current_thread_id)
 
+        resolved = resolve_workspace_for_stream(
+            explicit=workspace,
+            config_workspace_dir=getattr(self._config, "workspace_dir", None),
+        )
+        effective_workspace = resolved.path
+        tid_for_log = str(thread_id or self._current_thread_id or "")
+        logger.debug(
+            "stream_workspace_resolved thread_id=%s path=%s source=%s",
+            tid_for_log,
+            effective_workspace,
+            resolved.source,
+        )
+
         try:
             # Quick path: direct subagent routing (bypasses classifier)
             if subagent:
@@ -476,7 +492,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
                 state = RunnerState()
                 state.thread_id = str(thread_id or self._current_thread_id or "")
-                state.workspace = workspace
+                state.workspace = effective_workspace
 
                 logger.info("Quick path: routing directly to subagent '%s'", subagent)
                 async for chunk in self._run_direct_subagent(user_input, subagent, state):
@@ -488,7 +504,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 async for chunk in self._run_autonomous(
                     user_input,
                     thread_id=thread_id,
-                    workspace=workspace,
+                    workspace=effective_workspace,
                     max_iterations=max_iterations or self._config.autonomous.max_iterations,
                 ):
                     yield chunk
@@ -498,7 +514,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             async for chunk in self._run_agentic_loop(
                 user_input,
                 thread_id=thread_id,
-                workspace=workspace,
+                workspace=effective_workspace,
                 max_iterations=max_iterations or self._config.agentic.max_iterations,
             ):
                 yield chunk

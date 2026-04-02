@@ -662,6 +662,7 @@ class SootheApp(App):
             if parsed_auto is not None:
                 max_iterations, prompt = parsed_auto
                 await self._client.send_input(prompt, autonomous=True, max_iterations=max_iterations)
+                self._is_running = True
                 # Don't return - let the user input be logged above
                 return
             # Check for subagent subcommands
@@ -673,6 +674,7 @@ class SootheApp(App):
                     autonomous=self._config.autonomous.enabled_by_default,
                     subagent=subagent_name,
                 )
+                self._is_running = True
                 return
             await self._client.send_command(text.strip())
         else:
@@ -680,6 +682,7 @@ class SootheApp(App):
                 text,
                 autonomous=self._config.autonomous.enabled_by_default,
             )
+            self._is_running = True
 
     # -- actions ------------------------------------------------------------
 
@@ -801,10 +804,11 @@ class SootheApp(App):
 
         # First Ctrl+C or timeout expired
         if self._is_running:
-            # Query is running - cancel it
+            # Query is running (optimistically set on send until daemon idle)
             self._ctrl_c_pressed_time = None
             if self._client and self._connected:
                 await self._client.send_command("/cancel")
+                # Leave _is_running True until daemon broadcasts idle (query may still be winding down).
                 # Show cancel message with daemon PID (RFC-0013)
                 from soothe.daemon import pid_path
 
@@ -813,7 +817,7 @@ class SootheApp(App):
                 self._on_panel_write(
                     make_dot_line(
                         DOT_COLORS["protocol"],
-                        f"Job cancelled. Press Ctrl+C again within 1s to quit. Daemon running (PID: {pid})",
+                        f"Cancel requested. Daemon running (PID: {pid}). Press Ctrl+C again within 1s to quit TUI.",
                     )
                 )
         else:

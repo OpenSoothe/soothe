@@ -172,7 +172,6 @@ class FrameworkFilesystem:
         """
         ws_path = Path(workspace) if isinstance(workspace, str) else workspace
         _current_workspace.set(ws_path)
-        logger.debug("Thread workspace set: %s", ws_path)
 
     @classmethod
     def get_current_workspace(cls) -> Path | None:
@@ -191,7 +190,6 @@ class FrameworkFilesystem:
         across stream boundaries.
         """
         _current_workspace.set(None)
-        logger.debug("Thread workspace cleared")
 
     @classmethod
     def resolve_path_dynamic(cls, file_path: str) -> Path:

@@ -6,6 +6,7 @@ Extracted from ``runner.py`` to keep the main module focused on orchestration.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
@@ -234,6 +235,28 @@ class PhasesMixin:
 
     # -- pre-stream ---------------------------------------------------------
 
+    def _ensure_runner_state_workspace(self, state: Any) -> None:
+        """Set ``state.workspace`` to a resolved path when missing (IG-116).
+
+        Ensures ``_pre_stream_planning`` / ``PlanContext`` and ``_stream_phase``
+        always see an absolute directory, even if the caller omitted workspace.
+        """
+        from soothe.core.workspace_resolution import resolve_workspace_for_stream
+
+        raw = getattr(state, "workspace", None)
+        if isinstance(raw, str):
+            if raw.strip():
+                return
+        elif raw is not None:
+            return
+
+        cfg = getattr(self, "_config", None)
+        cfg_dir = getattr(cfg, "workspace_dir", None) if cfg is not None else None
+        resolved = resolve_workspace_for_stream(
+            config_workspace_dir=cfg_dir,
+        )
+        state.workspace = resolved.path
+
     async def _pre_stream_independent(
         self,
         user_input: str,
@@ -251,6 +274,8 @@ class PhasesMixin:
             complexity: Override complexity (when known from tier-1 routing).
                 Falls back to state.unified_classification or "medium".
         """
+        self._ensure_runner_state_workspace(state)
+
         from soothe.protocols.durability import ThreadMetadata
 
         from ._types import _generate_thread_id
@@ -592,14 +617,18 @@ class PhasesMixin:
         from soothe.core import FrameworkFilesystem
         from soothe.core.workspace import get_git_status
 
-        # Workspace from ContextVar (set by WorkspaceContextMiddleware)
-        workspace = FrameworkFilesystem.get_current_workspace()
-        if workspace:
-            state.workspace = workspace
+        # Prefer ContextVar (WorkspaceContextMiddleware); else RunnerState (IG-116 / RFC-104).
+        workspace_path: Path | None = FrameworkFilesystem.get_current_workspace()
+        if workspace_path is None and getattr(state, "workspace", None):
+            # Sync filesystem resolution; local path only (RFC-104 backfill).
+            workspace_path = Path(str(state.workspace)).expanduser().resolve()  # noqa: ASYNC240
+
+        if workspace_path:
+            state.workspace = str(workspace_path)
 
             # Git status (async collection)
             try:
-                git_status = await get_git_status(workspace)
+                git_status = await get_git_status(workspace_path)
                 state.git_status = git_status
             except Exception:
                 logger.debug("Git status collection failed", exc_info=True)

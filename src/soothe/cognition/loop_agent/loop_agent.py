@@ -113,12 +113,7 @@ class LoopAgent:
             max_iterations=max_iterations,
         )
 
-        logger.info(
-            "[Goal] %s (max_iterations=%d, workspace=%s)",
-            goal[:80],
-            max_iterations,
-            workspace or "default",
-        )
+        logger.info("[Goal] %s (max_iterations=%d)", goal[:80], max_iterations)
 
         while state.iteration < state.max_iterations:
             iteration_start = time.perf_counter()

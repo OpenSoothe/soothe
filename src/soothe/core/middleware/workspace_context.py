@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware
@@ -10,8 +9,6 @@ from langchain.agents.middleware.types import AgentMiddleware
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentState
     from langgraph.runtime import Runtime
-
-logger = logging.getLogger(__name__)
 
 
 class WorkspaceContextMiddleware(AgentMiddleware):
@@ -58,24 +55,19 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         try:
             config = get_config()
             configurable = config.get("configurable", {})
-            logger.debug("abefore_agent: configurable keys = %s", list(configurable.keys()))
-        except Exception as e:
-            logger.debug("Could not get config in abefore_agent: %s", e)
+        except Exception:
             configurable = {}
 
         workspace = configurable.get("workspace")
 
         if workspace:
             FrameworkFilesystem.set_current_workspace(workspace)
-            logger.debug("Workspace context set: %s", workspace)
             # Mirror in state for explicit access
             return {"workspace": workspace}
-        logger.debug("No workspace in configurable, checking state")
         # Try to get workspace from state if available
         if "workspace" in state:
             ws = state["workspace"]
             FrameworkFilesystem.set_current_workspace(ws)
-            logger.debug("Workspace context set from state: %s", ws)
             return None
 
         return None
@@ -97,5 +89,4 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         from soothe.core import FrameworkFilesystem
 
         FrameworkFilesystem.clear_current_workspace()
-        logger.debug("Workspace context cleared")
         return None

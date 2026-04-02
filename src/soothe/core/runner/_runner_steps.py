@@ -239,6 +239,8 @@ class StepLoopMixin:
             step_state = RunnerState()
             step_state.thread_id = thread_id
             step_state.unified_classification = getattr(state, "unified_classification", None)
+            step_state.workspace = getattr(state, "workspace", None)
+            self._ensure_runner_state_workspace(step_state)
 
             inherited_projection = getattr(state, "context_projection", None)
             inherited_memories = list(getattr(state, "recalled_memories", []) or [])

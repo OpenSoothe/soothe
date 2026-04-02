@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.core.event_catalog import ERROR
+from soothe.core.workspace_resolution import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
 from soothe.logging import ThreadLogger
 
@@ -29,6 +30,15 @@ class QueryEngine:
     def __init__(self, daemon: Any) -> None:
         """Attach to the running ``SootheDaemon`` instance (expects ``_runner`` after ``start()``)."""
         self._daemon = daemon
+
+    def _workspace_str_for_thread(self, thread_id: str) -> str:
+        """Workspace path for ``runner.astream`` via unified resolution (IG-116)."""
+        d = self._daemon
+        return resolve_workspace_for_stream(
+            thread_workspace=d._thread_registry.get_workspace(thread_id),
+            installation_default=d._daemon_workspace,
+            config_workspace_dir=d._config.workspace_dir,
+        ).path
 
     async def run_query(
         self,
@@ -95,22 +105,16 @@ class QueryEngine:
         async def _run_stream() -> None:
             chunk_count = 0
             try:
-                stream_kwargs: dict[str, Any] = {"thread_id": thread_id}
-                thread_workspace = d._thread_registry.get_workspace(thread_id)
-                logger.debug(
-                    "Thread %s workspace lookup: found=%s",
-                    thread_id,
-                    thread_workspace,
-                )
-                if thread_workspace:
-                    stream_kwargs["workspace"] = str(thread_workspace)
+                stream_kwargs: dict[str, Any] = {
+                    "thread_id": thread_id,
+                    "workspace": self._workspace_str_for_thread(thread_id),
+                }
                 if autonomous:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
                         stream_kwargs["max_iterations"] = max_iterations
                 if subagent is not None:
                     stream_kwargs["subagent"] = subagent
-                logger.debug("Starting runner.astream() for thread %s", thread_id)
                 async for chunk in d._runner.astream(text, **stream_kwargs):
                     chunk_count += 1
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
@@ -255,10 +259,7 @@ class QueryEngine:
 
         async def _run_stream() -> None:
             try:
-                stream_kwargs: dict[str, Any] = {}
-                thread_workspace = d._thread_registry.get_workspace(thread_id)
-                if thread_workspace:
-                    stream_kwargs["workspace"] = str(thread_workspace)
+                stream_kwargs: dict[str, Any] = {"workspace": self._workspace_str_for_thread(thread_id)}
                 if autonomous:
                     stream_kwargs["autonomous"] = True
                     if max_iterations is not None:
@@ -367,7 +368,8 @@ class QueryEngine:
             d._active_threads and any(t is not None and not t.done() for t in d._active_threads.values())
         )
         has_current_task = bool(d._current_query_task and not d._current_query_task.done())
-        if not d._query_running and not active_thread_tasks and not has_current_task:
+        # Rely on concrete tasks, not only _query_running (avoids races / stale flags).
+        if not active_thread_tasks and not has_current_task:
             return
 
         cancelled_any = False
@@ -466,8 +468,11 @@ class QueryEngine:
             return current
 
         thread_info = await d._runner.create_persisted_thread()
-        d._runner.set_current_thread_id(thread_info.thread_id)
-        return thread_info.thread_id
+        tid = thread_info.thread_id
+        d._runner.set_current_thread_id(tid)
+        d._thread_registry.ensure(tid, is_draft=False)
+        d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
+        return tid
 
     @staticmethod
     def extract_custom_output_text(data: dict[str, Any]) -> str | None:

@@ -254,6 +254,8 @@ class AutonomousMixin(GoalDirectivesMixin):
         try:
             iter_state = RunnerState()
             iter_state.thread_id = thread_id
+            iter_state.workspace = getattr(parent_state, "workspace", None)
+            self._ensure_runner_state_workspace(iter_state)
             self._ensure_artifact_store(iter_state)
             iter_state.unified_classification = parent_state.unified_classification
             iter_state.context_projection = getattr(parent_state, "context_projection", None)
