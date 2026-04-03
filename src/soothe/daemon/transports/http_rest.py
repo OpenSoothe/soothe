@@ -414,6 +414,205 @@ class HttpRestTransport(TransportServer):
                 self._message_handler(client_id, {"type": "command", "cmd": "/exit"})
             return {"status": "shutting_down"}
 
+        # ----------------------------------------------------------------
+        # Autopilot endpoints (RFC-204)
+        # ----------------------------------------------------------------
+
+        @self._app.get("/api/v1/autopilot/status")
+        async def autopilot_status() -> dict[str, Any]:
+            """Get overall autopilot state.
+
+            Returns:
+                JSON with state, goals count, inbox count, scheduler tasks.
+            """
+            from soothe.config import SOOTHE_HOME
+
+            autopilot_dir = SOOTHE_HOME / "autopilot"
+            result: dict[str, Any] = {"state": "idle"}
+
+            if not autopilot_dir.exists():
+                return result
+
+            # Check status.json
+            state_file = autopilot_dir / "status.json"
+            if state_file.exists():
+                try:
+                    import json
+
+                    result.update(json.loads(state_file.read_text()))
+                except (json.JSONDecodeError, OSError):
+                    pass
+
+            # Count inbox files
+            inbox_dir = autopilot_dir / "inbox"
+            if inbox_dir.exists():
+                result["pending_tasks"] = len(list(inbox_dir.glob("*.md")))
+
+            return result
+
+        @self._app.get("/api/v1/autopilot/goals")
+        async def autopilot_list_goals() -> dict[str, Any]:
+            """List all goals.
+
+            Returns:
+                JSON with list of goals and their statuses.
+            """
+            # Try to get goals from engine first
+            engine = getattr(self._runner, "_goal_engine", None)
+            if engine:
+                goals = await engine.list_goals()
+                return {"goals": [g.model_dump(mode="json") for g in goals]}
+
+            # Fallback: parse files
+            from soothe.config import SOOTHE_HOME
+            from soothe.ux.tui.autopilot_dashboard import _parse_autopilot_files
+
+            goals = _parse_autopilot_files(SOOTHE_HOME / "autopilot")
+            return {"goals": goals, "source": "files"}
+
+        @self._app.get("/api/v1/autopilot/goals/{goal_id}")
+        async def autopilot_get_goal(goal_id: str) -> dict[str, Any]:
+            """Get details for a specific goal.
+
+            Args:
+                goal_id: Goal identifier.
+
+            Returns:
+                JSON with goal details.
+            """
+            engine = getattr(self._runner, "_goal_engine", None)
+            if engine:
+                goal = await engine.get_goal(goal_id)
+                if goal:
+                    return {"goal": goal.model_dump(mode="json")}
+                raise HTTPException(status_code=404, detail="Goal not found")
+            raise HTTPException(status_code=404, detail="Goal not found")
+
+        @self._app.post("/api/v1/autopilot/submit")
+        async def autopilot_submit(request: Request) -> dict[str, Any]:
+            """Submit a new task to autopilot.
+
+            Request body:
+                {"description": "task text", "priority": 50}
+            """
+            from datetime import UTC, datetime
+
+            from soothe.config import SOOTHE_HOME
+
+            body = await request.json()
+            description = body.get("description", "")
+            priority = int(body.get("priority", 50))
+
+            if not description:
+                raise HTTPException(status_code=400, detail="description is required")
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
+            filename = f"TASK-{timestamp}.md"
+            fpath = inbox_dir / filename
+            fpath.write_text(
+                f"---\ntype: task_submit\npriority: {priority}\n---\n\n{description}\n"
+            )
+            return {"status": "submitted", "file": filename}
+
+        @self._app.delete("/api/v1/autopilot/goals/{goal_id}")
+        async def autopilot_cancel_goal(goal_id: str) -> dict[str, Any]:
+            """Cancel a goal (remove from inbox if pending).
+
+            Args:
+                goal_id: Goal identifier.
+            """
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            if not inbox_dir.exists():
+                return {"status": "not_found"}
+
+            removed = 0
+            for f in inbox_dir.glob("*.md"):
+                if goal_id in f.stem:
+                    f.unlink()
+                    removed += 1
+            return {"status": "cancelled" if removed else "not_found", "removed": removed}
+
+        @self._app.post("/api/v1/autopilot/goals/{goal_id}/approve")
+        async def autopilot_approve_goal(goal_id: str) -> dict[str, Any]:
+            """Approve a MUST-confirmation goal.
+
+            Args:
+                goal_id: Goal identifier.
+            """
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+            approval = inbox_dir / f"APPROVE-{goal_id}.md"
+            approval.write_text(f"---\ntype: approve\ngoal_id: {goal_id}\n---\n\nApproved.\n")
+            return {"status": "approved", "goal_id": goal_id}
+
+        @self._app.post("/api/v1/autopilot/goals/{goal_id}/reject")
+        async def autopilot_reject_goal(goal_id: str) -> dict[str, Any]:
+            """Reject a proposed goal.
+
+            Args:
+                goal_id: Goal identifier.
+            """
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+            rejection = inbox_dir / f"REJECT-{goal_id}.md"
+            rejection.write_text(f"---\ntype: reject\ngoal_id: {goal_id}\n---\n\nRejected.\n")
+            return {"status": "rejected", "goal_id": goal_id}
+
+        @self._app.post("/api/v1/autopilot/wake")
+        async def autopilot_wake() -> dict[str, Any]:
+            """Exit dreaming mode — resume active execution."""
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+            signal = inbox_dir / "WAKE.md"
+            signal.write_text("---\ntype: signal_resume\n---\n\nWake signal.\n")
+            return {"status": "wake_sent"}
+
+        @self._app.post("/api/v1/autopilot/dream")
+        async def autopilot_dream() -> dict[str, Any]:
+            """Force enter dreaming mode."""
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            inbox_dir.mkdir(parents=True, exist_ok=True)
+            signal = inbox_dir / "DREAM.md"
+            signal.write_text("---\ntype: signal_interrupt\n---\n\nDream signal.\n")
+            return {"status": "dream_sent"}
+
+        @self._app.get("/api/v1/autopilot/inbox")
+        async def autopilot_inbox(
+            limit: int = 10,
+        ) -> dict[str, Any]:
+            """View pending inbox tasks.
+
+            Args:
+                limit: Maximum tasks to return.
+
+            Returns:
+                JSON with list of pending inbox tasks.
+            """
+            from soothe.config import SOOTHE_HOME
+
+            inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
+            if not inbox_dir.exists():
+                return {"tasks": []}
+
+            tasks = []
+            for f in sorted(inbox_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+                content = f.read_text()
+                tasks.append({"file": f.name, "content_preview": content[:200]})
+            return {"tasks": tasks}
+
     async def start(
         self,
         message_handler: Callable[[str, dict[str, Any]], None],
