@@ -462,6 +462,76 @@ class AutonomousMixin(GoalDirectivesMixin):
                 plan_summary = f"{iter_state.plan.goal}: " + "; ".join(s.description for s in iter_state.plan.steps[:5])
 
             should_continue = reflection.should_revise if reflection else False
+
+            # RFC-204: Consensus loop — validate goal completion before accepting
+            if self._goal_engine and self._model and not should_continue:
+                from soothe.cognition.consensus import evaluate_goal_completion
+
+                success_criteria = getattr(goal, "_success_criteria", None)
+                c_decision, c_reasoning = await evaluate_goal_completion(
+                    goal_description=goal.description,
+                    response_text=response_text,
+                    evidence_summary=plan_summary[:500],
+                    success_criteria=success_criteria,
+                    model=self._model,
+                )
+
+                if c_decision == "send_back":
+                    sb_count = getattr(goal, "send_back_count", 0)
+                    max_sb = getattr(goal, "max_send_backs", 3)
+
+                    if sb_count < max_sb:
+                        goal.send_back_count = sb_count + 1
+                        logger.info(
+                            "Goal %s sent back (%d/%d): %s",
+                            goal.id,
+                            goal.send_back_count,
+                            max_sb,
+                            c_reasoning[:100],
+                        )
+                        # Re-enter loop with refined instruction
+                        current_input = (
+                            f"Previous attempt did not satisfy goal. "
+                            f"Feedback: {c_reasoning}. Try different approach."
+                        )
+                        should_continue = True  # Force another iteration
+                    else:
+                        # Budget exhausted — suspend
+                        await self._goal_engine.suspend_goal(
+                            goal.id,
+                            reason=f"Send-back budget exhausted ({max_sb} rounds)",
+                        )
+                        yield _custom({
+                            "type": "soothe.autopilot.goal_suspended",
+                            "goal_id": goal.id,
+                            "reason": f"Budget exhausted: {c_reasoning[:100]}",
+                        })
+                        async for chunk in self._save_checkpoint(
+                            parent_state, user_input=user_input, mode="autonomous"
+                        ):
+                            yield chunk
+                        return
+
+                elif c_decision == "suspend":
+                    await self._goal_engine.suspend_goal(
+                        goal.id,
+                        reason=f"Consensus suspension: {c_reasoning}",
+                    )
+                    async for chunk in self._save_checkpoint(
+                        parent_state, user_input=user_input, mode="autonomous"
+                    ):
+                        yield chunk
+                    return
+
+                else:
+                    # Accepted — mark as validated
+                    await self._goal_engine.validate_goal(goal.id)
+                    yield _custom({
+                        "type": "soothe.autopilot.goal_validated",
+                        "goal_id": goal.id,
+                        "confidence": 1.0,
+                    })
+
             record = IterationRecord(
                 iteration=total_iterations,
                 goal_id=goal.id,

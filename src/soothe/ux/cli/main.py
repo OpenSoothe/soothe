@@ -549,66 +549,10 @@ def _checkhealth(
 # Autopilot Command (Nested Subcommands)
 # ---------------------------------------------------------------------------
 
-autopilot_app = typer.Typer(name="autopilot", help="Run autonomous agent loops")
-add_help_alias(autopilot_app)
-app.add_typer(autopilot_app)
+from soothe.ux.cli.commands.autopilot_cmd import app as _autopilot_app  # noqa: E402
 
-
-@autopilot_app.command("run")
-def _autopilot_run(
-    prompt: Annotated[
-        str,
-        typer.Argument(help="Task for autonomous execution."),
-    ],
-    config: Annotated[
-        str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
-    ] = None,
-    max_iterations: Annotated[
-        int | None,
-        typer.Option("--max-iterations", help="Maximum autonomous iterations."),
-    ] = None,
-    output_format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Output format: text or jsonl."),
-    ] = "text",
-) -> None:
-    """Run autonomous agent loop for complex tasks.
-
-    Autopilot mode executes tasks autonomously without requiring user interaction.
-    The agent will plan, execute, and iterate on the task until completion or
-    reaching the maximum iteration limit.
-
-    This mode is ideal for:
-    - Long-running tasks that don't need user input
-    - Background execution of complex workflows
-    - Batch processing or research tasks
-    - Automated testing and validation
-
-    The agent operates in headless mode (no TUI) and outputs progress to stdout.
-    Use --format jsonl for machine-readable output suitable for logging or piping.
-
-    Examples:
-        # Basic autonomous execution
-        soothe autopilot run "Research AI safety and summarize findings"
-
-        # Limit iterations for complex tasks
-        soothe autopilot run "Build a web scraper" --max-iterations 10
-
-        # Use custom config with JSON output
-        soothe autopilot run "Analyze codebase" -c config.yml --format jsonl
-
-        # Long-running research task
-        soothe autopilot run "Investigate performance bottlenecks" --max-iterations 20
-    """
-    from soothe.ux.cli.commands.autopilot_cmd import autopilot as _autopilot
-
-    _autopilot(
-        prompt=prompt,
-        config=config,
-        max_iterations=max_iterations,
-        output_format=output_format,
-    )
+add_help_alias(_autopilot_app)
+app.add_typer(_autopilot_app, name="autopilot")
 
 
 # ---------------------------------------------------------------------------
