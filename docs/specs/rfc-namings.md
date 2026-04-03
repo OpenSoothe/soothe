@@ -64,6 +64,23 @@ This document defines the terminology and naming conventions used in this projec
 | Session Manager | Singleton managing Python sessions with thread_id isolation, cleanup, and thread-safe execution. | RFC-101 |
 | Structured Error | Error response with standardized format: error, details, suggestions, recoverable, auto_retry_hint. Provides actionable guidance for LLM recovery. | RFC-101 |
 
+### Autopilot Terms (RFC-204)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Autopilot Mode | Layer 3 extension enabling long-running autonomous operation with dreaming mode and continuous improvement. | RFC-204 |
+| Dreaming Mode | Persistent idle state where Soothe performs memory consolidation, indexing, goal anticipation, and health monitoring. | RFC-204 |
+| Consensus Loop | Layer 3 validation of Layer 2 completion judgment with send-back capability and budget. | RFC-204 |
+| Send-Back Budget | Per-goal limit on Layer 3 rejections (default: 3 rounds). Independent from Layer 2 iteration budget. | RFC-204 |
+| Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Generic routing by type prefix. | RFC-204 |
+| ChannelMessage | Data structure with type, payload, timestamp, sender fields for channel communication. | RFC-204 |
+| CriticalityEvaluator | Module in GoalEngine that determines if a proposed goal requires user confirmation (MUST status). | RFC-204 |
+| SchedulerService | Independent service in `cognition/scheduler/` for time-based task execution (delay, cron, recurrence). | RFC-204 |
+| Goal Relationship | Connection between goals: `depends_on` (hard), `informs` (soft), `conflicts_with` (mutual exclusion). | RFC-204 |
+| Context Envelope | Rich context package sent from Layer 3 to Layer 2 containing world info, goals, memory, instructions. | RFC-204 |
+| Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-204 |
+| Critical Message | Channel message requiring acknowledgment (e.g., blocker_alert, MUST goal confirmation). Retries with backoff. | RFC-204 |
+
 ## Naming Conventions
 
 ### General Principles

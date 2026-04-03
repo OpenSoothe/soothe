@@ -13,7 +13,7 @@ The HTTP REST API provides CRUD operations for thread management, configuration,
 - JSON request/response bodies
 - Async FastAPI implementation for performance
 - OpenAPI documentation auto-generated
-- Shared authentication with WebSocket
+- Authentication delegated to external services (reverse proxy, API gateway)
 - CORS support for web clients
 
 **Base URL**: `http://localhost:8766/api/v1`
@@ -53,7 +53,7 @@ GET /api/v1/threads
       "created_at": "2026-03-19T10:00:00Z",
       "updated_at": "2026-03-19T12:30:00Z",
       "message_count": 15,
-      "last_query": "Analyze authentication code"
+      "last_query": "Analyze data pipeline"
     }
   ],
   "total": 1,
@@ -81,7 +81,7 @@ GET /api/v1/threads/{thread_id}
   "created_at": "2026-03-19T10:00:00Z",
   "updated_at": "2026-03-19T12:30:00Z",
   "message_count": 15,
-  "last_query": "Analyze authentication code",
+  "last_query": "Analyze data pipeline",
   "artifacts": ["report.md", "analysis.json"],
   "metadata": {
     "mode": "interactive",
@@ -179,13 +179,13 @@ GET /api/v1/threads/{thread_id}/messages
       "timestamp": "2026-03-19T10:05:00Z",
       "kind": "conversation",
       "role": "user",
-      "content": "Analyze authentication code"
+      "content": "Analyze data pipeline"
     },
     {
       "timestamp": "2026-03-19T10:05:02Z",
       "kind": "event",
       "type": "soothe.cognition.plan.created",
-      "data": {"goal": "Analyze auth", "steps": [...]}
+      "data": {"goal": "Analyze pipeline", "steps": [...]}
     }
   ],
   "total": 150,

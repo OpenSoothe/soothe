@@ -5,7 +5,7 @@
 **Status**: Revised
 **Kind**: Architecture Design
 **Created**: 2026-03-15
-**Updated**: 2026-03-29
+**Updated**: 2026-04-03
 **Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 
 ## Abstract
@@ -336,10 +336,179 @@ autonomous:
   enable_dynamic_goals: true
 ```
 
+## Autopilot Working Directory
+
+### Directory Layout
+
+Autopilot owns `SOOTHE_HOME/autopilot/` as its dedicated working directory:
+
+```
+SOOTHE_HOME/
+└── autopilot/
+    ├── GOAL.md              # Single goal definition (autopilot root)
+    ├── GOALS.md             # Multiple goals definition (autopilot root)
+    └── goals/               # Per-goal subdirectories
+        ├── data-pipeline/
+        │   ├── GOAL.md      # Goal definition
+        │   └── *.md         # Supporting context files
+        └── report-generation/
+            └── GOAL.md
+```
+
+### Goal File Discovery
+
+When autopilot starts, it scans for goals in this order:
+
+1. **Autopilot `GOAL.md`**: Single goal definition at `autopilot/GOAL.md`
+2. **Autopilot `GOALS.md`**: Multiple goals at `autopilot/GOALS.md`
+3. **Subdirectory `GOAL.md`**: Each `autopilot/goals/*/GOAL.md` defines a goal
+
+**Discovery Algorithm**:
+```python
+def discover_goals(autopilot_dir: Path) -> list[GoalDefinition]:
+    goals = []
+
+    # Priority 1: Autopilot GOAL.md (single goal mode)
+    if (autopilot_dir / "GOAL.md").exists():
+        goals.append(parse_goal_file(autopilot_dir / "GOAL.md"))
+        return goals  # Single goal mode, skip other discovery
+
+    # Priority 2: Autopilot GOALS.md (batch mode)
+    if (autopilot_dir / "GOALS.md").exists():
+        goals.extend(parse_goals_batch(autopilot_dir / "GOALS.md"))
+
+    # Priority 3: goals/ subdirectory GOAL.md files
+    goals_subdir = autopilot_dir / "goals"
+    if goals_subdir.exists():
+        for subdir in sorted(goals_subdir.iterdir()):
+            if subdir.is_dir() and (subdir / "GOAL.md").exists():
+                goals.append(parse_goal_file(subdir / "GOAL.md"))
+
+    return goals
+```
+
+### Goal File Format
+
+**`GOAL.md` format**:
+```markdown
+---
+id: data-pipeline
+priority: 80
+depends_on: []
+---
+
+# Feature: Data Processing Pipeline
+
+Implement a robust data processing pipeline with validation and error handling.
+
+## Success Criteria
+- Data is validated before processing
+- Errors are properly handled and logged
+- Pipeline produces correct output files
+```
+
+**`GOALS.md` format** (multiple goals):
+```markdown
+# Project Goals
+
+## Goal: Data Pipeline
+- id: pipeline
+- priority: 90
+- depends_on: []
+
+Implement the data processing pipeline.
+
+## Goal: Report Generation
+- id: report
+- priority: 70
+- depends_on: [pipeline]
+
+Build the report generation from processed data.
+```
+
+### Goal Status Tracking
+
+Autopilot updates goal status back to the source markdown files:
+
+**Status field in frontmatter**:
+```yaml
+---
+id: data-pipeline
+priority: 80
+status: active  # pending | active | completed | failed
+error: null     # Set if failed
+---
+```
+
+**Progress tracking**:
+```markdown
+## Progress
+
+- [x] Design pipeline architecture
+- [x] Implement data validation
+- [ ] Add error handling
+- [ ] Write tests
+
+Last updated: 2026-04-03T14:30:00Z
+```
+
+**Update behavior**:
+1. Status changes (`pending` → `active` → `completed`/`failed`) are written to frontmatter
+2. Progress section is appended/updated as sub-goals complete
+3. Failed goals include error message in frontmatter
+4. All updates preserve original file structure and comments
+
+### Autopilot Initialization
+
+```python
+async def initialize_autopilot(soothe_home: Path) -> GoalEngine:
+    autopilot_dir = soothe_home / "autopilot"
+    goals_dir = autopilot_dir / "goals"
+
+    # Ensure directory structure exists
+    goals_dir.mkdir(parents=True, exist_ok=True)
+
+    # Discover and load goals
+    goal_definitions = discover_goals(autopilot_dir)
+
+    # Create GoalEngine with discovered goals
+    engine = GoalEngine()
+    for goal_def in goal_definitions:
+        engine.create_goal(
+            description=goal_def.description,
+            priority=goal_def.priority,
+            goal_id=goal_def.id,
+            depends_on=goal_def.depends_on
+        )
+
+    return engine
+```
+
+### File Watching (Optional)
+
+For long-running autopilot sessions, optional file watching can detect external goal changes:
+
+```python
+class GoalFileWatcher:
+    """Watch for changes to goal files and sync with GoalEngine."""
+
+    async def on_goal_file_changed(self, path: Path):
+        goal_def = parse_goal_file(path)
+        existing = self.engine.get_goal(goal_def.id)
+
+        if not existing:
+            self.engine.create_goal(**goal_def.model_dump())
+        else:
+            # Update existing goal
+            self.engine.update_goal(goal_def.id, **goal_def.model_dump())
+```
+
 ## CLI Integration
 
-- `soothe autopilot run <prompt>`
+- `soothe autopilot run <prompt>` - Start autopilot with prompt or discover from `SOOTHE_HOME/autopilot/goals/`
+- `soothe autopilot run --goal-file path/to/GOAL.md` - Start with specific goal file
 - `--max-iterations` on autopilot command
+- `--no-watch` - Disable file watching for long-running sessions
 - TUI `/autopilot` command for autonomous execution
 
 ## Constraints
@@ -365,6 +534,16 @@ autonomous:
 - [RFC-202](./RFC-202-dag-execution.md) - DAG Execution & Failure Recovery
 
 ## Changelog
+
+### 2026-04-03
+- Added §"Autopilot Working Directory" specification
+- Defined `SOOTHE_HOME/autopilot/` as autopilot's working directory
+- Added `goals/` subdirectory structure for goal file storage
+- Defined goal file discovery algorithm (GOAL.md, GOALS.md, subdirectory scanning)
+- Added goal file format specifications (frontmatter + markdown)
+- Defined goal status tracking with file updates
+- Added optional file watching for long-running sessions
+- Extended CLI integration with `--goal-file` and `--no-watch` options
 
 ### 2026-03-29
 - Established as Layer 3 foundation in three-layer architecture

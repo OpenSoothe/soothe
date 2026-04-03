@@ -45,6 +45,7 @@ RFCs are organized by numeric prefix:
 | [RFC-201](./RFC-201-agentic-goal-execution.md) | Agentic Goal Execution (Layer 2) | Implemented | Architecture Design | RFC-000, RFC-001, RFC-100 |
 | [RFC-202](./RFC-202-dag-execution.md) | DAG Execution & Failure Recovery | Draft | Architecture Design | RFC-200, RFC-201, RFC-100 |
 | [RFC-203](./RFC-203-loop-working-memory.md) | Loop Working Memory | Draft | Architecture Design | RFC-201, RFC-103, RFC-100 |
+| [RFC-204](./RFC-204-autopilot-mode.md) | Autopilot Mode | Draft | Architecture Design | RFC-200, RFC-201, RFC-202, RFC-400, RFC-500 |
 
 ### 3xx — Protocols (Interface Contracts)
 
@@ -121,7 +122,8 @@ RFC-000 (System Conceptual Design)
     │   ├── RFC-101 (Tool Interface)
     │   └── RFC-201 (Agentic Goal Execution) [Layer 2]
     │       └── RFC-200 (Autonomous Goal Management) [Layer 3]
-    │           └── RFC-202 (DAG Execution)
+    │           ├── RFC-202 (DAG Execution)
+    │           └── RFC-204 (Autopilot Mode)
     ├── RFC-102 (Security Policy)
     │   └── RFC-103 (Thread-Aware Workspace)
     │       └── RFC-104 (Dynamic System Context)
@@ -143,12 +145,12 @@ RFC-000 (System Conceptual Design)
 |----------|-------------|-------|-------|
 | Foundation (0xx) | 2 | 0 | 2 |
 | Core Agent (1xx) | 3 | 2 | 5 |
-| Cognition Loop (2xx) | 2 | 1 | 3 |
+| Cognition Loop (2xx) | 2 | 3 | 5 |
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 0 | 2 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
 | Plugin System (6xx) | 2 | 0 | 2 |
-| **Total** | **14** | **4** | **18** |
+| **Total** | **14** | **6** | **20** |
 
 ---
 

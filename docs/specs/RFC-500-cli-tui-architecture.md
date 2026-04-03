@@ -17,7 +17,7 @@ This RFC defines the architecture for Soothe CLI's interactive terminal user int
 
 2. **Headless CLI** — Single-prompt execution with streaming output to stdout/stderr. Supports `--format jsonl` for machine-readable events. No TUI required.
 
-3. **Daemon-based background execution** — Daemon runs `SootheRunner` in background, serves events over Unix socket/WebSocket. Clients attach/detach/reconnect without losing session.
+3. **Daemon-based background execution** — Daemon runs `SootheRunner` in background, serves events over WebSocket. Clients attach/detach/reconnect without losing session.
 
 ## Design Principles
 
@@ -91,17 +91,17 @@ See **RFC-400: Unified Daemon Communication Protocol**.
 
 ### Transports
 
-1. **Unix Domain Socket** (default local) — Path: `$SOOTHE_HOME/soothe.sock`, newline-delimited JSON, local CLI/TUI clients.
+1. **WebSocket** (primary) — Default port `8765` (localhost), WebSocket text frames, all clients (CLI/TUI/web/desktop), real-time streaming.
 
-2. **WebSocket** (implemented) — Default port `8765` (localhost), WebSocket text frames, web/desktop applications, real-time streaming.
+2. **HTTP REST API** — Default port `8766` (localhost), HTTP/1.1 with JSON bodies, health checks, CRUD operations, management endpoints.
 
-3. **HTTP REST API** (implemented) — Default port `8766` (localhost), HTTP/1.1 with JSON bodies, status/operations/management.
+See RFC-400 for full protocol specification.
 
-### Unix Socket Messages
+### WebSocket Messages
 
-**Server → Client**: `event` (stream chunk), `status` (daemon state), `command_response`, `clear`.
+**Server → Client**: `event` (stream chunk), `status` (daemon state), `command_response`, `subscription_confirmed`, `error`.
 
-**Client → Server**: `input` (user message), `command` (slash command), `detach`, `resume_thread`, `new_thread`.
+**Client → Server**: `input` (user message), `command` (slash command), `detach`, `resume_thread`, `subscribe_thread`, `new_thread`.
 
 ## CLI Commands
 

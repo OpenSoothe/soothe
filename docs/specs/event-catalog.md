@@ -193,6 +193,20 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 ---
 
+## Autopilot Events (RFC-204)
+
+| Type | Fields | VerbosityTier |
+|------|--------|---------------|
+| `soothe.autopilot.dreaming_entered` | `timestamp: datetime` | NORMAL |
+| `soothe.autopilot.dreaming_exited` | `timestamp: datetime`, `trigger: str` | NORMAL |
+| `soothe.autopilot.goal_validated` | `goal_id: str`, `confidence: float` | DETAILED |
+| `soothe.autopilot.goal_suspended` | `goal_id: str`, `reason: str` | NORMAL |
+| `soothe.autopilot.send_back` | `goal_id: str`, `remaining_budget: int`, `feedback: str` | DETAILED |
+| `soothe.autopilot.relationship_detected` | `from_goal: str`, `to_goal: str`, `type: str`, `confidence: float` | DETAILED |
+| `soothe.autopilot.checkpoint.saved` | `thread_id: str`, `trigger: str` | DETAILED |
+
+---
+
 ## Error Events
 
 | Type | Fields | VerbosityTier |

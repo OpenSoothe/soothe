@@ -316,7 +316,7 @@ $SOOTHE_HOME/
 ├── threads/          # Thread JSONL logs (one per thread)
 ├── logs/             # Application logs (soothe.log, rotating)
 ├── history.json      # Input history
-├── soothe.sock       # Daemon Unix socket
+├── soothe.sock       # Legacy (removed in v0.2)
 └── config/           # User config files
     └── config.yml
 ```

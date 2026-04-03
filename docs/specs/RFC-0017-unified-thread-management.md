@@ -10,7 +10,7 @@
 
 ## Abstract
 
-This RFC defines a unified thread management architecture for Soothe that consolidates thread lifecycle operations across all transport layers (Unix socket, WebSocket, HTTP REST), supports concurrent multi-thread execution with isolation guarantees, and provides comprehensive thread metadata and statistics. The design introduces a ThreadContextManager component that coordinates all thread-related storage systems (DurabilityProtocol, LangGraph checkpointer, ThreadLogger, RunArtifactStore) and exposes a consistent API for thread CRUD operations across all client interfaces.
+This RFC defines a unified thread management architecture for Soothe that consolidates thread lifecycle operations across all transport layers (WebSocket, HTTP REST), supports concurrent multi-thread execution with isolation guarantees, and provides comprehensive thread metadata and statistics. The design introduces a ThreadContextManager component that coordinates all thread-related storage systems (DurabilityProtocol, LangGraph checkpointer, ThreadLogger, RunArtifactStore) and exposes a consistent API for thread CRUD operations across all client interfaces.
 
 ## Motivation
 
@@ -20,7 +20,7 @@ The current thread management system has several critical issues:
 
 1. **CLI Duplication**: `soothe daemon attach --thread-id <id>` duplicates functionality provided by `soothe thread continue <id>`, creating user confusion and maintenance burden.
 
-2. **Transport Limitations**: Thread operations only work via Unix socket and WebSocket. HTTP REST endpoints defined in RFC-101 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
+2. **Transport Limitations**: Thread operations primarily work via WebSocket. HTTP REST endpoints defined in RFC-101 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
 
 3. **Protocol Gaps**: The daemon protocol (RFC-400) lacks dedicated thread management messages. Thread operations require slash commands or are limited to `resume_thread`/`new_thread` primitives.
 
@@ -46,7 +46,7 @@ Current `ThreadInfo` only captures basic metadata (status, timestamps, tags). Mi
 
 ### Design Goals
 
-1. **Unified API**: Consistent thread operations across Unix socket, WebSocket, and HTTP REST
+1. **Unified API**: Consistent thread operations across WebSocket and HTTP REST
 2. **Multi-threading**: Concurrent thread execution with isolation guarantees
 3. **Rich metadata**: Comprehensive thread statistics and organization tools
 4. **Single source of truth**: ThreadContextManager coordinates all storage systems
@@ -67,7 +67,7 @@ All thread operations flow through ThreadContextManager, which coordinates with 
 
 ### Principle 2: Transport Independence
 
-Thread operations use the same API whether via Unix socket, WebSocket, or HTTP REST. The protocol layer translates transport-specific requests to ThreadContextManager calls.
+Thread operations use the same API whether via WebSocket or HTTP REST. The protocol layer translates transport-specific requests to ThreadContextManager calls.
 
 ### Principle 3: Isolation by Default
 
@@ -89,10 +89,10 @@ New thread features (labels, categories, priority) are optional additions to exi
 ┌─────────────────────────────────────────────────────────────┐
 │                      Client Layer                            │
 │                                                              │
-│  CLI Commands    Unix Socket    WebSocket    HTTP REST      │
-│  thread list     thread_list    thread_list  GET /threads   │
-│  thread continue thread_create  thread_get   POST /threads  │
-│  thread stats    thread_get     ...          ...            │
+│  CLI Commands    WebSocket    HTTP REST                      │
+│  thread list     thread_list  GET /threads                   │
+│  thread continue thread_get   POST /threads                  │
+│  thread stats    ...          ...                            │
 │  thread tag      ...                                         │
 └───────────────────────────┬─────────────────────────────────┘
                             │
@@ -293,7 +293,7 @@ Thread management operations are exposed through daemon protocol messages:
 
 **Server → Client**: `thread_list_response`, `thread_get_response`, `thread_created`, `thread_operation_ack`
 
-These messages map directly to ThreadContextManager method calls, enabling Unix socket and WebSocket clients to perform thread operations.
+These messages map directly to ThreadContextManager method calls, enabling WebSocket clients to perform thread operations.
 
 ### HTTP REST API
 
