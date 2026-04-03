@@ -216,6 +216,10 @@ class AutonomousMixin(GoalDirectivesMixin):
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
 
+        # RFC-204: Check for scheduled tasks and enter dreaming mode if enabled
+        if self._goal_engine and self._goal_engine.is_complete():
+            await self._check_scheduled_and_dream(state, user_input)
+
         yield _custom(ThreadEndedEvent(thread_id=state.thread_id).to_dict())
 
     async def _execute_autonomous_goal(
@@ -644,6 +648,17 @@ class AutonomousMixin(GoalDirectivesMixin):
                         goal_id=goal.id,
                     ).to_dict()
                 )
+
+                # RFC-204: Webhook notification for goal completion
+                await self._send_autopilot_webhook(
+                    "goal_completed",
+                    {
+                        "goal_id": goal.id,
+                        "description": goal.description[:200],
+                        "status": "completed",
+                        "summary": goal_report.summary[:200] if goal_report and goal_report.summary else "",
+                    },
+                )
             elif self._planner and iter_state.plan and reflection:
                 try:
                     revised = await self._planner.revise_plan(iter_state.plan, reflection.feedback)
@@ -675,3 +690,58 @@ class AutonomousMixin(GoalDirectivesMixin):
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
                 logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
                 await asyncio.sleep(backoff)
+
+    async def _check_scheduled_and_dream(
+        self,
+        state: Any,  # noqa: ARG002
+        user_input: str,  # noqa: ARG002
+    ) -> None:
+        """RFC-204: Check for scheduled tasks, enter dreaming if none found.
+
+        Args:
+            state: Current runner state (unused, reserved for future).
+            user_input: Original user input string (unused, reserved).
+        """
+        from soothe.config import SOOTHE_HOME
+
+        autopilot_dir = SOOTHE_HOME / "autopilot"
+        if not autopilot_dir.exists():
+            return
+
+        # Check for scheduled tasks
+        try:
+            from soothe.cognition.scheduler import SchedulerService
+
+            persist_path = autopilot_dir / "scheduler.json"
+            scheduler = SchedulerService(persist_path=str(persist_path))
+            due_tasks = scheduler.get_due_tasks()
+
+            if due_tasks:
+                task = due_tasks[0]
+                scheduler.mark_running(task.id)
+                logger.info("Autopilot resuming from scheduled task: %s", task.id)
+
+                # Create goal from scheduled task and run it
+                if self._goal_engine:
+                    await self._goal_engine.create_goal(
+                        description=task.description,
+                        priority=task.priority,
+                    )
+                    scheduler.mark_completed(task.id)
+                return
+        except Exception:
+            logger.debug("Scheduler check failed", exc_info=True)
+
+        # No scheduled tasks — enter dreaming mode
+        try:
+            from soothe.cognition.dreaming import DreamingMode
+
+            dreaming = DreamingMode(
+                soothe_home=SOOTHE_HOME,
+                memory_protocol=self._memory,
+                context_protocol=self._context,
+            )
+            logger.info("Entering autopilot dreaming mode")
+            await dreaming.run()
+        except Exception:
+            logger.debug("Dreaming mode failed to start", exc_info=True)
