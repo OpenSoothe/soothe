@@ -333,8 +333,20 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """
         if self._checkpointer_pool is not None:
             try:
-                await self._checkpointer_pool.close()
-                logger.info("Closed PostgreSQL checkpointer connection pool")
+                import sqlite3
+
+                is_sqlite_conn = isinstance(self._checkpointer_pool, sqlite3.Connection)
+            except Exception:
+                is_sqlite_conn = False
+
+            try:
+                if is_sqlite_conn:
+                    self._checkpointer_pool.commit()
+                    self._checkpointer_pool.close()
+                    logger.info("Closed SQLite checkpointer connection")
+                else:
+                    await self._checkpointer_pool.close()
+                    logger.info("Closed PostgreSQL checkpointer connection pool")
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 

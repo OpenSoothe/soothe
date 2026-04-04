@@ -144,21 +144,15 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
     return MemorySaver()
 
 
-def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
+def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | None, Any] | None:
     """Initialize SQLite checkpointer via langgraph-checkpoint-sqlite.
 
-    Returns:
-        SQLiteSaver if successful, None otherwise.
-    """
-    try:
-        from langgraph.checkpoint.sqlite import SqliteSaver
-    except ImportError:
-        logger.warning(
-            "SQLite checkpointer requires 'langgraph-checkpoint-sqlite'. "
-            "Install with: pip install langgraph-checkpoint-sqlite"
-        )
-        return None
+    Defers AsyncSqliteSaver creation to async context (same pattern as PostgreSQL).
 
+    Returns:
+        A tuple of (None, sqlite3.Connection) if successful, None otherwise.
+        The runner will create AsyncSqliteSaver from the connection in async context.
+    """
     try:
         import sqlite3
         from pathlib import Path
@@ -167,12 +161,11 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False)
     except Exception as exc:
-        logger.warning("Failed to create SQLite checkpointer: %s", exc)
+        logger.warning("Failed to create SQLite checkpointer connection: %s", exc)
         return None
-    else:
-        saver = SqliteSaver(conn)
-        logger.info("SQLite checkpointer initialized at %s", db_path)
-        return saver
+
+    logger.info("SQLite checkpointer connection created at %s", db_path)
+    return (None, conn)
 
 
 def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:

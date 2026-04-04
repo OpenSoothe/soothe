@@ -168,20 +168,38 @@ class PhasesMixin:
 
         if not self._checkpointer_initialized and self._checkpointer_pool is not None:
             try:
-                await self._checkpointer_pool.open()
+                import sqlite3
 
-                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+                is_sqlite_conn = isinstance(self._checkpointer_pool, sqlite3.Connection)
+            except Exception:
+                is_sqlite_conn = False
 
-                checkpointer = AsyncPostgresSaver(self._checkpointer_pool)
-                await checkpointer.setup()
+            try:
+                if is_sqlite_conn:
+                    # SQLite: create AsyncSqliteSaver from connection
+                    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-                self._checkpointer = checkpointer
-                self._agent.checkpointer = checkpointer
+                    checkpointer = AsyncSqliteSaver(self._checkpointer_pool)
+                    self._checkpointer = checkpointer
+                    self._agent.checkpointer = checkpointer
+                    self._checkpointer_initialized = True
+                    logger.info("AsyncSqliteSaver created and tables initialized, checkpointer replaced")
+                else:
+                    # PostgreSQL: open pool then create AsyncPostgresSaver
+                    await self._checkpointer_pool.open()
 
-                self._checkpointer_initialized = True
-                logger.info("AsyncPostgresSaver pool opened and tables initialized, checkpointer replaced")
+                    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+                    checkpointer = AsyncPostgresSaver(self._checkpointer_pool)
+                    await checkpointer.setup()
+
+                    self._checkpointer = checkpointer
+                    self._agent.checkpointer = checkpointer
+
+                    self._checkpointer_initialized = True
+                    logger.info("AsyncPostgresSaver pool opened and tables initialized, checkpointer replaced")
             except Exception as exc:
-                logger.warning("Failed to initialize AsyncPostgresSaver: %s", exc)
+                logger.warning("Failed to initialize async checkpointer: %s", exc)
                 self._checkpointer_pool = None
                 self._checkpointer_initialized = True
                 logger.info("Using MemorySaver as fallback")
