@@ -114,6 +114,7 @@ def resolve_context(config: SootheConfig) -> ContextProtocol | None:
             persist_dir=persist_dir,
             backend=storage,
             dsn=config.resolve_persistence_postgres_dsn() if storage == "postgresql" else None,
+            db_path=config.persistence.sqlite_path if storage == "sqlite" else None,
             namespace="context",
         )
     except Exception as e:

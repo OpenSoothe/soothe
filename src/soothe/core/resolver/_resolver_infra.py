@@ -27,10 +27,23 @@ logger = logging.getLogger(__name__)
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     """Instantiate the DurabilityProtocol implementation from config.
 
-    Supports: json, rocksdb, postgresql backends.
+    Supports: json, rocksdb, postgresql, sqlite backends.
     Falls back to json durability when other backends fail.
     """
     from pathlib import Path
+
+    if config.protocols.durability.backend == "sqlite":
+        try:
+            from soothe.backends.durability.sqlite import SQLiteDurability
+
+            db_path = config.persistence.sqlite_path
+            logger.info("Using SQLite durability backend")
+            return SQLiteDurability(db_path=db_path)
+        except Exception as e:
+            logger.warning(
+                "SQLite durability requested but failed: %s. Falling back to json durability.",
+                e,
+            )
 
     if config.protocols.durability.backend == "postgresql":
         try:
@@ -74,7 +87,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
                 e,
             )
 
-    if config.protocols.durability.backend in ("json", "postgresql", "rocksdb"):
+    if config.protocols.durability.backend in ("json", "postgresql", "rocksdb", "sqlite"):
         from soothe.backends.durability.json import JsonDurability
 
         persist_dir = config.protocols.durability.persist_dir or str(Path(SOOTHE_HOME) / "durability")
@@ -99,11 +112,12 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
-    Uses persistence.soothe_postgres_dsn for connection.
-    Falls back to MemorySaver when PostgreSQL is unavailable.
+    Uses persistence.soothe_postgres_dsn for PostgreSQL connection.
+    Uses SQLite for SQLite checkpointer via langgraph-checkpoint-sqlite.
+    Falls back to MemorySaver when backends are unavailable.
 
     Returns:
-        A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for MemorySaver.
+        A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for MemorySaver/SQLite.
         The connection_resource must be closed during cleanup (e.g., via runner.cleanup()).
     """
     from langgraph.checkpoint.memory import MemorySaver
@@ -114,13 +128,51 @@ def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Che
         result = _resolve_postgres_checkpointer(dsn)
         if result:
             return result  # (None, pool)
-        logger.info("PostgreSQL checkpointer unavailable, using MemorySaver")
-    elif backend == "memory":
+        logger.info("PostgreSQL checkpointer unavailable, falling back")
+        return _resolve_sqlite_checkpointer(config) or MemorySaver()
+    if backend == "sqlite":
+        result = _resolve_sqlite_checkpointer(config)
+        if result:
+            return result
+        logger.info("SQLite checkpointer unavailable, using MemorySaver")
+        return MemorySaver()
+    if backend == "memory":
         logger.debug("Using memory checkpointer")
     else:
         logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
 
     return MemorySaver()
+
+
+def _resolve_sqlite_checkpointer(config: SootheConfig) -> Checkpointer | None:
+    """Initialize SQLite checkpointer via langgraph-checkpoint-sqlite.
+
+    Returns:
+        SQLiteSaver if successful, None otherwise.
+    """
+    try:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+    except ImportError:
+        logger.warning(
+            "SQLite checkpointer requires 'langgraph-checkpoint-sqlite'. "
+            "Install with: pip install langgraph-checkpoint-sqlite"
+        )
+        return None
+
+    try:
+        import sqlite3
+        from pathlib import Path
+
+        db_path = config.persistence.sqlite_path or str(Path(SOOTHE_HOME) / "soothe.db")
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+    except Exception as exc:
+        logger.warning("Failed to create SQLite checkpointer: %s", exc)
+        return None
+    else:
+        saver = SqliteSaver(conn)
+        logger.info("SQLite checkpointer initialized at %s", db_path)
+        return saver
 
 
 def _resolve_postgres_checkpointer(dsn: str) -> tuple[Checkpointer, Any] | None:

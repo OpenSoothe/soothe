@@ -10,14 +10,16 @@ def create_persist_store(
     backend: str = "json",
     dsn: str | None = None,
     namespace: str = "default",
+    db_path: str | None = None,
 ) -> PersistStore | None:
     """Factory for persistence backends.
 
     Args:
         persist_dir: Root directory for file-based backends (json/rocksdb). None disables file persistence.
-        backend: Backend type (``json``, ``rocksdb``, or ``postgresql``).
+        backend: Backend type (``json``, ``rocksdb``, ``postgresql``, or ``sqlite``).
         dsn: PostgreSQL DSN (required for backend="postgresql").
-        namespace: Namespace for key isolation (PostgreSQL only).
+        namespace: Namespace for key isolation (PostgreSQL and SQLite).
+        db_path: SQLite database file path (SQLite only).
 
     Returns:
         A PersistStore instance, or None if persistence is disabled.
@@ -28,6 +30,11 @@ def create_persist_store(
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
         return PostgreSQLPersistStore(dsn=dsn, namespace=namespace)
+
+    if backend == "sqlite":
+        from soothe.backends.persistence.sqlite_store import SQLitePersistStore
+
+        return SQLitePersistStore(db_path, namespace=namespace)
 
     if not persist_dir:
         return None

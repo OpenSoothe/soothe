@@ -43,7 +43,7 @@ class VectorStoreProviderConfig(BaseModel):
     """
 
     name: str
-    provider_type: Literal["pgvector", "weaviate", "in_memory"] = "in_memory"
+    provider_type: Literal["pgvector", "weaviate", "in_memory", "sqlite_vec"] = "sqlite_vec"
 
     # pgvector options
     dsn: str | None = None
@@ -341,7 +341,8 @@ class PersistenceConfig(BaseModel):
     """
 
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    default_backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
+    default_backend: Literal["json", "rocksdb", "postgresql", "sqlite"] = "sqlite"
+    sqlite_path: str | None = None
 
 
 class ContextProtocolConfig(BaseModel):
@@ -358,9 +359,15 @@ class ContextProtocolConfig(BaseModel):
     """
 
     enabled: bool = True
-    backend: Literal["keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"] = (
-        "keyword-postgresql"
-    )
+    backend: Literal[
+        "keyword-json",
+        "keyword-rocksdb",
+        "keyword-postgresql",
+        "keyword-sqlite",
+        "vector-postgresql",
+        "vector-sqlite",
+        "none",
+    ] = "keyword-sqlite"
     persist_dir: str | None = None
 
 
@@ -428,8 +435,8 @@ class DurabilityProtocolConfig(BaseModel):
         thread_inactivity_timeout_hours: Hours before an active thread with no updates is marked as suspended.
     """
 
-    backend: Literal["json", "rocksdb", "postgresql"] = "postgresql"
-    checkpointer: Literal["postgresql"] = "postgresql"
+    backend: Literal["json", "rocksdb", "postgresql", "sqlite"] = "sqlite"
+    checkpointer: Literal["postgresql", "sqlite", "memory"] = "sqlite"
     persist_dir: str | None = None
     thread_inactivity_timeout_hours: int = Field(default=72, ge=1, le=720)
 

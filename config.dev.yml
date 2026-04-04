@@ -236,7 +236,7 @@ protocols:
   # Context Protocol: Accumulates and projects knowledge within a thread
   context:
     enabled: true
-    backend: vector-postgresql  # {behavior}-{storage}: keyword-json, keyword-rocksdb, keyword-postgresql, vector-postgresql, none
+    backend: keyword-sqlite  # {behavior}-{storage}: keyword-json, keyword-sqlite, keyword-rocksdb, keyword-postgresql, vector-sqlite, vector-postgresql, none
     persist_dir: ""   # Empty = SOOTHE_HOME/context/
 
   # Memory Protocol: Cross-thread long-term memory
@@ -250,9 +250,9 @@ protocols:
 
   # Durability Protocol: Thread lifecycle and state persistence
   durability:
-    backend: postgresql  # json | rocksdb | postgresql
+    backend: sqlite  # json | rocksdb | postgresql | sqlite
     persist_dir: ""  # Empty = SOOTHE_HOME/durability/
-    checkpointer: postgresql  # LangGraph checkpoint backend
+    checkpointer: sqlite  # LangGraph checkpoint backend: postgresql | sqlite | memory
     thread_inactivity_timeout_hours: 72  # Hours before inactive threads are suspended
 
 # =============================================================================
@@ -263,8 +263,9 @@ protocols:
 
 persistence:
   # Default backend for new protocols (can be overridden per-protocol below)
-  # Options: json (simple files), rocksdb (embedded KV), postgresql (production)
-  default_backend: postgresql
+  # Options: json (simple files), rocksdb (embedded KV), sqlite (local default), postgresql (production)
+  default_backend: sqlite
+  # sqlite_path: ""  # Empty = SOOTHE_HOME/soothe.db
 
   # PostgreSQL DSN for Soothe metadata backends
   # (checkpointer, durability, keyword context/memory backends)

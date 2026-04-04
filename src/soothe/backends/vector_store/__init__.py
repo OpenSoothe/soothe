@@ -43,5 +43,13 @@ def create_vector_store(
 
         return WeaviateVectorStore(collection=collection, **config)
 
-    msg = f"Unknown vector store provider: {provider!r}. Use 'pgvector', 'weaviate', 'in_memory', or 'none'."
+    if provider == "sqlite_vec":
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        return SQLiteVecStore(collection=collection, **config)
+
+    msg = (
+        f"Unknown vector store provider: {provider!r}. "
+        "Use 'pgvector', 'weaviate', 'sqlite_vec', 'in_memory', or 'none'."
+    )
     raise ValueError(msg)
