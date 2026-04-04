@@ -14,6 +14,7 @@ from soothe.config.env import _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgenticLoopConfig,
     AutonomousConfig,
+    AutopilotConfig,
     ExecutionConfig,
     LoggingConfig,
     MCPServerConfig,
@@ -189,6 +190,9 @@ class SootheConfig(BaseSettings):
 
     daemon: DaemonConfig = Field(default_factory=DaemonConfig)
     """Daemon multi-transport configuration."""
+
+    autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)
+    """Autopilot mode configuration (RFC-204)."""
 
     # --- Vector store config ---
 

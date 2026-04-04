@@ -281,15 +281,13 @@ class GetRelatedGoalsTool(BaseTool):
         goals = await self.goal_engine.list_goals()
         query_lower = query.lower()
         related = [
-            g for g in goals
+            g
+            for g in goals
             if g.status in ("active", "completed", "validated")
             and any(w in g.description.lower() for w in query_lower.split())
         ]
         return {
-            "related_goals": [
-                {"id": g.id, "description": g.description, "status": g.status}
-                for g in related[:10]
-            ],
+            "related_goals": [{"id": g.id, "description": g.description, "status": g.status} for g in related[:10]],
         }
 
 
@@ -328,9 +326,7 @@ class ReportProgressTool(BaseTool):
 
     name: str = "report_progress"
     description: str = (
-        "Report progress on the current goal. "
-        "Parameters: goal_id (required), status, findings. "
-        "Returns: confirmation."
+        "Report progress on the current goal. Parameters: goal_id (required), status, findings. Returns: confirmation."
     )
     goal_engine: GoalEngine = Field(exclude=True)
 
@@ -405,19 +401,138 @@ class FlagBlockerTool(BaseTool):
         return {"status": "flagged", "goal_id": goal_id, "reason": reason}
 
 
-def create_layer2_tools(goal_engine: GoalEngine) -> list[BaseTool]:
-    """Create Layer 2 ↔ Layer 3 communication tools (RFC-204).
+class GetWorldInfoTool(BaseTool):
+    """RFC-204: Get current workspace and execution state."""
+
+    name: str = "get_world_info"
+    description: str = (
+        "Get the current workspace and execution state. "
+        "Parameters: none. "
+        "Returns: current goal ID, iteration count, workspace path, active goals count."
+    )
+    goal_engine: GoalEngine = Field(exclude=True)
+    iteration_count: int = Field(default=0, exclude=True)
+    workspace: str = Field(default="", exclude=True)
+    available_subagents: list[str] = Field(default_factory=list, exclude=True)
+
+    def _run(self) -> dict[str, Any]:
+        return _run_async(self._arun())
+
+    async def _arun(self) -> dict[str, Any]:
+        goals = await self.goal_engine.list_goals()
+        active = [g for g in goals if g.status == "active"]
+        return {
+            "active_goals": len(active),
+            "total_goals": len(goals),
+            "iteration_count": self.iteration_count,
+            "workspace": self.workspace,
+            "available_subagents": self.available_subagents,
+        }
+
+
+class SearchMemoryTool(BaseTool):
+    """RFC-204: Search cross-thread memory for relevant content."""
+
+    name: str = "search_memory"
+    description: str = (
+        "Search long-term memory for content related to the query. "
+        "Parameters: query (required), limit (optional, default 5). "
+        "Returns: matching memory items."
+    )
+    memory_protocol: Any = Field(exclude=True)
+
+    def _run(self, query: str = "", limit: int = 5) -> dict[str, Any]:
+        if not query:
+            return {"error": "query is required"}
+        return _run_async(self._arun(query=query, limit=limit))
+
+    async def _arun(self, query: str = "", limit: int = 5) -> dict[str, Any]:
+        if not query:
+            return {"error": "query is required"}
+        try:
+            items = await self.memory_protocol.recall(query, limit=limit)
+            return {"results": items if isinstance(items, list) else [items]}
+        except Exception as exc:
+            return {"error": f"Memory search failed: {exc}"}
+
+
+class AddFindingTool(BaseTool):
+    """RFC-204: Add a finding to the current goal's context ledger."""
+
+    name: str = "add_finding"
+    description: str = (
+        "Record a significant finding for the current goal. "
+        "Parameters: goal_id (required), content (required), tags (optional). "
+        "Returns: confirmation."
+    )
+    goal_engine: GoalEngine = Field(exclude=True)
+    proposal_queue: Any = Field(default=None, exclude=True)
+
+    def _run(self, goal_id: str = "", content: str = "", tags: str = "") -> dict[str, Any]:
+        if not goal_id:
+            return {"error": "goal_id is required"}
+        if not content:
+            return {"error": "content is required"}
+        return _run_async(self._arun(goal_id=goal_id, content=content, tags=tags))
+
+    async def _arun(self, goal_id: str = "", content: str = "", tags: str = "") -> dict[str, Any]:
+        if not goal_id:
+            return {"error": "goal_id is required"}
+        if not content:
+            return {"error": "content is required"}
+        goal = await self.goal_engine.get_goal(goal_id)
+        if not goal:
+            return {"error": f"Goal {goal_id} not found"}
+        # Queue the finding for post-iteration application
+        if self.proposal_queue:
+            from soothe.cognition.proposal_queue import Proposal
+
+            self.proposal_queue.enqueue(
+                Proposal(
+                    type="add_finding",
+                    goal_id=goal_id,
+                    payload={"content": content, "tags": tags.split(",") if tags else []},
+                )
+            )
+        return {"status": "queued", "goal_id": goal_id, "content_preview": content[:100]}
+
+
+def create_layer2_tools(
+    goal_engine: GoalEngine,
+    *,
+    proposal_queue: Any = None,
+    memory_protocol: Any = None,
+    iteration_count: int = 0,
+    workspace: str = "",
+    available_subagents: list[str] | None = None,
+) -> list[BaseTool]:
+    """Create Layer 2 <-> Layer 3 communication tools (RFC-204).
 
     Args:
         goal_engine: The GoalEngine to bind.
+        proposal_queue: Optional ProposalQueue for queuing semantics.
+        memory_protocol: Optional memory protocol for search.
+        iteration_count: Current iteration count.
+        workspace: Workspace path.
+        available_subagents: List of available subagent names.
 
     Returns:
         List of query and proposal tool instances.
     """
-    return [
+    tools = [
         GetRelatedGoalsTool(goal_engine=goal_engine),
         GetGoalProgressTool(goal_engine=goal_engine),
         ReportProgressTool(goal_engine=goal_engine),
         SuggestGoalTool(goal_engine=goal_engine),
         FlagBlockerTool(goal_engine=goal_engine),
+        GetWorldInfoTool(
+            goal_engine=goal_engine,
+            iteration_count=iteration_count,
+            workspace=workspace,
+            available_subagents=available_subagents or [],
+        ),
     ]
+    if memory_protocol:
+        tools.append(SearchMemoryTool(memory_protocol=memory_protocol))
+    tools.append(AddFindingTool(goal_engine=goal_engine, proposal_queue=proposal_queue))
+    return tools

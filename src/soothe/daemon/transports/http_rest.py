@@ -463,11 +463,12 @@ class HttpRestTransport(TransportServer):
                 goals = await engine.list_goals()
                 return {"goals": [g.model_dump(mode="json") for g in goals]}
 
-            # Fallback: parse files
+            # Fallback: parse goal files directly
             from soothe.config import SOOTHE_HOME
-            from soothe.ux.tui.autopilot_dashboard import _parse_autopilot_files
+            from soothe.utils.goal_parsing import parse_autopilot_goals
 
-            goals = _parse_autopilot_files(SOOTHE_HOME / "autopilot")
+            autopilot_dir = SOOTHE_HOME / "autopilot"
+            goals = parse_autopilot_goals(autopilot_dir)
             return {"goals": goals, "source": "files"}
 
         @self._app.get("/api/v1/autopilot/goals/{goal_id}")
@@ -512,9 +513,7 @@ class HttpRestTransport(TransportServer):
             timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S")
             filename = f"TASK-{timestamp}.md"
             fpath = inbox_dir / filename
-            fpath.write_text(
-                f"---\ntype: task_submit\npriority: {priority}\n---\n\n{description}\n"
-            )
+            fpath.write_text(f"---\ntype: task_submit\npriority: {priority}\n---\n\n{description}\n")
             return {"status": "submitted", "file": filename}
 
         @self._app.delete("/api/v1/autopilot/goals/{goal_id}")

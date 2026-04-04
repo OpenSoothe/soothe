@@ -6,7 +6,8 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
-| 2026-04-03 | RFC-204 | Draft | Autopilot Mode — consensus loop, dreaming mode, channel protocol, scheduler, UX surfaces |
+| 2026-04-03 | RFC-204 | Active | Autopilot Mode — consensus loop, dreaming mode, channel protocol, scheduler, UX surfaces; gap analysis identifying 12 remaining gaps |
+| 2026-04-03 | IG-125 | New | Implementation Guide for RFC-204 gap closure |
 | 2026-03-31 | Multiple | Reclassified | **RFC Reclassification** — Consolidated 23 RFCs into 16 with new numbering scheme |
 | 2026-03-31 | RFC-101 | New | Created from merger of RFC-0016 (Tool Interface) + RFC-0025 (Event Naming) |
 | 2026-03-31 | RFC-202 | New | Created from merger of RFC-0009 (DAG Execution) + RFC-0010 (Failure Recovery) |

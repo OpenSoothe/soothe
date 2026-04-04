@@ -5,8 +5,11 @@ This module provides the cognitive capabilities for Soothe:
 """
 
 from soothe.cognition.goal_engine import Goal, GoalEngine
+from soothe.cognition.proposal_queue import Proposal, ProposalQueue
 
 __all__ = [
     "Goal",
     "GoalEngine",
+    "Proposal",
+    "ProposalQueue",
 ]

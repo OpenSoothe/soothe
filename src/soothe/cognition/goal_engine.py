@@ -785,9 +785,7 @@ class GoalEngine:
                     if gfile.exists():
                         goal_def = _parse_goal_file(gfile)
                         if goal_def:
-                            goal = await self._create_from_definition(
-                                goal_def, source_file=str(gfile)
-                            )
+                            goal = await self._create_from_definition(goal_def, source_file=str(gfile))
                             goals_created.append(goal)
 
         if goals_created:
@@ -810,6 +808,52 @@ class GoalEngine:
             _update_frontmatter_status(goal.source_file, goal.status)
         except Exception:
             logger.debug("Failed to update goal file status for %s", goal_id, exc_info=True)
+
+    async def append_goal_progress(self, goal_id: str, entry: str) -> None:
+        """RFC-204: Append a progress entry to the goal's GOAL.md file.
+
+        Finds or creates a ``## Progress`` section and appends a timestamped entry.
+
+        Args:
+            goal_id: Goal ID to update.
+            entry: Progress entry text.
+        """
+        goal = self._goals.get(goal_id)
+        if not goal or not goal.source_file:
+            return
+
+        source = Path(goal.source_file)
+        if not source.exists():  # noqa: ASYNC240
+            return
+
+        try:
+            from datetime import UTC, datetime
+
+            content = source.read_text()  # noqa: ASYNC240
+            timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+            progress_line = f"\n- [{timestamp}] {entry}"
+
+            # Find or create ## Progress section
+            if "## Progress" in content:
+                # Append after the last ## section header within progress, or at end of file
+                parts = content.split("## Progress", 1)
+                section = parts[1]
+                # Find next ## header after Progress
+                next_header_idx = section.find("\n## ")
+                if next_header_idx >= 0:
+                    # Insert before the next section header
+                    before = section[:next_header_idx]
+                    after = section[next_header_idx:]
+                    content = parts[0] + "## Progress" + before + progress_line + after
+                else:
+                    content += progress_line
+            else:
+                # Create Progress section at the end
+                content += f"\n## Progress{progress_line}\n"
+
+            source.write_text(content)  # noqa: ASYNC240
+        except OSError:
+            logger.debug("Failed to append progress for %s", goal_id, exc_info=True)
 
     # ------------------------------------------------------------------
     # Internal helpers for file discovery
@@ -837,9 +881,11 @@ class GoalEngine:
 # RFC-204: Goal File Parsing Helpers
 # ======================================================================
 
+
 @dataclass
 class _GoalFileDefinition:
     """Parsed definition of a goal from a markdown file."""
+
     id: str
     description: str
     priority: int = 50
@@ -875,6 +921,7 @@ def _parse_goal_file(path: Path) -> _GoalFileDefinition | None:
         return None
 
     import yaml
+
     fm = yaml.safe_load(frontmatter) or {}
 
     # Extract description from first heading
@@ -957,14 +1004,16 @@ def _parse_goals_batch_file(path: Path) -> list[_GoalFileDefinition]:
             if desc_text:
                 description = f"{name}: {desc_text}"
 
-        goals.append(_GoalFileDefinition(
-            id=metadata.get("id", name.lower().replace(" ", "-")),
-            description=description,
-            priority=metadata.get("priority", 50),
-            depends_on=metadata.get("depends_on", []),
-            informs=metadata.get("informs", []),
-            conflicts_with=metadata.get("conflicts_with", []),
-        ))
+        goals.append(
+            _GoalFileDefinition(
+                id=metadata.get("id", name.lower().replace(" ", "-")),
+                description=description,
+                priority=metadata.get("priority", 50),
+                depends_on=metadata.get("depends_on", []),
+                informs=metadata.get("informs", []),
+                conflicts_with=metadata.get("conflicts_with", []),
+            )
+        )
 
     return goals
 
@@ -1016,6 +1065,7 @@ def _update_frontmatter_status(file_path: str, status: str) -> None:
         return
 
     import yaml
+
     fm = yaml.safe_load(frontmatter) or {}
     fm["status"] = status
 

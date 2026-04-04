@@ -7,31 +7,37 @@ from datetime import UTC, datetime
 from typing import Literal
 
 # User → Soothe message types
-CHANNEL_USER_TO_SOOTHE = frozenset({
-    "task_submit",
-    "task_cancel",
-    "signal_interrupt",
-    "signal_resume",
-    "query_status",
-    "feedback",
-})
+CHANNEL_USER_TO_SOOTHE = frozenset(
+    {
+        "task_submit",
+        "task_cancel",
+        "signal_interrupt",
+        "signal_resume",
+        "query_status",
+        "feedback",
+    }
+)
 
 # Soothe → User message types
-CHANNEL_SOOTHE_TO_USER = frozenset({
-    "status_update",
-    "goal_progress",
-    "finding_report",
-    "blocker_alert",
-    "dreaming_entered",
-    "session_summary",
-})
+CHANNEL_SOOTHE_TO_USER = frozenset(
+    {
+        "status_update",
+        "goal_progress",
+        "finding_report",
+        "blocker_alert",
+        "dreaming_entered",
+        "session_summary",
+    }
+)
 
 # Message types that require acknowledgment
-CRITICAL_MESSAGE_TYPES = frozenset({
-    "blocker_alert",
-    "dreaming_entered",
-    "must_goal_confirmation",
-})
+CRITICAL_MESSAGE_TYPES = frozenset(
+    {
+        "blocker_alert",
+        "dreaming_entered",
+        "must_goal_confirmation",
+    }
+)
 
 
 @dataclass
@@ -90,10 +96,12 @@ class ChannelMessage:
     def to_json(self) -> str:
         """Serialize to JSON string."""
         import json
+
         return json.dumps(self.to_dict(), indent=2)
 
     @classmethod
     def from_json(cls, text: str) -> ChannelMessage:
         """Deserialize from JSON string."""
         import json
+
         return cls.from_dict(json.loads(text))

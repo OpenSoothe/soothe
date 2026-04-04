@@ -514,7 +514,171 @@ autopilot:
 
 ---
 
-## 10. References
+## 10. Implementation Gap Analysis
+
+After initial Phases 1-4 implementation, 12 gaps remain. This section documents each gap and its fix.
+
+### Gap Inventory
+
+| # | Gap | Severity | Group | Phase |
+|---|-----|----------|-------|-------|
+| 1 | `_send_autopilot_webhook()` called but undefined | Bug | A | 4 |
+| 2 | `get_world_info()` tool missing | Missing | B | 1 |
+| 3 | `search_memory()` tool missing | Missing | B | 1 |
+| 4 | `add_finding()` tool missing | Missing | B | 1 |
+| 5 | Proposal queuing not implemented (tools just log) | Missing | C | 1 |
+| 6 | LLM-judged criticality is placeholder only | Partial | D | 2 |
+| 7 | MUST confirmation not wired into execution loop | Missing | D | 2 |
+| 8 | Relationship auto-detection entirely missing | Missing | D | 2 |
+| 9 | File-based progress tracking incomplete | Partial | E | 2 |
+| 10 | WebSocket events not emitted | Missing | F | 3 |
+| 11 | Dreaming "goal anticipation" activity missing | Missing | F | 4 |
+| 12 | Autopilot config schema missing from SootheConfig | Missing | F | 4 |
+
+### Group A: Broken Code
+
+**Gap 1 — `_send_autopilot_webhook()` not defined**
+
+- **Location**: `_runner_autonomous.py:653` calls `await self._send_autopilot_webhook(...)` but method doesn't exist on `AutonomousMixin`
+- **Fix**: Add `_send_autopilot_webhook(self, event_type: str, payload: dict)` method that instantiates `WebhookService` from config and calls `send_webhook`. Wire additional call sites on `goal_failed`, `dreaming_entered`, `dreaming_exited`.
+- **Dependency**: Requires Gap 12 (config schema) for webhook URL resolution.
+
+### Group B: Missing Layer 2 Tools
+
+**Gap 2 — `get_world_info()` tool**
+
+- New `GetWorldInfoTool` in `tools/goals/implementation.py`
+- Returns: current goal ID, iteration count, available subagents, workspace path, active goals count
+- Read-only, no external dependencies
+
+**Gap 3 — `search_memory()` tool**
+
+- New `SearchMemoryTool` in `tools/goals/implementation.py`
+- Delegates to `self._memory.recall(query, limit=5)` — memory protocol already provides this
+- Returns list of recalled memory snippets
+
+**Gap 4 — `add_finding()` tool**
+
+- New `AddFindingTool` in `tools/goals/implementation.py`
+- Writes to the proposal queue (see Group C)
+- Signature: `add_finding(goal_id, content, tags?)`
+
+All three tools added to `create_layer2_tools()` return list.
+
+### Group C: Proposal Queuing
+
+**Gap 5 — Queuing semantics for Layer 2 proposals**
+
+- New `ProposalQueue` class in `soothe/cognition/proposal_queue.py`:
+  ```python
+  @dataclass
+  class Proposal:
+      type: str  # "report_progress" | "suggest_goal" | "add_finding" | "flag_blocker"
+      goal_id: str
+      payload: dict
+      timestamp: datetime
+  ```
+- `AutonomousMixin` gets `_proposal_queue: list[Proposal]` attribute, initialized per goal execution
+- Layer 2 tools write proposals to the queue instead of just logging
+- After iteration completes (before `complete_goal`), runner processes queued proposals:
+  - `report_progress` → append to goal's progress section
+  - `suggest_goal` → run through criticality evaluator, create if approved
+  - `add_finding` → append to findings list
+  - `flag_blocker` → transition goal to `blocked` state
+- Queue cleared after processing
+
+### Group D: Goal Management
+
+**Gap 6 — LLM-judged criticality**
+
+- In `criticality.py`, replace the LLM placeholder (lines 97-102) with actual LLM call
+- Add `_evaluate_with_llm(description, priority, model)` async function:
+  - Prompt LLM with risk criteria: external systems, security, cost, data modification, irreversibility, dependency breadth
+  - Structured output: `{"risk_level": "high|medium|low", "reasons": [...]}`
+  - High risk → elevate to "must"; medium → "should"
+- `evaluate_criticality()` gains optional `model` parameter when `use_llm=True`
+
+**Gap 7 — MUST confirmation wired into execution loop**
+
+- When `suggest_goal` proposals are dequeued in runner:
+  - Call `evaluate_criticality(description, priority, use_llm=True, model=self._model)`
+  - If "must": store in pending confirmations, send `must_goal_confirmation` via channel outbox, notify user
+  - If "should"/"nice": create goal immediately via `goal_engine.create_goal()`
+- Pending confirmations stored as JSON file at `SOOTHE_HOME/autopilot/pending_confirmations.json`
+- CLI `approve/reject` commands read/write this file directly (file-based shared state, consistent with channel protocol pattern)
+- Runner polls the file during execution loop to pick up user decisions
+
+**Gap 8 — Relationship auto-detection**
+
+- New module `soothe/cognition/relationship_detector.py`
+- `detect_relationships(completed_goal, all_goals)` function:
+  - **`informs`**: Text overlap between completed goal's findings/description and other goals' descriptions. Shared tags increase confidence.
+  - **`conflicts_with`**: Both goals reference same resource paths (file patterns, tool names) with write intent. High confidence auto-apply.
+  - **`depends_on`**: If goal B's description references goal A's output artifacts.
+- Emits `relationship_detected` event with `from_goal`, `to_goal`, `type`, `confidence`
+- Called after goal completion, before marking complete
+- Confidence threshold: >=0.8 auto-apply, 0.5-0.8 flag for review
+
+### Group E: Progress Tracking
+
+**Gap 9 — File-based progress tracking**
+
+- In `goal_engine.py`, extend `update_goal_file_status()` to also maintain a `## Progress` section
+- Add `_append_goal_progress(goal_id, entry: str)`:
+  - Opens goal's GOAL.md, finds `## Progress` section (creates if missing)
+  - Appends `[{timestamp}] {entry}` line
+- Called when `ReportProgressTool` is used and when proposals are processed
+- Ensure `runs/{thread_id}/goals/{goal_id}/` directory created on goal execution start
+
+### Group F: Integration
+
+**Gap 10 — WebSocket events**
+
+- Add 6 event types to daemon's WebSocket broadcast:
+  - `autopilot.status_changed`, `autopilot.goal_created`, `autopilot.goal_progress`, `autopilot.goal_completed`, `autopilot.dreaming_entered`, `autopilot.dreaming_exited`
+- Map existing `soothe.autopilot.*` custom events from runner to WebSocket format
+- Wire `_custom()` calls in runner to emit the missing events
+- Daemon event filter already supports custom events — just need to add autopilot types to the whitelist
+
+**Gap 11 — Dreaming goal anticipation**
+
+- In `dreaming.py`, add `_anticipate_goals()` method
+- Analyzes memory patterns and recently completed goals
+- Drafts candidate future tasks as markdown files to `SOOTHE_HOME/autopilot/draft_goals/`
+- Not auto-created — user reviews and submits via CLI/inbox
+- Lightweight: pattern matching + LLM generation if model available, text template fallback
+
+**Gap 12 — Autopilot config schema**
+
+- Add `AutopilotConfig` Pydantic model to `config.py`:
+  ```python
+  class AutopilotConfig(BaseModel):
+      max_iterations: int = 50
+      max_send_backs: int = 3
+      max_parallel_goals: int = 3
+      dreaming_enabled: bool = True
+      dreaming_consolidation_interval: int = 300
+      dreaming_health_check_interval: int = 60
+      checkpoint_interval: int = 10
+      scheduler_enabled: bool = True
+      max_scheduled_tasks: int = 100
+      webhooks: dict[str, str | None] = {}
+  ```
+- Add to `SootheConfig` as `autopilot: AutopilotConfig = Field(default_factory=AutopilotConfig)`
+- Replace hardcoded values in runner, dreaming, scheduler with config-driven values
+- Wire webhook URL resolution from `config.autopilot.webhooks`
+
+### Implementation Order
+
+1. **Fix bugs first**: Gap 1 (webhook method) + Gap 12 (config schema) — unblocks webhook wiring
+2. **Wire up existing pieces**: Gap 5 (proposal queue), Gap 10 (WebSocket events)
+3. **Add missing tools**: Gaps 2, 3, 4 (new tools)
+4. **Add missing logic**: Gap 6 (LLM criticality), Gap 7 (MUST confirmation), Gap 9 (progress tracking)
+5. **Add new features**: Gap 8 (relationship detection), Gap 11 (goal anticipation)
+
+---
+
+## 11. References
 
 - RFC-200: Layer 3 Autonomous Goal Management
 - RFC-201: Layer 2 Agentic Goal Execution

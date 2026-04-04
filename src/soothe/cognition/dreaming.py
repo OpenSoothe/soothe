@@ -123,6 +123,7 @@ class DreamingMode:
         - Memory deduplication and merging
         - Vector re-indexing if needed
         - Context summarization
+        - Goal anticipation analysis
         """
         if self._memory:
             try:
@@ -140,6 +141,8 @@ class DreamingMode:
                     await self._context.compact()
             except Exception:
                 logger.debug("Context compaction failed", exc_info=True)
+
+        await self._anticipate_goals()
 
     async def _run_health_check(self) -> None:
         """Run health monitoring.
@@ -189,6 +192,84 @@ class DreamingMode:
         outbox = ChannelOutbox(self._soothe_home / "autopilot" / "outbox")
         msg = ChannelMessage(type=event_type, payload=data, sender="soothe")
         outbox.send(msg)
+
+    async def _anticipate_goals(self) -> None:
+        """Analyze completed goals and generate candidate future tasks.
+
+        Reads goal completion artifacts from the runs directory, identifies
+        recurring patterns, and drafts candidate task files to
+        ``SOOTHE_HOME/autopilot/draft_goals/`` for user review.
+
+        Uses simple pattern matching; no LLM dependency.
+        """
+        runs_dir = self._soothe_home / "runs"
+        if not runs_dir.exists():
+            return
+
+        # Collect recent goal reports
+        goal_summaries: list[dict[str, str]] = []
+        for goal_dir in sorted(runs_dir.rglob("goals/*/report.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:5]:
+            try:
+                content = goal_dir.read_text()
+                goal_id = goal_dir.parent.name
+                # Extract a brief summary from the first meaningful lines
+                lines = [line.strip() for line in content.splitlines() if line.strip() and not line.startswith("#")]
+                if lines:
+                    goal_summaries.append({"id": goal_id, "summary": "\n".join(lines[:5])})
+            except OSError:
+                continue
+
+        if not goal_summaries:
+            return
+
+        # Identify recurring themes
+        theme_words: dict[str, int] = {}
+        stop_words = {"the", "a", "an", "is", "was", "to", "for", "of", "and", "in", "with", "on", "at", "by", "from"}
+        for g in goal_summaries:
+            words = set(g["summary"].lower().split())
+            for w in words - stop_words:
+                if len(w) > 3:  # noqa: PLR2004
+                    theme_words[w] = theme_words.get(w, 0) + 1
+
+        # Find top recurring themes
+        recurring = sorted(theme_words.items(), key=lambda x: x[1], reverse=True)[:5]
+        if not recurring:
+            return
+
+        themes = ", ".join(f"{w} ({n}x)" for w, n in recurring if n > 1)
+        if not themes:
+            return
+
+        # Write draft goal
+        draft_dir = self._soothe_home / "autopilot" / "draft_goals"
+        draft_dir.mkdir(parents=True, exist_ok=True)
+
+        # Only write one draft per dreaming cycle (check if recent draft exists)
+        recent_drafts = list(draft_dir.glob("DRAFT-*.md"))
+        from datetime import datetime as _dt
+
+        cutoff = _dt.now(tz=UTC).timestamp() - self._consolidation_interval
+        if any(d.stat().st_mtime > cutoff for d in recent_drafts):
+            return
+
+        timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
+        draft_path = draft_dir / f"DRAFT-{timestamp}.md"
+        goals_text = "\n".join(f"- [{g['id']}] {g['summary'][:200]}" for g in goal_summaries[:5])
+        draft_path.write_text(
+            f"---\n"
+            f"type: task_submit\n"
+            f"priority: 30\n"
+            f"---\n\n"
+            f"# Draft Goal: Theme Analysis\n\n"
+            f"Generated from analysis of recent completed goals.\n\n"
+            f"## Recurring Themes\n"
+            f"Keywords that appeared across multiple goals: {themes}\n\n"
+            f"## Recent Completed Goals\n"
+            f"{goals_text}\n\n"
+            f"## Suggested Next Steps\n"
+            f"Consider whether follow-up tasks are needed for the themes above.\n"
+        )
+        logger.info("Draft goal written to %s", draft_path)
 
     def _write_status(self) -> None:
         """Write current status to status.json."""

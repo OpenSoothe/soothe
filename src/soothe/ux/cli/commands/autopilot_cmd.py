@@ -178,33 +178,62 @@ def cancel_goal(
 
 @app.command("approve")
 def approve_goal(
-    goal_id: str = typer.Argument(..., help="Goal ID to approve."),
+    goal_id: str = typer.Argument(..., help="Confirmation ID to approve (use 'inbox' to list pending)."),
 ) -> None:
     """Approve a MUST-confirmation goal."""
+    import json
+
     from soothe.config import SOOTHE_HOME
 
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
+    confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
+    if not confirmations_file.exists():
+        typer.echo("No pending goal confirmations.")
+        return
 
-    # Create approval marker
-    approval = inbox_dir / f"APPROVE-{goal_id}.md"
-    approval.write_text(f"---\ntype: approve\ngoal_id: {goal_id}\n---\n\nApproved.\n")
-    typer.echo(f"Goal {goal_id} approved.")
+    try:
+        confirmations = json.loads(confirmations_file.read_text())
+    except (json.JSONDecodeError, OSError):
+        typer.echo("Failed to read pending confirmations.")
+        return
+
+    for i, c in enumerate(confirmations):
+        if c.get("id") == goal_id:
+            c["status"] = "approved"
+            confirmations[i] = c
+            confirmations_file.write_text(json.dumps(confirmations, indent=2))
+            typer.echo(f"Confirmation {goal_id} approved. Goal will be created on next runner poll.")
+            return
+
+    typer.echo(f"Confirmation {goal_id} not found. Run 'soothe autopilot inbox' to list pending.")
 
 
 @app.command("reject")
 def reject_goal(
-    goal_id: str = typer.Argument(..., help="Goal ID to reject."),
+    goal_id: str = typer.Argument(..., help="Confirmation ID to reject."),
 ) -> None:
     """Reject a proposed goal."""
+    import json
+
     from soothe.config import SOOTHE_HOME
 
-    inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
+    confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
+    if not confirmations_file.exists():
+        typer.echo("No pending goal confirmations.")
+        return
 
-    rejection = inbox_dir / f"REJECT-{goal_id}.md"
-    rejection.write_text(f"---\ntype: reject\ngoal_id: {goal_id}\n---\n\nRejected.\n")
-    typer.echo(f"Goal {goal_id} rejected.")
+    try:
+        confirmations = json.loads(confirmations_file.read_text())
+    except (json.JSONDecodeError, OSError):
+        typer.echo("Failed to read pending confirmations.")
+        return
+
+    remaining = [c for c in confirmations if c.get("id") != goal_id]
+    if len(remaining) == len(confirmations):
+        typer.echo(f"Confirmation {goal_id} not found.")
+        return
+
+    confirmations_file.write_text(json.dumps(remaining, indent=2))
+    typer.echo(f"Confirmation {goal_id} rejected.")
 
 
 @app.command("wake")

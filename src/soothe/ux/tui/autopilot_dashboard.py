@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -287,7 +286,9 @@ class AutopilotApp:
                 pass
 
         # Fallback: parse goal files
-        goals.extend(_parse_autopilot_files(autopilot_dir))
+        from soothe.utils.goal_parsing import parse_autopilot_goals
+
+        goals.extend(parse_autopilot_goals(autopilot_dir))
         return goals
 
 
@@ -300,104 +301,6 @@ def _parse_autopilot_files(autopilot_dir: Path) -> list[dict]:
     Returns:
         List of goal info dicts.
     """
-    goals = []
+    from soothe.utils.goal_parsing import parse_autopilot_goals
 
-    goal_file = autopilot_dir / "GOAL.md"
-    if goal_file.exists():
-        g = _parse_single_goal_file(goal_file.read_text(), str(goal_file))
-        if g:
-            goals.append(g)
-
-    goals_file = autopilot_dir / "GOALS.md"
-    if goals_file.exists():
-        text = goals_file.read_text()
-        for section in re.split(r"## Goal:", text)[1:]:
-            g = _parse_goals_section(section.strip(), str(goals_file))
-            if g:
-                goals.append(g)
-
-    goals_dir = autopilot_dir / "goals"
-    if goals_dir.exists():
-        for subdir in sorted(goals_dir.iterdir()):
-            gfile = subdir / "GOAL.md"
-            if gfile.exists():
-                g = _parse_single_goal_file(gfile.read_text(), str(gfile))
-                if g:
-                    goals.append(g)
-
-    return goals
-
-
-def _parse_single_goal_file(text: str, source: str) -> dict[str, Any] | None:
-    """Parse a single GOAL.md file.
-
-    Args:
-        text: File content.
-        source: File path for reference.
-
-    Returns:
-        Goal info dict or None.
-    """
-    if not text.startswith("---"):
-        return None
-
-    import yaml
-
-    parts = text.split("---", 2)
-    if len(parts) < 3:  # noqa: PLR2004
-        return None
-
-    fm: dict[str, Any] = yaml.safe_load(parts[1]) or {}
-    body = parts[2].strip()
-
-    desc = ""
-    for line in body.splitlines():
-        s = line.strip()
-        if s.startswith("# "):
-            desc = s[2:]
-            break
-
-    return {
-        "id": fm.get("id", source.split("/")[-2]),
-        "description": desc or body[:80],
-        "priority": int(fm.get("priority", 50)),
-        "status": fm.get("status", "pending"),
-        "depends_on": fm.get("depends_on", []),
-        "source_file": source,
-    }
-
-
-def _parse_goals_section(text: str, source: str) -> dict[str, Any] | None:
-    """Parse a goal section from GOALS.md.
-
-    Args:
-        text: Section text.
-        source: File path for reference.
-
-    Returns:
-        Goal info dict or None.
-    """
-    lines = text.splitlines()
-    name = lines[0].strip() if lines else ""
-    metadata: dict[str, Any] = {}
-    for line in lines[1:]:
-        s = line.strip()
-        if s.startswith("- id:"):
-            metadata["id"] = s.split(":", 1)[1].strip()
-        elif s.startswith("- priority:"):
-            metadata["priority"] = int(s.split(":", 1)[1].strip())
-        elif s.startswith("- depends_on:"):
-            raw = s.split(":", 1)[1].strip()
-            if raw.startswith("[") and raw.endswith("]"):
-                inner = raw[1:-1].strip()
-                metadata["depends_on"] = [
-                    x.strip() for x in inner.split(",") if x.strip()
-                ] if inner else []
-    return {
-        "id": metadata.get("id", name.lower().replace(" ", "-")),
-        "description": name,
-        "priority": metadata.get("priority", 50),
-        "status": "pending",
-        "depends_on": metadata.get("depends_on", []),
-        "source_file": source,
-    }
+    return parse_autopilot_goals(autopilot_dir)

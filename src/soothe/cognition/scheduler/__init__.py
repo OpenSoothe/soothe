@@ -235,6 +235,7 @@ class SchedulerService:
             return
         try:
             import json
+
             data = json.loads(self._persist_path.read_text())
             for item in data.get("tasks", []):
                 spec = ScheduleSpec(kind=item["schedule_kind"], value=item["schedule_value"])
@@ -258,19 +259,22 @@ class SchedulerService:
             return
         try:
             import json
-            data = {"tasks": [
-                {
-                    "id": t.id,
-                    "description": t.description,
-                    "schedule_kind": t.schedule.kind,
-                    "schedule_value": t.schedule.value,
-                    "priority": t.priority,
-                    "status": t.status,
-                    "created_at": t.created_at.isoformat(),
-                    "next_run": t.next_run.isoformat() if t.next_run else None,
-                }
-                for t in self._tasks.values()
-            ]}
+
+            data = {
+                "tasks": [
+                    {
+                        "id": t.id,
+                        "description": t.description,
+                        "schedule_kind": t.schedule.kind,
+                        "schedule_value": t.schedule.value,
+                        "priority": t.priority,
+                        "status": t.status,
+                        "created_at": t.created_at.isoformat(),
+                        "next_run": t.next_run.isoformat() if t.next_run else None,
+                    }
+                    for t in self._tasks.values()
+                ]
+            }
             self._persist_path.write_text(json.dumps(data, indent=2))
         except Exception:
             logger.debug("Failed to persist scheduler state", exc_info=True)

@@ -722,6 +722,40 @@ class ExecutionConfig(BaseModel):
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
 
 
+class AutopilotConfig(BaseModel):
+    """Autopilot mode configuration (RFC-204)."""
+
+    max_iterations: int = Field(default=50, ge=1, le=500)
+    """Maximum iterations for autonomous goal execution."""
+
+    max_send_backs: int = Field(default=3, ge=1, le=10)
+    """Per-goal send-back budget for consensus validation."""
+
+    max_parallel_goals: int = Field(default=3, ge=1, le=10)
+    """Maximum number of goals executed in parallel."""
+
+    dreaming_enabled: bool = True
+    """Whether to enter dreaming mode when all goals complete."""
+
+    dreaming_consolidation_interval: int = Field(default=300, ge=10)
+    """Seconds between memory consolidation during dreaming."""
+
+    dreaming_health_check_interval: int = Field(default=60, ge=5)
+    """Seconds between health checks during dreaming."""
+
+    checkpoint_interval: int = Field(default=10, ge=1, le=100)
+    """Iterations between periodic checkpoints."""
+
+    scheduler_enabled: bool = True
+    """Whether scheduler service is active."""
+
+    max_scheduled_tasks: int = Field(default=100, ge=1, le=1000)
+    """Maximum number of pending scheduled tasks."""
+
+    webhooks: dict[str, str | None] = Field(default_factory=dict)
+    """Webhook URLs by event type (e.g., on_goal_completed, on_goal_failed)."""
+
+
 class SecurityConfig(BaseModel):
     """Security policy configuration for filesystem access control.
 

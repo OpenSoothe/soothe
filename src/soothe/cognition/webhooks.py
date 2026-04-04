@@ -14,12 +14,14 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # Event types that trigger webhooks
-AUTONOTIFY_EVENTS = frozenset({
-    "goal_completed",
-    "goal_failed",
-    "dreaming_entered",
-    "dreaming_exited",
-})
+AUTONOTIFY_EVENTS = frozenset(
+    {
+        "goal_completed",
+        "goal_failed",
+        "dreaming_entered",
+        "dreaming_exited",
+    }
+)
 
 
 @dataclass

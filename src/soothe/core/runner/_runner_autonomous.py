@@ -216,6 +216,14 @@ class AutonomousMixin(GoalDirectivesMixin):
         except Exception:
             logger.debug("Final state persistence failed", exc_info=True)
 
+        # RFC-204: Emit status change event
+        yield _custom(
+            {
+                "type": "soothe.autopilot.status_changed",
+                "state": "idle" if self._goal_engine.is_complete() else "running",
+            }
+        )
+
         # RFC-204: Check for scheduled tasks and enter dreaming mode if enabled
         if self._goal_engine and self._goal_engine.is_complete():
             await self._check_scheduled_and_dream(state, user_input)
@@ -495,8 +503,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         )
                         # Re-enter loop with refined instruction
                         current_input = (
-                            f"Previous attempt did not satisfy goal. "
-                            f"Feedback: {c_reasoning}. Try different approach."
+                            f"Previous attempt did not satisfy goal. Feedback: {c_reasoning}. Try different approach."
                         )
                         should_continue = True  # Force another iteration
                     else:
@@ -505,11 +512,13 @@ class AutonomousMixin(GoalDirectivesMixin):
                             goal.id,
                             reason=f"Send-back budget exhausted ({max_sb} rounds)",
                         )
-                        yield _custom({
-                            "type": "soothe.autopilot.goal_suspended",
-                            "goal_id": goal.id,
-                            "reason": f"Budget exhausted: {c_reasoning[:100]}",
-                        })
+                        yield _custom(
+                            {
+                                "type": "soothe.autopilot.goal_suspended",
+                                "goal_id": goal.id,
+                                "reason": f"Budget exhausted: {c_reasoning[:100]}",
+                            }
+                        )
                         async for chunk in self._save_checkpoint(
                             parent_state, user_input=user_input, mode="autonomous"
                         ):
@@ -521,20 +530,20 @@ class AutonomousMixin(GoalDirectivesMixin):
                         goal.id,
                         reason=f"Consensus suspension: {c_reasoning}",
                     )
-                    async for chunk in self._save_checkpoint(
-                        parent_state, user_input=user_input, mode="autonomous"
-                    ):
+                    async for chunk in self._save_checkpoint(parent_state, user_input=user_input, mode="autonomous"):
                         yield chunk
                     return
 
                 else:
                     # Accepted — mark as validated
                     await self._goal_engine.validate_goal(goal.id)
-                    yield _custom({
-                        "type": "soothe.autopilot.goal_validated",
-                        "goal_id": goal.id,
-                        "confidence": 1.0,
-                    })
+                    yield _custom(
+                        {
+                            "type": "soothe.autopilot.goal_validated",
+                            "goal_id": goal.id,
+                            "confidence": 1.0,
+                        }
+                    )
 
             record = IterationRecord(
                 iteration=total_iterations,
@@ -686,10 +695,207 @@ class AutonomousMixin(GoalDirectivesMixin):
                     retry_count=updated.retry_count,
                 ).to_dict()
             )
+
+            # RFC-204: Webhook notification for goal failure
+            await self._send_autopilot_webhook(
+                "goal_failed",
+                {
+                    "goal_id": goal.id,
+                    "description": goal.description[:200],
+                    "status": "failed",
+                    "error": str(exc)[:500],
+                },
+            )
+
             if updated.status == "pending":
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
                 logger.info("Retrying goal %s after %.1fs backoff", goal.id, backoff)
                 await asyncio.sleep(backoff)
+
+    async def _process_proposals(
+        self,
+        goal_id: str,
+        proposal_queue: Any,  # ProposalQueue
+    ) -> None:
+        """RFC-204: Process proposals queued by Layer 2 tools after iteration.
+
+        Applies each proposal based on type:
+        - report_progress → append to goal progress section
+        - suggest_goal → evaluate criticality, create if approved
+        - add_finding → append to findings
+        - flag_blocker → transition goal to blocked state
+
+        Args:
+            goal_id: Current goal ID.
+            proposal_queue: ProposalQueue instance to drain.
+        """
+        proposals = proposal_queue.drain()
+        if not proposals:
+            return
+
+        logger.info("Processing %d proposals for goal %s", len(proposals), goal_id)
+
+        for proposal in proposals:
+            try:
+                if proposal.type == "report_progress":
+                    payload = proposal.payload
+                    entry = f"{payload.get('status', 'update')}: {payload.get('findings', '')[:200]}"
+                    if self._goal_engine:
+                        await self._goal_engine.append_goal_progress(goal_id, entry)
+
+                elif proposal.type == "suggest_goal":
+                    await self._handle_suggested_goal(proposal)
+
+                elif proposal.type == "add_finding":
+                    content = proposal.payload.get("content", "")
+                    tags = proposal.payload.get("tags", [])
+                    if self._context and content:
+                        from soothe.protocols.context import ContextEntry
+
+                        await self._context.ingest(
+                            ContextEntry(
+                                source="layer2_finding",
+                                content=content[:1000],
+                                tags=["finding", f"goal:{goal_id}", *tags],
+                                importance=0.6,
+                            )
+                        )
+
+                elif proposal.type == "flag_blocker":
+                    reason = proposal.payload.get("reason", "Unknown blocker")
+                    if self._goal_engine:
+                        await self._goal_engine.block_goal(goal_id, reason=reason)
+                    _custom(
+                        {
+                            "type": "soothe.autopilot.goal_blocked",
+                            "goal_id": goal_id,
+                            "reason": reason[:200],
+                        }
+                    )
+
+            except Exception:
+                logger.debug("Failed to process proposal: %s", proposal.type, exc_info=True)
+
+    async def _handle_suggested_goal(self, proposal: Any) -> None:
+        """RFC-204: Handle a suggested goal proposal with criticality check.
+
+        If goal is evaluated as 'must', it queues for user confirmation.
+        Otherwise it creates the goal immediately.
+
+        Args:
+            proposal: Proposal with type 'suggest_goal'.
+        """
+        from soothe.cognition.criticality import evaluate_criticality_async
+
+        description = proposal.payload.get("description", "")
+        priority = proposal.payload.get("priority", 50)
+
+        if not description:
+            return
+
+        result = await evaluate_criticality_async(
+            description, priority, use_llm=True, model=getattr(self, "_model", None)
+        )
+
+        if result.is_must:
+            # Queue for user confirmation
+            await self._queue_must_confirmation(description, priority, result.reasons)
+        # Create goal immediately
+        elif self._goal_engine:
+            goal = await self._goal_engine.create_goal(description, priority=priority)
+            logger.info(
+                "Suggested goal created: %s (criticality=%s)",
+                goal.id,
+                result.level,
+            )
+
+    async def _queue_must_confirmation(self, description: str, priority: int, reasons: list[str]) -> None:
+        """RFC-204: Queue a MUST goal for user confirmation.
+
+        Writes to pending_confirmations.json and sends via channel outbox.
+
+        Args:
+            description: Goal description.
+            priority: Goal priority.
+            reasons: Criticality reasons.
+        """
+        import json
+        import uuid
+        from datetime import UTC, datetime
+
+        from soothe.config import SOOTHE_HOME
+
+        autopilot_dir = SOOTHE_HOME / "autopilot"
+        confirmations_file = autopilot_dir / "pending_confirmations.json"
+        confirmations_file.parent.mkdir(parents=True, exist_ok=True)
+
+        confirmation = {
+            "id": uuid.uuid4().hex[:12],
+            "description": description,
+            "priority": priority,
+            "reasons": reasons,
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+            "status": "pending",
+        }
+
+        # Read existing confirmations
+        existing: list[dict] = []
+        if confirmations_file.exists():
+            try:
+                existing = json.loads(confirmations_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                existing = []
+
+        existing.append(confirmation)
+        confirmations_file.write_text(json.dumps(existing, indent=2))
+
+        # Send via channel outbox
+        try:
+            from soothe.cognition.channel.models import ChannelMessage
+            from soothe.cognition.channel.outbox import ChannelOutbox
+
+            outbox = ChannelOutbox(autopilot_dir / "outbox")
+            msg = ChannelMessage(
+                type="must_goal_confirmation",
+                payload=confirmation,
+                sender="soothe",
+                requires_ack=True,
+            )
+            outbox.send(msg)
+        except Exception:
+            logger.debug("Failed to send MUST confirmation via channel", exc_info=True)
+
+        logger.info(
+            "MUST goal queued for confirmation: %s (reasons: %s)",
+            description[:80],
+            ", ".join(reasons[:3]),
+        )
+
+    async def _send_autopilot_webhook(self, event_type: str, payload: dict) -> None:
+        """Send autopilot webhook notification for an event.
+
+        Args:
+            event_type: Event type (e.g., "goal_completed", "goal_failed").
+            payload: Event-specific payload dict.
+        """
+        try:
+            from soothe.cognition.webhooks import WebhookConfig, WebhookService
+
+            webhook_url = None
+            if self._config and hasattr(self._config, "autopilot"):
+                webhook_url = self._config.autopilot.webhooks.get(f"on_{event_type}")
+
+            if not webhook_url:
+                return
+
+            service = WebhookService(
+                webhooks={
+                    event_type: [WebhookConfig(url=webhook_url)],
+                }
+            )
+            await service.notify(event_type, payload)
+        except Exception:
+            logger.debug("Webhook failed for %s", event_type, exc_info=True)
 
     async def _check_scheduled_and_dream(
         self,
@@ -742,6 +948,10 @@ class AutonomousMixin(GoalDirectivesMixin):
                 context_protocol=self._context,
             )
             logger.info("Entering autopilot dreaming mode")
+
+            # RFC-204: Emit dreaming events via WebSocket and webhook
+            await self._send_autopilot_webhook("dreaming_entered", {})
             await dreaming.run()
+            await self._send_autopilot_webhook("dreaming_exited", {})
         except Exception:
             logger.debug("Dreaming mode failed to start", exc_info=True)
