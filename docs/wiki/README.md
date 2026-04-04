@@ -65,11 +65,11 @@ Learn more: [Getting Started](getting-started.md#execution-modes)
 
 ### Architecture Overview
 
-Soothe uses a **PLAN → ACT → JUDGE** execution loop:
+Soothe uses a **Reason → Act** execution loop:
 
 ```
-User Query → PLAN (LLM decides action) → ACT (execute tools) → JUDGE (evaluate results)
-                ↑                                                        ↓
+User Query → REASON (LLM plans, assesses progress, decides steps) → ACT (execute tools)
+                ↑                                                                                ↓
                 └────────────────── Retry/Adjust ←───────────────────────┘
 ```
 

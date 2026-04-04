@@ -70,7 +70,7 @@ Soothe is a protocol-driven AI orchestration framework that transforms how you w
 
 ### 🎯 Intelligent by Default
 
-Soothe uses a **PLAN → ACT → JUDGE** execution loop that automatically:
+Soothe uses a **Reason → Act** execution loop that automatically:
 - Analyzes your request and decides the best approach
 - Executes tools with structured outputs for reliable results
 - Evaluates success and adjusts strategy without manual intervention
@@ -238,7 +238,7 @@ soothe thread continue <thread-id>
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| **Intelligent Execution Loop** | ✅ Implemented | PLAN → ACT → JUDGE architecture with automatic strategy adjustment |
+| **Intelligent Execution Loop** | ✅ Implemented | Reason → Act architecture with automatic strategy adjustment |
 | **Multi-Source Research** | ✅ Implemented | Web search, academic papers, documents with automatic synthesis |
 | **Specialized Subagents** | ✅ Implemented | Browser automation, planning, research, skill creation |
 | **Plugin System** | ✅ Implemented | Decorator-based tools and subagents with lifecycle management |
@@ -263,7 +263,7 @@ Soothe is built on a **protocol-driven architecture** that ensures flexibility a
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Core Framework (Agent Factory & Runner)                │
-│  PLAN → ACT → JUDGE Loop                                │
+│  Reason → Act Loop                                      │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐

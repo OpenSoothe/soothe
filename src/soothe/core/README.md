@@ -90,7 +90,7 @@ All exports are lazy-loaded in `__init__.py` to keep startup fast.
 
 ```
 SootheRunner.astream(user_input)
-  → _run_agentic_loop()          # RFC-0008 observe/act/verify
+  → _run_agentic_loop()          # RFC-201 Reason → Act loop
     → pre-stream: context.restore, memory.recall, plan
     → PhasesMixin._stream_agent  # CoreAgent.astream → LangGraph
     → post-stream: context.ingest, memory.remember, checkpoint

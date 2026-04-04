@@ -217,13 +217,13 @@ class PlannerProtocol(Protocol):
         """Evaluate progress and recommend changes."""
         ...
 
-    async def decide_steps(
+    async def reason(
         self,
         goal: str,
         context: PlanContext,
-        previous_judgment: Any | None = None,
+        previous_reason: Any | None = None,
     ) -> Any:
-        """Decide steps for Layer 2 execution loop."""
+        """Produce ReasonResult for Layer 2 execution loop."""
         ...
 ```
 

@@ -1,10 +1,13 @@
 # RFC-201 Configuration Guide
 
+> **DEPRECATED** (2026-04-05): This guide describes the old `use_judge_engine` config flag
+> which was removed after the Reason → Act migration (IG-115). The flag no longer affects
+> runtime behavior. See RFC-201 for the current Reason → Act architecture.
+
 ## ✅ RFC-201 is Now Enabled by Default
 
 **Status**: Production-ready (all tests passing)
-**Default Mode**: PLAN → ACT → JUDGE (RFC-201)
-**Fallback**: Legacy OBSERVE → ACT → VERIFY still available
+**Default Mode**: Reason → Act (single LLM call per iteration)
 
 ---
 

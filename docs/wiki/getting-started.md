@@ -211,14 +211,13 @@ soothe thread continue
 
 Soothe provides multiple execution modes tailored to different task types:
 
-### Default Mode (TUI with PLAN → ACT → JUDGE)
+### Default Mode (TUI with Reason → Act)
 
 **Best for**: Standard tasks, research, file operations, code analysis
 
 The default execution mode uses an intelligent loop that:
-1. **PLAN**: Analyzes your request and decides the best approach
-2. **ACT**: Executes tools with structured outputs
-3. **JUDGE**: Evaluates results and adjusts strategy if needed
+1. **REASON**: Analyzes your request, assesses progress, and decides the next steps
+2. **ACT**: Executes tools with structured outputs and evaluates results
 
 ```bash
 # Launch TUI with your query (default behavior)

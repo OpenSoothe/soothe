@@ -1,8 +1,12 @@
 # IG-097: RFC-201 (Layer 2) Implementation - LoopAgent System
 
+> **SUPERSEDED** (2026-04-05): This guide describes the old PLAN → ACT → JUDGE architecture
+> which was replaced by Reason → Act in IG-115. The `JudgeEngine`, `JudgeResult`, and
+> `decide_steps` referenced here no longer exist. See IG-115 for the current implementation.
+
 **Implementation Guide**: IG-097
 **RFC**: RFC-201 - Layer 2: Agentic Goal Execution Loop
-**Status**: In Progress
+**Status**: Superseded by IG-115
 **Created**: 2026-03-29
 **Related**: RFC-200, RFC-100, RFC-000, RFC-001
 

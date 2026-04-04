@@ -8,8 +8,8 @@ RFC-0007 adds autonomous iteration: when ``autonomous=True``, the runner
 loops reflect -> revise -> re-execute until the goal is complete or
 max_iterations is reached.
 
-RFC-0008 adds agentic loop: default execution mode with observe → act → verify
-iterative refinement loop replacing single-pass execution.
+RFC-0008 adds agentic loop: default execution mode with Reason → Act
+iterative refinement loop (RFC-201) replacing single-pass execution.
 
 RFC-0009 adds DAG-based step execution: plans with multiple steps are
 iterated via ``StepScheduler``, independent steps can run in parallel,
@@ -460,7 +460,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         **Two execution modes**:
         - ``autonomous=True`` (RFC-0007): Goal-driven iteration with explicit goal management
-        - Default (RFC-0008): Agentic loop with observe → act → verify iteration
+        - Default (RFC-201): Agentic loop with Reason → Act iteration
 
         **Quick path optimization**:
         - If `subagent` is provided, bypass classifier and route directly to subagent

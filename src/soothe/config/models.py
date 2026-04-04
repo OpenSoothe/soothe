@@ -569,13 +569,11 @@ class EarlyTerminationConfig(BaseModel):
 
 
 class AgenticLoopConfig(BaseModel):
-    """Configuration for agentic loop execution mode (RFC-0008).
+    """Configuration for agentic loop execution mode (RFC-201).
 
     Args:
         enabled: Enable agentic loop mode.
         max_iterations: Maximum agentic loop iterations.
-        observation_strategy: Strategy for observation phase.
-        verification_strictness: Strictness level for verification phase.
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
@@ -586,26 +584,11 @@ class AgenticLoopConfig(BaseModel):
         description="Enable agentic loop mode",
     )
 
-    use_judge_engine: bool = Field(
-        default=True,
-        description="Use LLM-based judge engine (PLAN→ACT→JUDGE) instead of text patterns (OBSERVE→ACT→VERIFY)",
-    )
-
     max_iterations: int = Field(
         default=3,
         description="Maximum agentic loop iterations",
         ge=1,
         le=10,
-    )
-
-    observation_strategy: Literal["minimal", "comprehensive", "adaptive"] = Field(
-        default="adaptive",
-        description="Strategy for observation phase",
-    )
-
-    verification_strictness: Literal["lenient", "moderate", "strict"] = Field(
-        default="moderate",
-        description="Strictness level for verification phase",
     )
 
     planning: PlanningConfig = Field(

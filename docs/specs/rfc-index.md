@@ -91,7 +91,7 @@ RFCs are organized by numeric prefix:
 - Delegates to Layer 2 for single-goal execution
 
 **Layer 2: Agentic Goal Execution** (RFC-201)
-- Executes single goals through PLAN → ACT → JUDGE loop
+- Executes single goals through Reason → Act loop
 - Delegates to Layer 1 for step execution
 
 **Layer 1: CoreAgent Runtime** (RFC-100)
