@@ -49,6 +49,25 @@ class PluginFailedEvent(SootheEvent):
     phase: Literal["discovery", "validation", "dependency", "initialization"]
 
 
+class PluginHealthCheckedEvent(SootheEvent):
+    """Emitted when a plugin health check is completed.
+
+    This event signals that a plugin's health_check() hook has been
+    called and reports the plugin's current health status.
+
+    Attributes:
+        type: Event type identifier ("soothe.plugin.health_checked").
+        name: Plugin name.
+        status: Health status ("healthy", "degraded", "unhealthy").
+        details: Optional details about the health check result.
+    """
+
+    type: Literal["soothe.plugin.health_checked"] = "soothe.plugin.health_checked"
+    name: str
+    status: Literal["healthy", "degraded", "unhealthy"]
+    details: str = ""
+
+
 class PluginUnloadedEvent(SootheEvent):
     """Emitted when a plugin is unloaded.
 
@@ -79,12 +98,17 @@ register_event(
     summary_template="Plugin {name} failed during {phase}: {error}",
 )
 register_event(
+    PluginHealthCheckedEvent,
+    summary_template="Plugin {name} health: {status}",
+)
+register_event(
     PluginUnloadedEvent,
     summary_template="Plugin {name} unloaded",
 )
 
 __all__ = [
     "PluginFailedEvent",
+    "PluginHealthCheckedEvent",
     "PluginLoadedEvent",
     "PluginUnloadedEvent",
 ]

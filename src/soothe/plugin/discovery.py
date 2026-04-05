@@ -8,6 +8,7 @@ This module implements three plugin discovery mechanisms:
 
 import importlib.metadata
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,36 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def discover_entry_points() -> list[str]:
+def _try_extract_plugin_name(module_path: str) -> str | None:
+    """Attempt to extract plugin name from module path without full import.
+
+    For entry point and filesystem discovery, tries to get the plugin
+    name from the manifest so deduplication works by name rather than
+    module path. Returns None if the manifest can't be loaded.
+    """
+    try:
+        if ":" in module_path:
+            module_name, class_name = module_path.split(":", 1)
+        else:
+            class_name = None
+            module_name = module_path
+
+        import importlib
+        mod = importlib.import_module(module_name)
+        if class_name and hasattr(mod, class_name):
+            cls = getattr(mod, class_name)
+            if hasattr(cls, "_plugin_manifest"):
+                return cls._plugin_manifest.name
+        # Fallback: look for any class with _plugin_manifest
+        if class_name is None:
+            for attr_name in dir(mod):
+                if attr_name.endswith("Plugin") and not attr_name.startswith("_"):
+                    cls = getattr(mod, attr_name)
+                    if hasattr(cls, "_plugin_manifest"):
+                        return cls._plugin_manifest.name
+    except Exception:
+        pass
+    return None
     """Discover plugins from Python entry points.
 
     Scans the `soothe.plugins` entry point group for plugin declarations.
@@ -127,6 +157,13 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
         logger.debug("Plugin directory does not exist: %s", base)
         return []
 
+    # Add plugin directory to sys.path so plugins can be imported
+    plugin_dir_str = str(base)
+    if plugin_dir_str not in sys.path:
+        sys.path.insert(0, plugin_dir_str)
+        logger.debug("Added plugin directory to sys.path: %s", plugin_dir_str)
+        return []
+
     plugins = []
 
     for plugin_dir in base.iterdir():
@@ -202,7 +239,8 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
 
     # Entry points (no config available)
     for module_path in discover_entry_points():
-        discovered[module_path] = (module_path, {})
+        name = _try_extract_plugin_name(module_path) or module_path
+        discovered[name] = (module_path, {})
 
     # Config-declared (has config)
     for module_path, plugin_config in discover_config_declared(config):
@@ -210,7 +248,8 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
 
     # Filesystem (no config available)
     for module_path in discover_filesystem():
-        discovered[module_path] = (module_path, {})
+        name = _try_extract_plugin_name(f"{module_path}:Plugin") or module_path
+        discovered[name] = (module_path, {})
 
     logger.info("Discovered %s total plugins", len(discovered))
     return discovered

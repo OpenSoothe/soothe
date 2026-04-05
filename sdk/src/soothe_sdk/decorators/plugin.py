@@ -21,6 +21,7 @@ def plugin(
     dependencies: list[str] | None = None,
     python_version: str = ">=3.11",
     soothe_version: str = ">=0.1.0",
+    config_requirements: list[str] | None = None,
     trust_level: str = "standard",
 ) -> Callable[[type], type]:
     """Decorator that marks a class as a Soothe plugin.
@@ -72,6 +73,7 @@ def plugin(
             dependencies=dependencies or [],
             python_version=python_version,
             soothe_version=soothe_version,
+            config_requirements=config_requirements or [],
             trust_level=trust_level,
         )
 

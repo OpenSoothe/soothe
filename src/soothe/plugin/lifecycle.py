@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING, Any
 from soothe.plugin.cache import cache_plugin, get_cached_plugin
 from soothe.plugin.context import create_plugin_context
 from soothe.plugin.discovery import discover_all_plugins
-from soothe.plugin.events import PluginFailedEvent, PluginLoadedEvent, PluginUnloadedEvent
+from soothe.plugin.events import (
+    PluginFailedEvent,
+    PluginHealthCheckedEvent,
+    PluginLoadedEvent,
+    PluginUnloadedEvent,
+)
 from soothe.plugin.exceptions import InitializationError
 from soothe.plugin.loader import PluginLoader
 from soothe.utils.progress import emit_progress
@@ -113,6 +118,45 @@ class PluginLifecycleManager:
                 logger.exception("Failed to shutdown plugin '%s'", name)
 
         self.loaded_plugins.clear()
+
+    async def health_check_all(self) -> dict[str, dict]:
+        """Run health checks on all loaded plugins.
+
+        Calls the health_check() hook on each loaded plugin and
+        emits health check events.
+
+        Returns:
+            Dict mapping plugin names to their health status dicts.
+        """
+        results: dict[str, dict] = {}
+
+        for name, plugin_instance in list(self.loaded_plugins.items()):
+            status = {"status": "unknown", "details": "No health_check() method"}
+            try:
+                if hasattr(plugin_instance, "health_check"):
+                    result = await plugin_instance.health_check()
+                    if hasattr(result, "model_dump"):
+                        status = result.model_dump()
+                    elif isinstance(result, dict):
+                        status = result
+                    else:
+                        status = {"status": str(result)}
+
+                emit_progress(
+                    PluginHealthCheckedEvent(
+                        name=name,
+                        status=status.get("status", "unknown"),
+                        details=status.get("details", ""),
+                    ).model_dump(),
+                    logger,
+                )
+            except Exception as e:
+                status = {"status": "unhealthy", "details": str(e)}
+                logger.exception("Health check failed for plugin '%s'", name)
+
+            results[name] = status
+
+        return results
 
     def _build_dependency_graph(
         self,

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from packaging.requirements import Requirement
 
-from soothe.plugin.exceptions import DependencyError, DiscoveryError
+from soothe.plugin.exceptions import DependencyError, DiscoveryError, ValidationError
 from soothe_sdk.types.manifest import PluginManifest
 
 if TYPE_CHECKING:
@@ -102,6 +102,9 @@ class PluginLoader:
             # Get manifest
             manifest: PluginManifest = plugin_class._plugin_manifest
 
+            # Validate trust level
+            self.validate_trust_level(manifest)
+
             # Resolve dependencies
             self.resolve_dependencies(manifest, config)
 
@@ -113,6 +116,8 @@ class PluginLoader:
             raise
         except DependencyError:
             raise
+        except ValidationError:
+            raise
         except Exception as e:
             logger.exception("Failed to load plugin from %s", module_path)
             msg = f"Failed to load plugin: {e}"
@@ -121,12 +126,13 @@ class PluginLoader:
     def resolve_dependencies(
         self,
         manifest: PluginManifest,
-        config: "SootheConfig",  # noqa: ARG002
+        config: "SootheConfig",
     ) -> None:
         """Check if plugin dependencies are satisfied.
 
-        Checks both library dependencies (pip packages) and configuration
-        dependencies. If any required dependency is missing, raises an error.
+        Checks library dependencies (pip packages), configuration
+        dependencies, and version constraints. If any required
+        dependency is missing, raises an error.
 
         Args:
             manifest: Plugin manifest with dependency declarations.
@@ -142,6 +148,18 @@ class PluginLoader:
 
         if missing_libs:
             msg = f"Missing library dependencies: {', '.join(missing_libs)}"
+            raise DependencyError(
+                msg,
+                plugin_name=manifest.name,
+            )
+
+        # Check configuration dependencies
+        missing_configs = [
+            key for key in manifest.config_requirements if not self._check_config_dependency(key, config)
+        ]
+
+        if missing_configs:
+            msg = f"Missing configuration dependencies: {', '.join(missing_configs)}"
             raise DependencyError(
                 msg,
                 plugin_name=manifest.name,
@@ -164,6 +182,65 @@ class PluginLoader:
             )
 
         logger.debug("All dependencies satisfied for plugin '%s'", manifest.name)
+
+    def _check_config_dependency(self, key: str, config: "SootheConfig") -> bool:
+        """Check if a configuration dependency is satisfied.
+
+        Supports dot-notation keys (e.g., "providers.openai.api_key")
+        that traverse the SootheConfig object.
+
+        Args:
+            key: Dot-notation config key (e.g., "providers.openai.api_key").
+            config: Soothe configuration instance.
+
+        Returns:
+            True if the key exists and has a non-empty value.
+        """
+        try:
+            parts = key.split(".")
+            value = config
+            for part in parts:
+                if not hasattr(value, part):
+                    return False
+                value = getattr(value, part)
+            return value is not None and value != ""
+        except Exception:
+            return False
+
+    def validate_trust_level(self, manifest: PluginManifest) -> None:
+        """Validate plugin trust level.
+
+        Untrusted plugins are rejected by default unless explicitly
+        allowed via environment variable SOOTHE_ALLOW_UNTRUSTED_PLUGINS.
+
+        Args:
+            manifest: Plugin manifest to validate.
+
+        Raises:
+            ValidationError: If trust level is not permitted.
+        """
+        trust_level = manifest.trust_level
+
+        # Always allow built-in, trusted, and standard
+        if trust_level in ("built-in", "trusted", "standard"):
+            return
+
+        # Untrusted plugins require explicit opt-in
+        if trust_level == "untrusted":
+            allow_untrusted = False
+            try:
+                import os
+
+                allow_untrusted = os.environ.get("SOOTHE_ALLOW_UNTRUSTED_PLUGINS", "").lower() in ("true", "1", "yes")
+            except Exception:
+                pass
+
+            if not allow_untrusted:
+                msg = (
+                    f"Plugin '{manifest.name}' has trust_level='untrusted' which is "
+                    f"blocked by default. Set SOOTHE_ALLOW_UNTRUSTED_PLUGINS=true to allow."
+                )
+                raise ValidationError(msg, plugin_name=manifest.name)
 
     def _check_library_dependency(self, dep_string: str) -> bool:
         """Check if a library dependency is satisfied.

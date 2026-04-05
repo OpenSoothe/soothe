@@ -37,6 +37,7 @@ from soothe.plugin.discovery import (
 )
 from soothe.plugin.events import (
     PluginFailedEvent,
+    PluginHealthCheckedEvent,
     PluginLoadedEvent,
     PluginUnloadedEvent,
 )
@@ -51,6 +52,7 @@ from soothe.plugin.exceptions import (
 )
 from soothe.plugin.lifecycle import PluginLifecycleManager
 from soothe.plugin.loader import PluginLoader
+from soothe.plugin.manifest import PluginManifest
 from soothe.plugin.registry import PluginRegistry, RegistryEntry
 
 __all__ = [
@@ -61,10 +63,12 @@ __all__ = [
     "PluginError",
     # Events
     "PluginFailedEvent",
+    "PluginHealthCheckedEvent",
     # Core classes
     "PluginLifecycleManager",
     "PluginLoadedEvent",
     "PluginLoader",
+    "PluginManifest",
     "PluginRegistry",
     "PluginUnloadedEvent",
     "RegistryEntry",
