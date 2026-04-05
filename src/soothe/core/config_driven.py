@@ -99,8 +99,6 @@ def _extract_required_permission(action: ActionRequest) -> Permission | None:
         return Permission("fs", "read", "*")
     if action.action_type == "subagent_spawn":
         return Permission("subagent", "spawn", action.tool_name or "*")
-    if action.action_type == "skillify_retrieve":
-        return Permission("subagent", "spawn", "skillify")
     if action.action_type == "mcp_connect":
         return Permission("mcp", "connect", action.tool_name or "*")
     return None

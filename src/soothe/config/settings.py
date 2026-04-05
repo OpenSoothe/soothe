@@ -25,12 +25,10 @@ from soothe.config.models import (
     PluginConfig,
     ProtocolsConfig,
     SecurityConfig,
-    SkillifyConfig,
     SubagentConfig,
     ToolsConfig,
     VectorStoreProviderConfig,
     VectorStoreRouter,
-    WeaverConfig,
 )
 from soothe.config.prompts import _DEFAULT_SYSTEM_PROMPT
 
@@ -88,7 +86,7 @@ class SootheConfig(BaseSettings):
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
 
-    Builtin subagents (browser, claude, skillify, weaver) are added automatically.
+    Builtin subagents (browser, claude) are added automatically.
     Plugin-discovered subagents are merged during config validation.
     """
 
@@ -99,8 +97,6 @@ class SootheConfig(BaseSettings):
         builtin_subagents = {
             "browser": SubagentConfig(),
             "claude": SubagentConfig(),
-            "skillify": SubagentConfig(),
-            "weaver": SubagentConfig(),
         }
 
         # Import here to avoid circular dependency
@@ -149,14 +145,6 @@ class SootheConfig(BaseSettings):
 
     activity_max_lines: int = 300
     """Maximum number of activity lines retained in the TUI Activity Panel."""
-
-    # --- Skillify and Weaver config (RFC-0004, RFC-0005) ---
-
-    skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
-    """Skillify subagent configuration."""
-
-    weaver: WeaverConfig = Field(default_factory=WeaverConfig)
-    """Weaver subagent configuration."""
 
     # --- Nested Configuration Objects ---
 
@@ -223,7 +211,7 @@ class SootheConfig(BaseSettings):
         Falls back to default if role is unset.
 
         Args:
-            role: Component role (context, skillify, weaver_reuse).
+            role: Component role (e.g. context).
 
         Returns:
             "provider:collection" string or None.
@@ -313,7 +301,7 @@ class SootheConfig(BaseSettings):
         """Create a vector store instance for a given role with caching.
 
         Args:
-            role: Component role (context, skillify, weaver_reuse).
+            role: Component role (e.g. context).
 
         Returns:
             Cached or newly created VectorStoreProtocol instance.

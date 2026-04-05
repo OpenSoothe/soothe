@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config import SOOTHE_HOME, BrowserSubagentConfig, SootheConfig
+from soothe.config import BrowserSubagentConfig, SootheConfig
 from soothe.utils import expand_path
 
 if TYPE_CHECKING:
@@ -28,21 +28,17 @@ logger = logging.getLogger(__name__)
 def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubAgent]]:
     """Lazily load subagent factories on first access.
 
-    This avoids importing heavy subagent modules (browser, skillify, weaver)
+    This avoids importing heavy subagent modules (browser)
     at module load time, which was causing 24+ second startup delays.
     """
     from soothe.subagents.browser import create_browser_subagent
     from soothe.subagents.claude import create_claude_subagent
     from soothe.subagents.research import create_research_subagent
-    from soothe.subagents.skillify import create_skillify_subagent
-    from soothe.subagents.weaver import create_weaver_subagent
 
     return {
         "browser": create_browser_subagent,
         "claude": create_claude_subagent,
         "research": create_research_subagent,
-        "skillify": create_skillify_subagent,
-        "weaver": create_weaver_subagent,
     }
 
 
@@ -517,8 +513,6 @@ def resolve_subagents(
         extra_kwargs: dict = dict(sub_cfg.config)
         if name in cwd_subagents and "cwd" not in extra_kwargs:
             extra_kwargs["cwd"] = resolved_cwd
-        if name in ("skillify", "weaver"):
-            extra_kwargs["config"] = config
         if name == "browser":
             extra_kwargs["config"] = BrowserSubagentConfig(**sub_cfg.config)
         if name == "research":
@@ -530,11 +524,6 @@ def resolve_subagents(
 
     parallel = lazy and len(pending) > 1
     subagents = _resolve_subagents_parallel(pending) if parallel else _resolve_subagents_sequential(pending)
-
-    generated = _resolve_generated_subagents(config)
-    if generated:
-        logger.info("Loaded %d generated agent(s) from registry", len(generated))
-        subagents.extend(generated)
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(
@@ -591,29 +580,4 @@ def _resolve_subagents_parallel(
                 subagents.append(future.result())
             except Exception:
                 logger.exception("Failed to load subagent '%s'", name)
-    return subagents
-
-
-def _resolve_generated_subagents(config: SootheConfig) -> list[SubAgent]:
-    """Load generated agents from Weaver's registry at startup."""
-    from pathlib import Path
-
-    generated_dir = config.weaver.generated_agents_dir or str(Path(SOOTHE_HOME) / "generated_agents")
-    base = Path(generated_dir).expanduser().resolve()
-    if not base.is_dir():
-        return []
-
-    try:
-        from soothe.subagents.weaver.registry import GeneratedAgentRegistry
-
-        registry = GeneratedAgentRegistry(base_dir=base)
-    except Exception:
-        logger.debug("Failed to initialise generated agent registry", exc_info=True)
-        return []
-
-    subagents: list[SubAgent] = []
-    for manifest in registry.list_agents():
-        agent = registry.load_as_subagent(manifest.name)
-        if agent:
-            subagents.append(agent)
     return subagents

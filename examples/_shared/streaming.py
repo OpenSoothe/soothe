@@ -21,8 +21,6 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "research": "Research",
     "browser": "Browser",
     "claude": "Claude",
-    "skillify": "Skillify",
-    "weaver": "Weaver",
 }
 
 _TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')

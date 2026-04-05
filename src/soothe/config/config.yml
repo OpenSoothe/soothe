@@ -105,26 +105,6 @@ subagents:
     # Uses the InquiryEngine for comprehensive investigation
     # No additional configuration needed - uses web_search tool settings
 
-  skillify:
-    enabled: true
-    # config:
-    #   warehouse_paths: []  # Additional warehouse paths beyond defaults
-    #   index_interval_seconds: 300  # Background indexing interval (5 min)
-    #   index_collection: soothe_skillify  # Vector store collection name
-    #   retrieval_top_k: 10  # Number of results for retrieval queries
-
-  weaver:
-    enabled: true
-    # config:
-    #   generated_agents_dir: ~/.soothe/generated_agents  # Directory for generated agents
-    #   reuse_threshold: 0.85  # Minimum confidence for reuse-first matching
-    #   reuse_collection: soothe_weaver_reuse  # Vector store collection for reuse index
-    #   max_generation_attempts: 2  # Maximum retries for agent generation
-    #   allowed_tool_groups: []  # Tool groups available to generated agents (empty = all)
-    #   allowed_mcp_servers: []  # MCP servers available to generated agents (empty = all)
-    #   cleanup_old_agents_days: 100  # Auto-delete agents older than N days
-    #   max_generated_agents: 100  # Maximum number of generated agents to keep
-
 # =============================================================================
 # Tools Configuration
 # =============================================================================
@@ -310,7 +290,7 @@ persistence:
 # =============================================================================
 # Vector Store Providers
 # =============================================================================
-# Define named vector store backends for VectorContext, Skillify, and Weaver.
+# Define named vector store backends for VectorContext.
 # Similar to LLM providers, each vector store has a type and configuration.
 # Use vector_store_router to assign components to providers.
 
@@ -323,7 +303,7 @@ vector_stores:
 
 vector_store_router:
   # Map component roles to "provider_name:collection_name"
-  # Roles: context (VectorContext), skillify (SkillIndexer), weaver_reuse (ReuseIndex)
+  # Roles: context (VectorContext)
   #
   # Format: "provider_name:collection_name"
   # - provider_name must match a name from vector_stores list above
@@ -332,8 +312,6 @@ vector_store_router:
   # All roles use pgvector with the configured DSN by default
   default: pgvector_default:soothe_default
   context: pgvector_default:soothe_context
-  skillify: pgvector_default:soothe_skillify
-  weaver_reuse: pgvector_default:soothe_weaver_reuse
 
 # =============================================================================
 # Autonomous Operation

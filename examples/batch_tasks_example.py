@@ -12,7 +12,6 @@ Usage:
 """
 
 import subprocess
-import sys
 from pathlib import Path
 
 TASKS = [
@@ -26,7 +25,7 @@ TASK_LABELS = [
     "Planning task (auto-routes to planner)",
     "Research task (auto-routes to research)",
     "Code exploration task (auto-routes to scout)",
-    "Skill retrieval task (auto-routes to skillify)",
+    "Task batch processing example",
 ]
 
 

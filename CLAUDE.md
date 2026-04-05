@@ -130,7 +130,7 @@ This runs:
 ### Capabilities
 | Package | Contents |
 |---------|----------|
-| `subagents/` | Browser, Claude, Skillify, Weaver (deepagents SubAgents) |
+| `subagents/` | Browser, Claude (deepagents SubAgents) |
 | `tools/` | Tool groups (execution, websearch, research, etc.) |
 | `mcp/` | MCP server loading and management |
 

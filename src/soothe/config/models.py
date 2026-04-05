@@ -85,14 +85,10 @@ class VectorStoreRouter(BaseModel):
     Args:
         default: Default assignment for unspecified roles.
         context: VectorContext protocol assignment.
-        skillify: Skillify subagent assignment.
-        weaver_reuse: Weaver reuse index assignment.
     """
 
     default: str | None = None
     context: str | None = None
-    skillify: str | None = None
-    weaver_reuse: str | None = None
 
 
 class SubagentConfig(BaseModel):
@@ -135,48 +131,6 @@ class MCPServerConfig(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     url: str | None = None
     transport: str = "stdio"
-
-
-class SkillifyConfig(BaseModel):
-    """Configuration for the Skillify subagent (RFC-0004).
-
-    Args:
-        enabled: Whether Skillify is active.
-        warehouse_paths: Additional warehouse paths beyond the default.
-        index_interval_seconds: Seconds between background indexing passes.
-        index_collection: Vector store collection name for skill embeddings.
-        retrieval_top_k: Default number of results for retrieval queries.
-    """
-
-    enabled: bool = False
-    warehouse_paths: list[str] = Field(default_factory=list)
-    index_interval_seconds: int = 300
-    index_collection: str = "soothe_skillify"
-    retrieval_top_k: int = 10
-
-
-class WeaverConfig(BaseModel):
-    """Configuration for the Weaver subagent (RFC-0005).
-
-    Args:
-        enabled: Whether Weaver is active.
-        generated_agents_dir: Directory for generated agent packages.
-        reuse_threshold: Minimum confidence for reuse-first matching.
-        reuse_collection: Vector store collection for reuse index.
-        max_generation_attempts: Maximum retries for agent generation.
-        allowed_tool_groups: Tool groups available to generated agents.
-        allowed_mcp_servers: MCP servers available to generated agents.
-    """
-
-    enabled: bool = False
-    generated_agents_dir: str = ""
-    reuse_threshold: float = 0.85
-    reuse_collection: str = "soothe_weaver_reuse"
-    max_generation_attempts: int = 2
-    allowed_tool_groups: list[str] = Field(default_factory=list)
-    allowed_mcp_servers: list[str] = Field(default_factory=list)
-    cleanup_old_agents_days: int = 100
-    max_generated_agents: int = 100
 
 
 class ComplexityThresholds(BaseModel):

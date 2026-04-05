@@ -215,8 +215,8 @@ class StepLoopMixin:
             elif hint == "subagent":
                 parts.append(
                     "Instruction: Delegate this step to the appropriate subagent using the `task` tool. "
-                    "Choose the subagent best suited for this task (e.g., weaver for generating "
-                    "new agents, browser for web interaction, claude for complex reasoning)."
+                    "Choose the subagent best suited for this task (e.g., browser for web interaction, "
+                    "claude for complex reasoning, research for deep investigation)."
                 )
             elif hint == "tool":
                 parts.append(

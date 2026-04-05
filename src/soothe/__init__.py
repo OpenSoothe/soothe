@@ -68,11 +68,9 @@ __all__ = [
     "PlannerProtocol",
     "PolicyProtocol",
     "RemoteAgentProtocol",
-    "SkillifyConfig",
     "SootheConfig",
     "VectorRecord",
     "VectorStoreProtocol",
-    "WeaverConfig",
     "create_soothe_agent",
 ]
 
@@ -102,14 +100,6 @@ def __getattr__(name: str) -> Any:
         from soothe.config import ModelRouter
 
         return ModelRouter
-    if name == "SkillifyConfig":
-        from soothe.config import SkillifyConfig
-
-        return SkillifyConfig
-    if name == "WeaverConfig":
-        from soothe.config import WeaverConfig
-
-        return WeaverConfig
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)

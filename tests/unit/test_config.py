@@ -47,8 +47,7 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert "browser" in cfg.subagents
         assert "claude" in cfg.subagents
-        assert "skillify" in cfg.subagents
-        assert "weaver" in cfg.subagents
+        # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
         assert "research" not in cfg.subagents
         for name, sub_cfg in cfg.subagents.items():
@@ -478,11 +477,11 @@ class TestProtocolConfig:
         cfg = SootheConfig(
             vector_store_router={
                 "default": "in_memory:soothe_default",
-                "context": "pgvector:soothe_context",
+                "context": "in_memory:soothe_context",
             }
         )
-        assert cfg.resolve_vector_store_role("context") == "pgvector:soothe_context"
-        assert cfg.resolve_vector_store_role("skillify") == "in_memory:soothe_default"
+        assert cfg.resolve_vector_store_role("context") == "in_memory:soothe_context"
+        assert cfg.resolve_vector_store_role("unknown_role") == "in_memory:soothe_default"
 
     def test_resolve_vector_store_role_no_default(self) -> None:
         """Test that role resolution returns None when no assignment and no default."""
@@ -502,11 +501,11 @@ class TestProtocolConfig:
         )
 
         # First call should create
-        vs1 = cfg.create_vector_store_for_role("skillify")
+        vs1 = cfg.create_vector_store_for_role("my_role")
         assert mock_create.call_count == 1
 
         # Second call should use cache
-        vs2 = cfg.create_vector_store_for_role("skillify")
+        vs2 = cfg.create_vector_store_for_role("my_role")
         assert mock_create.call_count == 1
         assert vs1 is vs2
 
@@ -531,7 +530,7 @@ class TestProtocolConfig:
         mock_create = MagicMock()
         monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
 
-        cfg.create_vector_store_for_role("skillify")
+        cfg.create_vector_store_for_role("my_role")
         call_kwargs = mock_create.call_args[0][2]
         assert call_kwargs["dsn"] == "postgresql://user:pass@host:5432/db"
 
@@ -553,7 +552,7 @@ class TestProtocolConfig:
             vector_store_router={"default": "pgvector_no_dsn:collection"},
         )
 
-        cfg.create_vector_store_for_role("skillify")
+        cfg.create_vector_store_for_role("my_role")
         call_kwargs = mock_create.call_args[0][2]
         # DSN should be None if not provided in config
         assert call_kwargs.get("dsn") is None
@@ -562,7 +561,7 @@ class TestProtocolConfig:
         """Test ValueError for malformed router strings."""
         cfg = SootheConfig(vector_store_router={"default": "invalid_format_no_colon"})
         with pytest.raises(ValueError, match="Invalid router format"):
-            cfg.create_vector_store_for_role("skillify")
+            cfg.create_vector_store_for_role("my_role")
 
     def test_missing_provider(self) -> None:
         """Test ValueError when provider name not found."""
@@ -571,7 +570,7 @@ class TestProtocolConfig:
             vector_store_router={"default": "provider2:collection"},
         )
         with pytest.raises(ValueError, match="Vector store provider 'provider2' not found"):
-            cfg.create_vector_store_for_role("skillify")
+            cfg.create_vector_store_for_role("my_role")
 
     def test_missing_role_assignment(self) -> None:
         """Test ValueError when role has no assignment and no default."""
@@ -579,7 +578,7 @@ class TestProtocolConfig:
             vector_store_router={"context": "provider:collection"}  # No default
         )
         with pytest.raises(ValueError, match="has no assignment and no default"):
-            cfg.create_vector_store_for_role("skillify")
+            cfg.create_vector_store_for_role("my_role")
 
     def test_mixed_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test using different providers for different roles."""
@@ -591,26 +590,23 @@ class TestProtocolConfig:
         cfg = SootheConfig(
             vector_stores=[
                 {"name": "pgvector_prod", "provider_type": "pgvector", "dsn": "postgresql://localhost/db"},
-                {"name": "weaviate_cloud", "provider_type": "weaviate", "url": "http://localhost:8080"},
                 {"name": "in_memory_dev", "provider_type": "in_memory"},
             ],
             vector_store_router={
+                "default": "in_memory_dev:soothe_default",
                 "context": "pgvector_prod:soothe_context",
-                "skillify": "weaviate_cloud:soothe_skillify",
-                "weaver_reuse": "in_memory_dev:soothe_weaver",
             },
         )
 
-        # Create for each role
+        # Create for context role (uses pgvector)
         cfg.create_vector_store_for_role("context")
-        cfg.create_vector_store_for_role("skillify")
-        cfg.create_vector_store_for_role("weaver_reuse")
+        # Create for unknown role (falls back to default, uses in_memory)
+        cfg.create_vector_store_for_role("my_role")
 
         # Verify each call had the correct provider type
         calls = mock_create.call_args_list
         assert calls[0][0][0] == "pgvector"
-        assert calls[1][0][0] == "weaviate"
-        assert calls[2][0][0] == "in_memory"
+        assert calls[1][0][0] == "in_memory"
 
 
 class TestToolsSettings:

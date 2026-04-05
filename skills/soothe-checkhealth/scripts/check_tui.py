@@ -179,7 +179,7 @@ def check_subagent_routing() -> dict[str, Any]:
         )
 
         # Check display names
-        expected_subagents = {"browser", "claude", "skillify", "weaver"}
+        expected_subagents = {"browser", "claude", "research"}
         actual_subagents = set(BUILTIN_SUBAGENT_NAMES)
 
         if expected_subagents != actual_subagents:

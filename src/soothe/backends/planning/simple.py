@@ -244,7 +244,7 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     """Build AgentDecision from a parsed JSON object (step list at top level)."""
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
 
-    known_subagents = {"browser", "weaver", "skillify", "claude", "research"}
+    known_subagents = {"browser", "claude", "research"}
 
     steps = []
     for i, step_data in enumerate(data.get("steps", [])):
@@ -565,7 +565,6 @@ def build_loop_reason_prompt(
 
 _SIMPLE_PLANNER_HINT_MAP = {
     "browser": "subagent",
-    "weaver": "subagent",
     "search": "tool",
     "web": "tool",
     "api": "tool",

@@ -266,8 +266,8 @@ class TestSimplePlanner:
             "goal": "test goal",
             "steps": [
                 {"id": "S_1", "description": "Step 1", "execution_hint": "browser"},
-                {"id": "S_2", "description": "Step 2", "execution_hint": "weaver"},
-                {"id": "S_3", "description": "Step 3", "execution_hint": "search"},
+                {"id": "S_2", "description": "Step 2", "execution_hint": "search"},
+                {"id": "S_3", "description": "Step 3", "execution_hint": "web"},
                 {"id": "S_4", "description": "Step 4", "execution_hint": "tool"},
                 {"id": "S_5", "description": "Step 5", "execution_hint": "unknown"},
             ],
@@ -276,8 +276,8 @@ class TestSimplePlanner:
         normalized_data = planner._normalize_hints_in_dict(data)
 
         assert normalized_data["steps"][0]["execution_hint"] == "subagent"  # browser
-        assert normalized_data["steps"][1]["execution_hint"] == "subagent"  # weaver
-        assert normalized_data["steps"][2]["execution_hint"] == "tool"  # search
+        assert normalized_data["steps"][1]["execution_hint"] == "tool"  # search
+        assert normalized_data["steps"][2]["execution_hint"] == "tool"  # web
         assert normalized_data["steps"][3]["execution_hint"] == "tool"  # valid, unchanged
         assert normalized_data["steps"][4]["execution_hint"] == "auto"  # unknown → auto
 
@@ -330,15 +330,15 @@ class TestSimplePlanner:
   "goal": "test goal",
   "steps": [
     {"id": "S_1", "description": "Step 1", "execution_hint": "browser"},
-    {"id": "S_2", "description": "Step 2", "execution_hint": "weaver"}
+    {"id": "S_2", "description": "Step 2", "execution_hint": "search"}
   ]
 }"""
 
         plan = planner._parse_json_from_response(content, "fallback goal")
 
         assert plan is not None
-        assert plan.steps[0].execution_hint == "subagent"
-        assert plan.steps[1].execution_hint == "subagent"
+        assert plan.steps[0].execution_hint == "subagent"  # browser -> subagent
+        assert plan.steps[1].execution_hint == "tool"  # search -> tool
 
     @pytest.mark.asyncio
     async def test_create_plan_manual_parse_fallback(self) -> None:

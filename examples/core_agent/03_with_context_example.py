@@ -18,15 +18,13 @@ Run:
 import asyncio
 import sys
 from pathlib import Path
-from datetime import datetime
 
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
-
-from soothe import create_soothe_agent, ContextEntry
+from soothe import ContextEntry, create_soothe_agent
 
 load_dotenv()
 

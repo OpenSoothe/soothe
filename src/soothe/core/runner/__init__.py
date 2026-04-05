@@ -153,6 +153,14 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         durability_ms = (time.perf_counter() - durability_start) * 1000
         logger.debug("Durability resolved in %.1fms", durability_ms)
 
+        # Model for consensus loop (RFC-204 goal validation)
+        self._model: Any | None = None
+        try:
+            self._model = self._config.create_chat_model("think")
+            logger.debug("Consensus model initialized (role=think)")
+        except Exception:
+            logger.debug("Consensus model unavailable, consensus will use heuristic fallback")
+
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
         self._artifact_store: Any | None = None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
@@ -352,21 +360,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
 
         await self._close_attached_store(self._context)
         await self._close_attached_store(self._memory)
-
-        subagents = getattr(self._agent, "soothe_subagents", None) or getattr(self._agent, "subagents", [])
-        for subagent in subagents:
-            if not isinstance(subagent, dict):
-                continue
-            indexer = subagent.get("_skillify_indexer")
-            if indexer is not None:
-                try:
-                    await indexer.stop()
-                except Exception:
-                    logger.debug("Failed to stop skillify indexer", exc_info=True)
-
-            reuse_index = subagent.get("_weaver_reuse_index")
-            if reuse_index is not None:
-                await self._safe_close(reuse_index)
 
     async def _close_attached_store(self, owner: Any | None) -> None:
         """Close a nested `_store` field when available."""

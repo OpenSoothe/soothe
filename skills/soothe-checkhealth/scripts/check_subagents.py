@@ -75,8 +75,6 @@ def check_subagent_imports() -> dict[str, Any]:
     subagent_modules = {
         "browser": "soothe.subagents.browser",
         "claude": "soothe.subagents.claude",
-        "skillify": "soothe.subagents.skillify",
-        "weaver": "soothe.subagents.weaver",
     }
 
     results = {}
@@ -122,8 +120,6 @@ def check_subagent_dependencies() -> dict[str, Any]:
     optional_deps = {
         "browser": ["browser_use"],
         "claude": ["claude_agent_sdk"],
-        "skillify": [],  # Uses standard deps
-        "weaver": [],  # Uses standard deps
     }
 
     results = {}

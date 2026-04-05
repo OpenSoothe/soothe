@@ -75,9 +75,7 @@ Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - browser: Interactive web browsing (login, forms, JavaScript-heavy sites). \
 NOT for simple search.
-- claude: Complex reasoning, creative writing, or superior code generation.
-- skillify: Discover and execute pre-built skills from the skill warehouse.
-- weaver: Generate a new custom agent for a novel, repeatable task.\
+- claude: Complex reasoning, creative writing, or superior code generation.\
 """
 
 _TOOL_ORCHESTRATION_GUIDE = f"""\
