@@ -30,8 +30,8 @@ a set of out-of-box default tools that work without API keys.
 
 ## References
 
-- [RFC-500](../specs/RFC-500.md) — CLI TUI Architecture Design
-- [RFC-000](../specs/RFC-000.md) — System Conceptual Design
+- [RFC-500](../specs/RFC-500-cli-tui-architecture.md) — CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000-system-conceptual-design.md) — System Conceptual Design
 
 ## Design Decisions
 
@@ -92,7 +92,7 @@ for basic operation:
 | `src/soothe/config.py` | Default tools list |
 | `config/config.yml` | Update tools section |
 | `pyproject.toml` | Move langchain-tavily to optional |
-| `docs/specs/RFC-500.md` | Align event names and logging docs |
+| `docs/specs/RFC-500-cli-tui-architecture.md` | Align event names and logging docs |
 | `AGENTS.md` | Add IG-017 to table |
 | `tests/unit_tests/test_progress_verbosity.py` | Update event classification tests |
 | `tests/unit_tests/test_tools.py` | Add datetime tool tests, update wizsearch defaults |

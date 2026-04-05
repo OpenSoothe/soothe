@@ -1143,7 +1143,7 @@ parts.extend([
 - **Planning protocol**: `src/soothe/protocols/planner.py`
 - **Runner flow**: `src/soothe/core/runner.py`
 - **Unified classifier**: `src/soothe/cognition/unified_classifier.py`
-- **RFC document**: `docs/specs/RFC-101.md`
+- **RFC document**: `docs/specs/RFC-101-tool-interface.md`
 
 ## Changelog
 

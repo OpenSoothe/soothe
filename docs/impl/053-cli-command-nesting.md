@@ -243,7 +243,7 @@ IG-050 created inconsistency by flattening most commands while keeping daemon ne
 
 ## Related Documents
 
-- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500.md)
+- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500-cli-tui-architecture.md)
 - [IG-050: CLI Subcommand Flattening](./050-cli-subcommand-flattening.md) (reverted by this guide)
 - [User Guide](../user_guide.md)
 - [CLI Reference](../wiki/cli-reference.md)

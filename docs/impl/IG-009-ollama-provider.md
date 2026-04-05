@@ -52,4 +52,4 @@ Add `OLLAMA_BASE_URL` to `config/env.example` and document the `ollama` extra in
 ## Related Documents
 
 - [IG-008](./008-config-docs-revision.md) - Config and Docs Revision
-- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
+- [RFC-001](../specs/RFC-001-core-modules-architecture.md) - Core Modules Architecture Design

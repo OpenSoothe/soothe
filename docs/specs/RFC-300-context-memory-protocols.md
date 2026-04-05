@@ -259,7 +259,7 @@ Support remote persistence backends (S3, Redis, PostgreSQL) for multi-instance d
 
 ## Related Documents
 
-- [RFC-000](./RFC-000.md) - System Conceptual Design
-- [RFC-001](./RFC-001.md) - Core Modules Architecture Design
-- [RFC-500](./RFC-500.md) - CLI TUI Architecture Design
+- [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
+- [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture Design
+- [RFC-500](./RFC-500-cli-tui-architecture.md) - CLI TUI Architecture Design
 - [RFC Index](./rfc-index.md) - All RFCs

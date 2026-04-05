@@ -288,7 +288,7 @@ def mock_persist_store():
 
 ## References
 
-- [RFC-600: Plugin Extension System](../specs/RFC-600.md)
+- [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension-system.md)
 - [IG-052: Event System Optimization](IG-052.md)
 - [Browser Subagent Implementation](../../src/soothe/subagents/browser/)
 - [Original PaperScout](../../thirdparty/Alithia/alithia/paperscout/)

@@ -1005,8 +1005,8 @@ class SootheConfig(BaseModel):
 
 ## References
 
-- [RFC-400: Unified Daemon Communication Protocol](../specs/RFC-400.md)
-- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500.md)
+- [RFC-400: Unified Daemon Communication Protocol](../specs/RFC-400-daemon-communication.md)
+- [RFC-500: CLI TUI Architecture Design](../specs/RFC-500-cli-tui-architecture.md)
 - [Implementation Plan](../../.claude/plans/jolly-growing-moon.md)
 
 ---

@@ -613,5 +613,5 @@ Not in initial scope:
 - `src/soothe/backends/durability/langgraph.py` - Reference implementation (JSON-based)
 - `src/soothe/config.py` - Configuration model
 - `src/soothe/core/resolver.py` - Backend resolution logic
-- `docs/specs/RFC-500.md` - CLI/TUI Architecture (defines thread terminology)
-- `docs/specs/RFC-201.md` - Performance Optimization
+- `docs/specs/RFC-500-cli-tui-architecture.md` - CLI/TUI Architecture (defines thread terminology)
+- `docs/specs/RFC-201-agentic-goal-execution.md` - Performance Optimization

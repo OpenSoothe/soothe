@@ -416,7 +416,7 @@ noisy_third_party = (
 
 ### 8. RFC-201 Documentation Polish
 
-**File**: `docs/specs/RFC-201.md`
+**File**: `docs/specs/RFC-201-agentic-goal-execution.md`
 
 #### Major Changes
 
@@ -490,7 +490,7 @@ noisy_third_party = (
 
 | File | Lines Changed | Description |
 |------|--------------|-------------|
-| `RFC-201.md` | ~200 | Complete rewrite with diagrams |
+| `RFC-201-agentic-goal-execution.md` | ~200 | Complete rewrite with diagrams |
 
 ## Testing
 

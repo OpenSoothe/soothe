@@ -112,7 +112,7 @@ Refactor Soothe CLI commands to follow a flat pattern `soothe <subcommand> <opti
 2. **`docs/wiki/thread-management.md`** - Update thread command examples
 3. **`docs/wiki/daemon-management.md`** - Update daemon command examples
 4. **`docs/wiki/getting-started.md`** - Update command examples
-5. **`docs/specs/RFC-500.md`** - Update CLI command table
+5. **`docs/specs/RFC-500-cli-tui-architecture.md`** - Update CLI command table
 6. **`docs/user_guide.md`** - Update command examples
 
 ### Implementation Approach
@@ -166,6 +166,6 @@ soothe agent --status
 
 ## References
 
-- Original spec: `docs/specs/RFC-500.md`
+- Original spec: `docs/specs/RFC-500-cli-tui-architecture.md`
 - CLI Reference: `docs/wiki/cli-reference.md`
 - Current implementation: `src/soothe/ux/cli/main.py`

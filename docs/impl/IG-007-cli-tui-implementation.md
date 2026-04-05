@@ -170,7 +170,7 @@ while True:
 
 ## Related Documents
 
-- [RFC-500](../specs/RFC-500.md) - CLI TUI Architecture Design
-- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
-- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
+- [RFC-500](../specs/RFC-500-cli-tui-architecture.md) - CLI TUI Architecture Design
+- [RFC-000](../specs/RFC-000-system-conceptual-design.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001-core-modules-architecture.md) - Core Modules Architecture Design
 - [IG-005](./005-core-protocols-implementation.md) - Core Protocols Implementation

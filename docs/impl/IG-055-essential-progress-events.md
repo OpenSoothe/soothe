@@ -177,6 +177,6 @@ After each tool:
 
 ## Related Documentation
 
-- [RFC-600: Plugin Extension Specification](../specs/RFC-600.md)
+- [RFC-600: Plugin Extension Specification](../specs/RFC-600-plugin-extension-system.md)
 - [IG-052: Event System Optimization](IG-052.md)
 - [IG-054: Event Constants Self-Containment](054-event-constants-self-containment.md)

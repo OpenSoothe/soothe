@@ -97,7 +97,7 @@ tests/
     └── test_agentic_integration.py # NEW: Integration tests
 
 docs/specs/
-└── RFC-201.md                     # UPDATED: Already updated
+└── RFC-201-agentic-goal-execution.md   # UPDATED: Already updated
 ```
 
 ## Implementation Details
@@ -1252,10 +1252,10 @@ async for chunk in runner.astream("debug tests"):
 
 ## Related Documents
 
-- [RFC-201](../specs/RFC-201.md) - Agentic Loop Architecture
-- [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
-- [RFC-102](../specs/RFC-102.md) - Unified Classification
-- [RFC-401](../specs/RFC-401.md) - Progress Event Protocol
+- [RFC-201](../specs/RFC-201-agentic-goal-execution.md) - Agentic Loop Architecture
+- [RFC-200](../specs/RFC-200-autonomous-goal-management.md) - Autonomous Iteration Loop
+- [RFC-102](../specs/RFC-102-security-filesystem-policy.md) - Unified Classification
+- [RFC-401](../specs/RFC-401-event-processing.md) - Progress Event Protocol
 
 ---
 

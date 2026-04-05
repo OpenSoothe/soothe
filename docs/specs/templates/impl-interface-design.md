@@ -153,7 +153,7 @@ const result = await instance.method(params)
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-000](./RFC-000.md) - Conceptual Design
+- [RFC-000](./RFC-000-system-conceptual-design.md) - Conceptual Design
 - [RFC-XXXX](./RFC-XXXX.md) - Architecture Design
 
 ---

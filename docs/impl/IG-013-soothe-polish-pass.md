@@ -49,7 +49,7 @@ This guide covers a comprehensive polish pass across several Soothe subsystems:
 - `config/config.yml`
 - `config/env.example`
 - `pyproject.toml`
-- `docs/specs/RFC-500.md`
+- `docs/specs/RFC-500-cli-tui-architecture.md`
 - `docs/impl/IG-010-tui-layout-history-refresh.md`
 
 ### Files deleted

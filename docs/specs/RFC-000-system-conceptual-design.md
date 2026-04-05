@@ -201,5 +201,5 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
-- [RFC-001](./RFC-001.md) - Core Modules Architecture Design
-- [RFC-202](./RFC-202.md) - DAG-Based Execution and Unified Concurrency
+- [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture Design
+- [RFC-202](./RFC-202-dag-execution.md) - DAG-Based Execution and Unified Concurrency

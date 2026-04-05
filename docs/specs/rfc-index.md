@@ -109,7 +109,7 @@ RFCs are organized by numeric prefix:
 | [rfc-standard.md](./rfc-standard.md) | RFC writing conventions |
 | [rfc-history.md](./rfc-history.md) | Change history |
 | [rfc-namings.md](./rfc-namings.md) | Terminology glossary |
-| [rfc-reclassification-plan.md](./rfc-reclassification-plan.md) | Migration plan (this reclassification) |
+| (reclassification plan) | Migration plan — see "Recent Changes" section below |
 
 ---
 

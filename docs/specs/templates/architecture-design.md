@@ -113,7 +113,7 @@ Entity {
 
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)
-- [RFC-000](./RFC-000.md) - Conceptual Design
+- [RFC-000](./RFC-000-system-conceptual-design.md) - Conceptual Design
 - [Related RFC-XXXX](./RFC-XXXX.md)
 
 ---

@@ -99,7 +99,7 @@ Update all references to implementation guides throughout the codebase:
 
 **Files with references** (as of 2026-03-26):
 - `src/soothe/skills/create-subagent/SKILL.md` ✅
-- `docs/specs/RFC-101.md` ✅
+- `docs/specs/RFC-101-tool-interface.md` ✅
 - `docs/impl/IG-013-soothe-polish-pass.md` ✅
 - `docs/impl/IG-025-subagent-progress-visibility.md` ✅
 - `docs/impl/IG-027-final-report-cli-output.md` ✅

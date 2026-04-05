@@ -16,8 +16,8 @@ Refactor the planner subsystem to:
 
 - [RFC-200 (merged)](../specs/RFC-200 (merged).md) -- Dynamic Goal Management During Reflection
 - [IG-028](028-dynamic-goal-management.md) -- Dynamic Goal Management (prior impl)
-- [RFC-200](../specs/RFC-200.md) -- Autonomous Iteration Loop
-- [RFC-202](../specs/RFC-202.md) -- DAG-Based Execution
+- [RFC-200](../specs/RFC-200-autonomous-goal-management.md) -- Autonomous Iteration Loop
+- [RFC-202](../specs/RFC-202-dag-execution.md) -- DAG-Based Execution
 
 ## Problem Analysis
 

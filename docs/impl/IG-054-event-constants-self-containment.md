@@ -141,7 +141,7 @@ The separate `events.py` file was redundant after Phase 3. All core event consta
 - `ux/shared/message_processing.py`
 - `utils/error_format.py`
 - `tests/unit/test_fixes.py`
-- Documentation files (IG-054.md, RFC-600.md)
+- Documentation files (IG-054.md, RFC-600-plugin-extension-system.md)
 
 **Deleted**:
 - `src/soothe/core/events.py` - No longer needed
@@ -282,7 +282,7 @@ tools/web_search/events.py
 
 ## Related Documentation
 
-- [RFC-600: Plugin Extension Specification](../specs/RFC-600.md)
+- [RFC-600: Plugin Extension Specification](../specs/RFC-600-plugin-extension-system.md)
 - [IG-052: Event System Optimization](052-rfc0018-event-system-optimization.md)
 - [CLAUDE.md](../../CLAUDE.md) - Updated with event constant location guidelines
 

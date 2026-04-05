@@ -205,7 +205,7 @@ wc -l src/soothe/core/event_catalog.py
 **Goal**: Document the new pattern for plugin developers.
 
 **Changes**:
-1. Update `docs/specs/RFC-600.md`:
+1. Update `docs/specs/RFC-600-plugin-extension-system.md`:
    - Add "Event Registration" section
    - Document `register_event()` API
    - Show examples for third-party plugins
@@ -224,7 +224,7 @@ wc -l src/soothe/core/event_catalog.py
    - Reference the new pattern
 
 **Files Created/Modified**:
-- `docs/specs/RFC-600.md`
+- `docs/specs/RFC-600-plugin-extension-system.md`
 - `docs/plugin_development.md` (new)
 - `examples/plugins/custom_events/` (new)
 - `CLAUDE.md`

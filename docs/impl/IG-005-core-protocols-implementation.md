@@ -169,7 +169,7 @@ src/soothe/
 
 ## Related Documents
 
-- [RFC-000](../specs/RFC-000.md) - System Conceptual Design
-- [RFC-001](../specs/RFC-001.md) - Core Modules Architecture Design
+- [RFC-000](../specs/RFC-000-system-conceptual-design.md) - System Conceptual Design
+- [RFC-001](../specs/RFC-001-core-modules-architecture.md) - Core Modules Architecture Design
 - [IG-004](./004-ecosystem-capability-analysis.md) - Ecosystem Capability Analysis
 - [RFC Index](../specs/rfc-index.md)
