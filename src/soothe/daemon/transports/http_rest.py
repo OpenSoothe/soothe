@@ -57,7 +57,7 @@ class HttpRestTransport(TransportServer):
 
     Args:
         config: HTTP REST configuration.
-        thread_manager: Optional ThreadContextManager for thread operations (RFC-0017).
+        thread_manager: Optional ThreadContextManager for thread operations (RFC-402).
     """
 
     def __init__(
@@ -125,7 +125,7 @@ class HttpRestTransport(TransportServer):
             """Get daemon version."""
             return {"version": "1.0.0", "protocol": "RFC-0013"}
 
-        # Thread management (RFC-0017)
+        # Thread management (RFC-402)
         @self._app.get("/api/v1/threads")
         async def list_threads(
             status: str | None = None,

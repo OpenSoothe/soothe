@@ -1,6 +1,6 @@
-"""Thread recovery integration tests for RFC-0017 compliance.
+"""Thread recovery integration tests for RFC-402 compliance.
 
-This module validates RFC-0017 thread resumption and recovery including
+This module validates RFC-402 thread resumption and recovery including
 thread resume from disk after restart, recovery with missing metadata,
 concurrent thread execution, thread cancellation, and thread isolation.
 """
@@ -70,7 +70,7 @@ async def daemon_fixture(tmp_path: Path):
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_thread_resume_from_disk(tmp_path: Path) -> None:
-    """Test resuming thread after daemon restart (RFC-0017)."""
+    """Test resuming thread after daemon restart (RFC-402)."""
     force_isolated_home(tmp_path / "soothe-home")
     socket_path = f"/tmp/soothe-restart-{os.getpid()}-{uuid.uuid4().hex[:8]}.sock"
     config = _build_daemon_config(tmp_path, socket_path)
@@ -155,7 +155,7 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_thread_recovery_missing_metadata(daemon_fixture: tuple[SootheDaemon, str, SootheConfig]) -> None:
-    """Test thread recovery when durability metadata is missing (RFC-0017)."""
+    """Test thread recovery when durability metadata is missing (RFC-402)."""
     daemon, socket_path, config = daemon_fixture
     _ = daemon
 
@@ -195,7 +195,7 @@ async def test_thread_recovery_missing_metadata(daemon_fixture: tuple[SootheDaem
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_concurrent_thread_execution(daemon_fixture: tuple[SootheDaemon, str, SootheConfig]) -> None:
-    """Test concurrent thread execution with RFC-0017 ThreadExecutor."""
+    """Test concurrent thread execution with RFC-402 ThreadExecutor."""
     daemon, socket_path, config = daemon_fixture
     _ = daemon
 
@@ -243,7 +243,7 @@ async def test_concurrent_thread_execution(daemon_fixture: tuple[SootheDaemon, s
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, SootheConfig]) -> None:
-    """Test thread cancellation during execution (RFC-0017)."""
+    """Test thread cancellation during execution (RFC-402)."""
     daemon, socket_path, config = daemon_fixture
     _ = daemon
 
@@ -300,7 +300,7 @@ async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, Soot
 @pytest.mark.asyncio
 @pytest.mark.integration
 async def test_thread_isolation(daemon_fixture: tuple[SootheDaemon, str, SootheConfig]) -> None:
-    """Test thread state isolation guarantees (RFC-0017)."""
+    """Test thread state isolation guarantees (RFC-402)."""
     daemon, socket_path, config = daemon_fixture
     _ = daemon
 

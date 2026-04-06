@@ -123,7 +123,7 @@ class SootheDaemon(DaemonHandlersMixin):
             self._event_bus,
             cancel_callback=self._cancel_thread,  # RFC-0013: auto-cancel on disconnect
         )
-        # Multi-threading support (RFC-0017)
+        # Multi-threading support (RFC-402)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
@@ -177,12 +177,12 @@ class SootheDaemon(DaemonHandlersMixin):
             self._running = True
 
             # Initialize transport manager (RFC-0013)
-            # Create ThreadContextManager for HTTP REST transport (RFC-0017)
+            # Create ThreadContextManager for HTTP REST transport (RFC-402)
             from soothe.core.thread import ThreadExecutor
 
             thread_manager = self._runner.thread_context_manager()
 
-            # Initialize ThreadExecutor for multi-threading support (RFC-0017)
+            # Initialize ThreadExecutor for multi-threading support (RFC-402)
             max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
             self._thread_executor = ThreadExecutor(self._runner, max_concurrent_threads=max_concurrent)
             logger.debug("ThreadExecutor initialized with max_concurrent_threads=%d", max_concurrent)

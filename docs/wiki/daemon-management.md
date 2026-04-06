@@ -79,7 +79,7 @@ soothe daemon restart
 
 ### Attach to Daemon
 
-**Note**: The `soothe daemon attach` command was removed in RFC-0017. To reconnect to a running daemon, use:
+**Note**: The `soothe daemon attach` command was removed in RFC-402. To reconnect to a running daemon, use:
 
 ```bash
 # Resume last active thread via daemon

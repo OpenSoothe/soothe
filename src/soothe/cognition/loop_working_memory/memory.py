@@ -1,4 +1,4 @@
-"""In-memory loop working memory with spill under SOOTHE_HOME (RFC-203)."""
+"""In-memory loop working memory with spill under SOOTHE_HOME/runs/{thread_id}/loop/ (RFC-203)."""
 
 from __future__ import annotations
 
@@ -16,55 +16,40 @@ _ERR_INLINE_MAX = 500
 _INLINE_SUCCESS_BODY_CAP = 800
 
 
-def _thread_slug(thread_id: str) -> str:
-    """Map thread id to a single filesystem path component."""
-    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "_", thread_id.strip())[:128]
-    return cleaned or "default"
-
-
-def _spill_subdir_under_home(spill_subdir: str) -> Path:
-    """Normalize config path to a directory relative to ``SOOTHE_HOME``."""
-    s = (spill_subdir or "loop").strip().strip("/")
-    if s.startswith(".soothe/"):
-        s = s[len(".soothe/") :]
-    elif s == ".soothe":
-        s = "loop"
-    return Path(s) if s else Path("loop")
-
-
 @dataclass
 class LoopWorkingMemory:
-    """Accumulate agentic-loop facts for Reason prompts; spill large outputs under SOOTHE_HOME.
+    """Accumulate agentic-loop facts for Reason prompts.
+
+    Spills large outputs under ``SOOTHE_HOME/runs/{thread_id}/loop/``.
 
     Args:
+        thread_id: Canonical thread identifier; spill path is ``runs/{thread_id}/loop/``.
         max_inline_chars: Cap for ``render_for_reason`` aggregate text.
         max_entry_chars_before_spill: Spill raw step output when longer than this.
-        spill_subdir: Directory under ``SOOTHE_HOME`` for spill files.
     """
 
+    thread_id: str
     max_inline_chars: int = 4000
     max_entry_chars_before_spill: int = 1500
-    spill_subdir: str = "loop"
     _lines: list[str] = field(default_factory=list)
-    _spill_seq: dict[tuple[str, str], int] = field(default_factory=dict)
+    _spill_seq: dict[str, int] = field(default_factory=dict)
 
     def clear(self) -> None:
         """Remove all entries (e.g. new goal)."""
         self._lines.clear()
         self._spill_seq.clear()
 
-    def _next_spill_seq(self, thread_slug: str, step_id: str) -> int:
-        key = (thread_slug, step_id)
-        n = self._spill_seq.get(key, 0) + 1
-        self._spill_seq[key] = n
+    def _next_spill_seq(self, step_id: str) -> int:
+        n = self._spill_seq.get(step_id, 0) + 1
+        self._spill_seq[step_id] = n
         return n
 
-    def _write_spill(self, thread_slug: str, step_id: str, body: str) -> str:
-        """Write spill file under SOOTHE_HOME; return path relative to SOOTHE_HOME (posix)."""
-        seq = self._next_spill_seq(thread_slug, step_id)
+    def _write_spill(self, step_id: str, body: str) -> str:
+        """Write spill file under ``SOOTHE_HOME/runs/{thread_id}/loop/``; return relative path (posix)."""
+        seq = self._next_spill_seq(step_id)
         safe_step = re.sub(r"[^a-zA-Z0-9._-]+", "_", step_id)[:64] or "step"
         home = Path(SOOTHE_HOME).expanduser()
-        rel_dir = _spill_subdir_under_home(self.spill_subdir) / thread_slug
+        rel_dir = Path("runs") / self.thread_id / "loop"
         name = f"step-{safe_step}-{seq}.md"
         abs_dir = (home / rel_dir).resolve()
         abs_dir.mkdir(parents=True, exist_ok=True)
@@ -87,19 +72,19 @@ class LoopWorkingMemory:
         thread_id: str,
     ) -> None:
         """Record one Act step outcome."""
-        _ = workspace  # Spill files live under SOOTHE_HOME (IG-124); arg kept for API stability.
+        _ = workspace  # Spill files live under SOOTHE_HOME/runs/{thread_id}/; arg kept for API stability.
+        _ = thread_id  # thread_id is set in constructor; kept for protocol compatibility.
         desc = (description or "").strip().replace("\n", " ")
         if len(desc) > _DESC_INLINE_MAX:
             desc = desc[: _DESC_INLINE_MAX - 3] + "…"
 
         body = (output or "").strip() if success else (error or "").strip()
-        slug = _thread_slug(thread_id)
         line: str
         if success:
             if body and len(body) > self.max_entry_chars_before_spill:
                 try:
-                    rel = self._write_spill(slug, step_id, body)
-                    line = f"[{step_id}] ✓ {desc} — full output in `{rel}` (under SOOTHE_HOME; use read_file)"
+                    rel = self._write_spill(step_id, body)
+                    line = f"[{step_id}] ✓ {desc} — full output in `{rel}` (use read_file)"
                 except OSError:
                     logger.exception("Working memory spill failed; truncating inline")
                     line = f"[{step_id}] ✓ {desc} — {body[: self.max_entry_chars_before_spill]}…"

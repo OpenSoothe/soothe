@@ -2,18 +2,18 @@
 
 **Implementation Guide**: 047
 **Title**: Unified Thread Management Implementation
-**RFC**: RFC-0017
+**RFC**: RFC-402
 **Status**: Draft
 **Created**: 2026-03-22
 **Estimated Effort**: 11-16 days
 
 ## Overview
 
-This implementation guide provides concrete steps for implementing RFC-0017: Unified Thread Management Architecture. The implementation consolidates thread lifecycle operations, adds multi-threading support, and provides consistent APIs across all transport layers.
+This implementation guide provides concrete steps for implementing RFC-402: Unified Thread Management Architecture. The implementation consolidates thread lifecycle operations, adds multi-threading support, and provides consistent APIs across all transport layers.
 
 ## Prerequisites
 
-- Read and understand RFC-0017
+- Read and understand RFC-402
 - Familiarity with existing thread storage systems:
   - `DurabilityProtocol` (`src/soothe/protocols/durability.py`)
   - LangGraph checkpointer (`src/soothe/core/resolver/_resolver_infra.py`)
@@ -42,7 +42,7 @@ touch src/soothe/core/thread/rate_limiter.py
 **File**: `src/soothe/core/thread/models.py`
 
 ```python
-"""Thread management models for RFC-0017."""
+"""Thread management models for RFC-402."""
 
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ class ThreadMetadata(BaseModel):
     plan_summary: str | None = None
     policy_profile: str = "standard"
 
-    # NEW FIELDS (RFC-0017):
+    # NEW FIELDS (RFC-402):
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
@@ -147,7 +147,7 @@ class ThreadMetadata(BaseModel):
 **File**: `src/soothe/core/thread/manager.py`
 
 ```python
-"""Thread lifecycle manager for RFC-0017."""
+"""Thread lifecycle manager for RFC-402."""
 
 from __future__ import annotations
 
@@ -650,7 +650,7 @@ class ThreadExecutor:
 **File**: `src/soothe/core/thread/__init__.py`
 
 ```python
-"""Thread management module for RFC-0017."""
+"""Thread management module for RFC-402."""
 
 from soothe.core.thread.executor import ThreadExecutor
 from soothe.core.thread.manager import ThreadContextManager
@@ -703,7 +703,7 @@ __all__ = [
 Add thread-specific message validation (around line 100, after existing message types):
 
 ```python
-# Thread management messages (RFC-0017)
+# Thread management messages (RFC-402)
 
 def validate_thread_list(msg: dict[str, Any]) -> list[str]:
     """Validate thread_list message."""
@@ -804,7 +804,7 @@ VALIDATORS: dict[str, Callable[[dict[str, Any]], list[str]]] = {
 Add thread message handlers (around line 400, after existing handlers):
 
 ```python
-# Thread management handlers (RFC-0017)
+# Thread management handlers (RFC-402)
 
 async def _handle_thread_list(
     self,
@@ -990,7 +990,7 @@ async def _handle_client_message(
 
     # ... existing handlers ...
 
-    # Thread management handlers (RFC-0017)
+    # Thread management handlers (RFC-402)
     elif msg_type == "thread_list":
         await self._handle_thread_list(msg)
     elif msg_type == "thread_create":
@@ -1055,7 +1055,7 @@ class HttpRestTransport(TransportServer):
     def _setup_routes(self) -> None:
         # ... existing routes ...
 
-        # THREAD MANAGEMENT ENDPOINTS (RFC-0017)
+        # THREAD MANAGEMENT ENDPOINTS (RFC-402)
 
         @self._app.get("/api/v1/threads")
         async def list_threads(

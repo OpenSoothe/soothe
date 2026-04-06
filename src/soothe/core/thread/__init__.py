@@ -1,4 +1,4 @@
-"""Thread management module for RFC-0017."""
+"""Thread management module for RFC-402."""
 
 from soothe.core.thread.executor import ThreadExecutor
 from soothe.core.thread.manager import ThreadContextManager

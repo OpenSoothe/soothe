@@ -1,4 +1,4 @@
-"""Thread management models for RFC-0017."""
+"""Thread management models for RFC-402."""
 
 from __future__ import annotations
 

@@ -111,7 +111,7 @@ def test_thread_status_matches_cli_filter() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fix 3: Thread Continue Command with --daemon flag (RFC-0017)
+# Fix 3: Thread Continue Command with --daemon flag (RFC-402)
 # ---------------------------------------------------------------------------
 
 

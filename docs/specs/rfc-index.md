@@ -34,7 +34,7 @@ RFCs are organized by numeric prefix:
 | [RFC-100](./RFC-100-coreagent-runtime.md) | CoreAgent Runtime (Layer 1) | Implemented | Architecture Design | RFC-000, RFC-001 |
 | [RFC-101](./RFC-101-tool-interface.md) | Tool Interface & Event Naming | Implemented | Impl Interface | RFC-100, RFC-401 |
 | [RFC-102](./RFC-102-security-filesystem-policy.md) | Security & Filesystem Policy | Implemented | Impl Interface | RFC-001 |
-| [RFC-103](./RFC-103-thread-aware-workspace.md) | Thread-Aware Workspace | Draft | Impl Interface | RFC-102, RFC-400, RFC-0017 |
+| [RFC-103](./RFC-103-thread-aware-workspace.md) | Thread-Aware Workspace | Draft | Impl Interface | RFC-102, RFC-400, RFC-402 |
 | [RFC-104](./RFC-104-dynamic-system-context.md) | Dynamic System Context Injection | Draft | Impl Interface | RFC-100, RFC-101, RFC-103 |
 
 ### 2xx — Cognition Loop (Goal & Planning)
@@ -60,6 +60,7 @@ RFCs are organized by numeric prefix:
 |-----|-------|--------|------|--------------|
 | [RFC-400](./RFC-400-daemon-communication.md) | Daemon Communication Protocol | Implemented | Architecture Design | RFC-000, RFC-001, RFC-500 |
 | [RFC-401](./RFC-401-event-processing.md) | Event Processing & Filtering | Implemented | Impl Interface | RFC-400, RFC-500 |
+| [RFC-402](./RFC-402-unified-thread-management.md) | Unified Thread Management | Draft | Architecture Design | RFC-000, RFC-001, RFC-101, RFC-201, RFC-400 |
 
 ### 5xx — CLI/TUI (User Interface)
 
@@ -75,12 +76,6 @@ RFCs are organized by numeric prefix:
 |-----|-------|--------|------|--------------|
 | [RFC-600](./RFC-600-plugin-extension-system.md) | Plugin Extension System | Implemented | Architecture Design | RFC-000, RFC-001, RFC-100 |
 | [RFC-601](./RFC-601-built-in-agents.md) | Built-in Plugin Agents | Implemented | Architecture Design | RFC-600, RFC-301 |
-
-### Legacy RFCs (To Be Reclassified)
-
-| RFC | Title | Status | Notes |
-|-----|-------|--------|-------|
-| [RFC-0017](./RFC-0017-unified-thread-management.md) | Unified Thread Management | Draft | Pending review for 2xx or 4xx |
 
 ---
 
@@ -130,7 +125,8 @@ RFC-000 (System Conceptual Design)
     ├── RFC-300 (Context & Memory)
     │   └── RFC-301 (Protocol Registry)
     ├── RFC-400 (Daemon Communication)
-    │   └── RFC-401 (Event Processing)
+    │   ├── RFC-401 (Event Processing)
+    │   └── RFC-402 (Unified Thread Management)
     ├── RFC-500 (CLI/TUI Architecture)
     │   └── RFC-501 (Display & Verbosity)
     └── RFC-600 (Plugin Extension)
@@ -147,10 +143,10 @@ RFC-000 (System Conceptual Design)
 | Core Agent (1xx) | 3 | 2 | 5 |
 | Cognition Loop (2xx) | 2 | 3 | 5 |
 | Protocols (3xx) | 2 | 0 | 2 |
-| Daemon (4xx) | 2 | 0 | 2 |
+| Daemon (4xx) | 2 | 1 | 3 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
 | Plugin System (6xx) | 2 | 0 | 2 |
-| **Total** | **14** | **6** | **20** |
+| **Total** | **14** | **7** | **21** |
 
 ---
 

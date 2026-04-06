@@ -85,7 +85,7 @@ graph LR
 | **WebSocket** | ❌ Opt-in | 8765 | Web applications, remote clients |
 | **HTTP REST** | ❌ Opt-in | 8766 | CRUD operations, health checks |
 
-**Note on Authentication (RFC-400, RFC-0017):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
+**Note on Authentication (RFC-400, RFC-402):** Soothe does not implement built-in authentication. Authentication and authorization are handled by external services such as reverse proxies, API gateways, or SSH tunneling. This design keeps Soothe simple and single-tenant.
 
 ### Message Protocol
 
@@ -1145,4 +1145,4 @@ sequenceDiagram
 - [RFC-201: Agentic Goal Execution](../specs/RFC-201-agentic-goal-execution.md)
 - [RFC-202: DAG Execution & Failure Recovery](../specs/RFC-202-dag-execution.md)
 - [RFC-400: Daemon Communication Protocol](../specs/RFC-400-daemon-communication.md)
-- [RFC-0017: Unified Thread Management Architecture](../specs/RFC-0017-unified-thread-management.md)
+- [RFC-402: Unified Thread Management Architecture](../specs/RFC-402-unified-thread-management.md)

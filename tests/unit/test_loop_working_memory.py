@@ -10,14 +10,14 @@ from soothe.protocols.loop_working_memory import LoopWorkingMemoryProtocol
 
 
 def test_render_empty() -> None:
-    wm = LoopWorkingMemory()
+    wm = LoopWorkingMemory(thread_id="t")
     assert wm.render_for_reason() == ""
 
 
 def test_spill_large_output_to_soothe_home(tmp_path: Path) -> None:
     wm = LoopWorkingMemory(
+        thread_id="thread-1",
         max_entry_chars_before_spill=20,
-        spill_subdir="loop",
     )
     body = "line\n" * 50
     with patch("soothe.cognition.loop_working_memory.memory.SOOTHE_HOME", str(tmp_path)):
@@ -30,9 +30,9 @@ def test_spill_large_output_to_soothe_home(tmp_path: Path) -> None:
             workspace=str(tmp_path),
             thread_id="thread-1",
         )
-    spill_root = tmp_path / "loop"
-    assert spill_root.is_dir()
-    files = list(spill_root.rglob("step-s1-*.md"))
+    spill_dir = tmp_path / "runs" / "thread-1" / "loop"
+    assert spill_dir.is_dir()
+    files = list(spill_dir.rglob("step-s1-*.md"))
     assert len(files) == 1
     text = wm.render_for_reason()
     assert "read_file" in text
@@ -40,7 +40,7 @@ def test_spill_large_output_to_soothe_home(tmp_path: Path) -> None:
 
 
 def test_failed_step_recorded_inline() -> None:
-    wm = LoopWorkingMemory()
+    wm = LoopWorkingMemory(thread_id="t")
     wm.record_step_result(
         step_id="x",
         description="fail",
@@ -55,6 +55,6 @@ def test_failed_step_recorded_inline() -> None:
 
 
 def test_loop_working_memory_is_structural_protocol() -> None:
-    wm = LoopWorkingMemory()
+    wm = LoopWorkingMemory(thread_id="t")
     accept: LoopWorkingMemoryProtocol = wm
     assert accept is wm

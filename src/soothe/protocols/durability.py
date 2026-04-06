@@ -15,15 +15,15 @@ class ThreadMetadata(BaseModel):
         tags: Categorical tags for filtering.
         plan_summary: Brief summary of the thread's plan (if any).
         policy_profile: Name of the active policy profile.
-        labels: User-defined labels for organization (RFC-0017).
-        priority: Thread priority level (RFC-0017).
-        category: User-defined category (RFC-0017).
+        labels: User-defined labels for organization (RFC-402).
+        priority: Thread priority level (RFC-402).
+        category: User-defined category (RFC-402).
     """
 
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-    # RFC-0017: Enhanced metadata
+    # RFC-402: Enhanced metadata
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
