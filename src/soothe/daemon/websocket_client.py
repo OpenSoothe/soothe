@@ -183,7 +183,7 @@ class WebSocketClient:
         include_stats: bool = False,
         include_last_message: bool = True,
     ) -> None:
-        """Request persisted threads (RFC-0017 ``thread_list`` / ``thread_list_response``)."""
+        """Request persisted threads (RFC-402 ``thread_list`` / ``thread_list_response``)."""
         payload: dict[str, Any] = {
             "type": "thread_list",
             "include_stats": include_stats,

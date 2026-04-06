@@ -384,7 +384,7 @@ logging:
 # HTTP REST provides optional health checks and CRUD operations.
 
 daemon:
-  # Multi-threading (RFC-0017) - Enable parallel query execution
+  # Multi-threading (RFC-402) - Enable parallel query execution
   multi_threading_enabled: true
   max_concurrent_threads: 4
 

@@ -154,5 +154,5 @@ def daemon_restart(
     daemon_start(config=config, foreground=False)
 
 
-# NOTE: daemon_attach() removed in RFC-0017
+# NOTE: daemon_attach() removed in RFC-402
 # Use 'soothe thread continue --daemon' instead

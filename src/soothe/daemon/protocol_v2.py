@@ -91,7 +91,7 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         # No additional fields required
         pass
 
-    # Thread management messages (RFC-0017)
+    # Thread management messages (RFC-402)
     elif msg_type == "thread_list":
         # filter is optional
         if "filter" in msg and not isinstance(msg["filter"], dict):

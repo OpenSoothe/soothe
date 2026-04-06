@@ -22,8 +22,8 @@ Loop working memory is **not** a second context ledger (see RFC-300). It is a **
 ## Design Principles
 
 - **In-memory first**: Fast, no I/O until spill triggers.
-- **Workspace-local files**: Spilled bytes stay under the thread workspace (RFC-103); agents use normal file tools to inspect them.
-- **Deterministic layout**: Paths are predictable so prompts can say `read_file(".soothe/loop/...")`.
+- **Runs-local files**: Spilled bytes stay under `SOOTHE_HOME/runs/{thread_id}/loop/`; agents use normal file tools to inspect them.
+- **Deterministic layout**: Paths are predictable so prompts can say `read_file("<runs>/loop/...")`.
 - **Optional**: Implementations may disable working memory via config.
 - **No secrets**: Do not store raw credentials; redact or omit sensitive tool output at the integration layer (future hardening).
 
@@ -43,25 +43,24 @@ Loop working memory is **not** a second context ledger (see RFC-300). It is a **
 
 - **File**: UTF-8 text (`.md` or `.txt`).
 - **Content**: Full or large excerpt of step output (or structured dump), written when inline budget is exceeded.
-- **Index**: The in-memory entry’s `inline_summary` references the relative path (e.g. `See .soothe/loop/<thread_slug>/step-<id>.md`).
+- **Index**: The in-memory entry’s `inline_summary` references the relative path (e.g. `See runs/<thread_id>/loop/step-<id>.md`).
 
 ## Filesystem Layout
 
-Relative to **workspace root** (`SootheConfig` / thread workspace):
+Relative to **SOOTHE_HOME**:
 
 ```text
-<workspace>/
-  .soothe/
-    loop/
-      <thread_slug>/
-        README.md           # optional: human description of spill convention
+SOOTHE_HOME/
+  runs/
+    {thread_id}/
+      loop/
         step-<step_id>-<seq>.md
 ```
 
-- **`thread_slug`**: Sanitized `thread_id` (filesystem-safe; collisions resolved by hashing if needed).
-- **`<seq>`**: Monotonic integer per `(thread_slug, step_id)` to avoid overwrites when the same step id is retried.
+- **`thread_id`**: The canonical durability thread identifier (same as used by `RunArtifactStore`).
+- **`<seq>`**: Monotonic integer per `(thread_id, step_id)` to avoid overwrites when the same step id is retried.
 
-Implementations **must** create parent directories before writing.
+Implementations **must** create parent directories before writing. Spill files co-locate with other run artifacts (manifest, checkpoints, step reports) under `runs/{thread_id}/`.
 
 ## Configuration (conceptual)
 
@@ -70,9 +69,8 @@ Implementations **must** create parent directories before writing.
 | `enabled` | Turn working memory on/off |
 | `max_inline_chars` | Max characters for the **aggregated** working-memory block injected into Reason |
 | `max_entry_chars_before_spill` | Per-step output length above which spill to disk is preferred |
-| `spill_subdir` | Root under workspace, default `.soothe/loop` |
 
-Exact field names live in `SootheConfig` (`AgenticLoopConfig.working_memory`; type `LoopWorkingMemoryConfig`).
+Spill path is canonical: `SOOTHE_HOME/runs/{thread_id}/loop/`. No configurable subdirectory.
 
 ## Python API (modular encapsulation)
 
@@ -80,8 +78,10 @@ Exact field names live in `SootheConfig` (`AgenticLoopConfig.working_memory`; ty
 
 Implementations provide:
 
+- `__init__(thread_id, *, max_inline_chars, max_entry_chars_before_spill)`  
+  Construct working memory scoped to a thread. Spill path is `SOOTHE_HOME/runs/{thread_id}/loop/`.
 - `record_step_result(step_id, description, output, success, *, workspace, thread_id) -> None`  
-  Append/update memory from one Act step. May spill `output` when large.
+  Append/update memory from one Act step. May spill `output` when large. `thread_id` is kept for API stability (unused; set in constructor).
 - `render_for_reason(*, max_chars: int | None = None) -> str`  
   Return a single prompt section (empty if disabled / no entries).
 - `clear() -> None`  

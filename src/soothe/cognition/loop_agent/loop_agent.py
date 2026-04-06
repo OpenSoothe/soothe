@@ -122,9 +122,9 @@ class LoopAgent:
         wm_cfg = self.config.agentic.working_memory
         if wm_cfg.enabled:
             state.working_memory = LoopWorkingMemory(
+                thread_id=thread_id,
                 max_inline_chars=wm_cfg.max_inline_chars,
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
-                spill_subdir=wm_cfg.spill_subdir,
             )
 
         logger.info("[Goal] %s (max_iterations=%d)", goal[:80], max_iterations)

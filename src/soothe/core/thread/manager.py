@@ -1,4 +1,4 @@
-"""Thread lifecycle manager for RFC-0017."""
+"""Thread lifecycle manager for RFC-402."""
 
 from __future__ import annotations
 

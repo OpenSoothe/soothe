@@ -111,7 +111,7 @@ Run `./scripts/verify_finally.sh` after implementation to ensure:
 
 - RFC-102 (Security Filesystem Policy) - existing `FrameworkFilesystem`
 - RFC-400 (Daemon Communication) - daemon message handling
-- RFC-0017 (Thread Management) - `_thread_workspaces` storage
+- RFC-402 (Thread Management) - `_thread_workspaces` storage
 
 ## Success Criteria
 

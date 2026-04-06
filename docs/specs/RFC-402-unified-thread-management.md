@@ -1,6 +1,6 @@
-# RFC-0017: Unified Thread Management Architecture
+# RFC-402: Unified Thread Management Architecture
 
-**RFC**: 0017
+**RFC**: 402
 **Title**: Unified Thread Management Architecture
 **Status**: Draft
 **Kind**: Architecture Design
@@ -79,7 +79,7 @@ Thread statistics are calculated lazily on request, not stored permanently. This
 
 ### Principle 5: Progressive Enhancement
 
-New thread features (labels, categories, priority) are optional additions to existing metadata. Threads created before RFC-0017 continue working with default values.
+New thread features (labels, categories, priority) are optional additions to existing metadata. Threads created before RFC-402 continue working with default values.
 
 ## Architecture
 
@@ -223,7 +223,7 @@ class ThreadMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-    # RFC-0017 additions:
+    # RFC-402 additions:
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None

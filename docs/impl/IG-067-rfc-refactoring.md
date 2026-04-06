@@ -17,7 +17,7 @@ Refactor all RFCs to be self-contained, properly scoped, and correctly cross-ref
    - RFC-600: 1684 lines (plugin API + discovery + security + migration)
    - RFC-401: 1003 lines (event protocol + catalog)
    - RFC-101: 963 lines (architecture + implementation guide)
-   - RFC-0017: 857 lines (thread lifecycle + REST API)
+   - RFC-402: 857 lines (thread lifecycle + REST API)
 
 2. **Non-Self-Contained RFCs**:
    - RFC-200: References RFC-202 without context
@@ -27,7 +27,7 @@ Refactor all RFCs to be self-contained, properly scoped, and correctly cross-ref
 3. **Dependency Issues**:
    - Circular dependencies between RFC-500 ↔ RFC-401
    - Circular dependencies between RFC-200 ↔ RFC-202
-   - Missing dependency declarations in RFC-0017, RFC-501, RFC-201
+   - Missing dependency declarations in RFC-402, RFC-501, RFC-201
    - Unnecessary dependencies in RFC-600, RFC-401
 
 ## Solution Approach
@@ -55,7 +55,7 @@ Refactor all RFCs to be self-contained, properly scoped, and correctly cross-ref
 - Keep architecture (~400 lines)
 - Move implementation steps to IG
 
-**RFC-0017 Refactor**:
+**RFC-402 Refactor**:
 - Keep thread lifecycle (~400 lines)
 - Move REST API to RFC-400c (HTTP REST API)
 
@@ -120,7 +120,7 @@ After splitting, renumber RFCs to maintain clarity:
 - docs/specs/RFC-400.md (mark as superseded, redirect to new RFCs)
 - docs/specs/RFC-401.md (remove catalog, keep protocol)
 - docs/specs/RFC-101.md (remove implementation steps)
-- docs/specs/RFC-0017.md (remove REST API)
+- docs/specs/RFC-402.md (remove REST API)
 - docs/specs/RFC-600.md (mark as superseded, redirect to new RFCs)
 - docs/specs/rfc-index.md (regenerate)
 - docs/specs/rfc-history.md (add splitting entries)
@@ -132,7 +132,7 @@ After splitting, renumber RFCs to maintain clarity:
 3. ⏳ Split RFC-600 → Create RFC-0026 through RFC-0028
 4. ⏳ Refactor RFC-401 (move catalog)
 5. ⏳ Refactor RFC-101 (move implementation)
-6. ⏳ Refactor RFC-0017 (move REST API to RFC-100)
+6. ⏳ Refactor RFC-402 (move REST API to RFC-100)
 7. ⏳ Make RFCs self-contained (RFC-200, RFC-500, RFC-202)
 8. ⏳ Fix dependencies in all RFCs
 9. ⏳ Update cross-references in docs/

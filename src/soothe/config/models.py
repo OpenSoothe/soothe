@@ -471,13 +471,13 @@ class PlanningConfig(BaseModel):
 class LoopWorkingMemoryConfig(BaseModel):
     """Agentic loop working memory (RFC-203).
 
-    In-memory scratchpad for the agentic loop; large entries spill under SOOTHE_HOME.
+    In-memory scratchpad for the agentic loop; large entries spill under
+    ``SOOTHE_HOME/runs/{thread_id}/loop/``.
 
     Args:
         enabled: Enable working memory for Layer 2 Reason prompts.
         max_inline_chars: Max size of the aggregated block injected into Reason.
         max_entry_chars_before_spill: Per-step output larger than this is written to disk.
-        spill_subdir: Directory under SOOTHE_HOME for spill files.
     """
 
     enabled: bool = Field(default=True, description="Enable RFC-203 working memory")
@@ -491,11 +491,7 @@ class LoopWorkingMemoryConfig(BaseModel):
         default=1500,
         ge=200,
         le=50_000,
-        description="Spill step output to disk under SOOTHE_HOME when longer than this",
-    )
-    spill_subdir: str = Field(
-        default="loop",
-        description="Spill directory under SOOTHE_HOME (RFC-203)",
+        description="Spill step output to disk under SOOTHE_HOME/runs/{thread_id}/loop/ when longer than this",
     )
 
 

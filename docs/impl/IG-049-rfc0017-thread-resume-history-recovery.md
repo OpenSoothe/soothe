@@ -1,8 +1,8 @@
-# IG-049: RFC-0017 Thread Resume History Recovery
+# IG-049: RFC-402 Thread Resume History Recovery
 
 ## Summary
 
-This guide closes RFC-0017 gaps in thread resume behavior for `soothe thread continue <thread_id>`.
+This guide closes RFC-402 gaps in thread resume behavior for `soothe thread continue <thread_id>`.
 The target outcome is consistent chat history recovery where both user and assistant turns are available
 after resume in daemon-backed TUI sessions.
 
@@ -22,11 +22,11 @@ Root causes:
 3. TUI history loader replays only `conversation` records, so assistant output present as `event` records
    is not reconstructed in chat view.
 
-## RFC-0017 Mapping
+## RFC-402 Mapping
 
-- RFC-0017 requires a unified thread coordinator (`ThreadContextManager`) to handle resume operations.
-- RFC-0017 resume flow expects full history loading behavior on thread continuation.
-- RFC-0017 storage model spans durability/checkpointer/thread logger/artifacts and must degrade gracefully.
+- RFC-402 requires a unified thread coordinator (`ThreadContextManager`) to handle resume operations.
+- RFC-402 resume flow expects full history loading behavior on thread continuation.
+- RFC-402 storage model spans durability/checkpointer/thread logger/artifacts and must degrade gracefully.
 
 ## Scope
 

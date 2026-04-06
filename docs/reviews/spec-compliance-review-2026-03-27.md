@@ -57,7 +57,7 @@
 
 | RFC | Title | Status |
 |-----|-------|--------|
-| RFC-0017 | Unified Thread Management | Planning phase |
+| RFC-402 | Unified Thread Management | Planning phase |
 | RFC-501 | Event Display Architecture | Partial implementation |
 | RFC-601 | Research Subagent | Recently implemented, needs status update |
 

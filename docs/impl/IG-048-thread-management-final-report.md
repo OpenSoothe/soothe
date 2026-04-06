@@ -1,4 +1,4 @@
-# RFC-0017 Implementation Complete: Unified Thread Management
+# RFC-402 Implementation Complete: Unified Thread Management
 
 ## Implementation Summary
 
@@ -84,7 +84,7 @@ All 6 phases of the unified thread management architecture have been successfull
 - Protocol message handling
 
 **Documentation**:
-- RFC-0017: Complete specification
+- RFC-402: Complete specification
 - IG-047: Implementation guide with code samples
 
 ## Key Features Implemented
