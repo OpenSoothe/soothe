@@ -6,6 +6,7 @@ This module implements three plugin discovery mechanisms:
 3. Filesystem discovery (~/.soothe/plugins/)
 """
 
+import importlib
 import importlib.metadata
 import logging
 import sys
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def _try_extract_plugin_name(module_path: str) -> str | None:
-    """Attempt to extract plugin name from module path without full import.
+    """Attempt to extract plugin name from module path by loading it.
 
     For entry point and filesystem discovery, tries to get the plugin
     name from the manifest so deduplication works by name rather than
@@ -32,7 +33,6 @@ def _try_extract_plugin_name(module_path: str) -> str | None:
             class_name = None
             module_name = module_path
 
-        import importlib
         mod = importlib.import_module(module_name)
         if class_name and hasattr(mod, class_name):
             cls = getattr(mod, class_name)
@@ -45,9 +45,12 @@ def _try_extract_plugin_name(module_path: str) -> str | None:
                     cls = getattr(mod, attr_name)
                     if hasattr(cls, "_plugin_manifest"):
                         return cls._plugin_manifest.name
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Could not extract plugin name from %s: %s", module_path, e)
     return None
+
+
+def discover_entry_points() -> list[str]:
     """Discover plugins from Python entry points.
 
     Scans the `soothe.plugins` entry point group for plugin declarations.
@@ -126,6 +129,7 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
     """Discover plugins from filesystem directory.
 
     Scans a directory for plugin directories containing plugin.py or __init__.py.
+    Adds the plugin directory to sys.path so plugins can be imported.
 
     Args:
         base_dir: Base directory for discovery. Defaults to ~/.soothe/plugins/
@@ -140,12 +144,6 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
             plugin.py  # Contains MyPlugin class
           research/
             __init__.py  # Contains ResearchPlugin class
-        ```
-
-    Example:
-        ```python
-        # Discovery result:
-        ["my_plugin.plugin", "research"]
         ```
     """
     if base_dir is None:
@@ -162,7 +160,6 @@ def discover_filesystem(base_dir: Path | None = None) -> list[str]:
     if plugin_dir_str not in sys.path:
         sys.path.insert(0, plugin_dir_str)
         logger.debug("Added plugin directory to sys.path: %s", plugin_dir_str)
-        return []
 
     plugins = []
 
@@ -204,12 +201,8 @@ def discover_all_plugins(config: "SootheConfig") -> dict[str, tuple[str, dict]]:
 
     Returns:
         Dict mapping unique identifiers to (module_path, config_dict) tuples.
-        The identifier is the module path for entry_points and filesystem,
-        or the plugin name for config-declared plugins.
-
-    Note:
-        This function does NOT handle priority conflicts. The PluginRegistry
-        is responsible for resolving conflicts when plugins are registered.
+        The identifier is the plugin name when discoverable from manifest,
+        or the module path for config-declared plugins.
     """
     discovered = {}
 

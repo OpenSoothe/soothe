@@ -131,7 +131,6 @@ class PluginLifecycleManager:
         results: dict[str, dict] = {}
 
         for name, plugin_instance in list(self.loaded_plugins.items()):
-            status = {"status": "unknown", "details": "No health_check() method"}
             try:
                 if hasattr(plugin_instance, "health_check"):
                     result = await plugin_instance.health_check()
@@ -140,12 +139,18 @@ class PluginLifecycleManager:
                     elif isinstance(result, dict):
                         status = result
                     else:
-                        status = {"status": str(result)}
+                        status = {"status": "healthy", "details": str(result)}
+                else:
+                    status = {"status": "healthy", "details": "No health_check() method"}
+
+                status_value = status.get("status", "healthy")
+                if status_value not in ("healthy", "degraded", "unhealthy"):
+                    status_value = "degraded"
 
                 emit_progress(
                     PluginHealthCheckedEvent(
                         name=name,
-                        status=status.get("status", "unknown"),
+                        status=status_value,
                         details=status.get("details", ""),
                     ).model_dump(),
                     logger,
@@ -153,6 +158,14 @@ class PluginLifecycleManager:
             except Exception as e:
                 status = {"status": "unhealthy", "details": str(e)}
                 logger.exception("Health check failed for plugin '%s'", name)
+                emit_progress(
+                    PluginHealthCheckedEvent(
+                        name=name,
+                        status="unhealthy",
+                        details=str(e),
+                    ).model_dump(),
+                    logger,
+                )
 
             results[name] = status
 

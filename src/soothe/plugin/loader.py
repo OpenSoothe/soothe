@@ -203,9 +203,10 @@ class PluginLoader:
                 if not hasattr(value, part):
                     return False
                 value = getattr(value, part)
-            return value is not None and value != ""
+            result = value is not None and value != ""
         except Exception:
-            return False
+            result = False
+        return result
 
     def validate_trust_level(self, manifest: PluginManifest) -> None:
         """Validate plugin trust level.
@@ -227,13 +228,9 @@ class PluginLoader:
 
         # Untrusted plugins require explicit opt-in
         if trust_level == "untrusted":
-            allow_untrusted = False
-            try:
-                import os
+            import os
 
-                allow_untrusted = os.environ.get("SOOTHE_ALLOW_UNTRUSTED_PLUGINS", "").lower() in ("true", "1", "yes")
-            except Exception:
-                pass
+            allow_untrusted = os.environ.get("SOOTHE_ALLOW_UNTRUSTED_PLUGINS", "").lower() in ("true", "1", "yes")
 
             if not allow_untrusted:
                 msg = (
