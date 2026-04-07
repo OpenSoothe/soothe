@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.backends.planning.simple import _default_agent_decision
 from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.reason import ReasonPhase
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
+from soothe.cognition.loop_agent.state_manager import Layer2StateManager
 from soothe.cognition.loop_working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
@@ -115,13 +117,34 @@ class LoopAgent:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
+        # Initialize Layer 2 state manager (RFC-205)
+        state_manager = Layer2StateManager(thread_id, Path(workspace) if workspace else None)
+
+        # Try to recover from checkpoint
+        checkpoint = state_manager.load()
+        if checkpoint and checkpoint.status == "running":
+            logger.info(
+                "[Layer2] Recovering from checkpoint at iteration %d",
+                checkpoint.iteration,
+            )
+            # Derive prior conversation from step outputs
+            prior_outputs = state_manager.derive_reason_conversation(limit=10)
+            # Merge with provided excerpts (if any)
+            provided_excerpts = list(reason_conversation_excerpts or [])
+            reason_excerpts = provided_excerpts + prior_outputs
+        else:
+            # Initialize new checkpoint
+            checkpoint = state_manager.initialize(goal, max_iterations)
+            reason_excerpts = list(reason_conversation_excerpts or [])
+
         state = LoopState(
             goal=goal,
             thread_id=thread_id,
             workspace=workspace,
             git_status=git_status,
+            iteration=checkpoint.iteration,  # Use checkpoint iteration
             max_iterations=max_iterations,
-            reason_conversation_excerpts=list(reason_conversation_excerpts or []),
+            reason_conversation_excerpts=reason_excerpts,
         )
         wm_cfg = self.config.agentic.working_memory
         if wm_cfg.enabled:
@@ -131,7 +154,7 @@ class LoopAgent:
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
 
-        logger.info("[Goal] %s (max_iterations=%d)", goal[:80], max_iterations)
+        logger.info("[Goal] %s (max_iterations=%d, iteration=%d)", goal[:80], max_iterations, state.iteration)
 
         while state.iteration < state.max_iterations:
             iteration_start = time.perf_counter()
@@ -168,6 +191,8 @@ class LoopAgent:
                 state.previous_reason = reason_result
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+                # Finalize checkpoint (RFC-205)
+                state_manager.finalize(status="completed")
                 logger.info(
                     "[✓] Goal achieved in %d iterations (%dms)",
                     state.iteration,
@@ -227,6 +252,8 @@ class LoopAgent:
                     "Fatal error detected, aborting loop: %s",
                     fatal_errors[0].error,
                 )
+                # Finalize checkpoint on fatal error (RFC-205)
+                state_manager.finalize(status="failed")
                 yield (
                     "fatal_error",
                     {
@@ -265,6 +292,16 @@ class LoopAgent:
             state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)
             state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
 
+            # Record iteration to checkpoint (RFC-205)
+            state_manager.record_iteration(
+                iteration=state.iteration,
+                reason_result=reason_result,
+                decision=decision,
+                step_results=step_results,
+                state=state,
+                working_memory=state.working_memory,
+            )
+
             state.previous_reason = reason_result
             state.iteration += 1
             state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
@@ -292,6 +329,9 @@ class LoopAgent:
             state.max_iterations,
             state.previous_reason.goal_progress * 100 if state.previous_reason else 0,
         )
+
+        # Finalize checkpoint (RFC-205)
+        state_manager.finalize(status="failed")
 
         result = state.previous_reason or ReasonResult(
             status="replan",
