@@ -109,12 +109,15 @@ class AutonomousMixin(GoalDirectivesMixin):
             ).to_dict()
         )
 
+        from soothe.cognition.proposal_queue import ProposalQueue
+
         from ._types import IterationRecord
 
         iteration_records: list[IterationRecord] = []
         total_iterations = 0
 
         while total_iterations < max_iterations and not self._goal_engine.is_complete():
+            self._proposal_queue = ProposalQueue()
             max_par_goals = self._concurrency.max_parallel_goals
             ready_goals = await self._goal_engine.ready_goals(limit=max_par_goals)
             if not ready_goals:
@@ -644,7 +647,17 @@ class AutonomousMixin(GoalDirectivesMixin):
                     except Exception:
                         logger.debug("Goal report write failed", exc_info=True)
 
+                    # RFC-204: Process proposals queued by Layer 2 tools before completing
+                pq = getattr(self, "_proposal_queue", None)
+                if pq is not None:
+                    await self._process_proposals(goal.id, pq)
+
                 await self._goal_engine.complete_goal(goal.id)
+
+                # RFC-204: Detect relationships after goal completion
+                rel_events = await self._detect_relationships_for_goal(goal)
+                for ev in rel_events:
+                    yield _custom(ev)
 
                 parent_state.plan = iter_state.plan
 
@@ -706,6 +719,11 @@ class AutonomousMixin(GoalDirectivesMixin):
                     "error": str(exc)[:500],
                 },
             )
+
+            # RFC-204: Process proposals even on failure (e.g., flag_blocker)
+            pq = getattr(self, "_proposal_queue", None)
+            if pq is not None:
+                await self._process_proposals(goal.id, pq)
 
             if updated.status == "pending":
                 backoff = _BACKOFF_BASE_SECONDS * (2 ** (updated.retry_count - 1))
@@ -896,6 +914,55 @@ class AutonomousMixin(GoalDirectivesMixin):
             await service.notify(event_type, payload)
         except Exception:
             logger.debug("Webhook failed for %s", event_type, exc_info=True)
+
+    async def _detect_relationships_for_goal(self, completed_goal: Any) -> list[dict]:
+        """RFC-204: Auto-detect relationships after goal completion.
+
+        Returns list of event dicts to yield to the caller.
+
+        Args:
+            completed_goal: The goal that just completed.
+
+        Returns:
+            List of custom event dicts for detected relationships.
+        """
+        if not self._goal_engine:
+            return []
+
+        try:
+            from soothe.cognition.relationship_detector import (
+                auto_apply_relationships,
+                detect_relationships,
+            )
+
+            all_goals = await self._goal_engine.list_goals()
+            relationships = detect_relationships(completed_goal, all_goals)
+            if not relationships:
+                return []
+
+            events = []
+            for rel in relationships:
+                events.append({
+                    "type": "soothe.autopilot.relationship_detected",
+                    "from_goal": rel.source_id,
+                    "to_goal": rel.target_id,
+                    "relationship_type": rel.rel_type,
+                    "confidence": rel.confidence,
+                })
+                logger.info(
+                    "Relationship detected: %s %s %s (confidence=%.2f)",
+                    rel.source_id,
+                    rel.rel_type,
+                    rel.target_id,
+                    rel.confidence,
+                )
+
+            auto_apply_relationships(relationships, self._goal_engine)
+        except Exception:
+            logger.debug("Relationship detection failed", exc_info=True)
+            return []
+
+        return events
 
     async def _check_scheduled_and_dream(
         self,

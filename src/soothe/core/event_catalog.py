@@ -701,6 +701,106 @@ _reg(CHITCHAT_STARTED, ChitchatStartedEvent, verbosity=VerbosityTier.INTERNAL)
 _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 
+# -- Autopilot (RFC-204) -------------------------------------------------
+AUTOPILLOT_STATUS_CHANGED = "soothe.autopilot.status_changed"
+AUTOPILLOT_GOAL_CREATED = "soothe.autopilot.goal_created"
+AUTOPILLOT_GOAL_PROGRESS = "soothe.autopilot.goal_progress"
+AUTOPILLOT_GOAL_COMPLETED = "soothe.autopilot.goal_completed"
+AUTOPILLOT_DREAMING_ENTERED = "soothe.autopilot.dreaming_entered"
+AUTOPILLOT_DREAMING_EXITED = "soothe.autopilot.dreaming_exited"
+AUTOPILLOT_GOAL_VALIDATED = "soothe.autopilot.goal_validated"
+AUTOPILLOT_GOAL_SUSPENDED = "soothe.autopilot.goal_suspended"
+AUTOPILLOT_SEND_BACK = "soothe.autopilot.send_back"
+AUTOPILLOT_RELATIONSHIP_DETECTED = "soothe.autopilot.relationship_detected"
+AUTOPILLOT_CHECKPOINT_SAVED = "soothe.autopilot.checkpoint.saved"
+AUTOPILLOT_GOAL_BLOCKED = "soothe.autopilot.goal_blocked"
+
+
+class _AutopilotStatusChanged(SootheEvent):
+    type: str = "soothe.autopilot.status_changed"
+    state: str
+
+
+class _AutopilotGoalCreated(SootheEvent):
+    type: str = "soothe.autopilot.goal_created"
+    goal_id: str
+    description: str = ""
+
+
+class _AutopilotGoalProgress(SootheEvent):
+    type: str = "soothe.autopilot.goal_progress"
+    goal_id: str
+    status: str = ""
+
+
+class _AutopilotGoalCompleted(SootheEvent):
+    type: str = "soothe.autopilot.goal_completed"
+    goal_id: str
+
+
+class _AutopilotDreamingEntered(SootheEvent):
+    type: str = "soothe.autopilot.dreaming_entered"
+    timestamp: str = ""
+
+
+class _AutopilotDreamingExited(SootheEvent):
+    type: str = "soothe.autopilot.dreaming_exited"
+    timestamp: str = ""
+    trigger: str = ""
+
+
+class _AutopilotGoalValidated(SootheEvent):
+    type: str = "soothe.autopilot.goal_validated"
+    goal_id: str
+    confidence: float = 1.0
+
+
+class _AutopilotGoalSuspended(SootheEvent):
+    type: str = "soothe.autopilot.goal_suspended"
+    goal_id: str
+    reason: str = ""
+
+
+class _AutopilotSendBack(SootheEvent):
+    type: str = "soothe.autopilot.send_back"
+    goal_id: str
+    remaining_budget: int = 0
+    feedback: str = ""
+
+
+class _AutopilotRelationshipDetected(SootheEvent):
+    type: str = "soothe.autopilot.relationship_detected"
+    from_goal: str
+    to_goal: str
+    relationship_type: str
+    confidence: float = 0.0
+
+
+class _AutopilotCheckpointSaved(SootheEvent):
+    type: str = "soothe.autopilot.checkpoint.saved"
+    thread_id: str
+    trigger: str = ""
+
+
+class _AutopilotGoalBlocked(SootheEvent):
+    type: str = "soothe.autopilot.goal_blocked"
+    goal_id: str
+    reason: str = ""
+
+
+_reg(AUTOPILLOT_STATUS_CHANGED, _AutopilotStatusChanged, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_GOAL_CREATED, _AutopilotGoalCreated, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_GOAL_PROGRESS, _AutopilotGoalProgress, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_GOAL_COMPLETED, _AutopilotGoalCompleted, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_DREAMING_ENTERED, _AutopilotDreamingEntered, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_DREAMING_EXITED, _AutopilotDreamingExited, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_GOAL_VALIDATED, _AutopilotGoalValidated, verbosity=VerbosityTier.DETAILED)
+_reg(AUTOPILLOT_GOAL_SUSPENDED, _AutopilotGoalSuspended, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILLOT_SEND_BACK, _AutopilotSendBack, verbosity=VerbosityTier.DETAILED)
+_reg(AUTOPILLOT_RELATIONSHIP_DETECTED, _AutopilotRelationshipDetected, verbosity=VerbosityTier.DETAILED)
+_reg(AUTOPILLOT_CHECKPOINT_SAVED, _AutopilotCheckpointSaved, verbosity=VerbosityTier.DETAILED)
+_reg(AUTOPILLOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORMAL)
+
 
 # ---------------------------------------------------------------------------
 # Import event modules to trigger self-registration
