@@ -223,10 +223,14 @@ class LoopState(BaseModel):
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0
 
-    # Last Act wave metrics for Reason prompts (IG-130)
+    # Last Act wave metrics for Reason prompts (IG-130, IG-132)
     last_wave_tool_call_count: int = 0
     last_wave_subagent_task_count: int = 0
     last_wave_hit_subagent_cap: bool = False
+    last_wave_output_length: int = 0
+    last_wave_error_count: int = 0
+    total_tokens_used: int = 0
+    context_percentage_consumed: float = 0.0
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

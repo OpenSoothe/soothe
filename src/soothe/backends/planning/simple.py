@@ -446,6 +446,22 @@ def build_loop_reason_prompt(
         ]
     )
 
+    # Add wave metrics section if wave was executed (IG-132)
+    if state.last_wave_tool_call_count > 0:
+        cap_status = "Yes" if state.last_wave_hit_subagent_cap else "No"
+        context_pct = f"{state.context_percentage_consumed:.1%}" if state.context_percentage_consumed > 0 else "N/A"
+        context_tokens = f"{state.total_tokens_used:,}" if state.total_tokens_used > 0 else "N/A"
+
+        parts.append("\n<SOOTHE_WAVE_METRICS>\n")
+        parts.append("Last Act wave completed:\n")
+        parts.append(f"- Subagent calls: {state.last_wave_subagent_task_count}\n")
+        parts.append(f"- Tool calls: {state.last_wave_tool_call_count}\n")
+        parts.append(f"- Output length: {state.last_wave_output_length:,} characters\n")
+        parts.append(f"- Errors: {state.last_wave_error_count}\n")
+        parts.append(f"- Cap hit: {cap_status}\n")
+        parts.append(f"- Context used: {context_pct} ({context_tokens} tokens)\n")
+        parts.append("</SOOTHE_WAVE_METRICS>\n")
+
     if context.recent_messages:
         parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
         parts.append(

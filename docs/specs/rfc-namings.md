@@ -81,6 +81,17 @@ This document defines the terminology and naming conventions used in this projec
 | Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-204 |
 | Critical Message | Channel message requiring acknowledgment (e.g., blocker_alert, MUST goal confirmation). Retries with backoff. | RFC-204 |
 
+### Layer 2 Execution Terms (RFC-201)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Context Isolation | Thread isolation for delegation steps where subagents receive only explicit task input, no prior conversation history. Prevents cross-wave contamination. | RFC-201 |
+| Thread Isolation | Execution pattern where delegation steps run on fresh checkpoint branches (`{thread_id}__l2act{uuid}`) with automatic merge back to canonical thread. | RFC-201 |
+| Execution Bounds | Two-layer constraint preventing runaway subagent loops: soft constraint (schema/prompt) and hard constraint (subagent task cap). | RFC-201 |
+| Wave Metrics | Structured metrics collected per Act wave (tool_call_count, subagent_task_count, output_length, error_count, context_window) informing Reason decisions. | RFC-201 |
+| Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-201 |
+| Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-201 |
+
 ## Naming Conventions
 
 ### General Principles

@@ -25,17 +25,22 @@ def test_should_use_isolated_respects_config_and_hints() -> None:
     ex = Executor(agent, config=cfg)
     steps = [_step(subagent=None), _step(subagent=None)]
 
+    # Disabled when sequential_act_isolated_thread is False (default)
     assert ex._should_use_isolated_sequential_thread(steps) is False
 
+    # Enable isolation feature
     cfg.agentic.sequential_act_isolated_thread = True
-    cfg.agentic.sequential_act_isolate_when_step_subagent_hint = True
+
+    # No subagent in steps → no isolation
     assert ex._should_use_isolated_sequential_thread(steps) is False
 
+    # Has subagent in steps → isolation enabled (automatic semantic rule)
     steps2 = [_step(subagent="claude")]
     assert ex._should_use_isolated_sequential_thread(steps2) is True
 
-    cfg.agentic.sequential_act_isolate_when_step_subagent_hint = False
-    assert ex._should_use_isolated_sequential_thread(steps) is True
+    # Mixed steps with subagent → isolation enabled
+    steps3 = [_step(subagent=None), _step(subagent="claude")]
+    assert ex._should_use_isolated_sequential_thread(steps3) is True
 
 
 @pytest.mark.asyncio
