@@ -329,6 +329,7 @@ class ReportProgressTool(BaseTool):
         "Report progress on the current goal. Parameters: goal_id (required), status, findings. Returns: confirmation."
     )
     goal_engine: GoalEngine = Field(exclude=True)
+    proposal_queue: Any = Field(default=None, exclude=True)
 
     def _run(self, goal_id: str = "", status: str = "", findings: str = "") -> dict[str, Any]:
         if not goal_id:
@@ -341,8 +342,17 @@ class ReportProgressTool(BaseTool):
         goal = await self.goal_engine.get_goal(goal_id)
         if not goal:
             return {"error": f"Goal {goal_id} not found"}
-        # Progress is logged and queued — applied after iteration
         logger.info("Goal %s progress reported: status=%s, findings=%s", goal_id, status, findings[:100])
+        if self.proposal_queue:
+            from soothe.cognition.proposal_queue import Proposal
+
+            self.proposal_queue.enqueue(
+                Proposal(
+                    type="report_progress",
+                    goal_id=goal_id,
+                    payload={"status": status, "findings": findings},
+                )
+            )
         return {"status": "queued", "goal_id": goal_id}
 
 
@@ -356,6 +366,7 @@ class SuggestGoalTool(BaseTool):
         "Returns: proposal confirmation (subject to review)."
     )
     goal_engine: GoalEngine = Field(exclude=True)
+    proposal_queue: Any = Field(default=None, exclude=True)
 
     def _run(self, description: str = "", priority: int = 50) -> dict[str, Any]:
         if not description:
@@ -365,8 +376,17 @@ class SuggestGoalTool(BaseTool):
     async def _arun(self, description: str = "", priority: int = 50) -> dict[str, Any]:
         if not description:
             return {"error": "description is required"}
-        # Proposal is logged — Layer 3 evaluates and creates if approved
         logger.info("Goal proposed: %s (priority=%d)", description, priority)
+        if self.proposal_queue:
+            from soothe.cognition.proposal_queue import Proposal
+
+            self.proposal_queue.enqueue(
+                Proposal(
+                    type="suggest_goal",
+                    goal_id="",
+                    payload={"description": description, "priority": priority},
+                )
+            )
         return {"status": "proposed", "description": description, "priority": priority}
 
 
@@ -380,6 +400,7 @@ class FlagBlockerTool(BaseTool):
         "Returns: confirmation."
     )
     goal_engine: GoalEngine = Field(exclude=True)
+    proposal_queue: Any = Field(default=None, exclude=True)
 
     def _run(self, goal_id: str = "", reason: str = "", dependencies: str = "") -> dict[str, Any]:
         if not goal_id:
@@ -398,6 +419,16 @@ class FlagBlockerTool(BaseTool):
             return {"error": f"Goal {goal_id} not found"}
         blocker_deps = f" (depends on: {dependencies})" if dependencies else ""
         logger.warning("Goal %s blocked: %s%s", goal_id, reason, blocker_deps)
+        if self.proposal_queue:
+            from soothe.cognition.proposal_queue import Proposal
+
+            self.proposal_queue.enqueue(
+                Proposal(
+                    type="flag_blocker",
+                    goal_id=goal_id,
+                    payload={"reason": reason, "dependencies": dependencies},
+                )
+            )
         return {"status": "flagged", "goal_id": goal_id, "reason": reason}
 
 
@@ -522,9 +553,9 @@ def create_layer2_tools(
     tools = [
         GetRelatedGoalsTool(goal_engine=goal_engine),
         GetGoalProgressTool(goal_engine=goal_engine),
-        ReportProgressTool(goal_engine=goal_engine),
-        SuggestGoalTool(goal_engine=goal_engine),
-        FlagBlockerTool(goal_engine=goal_engine),
+        ReportProgressTool(goal_engine=goal_engine, proposal_queue=proposal_queue),
+        SuggestGoalTool(goal_engine=goal_engine, proposal_queue=proposal_queue),
+        FlagBlockerTool(goal_engine=goal_engine, proposal_queue=proposal_queue),
         GetWorldInfoTool(
             goal_engine=goal_engine,
             iteration_count=iteration_count,
