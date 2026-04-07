@@ -351,14 +351,6 @@ class ClientSessionManager:
 
                         # Check if event should be shown at client's verbosity level
                         if not should_show(event_meta.verbosity, session.verbosity):
-                            # Filter out - do not send to client
-                            logger.debug(
-                                "Filtered event [%s] for client %s (event_verbosity=%s, client_verbosity=%s)",
-                                event.get("type"),
-                                session.client_id,
-                                event_meta.verbosity,
-                                session.verbosity,
-                            )
                             continue  # Skip this event
 
                 # Send filtered event to client

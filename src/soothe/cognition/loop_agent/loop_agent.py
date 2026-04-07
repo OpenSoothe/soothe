@@ -56,6 +56,7 @@ class LoopAgent:
         self.executor = Executor(
             core_agent,
             max_parallel_steps=config.execution.concurrency.max_parallel_steps,
+            config=config,
         )
 
     async def run(
@@ -97,6 +98,7 @@ class LoopAgent:
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
         max_iterations: int = 8,
+        reason_conversation_excerpts: list[str] | None = None,
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -108,6 +110,7 @@ class LoopAgent:
             workspace: Thread-specific workspace path (RFC-103)
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
+            reason_conversation_excerpts: Prior thread lines (User/Assistant) for Reason (IG-128).
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -118,6 +121,7 @@ class LoopAgent:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
+            reason_conversation_excerpts=list(reason_conversation_excerpts or []),
         )
         wm_cfg = self.config.agentic.working_memory
         if wm_cfg.enabled:
@@ -257,6 +261,10 @@ class LoopAgent:
                     },
                 )
 
+            state.last_wave_tool_call_count = sum(r.tool_call_count for r in step_results)
+            state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)
+            state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
+
             state.previous_reason = reason_result
             state.iteration += 1
             state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
@@ -350,7 +358,7 @@ class LoopAgent:
 
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
-            recent_messages=[],
+            recent_messages=list(state.reason_conversation_excerpts),
             completed_steps=completed_steps,
             workspace=state.workspace,
             git_status=state.git_status,

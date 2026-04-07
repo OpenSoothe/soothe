@@ -215,6 +215,8 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
     status: str
     goal_progress: float
     evidence_summary: str
+    # One-line UI summary for TUI/registry (avoid duplicating streamed full_output).
+    completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
     # Headless CLI: when max_iterations>1, main assistant stdout is suppressed; surface this once at done.
@@ -641,7 +643,7 @@ _reg(
     "soothe.agentic.loop.completed",
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
-    summary_template="Done: {evidence_summary}",
+    summary_template="Done: {completion_summary}",
 )
 _reg(
     "soothe.agentic.step.started",

@@ -25,7 +25,8 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Read(//Users/chenxm/.soothe/**)",
-      "Read(//Users/chenxm/.soothe/logs/**)"
+      "Read(//Users/chenxm/.soothe/logs/**)",
+      "Bash(make test-unit:*)"
     ]
   }
 }

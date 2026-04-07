@@ -22,16 +22,20 @@ from soothe.core.event_catalog import (
 )
 from soothe.core.runner._runner_shared import StreamChunk, _custom
 
+# Default limit of recent messages to inspect for query classification
+_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT = 6
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
 
-_AGENTIC_FINAL_STDOUT_CAP = 12000
-# Full normalized body at or below this length is printed to stdout in full (IG-123).
-_AGENTIC_REPORT_FULL_DISPLAY_MAX = 8000
+_AGENTIC_FINAL_STDOUT_CAP = 200_000
+# Full normalized body at or below this length is printed without truncation (IG-123, IG-128).
+# Long translations and reports often exceed 8k; keep a high ceiling and spool beyond it.
+_AGENTIC_REPORT_FULL_DISPLAY_MAX = 200_000
 # When spooling to disk, keep the on-screen preview strictly below the threshold above.
-_AGENTIC_REPORT_PREVIEW_MAX = 7800
+_AGENTIC_REPORT_PREVIEW_MAX = 198_000
 
 
 def _strip_leading_python_list_reprs(text: str, *, max_strips: int = 24) -> str:
@@ -93,26 +97,63 @@ def _agentic_final_stdout_text(
         if len(body) <= _AGENTIC_REPORT_FULL_DISPLAY_MAX:
             return body
         preview = body[:_AGENTIC_REPORT_PREVIEW_MAX].rstrip()
-        notice = (
-            f"\n\n[Output truncated for stdout — full text exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters.]\n\n"
-        )
-        saved: Path | None = None
-        if workspace and config and thread_id.strip():
-            run_dir = _resolve_agentic_report_run_dir(
-                thread_id=thread_id.strip(),
+        tid = thread_id.strip()
+        run_dir_hint: Path | None = None
+        if workspace and config and tid:
+            run_dir_hint = _resolve_agentic_report_run_dir(
+                thread_id=tid,
                 workspace=workspace,
                 config=config,
             )
-            saved = _spool_agentic_overflow_report(body, run_dir=run_dir)
+        saved: Path | None = None
+        if run_dir_hint is not None:
+            saved = _spool_agentic_overflow_report(body, run_dir=run_dir_hint)
         if saved is not None:
-            return f"{preview}{notice}Full report saved to: {saved}"
-        return f"{preview}{notice}Full report could not be written to disk (see logs for details)."
+            return f"{preview}...\n\nFull report: {saved}"
+        if run_dir_hint is not None:
+            pattern = f"{run_dir_hint.as_posix()}/final_report_*.md"
+        elif tid:
+            from soothe.config import SOOTHE_HOME
+
+            pattern = f"{Path(SOOTHE_HOME).expanduser().resolve().as_posix()}/runs/{tid}/final_report_*.md"
+        else:
+            pattern = "runs/<thread_id>/final_report_*.md"
+        return (
+            f"{preview}...\n\nFull report: {pattern}\n"
+            f"(file not written; exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters — see logs)"
+        )
 
     summary = (user_summary or "").strip()
     if summary:
         cap = _AGENTIC_FINAL_STDOUT_CAP
         return summary[:cap] if len(summary) > cap else summary
     return None
+
+
+_AGENTIC_STEP_DESC_UI_MAX = 220
+
+
+def _stringify_llm_message_content(content: object) -> str:
+    """Flatten LangChain message content to a single string."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and "text" in block:
+                parts.append(str(block["text"]))
+        return "".join(parts)
+    return str(content or "")
+
+
+def _clip_agentic_step_description(description: str, *, max_len: int = _AGENTIC_STEP_DESC_UI_MAX) -> str:
+    """Shorten Layer-2 step descriptions for progress events (TUI one-line template)."""
+    text = (description or "").strip().replace("\n", " ")
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
 
 
 class AgenticMixin:
@@ -146,13 +187,21 @@ class AgenticMixin:
         # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
 
-        # First, classify the query to check for chitchat
+        # One load for Tier-1 routing (tail) and Layer-2 Reason (full excerpt list, IG-128).
+        await self._ensure_checkpointer_initialized()
+        recent_for_thread = await self._load_recent_messages(tid, limit=16)
+        reason_excerpts = self._format_thread_messages_for_reason(recent_for_thread)
+
+        # Classify the query to check for chitchat
         if self._unified_classifier:
-            classification = await self._unified_classifier.classify_routing(user_input)
+            limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
+            recent_for_classify = recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
+            classification = await self._unified_classifier.classify_routing(
+                user_input, recent_messages=recent_for_classify
+            )
             if classification.task_complexity == "chitchat":
-                # Use chitchat fast path
                 logger.info("[Router] Chitchat detected → fast path")
-                async for chunk in self._run_chitchat(user_input, classification):
+                async for chunk in self._run_chitchat(user_input, tid, classification):
                     yield chunk
                 return
 
@@ -194,6 +243,7 @@ class AgenticMixin:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
+            reason_conversation_excerpts=reason_excerpts,
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user
@@ -208,10 +258,10 @@ class AgenticMixin:
                 )
 
             elif event_type == "step_started":
-                # Level 2: Step description
+                # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
                 yield _custom(
                     AgenticStepStartedEvent(
-                        description=event_data["description"],
+                        description=_clip_agentic_step_description(event_data["description"]),
                     ).to_dict()
                 )
 
@@ -272,6 +322,12 @@ class AgenticMixin:
                 # attach a one-shot final line/block so the user still sees the outcome (IG-119 follow-up).
 
                 evidence = (final_result.evidence_summary or "")[:500]
+                completion_summary = (final_result.user_summary or "").strip()
+                if not completion_summary:
+                    completion_summary = (
+                        f"{n_act_steps} step(s) complete" if n_act_steps else (final_result.status or "complete")
+                    )
+                completion_summary = completion_summary[:240]
                 final_stdout: str | None = None
                 if final_result.status == "done":
                     body = (final_result.full_output or "").strip()
@@ -301,6 +357,7 @@ class AgenticMixin:
                         status=final_result.status,
                         goal_progress=final_result.goal_progress,
                         evidence_summary=evidence,
+                        completion_summary=completion_summary,
                         total_steps=n_act_steps,
                         final_stdout_message=final_stdout,
                     ).to_dict()

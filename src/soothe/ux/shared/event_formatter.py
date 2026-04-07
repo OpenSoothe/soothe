@@ -29,7 +29,14 @@ def build_event_summary(event_type: str, data: dict[str, Any]) -> str:
     meta = REGISTRY.get_meta(event_type)
     if meta and meta.summary_template:
         try:
-            return meta.summary_template.format(**data)
+            payload = dict(data)
+            # Agentic loop completion moved to completion_summary (avoid huge evidence blobs in UI).
+            if event_type == "soothe.agentic.loop.completed":
+                payload.setdefault(
+                    "completion_summary",
+                    ((payload.get("evidence_summary") or "") or "complete").strip()[:240] or "complete",
+                )
+            return meta.summary_template.format(**payload)
         except (KeyError, ValueError) as e:
             logger.debug("Failed to format template for %s: %s", event_type, e)
             return ""

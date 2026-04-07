@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
 
 from soothe.core.event_catalog import (
@@ -40,6 +40,8 @@ from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _v
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from langchain_core.messages import BaseMessage
+
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,7 @@ class PhasesMixin:
     async def _run_chitchat(
         self,
         user_input: str,
+        thread_id: str,
         classification: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for chitchat -- uses piggybacked response from classification.
@@ -75,6 +78,7 @@ class PhasesMixin:
         if piggybacked:
             yield _custom(ChitchatResponseEvent(content=piggybacked).to_dict())
             logger.debug("Chitchat completed for query: %s", user_input[:50])
+            await self._save_chitchat_to_state(user_input, piggybacked, thread_id)
             return
 
         # Safety net: should not be reached if classifier post-processing works.
@@ -128,12 +132,200 @@ class PhasesMixin:
 
     # -- LangGraph stream with HITL loop ------------------------------------
 
+    async def _ensure_checkpointer_initialized(self) -> None:
+        """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
+
+        The checkpointer is created from ``self._checkpointer_pool`` and replaces
+        the temporary ``MemorySaver`` on ``self._agent``.  Must be called before
+        any ``core_agent.astream()`` that needs persistent thread state.
+        """
+        if self._checkpointer_initialized or self._checkpointer_pool is None:
+            return
+
+        try:
+            import sqlite3
+
+            is_sqlite_conn = isinstance(self._checkpointer_pool, sqlite3.Connection)
+        except Exception:
+            is_sqlite_conn = False
+
+        try:
+            if is_sqlite_conn:
+                from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+                checkpointer = AsyncSqliteSaver(self._checkpointer_pool)
+                self._checkpointer = checkpointer
+                self._agent.checkpointer = checkpointer
+                self._checkpointer_initialized = True
+                logger.info("AsyncSqliteSaver created and tables initialized, checkpointer replaced")
+            else:
+                await self._checkpointer_pool.open()
+
+                from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+                checkpointer = AsyncPostgresSaver(self._checkpointer_pool)
+                await checkpointer.setup()
+
+                self._checkpointer = checkpointer
+                self._agent.checkpointer = checkpointer
+
+                self._checkpointer_initialized = True
+                logger.info("AsyncPostgresSaver pool open and tables initialized, checkpointer replaced")
+        except Exception as exc:
+            logger.warning("Failed to initialize async checkpointer: %s", exc)
+            self._checkpointer_pool = None
+            self._checkpointer_initialized = True
+            logger.info("Using MemorySaver as fallback")
+
+    async def _load_recent_messages(
+        self,
+        thread_id: str,
+        *,
+        limit: int = 6,
+    ) -> list[BaseMessage]:
+        """Load the most recent messages from the checkpointer for a thread.
+
+        Used to provide conversation context to the unified classifier so it
+        can distinguish follow-up actions (e.g. "translate that") from
+        standalone chitchat.
+
+        Args:
+            thread_id: Thread ID to load messages for.
+            limit: Number of recent messages to return.
+
+        Returns:
+            List of recent BaseMessage instances, empty if unavailable.
+        """
+        if not thread_id or not self._checkpointer_initialized:
+            return []
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            state = await self._agent.graph.aget_state(config)
+            if state and state.values:
+                messages = state.values.get("messages", [])
+                return list(messages[-limit:]) if messages else []
+        except Exception:
+            logger.debug("Failed to load recent messages from checkpointer", exc_info=True)
+        return []
+
+    def _format_recent_messages_for_classifier(
+        self,
+        messages: list[BaseMessage],
+        *,
+        max_chars: int = 300,
+    ) -> str:
+        """Format recent messages as a short conversation context string.
+
+        Args:
+            messages: Recent conversation messages.
+            max_chars: Maximum length per message preview.
+
+        Returns:
+            Formatted string suitable for inclusion in the routing prompt.
+        """
+        lines = []
+        for msg in messages:
+            role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+            content = getattr(msg, "content", "")
+            if not isinstance(content, str):
+                content = str(content)
+            preview = content[:max_chars].strip()
+            if preview:
+                lines.append(f"{role}: {preview}")
+        return "\n".join(lines) if lines else ""
+
+    def _format_thread_messages_for_reason(
+        self,
+        messages: list[BaseMessage],
+        *,
+        limit: int = 16,
+        max_chars_per_message: int = 8000,
+        last_assistant_max_chars: int = 100_000,
+    ) -> list[str]:
+        """Format recent thread messages for Layer-2 Reason prompts (IG-128).
+
+        Includes Human and AI turns only (skips tool/system messages). Older turns
+        use ``max_chars_per_message``; the **last** ``AIMessage`` in the tail uses
+        ``last_assistant_max_chars`` so follow-ups (e.g. full-document translation)
+        are not cut at 8k.
+
+        Args:
+            messages: Conversation messages from the checkpointer (newest slice).
+            limit: Max messages to consider from the tail of ``messages``.
+            max_chars_per_message: Truncation bound for non-final assistant bodies.
+            last_assistant_max_chars: Truncation bound for the last assistant turn.
+
+        Returns:
+            Lines like ``User: ...`` / ``Assistant: ...`` for ``PlanContext.recent_messages``.
+        """
+        if not messages:
+            return []
+        tail = messages[-limit:] if len(messages) > limit else messages
+        last_ai_idx: int | None = None
+        for i in range(len(tail) - 1, -1, -1):
+            if isinstance(tail[i], AIMessage):
+                last_ai_idx = i
+                break
+
+        lines: list[str] = []
+        for i, msg in enumerate(tail):
+            if isinstance(msg, HumanMessage):
+                role = "User"
+            elif isinstance(msg, AIMessage):
+                role = "Assistant"
+            else:
+                continue
+            content = getattr(msg, "content", "")
+            if not isinstance(content, str):
+                content = str(content)
+            body = content.strip()
+            if not body:
+                continue
+            cap = last_assistant_max_chars if isinstance(msg, AIMessage) and i == last_ai_idx else max_chars_per_message
+            if len(body) > cap:
+                body = body[:cap].rstrip() + "\n[…truncated…]"
+            lines.append(f"{role}: {body}")
+        return lines
+
+    async def _save_chitchat_to_state(
+        self,
+        user_input: str,
+        response: str,
+        thread_id: str,
+    ) -> None:
+        """Save a chitchat exchange (HumanMessage + AIMessage) to the checkpointer.
+
+        Ensures subsequent turns in the same thread can see the chitchat
+        conversation history.
+        """
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        await self._ensure_checkpointer_initialized()
+
+        if not thread_id:
+            return
+
+        config = {"configurable": {"thread_id": thread_id}}
+
+        try:
+            await self._agent.graph.aupdate_state(
+                config,
+                {"messages": [HumanMessage(content=user_input), AIMessage(content=response)]},
+            )
+            logger.debug("Chitchat exchange saved to checkpointer for thread %s", thread_id)
+        except Exception:
+            logger.debug("Failed to save chitchat to checkpointer", exc_info=True)
+
     async def _stream_phase(
         self,
         user_input: str,
         state: Any,
     ) -> AsyncGenerator[StreamChunk]:
         """Run the LangGraph stream with HITL interrupt loop."""
+        await self._ensure_checkpointer_initialized()
+
         enriched_messages = self._build_enriched_input(
             user_input,
             state.context_projection,
@@ -165,44 +357,6 @@ class PhasesMixin:
         config = {"configurable": {"thread_id": lg_tid}}
         if state.workspace:
             config["configurable"]["workspace"] = state.workspace
-
-        if not self._checkpointer_initialized and self._checkpointer_pool is not None:
-            try:
-                import sqlite3
-
-                is_sqlite_conn = isinstance(self._checkpointer_pool, sqlite3.Connection)
-            except Exception:
-                is_sqlite_conn = False
-
-            try:
-                if is_sqlite_conn:
-                    # SQLite: create AsyncSqliteSaver from connection
-                    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
-                    checkpointer = AsyncSqliteSaver(self._checkpointer_pool)
-                    self._checkpointer = checkpointer
-                    self._agent.checkpointer = checkpointer
-                    self._checkpointer_initialized = True
-                    logger.info("AsyncSqliteSaver created and tables initialized, checkpointer replaced")
-                else:
-                    # PostgreSQL: open pool then create AsyncPostgresSaver
-                    await self._checkpointer_pool.open()
-
-                    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-                    checkpointer = AsyncPostgresSaver(self._checkpointer_pool)
-                    await checkpointer.setup()
-
-                    self._checkpointer = checkpointer
-                    self._agent.checkpointer = checkpointer
-
-                    self._checkpointer_initialized = True
-                    logger.info("AsyncPostgresSaver pool opened and tables initialized, checkpointer replaced")
-            except Exception as exc:
-                logger.warning("Failed to initialize async checkpointer: %s", exc)
-                self._checkpointer_pool = None
-                self._checkpointer_initialized = True
-                logger.info("Using MemorySaver as fallback")
 
         hitl_iterations = 0
         while True:

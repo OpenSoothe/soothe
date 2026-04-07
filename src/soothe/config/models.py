@@ -524,6 +524,8 @@ class AgenticLoopConfig(BaseModel):
     Args:
         enabled: Enable agentic loop mode.
         max_iterations: Maximum agentic loop iterations.
+        max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
+        layer2_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
@@ -539,6 +541,34 @@ class AgenticLoopConfig(BaseModel):
         description="Maximum agentic loop iterations",
         ge=1,
         le=10,
+    )
+
+    max_subagent_tasks_per_wave: int = Field(
+        default=2,
+        description="Max completed subagent ``task`` tool results per Act wave (0 = no limit)",
+        ge=0,
+        le=20,
+    )
+
+    layer2_output_contract_enabled: bool = Field(
+        default=True,
+        description="Instruct Layer 1 not to paste full tool outputs again during Layer 2 Act",
+    )
+
+    sequential_act_isolated_thread: bool = Field(
+        default=False,
+        description=(
+            "Run each sequential Act wave under a temporary thread_id with no prior checkpoint "
+            "messages, then merge produced messages back into the canonical thread (IG-131)."
+        ),
+    )
+
+    sequential_act_isolate_when_step_subagent_hint: bool = Field(
+        default=True,
+        description=(
+            "When sequential_act_isolated_thread is enabled, isolate only if at least one step "
+            "in the wave has a non-empty ``subagent`` hint; when false, isolate every sequential wave."
+        ),
     )
 
     planning: PlanningConfig = Field(

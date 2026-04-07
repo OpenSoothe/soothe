@@ -78,7 +78,11 @@ class AutonomousMixin(GoalDirectivesMixin):
         if self._unified_classifier:
             from soothe.core.unified_classifier import UnifiedClassification
 
-            routing = await self._unified_classifier.classify_routing(user_input)
+            # Load recent messages for conversation context
+            await self._ensure_checkpointer_initialized()
+            thread_id_for_context = state.thread_id or self._current_thread_id or ""
+            recent = await self._load_recent_messages(thread_id_for_context, limit=6)
+            routing = await self._unified_classifier.classify_routing(user_input, recent_messages=recent)
             logger.info(
                 "Autonomous mode: tier-1 routing task_complexity=%s - %s",
                 routing.task_complexity,
@@ -87,7 +91,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             # Fast path for chitchat - skip goal engine and planning
             if routing.task_complexity == "chitchat":
-                async for chunk in self._run_chitchat(user_input, classification=routing):
+                async for chunk in self._run_chitchat(user_input, state.thread_id or "", classification=routing):
                     yield chunk
                 return
 
@@ -942,13 +946,15 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             events = []
             for rel in relationships:
-                events.append({
-                    "type": "soothe.autopilot.relationship_detected",
-                    "from_goal": rel.source_id,
-                    "to_goal": rel.target_id,
-                    "relationship_type": rel.rel_type,
-                    "confidence": rel.confidence,
-                })
+                events.append(
+                    {
+                        "type": "soothe.autopilot.relationship_detected",
+                        "from_goal": rel.source_id,
+                        "to_goal": rel.target_id,
+                        "relationship_type": rel.rel_type,
+                        "confidence": rel.confidence,
+                    }
+                )
                 logger.info(
                     "Relationship detected: %s %s %s (confidence=%.2f)",
                     rel.source_id,

@@ -83,8 +83,9 @@ class QueryEngine:
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
-        if d._input_history:
-            d._input_history.add(text)
+        st = d._thread_registry.get(thread_id)
+        if st and st.input_history:
+            st.input_history.add(text)
 
         query_state_lock = getattr(d, "_query_state_lock", None)
         if query_state_lock:
@@ -245,8 +246,9 @@ class QueryEngine:
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
-        if d._input_history:
-            d._input_history.add(text)
+        st2 = d._thread_registry.get(thread_id)
+        if st2 and st2.input_history:
+            st2.input_history.add(text)
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)

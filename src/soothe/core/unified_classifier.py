@@ -107,7 +107,7 @@ class UnifiedClassification(BaseModel):
 _ROUTING_PROMPT = """\
 You are {assistant_name}. Classify this request.
 Current time: {current_time}
-
+{conversation_context}
 Request: {query}
 
 CRITICAL OUTPUT RULES:
@@ -123,8 +123,12 @@ Required JSON shape:
 Classification rules:
 - chitchat: Greetings, thanks, fillers needing no action. Set chitchat_response to a short,
   direct reply in the user's language.
-- medium: Research, questions, tasks, debugging. DEFAULT when uncertain. chitchat_response=null.
-- complex: Architecture design, large migrations, major refactoring. chitchat_response=null.\
+- medium: Research, questions, tasks, debugging, follow-up actions. DEFAULT when uncertain.
+  chitchat_response=null.
+- complex: Architecture design, large migrations, major refactoring. chitchat_response=null.
+
+IMPORTANT: If the request refers to prior context (e.g. "translate that", "summarize the above",
+"explain more", "continue"), classify as "medium" NOT "chitchat".\
 """
 
 _ROUTING_RETRY_PROMPT = """\
@@ -185,7 +189,12 @@ class UnifiedClassifier:
 
     # -- two-tier public API ------------------------------------------------
 
-    async def classify_routing(self, query: str) -> RoutingResult:
+    async def classify_routing(
+        self,
+        query: str,
+        *,
+        recent_messages: list[Any] | None = None,
+    ) -> RoutingResult:
         """Tier-1: fast routing classification (~2-4s).
 
         Returns task_complexity and, for chitchat, a piggybacked response.
@@ -193,12 +202,32 @@ class UnifiedClassifier:
 
         Args:
             query: User input text.
+            recent_messages: Optional recent conversation messages to provide
+                context for classification (helps distinguish follow-up actions
+                like "translate that" from standalone chitchat).
 
         Returns:
             RoutingResult with task_complexity and optional chitchat_response.
         """
         if self._mode == "disabled" or not self._fast_model:
             return RoutingResult(task_complexity="medium")
+
+        # Build conversation context for the prompt
+        conversation_context = ""
+        if recent_messages:
+            lines = []
+            for msg in recent_messages:
+                from langchain_core.messages import HumanMessage
+
+                role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+                content = getattr(msg, "content", "")
+                if not isinstance(content, str):
+                    content = str(content)
+                preview = content[:200].strip()
+                if preview:
+                    lines.append(f"{role}: {preview}")
+            if lines:
+                conversation_context = "\n\nRecent conversation:\n" + "\n".join(lines[-8:])
 
         attempts: tuple[tuple[bool, str], ...] = (
             (False, "primary"),
@@ -209,7 +238,11 @@ class UnifiedClassifier:
 
         for retry_mode, label in attempts:
             try:
-                result = await self._llm_routing(query, retry_mode=retry_mode)
+                result = await self._llm_routing(
+                    query,
+                    conversation_context=conversation_context,
+                    retry_mode=retry_mode,
+                )
                 break
             except Exception as exc:
                 last_error = exc
@@ -235,7 +268,13 @@ class UnifiedClassifier:
 
     # -- internal LLM calls -------------------------------------------------
 
-    async def _llm_routing(self, query: str, *, retry_mode: bool = False) -> RoutingResult:
+    async def _llm_routing(
+        self,
+        query: str,
+        *,
+        conversation_context: str = "",
+        retry_mode: bool = False,
+    ) -> RoutingResult:
         """Tier-1 LLM call with compact routing prompt."""
         from datetime import UTC, datetime
 
@@ -245,6 +284,7 @@ class UnifiedClassifier:
             query=query,
             current_time=current_time,
             assistant_name=self._assistant_name,
+            conversation_context=conversation_context if not retry_mode else "",
         )
 
         try:

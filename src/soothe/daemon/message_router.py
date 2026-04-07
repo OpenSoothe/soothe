@@ -174,6 +174,17 @@ class MessageRouter:
 
             conversation_history = d._thread_logger.recent_conversation(limit=50)
 
+            # Get or create per-thread input history
+            input_history = d._thread_registry.get_input_history(resumed_thread_id)
+            if input_history is None:
+                from soothe.config import SOOTHE_HOME
+
+                input_history = InputHistory(
+                    history_file=str(Path(SOOTHE_HOME) / "runs" / resumed_thread_id / "input_history.json"),
+                    max_size=1000,
+                )
+                d._thread_registry.set_input_history(resumed_thread_id, input_history)
+
             session = await d._session_manager.get_session(client_id)
             logger.info("resume_thread: session for client %s = %s", client_id, session is not None)
             if session:
@@ -184,7 +195,7 @@ class MessageRouter:
                         "state": "idle",
                         "thread_id": resumed_thread_id,
                         "thread_resumed": True,
-                        "input_history": d._input_history.history[-100:] if d._input_history else [],
+                        "input_history": input_history.history[-100:] if input_history else [],
                         "conversation_history": conversation_history,
                     },
                 )
@@ -225,7 +236,14 @@ class MessageRouter:
         d._thread_registry.set_client_thread(client_id, draft_thread_id)
         d._runner.set_current_thread_id(draft_thread_id)
 
-        d._input_history = InputHistory()
+        # Create per-thread input history
+        from soothe.config import SOOTHE_HOME
+
+        thread_input_history = InputHistory(
+            history_file=str(Path(SOOTHE_HOME) / "runs" / draft_thread_id / "input_history.json"),
+            max_size=1000,
+        )
+        d._thread_registry.set_input_history(draft_thread_id, thread_input_history)
 
         session = await d._session_manager.get_session(client_id)
         if session:
@@ -237,7 +255,7 @@ class MessageRouter:
                     "thread_id": draft_thread_id,
                     "new_thread": True,
                     "workspace": str(thread_workspace),
-                    "input_history": [],
+                    "input_history": thread_input_history.history[-100:] if thread_input_history else [],
                 },
             )
         logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)

@@ -151,6 +151,8 @@ class StepResult(BaseModel):
         duration_ms: Execution duration in milliseconds
         thread_id: Thread used for execution
         tool_call_count: Number of tool calls made during execution
+        subagent_task_completions: Completed ``task`` tool results at graph root (IG-130).
+        hit_subagent_cap: True when streaming stopped early due to subagent task cap (IG-130).
     """
 
     step_id: str
@@ -161,6 +163,8 @@ class StepResult(BaseModel):
     duration_ms: int
     thread_id: str
     tool_call_count: int = 0
+    subagent_task_completions: int = 0
+    hit_subagent_cap: bool = False
 
     def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.
@@ -198,6 +202,7 @@ class LoopState(BaseModel):
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
+        reason_conversation_excerpts: Prior Human/Assistant lines for Reason (IG-128).
     """
 
     goal: str
@@ -213,9 +218,15 @@ class LoopState(BaseModel):
     step_results: list[StepResult] = []
     evidence_summary: str = ""
     working_memory: Any | None = None
+    reason_conversation_excerpts: list[str] = Field(default_factory=list)
 
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0
+
+    # Last Act wave metrics for Reason prompts (IG-130)
+    last_wave_tool_call_count: int = 0
+    last_wave_subagent_task_count: int = 0
+    last_wave_hit_subagent_cap: bool = False
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

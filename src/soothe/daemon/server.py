@@ -29,7 +29,7 @@ from soothe.daemon.singleton import (
 )
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
-from soothe.logging import InputHistory, ThreadLogger
+from soothe.logging import ThreadLogger
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._input_loop_task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._thread_logger: ThreadLogger | None = None
-        self._input_history: InputHistory | None = None
         self._pid_lock_fd: int | None = None
         # Transport manager for multi-transport support (RFC-0013)
         self._transport_manager: TransportManager | None = None
@@ -168,10 +167,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 raise
 
             # QueryEngine is created in __init__; runner is now available for queries
-
-            # Initialize persistent input history
-            self._input_history = InputHistory(history_file=str(Path(SOOTHE_HOME) / "history.json"), max_size=1000)
-            logger.debug("Input history initialized with %d entries", len(self._input_history.history))
+            # Per-thread input history is created in message_router.py on new_thread/resume_thread
 
             self._stop_event = asyncio.Event()
             self._running = True

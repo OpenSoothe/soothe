@@ -73,7 +73,7 @@ class CoreAgent:
         config = SootheConfig.from_file("config.yml")
         agent = create_soothe_agent(config)
 
-        # Layer 1 execution
+        # CoreAgent execution
         async for chunk in agent.astream("query", {"thread_id": "123"}):
             print(chunk)
 

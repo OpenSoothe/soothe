@@ -61,6 +61,7 @@ embedding_dims: 1536
 workspace_dir: "."
 debug: false
 activity_max_lines: 300
+# tui_debug: false   # SOOTHE_TUI_DEBUG — structured TUI trace logs (logger soothe.ux.tui.trace)
 
 # =============================================================================
 # Agentic Loop Configuration (RFC-201)
@@ -72,6 +73,16 @@ agentic:
 
   # Maximum loop iterations (default: 3, max: 10)
   max_iterations: 3
+
+  # Cap subagent ``task`` tool completions per Act wave (0 = unlimited). Use 1 to stop double-delegation.
+  max_subagent_tasks_per_wave: 2
+
+  # Ask Layer 1 not to paste full tool output again during Layer 2 Act
+  layer2_output_contract_enabled: true
+
+  # Optional: sequential Act waves use a temp thread (no prior messages), then merge into main thread (IG-131)
+  sequential_act_isolated_thread: false
+  sequential_act_isolate_when_step_subagent_hint: true
 
 # =============================================================================
 # Subagents

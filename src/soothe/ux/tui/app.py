@@ -48,6 +48,32 @@ from soothe.ux.tui.widgets import ChatInput, ConversationPanel, InfoBar, PlanTre
 
 logger = logging.getLogger(__name__)
 
+# Pool of status words shown during query execution.
+# Pick one in _start_typing_indicator — it stays fixed for the whole query
+# to avoid the status bar width jumping (different words have different lengths).
+STATUS_MESSAGES = [
+    "Working",
+    "Thinking",
+    "Processing",
+    "Executing",
+    "Analyzing",
+    "Computing",
+    "Reasoning",
+    "Generating",
+    "Formulating",
+    "Constructing",
+    "In progress",
+    "Preparing response",
+    "Crunching data",
+    "Connecting dots",
+    "Putting it together",
+    "Assembling",
+    "Spinning wheels",
+    "Almost there",
+    "Loading",
+    "Calculating",
+]
+
 _THREAD_ID_DISPLAY_LEN = 8
 
 
@@ -192,6 +218,7 @@ class SootheApp(App):
         self._was_running = False
         self._typing_indicator_task: asyncio.Task | None = None
         self._typing_frame = 0
+        self._current_status_message: str = "Working"
         self._is_running = False
         # RFC-0019: Unified event processor with TUI renderer
         self._renderer: TuiRenderer | None = None
@@ -241,11 +268,13 @@ class SootheApp(App):
             on_status_update=self._update_status,
             on_plan_refresh=self._refresh_plan,
             presentation_engine=self._presentation,
+            tui_debug=self._config.tui_debug,
         )
         self._processor = EventProcessor(
             self._renderer,
             verbosity=self._progress_verbosity,
             presentation_engine=self._presentation,
+            tui_debug=self._config.tui_debug,
         )
         self.run_worker(self._connect_and_listen(), exclusive=True)
 
@@ -443,12 +472,14 @@ class SootheApp(App):
                 on_status_update=self._update_status,
                 on_plan_refresh=self._refresh_plan,
                 presentation_engine=self._presentation,
+                tui_debug=self._config.tui_debug,
             )
         if not self._processor:
             self._processor = EventProcessor(
                 self._renderer,
                 verbosity=self._progress_verbosity,
                 presentation_engine=self._presentation,
+                tui_debug=self._config.tui_debug,
             )
         self._processor.process_event(status_event)
         self._state.thread_id = self._processor.thread_id
@@ -569,6 +600,8 @@ class SootheApp(App):
             self._state.seen_message_ids.clear()
             self._state.errors.clear()
 
+            self._show_welcome_banner()
+
             logger.info("TUI panels cleared")
         except Exception:
             logger.exception("Failed to clear TUI panels")
@@ -587,6 +620,7 @@ class SootheApp(App):
     def _start_typing_indicator(self) -> None:
         """Start the animated typing indicator."""
         if self._typing_indicator_task is None or self._typing_indicator_task.done():
+            self._current_status_message = "Working"
             self._typing_indicator_task = asyncio.create_task(self._animate_typing_indicator())
 
     def _stop_typing_indicator(self) -> None:
@@ -598,25 +632,15 @@ class SootheApp(App):
             self._typing_indicator_task = None
 
     async def _animate_typing_indicator(self) -> None:
-        """Animate typing indicator in the info bar."""
-        # Spinner frames
+        """Animate typing indicator in the info bar with a fixed status message."""
         frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        messages = ["Thinking", "Processing", "Working", "Analyzing"]
-        msg_idx = 0
 
         try:
             while self._is_running:
                 frame = frames[self._typing_frame % len(frames)]
-                message = messages[msg_idx % len(messages)]
-                indicator = f"[bold cyan]{frame} {message}...[/bold cyan]"
-
-                # Update info bar with indicator
+                indicator = f"[bold cyan]{frame} {self._current_status_message}...[/bold cyan]"
                 self._update_status_bar(indicator)
-
                 self._typing_frame += 1
-                if self._typing_frame % 10 == 0:  # Change message every 10 frames
-                    msg_idx += 1
-
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:
             self._typing_indicator_task = None
