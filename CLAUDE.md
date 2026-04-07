@@ -20,7 +20,13 @@
 - Purpose: Track all implementation work
 - Example: This document guides all code changes
 
-### 2. Ecosystem Dependencies
+### 2. MUST Keep Config Files Synchronized
+**When updating `src/soothe/config/config.yml` (template)**, you MUST also update `config.dev.yml` in the project root (dev defaults):
+- Both files must have matching structure
+- Dev config should have sensible defaults for local development
+- This ensures developers see the latest configuration options
+
+### 3. Ecosystem Dependencies
 **DO NOT reinvent modules** if langchain ecosystem already provides them:
 - Tools: Use `langchain.BaseTool` or `@tool` decorator
 - Subagents: Use `deepagents.SubAgent` or `CompiledSubAgent`

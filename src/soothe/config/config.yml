@@ -80,6 +80,10 @@ agentic:
   # Ask Layer 1 not to paste full tool output again during Layer 2 Act
   layer2_output_contract_enabled: true
 
+  # Maximum prior messages to inject into Reason prompts (IG-133)
+  # Only used when Act execution uses isolated threads (no checkpoint access)
+  prior_conversation_limit: 10
+
   # Optional: sequential Act waves use a temp thread (no prior messages), then merge into main thread (IG-131)
   sequential_act_isolated_thread: false
   sequential_act_isolate_when_step_subagent_hint: true

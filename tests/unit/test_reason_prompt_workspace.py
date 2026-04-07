@@ -52,9 +52,14 @@ def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
 
 def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
+    # Set flag to False to trigger prior conversation injection (IG-133)
+    state.act_will_have_checkpoint_access = False
     ctx = PlanContext(
         workspace=None,
-        recent_messages=["User: Iran news please", "Assistant: **Infrastructure** … long body …"],
+        recent_messages=[
+            "<user>\nIran news please\n</user>",
+            "<assistant>\n**Infrastructure** … long body …\n</assistant>",
+        ],
     )
     text = build_loop_reason_prompt("翻译成中文", state, ctx)
     assert "<SOOTHE_PRIOR_CONVERSATION>" in text

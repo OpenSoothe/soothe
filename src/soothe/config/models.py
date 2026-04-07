@@ -555,6 +555,15 @@ class AgenticLoopConfig(BaseModel):
         description="Instruct Layer 1 not to paste full tool outputs again during Layer 2 Act",
     )
 
+    prior_conversation_limit: int = Field(
+        default=10,
+        description=(
+            "Maximum prior messages to format for Reason prompts when Act execution uses isolated threads (IG-133)"
+        ),
+        ge=1,
+        le=50,
+    )
+
     sequential_act_isolated_thread: bool = Field(
         default=False,
         description=(

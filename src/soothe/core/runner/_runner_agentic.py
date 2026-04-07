@@ -187,10 +187,12 @@ class AgenticMixin:
         # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
 
-        # One load for Tier-1 routing (tail) and Layer-2 Reason (full excerpt list, IG-128).
+        # One load for Tier-1 routing (tail) and Layer-2 Reason (full excerpt list, IG-128, IG-133).
         await self._ensure_checkpointer_initialized()
-        recent_for_thread = await self._load_recent_messages(tid, limit=16)
-        reason_excerpts = self._format_thread_messages_for_reason(recent_for_thread)
+        # Use configurable limit for prior conversation (default 10, IG-133)
+        prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
+        recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
+        reason_excerpts = self._format_thread_messages_for_reason(recent_for_thread, limit=prior_limit)
 
         # Classify the query to check for chitchat
         if self._unified_classifier:
