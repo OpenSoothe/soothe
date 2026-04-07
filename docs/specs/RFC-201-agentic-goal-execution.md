@@ -2,10 +2,10 @@
 
 **RFC**: 0008
 **Title**: Layer 2: Agentic Goal Execution Loop
-**Status**: Revised
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-16
-**Updated**: 2026-04-05
+**Updated**: 2026-04-07
 **Dependencies**: RFC-000, RFC-001, RFC-200, RFC-100
 
 ## Abstract
@@ -22,7 +22,7 @@ Layer 2: Agentic Goal Execution (this RFC) → Layer 1 (Act phase)
 Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 ```
 
-**Layer 2 Responsibilities**: Single-goal focus, LLM-driven reasoning (ReasonResult), evidence accumulation, goal-directed evaluation, adaptive execution, strategy reuse, Layer 1 delegation.
+**Layer 2 Responsibilities**: Single-goal focus, LLM-driven reasoning (ReasonResult), evidence accumulation, goal-directed evaluation, adaptive execution, strategy reuse, context isolation, execution bounds, Layer 1 delegation.
 
 ### Layer Integration
 
@@ -99,6 +99,8 @@ result = await reasoner.reason(goal, state, context, previous_reason)
 
 **Iteration-Scoped Reasoning**: REASON inside loop (not before). Reuse plan on "continue", replan on "replan".
 
+**Reason Metrics Enhancement**: Structured wave metrics inform Reason decisions (tool_call_count, subagent_task_count, cap_hit, output_length, error_count, context_window). Metrics-driven approach prevents premature `continue` after satisfactory output.
+
 ## ACT Phase
 
 ### Hybrid Execution
@@ -113,11 +115,15 @@ elif execution_mode == "dependency":
     results = await execute_dag_steps(scheduler, core_agent, thread_id)
 ```
 
+**Context Isolation**: Delegation steps (subagent specified) execute on isolated thread branches to prevent cross-wave contamination. Executor checks `step.subagent` field and creates fresh checkpoint branch `{thread_id}__l2act{uuid}` for delegation. Tool-only steps use full thread context. Isolation is automatic, semantic rule-based, not configurable per-step.
+
+**Execution Bounds**: Two-layer constraint prevents runaway subagent loops. Soft constraint: schema/prompt defines "one delegation = one call; retry = explicit second step". Hard constraint: `max_subagent_tasks_per_wave` cap (default 2) stops stream early. Cap hit signals metrics to Reason for replan/continue decision.
+
 **Layer 1 Integration**: `config = {"thread_id": tid, "soothe_step_tools": step.tools, "soothe_step_subagent": step.subagent, "soothe_step_expected_output": step.expected_output}`. Layer 1's `ExecutionHintsMiddleware` injects hints into system prompt (RFC-100).
 
 **CoreAgent Responsibilities**: Execute tools/subagents, consider hints, apply middlewares, manage thread state, return streaming results.
 
-**Layer 2 Controls**: What to execute, suggestions, timing, sequencing, thread isolation.
+**Layer 2 Controls**: What to execute, suggestions, timing, sequencing, thread isolation (automatic), execution bounds (soft + hard cap), metrics aggregation.
 
 ## Iteration Flow
 
@@ -168,17 +174,76 @@ class PlannerProtocol:
 | `soothe.agentic.act.step_completed` | Step completed |
 | `soothe.agentic.loop.completed` | Loop completed |
 
+## LoopState Metrics
+
+### Wave Execution Metrics
+
+```python
+class LoopState(BaseModel):
+    # Wave execution metrics (IG-130, this RFC)
+    last_wave_tool_call_count: int = 0
+    last_wave_subagent_task_count: int = 0
+    last_wave_hit_subagent_cap: bool = False
+    last_wave_output_length: int = 0
+    last_wave_error_count: int = 0
+
+    # Context window metrics
+    total_tokens_used: int = 0
+    context_percentage_consumed: float = 0.0
+```
+
+**Purpose**: Inform Reason decisions with structured evidence beyond truncated summary. Metrics aggregation occurs after each Act wave, before Reason phase.
+
+**Decision Impact**: Translation (8000 char output + 1 subagent call → `done`), Research (cap hit + partial output → `replan`), Multi-phase (2000 char output + cap not hit → `continue`).
+
 ## Configuration
 
 ```yaml
 agentic:
   enabled: true
   max_iterations: 8
+
+  # Thread isolation for sequential Act
+  sequential_act_isolated_thread: true
+  sequential_act_isolate_when_step_subagent_hint: true
+
+  # Execution bounds
+  max_subagent_tasks_per_wave: 2  # safety cap
+
+  # Output contract
+  layer2_output_contract_enabled: true
+
   planning:
     adaptive_granularity: true
   judgment:
     evidence_threshold: 0.7
 ```
+
+## Contamination Prevention
+
+### Cross-Wave Isolation
+
+**Problem**: Wave 1 output contaminates Wave 2 delegation (e.g., research output causes translation language detection failure).
+
+**Solution**: Thread isolation for delegation steps. Subagent sees only explicit task input, no prior wave outputs or conversation history.
+
+**Mechanism**: Executor creates `{thread_id}__l2act{uuid}` branch when `step.subagent` is set. Messages merged back to canonical thread after execution.
+
+### Output Duplication Prevention
+
+**Problem**: Subagent output streamed to TUI, then main model repeats it verbatim.
+
+**Solution**: Output contract suffix (anti-repetition instructions) + metrics-driven Reason prevents premature `continue`.
+
+**Mechanism**: Layer 2 contract suffix in executor. Better Reason decisions (metrics-aware) reduce post-delegation summary tendency.
+
+### Premature Continue Detection
+
+**Problem**: Reason decides `continue` after satisfactory Act output, triggering unnecessary iteration.
+
+**Solution**: Structured metrics inform Reason of wave completion status. Output length, subagent count, cap hit signal done vs continue criteria.
+
+**Mechanism**: `<SOOTHE_WAVE_METRICS>` section in Reason prompt. Model judges based on metrics pattern + goal text.
 
 ## Implementation Status
 
@@ -187,8 +252,24 @@ agentic:
 - ✅ LoopReasonerProtocol for reasoning
 - ✅ Iteration-scoped reasoning, goal-directed evaluation
 - ✅ ACT → Layer 1 integration
+- ✅ Thread isolation pattern (IG-131)
+- ✅ Subagent task cap tracking (IG-130)
+- ✅ Output contract suffix (IG-119)
+- ✅ Prior conversation for Reason (IG-128)
+- 🔄 Metrics aggregation in executor (remaining)
+- 🔄 Reason metrics-aware prompts (remaining)
+- 🔄 Automatic isolation trigger logic (remaining)
 
 ## Changelog
+
+### 2026-04-07
+- Added Context Isolation section (thread isolation for delegation steps)
+- Added Execution Bounds section (soft + hard cap mechanism)
+- Added LoopState Metrics section (wave execution and context window metrics)
+- Added Contamination Prevention section (cross-wave, output duplication, premature continue)
+- Updated Layer 2 Responsibilities to include context isolation and execution bounds
+- Updated implementation status with IG-130, IG-131, IG-128, IG-119
+- Configuration extended with isolation and cap settings
 
 ### 2026-04-05
 - Migrated from PLAN → ACT → JUDGE to Reason → Act (IG-115)
@@ -211,8 +292,14 @@ agentic:
 - RFC-001: Core modules architecture
 - RFC-200: Layer 3 autonomous goal management
 - RFC-100: Layer 1 CoreAgent runtime
+- RFC-203: Loop working memory
 - IG-115: LoopAgent ReAct (Reason + Act) migration
+- IG-130: Subagent task cap tracking
+- IG-131: Sequential Act isolated thread
+- IG-128: Prior conversation for Reason
+- IG-119: Output contract and duplicate stdout
+- Design draft: `docs/drafts/2026-04-07-layer2-context-isolation-design.md`
 
 ---
 
-*Layer 2 agentic execution through Reason → Act loop with decision reuse and goal-directed evaluation.*
+*Layer 2 agentic execution through Reason → Act loop with context isolation, execution bounds, metrics-driven reasoning, and goal-directed evaluation.*

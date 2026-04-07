@@ -6,6 +6,7 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-04-07 | RFC-201 | Implemented | Added Layer 2 Context Isolation and Execution Bounds — thread isolation for delegation steps, subagent task cap, wave metrics, output contract enforcement |
 | 2026-04-03 | RFC-204 | Active | Autopilot Mode — consensus loop, dreaming mode, channel protocol, scheduler, UX surfaces; gap analysis identifying 12 remaining gaps |
 | 2026-04-03 | IG-125 | New | Implementation Guide for RFC-204 gap closure |
 | 2026-03-31 | Multiple | Reclassified | **RFC Reclassification** — Consolidated 23 RFCs into 16 with new numbering scheme |

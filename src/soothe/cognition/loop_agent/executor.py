@@ -86,12 +86,66 @@ class Executor:
         )
 
     def _should_use_isolated_sequential_thread(self, steps: list) -> bool:
-        """True when this sequential wave should run on a fresh checkpoint branch (IG-131)."""
+        """Return True if sequential wave should use isolated thread.
+
+        Semantic rule: isolate when any step delegates to subagent.
+        Rationale: delegation steps should work on explicit input, not prior thread history.
+
+        Args:
+            steps: List of StepAction objects to execute
+
+        Returns:
+            True if thread isolation should be applied
+        """
         if self._config is None or not self._config.agentic.sequential_act_isolated_thread:
-            return False
-        if self._config.agentic.sequential_act_isolate_when_step_subagent_hint:
-            return any(bool(getattr(s, "subagent", None)) for s in steps)
-        return True
+            return False  # Feature disabled
+        # Automatic: isolate if any step has subagent delegation
+        return any(bool(getattr(s, "subagent", None)) for s in steps)
+
+    def _aggregate_wave_metrics(
+        self,
+        step_results: list[StepResult],
+        output: str,
+        state: LoopState,
+    ) -> None:
+        """Aggregate metrics from wave execution into LoopState.
+
+        Called after sequential or parallel wave completes.
+
+        Args:
+            step_results: List of step results from the wave
+            output: Combined output text from the wave
+            state: LoopState to update with aggregated metrics
+        """
+        # Sum tool calls and subagent tasks
+        total_tool_calls = sum(r.tool_call_count for r in step_results)
+        total_subagent_tasks = sum(r.subagent_task_completions for r in step_results)
+
+        # OR cap hit (any step hit cap)
+        hit_cap = any(r.hit_subagent_cap for r in step_results)
+
+        # Count errors
+        error_count = sum(1 for r in step_results if not r.success)
+
+        # Measure output length
+        output_length = len(output) if output else 0
+
+        # Update state
+        state.last_wave_tool_call_count = total_tool_calls
+        state.last_wave_subagent_task_count = total_subagent_tasks
+        state.last_wave_hit_subagent_cap = hit_cap
+        state.last_wave_output_length = output_length
+        state.last_wave_error_count = error_count
+
+        # Context window metrics estimation from output length
+        # Note: In future, extract from model response usage_metadata for accuracy
+        if output_length > 0 and self._config is not None:
+            # Rough estimate: ~4 chars per token (varies by language/model)
+            estimated_tokens = output_length // 4
+            state.total_tokens_used += estimated_tokens
+            # Assume 200k context limit for estimation (configurable in future)
+            context_limit = 200_000
+            state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
 
     async def _merge_isolated_act_into_parent_thread(
         self,
@@ -292,6 +346,7 @@ class Executor:
             raise
 
         # Process results
+        all_step_results: list[StepResult] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(
@@ -300,7 +355,7 @@ class Executor:
                     result,
                     exc_info=result,
                 )
-                yield StepResult(
+                step_result = StepResult(
                     step_id=steps[i].id,
                     success=False,
                     error=str(result),
@@ -310,13 +365,24 @@ class Executor:
                     subagent_task_completions=0,
                     hit_subagent_cap=False,
                 )
+                all_step_results.append(step_result)
+                yield step_result
             else:
                 events, step_result = result
+                all_step_results.append(step_result)
                 # Yield collected events first
                 for event in events:
                     yield event
                 # Then yield the result
                 yield step_result
+
+        # Aggregate metrics from parallel execution
+        if all_step_results:
+            # For parallel, use max output length across steps
+            output_lengths = [len(r.output or "") for r in all_step_results if r.output]
+            max_output_len = max(output_lengths) if output_lengths else 0
+            self._aggregate_wave_metrics(all_step_results, "", state)
+            state.last_wave_output_length = max_output_len
 
     async def _execute_sequential_waves(
         self,
@@ -406,18 +472,27 @@ class Executor:
                 budget.hit_subagent_cap,
             )
 
-            for sr in self._step_results_for_chunk(
-                steps,
-                success=True,
-                output=output,
-                error=None,
-                error_type=None,
-                duration_ms=duration_ms,
-                tool_call_count=tool_call_count,
-                thread_id=state.thread_id,
-                subagent_task_completions=budget.subagent_task_completions,
-                hit_subagent_cap=budget.hit_subagent_cap,
-            ):
+            # Collect step results for metrics aggregation
+            step_results = list(
+                self._step_results_for_chunk(
+                    steps,
+                    success=True,
+                    output=output,
+                    error=None,
+                    error_type=None,
+                    duration_ms=duration_ms,
+                    tool_call_count=tool_call_count,
+                    thread_id=state.thread_id,
+                    subagent_task_completions=budget.subagent_task_completions,
+                    hit_subagent_cap=budget.hit_subagent_cap,
+                )
+            )
+
+            # Aggregate metrics into LoopState
+            self._aggregate_wave_metrics(step_results, output, state)
+
+            # Yield step results
+            for sr in step_results:
                 yield sr
 
         except Exception as e:
@@ -427,18 +502,27 @@ class Executor:
             error_msg = self._extract_error_message(e, "Sequential execution failed")
             et = self._classify_error_severity(e)
 
-            for sr in self._step_results_for_chunk(
-                steps,
-                success=False,
-                output=None,
-                error=error_msg,
-                error_type=et,
-                duration_ms=duration_ms,
-                tool_call_count=0,
-                thread_id=state.thread_id,
-                subagent_task_completions=0,
-                hit_subagent_cap=False,
-            ):
+            # Collect failed step results for metrics
+            step_results = list(
+                self._step_results_for_chunk(
+                    steps,
+                    success=False,
+                    output=None,
+                    error=error_msg,
+                    error_type=et,
+                    duration_ms=duration_ms,
+                    tool_call_count=0,
+                    thread_id=state.thread_id,
+                    subagent_task_completions=0,
+                    hit_subagent_cap=False,
+                )
+            )
+
+            # Aggregate metrics (includes error count)
+            self._aggregate_wave_metrics(step_results, "", state)
+
+            # Yield step results
+            for sr in step_results:
                 yield sr
 
     async def _execute_dependency(
