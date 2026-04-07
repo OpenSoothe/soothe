@@ -283,6 +283,9 @@ vector_store_router:
 
 agentic:
   max_iterations: 10         # Maximum agentic loop iterations
+  # Maximum prior messages to inject into Reason prompts (IG-133)
+  # Only used when Act execution uses isolated threads (no checkpoint access)
+  prior_conversation_limit: 10
 
 # =============================================================================
 # Autonomous Operation

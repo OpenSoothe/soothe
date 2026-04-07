@@ -244,12 +244,12 @@ class PhasesMixin:
         max_chars_per_message: int = 8000,
         last_assistant_max_chars: int = 100_000,
     ) -> list[str]:
-        """Format recent thread messages for Layer-2 Reason prompts (IG-128).
+        """Format recent thread messages for Layer-2 Reason prompts (IG-128, IG-133).
 
-        Includes Human and AI turns only (skips tool/system messages). Older turns
-        use ``max_chars_per_message``; the **last** ``AIMessage`` in the tail uses
-        ``last_assistant_max_chars`` so follow-ups (e.g. full-document translation)
-        are not cut at 8k.
+        Includes Human and AI turns only (skips tool/system messages). Uses XML tags
+        for better multi-line content handling. Older turns use ``max_chars_per_message``;
+        the **last** ``AIMessage`` in the tail uses ``last_assistant_max_chars`` so
+        follow-ups (e.g. full-document translation) are not cut at 8k.
 
         Args:
             messages: Conversation messages from the checkpointer (newest slice).
@@ -258,7 +258,7 @@ class PhasesMixin:
             last_assistant_max_chars: Truncation bound for the last assistant turn.
 
         Returns:
-            Lines like ``User: ...`` / ``Assistant: ...`` for ``PlanContext.recent_messages``.
+            XML-formatted strings like ``<user>...</user>`` / ``<assistant>...</assistant>``.
         """
         if not messages:
             return []
@@ -272,9 +272,9 @@ class PhasesMixin:
         lines: list[str] = []
         for i, msg in enumerate(tail):
             if isinstance(msg, HumanMessage):
-                role = "User"
+                tag = "user"
             elif isinstance(msg, AIMessage):
-                role = "Assistant"
+                tag = "assistant"
             else:
                 continue
             content = getattr(msg, "content", "")
@@ -286,7 +286,8 @@ class PhasesMixin:
             cap = last_assistant_max_chars if isinstance(msg, AIMessage) and i == last_ai_idx else max_chars_per_message
             if len(body) > cap:
                 body = body[:cap].rstrip() + "\n[…truncated…]"
-            lines.append(f"{role}: {body}")
+            # XML format handles multi-line content cleanly
+            lines.append(f"<{tag}>\n{body}\n</{tag}>")
         return lines
 
     async def _save_chitchat_to_state(

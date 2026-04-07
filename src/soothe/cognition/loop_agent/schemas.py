@@ -232,6 +232,9 @@ class LoopState(BaseModel):
     total_tokens_used: int = 0
     context_percentage_consumed: float = 0.0
 
+    # Execution context flag (IG-133): True if Act will load checkpoint history
+    act_will_have_checkpoint_access: bool = True
+
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.
 

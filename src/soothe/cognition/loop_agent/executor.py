@@ -210,11 +210,26 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
+        # Determine if Act will have checkpoint access (IG-133)
+        # Set flag before execution so Reason phase knows whether to inject prior conversation
+        if decision.execution_mode == "sequential":
+            has_delegation = any(bool(getattr(s, "subagent", None)) for s in ready_steps)
+            isolation_enabled = self._config is not None and self._config.agentic.sequential_act_isolated_thread
+            # Checkpoint access if: no delegation OR isolation disabled
+            state.act_will_have_checkpoint_access = not (has_delegation and isolation_enabled)
+        elif decision.execution_mode in ("parallel", "dependency"):
+            # Parallel and dependency modes use isolated threads per step
+            state.act_will_have_checkpoint_access = False
+        else:
+            # Unknown mode - default to True (checkpoint available)
+            state.act_will_have_checkpoint_access = True
+
         logger.info(
-            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
+            "Executing %d steps in mode: %s (max_parallel_steps=%d, checkpoint_access=%s)",
             len(ready_steps),
             decision.execution_mode,
             self._max_parallel_steps,
+            state.act_will_have_checkpoint_access,
         )
 
         if decision.execution_mode == "parallel":

@@ -462,13 +462,18 @@ def build_loop_reason_prompt(
         parts.append(f"- Context used: {context_pct} ({context_tokens} tokens)\n")
         parts.append("</SOOTHE_WAVE_METRICS>\n")
 
-    if context.recent_messages:
+    # Only inject prior conversation if Act won't have checkpoint access (IG-133)
+    # Avoids duplication when CoreAgent loads messages from checkpoint automatically
+    if context.recent_messages and not state.act_will_have_checkpoint_access:
         parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
         parts.append(
             "Recent messages in this thread before the current goal. The user may refer to this content "
-            '(e.g. "translate that", "summarize the above", "shorter").\n'
+            '(e.g. "translate that", "summarize the above", "shorter").\n\n'
         )
-        parts.extend(context.recent_messages)
+        # Messages are already XML-formatted (<user>...</user>, <assistant>...</assistant>)
+        for msg_xml in context.recent_messages:
+            parts.append(msg_xml)
+            parts.append("\n")
         parts.append(
             "\n<SOOTHE_FOLLOW_UP_POLICY>\n"
             '- If the goal depends on this prior text, status MUST NOT be "done" until CoreAgent execution '
