@@ -446,6 +446,25 @@ def build_loop_reason_prompt(
         ]
     )
 
+    if context.recent_messages:
+        parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
+        parts.append(
+            "Recent messages in this thread before the current goal. The user may refer to this content "
+            '(e.g. "translate that", "summarize the above", "shorter").\n'
+        )
+        parts.extend(context.recent_messages)
+        parts.append(
+            "\n<SOOTHE_FOLLOW_UP_POLICY>\n"
+            '- If the goal depends on this prior text, status MUST NOT be "done" until CoreAgent execution '
+            "has produced the requested output (translation, summary, etc.).\n"
+            '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
+            "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
+            "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
+            "the actual result.\n"
+            "</SOOTHE_FOLLOW_UP_POLICY>\n"
+            "</SOOTHE_PRIOR_CONVERSATION>\n"
+        )
+
     if context.workspace:
         parts.append(
             "\n<SOOTHE_REASON_WORKSPACE_RULES>\n"
@@ -462,6 +481,17 @@ def build_loop_reason_prompt(
     if state.step_results:
         parts.append("\nEvidence from steps run so far in this goal:")
         parts.extend(r.to_evidence_string() for r in state.step_results)
+
+    if state.last_wave_subagent_task_count or state.last_wave_tool_call_count:
+        parts.append("\n<SOOTHE_LAST_ACT_WAVE_METRICS>")
+        parts.append(f"- Layer 1 tool results processed (approx): {state.last_wave_tool_call_count}")
+        parts.append(f"- Subagent task tool completions (root graph): {state.last_wave_subagent_task_count}")
+        if state.last_wave_hit_subagent_cap:
+            parts.append(
+                "- The previous Act wave hit the configured subagent task cap. If more delegation is needed, "
+                "plan **one** follow-up step; avoid describing multiple serial subagent calls in a single Act turn."
+            )
+        parts.append("</SOOTHE_LAST_ACT_WAVE_METRICS>\n")
 
     if context.completed_steps:
         parts.append("\nPlanner context — completed step summaries (do not repeat work):")
@@ -500,6 +530,16 @@ def build_loop_reason_prompt(
 
     if context.available_capabilities:
         parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
+
+    parts.append(
+        "\n<SOOTHE_DELEGATION_POLICY>\n"
+        "- Prefer **one** subagent delegation per execute_steps item; if a correction needs another delegation, "
+        'use status "continue" and a **new** step on the next iteration instead of implying multiple serial '
+        "delegations inside one vague step.\n"
+        "- When evidence already contains a complete user-facing deliverable matching the goal (e.g. translation), "
+        'use status "done" — do not schedule another step whose only purpose is to repeat the same output.\n'
+        "</SOOTHE_DELEGATION_POLICY>\n"
+    )
 
     parts.append(
         "\n<STEP_GRANULARITY_AND_LAYER_ALIGNMENT>\n"

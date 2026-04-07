@@ -146,6 +146,9 @@ class SootheConfig(BaseSettings):
     activity_max_lines: int = 300
     """Maximum number of activity lines retained in the TUI Activity Panel."""
 
+    tui_debug: bool = False
+    """Emit structured TUI trace logs (logger ``soothe.ux.tui.trace``) for EventProcessor + TuiRenderer."""
+
     # --- Nested Configuration Objects ---
 
     persistence: PersistenceConfig = Field(default_factory=PersistenceConfig)

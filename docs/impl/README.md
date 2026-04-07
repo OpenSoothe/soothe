@@ -57,6 +57,8 @@ Each implementation guide follows the template in `templates/impl-guide-template
 - [IG-024: Existing Browser Connection](024-existing-browser-connection.md)
 - [IG-025: Subagent Progress Visibility and Output Capture](025-subagent-progress-visibility.md)
 - [IG-026: Planning Workflow Refactoring](036-planning-workflow-refactoring.md)
+- [IG-128: Layer 2 Reason — thread context and TUI completion display](IG-128-loop-reason-prior-conversation.md)
+- [IG-129: TUI debug trace (logging + tests)](IG-129-tui-debug-trace.md)
 
 ## Related Documents
 

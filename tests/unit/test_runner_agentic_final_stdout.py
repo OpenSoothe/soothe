@@ -135,7 +135,8 @@ def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
         )
     assert out is not None
     assert out.startswith("y" * _AGENTIC_REPORT_PREVIEW_MAX)
-    assert "Full report saved to:" in out
+    assert "..." in out
+    assert "Full report:" in out
     run_dir = root / "runs" / "thread-a"
     saved = list(run_dir.glob("final_report_*.md"))
     assert len(saved) == 1
@@ -153,5 +154,7 @@ def test_over_threshold_without_workspace_skips_write_but_truncates() -> None:
         config=_mock_config(),
     )
     assert out is not None
-    assert "could not be written" in out
+    assert "file not written" in out
+    assert "final_report_*.md" in out
     assert out.startswith("z" * _AGENTIC_REPORT_PREVIEW_MAX)
+    assert "..." in out

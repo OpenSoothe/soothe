@@ -29,6 +29,7 @@ from soothe.ux.shared.message_processing import (
 from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.ux.shared.processor_state import ProcessorState
 from soothe.ux.shared.rendering import update_name_map_from_tool_calls
+from soothe.ux.shared.tui_trace_log import log_tui_trace
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -59,6 +60,7 @@ class EventProcessor:
         *,
         verbosity: VerbosityLevel = "normal",
         presentation_engine: PresentationEngine | None = None,
+        tui_debug: bool = False,
     ) -> None:
         """Initialize processor with renderer and verbosity level.
 
@@ -67,9 +69,11 @@ class EventProcessor:
             verbosity: Progress visibility level.
             presentation_engine: Shared engine; if omitted, uses renderer's
                 ``presentation_engine`` when present, else a new instance.
+            tui_debug: When True, emit INFO logs on logger ``soothe.ux.tui.trace`` (IG-129).
         """
         self._renderer = renderer
         self._verbosity = normalize_verbosity(verbosity)
+        self._tui_debug = tui_debug
 
         rebind = getattr(renderer, "_rebind_presentation", None)
         shared_from_renderer = getattr(renderer, "presentation_engine", None)
@@ -116,8 +120,16 @@ class EventProcessor:
         """Forward assistant text unless a custom final response already locked the stream."""
         if is_main and self._presentation.final_answer_locked:
             return
+        payload = self._maybe_extract_quiet_answer(text)
+        log_tui_trace(
+            tui_debug=self._tui_debug,
+            event="processor.emit_assistant_text",
+            is_main=is_main,
+            is_streaming=is_streaming,
+            chars=len(payload),
+        )
         self._renderer.on_assistant_text(
-            self._maybe_extract_quiet_answer(text),
+            payload,
             is_main=is_main,
             is_streaming=is_streaming,
         )
@@ -129,6 +141,11 @@ class EventProcessor:
             event: Daemon event dictionary with 'type' key.
         """
         event_type = event.get("type", "")
+        log_tui_trace(
+            tui_debug=self._tui_debug,
+            event="processor.process_event",
+            event_type=event_type,
+        )
 
         if event_type == "status":
             self._handle_status(event)
@@ -147,6 +164,12 @@ class EventProcessor:
         tid = self._state.thread_id if tid_raw in (None, "") else str(tid_raw)
         previous_thread_id = self._state.thread_id
         self._state.thread_id = tid
+        log_tui_trace(
+            tui_debug=self._tui_debug,
+            event="processor.status",
+            state=state_str,
+            thread_id=tid,
+        )
 
         # Clear session state on thread change
         if tid and tid != previous_thread_id:
@@ -166,6 +189,12 @@ class EventProcessor:
         mode = event.get("mode", "")
         namespace = tuple(event.get("namespace", []))
         data = event.get("data")
+        log_tui_trace(
+            tui_debug=self._tui_debug,
+            event="processor.stream_event",
+            mode=mode,
+            namespace=namespace,
+        )
 
         if mode == "messages":
             self._handle_messages(data, namespace)
@@ -196,6 +225,21 @@ class EventProcessor:
             return
 
         is_main = not namespace
+        msg_kind: str
+        if isinstance(msg, AIMessage):
+            msg_kind = "AIMessageChunk" if isinstance(msg, AIMessageChunk) else "AIMessage"
+        elif isinstance(msg, ToolMessage):
+            msg_kind = "ToolMessage"
+        elif isinstance(msg, dict):
+            msg_kind = str(msg.get("type", "dict"))
+        else:
+            msg_kind = type(msg).__name__
+        log_tui_trace(
+            tui_debug=self._tui_debug,
+            event="processor.messages",
+            msg_kind=msg_kind,
+            is_main=is_main,
+        )
 
         if isinstance(msg, AIMessage):
             self._handle_ai_message(msg, is_main=is_main, namespace=namespace)
@@ -610,7 +654,10 @@ class EventProcessor:
         # They are processed through on_progress_event -> StreamDisplayPipeline
 
         # Handle chitchat/final responses through shared cleaner path
-        if etype in {"soothe.output.chitchat.response", "soothe.output.autonomous.final_report"}:
+        if etype in {
+            "soothe.output.chitchat.response",
+            "soothe.output.autonomous.final_report",
+        }:
             content = data.get("content", data.get("summary", ""))
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
                 cleaned = self._clean_assistant_text(content)
@@ -629,10 +676,12 @@ class EventProcessor:
         if etype == PLAN_CREATED and len(data.get("steps", [])) > 1:
             self._state.multi_step_active = True
 
-        # Also check for agentic loop start with multiple iterations
-        # The agentic loop uses step events instead of plan events
-        if etype == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
-            self._state.multi_step_active = True
+        # Agentic loop started: track multi-iteration but suppress the goal echo
+        # (the goal just duplicates the user's input shown above)
+        if etype == "soothe.agentic.loop.started":
+            if data.get("max_iterations", 1) > 1:
+                self._state.multi_step_active = True
+            return
 
         # Update plan state and call specific hooks
         if etype == PLAN_CREATED:

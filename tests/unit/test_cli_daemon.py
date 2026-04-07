@@ -355,14 +355,11 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
     from asyncio import StreamWriter
 
-    from soothe.logging import InputHistory
-
     daemon = SootheDaemon(SootheConfig())
     # Set up a runner with an existing thread_id (simulating previous session)
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._runner.current_thread_id = "old-thread-123"  # type: ignore[attr-defined]
     daemon._running = True
-    daemon._input_history = InputHistory()  # Initialize input history
 
     sent_messages: list[bytes] = []
 

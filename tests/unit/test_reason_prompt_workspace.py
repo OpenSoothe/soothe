@@ -50,6 +50,19 @@ def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
     assert "listed src/" in text
 
 
+def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
+    state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
+    ctx = PlanContext(
+        workspace=None,
+        recent_messages=["User: Iran news please", "Assistant: **Infrastructure** … long body …"],
+    )
+    text = build_loop_reason_prompt("翻译成中文", state, ctx)
+    assert "<SOOTHE_PRIOR_CONVERSATION>" in text
+    assert "<SOOTHE_FOLLOW_UP_POLICY>" in text
+    assert "Infrastructure" in text
+    assert "translate" in text.lower() or "Layer 1" in text
+
+
 def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
 

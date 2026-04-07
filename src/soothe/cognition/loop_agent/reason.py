@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 
 from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
 
+# Maximum evidence summary length before truncating model-supplied evidence
+_EVIDENCE_SUMMARY_MAX_CHARS = 600
+
 if TYPE_CHECKING:
     from soothe.protocols.loop_reasoner import LoopReasonerProtocol
     from soothe.protocols.planner import PlanContext
@@ -35,6 +38,15 @@ class ReasonPhase:
 
         if not result.evidence_summary and state.evidence_summary:
             result = result.model_copy(update={"evidence_summary": state.evidence_summary})
+
+        # Model-supplied evidence can repeat the full assistant answer; that duplicates streamed
+        # output and blows the loop.completed one-liner. Prefer compact step-derived evidence.
+        _ev = (result.evidence_summary or "").strip()
+        _compact = (state.evidence_summary or "").strip()
+        if len(_ev) > _EVIDENCE_SUMMARY_MAX_CHARS:
+            result = result.model_copy(
+                update={"evidence_summary": _compact or f"{_ev[:400].rstrip()}…"},
+            )
 
         if result.is_done():
             full_outputs = [r.to_evidence_string(truncate=False) for r in state.step_results if r.success and r.output]

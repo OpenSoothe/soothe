@@ -120,9 +120,7 @@ class TestAddFindingToolWiring:
         """AddFindingTool should enqueue proposals when queue is set."""
         q = ProposalQueue()
         tool = AddFindingTool.model_construct(proposal_queue=q)
-        q.enqueue(
-            Proposal(type="add_finding", goal_id="g1", payload={"content": "test", "tags": []})
-        )
+        q.enqueue(Proposal(type="add_finding", goal_id="g1", payload={"content": "test", "tags": []}))
         assert not q.is_empty()
         props = q.drain()
         assert len(props) == 1

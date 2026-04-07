@@ -154,13 +154,21 @@ class DaemonHandlersMixin:
         output = StringIO()
         console = Console(file=output, force_terminal=False, width=120)
 
+        # Use per-thread input history
+        current_tid = self._runner.current_thread_id
+        input_hist = None
+        if current_tid and hasattr(self, "_thread_registry"):
+            st = self._thread_registry.get(current_tid)
+            if st:
+                input_hist = st.input_history
+
         await handle_slash_command(
             cmd,
             self._runner,
             console,
             current_plan=None,
             thread_logger=self._thread_logger,
-            input_history=self._input_history,
+            input_history=input_hist,
         )
 
         response_text = output.getvalue()

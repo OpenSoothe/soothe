@@ -11,6 +11,7 @@ import pytest
 
 from soothe.core.event_catalog import CHITCHAT_RESPONSE
 from soothe.daemon import SootheDaemon, WebSocketClient
+from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.foundation.slash_commands import (
     _show_context,
     _show_memory,
@@ -212,7 +213,11 @@ async def test_daemon_run_query_persists_assistant_from_custom_output() -> None:
     logger_mock.log_user_input = MagicMock()
     logger_mock.log_assistant_response = MagicMock()
     daemon._thread_logger = logger_mock
-    daemon._input_history = None
+
+    # Mock thread_registry with per-thread input history for query_engine
+    reg = ThreadStateRegistry()
+    reg.ensure("thread-456")
+    daemon._thread_registry = reg  # type: ignore[attr-defined]
 
     async def _fake_broadcast(_msg: dict[str, Any]) -> None:
         return None

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAction, StepResult
@@ -12,9 +14,20 @@ from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAc
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ActStreamBudget:
+    """Mutable counters for a single CoreAgent stream (IG-130)."""
+
+    max_subagent_tasks_per_wave: int = 0
+    subagent_task_completions: int = 0
+    hit_subagent_cap: bool = False
+
 
 _TUPLE_LEN = 3
 _LIST_MIN_LEN = 2
@@ -35,15 +48,90 @@ class Executor:
     Events from CoreAgent are propagated through for upstream consumption.
     """
 
-    def __init__(self, core_agent: CoreAgent, *, max_parallel_steps: int = 1) -> None:
+    def __init__(
+        self,
+        core_agent: CoreAgent,
+        *,
+        max_parallel_steps: int = 1,
+        config: SootheConfig | None = None,
+    ) -> None:
         """Initialize ACT phase.
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution
             max_parallel_steps: Max steps per wave; ``0`` means unlimited (RFC-201 / concurrency).
+            config: Optional Soothe config for Act wave caps (IG-130).
         """
         self.core_agent = core_agent
         self._max_parallel_steps = max_parallel_steps
+        self._config = config
+
+    def _max_subagent_tasks_per_wave(self) -> int:
+        """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
+        if self._config is None:
+            return 0
+        return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
+
+    def _layer2_output_contract_suffix(self) -> str:
+        """Anti-repetition instructions appended to Layer 2 Act user messages."""
+        if self._config is None or not self._config.agentic.layer2_output_contract_enabled:
+            return ""
+        return (
+            "\n\n<SOOTHE_LAYER2_OUTPUT_CONTRACT>\n"
+            "- After tool or subagent results arrive, add at most two short wrap-up sentences in your own words.\n"
+            "- Do NOT paste the full tool/subagent output again unless the user explicitly asked for a "
+            "verbatim repeat.\n"
+            "- If the tool output already satisfies the user-visible deliverable, stop there.\n"
+            "</SOOTHE_LAYER2_OUTPUT_CONTRACT>\n"
+        )
+
+    def _should_use_isolated_sequential_thread(self, steps: list) -> bool:
+        """True when this sequential wave should run on a fresh checkpoint branch (IG-131)."""
+        if self._config is None or not self._config.agentic.sequential_act_isolated_thread:
+            return False
+        if self._config.agentic.sequential_act_isolate_when_step_subagent_hint:
+            return any(bool(getattr(s, "subagent", None)) for s in steps)
+        return True
+
+    async def _merge_isolated_act_into_parent_thread(
+        self,
+        *,
+        parent_thread_id: str,
+        child_thread_id: str,
+    ) -> None:
+        """Append messages from an isolated Act checkpoint branch onto the canonical thread."""
+        graph = self.core_agent.graph
+        cfg_child = {"configurable": {"thread_id": child_thread_id}}
+        cfg_parent = {"configurable": {"thread_id": parent_thread_id}}
+        try:
+            snap = await graph.aget_state(cfg_child)
+        except Exception:
+            logger.debug(
+                "Isolated Act merge skipped: failed to read child thread %s",
+                child_thread_id,
+                exc_info=True,
+            )
+            return
+        if snap is None or not getattr(snap, "values", None):
+            return
+        msgs = snap.values.get("messages")
+        if not msgs:
+            logger.debug("Isolated Act merge skipped: no messages on child thread %s", child_thread_id)
+            return
+        try:
+            await graph.aupdate_state(cfg_parent, {"messages": list(msgs)})
+            logger.info(
+                "Merged isolated sequential Act thread %s → %s (%d messages)",
+                child_thread_id,
+                parent_thread_id,
+                len(msgs),
+            )
+        except Exception:
+            logger.exception(
+                "Failed merging isolated Act thread %s into parent %s",
+                child_thread_id,
+                parent_thread_id,
+            )
 
     async def execute(
         self,
@@ -122,6 +210,8 @@ class Executor:
         duration_ms: int,
         tool_call_count: int,
         thread_id: str,
+        subagent_task_completions: int = 0,
+        hit_subagent_cap: bool = False,
     ) -> list[StepResult]:
         """One ``StepResult`` per step in a combined sequential turn (scheme B)."""
         n = len(steps)
@@ -143,6 +233,8 @@ class Executor:
                         duration_ms=durations[i],
                         thread_id=thread_id,
                         tool_call_count=tool_counts[i],
+                        subagent_task_completions=subagent_task_completions if i == 0 else 0,
+                        hit_subagent_cap=hit_subagent_cap if i == 0 else False,
                     )
                 )
             else:
@@ -155,6 +247,8 @@ class Executor:
                         duration_ms=durations[i],
                         thread_id=thread_id,
                         tool_call_count=0,
+                        subagent_task_completions=0,
+                        hit_subagent_cap=False,
                     )
                 )
         return results
@@ -213,6 +307,8 @@ class Executor:
                     error_type=self._classify_error_severity(result),
                     duration_ms=0,
                     thread_id=f"{state.thread_id}__step_{i}",
+                    subagent_task_completions=0,
+                    hit_subagent_cap=False,
                 )
             else:
                 events, step_result = result
@@ -258,8 +354,20 @@ class Executor:
         start = time.perf_counter()
         output = ""
         event_count = 0  # Track events for debugging
+        budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
+        act_thread_id = state.thread_id
+        isolated_child_id: str | None = None
+        if self._should_use_isolated_sequential_thread(steps):
+            isolated_child_id = f"{state.thread_id}__l2act{uuid.uuid4().hex[:12]}"
+            act_thread_id = isolated_child_id
+            logger.info(
+                "Sequential Act using isolated thread %s (merge → %s)",
+                isolated_child_id,
+                state.thread_id,
+            )
+
         try:
-            configurable: dict[str, Any] = {"thread_id": state.thread_id}
+            configurable: dict[str, Any] = {"thread_id": act_thread_id}
             if state.workspace:
                 configurable["workspace"] = state.workspace
             stream = self.core_agent.astream(
@@ -270,7 +378,7 @@ class Executor:
             )
 
             tool_call_count = 0
-            async for final_output, event, tc_count in self._stream_and_collect(stream):
+            async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     event_count += 1
                     yield event
@@ -278,15 +386,24 @@ class Executor:
                     output = final_output
                     tool_call_count = tc_count
 
+            if isolated_child_id is not None:
+                await self._merge_isolated_act_into_parent_thread(
+                    parent_thread_id=state.thread_id,
+                    child_thread_id=isolated_child_id,
+                )
+
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d",
+                "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d "
+                "(subagent_tasks=%d cap_hit=%s)",
                 len(steps),
                 duration_ms,
                 len(output),
                 event_count,
                 tool_call_count,
+                budget.subagent_task_completions,
+                budget.hit_subagent_cap,
             )
 
             for sr in self._step_results_for_chunk(
@@ -298,6 +415,8 @@ class Executor:
                 duration_ms=duration_ms,
                 tool_call_count=tool_call_count,
                 thread_id=state.thread_id,
+                subagent_task_completions=budget.subagent_task_completions,
+                hit_subagent_cap=budget.hit_subagent_cap,
             ):
                 yield sr
 
@@ -317,6 +436,8 @@ class Executor:
                 duration_ms=duration_ms,
                 tool_call_count=0,
                 thread_id=state.thread_id,
+                subagent_task_completions=0,
+                hit_subagent_cap=False,
             ):
                 yield sr
 
@@ -376,6 +497,7 @@ class Executor:
         start = time.perf_counter()
         events: list[StreamEvent] = []
         output = ""
+        budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
 
         try:
             logger.debug(
@@ -396,8 +518,9 @@ class Executor:
                 configurable["workspace"] = workspace
             config = {"configurable": configurable}
 
+            step_body = f"Execute: {step.description}{self._layer2_output_contract_suffix()}"
             stream = self.core_agent.astream(
-                {"messages": [HumanMessage(content=f"Execute: {step.description}")]},
+                {"messages": [HumanMessage(content=step_body)]},
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
@@ -405,7 +528,7 @@ class Executor:
 
             # Stream events and collect for parallel execution
             tool_call_count = 0
-            async for final_output, event, tc_count in self._stream_and_collect(stream):
+            async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     events.append(event)
                 elif final_output is not None:
@@ -415,11 +538,12 @@ class Executor:
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             logger.info(
-                "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d)",
+                "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d, subagent_cap_hit=%s)",
                 step.id,
                 duration_ms,
                 step.tools or "none",
                 tool_call_count,
+                budget.hit_subagent_cap,
             )
 
             return events, StepResult(
@@ -429,6 +553,8 @@ class Executor:
                 duration_ms=duration_ms,
                 thread_id=thread_id,
                 tool_call_count=tool_call_count,
+                subagent_task_completions=budget.subagent_task_completions,
+                hit_subagent_cap=budget.hit_subagent_cap,
             )
 
         except Exception as e:
@@ -450,11 +576,15 @@ class Executor:
                 error_type=self._classify_error_severity(e),
                 duration_ms=duration_ms,
                 thread_id=thread_id,
+                subagent_task_completions=0,
+                hit_subagent_cap=False,
             )
 
     async def _stream_and_collect(
         self,
         stream: AsyncGenerator,
+        *,
+        budget: _ActStreamBudget | None = None,
     ) -> AsyncGenerator[tuple[str | None, StreamEvent | None, int], None]:
         """Stream events immediately while accumulating output and counting tool calls.
 
@@ -464,6 +594,7 @@ class Executor:
 
         Args:
             stream: Async iterator from agent.astream()
+            budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
 
         Yields:
             Tuple of (output, event, tool_call_count):
@@ -474,6 +605,24 @@ class Executor:
 
         chunks: list[str] = []
         tool_call_count = 0
+
+        def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
+            """Return True if the stream must stop (cap exceeded)."""
+            if budget is None:
+                return False
+            if getattr(msg, "name", "") != "task":
+                return False
+            budget.subagent_task_completions += 1
+            cap = budget.max_subagent_tasks_per_wave
+            if cap > 0 and budget.subagent_task_completions > cap:
+                budget.hit_subagent_cap = True
+                logger.warning(
+                    "Subagent task cap reached (%s > %s); stopping Act stream consumption",
+                    budget.subagent_task_completions,
+                    cap,
+                )
+                return True
+            return False
 
         async for chunk in stream:
             # Handle tuple format (namespace, mode, data) - deepagents canonical
@@ -492,6 +641,8 @@ class Executor:
                         if isinstance(msg, ToolMessage):
                             # Count tool calls
                             tool_call_count += 1
+                            if _maybe_cap_subagent_tasks(msg):
+                                break
                             # Extract tool result content
                             content = msg.content
                             if isinstance(content, str) and content:
@@ -517,6 +668,8 @@ class Executor:
                         msg_chunk = data[0]
                         if isinstance(msg_chunk, ToolMessage):
                             tool_call_count += 1
+                            if _maybe_cap_subagent_tasks(msg_chunk):
+                                break
                         if hasattr(msg_chunk, "content"):
                             content = msg_chunk.content
                             if isinstance(content, str):
@@ -532,9 +685,13 @@ class Executor:
                 if "model" in chunk:
                     model_data = chunk["model"]
                     if isinstance(model_data, dict) and "messages" in model_data:
+                        cap_break = False
                         for msg in model_data["messages"]:
                             if isinstance(msg, ToolMessage):
                                 tool_call_count += 1
+                                if _maybe_cap_subagent_tasks(msg):
+                                    cap_break = True
+                                    break
                             if hasattr(msg, "content"):
                                 content = msg.content
                                 if isinstance(content, str) and content:
@@ -545,6 +702,8 @@ class Executor:
                                             chunks.append(c)
                                         elif isinstance(c, dict) and "text" in c:
                                             chunks.append(c["text"])
+                        if cap_break:
+                            break
                 elif "content" in chunk:
                     chunks.append(str(chunk["content"]))
                 elif "output" in chunk:
@@ -567,7 +726,8 @@ class Executor:
             Combined input string
         """
         descriptions = [f"{i + 1}. {step.description}" for i, step in enumerate(steps)]
-        return "Execute these steps sequentially:\n" + "\n".join(descriptions)
+        body = "Execute these steps sequentially:\n" + "\n".join(descriptions)
+        return body + self._layer2_output_contract_suffix()
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.
