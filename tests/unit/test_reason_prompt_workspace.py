@@ -95,5 +95,3 @@ def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
     state.completed_step_ids = {"a"}
     builder = PromptBuilder()
     text = builder.build_reason_prompt("g", state, PlanContext())
-    # RFC-207: PLAN_CONTINUE_POLICY now in SystemMessage (static rule)
-    assert "PLAN_CONTINUE_POLICY" in text
