@@ -132,18 +132,22 @@ class LLMTracingMiddleware(AgentMiddleware):
             self._format_size(total_chars),
         )
 
-        # Log message breakdown by type
+        # Log message breakdown by type with RFC-207 context (IG-143)
         system_count = sum(1 for msg in messages if isinstance(msg, SystemMessage))
         human_count = sum(1 for msg in messages if isinstance(msg, HumanMessage))
         ai_count = sum(1 for msg in messages if isinstance(msg, AIMessage))
 
         if system_count > 0 or human_count > 0 or ai_count > 0:
+            # Detect RFC-207 pattern: SystemMessage + HumanMessage (no prior AI messages)
+            rfc207_pattern = system_count == 1 and human_count >= 1 and ai_count == 0
+
             logger.debug(
-                "[LLM Trace #%d] Messages: system=%d, human=%d, ai=%d",
+                "[LLM Trace #%d] Messages: system=%d, human=%d, ai=%d%s",
                 trace_id,
                 system_count,
                 human_count,
                 ai_count,
+                " (RFC-207 separation)" if rfc207_pattern else "",
             )
 
         # Log system prompt preview
@@ -157,6 +161,58 @@ class LLMTracingMiddleware(AgentMiddleware):
                 )
                 break
 
+        # NEW: Extract metadata tags (IG-143)
+        if hasattr(request, "config") and request.config:
+            metadata = request.config.get("metadata", {})
+
+            purpose = metadata.get("soothe_call_purpose", "unknown")
+            component = metadata.get("soothe_call_component", "unknown")
+            phase = metadata.get("soothe_call_phase", "unknown")
+
+            if purpose != "unknown":
+                logger.debug(
+                    "[LLM Trace #%d] Purpose: %s (component=%s, phase=%s)",
+                    trace_id,
+                    purpose,
+                    component,
+                    phase,
+                )
+
+            # Purpose-specific previews (IG-143)
+            if purpose == "classify":
+                # For classification: show user query
+                for msg in messages:
+                    if isinstance(msg, HumanMessage):
+                        query_preview = str(msg.content)[:200]
+                        logger.debug(
+                            "[LLM Trace #%d] Query: %s",
+                            trace_id,
+                            query_preview,
+                        )
+                        break
+
+            elif purpose == "plan":
+                # For planning: show goal excerpt (longer preview)
+                for msg in messages:
+                    if isinstance(msg, HumanMessage):
+                        goal_preview = self._preview(msg.content, max_length=400)
+                        logger.debug(
+                            "[LLM Trace #%d] Goal (preview): %s",
+                            trace_id,
+                            goal_preview,
+                        )
+                        break
+
+            # Thread ID from configurable (existing code)
+            configurable = request.config.get("configurable", {})
+            thread_id = configurable.get("thread_id", "unknown")
+            if thread_id != "unknown":
+                logger.debug(
+                    "[LLM Trace #%d] Thread: %s",
+                    trace_id,
+                    thread_id,
+                )
+
         # Log state/configurable info
         if hasattr(request, "state") and request.state:
             state_keys = list(request.state.keys()) if hasattr(request.state, "keys") else []
@@ -165,16 +221,6 @@ class LLMTracingMiddleware(AgentMiddleware):
                     "[LLM Trace #%d] State keys: %s",
                     trace_id,
                     state_keys,
-                )
-
-        if hasattr(request, "config") and request.config:
-            configurable = request.config.get("configurable", {})
-            thread_id = configurable.get("thread_id", "unknown")
-            if thread_id != "unknown":
-                logger.debug(
-                    "[LLM Trace #%d] Thread: %s",
-                    trace_id,
-                    thread_id,
                 )
 
     def _log_response(self, trace_id: int, response: ModelResponse[Any], duration_ms: int) -> None:
@@ -255,19 +301,22 @@ class LLMTracingMiddleware(AgentMiddleware):
             str(error)[:200],
         )
 
-    def _preview(self, content: str | list | dict) -> str:
+    def _preview(self, content: str | list | dict, max_length: int | None = None) -> str:
         """Create preview of content.
 
         Args:
             content: Content to preview.
+            max_length: Optional override for preview length (default: self._log_preview_length).
 
         Returns:
             Preview string.
         """
+        length = max_length or self._log_preview_length
+
         if isinstance(content, str):
             preview = content.strip()
-            if len(preview) > self._log_preview_length:
-                preview = preview[: self._log_preview_length - 3] + "..."
+            if len(preview) > length:
+                preview = preview[: length - 3] + "..."
             return preview
 
         if isinstance(content, list):
@@ -277,7 +326,7 @@ class LLMTracingMiddleware(AgentMiddleware):
         if isinstance(content, dict):
             return f"[dict with keys: {list(content.keys())[:5]}]"
 
-        return str(content)[: self._log_preview_length]
+        return str(content)[:length]
 
     def _format_size(self, char_count: int) -> str:
         """Format character count as human-readable size.

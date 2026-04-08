@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -72,6 +72,7 @@ async def _evaluate_with_llm(
     description: str,
     priority: int,
     model: BaseChatModel,
+    config: Any | None = None,  # IG-143: Add config for tracing
 ) -> tuple[str, list[str]]:
     """Evaluate goal criticality using an LLM.
 
@@ -83,10 +84,19 @@ async def _evaluate_with_llm(
         description: Goal description text.
         priority: Goal priority (0-100).
         model: Chat model to use for evaluation.
+        config: Optional SootheConfig for LLM tracing support.
 
     Returns:
         Tuple of (risk_level, reasons) where risk_level is "high", "medium", or "low".
     """
+    # IG-143: Wrap model with tracing if enabled
+    from soothe.core.middleware._utils import create_llm_call_metadata
+
+    if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
+        from soothe.core.middleware._wrapper import LLMTracingWrapper
+
+        model = LLMTracingWrapper(model)
+
     prompt_text = (
         "You are evaluating whether a proposed autonomous agent task requires human approval.\n"
         f"\nProposed task: {description}\n"
@@ -104,7 +114,16 @@ async def _evaluate_with_llm(
     )
 
     try:
-        response = await model.ainvoke(prompt_text)
+        response = await model.ainvoke(
+            prompt_text,
+            config={
+                "metadata": create_llm_call_metadata(
+                    purpose="criticality_assessment",
+                    component="cognition.criticality",
+                    phase="pre-goal",
+                )
+            },
+        )
         content = response.content.strip() if hasattr(response, "content") else ""
 
         risk_level = "medium"
@@ -191,6 +210,7 @@ async def evaluate_criticality_async(
     *,
     use_llm: bool = False,
     model: BaseChatModel | None = None,
+    config: Any | None = None,  # IG-143: Add config for tracing
 ) -> CriticalityResult:
     """Async version of ``evaluate_criticality`` with full LLM support.
 
@@ -199,6 +219,7 @@ async def evaluate_criticality_async(
         priority: Goal priority (0-100).
         use_llm: Whether to apply LLM-based evaluation.
         model: Chat model for LLM evaluation. Required when use_llm=True.
+        config: Optional SootheConfig for LLM tracing support.
 
     Returns:
         CriticalityResult with level, reasons, and confirmation flag.
@@ -234,7 +255,7 @@ async def evaluate_criticality_async(
     # LLM-based evaluation if available and no rule triggers
     if use_llm and model:
         try:
-            risk_level, llm_reasons = await _evaluate_with_llm(description, priority, model)
+            risk_level, llm_reasons = await _evaluate_with_llm(description, priority, model, config=config)  # IG-143
         except Exception:
             risk_level, llm_reasons = "medium", ["LLM evaluation unavailable"]
 

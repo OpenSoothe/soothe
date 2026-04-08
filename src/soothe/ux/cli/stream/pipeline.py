@@ -458,46 +458,57 @@ class StreamDisplayPipeline:
         ]
 
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle Layer 2 Reason progress as a single concise status line."""
+        """Handle Layer 2 Reason progress with condensed action summary."""
         status = event.get("status", "")
-        progress = event.get("progress", 0.0)
         confidence = event.get("confidence", 0.0)
-        soothe_next_action = (event.get("soothe_next_action") or "").strip()
-        user_summary = (event.get("user_summary") or "").strip()
 
-        if status == "done":
-            label = "Done"
-            action = "complete"
-        elif status == "replan":
-            label = "Trying a new approach"
-            action = "continue"
-        else:
-            label = "Continuing"
-            action = "continue"
+        # Extract action summary (priority order)
+        action_text = (
+            event.get("user_summary", "").strip()
+            or event.get("soothe_next_action", "").strip()
+            or self._derive_action_from_status(status)
+        )
 
-        # Emit only one line per reason event to avoid repeated arrow lines.
-        if user_summary:
-            content = f"{user_summary} ({confidence:.0%} sure)"
-        elif soothe_next_action:
-            content = f"{soothe_next_action} ({confidence:.0%} sure)"
-        else:
-            content = f"{label} — about {progress:.0%} toward the goal ({confidence:.0%} sure)"
-
-        if not content.strip():
+        if not action_text:
             return []
 
-        step_id = str(event.get("step_id", "") or event.get("iteration", "") or "")
-        if not self._presentation.should_emit_reason(content=content, step_id=step_id or None):
+        # Format with confidence
+        confidence_pct = confidence if confidence > 0 else 0.8
+        formatted = f"{action_text} ({confidence_pct:.0%} sure)"
+
+        # Deduplicate repeated actions
+        if not self._presentation.should_emit_action(action_text=formatted):
             return []
+
+        # Determine action type
+        action = "complete" if status == "done" else "continue"
 
         return [
             format_judgement(
-                content.strip(),
+                formatted,
                 action,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
         ]
+
+    def _derive_action_from_status(self, status: str) -> str:
+        """Fallback action text when metadata missing.
+
+        Args:
+            status: Reason event status field.
+
+        Returns:
+            Human-readable action description, or empty string if no valid status.
+        """
+        if status == "done":
+            return "Completing final analysis"
+        if status == "replan":
+            return "Trying alternative approach"
+        if status == "working":
+            return "Processing next step"
+        # No fallback for missing/empty status - better to skip than emit noise
+        return ""
 
 
 __all__ = ["StreamDisplayPipeline"]

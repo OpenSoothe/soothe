@@ -70,7 +70,19 @@ class GoalDirectivesMixin:
         )
 
         try:
-            response = await model.ainvoke([HumanMessage(content=prompt)])
+            # IG-143: Add metadata for tracing
+            from soothe.core.middleware._utils import create_llm_call_metadata
+
+            response = await model.ainvoke(
+                [HumanMessage(content=prompt)],
+                config={
+                    "metadata": create_llm_call_metadata(
+                        purpose="goal_alignment",
+                        component="runner.goal_directives",
+                        phase="layer2",
+                    )
+                },
+            )
             return str(response.content).strip() or original_goal
         except Exception:
             logger.debug("Continuation synthesis failed, reusing original goal", exc_info=True)

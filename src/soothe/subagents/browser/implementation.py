@@ -78,7 +78,20 @@ Examples:
             SystemMessage(content=detection_prompt),
             HumanMessage(content=prompt),
         ]
-        response = await model.ainvoke(messages)
+        # IG-143: Add metadata for tracing
+        from soothe.core.middleware._utils import create_llm_call_metadata
+
+        response = await model.ainvoke(
+            messages,
+            config={
+                "metadata": create_llm_call_metadata(
+                    purpose="intent_detection",
+                    component="subagents.browser",
+                    phase="initialization",
+                    existing_browser_check=True,
+                )
+            },
+        )
         content = response.content.strip()
         result = content.lower() == "yes"
     except Exception as e:

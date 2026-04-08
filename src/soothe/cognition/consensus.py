@@ -7,7 +7,7 @@ If not satisfied, Layer 3 can send the goal back with refined instructions.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -26,6 +26,7 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
+    config: Any | None = None,  # IG-143: Add config for tracing
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion.
 
@@ -38,6 +39,7 @@ async def evaluate_goal_completion(
         evidence_summary: Accumulated evidence from execution.
         success_criteria: List of success criteria to check.
         model: LLM for evaluation. If None, uses heuristic fallback.
+        config: Optional SootheConfig for LLM tracing support.
 
     Returns:
         Tuple of (decision, reasoning).
@@ -46,9 +48,26 @@ async def evaluate_goal_completion(
     if model is None:
         return _heuristic_evaluation(response_text, evidence_summary, success_criteria)
 
+    # IG-143: Wrap model with tracing if enabled
+    from soothe.core.middleware._utils import create_llm_call_metadata
+
+    if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
+        from soothe.core.middleware._wrapper import LLMTracingWrapper
+
+        model = LLMTracingWrapper(model)
+
     prompt = _build_consensus_prompt(goal_description, response_text, evidence_summary, success_criteria)
     try:
-        response = await model.ainvoke(prompt)
+        response = await model.ainvoke(
+            prompt,
+            config={
+                "metadata": create_llm_call_metadata(
+                    purpose="consensus_vote",
+                    component="cognition.consensus",
+                    phase="layer3",
+                )
+            },
+        )
         content = response.content.strip().lower() if hasattr(response, "content") else ""
 
         if "send_back" in content:
