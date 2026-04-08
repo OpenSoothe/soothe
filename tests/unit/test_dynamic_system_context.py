@@ -54,8 +54,9 @@ class TestEnvironmentSection:
         """Environment section has nested XML structure."""
         section = build_soothe_environment_section(model="claude-opus-4-6")
 
-        assert '<SOOTHE_ENVIRONMENT version="1">' in section
-        assert "</SOOTHE_ENVIRONMENT>" in section
+        # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
+        assert '<ENVIRONMENT version="1">' in section
+        assert "</ENVIRONMENT>" in section
         assert "<platform>" in section
         assert "<shell>" in section
         assert "<os_version>" in section
@@ -75,8 +76,9 @@ class TestWorkspaceSection:
         """Workspace section handles non-git directory."""
         section = build_soothe_workspace_section(Path("/tmp/test"), None)
 
-        assert '<SOOTHE_WORKSPACE version="1">' in section
-        assert "</SOOTHE_WORKSPACE>" in section
+        # RFC-207: Removed SOOTHE_ prefix from WORKSPACE tag
+        assert '<WORKSPACE version="1">' in section
+        assert "</WORKSPACE>" in section
         assert "<root>" in section
         assert "/tmp/test" in section
         assert 'present="false"' in section
@@ -216,8 +218,9 @@ class TestBuildContextSectionsForComplexity:
             config=config, complexity="medium", state=state, include_workspace_extras=False
         )
         assert len(blocks) == 2
-        assert "SOOTHE_ENVIRONMENT" in blocks[0]
-        assert "SOOTHE_WORKSPACE" in blocks[1]
+        # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT and WORKSPACE tags
+        assert "ENVIRONMENT" in blocks[0]
+        assert "WORKSPACE" in blocks[1]
 
 
 class TestComplexityMapping:
@@ -251,8 +254,9 @@ class TestComplexityMapping:
 
         prompt = middleware._get_prompt_for_complexity("medium", state)
 
-        assert "<SOOTHE_ENVIRONMENT" in prompt
-        assert "<SOOTHE_WORKSPACE" in prompt
+        # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT and WORKSPACE tags
+        assert "<ENVIRONMENT" in prompt
+        assert "<WORKSPACE" in prompt
         assert "<SOOTHE_THREAD" not in prompt
         assert "<SOOTHE_PROTOCOLS" not in prompt
         assert prompt.strip().endswith(middleware._current_date_line())
@@ -268,8 +272,9 @@ class TestComplexityMapping:
 
         prompt = middleware._get_prompt_for_complexity("complex", state)
 
-        assert "<SOOTHE_ENVIRONMENT" in prompt
-        assert "<SOOTHE_WORKSPACE" in prompt
+        # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT and WORKSPACE tags
+        assert "<ENVIRONMENT" in prompt
+        assert "<WORKSPACE" in prompt
         assert "<SOOTHE_THREAD" in prompt
         assert "<SOOTHE_PROTOCOLS" in prompt
 

@@ -49,10 +49,12 @@ def test_prior_conversation_injected_when_no_checkpoint_access(config, state, co
     builder = PromptBuilder(config)
     prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
-    assert "<SOOTHE_PRIOR_CONVERSATION>" in prompt
+    # RFC-207: Removed SOOTHE_ prefix
+    assert "<PRIOR_CONVERSATION>" in prompt
     assert "Previous message 1" in prompt
     assert "Previous response 1" in prompt
-    assert "<SOOTHE_FOLLOW_UP_POLICY>" in prompt
+    # FOLLOW_UP_POLICY now in SystemMessage (static rule)
+    assert "<FOLLOW_UP_POLICY>" in prompt
 
 
 def test_prior_conversation_not_injected_when_checkpoint_access(config, state, context_with_recent_messages):
@@ -62,7 +64,8 @@ def test_prior_conversation_not_injected_when_checkpoint_access(config, state, c
     builder = PromptBuilder(config)
     prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
-    assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
+    # RFC-207: Removed SOOTHE_ prefix
+    assert "<PRIOR_CONVERSATION>" not in prompt
     assert "Previous message 1" not in prompt
     assert "Previous response 1" not in prompt
 
@@ -81,7 +84,8 @@ def test_no_injection_when_empty_recent_messages(config, state):
     builder = PromptBuilder(config)
     prompt = builder.build_reason_prompt("Test goal", state, context_empty)
 
-    assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
+    # RFC-207: Removed SOOTHE_ prefix
+    assert "<PRIOR_CONVERSATION>" not in prompt
 
 
 def test_prior_conversation_format(config, state, context_with_recent_messages):
@@ -94,9 +98,11 @@ def test_prior_conversation_format(config, state, context_with_recent_messages):
     # Check structure
     assert "Recent messages in this thread before the current goal" in prompt
     assert "The user may refer to this content" in prompt
-    assert "<SOOTHE_FOLLOW_UP_POLICY>" in prompt
+    # RFC-207: FOLLOW_UP_POLICY now in SystemMessage (static rule)
+    assert "<FOLLOW_UP_POLICY>" in prompt
     assert 'status MUST NOT be "done"' in prompt
-    assert "</SOOTHE_PRIOR_CONVERSATION>" in prompt
+    # RFC-207: Removed SOOTHE_ prefix
+    assert "</PRIOR_CONVERSATION>" in prompt
 
 
 def test_flag_true_prevents_duplication(config, state, context_with_recent_messages):
@@ -106,8 +112,9 @@ def test_flag_true_prevents_duplication(config, state, context_with_recent_messa
     builder = PromptBuilder(config)
     prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
+    # RFC-207: Removed SOOTHE_ prefix
     # Verify no prior conversation section
-    assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
+    assert "<PRIOR_CONVERSATION>" not in prompt
 
     # This means CoreAgent will load messages from checkpoint instead
     # Reason prompt is leaner, avoiding duplication
@@ -120,8 +127,9 @@ def test_flag_false_enables_context_for_isolated_execution(config, state, contex
     builder = PromptBuilder(config)
     prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
+    # RFC-207: Removed SOOTHE_ prefix
     # Prior conversation is present
-    assert "<SOOTHE_PRIOR_CONVERSATION>" in prompt
+    assert "<PRIOR_CONVERSATION>" in prompt
 
     # This ensures isolated threads (no checkpoint) still have prior context
     # Critical for follow-up tasks like "translate that"

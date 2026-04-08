@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 if TYPE_CHECKING:
     from soothe.cognition.loop_agent.schemas import LoopState
@@ -37,24 +40,41 @@ class PromptBuilder:
         self.config = config
         self._fragments_dir = Path(__file__).parent / "fragments"
 
-    def build_reason_prompt(
+    def build_reason_messages(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
-    ) -> str:
-        """Build hierarchical Reason prompt with dynamic sections.
+    ) -> list[BaseMessage]:
+        """Build SystemMessage + HumanMessage for Reason phase (RFC-207).
 
-        Replaces legacy build_loop_reason_prompt() function.
-        Combines fragment-based static policies with dynamic state injections.
+        Constructs proper message type separation:
+        - SystemMessage: environment, workspace, policies, instructions
+        - HumanMessage: goal, evidence, working memory, prior conversation
 
         Args:
             goal: User's goal description
-            state: Current loop state with iteration, evidence, wave metrics
-            context: Planning context with workspace, capabilities, working memory
+            state: Current loop state with iteration, evidence, working memory
+            context: Planning context with workspace, capabilities
 
         Returns:
-            Complete hierarchical prompt string with all dynamic sections
+            List of [SystemMessage, HumanMessage] to send to LLM.
+        """
+        system_content = self._build_system_message(context)
+        human_content = self._build_human_message(goal, state, context)
+
+        return [
+            SystemMessage(content=system_content),
+            HumanMessage(content=human_content),
+        ]
+
+    def _build_system_message(
+        self,
+        context: PlanContext,
+    ) -> str:
+        """Construct static context: environment, workspace, policies, instructions.
+
+        Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
         """
         parts: list[str] = []
 
@@ -75,6 +95,54 @@ class PromptBuilder:
 
             parts.append(build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n\n")
 
+        # Workspace rules (static when workspace present)
+        if context.workspace:
+            parts.append(
+                "\n<WORKSPACE_RULES>\n"
+                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
+                "Rules:\n"
+                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
+                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
+                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
+                "a different project outside this directory.\n"
+                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
+                "</WORKSPACE_RULES>\n"
+            )
+
+        # Prior conversation follow-up policy (static)
+        if context.recent_messages:
+            parts.append(
+                "\n<FOLLOW_UP_POLICY>\n"
+                '- If the goal depends on prior conversation text, status MUST NOT be "done" until CoreAgent execution '
+                "has produced the requested output (translation, summary, etc.).\n"
+                '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
+                "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
+                "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
+                "the actual result.\n"
+                "</FOLLOW_UP_POLICY>\n"
+            )
+
+        # Static policy fragments (delegation, granularity)
+        parts.append(self._load_fragment("system/policies/delegation.xml"))
+        parts.append(self._load_fragment("system/policies/granularity.xml"))
+
+        # Output format specification
+        parts.append(self._load_fragment("instructions/output_format.xml"))
+
+        return "\n".join(parts)
+
+    def _build_human_message(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> str:
+        """Construct dynamic task: goal, evidence, working memory, prior conversation.
+
+        Maps RFC-206 USER_TASK layer to HumanMessage.
+        """
+        parts: list[str] = []
+
         # Goal and iteration info
         parts.extend(
             [
@@ -83,25 +151,9 @@ class PromptBuilder:
             ]
         )
 
-        # Wave metrics section (IG-132)
-        if state.last_wave_tool_call_count > 0:
-            cap_status = "Yes" if state.last_wave_hit_subagent_cap else "No"
-            context_pct = f"{state.context_percentage_consumed:.1%}" if state.context_percentage_consumed > 0 else "N/A"
-            context_tokens = f"{state.total_tokens_used:,}" if state.total_tokens_used > 0 else "N/A"
-
-            parts.append("\n<SOOTHE_WAVE_METRICS>\n")
-            parts.append("Last Act wave completed:\n")
-            parts.append(f"- Subagent calls: {state.last_wave_subagent_task_count}\n")
-            parts.append(f"- Tool calls: {state.last_wave_tool_call_count}\n")
-            parts.append(f"- Output length: {state.last_wave_output_length:,} characters\n")
-            parts.append(f"- Errors: {state.last_wave_error_count}\n")
-            parts.append(f"- Cap hit: {cap_status}\n")
-            parts.append(f"- Context used: {context_pct} ({context_tokens} tokens)\n")
-            parts.append("</SOOTHE_WAVE_METRICS>\n")
-
         # Prior conversation (IG-133) - only if Act won't have checkpoint access
         if context.recent_messages and not state.act_will_have_checkpoint_access:
-            parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
+            parts.append("\n<PRIOR_CONVERSATION>\n")
             parts.append(
                 "Recent messages in this thread before the current goal. The user may refer to this content "
                 '(e.g. "translate that", "summarize the above", "shorter").\n\n'
@@ -109,48 +161,12 @@ class PromptBuilder:
             for msg_xml in context.recent_messages:
                 parts.append(msg_xml)
                 parts.append("\n")
-            parts.append(
-                "\n<SOOTHE_FOLLOW_UP_POLICY>\n"
-                '- If the goal depends on this prior text, status MUST NOT be "done" until CoreAgent execution '
-                "has produced the requested output (translation, summary, etc.).\n"
-                '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
-                "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
-                "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
-                "the actual result.\n"
-                "</SOOTHE_FOLLOW_UP_POLICY>\n"
-                "</SOOTHE_PRIOR_CONVERSATION>\n"
-            )
-
-        # Workspace rules
-        if context.workspace:
-            parts.append(
-                "\n<SOOTHE_REASON_WORKSPACE_RULES>\n"
-                "The open project root (absolute path) is under <SOOTHE_WORKSPACE><root> above.\n\n"
-                "Rules:\n"
-                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
-                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
-                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
-                "a different project outside this directory.\n"
-                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-                "</SOOTHE_REASON_WORKSPACE_RULES>\n"
-            )
+            parts.append("</PRIOR_CONVERSATION>\n")
 
         # Evidence from steps
         if state.step_results:
             parts.append("\nEvidence from steps run so far in this goal:")
             parts.extend(r.to_evidence_string() for r in state.step_results)
-
-        # Last act wave metrics
-        if state.last_wave_subagent_task_count or state.last_wave_tool_call_count:
-            parts.append("\n<SOOTHE_LAST_ACT_WAVE_METRICS>")
-            parts.append(f"- Layer 1 tool results processed (approx): {state.last_wave_tool_call_count}")
-            parts.append(f"- Subagent task tool completions (root graph): {state.last_wave_subagent_task_count}")
-            if state.last_wave_hit_subagent_cap:
-                parts.append(
-                    "- The previous Act wave hit the configured subagent task cap. If more delegation is needed, "
-                    "plan **one** follow-up step; avoid describing multiple serial subagent calls in a single Act turn."
-                )
-            parts.append("</SOOTHE_LAST_ACT_WAVE_METRICS>\n")
 
         # Completed steps summary
         if context.completed_steps:
@@ -162,13 +178,13 @@ class PromptBuilder:
 
         # Working memory excerpt (RFC-203)
         if context.working_memory_excerpt:
-            parts.append("\n<SOOTHE_LOOP_WORKING_MEMORY>")
+            parts.append("\n<WORKING_MEMORY>")
             parts.append(
                 "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
                 "Prefer read_file on referenced paths instead of repeating large listings.\n"
             )
             parts.append(context.working_memory_excerpt)
-            parts.append("</SOOTHE_LOOP_WORKING_MEMORY>\n")
+            parts.append("</WORKING_MEMORY>\n")
 
         # Previous reason assessment
         prev = state.previous_reason
@@ -180,29 +196,45 @@ class PromptBuilder:
             if prev.next_steps_hint:
                 parts.append(f"- Hint: {prev.next_steps_hint}")
 
-        # Plan continue policy
-        if state.has_remaining_steps():
-            parts.append(
-                "\n<PLAN_CONTINUE_POLICY>\n"
-                "The current AgentDecision still has unfinished steps. If the latest Act results fit the plan, "
-                'you MUST prefer plan_action "keep" and omit "decision" so the executor runs the remaining '
-                'steps in the next wave. Use plan_action "new" only when evidence proves the plan is wrong, '
-                "blocked, or obsolete.\n"
-                "</PLAN_CONTINUE_POLICY>\n"
-            )
-
         # Available capabilities
         if context.available_capabilities:
             parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
 
-        # Static policy fragments (delegation, granularity)
-        parts.append(self._load_fragment("system/policies/delegation.xml"))
-        parts.append(self._load_fragment("system/policies/granularity.xml"))
-
-        # Output format specification
-        parts.append(self._load_fragment("instructions/output_format.xml"))
-
         return "\n".join(parts)
+
+    def build_reason_prompt(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+    ) -> str:
+        """Build hierarchical Reason prompt with dynamic sections.
+
+        **DEPRECATED**: Use build_reason_messages() instead (RFC-207).
+
+        This method returns a single concatenated string for backward compatibility.
+        The new build_reason_messages() returns proper SystemMessage/HumanMessage types.
+
+        Args:
+            goal: User's goal description
+            state: Current loop state with iteration, evidence, wave metrics
+            context: Planning context with workspace, capabilities, working memory
+
+        Returns:
+            Complete hierarchical prompt string with all dynamic sections
+
+        Warns:
+            DeprecationWarning: This method is deprecated per RFC-207.
+        """
+        warnings.warn(
+            "build_reason_prompt() is deprecated, use build_reason_messages() per RFC-207",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        # Use new method for implementation, concatenate for compatibility
+        messages = self.build_reason_messages(goal, state, context)
+        return "\n\n".join([m.content for m in messages])
 
     def _load_fragment(self, relative_path: str) -> str:
         """Load fragment file content.
