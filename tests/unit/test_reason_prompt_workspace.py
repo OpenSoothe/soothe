@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.backends.planning.simple import build_loop_reason_prompt
 from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 
@@ -14,7 +14,8 @@ def test_build_loop_reason_prompt_with_config_includes_soothe_blocks() -> None:
     ctx = PlanContext(workspace="/abs/path/to/repo")
     config = MagicMock()
     config.resolve_model.return_value = "claude-opus-4-6"
-    text = build_loop_reason_prompt("analyze architecture", state, ctx, config=config)
+    builder = PromptBuilder(config)
+    text = builder.build_reason_prompt("analyze architecture", state, ctx)
     assert "<SOOTHE_ENVIRONMENT" in text
     assert "<SOOTHE_WORKSPACE" in text
     assert "/abs/path/to/repo" in text
@@ -25,7 +26,8 @@ def test_build_loop_reason_prompt_with_config_includes_soothe_blocks() -> None:
 def test_build_loop_reason_prompt_without_config_workspace_only() -> None:
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
-    text = build_loop_reason_prompt("analyze architecture", state, ctx)
+    builder = PromptBuilder()
+    text = builder.build_reason_prompt("analyze architecture", state, ctx)
     assert "<SOOTHE_ENVIRONMENT" not in text
     assert "<SOOTHE_WORKSPACE" in text
     assert "/abs/path/to/repo" in text
@@ -35,7 +37,8 @@ def test_build_loop_reason_prompt_without_config_workspace_only() -> None:
 def test_build_loop_reason_prompt_omits_workspace_rules_without_workspace() -> None:
     state = LoopState(goal="hi", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace=None)
-    text = build_loop_reason_prompt("hi", state, ctx)
+    builder = PromptBuilder()
+    text = builder.build_reason_prompt("hi", state, ctx)
     assert "<SOOTHE_REASON_WORKSPACE_RULES>" not in text
 
 
@@ -45,7 +48,8 @@ def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
         workspace=None,
         working_memory_excerpt="[step_0] ✓ listed src/",
     )
-    text = build_loop_reason_prompt("g", state, ctx)
+    builder = PromptBuilder()
+    text = builder.build_reason_prompt("g", state, ctx)
     assert "<SOOTHE_LOOP_WORKING_MEMORY>" in text
     assert "listed src/" in text
 
@@ -61,7 +65,8 @@ def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
             "<assistant>\n**Infrastructure** … long body …\n</assistant>",
         ],
     )
-    text = build_loop_reason_prompt("翻译成中文", state, ctx)
+    builder = PromptBuilder()
+    text = builder.build_reason_prompt("翻译成中文", state, ctx)
     assert "<SOOTHE_PRIOR_CONVERSATION>" in text
     assert "<SOOTHE_FOLLOW_UP_POLICY>" in text
     assert "Infrastructure" in text
@@ -82,5 +87,6 @@ def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
         reasoning="r",
     )
     state.completed_step_ids = {"a"}
-    text = build_loop_reason_prompt("g", state, PlanContext())
+    builder = PromptBuilder()
+    text = builder.build_reason_prompt("g", state, PlanContext())
     assert "PLAN_CONTINUE_POLICY" in text

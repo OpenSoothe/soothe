@@ -105,6 +105,13 @@ class QueryEngine:
 
         async def _run_stream() -> None:
             chunk_count = 0
+            timeout_minutes = d._config.daemon.max_query_duration_minutes
+            timeout_enabled = timeout_minutes > 0
+            timeout_seconds = timeout_minutes * 60 if timeout_enabled else None
+            warning_threshold = timeout_seconds * 0.8 if timeout_enabled else None
+            start_time = asyncio.get_event_loop().time() if timeout_enabled else None
+            warning_sent = False
+
             try:
                 stream_kwargs: dict[str, Any] = {
                     "thread_id": thread_id,
@@ -116,38 +123,133 @@ class QueryEngine:
                         stream_kwargs["max_iterations"] = max_iterations
                 if subagent is not None:
                     stream_kwargs["subagent"] = subagent
-                async for chunk in d._runner.astream(text, **stream_kwargs):
-                    chunk_count += 1
-                    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
-                        logger.debug("Skipping invalid chunk #%d: type=%s", chunk_count, type(chunk).__name__)
-                        continue
-                    namespace, mode, data = chunk
-                    logger.debug("Received chunk #%d: namespace=%s, mode=%s", chunk_count, namespace, mode)
 
-                    d._thread_logger.log(tuple(namespace), mode, data)
+                # Wrap streaming with timeout if configured
+                if timeout_enabled:
+                    async with asyncio.timeout(timeout_seconds):
+                        async for chunk in d._runner.astream(text, **stream_kwargs):
+                            chunk_count += 1
 
-                    if (
-                        not namespace
-                        and mode == "custom"
-                        and isinstance(data, dict)
-                        and (output_text := self.extract_custom_output_text(data))
-                    ):
-                        full_response.append(output_text)
+                            # Check for warning threshold (80% of timeout)
+                            if not warning_sent and warning_threshold:
+                                elapsed = asyncio.get_event_loop().time() - start_time
+                                if elapsed >= warning_threshold:
+                                    warning_sent = True
+                                    remaining = timeout_seconds - elapsed
+                                    logger.warning(
+                                        "Query approaching timeout for thread %s (%.1fs remaining)",
+                                        thread_id,
+                                        remaining,
+                                    )
+                                    await d._broadcast(
+                                        {
+                                            "type": "event",
+                                            "thread_id": thread_id,
+                                            "namespace": [],
+                                            "mode": "custom",
+                                            "data": {
+                                                "type": "query_timeout_warning",
+                                                "message": f"Query will timeout in {remaining:.0f} seconds",
+                                                "remaining_seconds": remaining,
+                                            },
+                                        }
+                                    )
 
-                    is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
-                    if not namespace and mode == "messages" and is_msg_pair:
-                        msg, _metadata = data
-                        full_response.extend(extract_text_from_ai_message(msg))
+                            # Process chunk
+                            if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
+                                logger.debug("Skipping invalid chunk #%d: type=%s", chunk_count, type(chunk).__name__)
+                                continue
+                            namespace, mode, data = chunk
+                            logger.debug("Received chunk #%d: namespace=%s, mode=%s", chunk_count, namespace, mode)
 
-                    event_msg = {
+                            d._thread_logger.log(tuple(namespace), mode, data)
+
+                            if (
+                                not namespace
+                                and mode == "custom"
+                                and isinstance(data, dict)
+                                and (output_text := self.extract_custom_output_text(data))
+                            ):
+                                full_response.append(output_text)
+
+                            is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
+                            if not namespace and mode == "messages" and is_msg_pair:
+                                msg, _metadata = data
+                                full_response.extend(extract_text_from_ai_message(msg))
+
+                            event_msg = {
+                                "type": "event",
+                                "thread_id": thread_id,
+                                "namespace": list(namespace),
+                                "mode": mode,
+                                "data": data,
+                            }
+                            await d._broadcast(event_msg)
+                        logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
+                else:
+                    # No timeout - original behavior
+                    async for chunk in d._runner.astream(text, **stream_kwargs):
+                        chunk_count += 1
+                        if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
+                            logger.debug("Skipping invalid chunk #%d: type=%s", chunk_count, type(chunk).__name__)
+                            continue
+                        namespace, mode, data = chunk
+                        logger.debug("Received chunk #%d: namespace=%s, mode=%s", chunk_count, namespace, mode)
+
+                        d._thread_logger.log(tuple(namespace), mode, data)
+
+                        if (
+                            not namespace
+                            and mode == "custom"
+                            and isinstance(data, dict)
+                            and (output_text := self.extract_custom_output_text(data))
+                        ):
+                            full_response.append(output_text)
+
+                        is_msg_pair = isinstance(data, (tuple, list)) and len(data) == _MSG_PAIR_LENGTH
+                        if not namespace and mode == "messages" and is_msg_pair:
+                            msg, _metadata = data
+                            full_response.extend(extract_text_from_ai_message(msg))
+
+                        event_msg = {
+                            "type": "event",
+                            "thread_id": thread_id,
+                            "namespace": list(namespace),
+                            "mode": mode,
+                            "data": data,
+                        }
+                        await d._broadcast(event_msg)
+                    logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
+
+            except TimeoutError:
+                # Query exceeded maximum duration
+                logger.warning(
+                    "Query exceeded %d minute timeout for thread %s",
+                    timeout_minutes,
+                    thread_id,
+                )
+                from soothe.core import FrameworkFilesystem
+
+                FrameworkFilesystem.clear_current_workspace()
+
+                # Cancel the running query
+                if d._current_query_task:
+                    d._current_query_task.cancel()
+
+                # Broadcast timeout error to client
+                await d._broadcast(
+                    {
                         "type": "event",
                         "thread_id": thread_id,
-                        "namespace": list(namespace),
-                        "mode": mode,
-                        "data": data,
+                        "namespace": [],
+                        "mode": "custom",
+                        "data": {
+                            "type": ERROR,
+                            "error": f"Query cancelled after {timeout_minutes} minute timeout",
+                            "timeout_minutes": timeout_minutes,
+                        },
                     }
-                    await d._broadcast(event_msg)
-                logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
+                )
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
                 from soothe.core import FrameworkFilesystem

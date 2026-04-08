@@ -117,7 +117,7 @@ class ChatInput(TextArea):
     - DOWN arrow: Shows newer messages, returns to current input at newest
     """
 
-    MAX_HEIGHT = 50  # Maximum height in lines (CSS max-height: 50vh handles actual limit)
+    MAX_HEIGHT = 80  # Maximum height in lines (CSS max-height: 80vh handles actual limit)
     current_height: reactive[int] = reactive(1)
 
     def __init__(self, **kwargs: Any) -> None:
@@ -164,7 +164,8 @@ class ChatInput(TextArea):
             new_height: New height value.
         """
         if old_height != new_height:
-            self.styles.height = new_height
+            # Use explicit 'lines' unit to ensure proper height calculation
+            self.styles.height = f"{new_height}lines"
 
     @property
     def input_history(self) -> list[str]:

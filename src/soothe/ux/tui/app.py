@@ -119,8 +119,8 @@ class SootheApp(App):
         dock: bottom;
         layout: vertical;
         height: auto;
+        max-height: 80vh;
         background: $surface;
-        border-top: solid $primary;
     }
 
     #plan-tree {
@@ -134,19 +134,21 @@ class SootheApp(App):
         display: block;
     }
 
+    #chat-input-row {
+        layout: horizontal;
+        height: auto;
+        min-height: 4;
+        max-height: 50vh;
+        padding: 0 1;
+        border-top: solid $primary;
+        border-bottom: solid $primary;
+    }
+
     #info-bar {
         height: 1;
         padding: 0 1;
         background: $surface-darken-1;
         color: $text-muted;
-    }
-
-    #chat-input-row {
-        layout: horizontal;
-        height: auto;
-        min-height: 1;
-        max-height: 50vh;
-        padding: 0 1;
     }
 
     #chat-prompt {
@@ -160,7 +162,7 @@ class SootheApp(App):
     #chat-input {
         height: auto;
         min-height: 1;
-        max-height: 50vh;
+        max-height: 80vh;
         padding: 0;
         color: $foreground;
         background: transparent;
@@ -502,14 +504,31 @@ class SootheApp(App):
                 # Use timeout to prevent indefinite blocking and allow UI updates
                 event = await asyncio.wait_for(self._client.read_event(), timeout=5.0)
                 if event is None:
-                    logger.warning("read_event returned None, connection closed")
+                    # Check if WebSocket connection is actually alive
+                    # read_event() returning None could mean:
+                    # 1. No events available (idle daemon) - connection alive
+                    # 2. Connection closed - connection dead
+                    if self._client.is_connection_alive():
+                        # Connection alive, just no events (daemon idle)
+                        # Continue polling - don't break
+                        logger.debug("No event received but connection alive, continuing...")
+                        continue
+                    # WebSocket actually closed
+                    logger.warning("WebSocket connection closed")
                     self._connected = False
                     self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Daemon connection closed."))
                     break
             except TimeoutError:
-                # No event received for 5 seconds - connection is still alive
-                # This timeout allows the UI to remain responsive
-                continue
+                # No event received for 5 seconds - check connection health
+                if self._client.is_connection_alive():
+                    # Connection alive, just no events (daemon idle or processing)
+                    # This timeout allows the UI to remain responsive
+                    continue
+                # Connection dead
+                logger.warning("Connection timed out and WebSocket closed")
+                self._connected = False
+                self._on_panel_write(make_dot_line(DOT_COLORS["protocol"], "Daemon connection closed."))
+                break
 
             # Capture thread_id BEFORE processor updates it
             # This is critical for detecting thread changes correctly
@@ -620,7 +639,10 @@ class SootheApp(App):
     def _start_typing_indicator(self) -> None:
         """Start the animated typing indicator."""
         if self._typing_indicator_task is None or self._typing_indicator_task.done():
-            self._current_status_message = "Working"
+            import random
+
+            # Random status message for UI display (non-cryptographic)
+            self._current_status_message = random.choice(STATUS_MESSAGES)  # noqa: S311
             self._typing_indicator_task = asyncio.create_task(self._animate_typing_indicator())
 
     def _stop_typing_indicator(self) -> None:

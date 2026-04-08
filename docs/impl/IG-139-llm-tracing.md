@@ -21,6 +21,8 @@ Set `SOOTHE_LOG_LEVEL=DEBUG` to enable LLM tracing:
 SOOTHE_LOG_LEVEL=DEBUG soothe "your query"
 ```
 
+**Note (IG-140)**: When LLM tracing is enabled, the middleware automatically configures the logger to DEBUG level. No need to manually configure `logging.file.level=DEBUG`.
+
 ### 2. Configuration File
 
 Add to your `config.yml`:
@@ -29,6 +31,8 @@ Add to your `config.yml`:
 llm_tracing:
   enabled: true
 ```
+
+**Note (IG-140)**: Logging level is auto-configured when tracing is enabled.
 
 ## Log Output Examples
 

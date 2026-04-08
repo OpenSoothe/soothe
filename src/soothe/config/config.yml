@@ -376,6 +376,17 @@ execution:
     auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
 
 # =============================================================================
+# LLM Tracing
+# =============================================================================
+# Configure LLM request/response tracing for debugging.
+# Logs comprehensive information about LLM calls including prompts, responses,
+# token usage, and latency. Useful for debugging and optimization.
+
+llm_tracing:
+  enabled: false             # Enable LLM tracing middleware
+  log_preview_length: 200    # Maximum characters to log for message previews (50-1000)
+
+# =============================================================================
 # Logging & Observability
 # =============================================================================
 # Configure logging, thread history, and debugging features.

@@ -2,9 +2,9 @@
 
 import pytest
 
-from soothe.backends.planning.simple import build_loop_reason_prompt
 from soothe.cognition.loop_agent.schemas import LoopState
 from soothe.config import SootheConfig
+from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 
@@ -46,7 +46,8 @@ def test_prior_conversation_injected_when_no_checkpoint_access(config, state, co
     """Prior conversation is injected when Act won't have checkpoint access."""
     state.act_will_have_checkpoint_access = False
 
-    prompt = build_loop_reason_prompt("Test goal", state, context_with_recent_messages, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
     assert "<SOOTHE_PRIOR_CONVERSATION>" in prompt
     assert "Previous message 1" in prompt
@@ -58,7 +59,8 @@ def test_prior_conversation_not_injected_when_checkpoint_access(config, state, c
     """Prior conversation is NOT injected when Act will have checkpoint access."""
     state.act_will_have_checkpoint_access = True
 
-    prompt = build_loop_reason_prompt("Test goal", state, context_with_recent_messages, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
     assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
     assert "Previous message 1" not in prompt
@@ -76,7 +78,8 @@ def test_no_injection_when_empty_recent_messages(config, state):
     )
 
     state.act_will_have_checkpoint_access = False
-    prompt = build_loop_reason_prompt("Test goal", state, context_empty, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_empty)
 
     assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
 
@@ -85,7 +88,8 @@ def test_prior_conversation_format(config, state, context_with_recent_messages):
     """Prior conversation section is properly formatted."""
     state.act_will_have_checkpoint_access = False
 
-    prompt = build_loop_reason_prompt("Test goal", state, context_with_recent_messages, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
     # Check structure
     assert "Recent messages in this thread before the current goal" in prompt
@@ -99,7 +103,8 @@ def test_flag_true_prevents_duplication(config, state, context_with_recent_messa
     """Flag=True prevents duplication with checkpoint history."""
     state.act_will_have_checkpoint_access = True
 
-    prompt = build_loop_reason_prompt("Test goal", state, context_with_recent_messages, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
     # Verify no prior conversation section
     assert "<SOOTHE_PRIOR_CONVERSATION>" not in prompt
@@ -112,7 +117,8 @@ def test_flag_false_enables_context_for_isolated_execution(config, state, contex
     """Flag=False enables prior context for isolated execution."""
     state.act_will_have_checkpoint_access = False
 
-    prompt = build_loop_reason_prompt("Test goal", state, context_with_recent_messages, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context_with_recent_messages)
 
     # Prior conversation is present
     assert "<SOOTHE_PRIOR_CONVERSATION>" in prompt

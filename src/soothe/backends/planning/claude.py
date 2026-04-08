@@ -15,7 +15,6 @@ from soothe.backends.planning._shared import (
 )
 from soothe.backends.planning.simple import (
     _default_agent_decision,
-    build_loop_reason_prompt,
     parse_reason_response_text,
 )
 from soothe.cognition.loop_agent.schemas import LoopState
@@ -164,8 +163,10 @@ class ClaudePlanner:
     ) -> object:
         """Layer 2 Reason phase via Claude subagent (same JSON contract as SimplePlanner)."""
         from soothe.cognition.loop_agent.schemas import ReasonResult
+        from soothe.core.prompts import PromptBuilder
 
-        prompt = build_loop_reason_prompt(goal, state, context, config=self._config)
+        prompt_builder = PromptBuilder(self._config)
+        prompt = prompt_builder.build_reason_prompt(goal, state, context)
         try:
             text = await self._invoke(prompt)
             return parse_reason_response_text(text, goal)
@@ -193,7 +194,7 @@ class ClaudePlanner:
         return ""
 
     def _build_prompt(self, goal: str, context: PlanContext) -> str:
-        from soothe.prompts.context_xml import build_shared_environment_workspace_prefix
+        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
 
         parts: list[str] = []
         if self._config is not None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import Any
 
 from soothe.backends.planning._shared import reflect_heuristic
@@ -403,231 +402,6 @@ def parse_reason_response_text(response: str, goal: str) -> Any:
         )
 
 
-def _parse_step_decision_text(response: str, goal: str) -> Any:
-    """Parse LLM response into AgentDecision (legacy JSON shape)."""
-    try:
-        return agent_decision_from_dict(_load_llm_json_dict(response), goal)
-    except Exception:
-        logger.exception("Failed to parse step decision")
-        return _default_agent_decision(goal)
-
-
-def build_loop_reason_prompt(
-    goal: str,
-    state: LoopState,
-    context: PlanContext,
-    *,
-    config: SootheConfig | None = None,
-) -> str:
-    """Shared Reason-phase prompt for Layer 2 (SimplePlanner / ClaudePlanner)."""
-    from soothe.prompts.context_xml import (
-        build_shared_environment_workspace_prefix,
-        build_soothe_workspace_section,
-    )
-
-    parts: list[str] = []
-
-    if config is not None:
-        parts.append(
-            build_shared_environment_workspace_prefix(
-                config,
-                context.workspace,
-                context.git_status,
-                include_workspace_extras=False,
-            )
-        )
-    elif context.workspace:
-        parts.append(build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n\n")
-
-    parts.extend(
-        [
-            f"Goal: {goal}\n",
-            f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
-        ]
-    )
-
-    # Add wave metrics section if wave was executed (IG-132)
-    if state.last_wave_tool_call_count > 0:
-        cap_status = "Yes" if state.last_wave_hit_subagent_cap else "No"
-        context_pct = f"{state.context_percentage_consumed:.1%}" if state.context_percentage_consumed > 0 else "N/A"
-        context_tokens = f"{state.total_tokens_used:,}" if state.total_tokens_used > 0 else "N/A"
-
-        parts.append("\n<SOOTHE_WAVE_METRICS>\n")
-        parts.append("Last Act wave completed:\n")
-        parts.append(f"- Subagent calls: {state.last_wave_subagent_task_count}\n")
-        parts.append(f"- Tool calls: {state.last_wave_tool_call_count}\n")
-        parts.append(f"- Output length: {state.last_wave_output_length:,} characters\n")
-        parts.append(f"- Errors: {state.last_wave_error_count}\n")
-        parts.append(f"- Cap hit: {cap_status}\n")
-        parts.append(f"- Context used: {context_pct} ({context_tokens} tokens)\n")
-        parts.append("</SOOTHE_WAVE_METRICS>\n")
-
-    # Only inject prior conversation if Act won't have checkpoint access (IG-133)
-    # Avoids duplication when CoreAgent loads messages from checkpoint automatically
-    if context.recent_messages and not state.act_will_have_checkpoint_access:
-        parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
-        parts.append(
-            "Recent messages in this thread before the current goal. The user may refer to this content "
-            '(e.g. "translate that", "summarize the above", "shorter").\n\n'
-        )
-        # Messages are already XML-formatted (<user>...</user>, <assistant>...</assistant>)
-        for msg_xml in context.recent_messages:
-            parts.append(msg_xml)
-            parts.append("\n")
-        parts.append(
-            "\n<SOOTHE_FOLLOW_UP_POLICY>\n"
-            '- If the goal depends on this prior text, status MUST NOT be "done" until CoreAgent execution '
-            "has produced the requested output (translation, summary, etc.).\n"
-            '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
-            "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
-            "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
-            "the actual result.\n"
-            "</SOOTHE_FOLLOW_UP_POLICY>\n"
-            "</SOOTHE_PRIOR_CONVERSATION>\n"
-        )
-
-    if context.workspace:
-        parts.append(
-            "\n<SOOTHE_REASON_WORKSPACE_RULES>\n"
-            "The open project root (absolute path) is under <SOOTHE_WORKSPACE><root> above.\n\n"
-            "Rules:\n"
-            "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
-            "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
-            "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
-            "a different project outside this directory.\n"
-            "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-            "</SOOTHE_REASON_WORKSPACE_RULES>\n"
-        )
-
-    if state.step_results:
-        parts.append("\nEvidence from steps run so far in this goal:")
-        parts.extend(r.to_evidence_string() for r in state.step_results)
-
-    if state.last_wave_subagent_task_count or state.last_wave_tool_call_count:
-        parts.append("\n<SOOTHE_LAST_ACT_WAVE_METRICS>")
-        parts.append(f"- Layer 1 tool results processed (approx): {state.last_wave_tool_call_count}")
-        parts.append(f"- Subagent task tool completions (root graph): {state.last_wave_subagent_task_count}")
-        if state.last_wave_hit_subagent_cap:
-            parts.append(
-                "- The previous Act wave hit the configured subagent task cap. If more delegation is needed, "
-                "plan **one** follow-up step; avoid describing multiple serial subagent calls in a single Act turn."
-            )
-        parts.append("</SOOTHE_LAST_ACT_WAVE_METRICS>\n")
-
-    if context.completed_steps:
-        parts.append("\nPlanner context — completed step summaries (do not repeat work):")
-        for step in context.completed_steps:
-            status = "✓" if step.success else "✗"
-            output_preview = step.output[:100] if step.output else "no output"
-            parts.append(f"- {step.step_id}: {status} {output_preview}")
-
-    if context.working_memory_excerpt:
-        parts.append("\n<SOOTHE_LOOP_WORKING_MEMORY>")
-        parts.append(
-            "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
-            "Prefer read_file on referenced paths instead of repeating large listings.\n"
-        )
-        parts.append(context.working_memory_excerpt)
-        parts.append("</SOOTHE_LOOP_WORKING_MEMORY>\n")
-
-    prev = state.previous_reason
-    if prev:
-        parts.append("\nYour previous assessment (for continuity):")
-        parts.append(f"- Status: {prev.status}")
-        parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
-        parts.append(f"- Summary: {prev.user_summary or prev.reasoning[:200]}")
-        if prev.next_steps_hint:
-            parts.append(f"- Hint: {prev.next_steps_hint}")
-
-    if state.has_remaining_steps():
-        parts.append(
-            "\n<PLAN_CONTINUE_POLICY>\n"
-            "The current AgentDecision still has unfinished steps. If the latest Act results fit the plan, "
-            'you MUST prefer plan_action "keep" and omit "decision" so the executor runs the remaining '
-            'steps in the next wave. Use plan_action "new" only when evidence proves the plan is wrong, '
-            "blocked, or obsolete.\n"
-            "</PLAN_CONTINUE_POLICY>\n"
-        )
-
-    if context.available_capabilities:
-        parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
-
-    parts.append(
-        "\n<SOOTHE_DELEGATION_POLICY>\n"
-        "- Prefer **one** subagent delegation per execute_steps item; if a correction needs another delegation, "
-        'use status "continue" and a **new** step on the next iteration instead of implying multiple serial '
-        "delegations inside one vague step.\n"
-        "- When evidence already contains a complete user-facing deliverable matching the goal (e.g. translation), "
-        'use status "done" — do not schedule another step whose only purpose is to repeat the same output.\n'
-        "- **CRITICAL**: When the assistant asks the user for clarification, missing information, or confirmation, "
-        'use status "done" immediately — the conversation turn is complete and waiting for user input. '
-        "Do NOT use status 'continue' when asking questions like 'What would you like me to translate?' or "
-        "'Please provide the text you want translated.' These are terminal actions for this turn.\n"
-        "</SOOTHE_DELEGATION_POLICY>\n"
-    )
-
-    parts.append(
-        "\n<STEP_GRANULARITY_AND_LAYER_ALIGNMENT>\n"
-        "- Prefer 1-3 concrete steps per decision; each step must have a checkable expected_output.\n"
-        "- Step descriptions are imperative, tool-facing actions; never use only the raw user goal string as "
-        "the entire step (Layer 2 plans steps; Layer 1 executes them).\n"
-        "- Merge related filesystem lists/reads into a single step when practical.\n"
-        "</STEP_GRANULARITY_AND_LAYER_ALIGNMENT>\n"
-    )
-
-    parts.extend(
-        [
-            "\n\nYou are the Reason step in a ReAct loop. In ONE response you must:",
-            "\n1. Estimate how complete the goal is (goal_progress 0.0-1.0) and your confidence.",
-            '\n2. Choose status: "done" (goal fully achieved), "continue" (more work with same or adjusted plan),',
-            '   or "replan" (abandon current approach).',
-            "\n3. Write user_summary: one short, friendly sentence for the user (no jargon).",
-            "\n4. Write soothe_next_action: ONE sentence in first person as the assistant Soothe",
-            '   (use "I" / "I will" / "I\'ll"), describing the immediate next action you will take.',
-            "   If status is done, say you are finishing or presenting the result (still first person).",
-            "\n5. Optionally write progress_detail: 1-2 sentences explaining what's left or what changed.",
-            "\n6. reasoning: INTERNAL ONLY - concise technical analysis, third person or neutral,",
-            "   NOT first person, NOT shown to the user. Never put user-facing text only in reasoning.",
-            '\n7. Choose plan_action: "keep" when the in-flight plan still applies and unfinished steps remain',
-            '   (see PLAN_CONTINUE_POLICY); otherwise "new" with a full "decision".',
-            '\n8. For "decision" when plan_action is "new", use the same shape as before:',
-            "   type, steps[], execution_mode, adaptive_granularity, reasoning (plan-focused).",
-            "\n9. Do NOT repeat work already shown in evidence or completed summaries.",
-            "\n\nReturn JSON:",
-            "{",
-            '  "status": "done" | "continue" | "replan",',
-            '  "goal_progress": 0.0,',
-            '  "confidence": 0.0,',
-            '  "reasoning": "internal technical analysis, not first person, not for user UI",',
-            '  "user_summary": "Short friendly line for the user",',
-            '  "soothe_next_action": "I will ... (first person, Soothe)",',
-            '  "progress_detail": "Optional extra context for the user",',
-            '  "plan_action": "keep" | "new",',
-            '  "next_steps_hint": null,',
-            '  "decision": {',
-            '    "type": "execute_steps",',
-            '    "steps": [',
-            "      {",
-            '        "description": "...",',
-            '        "tools": [],',
-            '        "subagent": null,',
-            '        "expected_output": "...",',
-            '        "dependencies": []',
-            "      }",
-            "    ],",
-            '    "execution_mode": "sequential" | "parallel" | "dependency",',
-            '    "adaptive_granularity": "atomic" | "semantic",',
-            '    "reasoning": "why these steps"',
-            "  }",
-            "}",
-            '\nWhen status is "done", you may omit "decision" or set plan_action to "keep" with no decision.',
-            '\nWhen plan_action is "keep", omit "decision" entirely.',
-        ]
-    )
-
-    return "\n".join(parts)
-
-
 _SIMPLE_PLANNER_HINT_MAP = {
     "browser": "subagent",
     "search": "tool",
@@ -661,7 +435,7 @@ class SimplePlanner:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
         """
-        from soothe.prompts import PromptBuilder
+        from soothe.core.prompts import PromptBuilder
 
         self._model = model
         self._config = config
@@ -773,7 +547,7 @@ class SimplePlanner:
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
         """Build unified planning prompt with XML sections (RFC-104 alignment)."""
-        from soothe.prompts.context_xml import build_shared_environment_workspace_prefix
+        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
 
         sections = []
 
