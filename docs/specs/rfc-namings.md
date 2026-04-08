@@ -92,6 +92,17 @@ This document defines the terminology and naming conventions used in this projec
 | Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-201 |
 | Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-201 |
 
+### Prompt Architecture Terms (RFC-206)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| Hierarchical Prompt | Three-layer XML structure separating system context from user tasks. Uses explicit container tags: `<SYSTEM_CONTEXT>`, `<USER_TASK>`, `<INSTRUCTIONS>`. Prevents LLM confusion between metadata and user content. | RFC-206 |
+| PromptBuilder | Internal API class that composes hierarchical prompts from modular XML fragments. Manages fragment loading, template rendering, and assembly. Not exposed to users for configuration. | RFC-206 |
+| SYSTEM_CONTEXT | Top-level XML container holding static system metadata (environment, workspace, capabilities, policies). Explicitly marked as non-user-content to prevent processing during ambiguous requests. | RFC-206 |
+| USER_TASK | Top-level XML container holding dynamic user-specific content (goal, prior conversation, evidence). This is the section LLM should focus on for user requests. | RFC-206 |
+| INSTRUCTIONS | Top-level XML container holding output format specification and execution rules. Defines how LLM should respond to the task. | RFC-206 |
+| Fragment Composition | Modular prompt construction from XML fragment files stored in `src/soothe/prompts/fragments/`. Each fragment has single responsibility (e.g., environment.xml, goal.xml). Internal implementation detail, not user-configurable. | RFC-206 |
+
 ## Naming Conventions
 
 ### General Principles

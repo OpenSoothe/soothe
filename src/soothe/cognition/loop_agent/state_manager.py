@@ -31,16 +31,17 @@ logger = logging.getLogger(__name__)
 class Layer2StateManager:
     """Manages Layer 2 checkpoint lifecycle."""
 
-    def __init__(self, thread_id: str, workspace: Path | None = None) -> None:
+    def __init__(self, thread_id: str, workspace: Path | None = None) -> None:  # noqa: ARG002
         """Initialize with thread context.
 
         Args:
             thread_id: Thread identifier
-            workspace: Optional workspace path (uses SOOTHE_HOME if None)
+            workspace: Optional workspace path (not used for checkpoint storage)
         """
         self.thread_id = thread_id
-        self.workspace = workspace or Path(SOOTHE_HOME).expanduser()
-        self.run_dir = self.workspace / "runs" / thread_id
+        # Checkpoint is ALWAYS stored in SOOTHE_HOME, not project workspace (IG-134)
+        sothe_home = Path(SOOTHE_HOME).expanduser()
+        self.run_dir = sothe_home / "runs" / thread_id
         self.checkpoint_path = self.run_dir / "layer2_checkpoint.json"
         self._checkpoint: Layer2Checkpoint | None = None
 

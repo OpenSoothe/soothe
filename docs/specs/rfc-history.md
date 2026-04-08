@@ -6,6 +6,8 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-04-08 | RFC-206 | Draft | Hierarchical Prompt Architecture with System/User Separation — three-layer XML structure (SYSTEM_CONTEXT, USER_TASK, INSTRUCTIONS), PromptBuilder API, modular fragment composition |
+| 2026-04-08 | RFC-205 | Draft | Layer 2 Unified State Model and Independent Checkpoint — step I/O semantics, independent persistence, recovery without Layer 1 dependency |
 | 2026-04-07 | RFC-201 | Implemented | Added Layer 2 Context Isolation and Execution Bounds — thread isolation for delegation steps, subagent task cap, wave metrics, output contract enforcement |
 | 2026-04-03 | RFC-204 | Active | Autopilot Mode — consensus loop, dreaming mode, channel protocol, scheduler, UX surfaces; gap analysis identifying 12 remaining gaps |
 | 2026-04-03 | IG-125 | New | Implementation Guide for RFC-204 gap closure |
