@@ -23,7 +23,7 @@ from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
     from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult, StepResult
-    from soothe.cognition.loop_working_memory import LoopWorkingMemory
+    from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -273,8 +273,8 @@ class Layer2StateManager:
                 success=result.success,
                 output=result.output or "",
                 error=result.error,
-                tool_calls=[],  # TODO(@chenxm): Extract from result if available
-                subagent_calls=[],  # TODO(@chenxm): Extract from result if available
+                tool_calls=[],  # Reserved for future extraction from result
+                subagent_calls=[],  # Reserved for future extraction from result
             )
             step_records.append(step_record)
 

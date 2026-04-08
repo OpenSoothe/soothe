@@ -193,7 +193,7 @@ class ClaudePlanner:
         return ""
 
     def _build_prompt(self, goal: str, context: PlanContext) -> str:
-        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
+        from soothe.prompts.context_xml import build_shared_environment_workspace_prefix
 
         parts: list[str] = []
         if self._config is not None:

@@ -90,7 +90,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Base prompt with appended XML sections for medium/complex.
         """
-        from soothe.core.prompts.context_xml import build_context_sections_for_complexity
+        from soothe.prompts.context_xml import build_context_sections_for_complexity
 
         base_core = self._get_base_prompt_core(complexity)
         date_line = self._current_date_line()

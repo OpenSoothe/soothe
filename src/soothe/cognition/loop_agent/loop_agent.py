@@ -12,7 +12,7 @@ from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.reason import ReasonPhase
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
 from soothe.cognition.loop_agent.state_manager import Layer2StateManager
-from soothe.cognition.loop_working_memory import LoopWorkingMemory
+from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
 if TYPE_CHECKING:

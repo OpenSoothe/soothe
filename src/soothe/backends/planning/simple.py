@@ -420,7 +420,7 @@ def build_loop_reason_prompt(
     config: SootheConfig | None = None,
 ) -> str:
     """Shared Reason-phase prompt for Layer 2 (SimplePlanner / ClaudePlanner)."""
-    from soothe.core.prompts.context_xml import (
+    from soothe.prompts.context_xml import (
         build_shared_environment_workspace_prefix,
         build_soothe_workspace_section,
     )
@@ -559,6 +559,10 @@ def build_loop_reason_prompt(
         "delegations inside one vague step.\n"
         "- When evidence already contains a complete user-facing deliverable matching the goal (e.g. translation), "
         'use status "done" — do not schedule another step whose only purpose is to repeat the same output.\n'
+        "- **CRITICAL**: When the assistant asks the user for clarification, missing information, or confirmation, "
+        'use status "done" immediately — the conversation turn is complete and waiting for user input. '
+        "Do NOT use status 'continue' when asking questions like 'What would you like me to translate?' or "
+        "'Please provide the text you want translated.' These are terminal actions for this turn.\n"
         "</SOOTHE_DELEGATION_POLICY>\n"
     )
 
@@ -769,7 +773,7 @@ class SimplePlanner:
 
     def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
         """Build unified planning prompt with XML sections (RFC-104 alignment)."""
-        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
+        from soothe.prompts.context_xml import build_shared_environment_workspace_prefix
 
         sections = []
 
