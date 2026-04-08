@@ -48,6 +48,7 @@ RFCs are organized by numeric prefix:
 | [RFC-204](./RFC-204-autopilot-mode.md) | Autopilot Mode | Active | Architecture Design | RFC-200, RFC-201, RFC-202, RFC-400, RFC-500 |
 | [RFC-205](./RFC-205-layer2-unified-state-checkpoint.md) | Layer 2 Unified State Model and Independent Checkpoint | Draft | Architecture Design | RFC-201, RFC-203, RFC-100 |
 | [RFC-206](./RFC-206-prompt-architecture.md) | Hierarchical Prompt Architecture | Draft | Architecture Design | RFC-201, RFC-100 |
+| [RFC-207](./RFC-207-message-type-separation.md) | SystemMessage/HumanMessage Separation | Draft | Architecture Refinement | RFC-206, RFC-201, RFC-100 |
 
 ### 3xx — Protocols (Interface Contracts)
 
@@ -143,12 +144,12 @@ RFC-000 (System Conceptual Design)
 |----------|-------------|-------|-------|
 | Foundation (0xx) | 2 | 0 | 2 |
 | Core Agent (1xx) | 3 | 2 | 5 |
-| Cognition Loop (2xx) | 2 | 3 | 5 |
+| Cognition Loop (2xx) | 2 | 4 | 6 |
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 1 | 3 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
 | Plugin System (6xx) | 2 | 0 | 2 |
-| **Total** | **14** | **7** | **21** |
+| **Total** | **14** | **8** | **22** |
 
 ---
 

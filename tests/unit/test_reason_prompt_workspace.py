@@ -16,10 +16,11 @@ def test_build_loop_reason_prompt_with_config_includes_soothe_blocks() -> None:
     config.resolve_model.return_value = "claude-opus-4-6"
     builder = PromptBuilder(config)
     text = builder.build_reason_prompt("analyze architecture", state, ctx)
-    assert "<SOOTHE_ENVIRONMENT" in text
-    assert "<SOOTHE_WORKSPACE" in text
+    # RFC-207: Removed SOOTHE_ prefix from all tags
+    assert "<ENVIRONMENT" in text
+    assert "<WORKSPACE" in text
     assert "/abs/path/to/repo" in text
-    assert "<SOOTHE_REASON_WORKSPACE_RULES>" in text
+    assert "<WORKSPACE_RULES>" in text
     assert "Do NOT ask the user" in text
 
 
@@ -28,10 +29,11 @@ def test_build_loop_reason_prompt_without_config_workspace_only() -> None:
     ctx = PlanContext(workspace="/abs/path/to/repo")
     builder = PromptBuilder()
     text = builder.build_reason_prompt("analyze architecture", state, ctx)
-    assert "<SOOTHE_ENVIRONMENT" not in text
-    assert "<SOOTHE_WORKSPACE" in text
+    # RFC-207: Removed SOOTHE_ prefix from all tags
+    assert "<ENVIRONMENT" not in text
+    assert "<WORKSPACE" in text
     assert "/abs/path/to/repo" in text
-    assert "<SOOTHE_REASON_WORKSPACE_RULES>" in text
+    assert "<WORKSPACE_RULES>" in text
 
 
 def test_build_loop_reason_prompt_omits_workspace_rules_without_workspace() -> None:
@@ -39,7 +41,8 @@ def test_build_loop_reason_prompt_omits_workspace_rules_without_workspace() -> N
     ctx = PlanContext(workspace=None)
     builder = PromptBuilder()
     text = builder.build_reason_prompt("hi", state, ctx)
-    assert "<SOOTHE_REASON_WORKSPACE_RULES>" not in text
+    # RFC-207: WORKSPACE_RULES in SystemMessage when workspace present
+    assert "<WORKSPACE_RULES>" not in text
 
 
 def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
@@ -50,7 +53,8 @@ def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
     )
     builder = PromptBuilder()
     text = builder.build_reason_prompt("g", state, ctx)
-    assert "<SOOTHE_LOOP_WORKING_MEMORY>" in text
+    # RFC-207: Removed SOOTHE_ prefix from WORKING_MEMORY tag
+    assert "<WORKING_MEMORY>" in text
     assert "listed src/" in text
 
 
@@ -67,8 +71,10 @@ def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
     )
     builder = PromptBuilder()
     text = builder.build_reason_prompt("翻译成中文", state, ctx)
-    assert "<SOOTHE_PRIOR_CONVERSATION>" in text
-    assert "<SOOTHE_FOLLOW_UP_POLICY>" in text
+    # RFC-207: Removed SOOTHE_ prefix from PRIOR_CONVERSATION tag
+    # FOLLOW_UP_POLICY now in SystemMessage (static rule)
+    assert "<PRIOR_CONVERSATION>" in text
+    assert "<FOLLOW_UP_POLICY>" in text  # Moved to SystemMessage
     assert "Infrastructure" in text
     assert "translate" in text.lower() or "Layer 1" in text
 
@@ -89,4 +95,5 @@ def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
     state.completed_step_ids = {"a"}
     builder = PromptBuilder()
     text = builder.build_reason_prompt("g", state, PlanContext())
+    # RFC-207: PLAN_CONTINUE_POLICY now in SystemMessage (static rule)
     assert "PLAN_CONTINUE_POLICY" in text

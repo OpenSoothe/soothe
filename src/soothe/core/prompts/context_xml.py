@@ -24,7 +24,7 @@ def _xml_attr(value: object) -> str:
 
 
 def build_soothe_environment_section(*, model: str) -> str:
-    """Build nested SOOTHE_ENVIRONMENT XML block (see RFC104_CONTEXT_XML_VERSION).
+    """Build nested ENVIRONMENT XML block (RFC-207: removed SOOTHE_ prefix).
 
     Args:
         model: Resolved default model id (e.g. from ``config.resolve_model`` for the default role).
@@ -48,7 +48,7 @@ def build_soothe_environment_section(*, model: str) -> str:
         ]
     )
     ver = RFC104_CONTEXT_XML_VERSION
-    return f'<SOOTHE_ENVIRONMENT version="{_xml_attr(ver)}">\n{inner}\n</SOOTHE_ENVIRONMENT>'
+    return f'<ENVIRONMENT version="{_xml_attr(ver)}">\n{inner}\n</ENVIRONMENT>'
 
 
 def _safe_list_dir_names(root: Path, *, max_entries: int) -> str | None:
@@ -87,7 +87,7 @@ def build_soothe_workspace_section(
     include_readme_excerpt: bool = False,
     readme_max_chars: int = 500,
 ) -> str:
-    """Build nested SOOTHE_WORKSPACE XML block (versioned via RFC104_CONTEXT_XML_VERSION).
+    """Build nested WORKSPACE XML block (RFC-207: removed SOOTHE_ prefix).
 
     Args:
         workspace: Project root; when None, the process current working directory is used.
@@ -132,7 +132,7 @@ def build_soothe_workspace_section(
 
     inner = "\n".join(lines)
     ver = RFC104_CONTEXT_XML_VERSION
-    return f'<SOOTHE_WORKSPACE version="{_xml_attr(ver)}">\n{inner}\n</SOOTHE_WORKSPACE>'
+    return f'<WORKSPACE version="{_xml_attr(ver)}">\n{inner}\n</WORKSPACE>'
 
 
 def build_soothe_thread_section(thread_context: dict[str, Any]) -> str:
