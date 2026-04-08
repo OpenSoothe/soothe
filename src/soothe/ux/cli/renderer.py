@@ -211,6 +211,10 @@ class CliRenderer:
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
+        # HARD SUPPRESS during multi-step execution (IG-143)
+        if self._state.multi_step_active or self._state.agentic_stdout_suppressed:
+            return
+
         self._stderr_begin_icon_block()
 
         display_name = get_tool_display_name(name)
@@ -249,6 +253,10 @@ class CliRenderer:
             is_main: True if from main agent.
         """
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
+            return
+
+        # HARD SUPPRESS during multi-step execution (IG-143)
+        if self._state.multi_step_active or self._state.agentic_stdout_suppressed:
             return
 
         self._stderr_begin_icon_block()
@@ -342,7 +350,8 @@ class CliRenderer:
             if want_final and not self._state.agentic_final_stdout_emitted:
                 self._write_stdout_final_report(final_stdout)
             self._state.agentic_final_stdout_emitted = True
-            self._state.agentic_stdout_suppressed = False
+            # Note: Keep agentic_stdout_suppressed=True to prevent late tool result leaks
+            # Will be cleared on status=idle or new thread session
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
