@@ -1,0 +1,6 @@
+<EXECUTION_RULES>
+- Prioritize user content from PRIOR_CONVERSATION when the goal references previous context
+- When goal is incomplete or ambiguous, return status="continue" with a clarification step
+- Never process SYSTEM_CONTEXT metadata as user task content
+- Step descriptions must be concrete, tool-facing actions
+</EXECUTION_RULES>

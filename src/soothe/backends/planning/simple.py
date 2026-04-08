@@ -657,8 +657,11 @@ class SimplePlanner:
             model: Langchain BaseChatModel supporting structured output.
             config: Optional configuration for shared context XML in prompts.
         """
+        from soothe.prompts import PromptBuilder
+
         self._model = model
         self._config = config
+        self._prompt_builder = PromptBuilder(config)
 
     async def create_plan(self, goal: str, context: PlanContext) -> Plan:
         """Create plan via LLM structured output."""
@@ -916,7 +919,7 @@ class SimplePlanner:
         """Layer 2 Reason phase: assess progress and plan the next act in one LLM call."""
         from soothe.cognition.loop_agent.schemas import ReasonResult
 
-        prompt = self._build_reason_prompt(goal, state, context)
+        prompt = self._prompt_builder.build_reason_prompt(goal, state, context)
         try:
             response = await self._invoke(prompt)
             return parse_reason_response_text(response, goal)
@@ -930,7 +933,3 @@ class SimplePlanner:
                 user_summary="Retrying with a simpler plan after a model error",
                 soothe_next_action="I'll retry with a simpler next step.",
             )
-
-    def _build_reason_prompt(self, goal: str, state: LoopState, context: PlanContext) -> str:
-        """Build unified Reason prompt (assessment + next steps)."""
-        return build_loop_reason_prompt(goal, state, context, config=self._config)
