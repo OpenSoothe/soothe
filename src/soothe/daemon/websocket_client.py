@@ -143,6 +143,19 @@ class WebSocketClient:
         """
         return self._connected
 
+    def is_connection_alive(self) -> bool:
+        """Check if WebSocket connection is actually alive (not closed).
+
+        This is a deeper check than is_connected - it verifies the actual
+        WebSocket state, not just the client-side flag.
+
+        Returns:
+            True if WebSocket is open and not closed, False otherwise.
+        """
+        from websockets.asyncio.connection import State
+
+        return self._ws is not None and self._ws.state == State.OPEN
+
     async def send_input(
         self,
         text: str,

@@ -334,6 +334,17 @@ execution:
     auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
 
 # =============================================================================
+# LLM Tracing
+# =============================================================================
+# Configure LLM request/response tracing for debugging.
+# Logs comprehensive information about LLM calls including prompts, responses,
+# token usage, and latency. Useful for debugging and optimization.
+
+llm_tracing:
+  enabled: true              # Enable LLM tracing middleware for debugging
+  log_preview_length: 1000    # Maximum characters to log for message previews (50-1000)
+
+# =============================================================================
 # Logging & Observability
 # =============================================================================
 # Configure logging, thread history, and debugging features.
@@ -390,6 +401,14 @@ daemon:
   # Multi-threading (RFC-402) - Enable parallel query execution
   multi_threading_enabled: true
   max_concurrent_threads: 4
+
+  # Query Timeout Safeguards (IG-138)
+  max_query_duration_minutes: 60  # Maximum query duration in minutes (0 = unlimited)
+  query_timeout_action: "cancel"  # Action on timeout: cancel | suspend
+
+  # Auto-Cancel Stuck Queries (IG-138)
+  thread_max_age_hours: 24  # Auto-cancel incomplete threads older than N hours
+  auto_cancel_on_startup: true  # Cancel very old incomplete threads on daemon start
 
   # Transport Layer Configuration
   transports:

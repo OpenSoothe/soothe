@@ -102,9 +102,19 @@ def build_soothe_middleware_stack(
     import os
 
     log_level = os.environ.get("SOOTHE_LOG_LEVEL", "INFO")
-    if log_level == "DEBUG" or getattr(config, "llm_tracing", {}).get("enabled", False):
-        stack.append(LLMTracingMiddleware(log_preview_length=200))
+    llm_tracing_enabled = log_level == "DEBUG" or (hasattr(config, "llm_tracing") and config.llm_tracing.enabled)
+    if llm_tracing_enabled:
+        preview_length = (
+            getattr(config.llm_tracing, "log_preview_length", 200) if hasattr(config, "llm_tracing") else 200
+        )
+        stack.append(LLMTracingMiddleware(log_preview_length=preview_length))
         logger.debug("[Middleware] LLM tracing enabled")
+
+        # Auto-configure logging level for LLM tracing module (IG-140)
+        import logging
+
+        llm_logger = logging.getLogger("soothe.core.middleware.llm_tracing")
+        llm_logger.setLevel(logging.DEBUG)
 
     # 4. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())

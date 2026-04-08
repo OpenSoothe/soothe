@@ -299,39 +299,111 @@ class SootheDaemon(DaemonHandlersMixin):
             loop.call_soon_threadsafe(self._stop_event.set)
 
     async def _detect_incomplete_threads(self) -> None:
-        """Detect threads left in_progress from a previous daemon run (RFC-0010)."""
+        """Detect threads left in_progress from a previous daemon run (RFC-0010, IG-138).
+
+        If auto_cancel_on_startup is enabled, threads older than thread_max_age_hours
+        are automatically cancelled.
+        """
+        from datetime import datetime, timedelta
+
         runs_dir = Path(SOOTHE_HOME).expanduser() / "runs"  # noqa: ASYNC240
         if not runs_dir.exists():
             return
         try:
             incomplete = []
+            auto_cancel = self._config.daemon.auto_cancel_on_startup
+            max_age_hours = self._config.daemon.thread_max_age_hours
+            max_age_threshold = datetime.now(tz=None) - timedelta(hours=max_age_hours) if auto_cancel else None
+
             for checkpoint_file in runs_dir.glob("*/checkpoint.json"):
                 try:
                     data = json.loads(checkpoint_file.read_text(encoding="utf-8"))
                     if isinstance(data, dict) and data.get("status") == "in_progress":
-                        incomplete.append(
-                            {
-                                "thread_id": checkpoint_file.parent.name,
-                                "query": data.get("last_query", "")[:60],
-                                "mode": data.get("mode", ""),
-                                "completed_steps": len(data.get("completed_step_ids", [])),
-                                "goals": len(data.get("goals", [])),
-                            }
-                        )
+                        thread_info = {
+                            "thread_id": checkpoint_file.parent.name,
+                            "query": data.get("last_query", "")[:60],
+                            "mode": data.get("mode", ""),
+                            "completed_steps": len(data.get("completed_step_ids", [])),
+                            "goals": len(data.get("goals", [])),
+                            "updated_at": data.get("updated_at"),
+                        }
+                        incomplete.append(thread_info)
+
+                        # Auto-cancel very old threads (IG-138)
+                        if auto_cancel and max_age_threshold and thread_info["updated_at"]:
+                            try:
+                                # Parse timestamp (may be ISO string or other format)
+                                updated_str = thread_info["updated_at"]
+                                if isinstance(updated_str, str):
+                                    # Try parsing ISO format (handle both "Z" suffix and standard ISO)
+                                    import re
+
+                                    normalized = re.sub(r"Z$", "+00:00", updated_str)
+                                    try:
+                                        updated_at = datetime.fromisoformat(normalized)
+                                    except ValueError:
+                                        logger.debug(
+                                            "Failed to parse timestamp: %s for thread %s",
+                                            updated_str,
+                                            thread_info["thread_id"],
+                                        )
+                                        continue
+
+                                    if updated_at.tzinfo is not None:
+                                        updated_at = updated_at.replace(tzinfo=None)
+                                else:
+                                    # Skip if not a string
+                                    continue
+
+                                if updated_at < max_age_threshold:
+                                    thread_id = thread_info["thread_id"]
+                                    age_hours = (datetime.now(tz=None) - updated_at).total_seconds() / 3600
+
+                                    logger.warning(
+                                        "Auto-cancelling very old thread %s (age: %.1f hours > max: %d)",
+                                        thread_id,
+                                        age_hours,
+                                        max_age_hours,
+                                    )
+
+                                    # Cancel the thread using ThreadContextManager
+                                    if self._runner:
+                                        try:
+                                            thread_manager = self._runner.thread_context_manager()
+                                            await thread_manager.cancel_thread(thread_id)
+                                            logger.info("Successfully auto-cancelled thread %s", thread_id)
+                                        except Exception:
+                                            logger.warning(
+                                                "Failed to cancel thread %s",
+                                                thread_id,
+                                                exc_info=True,
+                                            )
+                            except (ValueError, TypeError):
+                                # Skip if timestamp parsing fails
+                                logger.debug(
+                                    "Failed to parse timestamp for thread %s",
+                                    thread_info["thread_id"],
+                                )
+                                continue
                 except Exception:  # noqa: S112
                     continue
+
             if incomplete:
-                logger.info(
-                    "Found %d incomplete threads from previous run",
-                    len(incomplete),
-                )
-                for t in incomplete:
+                # Filter out auto-cancelled threads for reporting
+                remaining = [t for t in incomplete if t["thread_id"] not in getattr(self, "_cancelled_threads", set())]
+                if remaining:
                     logger.info(
-                        "  Thread %s: %s (%d steps done)",
-                        t["thread_id"],
-                        t["query"],
-                        t["completed_steps"],
+                        "Found %d incomplete threads from previous run (%d auto-cancelled)",
+                        len(remaining),
+                        len(incomplete) - len(remaining),
                     )
+                    for t in remaining:
+                        logger.info(
+                            "  Thread %s: %s (%d steps done)",
+                            t["thread_id"],
+                            t["query"],
+                            t["completed_steps"],
+                        )
             else:
                 logger.debug("No incomplete threads found from previous runs")
         except Exception:

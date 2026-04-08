@@ -1,4 +1,10 @@
-"""LLM request/response tracing middleware for debugging."""
+"""LLM request/response tracing middleware for debugging.
+
+IMPORTANT: This middleware uses langchain's hook-based middleware pattern.
+- Implement awrap_model_call() to wrap async LLM invocations
+- The framework calls this hook, NOT run()/arun() methods
+- See IG-141 for the correct middleware implementation pattern
+"""
 
 from __future__ import annotations
 
@@ -67,41 +73,15 @@ class LLMTracingMiddleware(AgentMiddleware):
         """
         return response
 
-    def run(
-        self,
-        request: ModelRequest[ContextT],
-        handler: Callable[[ModelRequest[ContextT]], ModelResponse[Any]],
-    ) -> ModelResponse[Any]:
-        """Trace synchronous LLM request/response lifecycle.
-
-        Args:
-            request: Model request to process.
-            handler: Next handler in middleware chain.
-
-        Returns:
-            Model response from handler.
-        """
-        trace_id = self._next_trace_id()
-        self._log_request(trace_id, request)
-
-        start_time = time.perf_counter()
-        try:
-            response = handler(request)
-        except Exception as e:
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            self._log_error(trace_id, e, duration_ms)
-            raise
-        else:
-            duration_ms = int((time.perf_counter() - start_time) * 1000)
-            self._log_response(trace_id, response, duration_ms)
-            return response
-
-    async def arun(
+    async def awrap_model_call(
         self,
         request: ModelRequest[ContextT],
         handler: Callable[[ModelRequest[ContextT]], Awaitable[ModelResponse[Any]]],
     ) -> ModelResponse[Any]:
         """Trace async LLM request/response lifecycle.
+
+        This is the correct langchain middleware hook that wraps model calls.
+        The framework calls this method, NOT run()/arun() which are unused.
 
         Args:
             request: Model request to process.
@@ -205,7 +185,8 @@ class LLMTracingMiddleware(AgentMiddleware):
             response: Model response to log.
             duration_ms: Request duration in milliseconds.
         """
-        messages = response.messages
+        # ModelResponse has 'result' attribute containing messages
+        messages = response.result
 
         # Find the latest AI message (LLM response)
         ai_message = None

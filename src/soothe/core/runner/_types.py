@@ -86,3 +86,5 @@ class RunnerState:
     protocol_summary: dict[str, Any] = field(default_factory=dict)
     # Per-query artifact store (RFC-0010); avoids sharing one RunArtifactStore on the runner (IG-110)
     artifact_store: Any = None
+    # Thread context for subagents (IG-140)
+    prior_messages: str | None = None

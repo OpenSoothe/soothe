@@ -29,7 +29,7 @@ class ThreadFormatter(logging.Formatter):
             The formatted log message string.
         """
         soothe_thread_id = get_thread_id()
-        record.thread_id = f"[T:{soothe_thread_id}]" if soothe_thread_id else ""
+        record.thread_id = f"[{soothe_thread_id}]" if soothe_thread_id else "[main]"
         return super().format(record)
 
 

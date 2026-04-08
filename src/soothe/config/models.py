@@ -701,6 +701,21 @@ class ExecutionConfig(BaseModel):
     recovery: RecoveryConfig = Field(default_factory=RecoveryConfig)
 
 
+class LLMTracingConfig(BaseModel):
+    """Configuration for LLM request/response tracing middleware.
+
+    Args:
+        enabled: Enable LLM tracing middleware for debugging.
+        log_preview_length: Maximum characters to log for message previews.
+    """
+
+    enabled: bool = False
+    """Enable LLM tracing middleware for debugging."""
+
+    log_preview_length: int = Field(default=200, ge=50, le=1000)
+    """Maximum characters to log for message previews."""
+
+
 class AutopilotConfig(BaseModel):
     """Autopilot mode configuration (RFC-204)."""
 

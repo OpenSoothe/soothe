@@ -120,14 +120,22 @@ class PhasesMixin:
         )
         state.unified_classification = UnifiedClassification.from_routing(routing)
 
-        # Run pre-stream work then stream directly
+        # Inject prior thread messages into subagent context (IG-140)
+        prior_messages = getattr(state, "prior_messages", "")
+        enhanced_input = user_input
+        if prior_messages:
+            # Prepend prior messages to user input as context
+            enhanced_input = f"{prior_messages}\n\nCurrent request: {user_input}"
+            logger.debug("Enhanced subagent input with prior thread messages")
+
+        # Run pre-stream work then stream directly with enhanced input
         collected_chunks = [
-            chunk async for chunk in self._pre_stream_independent(user_input, state, complexity="medium")
+            chunk async for chunk in self._pre_stream_independent(enhanced_input, state, complexity="medium")
         ]
         for chunk in collected_chunks:
             yield chunk
 
-        async for chunk in self._stream_phase(user_input, state):
+        async for chunk in self._stream_phase(enhanced_input, state):
             yield chunk
 
     # -- LangGraph stream with HITL loop ------------------------------------

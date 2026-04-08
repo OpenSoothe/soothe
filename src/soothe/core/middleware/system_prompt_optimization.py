@@ -90,7 +90,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         Returns:
             Base prompt with appended XML sections for medium/complex.
         """
-        from soothe.prompts.context_xml import build_context_sections_for_complexity
+        from soothe.core.prompts.context_xml import build_context_sections_for_complexity
 
         base_core = self._get_base_prompt_core(complexity)
         date_line = self._current_date_line()
@@ -151,10 +151,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         classification: UnifiedClassification | None = request.state.get("unified_classification")
         if not classification:
-            logger.debug(
-                "No classification found in state (keys=%s), using default prompt",
-                list(request.state.keys()) if hasattr(request.state, "keys") else "N/A",
-            )
             return request
 
         complexity = classification.task_complexity

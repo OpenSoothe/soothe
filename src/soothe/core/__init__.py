@@ -7,6 +7,7 @@ __all__ = [
     "ConfigDrivenPolicy",
     "CoreAgent",
     "FrameworkFilesystem",
+    "PromptBuilder",
     "ResolvedWorkspace",
     "SootheRunner",
     "create_soothe_agent",
@@ -34,6 +35,10 @@ def __getattr__(name: str) -> Any:
         from soothe.core.config_driven import ConfigDrivenPolicy
 
         return ConfigDrivenPolicy
+    if name == "PromptBuilder":
+        from soothe.core.prompts import PromptBuilder
+
+        return PromptBuilder
     if name == "INVALID_WORKSPACE_DIRS":
         from soothe.foundation.types import INVALID_WORKSPACE_DIRS
 

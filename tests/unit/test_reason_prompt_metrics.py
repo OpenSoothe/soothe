@@ -2,9 +2,9 @@
 
 import pytest
 
-from soothe.backends.planning.simple import build_loop_reason_prompt
 from soothe.cognition.loop_agent.schemas import LoopState
 from soothe.config import SootheConfig
+from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 
@@ -47,7 +47,8 @@ def test_metrics_section_included_when_wave_executed(config, state, context):
     state.total_tokens_used = 30000
     state.context_percentage_consumed = 0.15
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "<SOOTHE_WAVE_METRICS>" in prompt
     assert "Subagent calls: 1" in prompt
@@ -63,7 +64,8 @@ def test_metrics_section_omitted_when_no_wave(config, state, context):
     """Metrics section not included when last_wave_tool_call_count == 0."""
     state.last_wave_tool_call_count = 0
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "<SOOTHE_WAVE_METRICS>" not in prompt
 
@@ -73,7 +75,8 @@ def test_metrics_section_cap_hit_yes(config, state, context):
     state.last_wave_tool_call_count = 1
     state.last_wave_hit_subagent_cap = True
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "Cap hit: Yes" in prompt
 
@@ -84,7 +87,8 @@ def test_metrics_section_no_context_data(config, state, context):
     state.total_tokens_used = 0
     state.context_percentage_consumed = 0.0
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "Context used: N/A" in prompt
     assert "N/A tokens" in prompt
@@ -96,7 +100,8 @@ def test_metrics_section_large_numbers_formatted(config, state, context):
     state.last_wave_output_length = 125000
     state.total_tokens_used = 150000
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "Output length: 125,000 characters" in prompt
     assert "150,000 tokens" in prompt
@@ -107,7 +112,8 @@ def test_metrics_section_with_errors(config, state, context):
     state.last_wave_tool_call_count = 3
     state.last_wave_error_count = 2
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     assert "Errors: 2" in prompt
 
@@ -116,7 +122,8 @@ def test_metrics_section_position_in_prompt(config, state, context):
     """Metrics section appears after goal and iteration info."""
     state.last_wave_tool_call_count = 1
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     # Find positions
     goal_pos = prompt.find("Goal: Test goal")
@@ -137,7 +144,8 @@ def test_metrics_section_all_components_present(config, state, context):
     state.total_tokens_used = 50000
     state.context_percentage_consumed = 0.25
 
-    prompt = build_loop_reason_prompt("Test goal", state, context, config=config)
+    builder = PromptBuilder(config)
+    prompt = builder.build_reason_prompt("Test goal", state, context)
 
     # Check all required fields are present
     required_fields = [

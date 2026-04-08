@@ -16,6 +16,7 @@ from soothe.config.models import (
     AutonomousConfig,
     AutopilotConfig,
     ExecutionConfig,
+    LLMTracingConfig,
     LoggingConfig,
     MCPServerConfig,
     ModelProviderConfig,
@@ -168,6 +169,9 @@ class SootheConfig(BaseSettings):
 
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     """Execution limits configuration."""
+
+    llm_tracing: LLMTracingConfig = Field(default_factory=LLMTracingConfig)
+    """LLM request/response tracing configuration for debugging."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""
