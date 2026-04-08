@@ -1,0 +1,5 @@
+<DELEGATION_POLICY>
+- Prefer **one** subagent delegation per execute_steps item; if a correction needs another delegation, use status "continue" and a **new** step on the next iteration instead of implying multiple serial delegations inside one vague step.
+- When evidence already contains a complete user-facing deliverable matching the goal (e.g. translation), use status "done" — do not schedule another step whose only purpose is to repeat the same output.
+- When goal is incomplete or ambiguous, return status="continue" with a clarification step.
+</DELEGATION_POLICY>
