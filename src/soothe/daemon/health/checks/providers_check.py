@@ -53,12 +53,25 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
         # Create a minimal test model
         model = config.create_chat_model(provider_name)
 
+        # IG-143: Add metadata for tracing
+        from soothe.core.middleware._utils import create_llm_call_metadata
+
         # Try a minimal test call with timeout
         # Use asyncio.wait_for to enforce timeout
         async def test_call() -> Any:
             from langchain_core.messages import HumanMessage
 
-            return await model.ainvoke([HumanMessage(content="test")])
+            return await model.ainvoke(
+                [HumanMessage(content="test")],
+                config={
+                    "metadata": create_llm_call_metadata(
+                        purpose="health_check",
+                        component="daemon.health.providers",
+                        phase="startup",
+                        provider=provider_name,
+                    )
+                },
+            )
 
         try:
             await asyncio.wait_for(test_call(), timeout=5.0)

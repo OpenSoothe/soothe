@@ -162,6 +162,9 @@ class CliRenderer:
     ) -> None:
         """Write assistant text to stdout.
 
+        HARD SUPPRESS during multi-step execution to prevent intermediate
+        LLM response text from flooding output (IG-143).
+
         Args:
             text: Text content to display.
             is_main: True if from main agent.
@@ -170,13 +173,13 @@ class CliRenderer:
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        # Suppress intermediate assistant/body text for multi-step runs.
-        # Keep CLI output focused on progress judgements + final completion summary.
+        # HARD BLOCK: No text during multi-step execution
         if self._state.multi_step_active:
             return
         if self._state.agentic_stdout_suppressed and not self._state.agentic_final_stdout_emitted:
             return
 
+        # Emit only on final iteration (after flags cleared)
         self._state.full_response.append(text)
 
         if self._state.stderr_just_written:

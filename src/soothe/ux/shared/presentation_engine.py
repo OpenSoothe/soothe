@@ -23,6 +23,10 @@ class PresentationState:
     last_reason_by_step: dict[str, float] | None = None
     final_answer_locked: bool = False
 
+    # Action deduplication tracking (IG-143)
+    last_action_text: str = ""
+    last_action_time: float = 0.0
+
     def __post_init__(self) -> None:
         """Initialize mutable map defaults safely."""
         if self.last_reason_by_step is None:
@@ -35,6 +39,7 @@ class PresentationEngine:
     _REASON_DEDUP_WINDOW_S = 8.0
     _REASON_STEP_RATE_LIMIT_S = 5.0
     _TOOL_RESULT_MAX_CHARS = 180
+    _ACTION_DEDUP_WINDOW_S = 5.0
 
     def __init__(self) -> None:
         """Initialize presentation state."""
@@ -50,11 +55,13 @@ class PresentationEngine:
         self._state.final_answer_locked = True
 
     def reset_turn(self) -> None:
-        """Clear per-turn presentation state (reason dedup, final lock)."""
+        """Clear per-turn presentation state (reason dedup, final lock, action dedup)."""
         self._state.last_reason_key = ""
         self._state.last_reason_at_s = 0.0
         self._state.last_reason_by_step.clear()
         self._state.final_answer_locked = False
+        self._state.last_action_text = ""
+        self._state.last_action_time = 0.0
 
     def reset_session(self) -> None:
         """Clear presentation state for a new session (e.g. thread change)."""
@@ -116,4 +123,49 @@ class PresentationEngine:
     def _normalize_reason(content: str) -> str:
         lowered = content.lower().strip()
         lowered = re.sub(r"\(\d+%\s+sure\)", "", lowered)
+        return re.sub(r"\s+", " ", lowered)
+
+    def should_emit_action(
+        self,
+        *,
+        action_text: str,
+        now_s: float | None = None,
+    ) -> bool:
+        """Deduplicate repeated action summaries within 5s window.
+
+        Args:
+            action_text: Action summary text (may include confidence).
+            now_s: Optional timestamp (defaults to monotonic time).
+
+        Returns:
+            True if action should be emitted, False if duplicate.
+        """
+        normalized = self._normalize_action(action_text)
+        now = now_s if now_s is not None else time.monotonic()
+
+        # Dedup identical actions within window
+        if (
+            normalized == self._state.last_action_text
+            and (now - self._state.last_action_time) < self._ACTION_DEDUP_WINDOW_S
+        ):
+            return False
+
+        # Update state
+        self._state.last_action_text = normalized
+        self._state.last_action_time = now
+        return True
+
+    @staticmethod
+    def _normalize_action(text: str) -> str:
+        """Strip confidence and whitespace for action comparison.
+
+        Args:
+            text: Action text to normalize.
+
+        Returns:
+            Normalized text for deduplication comparison.
+        """
+        lowered = text.lower().strip()
+        # Remove "(XX% sure)" or "(XX% confident)" suffix
+        lowered = re.sub(r"\(\d+%\s+(?:sure|confident)\)", "", lowered)
         return re.sub(r"\s+", " ", lowered)

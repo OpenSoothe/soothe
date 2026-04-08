@@ -92,6 +92,9 @@ class ImageAnalysisTool(BaseTool):
     async def _arun(self, image_path: str, prompt: str = "Describe this image in detail.") -> str:
         from langchain.chat_models import init_chat_model
 
+        # IG-143: Add metadata for tracing
+        from soothe.core.middleware._utils import create_llm_call_metadata
+
         b64 = _image_to_base64(image_path)
         model = init_chat_model(f"openai:{self.model_name}")
         msg = await model.ainvoke(
@@ -103,7 +106,15 @@ class ImageAnalysisTool(BaseTool):
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                     ],
                 }
-            ]
+            ],
+            config={
+                "metadata": create_llm_call_metadata(
+                    purpose="vision_analysis",
+                    component="tools.image",
+                    phase="layer1",
+                    image_path=image_path,
+                )
+            },
         )
 
         return str(msg.content)

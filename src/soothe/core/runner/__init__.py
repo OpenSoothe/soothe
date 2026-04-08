@@ -108,6 +108,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                     fast_model=fast_model,
                     classification_mode=self._config.performance.classification_mode,
                     assistant_name=self._config.assistant_name,
+                    config=self._config,  # IG-143: Pass config for LLM tracing
                 )
                 logger.info("Unified classifier initialized in %s mode", self._config.performance.classification_mode)
             else:

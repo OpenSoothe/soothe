@@ -170,6 +170,7 @@ class UnifiedClassifier:
         fast_model: BaseChatModel | None = None,
         classification_mode: Literal["llm", "disabled"] = "llm",
         assistant_name: str = "Soothe",
+        config: Any | None = None,  # IG-143: Add config for tracing
     ) -> None:
         """Initialize the unified classifier.
 
@@ -177,13 +178,23 @@ class UnifiedClassifier:
             fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
             classification_mode: "llm" or "disabled".
             assistant_name: Name used in chitchat responses.
+            config: Optional SootheConfig for LLM tracing support.
         """
         self._fast_model = fast_model
         self._mode = classification_mode
         self._assistant_name = assistant_name
+        self._config = config  # IG-143: Store config for tracing
 
         if fast_model:
-            self._routing_model = self._create_routing_model(fast_model)
+            # IG-143: Wrap model with tracing if enabled
+            routing_model = self._create_routing_model(fast_model)
+            if config and hasattr(config, "llm_tracing") and config.llm_tracing.enabled:
+                from soothe.core.middleware._wrapper import LLMTracingWrapper
+
+                self._routing_model = LLMTracingWrapper(routing_model)
+                logger.debug("[Classifier] LLM tracing wrapper enabled")
+            else:
+                self._routing_model = routing_model
         else:
             self._routing_model = None
 
@@ -288,7 +299,19 @@ class UnifiedClassifier:
         )
 
         try:
-            result = await self._routing_model.ainvoke(prompt)
+            # IG-143: Add metadata for tracing
+            from soothe.core.middleware._utils import create_llm_call_metadata
+
+            result = await self._routing_model.ainvoke(
+                prompt,
+                config={
+                    "metadata": create_llm_call_metadata(
+                        purpose="classify",
+                        component="classifier.unified",
+                        phase="pre-stream",
+                    )
+                },
+            )
         except Exception:
             logger.exception("LLM routing call failed")
             raise
