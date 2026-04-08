@@ -100,7 +100,7 @@ class LoopAgent:
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
         max_iterations: int = 8,
-        reason_conversation_excerpts: list[str] | None = None,
+        reason_conversation_excerpts: list[str] | None = None,  # noqa: ARG002 - Reserved for future use
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -127,15 +127,13 @@ class LoopAgent:
                 "[Layer2] Recovering from checkpoint at iteration %d",
                 checkpoint.iteration,
             )
-            # Derive prior conversation from step outputs
+            # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_reason_conversation(limit=10)
-            # Merge with provided excerpts (if any)
-            provided_excerpts = list(reason_conversation_excerpts or [])
-            reason_excerpts = provided_excerpts + prior_outputs
+            reason_excerpts = prior_outputs
         else:
-            # Initialize new checkpoint
+            # Initialize new checkpoint - NO Layer 1 messages (RFC-205)
             checkpoint = state_manager.initialize(goal, max_iterations)
-            reason_excerpts = list(reason_conversation_excerpts or [])
+            reason_excerpts = []  # Start fresh, no prior conversation from Layer 1
 
         state = LoopState(
             goal=goal,

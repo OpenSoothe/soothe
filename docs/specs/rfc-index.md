@@ -46,6 +46,8 @@ RFCs are organized by numeric prefix:
 | [RFC-202](./RFC-202-dag-execution.md) | DAG Execution & Failure Recovery | Draft | Architecture Design | RFC-200, RFC-201, RFC-100 |
 | [RFC-203](./RFC-203-loop-working-memory.md) | Loop Working Memory | Draft | Architecture Design | RFC-201, RFC-103, RFC-100 |
 | [RFC-204](./RFC-204-autopilot-mode.md) | Autopilot Mode | Active | Architecture Design | RFC-200, RFC-201, RFC-202, RFC-400, RFC-500 |
+| [RFC-205](./RFC-205-layer2-unified-state-checkpoint.md) | Layer 2 Unified State Model and Independent Checkpoint | Draft | Architecture Design | RFC-201, RFC-203, RFC-100 |
+| [RFC-206](./RFC-206-prompt-architecture.md) | Hierarchical Prompt Architecture | Draft | Architecture Design | RFC-201, RFC-100 |
 
 ### 3xx — Protocols (Interface Contracts)
 
