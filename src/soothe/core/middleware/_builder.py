@@ -41,15 +41,19 @@ def build_soothe_middleware_stack(
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
-    3. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
+    3. **LLMTracingMiddleware** - Traces LLM request/response lifecycle for
+       debugging. Logs request details, response details, and latency metrics.
+       Enabled via SOOTHE_LOG_LEVEL=DEBUG or config.llm_tracing.enabled=True.
+
+    4. **ExecutionHintsMiddleware** - Injects Layer 2 execution hints
        (soothe_step_tools, soothe_step_subagent, soothe_step_expected_output)
        into system prompt via abefore_agent hook. Runs before agent loop starts.
 
-    4. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    5. **SubagentContextMiddleware** - Injects context briefings into
+    6. **SubagentContextMiddleware** - Injects context briefings into
        task tool delegations via awrap_tool_call hook. Provides subagents
        with scoped context projections from ContextProtocol.
 
@@ -65,6 +69,7 @@ def build_soothe_middleware_stack(
         Tuple of middleware instances in execution order.
     """
     from .execution_hints import ExecutionHintsMiddleware
+    from .llm_tracing import LLMTracingMiddleware
     from .policy import SoothePolicyMiddleware
     from .subagent_context import SubagentContextMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
@@ -92,15 +97,24 @@ def build_soothe_middleware_stack(
         stack.append(SystemPromptOptimizationMiddleware(config=config))
         logger.info("[Middleware] System prompt optimization enabled")
 
-    # 3. Execution hints (Layer 2 → Layer 1 integration)
+    # 3. LLM tracing (debug info for request/response lifecycle)
+    # Enabled when logging level is DEBUG or explicitly configured
+    import os
+
+    log_level = os.environ.get("SOOTHE_LOG_LEVEL", "INFO")
+    if log_level == "DEBUG" or getattr(config, "llm_tracing", {}).get("enabled", False):
+        stack.append(LLMTracingMiddleware(log_preview_length=200))
+        logger.debug("[Middleware] LLM tracing enabled")
+
+    # 4. Execution hints (Layer 2 → Layer 1 integration)
     stack.append(ExecutionHintsMiddleware())
     logger.debug("[Middleware] Execution hints enabled")
 
-    # 4. Workspace context (thread-aware filesystem)
+    # 5. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 5. Subagent context briefing injection
+    # 6. Subagent context briefing injection
     if context:
         stack.append(SubagentContextMiddleware(context=context))
         logger.debug("[Middleware] Subagent context briefing enabled")

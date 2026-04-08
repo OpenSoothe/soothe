@@ -16,6 +16,7 @@ from .schemas import (
     StepResult,
 )
 from .state_manager import Layer2StateManager
+from .working_memory import LoopWorkingMemory
 
 __all__ = [
     "ActWaveRecord",
@@ -24,6 +25,7 @@ __all__ = [
     "Layer2StateManager",
     "LoopAgent",
     "LoopState",
+    "LoopWorkingMemory",
     "ReasonResult",
     "ReasonStepRecord",
     "StepAction",

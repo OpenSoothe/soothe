@@ -84,7 +84,7 @@ class PromptBuilder:
 
     def _render_environment(self) -> str:
         """Render environment metadata."""
-        from soothe.core.prompts.context_xml import build_shared_environment_workspace_prefix
+        from soothe.prompts.context_xml import build_shared_environment_workspace_prefix
 
         if self.config is None:
             return ""
@@ -99,7 +99,7 @@ class PromptBuilder:
 
     def _render_workspace(self, context: PlanContext) -> str:
         """Render workspace metadata."""
-        from soothe.core.prompts.context_xml import build_soothe_workspace_section
+        from soothe.prompts.context_xml import build_soothe_workspace_section
 
         if not context.workspace:
             return ""
