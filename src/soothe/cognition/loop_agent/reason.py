@@ -81,7 +81,7 @@ class ReasonPhase:
 
         enhanced_action = enhance_action_specificity(
             action=original_action,
-            goal=goal,
+            _goal=goal,
             iteration=state.iteration,
             previous_actions=state.get_recent_actions(3),
             step_results=state.step_results,
