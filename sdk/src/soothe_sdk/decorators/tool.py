@@ -13,6 +13,8 @@ def tool(
     name: str,
     description: str = "",
     group: str | None = None,
+    system_context: str | None = None,
+    triggers: list[str] | None = None,
 ) -> Callable:
     """Decorator that marks a method as a langchain tool.
 
@@ -27,6 +29,8 @@ def tool(
         name: Tool name in snake_case (used to invoke the tool).
         description: Tool description for the LLM (shown in tool selection).
         group: Optional tool group name for organization.
+        system_context: Optional XML fragment for system message when tool is active (RFC-210).
+        triggers: Optional list of system section names this tool triggers (RFC-210).
 
     Returns:
         Decorated method with tool metadata.
@@ -51,6 +55,8 @@ def tool(
         func._tool_name = name
         func._tool_description = description
         func._tool_group = group
+        func._tool_system_context = system_context  # RFC-210
+        func._tool_triggers = triggers or []  # RFC-210
 
         @wraps(func)
         async def async_wrapper(self, *args, **kwargs):
@@ -75,6 +81,8 @@ def tool(
         wrapper._tool_name = name
         wrapper._tool_description = description
         wrapper._tool_group = group
+        wrapper._tool_system_context = system_context  # RFC-210
+        wrapper._tool_triggers = triggers or []  # RFC-210
 
         return wrapper
 
