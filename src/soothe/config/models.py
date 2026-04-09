@@ -557,27 +557,9 @@ class AgenticLoopConfig(BaseModel):
 
     prior_conversation_limit: int = Field(
         default=10,
-        description=(
-            "Maximum prior messages to format for Reason prompts when Act execution uses isolated threads (IG-133)"
-        ),
+        description=("Maximum prior messages to format for Reason prompts when Act execution uses isolated threads"),
         ge=1,
         le=50,
-    )
-
-    sequential_act_isolated_thread: bool = Field(
-        default=False,
-        description=(
-            "Run each sequential Act wave under a temporary thread_id with no prior checkpoint "
-            "messages, then merge produced messages back into the canonical thread (IG-131)."
-        ),
-    )
-
-    sequential_act_isolate_when_step_subagent_hint: bool = Field(
-        default=True,
-        description=(
-            "When sequential_act_isolated_thread is enabled, isolate only if at least one step "
-            "in the wave has a non-empty ``subagent`` hint; when false, isolate every sequential wave."
-        ),
     )
 
     planning: PlanningConfig = Field(

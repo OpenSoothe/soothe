@@ -60,8 +60,7 @@ def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
 
 def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
-    # Set flag to False to trigger prior conversation injection (IG-133)
-    state.act_will_have_checkpoint_access = False
+    # RFC-209: Prior conversation always available (same thread_id)
     ctx = PlanContext(
         workspace=None,
         recent_messages=[

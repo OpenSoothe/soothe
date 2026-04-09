@@ -1,9 +1,9 @@
 # Soothe LLM Communication Flow Analysis
 
-**Author**: Claude Code Analysis  
-**Date**: 2026-04-09  
-**Last Updated**: 2026-04-09 (RFC-208 integration)  
-**Scope**: Analysis of how and what is sent to LLM in each execution thread across Soothe's three-layer architecture
+**Author**: Claude Code Analysis
+**Date**: 2026-04-09
+**Last Updated**: 2026-04-09 (Layer 1/Layer 2 message flow analysis added)
+**Scope**: Analysis of how and what is sent to LLM in each execution thread across Soothe's three-layer architecture, including detailed message flow between layers
 
 ---
 
@@ -294,16 +294,19 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 
 #### Thread Isolation Strategy
 
-**Automatic Isolation** (RFC-201):
-- **Subagent Steps**: Execute on isolated thread branches
-  - Thread ID: `{thread_id}__l2act{uuid}`
+**Automatic Isolation** (RFC-201, simplified in RFC-209):
+- **Subagent Steps**: task tool creates isolated thread branches automatically
+  - Thread ID: `{thread_id}__task_{uuid}` (handled by task tool internally)
   - Fresh checkpoint branch
-  - No prior wave outputs or conversation history
-- **Tool-Only Steps**: Use full thread context
+  - Results merge back via ToolMessage
+- **Tool-Only Steps**: Use parent thread context
   - Standard thread continuation
   - All prior messages visible
+  - langgraph handles concurrent execution safely
 
 **Purpose**: Prevents cross-wave contamination (e.g., research output interfering with translation language detection)
+
+**Note**: RFC-209 simplifies executor implementation by removing manual thread ID generation (`{thread_id}__l2act{uuid}` and `{thread_id}__step_{i}`) and trusting langgraph's built-in concurrency handling and task tool's automatic isolation.
 
 #### Execution Bounds
 
@@ -702,6 +705,348 @@ results = await asyncio.gather([
 
 ---
 
+## Layer 1 ↔ Layer 2 Message Flow Architecture
+
+### Critical Boundaries
+
+This section analyzes the message flow between Layer 1 CoreAgent and Layer 2 Loop Agent, focusing on what's persisted, derived, and carried forward across iterations.
+
+**Key Principle**: Layer 2 maintains its own checkpoint separate from Layer 1, deriving conversation context from execution results rather than inheriting raw messages (RFC-205).
+
+#### 1. What's Saved in Layer 1 Checkpointer
+
+**LangGraph Checkpointer Contents** (AsyncSqliteSaver/AsyncPostgresSaver):
+
+```python
+# Full message history in thread checkpoint
+[
+    SystemMessage(content="...system prompt with context/memory..."),  # RFC-208
+    HumanMessage(content="User query"),
+    AIMessage(content="AI response with tool calls"),
+    ToolMessage(content="Tool result", name="read_file"),
+    ToolMessage(content="Subagent result", name="task"),  # Subagent delegations
+    AIMessage(content="Final response"),
+    ...
+]
+```
+
+**Characteristics**:
+- **All message types**: System, Human, AI, Tool
+- **Full thread history**: Unbounded growth (middleware handles summarization)
+- **Automatic persistence**: Every turn saved atomically
+- **Thread ID keyed**: `{thread_id}` as primary key
+- **Subagent isolation**: ToolMessage(name="task") contains subagent results
+
+**Storage Location**: `src/soothe/core/runner/_runner_phases.py` lines 307-324
+
+#### 2. What's Passed to Layer 2 Reason Phase
+
+**Layer 2's Independent Checkpoint** (RFC-205):
+
+From `src/soothe/cognition/loop_agent/loop_agent.py` lines 124-137:
+
+```python
+# Layer 2 uses its OWN checkpoint, not Layer 1 messages
+checkpoint = state_manager.load()  # Layer 2's own checkpoint
+if checkpoint and checkpoint.status == "running":
+    # Recover from Layer 2 checkpoint
+    prior_outputs = state_manager.derive_reason_conversation(limit=10)
+    reason_excerpts = prior_outputs
+else:
+    # Start fresh - NO Layer 1 messages
+    checkpoint = state_manager.initialize(goal, max_iterations)
+    reason_excerpts = []  # Empty - no prior conversation from Layer 1
+```
+
+**What's in `reason_conversation_excerpts`**:
+
+From `src/soothe/core/runner/_runner_phases.py` lines 259-296:
+
+```python
+# Format: <user>...</user> and <assistant>...</assistant> XML tags
+# Last 10 messages (configurable via prior_conversation_limit)
+# Only HumanMessage and AIMessage (no Tool/System)
+# Last AIMessage gets higher char limit (100k vs 8k)
+```
+
+**Example Format**:
+```xml
+<user>Translate this to Chinese</user>
+<assistant>I'll help you translate the document...</assistant>
+<user>Research async patterns in Python</user>
+<assistant>I found several async patterns...</assistant>
+```
+
+**Why Layer 2 Doesn't Inherit Layer 1 Messages**:
+- Layer 2 manages **goal-level** reasoning, not conversation turns
+- Layer 1's tool execution details are noise for goal planning
+- Prior conversation should be **derived** from Layer 2's own step outputs
+- Prevents contamination from Layer 1's subagent/tool chatter (RFC-205)
+
+**Evidence Flow Direction**:
+
+```
+Layer 1 → Layer 2:
+  ToolMessage.content → StepResult.output → state.step_results
+  ↓
+  evidence_lines = [result.to_evidence_string() for result in state.step_results]
+  ↓
+  state.evidence_summary = "\n".join(evidence_lines)
+  ↓
+  Reason phase receives evidence_summary + step_results
+```
+
+**Not message-level inheritance**: Layer 2 sees **results**, not messages.
+
+#### 3. What's Passed to Next Iteration
+
+**LoopState Carried Forward** (from `src/soothe/cognition/loop_agent/schemas.py`):
+
+```python
+# State passed to next iteration
+state.previous_reason          # Last ReasonResult (continuity)
+state.step_results             # All StepResult objects (accumulation)
+state.evidence_summary         # Accumulated evidence text
+state.completed_step_ids       # Set of completed step IDs
+state.current_decision         # Active AgentDecision (for reuse)
+state.working_memory           # LoopWorkingMemory (RFC-203)
+state.action_history           # Progressive actions (RFC-603)
+state.iteration                # Current iteration number
+
+# Metrics from last Act wave (IG-130)
+state.last_wave_tool_call_count
+state.last_wave_subagent_task_count
+state.last_wave_hit_subagent_cap
+state.last_wave_output_length
+state.last_wave_error_count
+state.total_tokens_used
+state.context_percentage_consumed
+```
+
+**Loop Continuity Mechanism** (`src/soothe/cognition/loop_agent/loop_agent.py` lines 158-346):
+
+```python
+while state.iteration < state.max_iterations:
+    # REASON phase
+    reason_result = await self.reason_phase.reason(goal, state, context)
+
+    # ACT phase
+    async for item in self.executor.execute(decision, state):
+        # Stream events + collect StepResults
+        step_results.append(item)
+
+    # UPDATE state for next iteration
+    for result in step_results:
+        state.add_step_result(result)  # Accumulates to state.step_results
+
+    state.previous_reason = reason_result
+    state.iteration += 1
+
+    # Checkpoint persistence (RFC-205)
+    state_manager.record_iteration(
+        iteration=state.iteration,
+        reason_result=reason_result,
+        decision=decision,
+        step_results=step_results,
+        state=state,
+        working_memory=state.working_memory,
+    )
+```
+
+### Message Type Lifecycle
+
+#### HumanMessage
+
+**Created at**:
+- CLI user input (`src/soothe/core/runner/_runner_phases.py` line 796)
+- Executor for Act phase (`src/soothe/cognition/loop_agent/executor.py` lines 370, 531)
+
+**Stored in**:
+- Layer 1 checkpointer (full conversation)
+- Layer 2 checkpoint (derived excerpts only)
+
+**Passed to**:
+- Layer 1 CoreAgent.astream() (current turn)
+- Layer 2 Reason phase (as XML excerpts)
+- Next iteration (as `reason_conversation_excerpts` in state)
+
+#### AIMessage
+
+**Created at**:
+- Model response (Layer 1 execution)
+- Executor accumulation (`src/soothe/cognition/loop_agent/executor.py` line 667)
+
+**Stored in**:
+- Layer 1 checkpointer (with tool calls)
+- Layer 2 checkpoint (derived excerpts)
+
+**Passed to**:
+- Layer 2 Reason (as `<assistant>` XML excerpts)
+- Next iteration (in `previous_reason.user_summary`)
+
+#### ToolMessage
+
+**Created at**:
+- Tool execution results (Layer 1)
+- Subagent delegation results (task tool)
+
+**Stored in**:
+- Layer 1 checkpointer ONLY
+- NOT passed to Layer 2 Reason
+
+**Evidence flow**:
+- ToolMessage.content → StepResult.output → state.step_results
+- Layer 2 sees results, NOT raw ToolMessages
+
+#### SystemMessage
+
+**Created at**:
+- CoreAgent middleware stack (RFC-208)
+- Contains: context, memory, policies, environment
+
+**Stored in**:
+- Layer 1 checkpointer
+- NOT passed to Layer 2
+
+**Purpose**: Layer 1 execution context only
+
+### Layer Separation Principle
+
+**Layer 1**: Conversation turns, tool execution, subagent delegations
+**Layer 2**: Goal reasoning, iteration planning, progress assessment
+
+**Critical separation** (RFC-205):
+- Layer 2 does NOT inherit Layer 1's message history
+- Layer 2 derives its own conversation context from step outputs
+- Prevents contamination from tool/subagent chatter
+- Focuses reasoning on goal-level context, not execution details
+
+### Contamination Prevention Example
+
+**Scenario**: Research → Translation workflow (RFC-201)
+
+```
+Iteration 1: Research async patterns (subagent delegation)
+  → Layer 1 creates isolated thread for subagent
+  → Research output in ToolMessage(name="task")
+  → Returns to parent thread as ToolMessage
+
+Iteration 2: Write async function (tool execution)
+  → Layer 2 sees: "Step 1 completed: found async patterns"
+  → Layer 2 does NOT see: Full research output (ToolMessage content)
+  → Reason prompt: "Prior conversation: <user>Research async...</user>"
+
+Translation scenario (contamination risk):
+  → If Layer 2 saw Layer 1's research ToolMessage
+  → Language detection could fail (research output mixing)
+  → Isolation prevents this automatically (RFC-209)
+```
+
+### Message Flow Summary Table
+
+| Content Type | Layer 1 Checkpoint | Layer 2 Checkpoint | Passed to Next Iteration |
+|--------------|-------------------|--------------------|-------------------------|
+| HumanMessage (user queries) | ✅ Full history | ✅ Derived excerpts (XML) | ✅ reason_conversation_excerpts |
+| AIMessage (AI responses) | ✅ Full history | ✅ Derived excerpts (XML) | ✅ previous_reason.user_summary |
+| ToolMessage (tool results) | ✅ All tool messages | ❌ NOT stored | ✅ Via StepResult.output |
+| SystemMessage (context) | ✅ System prompt | ❌ NOT stored | ❌ NOT passed |
+| StepResult (execution) | ❌ NOT in L1 | ✅ In L2 checkpoint | ✅ state.step_results |
+| ReasonResult (reasoning) | ❌ NOT in L1 | ✅ In L2 checkpoint | ✅ state.previous_reason |
+| LoopState (full state) | ❌ NOT in L1 | ✅ Full state | ✅ Carried forward |
+
+**Flow direction**: Layer 1 messages → Layer 2 derived excerpts → Next iteration state
+
+**Separation principle**: Layer 2 uses its own checkpoint, not Layer 1's raw messages
+
+**Evidence flow**: ToolMessage → StepResult → evidence_summary → Reason phase
+
+### Complete Message Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ LAYER 1 COREAGENT (Tool Execution)                                 │
+│                                                                      │
+│ Checkpointer stores:                                                │
+│ ├─ SystemMessage (context, memory, policies) [RFC-208]            │
+│ ├─ HumanMessage (user query)                                        │
+│ ├─ AIMessage (tool calls)                                          │
+│ ├─ ToolMessage (tool results)                                       │
+│ ├─ ToolMessage (task=subagent results)                             │
+│ └─ AIMessage (final response)                                       │
+│                                                                      │
+│ Thread ID: {thread_id}                                              │
+│ Persistence: Full conversation history                               │
+└─────────────────────────────────────────────────────────────────────┘
+                    ↓ (NOT passed directly to Layer 2)
+                    ↓ (Layer 2 uses its own checkpoint)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ LAYER 2 LOOP AGENT (Goal Reasoning)                                │
+│                                                                      │
+│ Separate checkpoint (RFC-205):                                      │
+│ ├─ goal: Goal description                                           │
+│ ├─ iteration: Current iteration                                     │
+│ ├─ status: running/completed/failed                                │
+│ ├─ step_outputs: Derived conversation excerpts                      │
+│ └─ working_memory_state: Inspection records                         │
+│                                                                      │
+│ reason_conversation_excerpts (IG-128):                              │
+│ ├─ Last 10 messages formatted as XML                               │
+│ ├─ <user>...</user> tags                                            │
+│ ├─ <assistant>...</assistant> tags                                  │
+│ └─ Derived from Layer 2 step outputs (NOT Layer 1)                 │
+│                                                                      │
+│ Thread ID: {thread_id}__layer2 (separate namespace)                │
+│ Persistence: Goal-level reasoning state                              │
+└─────────────────────────────────────────────────────────────────────┘
+                    ↓ (State passed to next iteration)
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ NEXT ITERATION STATE                                                │
+│                                                                      │
+│ LoopState carries forward:                                          │
+│ ├─ previous_reason: Last ReasonResult                               │
+│ ├─ step_results: All StepResult objects                            │
+│ ├─ evidence_summary: Accumulated evidence                           │
+│ ├─ completed_step_ids: Set of completed IDs                         │
+│ ├─ current_decision: Active AgentDecision                          │
+│ ├─ working_memory: LoopWorkingMemory                                │
+│ ├─ action_history: Last 3 actions (RFC-603)                        │
+│ └─ iteration: Incremented counter                                   │
+│                                                                      │
+│ Metrics from last Act wave:                                         │
+│ ├─ last_wave_tool_call_count                                       │
+│ ├─ last_wave_subagent_task_count                                   │
+│ ├─ last_wave_hit_subagent_cap                                      │
+│ ├─ last_wave_output_length                                         │
+│ ├─ last_wave_error_count                                           │
+│ ├─ total_tokens_used                                               │
+│ └─ context_percentage_consumed                                     │
+│                                                                      │
+│ Persistence: Layer 2 checkpoint updated each iteration              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Source Files
+
+**Layer 1 Checkpointer**:
+- `src/soothe/core/runner/_runner_phases.py`: Message persistence (lines 307-324)
+- `src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
+
+**Layer 2 State Management**:
+- `src/soothe/cognition/loop_agent/loop_agent.py`: Checkpoint recovery (lines 124-137)
+- `src/soothe/cognition/loop_agent/state_manager.py`: Layer 2 checkpoint operations
+- `src/soothe/cognition/loop_agent/schemas.py`: LoopState schema definition
+
+**Message Formatting**:
+- `src/soothe/core/runner/_runner_phases.py`: XML excerpt formatting (lines 259-296)
+
+**Evidence Accumulation**:
+- `src/soothe/cognition/loop_agent/reason.py`: Evidence aggregation (lines 35-62)
+- `src/soothe/cognition/loop_agent/executor.py`: Step result collection
+
+---
+
 ## Performance Optimization Patterns
 
 ### Parallel Execution
@@ -852,7 +1197,7 @@ This architecture enables Soothe to handle complex multi-step goals with bounded
 
 ---
 
-**Document Status**: Analysis Updated (RFC-208 Integration)
+**Document Status**: Analysis Updated (Layer 1/Layer 2 Message Flow)
 **Generated**: 2026-04-09 by Claude Code
-**Last Updated**: 2026-04-09 (RFC-208 CoreAgent message optimization)
+**Last Updated**: 2026-04-09 (Added comprehensive Layer 1/Layer 2 message flow analysis)
 **Reviewed**: Pending human review

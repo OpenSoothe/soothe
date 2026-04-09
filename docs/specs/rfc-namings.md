@@ -86,11 +86,12 @@ This document defines the terminology and naming conventions used in this projec
 | Term | Definition | Introduced In |
 |------|------------|---------------|
 | Context Isolation | Thread isolation for delegation steps where subagents receive only explicit task input, no prior conversation history. Prevents cross-wave contamination. | RFC-201 |
-| Thread Isolation | Execution pattern where delegation steps run on fresh checkpoint branches (`{thread_id}__l2act{uuid}`) with automatic merge back to canonical thread. | RFC-201 |
+| Thread Isolation | Automatic isolation provided by task tool for subagent delegations. Tool executions use parent thread_id with langgraph concurrent safety. Simplified in RFC-209. | RFC-201, RFC-209 |
 | Execution Bounds | Two-layer constraint preventing runaway subagent loops: soft constraint (schema/prompt) and hard constraint (subagent task cap). | RFC-201 |
 | Wave Metrics | Structured metrics collected per Act wave (tool_call_count, subagent_task_count, output_length, error_count, context_window) informing Reason decisions. | RFC-201 |
 | Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-201 |
 | Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-201 |
+| Manual Thread ID Generation (deprecated) | Old pattern where executor created isolated thread IDs (`{thread_id}__l2act{uuid}`, `{thread_id}__step_{i}`) and manually merged results. Removed in RFC-209. | RFC-201 (deprecated), RFC-209 |
 
 ### Prompt Architecture Terms (RFC-206)
 

@@ -126,7 +126,7 @@ class StepLoopMixin:
                 ) -> None:
                     chunks: list[StreamChunk] = []
                     dep_results = scheduler.get_dependency_results(s)
-                    step_tid = f"{state.thread_id}__step_{s.id}"
+                    step_tid = state.thread_id  # Use parent thread_id (RFC-209)
                     async with self._concurrency.acquire_step():
                         async for chunk in self._execute_step(
                             s,

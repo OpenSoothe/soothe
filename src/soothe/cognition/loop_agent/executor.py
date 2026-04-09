@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -85,23 +84,6 @@ class Executor:
             "</SOOTHE_LAYER2_OUTPUT_CONTRACT>\n"
         )
 
-    def _should_use_isolated_sequential_thread(self, steps: list) -> bool:
-        """Return True if sequential wave should use isolated thread.
-
-        Semantic rule: isolate when any step delegates to subagent.
-        Rationale: delegation steps should work on explicit input, not prior thread history.
-
-        Args:
-            steps: List of StepAction objects to execute
-
-        Returns:
-            True if thread isolation should be applied
-        """
-        if self._config is None or not self._config.agentic.sequential_act_isolated_thread:
-            return False  # Feature disabled
-        # Automatic: isolate if any step has subagent delegation
-        return any(bool(getattr(s, "subagent", None)) for s in steps)
-
     def _aggregate_wave_metrics(
         self,
         step_results: list[StepResult],
@@ -147,46 +129,6 @@ class Executor:
             context_limit = 200_000
             state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
 
-    async def _merge_isolated_act_into_parent_thread(
-        self,
-        *,
-        parent_thread_id: str,
-        child_thread_id: str,
-    ) -> None:
-        """Append messages from an isolated Act checkpoint branch onto the canonical thread."""
-        graph = self.core_agent.graph
-        cfg_child = {"configurable": {"thread_id": child_thread_id}}
-        cfg_parent = {"configurable": {"thread_id": parent_thread_id}}
-        try:
-            snap = await graph.aget_state(cfg_child)
-        except Exception:
-            logger.debug(
-                "Isolated Act merge skipped: failed to read child thread %s",
-                child_thread_id,
-                exc_info=True,
-            )
-            return
-        if snap is None or not getattr(snap, "values", None):
-            return
-        msgs = snap.values.get("messages")
-        if not msgs:
-            logger.debug("Isolated Act merge skipped: no messages on child thread %s", child_thread_id)
-            return
-        try:
-            await graph.aupdate_state(cfg_parent, {"messages": list(msgs)})
-            logger.info(
-                "Merged isolated sequential Act thread %s → %s (%d messages)",
-                child_thread_id,
-                parent_thread_id,
-                len(msgs),
-            )
-        except Exception:
-            logger.exception(
-                "Failed merging isolated Act thread %s into parent %s",
-                child_thread_id,
-                parent_thread_id,
-            )
-
     async def execute(
         self,
         decision: AgentDecision,
@@ -210,26 +152,11 @@ class Executor:
             logger.warning("No ready steps to execute (all completed or blocked)")
             return
 
-        # Determine if Act will have checkpoint access (IG-133)
-        # Set flag before execution so Reason phase knows whether to inject prior conversation
-        if decision.execution_mode == "sequential":
-            has_delegation = any(bool(getattr(s, "subagent", None)) for s in ready_steps)
-            isolation_enabled = self._config is not None and self._config.agentic.sequential_act_isolated_thread
-            # Checkpoint access if: no delegation OR isolation disabled
-            state.act_will_have_checkpoint_access = not (has_delegation and isolation_enabled)
-        elif decision.execution_mode in ("parallel", "dependency"):
-            # Parallel and dependency modes use isolated threads per step
-            state.act_will_have_checkpoint_access = False
-        else:
-            # Unknown mode - default to True (checkpoint available)
-            state.act_will_have_checkpoint_access = True
-
         logger.info(
-            "Executing %d steps in mode: %s (max_parallel_steps=%d, checkpoint_access=%s)",
+            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
             len(ready_steps),
             decision.execution_mode,
             self._max_parallel_steps,
-            state.act_will_have_checkpoint_access,
         )
 
         if decision.execution_mode == "parallel":
@@ -342,10 +269,8 @@ class Executor:
         """
         # Create tasks that collect events
         tasks = [
-            asyncio.create_task(
-                self._execute_step_collecting_events(step, f"{state.thread_id}__step_{i}", state.workspace)
-            )
-            for i, step in enumerate(steps)
+            asyncio.create_task(self._execute_step_collecting_events(step, state.thread_id, state.workspace))
+            for step in steps
         ]
 
         try:
@@ -376,7 +301,7 @@ class Executor:
                     error=str(result),
                     error_type=self._classify_error_severity(result),
                     duration_ms=0,
-                    thread_id=f"{state.thread_id}__step_{i}",
+                    thread_id=state.thread_id,
                     subagent_task_completions=0,
                     hit_subagent_cap=False,
                 )
@@ -436,19 +361,9 @@ class Executor:
         output = ""
         event_count = 0  # Track events for debugging
         budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
-        act_thread_id = state.thread_id
-        isolated_child_id: str | None = None
-        if self._should_use_isolated_sequential_thread(steps):
-            isolated_child_id = f"{state.thread_id}__l2act{uuid.uuid4().hex[:12]}"
-            act_thread_id = isolated_child_id
-            logger.info(
-                "Sequential Act using isolated thread %s (merge → %s)",
-                isolated_child_id,
-                state.thread_id,
-            )
 
         try:
-            configurable: dict[str, Any] = {"thread_id": act_thread_id}
+            configurable: dict[str, Any] = {"thread_id": state.thread_id}
             if state.workspace:
                 configurable["workspace"] = state.workspace
             stream = self.core_agent.astream(
@@ -466,12 +381,6 @@ class Executor:
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
-
-            if isolated_child_id is not None:
-                await self._merge_isolated_act_into_parent_thread(
-                    parent_thread_id=state.thread_id,
-                    child_thread_id=isolated_child_id,
-                )
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 

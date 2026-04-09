@@ -6,6 +6,7 @@ This document tracks the change history of all RFCs in this project.
 
 | Date | RFC | Status | Description |
 |------|-----|--------|-------------|
+| 2026-04-09 | RFC-209 | Draft | Executor Thread Isolation Simplification — remove manual thread ID generation, leverage langgraph concurrency and task tool automatic isolation, ~80 lines simplified |
 | 2026-04-08 | RFC-206 | Draft | Hierarchical Prompt Architecture with System/User Separation — three-layer XML structure (SYSTEM_CONTEXT, USER_TASK, INSTRUCTIONS), PromptBuilder API, modular fragment composition |
 | 2026-04-08 | RFC-205 | Draft | Layer 2 Unified State Model and Independent Checkpoint — step I/O semantics, independent persistence, recovery without Layer 1 dependency |
 | 2026-04-07 | RFC-201 | Implemented | Added Layer 2 Context Isolation and Execution Bounds — thread isolation for delegation steps, subagent task cap, wave metrics, output contract enforcement |

@@ -85,7 +85,7 @@ Each level nests inside the one above. The `global_max_llm_calls` semaphore acts
 |-----------|-----------------|-----------------|
 | Scope | Within single goal's plan | Across independent goals |
 | Mode | Both autonomous and non-autonomous | Autonomous only |
-| Thread model | `{tid}__step_{sid}` | `{tid}__goal_{gid}` |
+| Thread model | Parent thread_id (RFC-209) | `{tid}__goal_{gid}` |
 | DAG source | `PlanStep.depends_on` | `Goal.depends_on` |
 | Typical scale | 1-5 parallel steps | 1-3 parallel goals |
 
@@ -456,7 +456,7 @@ execution:
 | Constraint | Rule |
 |------------|------|
 | LangGraph integration | Reuse `_stream_phase()` per step, no internal modifications |
-| Thread branching | Parallel steps/goals use `{tid}__step_{sid}` / `{tid}__goal_{gid}` |
+| Thread branching | Parallel steps use parent thread_id (RFC-209); goals use `{tid}__goal_{gid}` |
 | Storage separation | DurabilityProtocol = lifecycle; RunArtifactStore = artifacts |
 
 ---

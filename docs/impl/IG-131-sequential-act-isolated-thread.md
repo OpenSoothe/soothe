@@ -1,6 +1,17 @@
 # IG-131: Sequential Act isolated `thread_id` + merge
 
-## Goal
+**Status**: DEPRECATED - Superseded by RFC-209
+
+This implementation guide is superseded by RFC-209 (Executor Thread Isolation Simplification), which removes the need for manual thread ID generation and merge logic. The entire approach has been replaced with a simpler design that:
+
+- Trusts langgraph's built-in concurrency handling for tool execution
+- Leverages task tool's automatic isolation for subagent delegations
+- Eliminates manual thread ID suffixes (`{thread_id}__l2act{uuid}`)
+- Removes the merge logic (`_merge_isolated_act_into_parent_thread()`)
+
+**No backward compatibility maintained**. Once RFC-209 is implemented, this guide becomes obsolete.
+
+## Goal (Historical Context)
 
 For Layer 2 **sequential** Act waves that are likely to delegate to a subagent, optionally run CoreAgent on a **fresh checkpoint branch** (no prior thread messages), then **merge** the produced `messages` back into the canonical `thread_id`.
 

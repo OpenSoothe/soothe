@@ -151,8 +151,9 @@ class PromptBuilder:
             ]
         )
 
-        # Prior conversation (IG-133) - only if Act won't have checkpoint access
-        if context.recent_messages and not state.act_will_have_checkpoint_access:
+        # Prior conversation (IG-128, RFC-209)
+        # Always inject prior conversation when available (same thread_id for all executions)
+        if context.recent_messages:
             parts.append("\n<PRIOR_CONVERSATION>\n")
             parts.append(
                 "Recent messages in this thread before the current goal. The user may refer to this content "
