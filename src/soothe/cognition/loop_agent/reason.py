@@ -35,7 +35,19 @@ class ReasonPhase:
         evidence_lines = [result.to_evidence_string() for result in state.step_results]
         state.evidence_summary = "\n".join(evidence_lines)
 
+        logger.info(
+            "[Reason] BEFORE LLM: iteration=%d, history_size=%d, step_results=%d",
+            state.iteration,
+            len(state.action_history),
+            len(state.step_results),
+        )
+
         result = await self._loop_reasoner.reason(goal=goal, state=state, context=context)
+
+        logger.info(
+            "[Reason] AFTER LLM: soothe_next_action from LLM: %s",
+            (result.soothe_next_action or "")[:100],
+        )
 
         if not result.evidence_summary and state.evidence_summary:
             result = result.model_copy(update={"evidence_summary": state.evidence_summary})
@@ -58,6 +70,15 @@ class ReasonPhase:
 
         # RFC-603: Enhance action specificity
         original_action = result.soothe_next_action or ""
+
+        logger.warning(
+            "[Action Trace] Iteration %d START:\n  LLM generated: %s\n  Previous actions: %s\n  Step results count: %d",
+            state.iteration,
+            original_action[:100],
+            [a[:50] for a in state.get_recent_actions(3)],
+            len(state.step_results),
+        )
+
         enhanced_action = enhance_action_specificity(
             action=original_action,
             goal=goal,
@@ -66,29 +87,35 @@ class ReasonPhase:
             step_results=state.step_results,
         )
 
+        logger.warning(
+            "[Action Trace] Iteration %d ENHANCEMENT:\n  Enhanced: %s\n  Changed: %s",
+            state.iteration,
+            enhanced_action[:100],
+            enhanced_action != original_action,
+        )
+
         # Update result with enhanced action
         if enhanced_action != original_action:
-            logger.info(
-                "[Action Enhancement] Iteration %d: Enhanced action\n  Original: %s\n  Enhanced: %s",
+            logger.warning(
+                "[Action Enhancement] Iteration %d: Applied enhancement",
                 state.iteration,
-                original_action[:80],
-                enhanced_action[:80],
             )
             result = result.model_copy(update={"soothe_next_action": enhanced_action})
         else:
-            logger.info(
-                "[Action Enhancement] Iteration %d: No enhancement needed: %s",
+            logger.warning(
+                "[Action Enhancement] Iteration %d: No enhancement needed",
                 state.iteration,
-                original_action[:80],
             )
 
         # Add to action history
         state.add_action_to_history(enhanced_action)
-        logger.info(
-            "[Action History] Iteration %d: History size=%d, Recent=%s",
+
+        logger.warning(
+            "[Action Trace] Iteration %d FINAL:\n  Result action: %s\n  History size: %d\n  Last 3 actions: %s",
             state.iteration,
+            result.soothe_next_action[:100] if result.soothe_next_action else "None",
             len(state.action_history),
-            [a[:50] for a in state.get_recent_actions(3)],
+            [a[:50] for a in state.action_history[-3:]],
         )
 
         successes = sum(1 for r in state.step_results if r.success)
