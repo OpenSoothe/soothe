@@ -23,6 +23,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _build_tool_registries(
+    config: SootheConfig,
+) -> tuple["ToolTriggerRegistry | None", "ToolContextRegistry | None"]:
+    """Create tool trigger and context registries.
+
+    Args:
+        config: Soothe configuration.
+
+    Returns:
+        Tuple of (trigger_registry, context_registry), or (None, None) if not configured.
+    """
+    # Only create registries if system prompt optimization is enabled
+    if not config.performance.enabled or not config.performance.optimize_system_prompts:
+        return None, None
+
+    try:
+        from soothe.core.tool_context_registry import ToolContextRegistry
+        from soothe.core.tool_trigger_registry import ToolTriggerRegistry
+        from soothe.plugin.global_registry import get_plugin_registry
+
+        plugin_registry = get_plugin_registry()
+
+        trigger_registry = ToolTriggerRegistry(plugin_registry)
+        context_registry = ToolContextRegistry(config, plugin_registry)
+
+        logger.debug("[Middleware] Tool registries created for dynamic context injection")
+        return trigger_registry, context_registry
+    except RuntimeError:
+        # Plugin registry not initialized, skip tool registries
+        logger.debug("[Middleware] Plugin registry not available, dynamic context injection disabled")
+        return None, None
+
+
 def build_soothe_middleware_stack(
     config: SootheConfig,
     policy: PolicyProtocol | None,
@@ -94,7 +127,16 @@ def build_soothe_middleware_stack(
         and config.performance.optimize_system_prompts
         and config.performance.unified_classification
     ):
-        stack.append(SystemPromptOptimizationMiddleware(config=config))
+        # Create tool registries for dynamic context injection (RFC-210)
+        trigger_registry, context_registry = _build_tool_registries(config)
+
+        stack.append(
+            SystemPromptOptimizationMiddleware(
+                config=config,
+                tool_trigger_registry=trigger_registry,
+                tool_context_registry=context_registry,
+            )
+        )
         logger.info("[Middleware] System prompt optimization enabled")
 
     # 3. LLM tracing (debug info for request/response lifecycle)

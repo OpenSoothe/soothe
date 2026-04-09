@@ -12,6 +12,8 @@ def subagent(
     name: str,
     description: str,
     model: str | None = None,
+    system_context: str | None = None,
+    triggers: list[str] | None = None,
 ) -> Callable:
     """Decorator that marks a method as a subagent factory.
 
@@ -26,6 +28,8 @@ def subagent(
         name: Subagent name in snake_case (used in task tool to invoke subagent).
         description: Subagent description for the task tool.
         model: Optional default model string (e.g., "openai:gpt-4o-mini").
+        system_context: Optional XML fragment for system message when subagent is active (RFC-210).
+        triggers: Optional list of system section names this subagent triggers (RFC-210).
 
     Returns:
         Decorated method with subagent metadata.
@@ -69,6 +73,8 @@ def subagent(
         func._subagent_name = name
         func._subagent_description = description
         func._subagent_model = model
+        func._subagent_system_context = system_context  # RFC-210
+        func._subagent_triggers = triggers or []  # RFC-210
 
         @wraps(func)
         async def wrapper(self, model, config, context, **kwargs):
@@ -80,6 +86,8 @@ def subagent(
         wrapper._subagent_name = name
         wrapper._subagent_description = description
         wrapper._subagent_model = model
+        wrapper._subagent_system_context = system_context  # RFC-210
+        wrapper._subagent_triggers = triggers or []  # RFC-210
 
         return wrapper
 

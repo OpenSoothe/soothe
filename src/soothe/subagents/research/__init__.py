@@ -115,6 +115,27 @@ class ResearchPlugin:
             "Inputs: `topic` (required), `domain` (optional: 'web', 'code', 'deep', 'auto'). "
             "Returns a comprehensive answer with citations."
         ),
+        model="openai:gpt-4o-mini",
+        system_context="""<RESEARCH_RULES>
+<source_verification>
+Cross-reference claims across multiple independent sources.
+Prefer primary sources (original papers, official docs) over secondary.
+Check publication dates and relevance to current context.
+Identify and note potential conflicts of interest or bias.
+</source_verification>
+<citation_format>
+Use markdown links for sources: [Title](URL)
+Include timestamps when available: [Title](URL) (accessed YYYY-MM-DD)
+Format quotes clearly with attribution.
+</citation_format>
+<depth_guidelines>
+Start broad to understand context, then narrow to specifics.
+Investigate contradictory information thoroughly.
+Document search strategy and sources consulted.
+Provide confidence levels for claims based on evidence strength.
+</depth_guidelines>
+</RESEARCH_RULES>""",
+        triggers=["RESEARCH_RULES", "context"],
     )
     async def create_subagent(
         self,
