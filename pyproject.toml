@@ -40,7 +40,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
     "requests>=2.31.0",
-    "soothe-sdk>=0.1.1",
+    "soothe-sdk",
     "textual>=0.40.0",
     "typer>=0.9.0,<1.0.0",
     "uvicorn[standard]>=0.24.0",
@@ -148,53 +148,6 @@ line-length = 120
 exclude = []
 
 [tool.ruff.format]
-docstring-code-format = true
 
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "COM812",
-    "ISC001",
-    "PERF203",
-    "SLF001",
-    "PLR0913",
-    # Intentional design choices:
-    "PLC0415",  # Lazy imports for optional dependencies
-    "BLE001",   # General exception catching for robustness
-    "ANN401",   # Any types at plugin/protocol boundaries
-    "C901",     # Complexity metrics (would require refactoring)
-    "PLR0911",  # Too many return statements
-    "PLR0912",  # Too many branches
-    "PLR0915",  # Too many statements
-    "S608",     # SQL with internally-controlled collection names
-    "PLW0603",  # Global state for CLI commands
-    "S324",     # Probabilistic hash comparison
-    "S603",     # Subprocess with trusted input
-    "S607",     # Partial executable path (git from PATH is intentional)
-    "TRY003",   # Long exception messages
-    "EM101",    # Exception with f-string
-    "TC001",    # Move application import into type-checking block (false positive for Pydantic)
-    "TC003",    # Move standard library import into type-checking block (false positive for Pydantic)
-    "TRY301",   # Abstract raise to inner function
-    "DTZ005",   # datetime.now() without timezone
-]
-
-[tool.ruff.lint.pyupgrade]
-keep-runtime-typing = true
-
-[tool.ruff.lint.isort]
-force-single-line = false
-combine-as-imports = true
-known-first-party = ["soothe", "soothe_sdk"]
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-ignore-var-parameters = true
-
-[tool.ruff.lint.per-file-ignores]
-# Tests can use assert, and have relaxed documentation/typing requirements
-"tests/**" = ["S101", "ANN", "ARG", "D1", "PLR2004", "PT", "BLE001", "F401", "F841", "PD", "PTH", "RUF", "SIM", "TRY", "S110", "S108", "ASYNC"]
-"src/soothe/core/event_catalog.py" = ["D101", "PLR2004"]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
+[tool.uv.sources]
+soothe-sdk = { path = "./sdk", editable = true }
