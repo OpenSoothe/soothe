@@ -4,11 +4,15 @@ This module implements an optional synthesis phase that generates comprehensive
 final reports from accumulated evidence using evidence-based trigger criteria.
 """
 
-import re
+from __future__ import annotations
 
-from langchain_core.language_models.chat_models import BaseChatModel
+import re
+from typing import TYPE_CHECKING
 
 from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
+
+if TYPE_CHECKING:
+    from langchain_core.language_models.chat_models import BaseChatModel
 
 # Synthesis trigger thresholds (internal constants, not exposed to users)
 _SYNTHESIS_MIN_STEPS = 2
@@ -72,7 +76,10 @@ class SynthesisPhase:
             return False
 
         # Criterion 3: Sufficient evidence volume
-        total_evidence_length = sum(len(r.output or "") for r in successful_steps)
+        # Use full output, not truncated evidence strings
+        total_evidence_length = sum(
+            len(r.to_evidence_string(truncate=False) if r.success else (r.output or "")) for r in successful_steps
+        )
         if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
             return False
 
@@ -131,8 +138,12 @@ class SynthesisPhase:
         Raises:
             Exception: If synthesis fails (caller should fallback).
         """
-        # Gather evidence
-        evidence_parts = [result.output for result in state.step_results if result.success and result.output]
+        # Gather evidence - use full output, not truncated strings
+        evidence_parts = [
+            result.to_evidence_string(truncate=False) if result.success else result.output
+            for result in state.step_results
+            if result.success and result.output
+        ]
 
         evidence = "\n\n".join(evidence_parts)
 

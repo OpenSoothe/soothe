@@ -392,7 +392,7 @@ class TestStreamDisplayPipeline:
         assert lines[0].duration_ms == 45200
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
-        """Loop agent Reason event emits one concise summary line."""
+        """Loop agent Reason event emits one concise summary line (RFC-603: no percentage)."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
@@ -409,7 +409,8 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert "Found structure" in lines[0].content
-        assert "80% sure" in lines[0].content
+        # RFC-603: Percentage display removed per user request
+        assert "80% sure" not in lines[0].content
         assert lines[0].icon == "→"
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
@@ -430,7 +431,8 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert "Goal achieved" in lines[0].content
-        assert "95% sure" in lines[0].content
+        # RFC-603: Percentage display removed per user request
+        assert "95% sure" not in lines[0].content
         assert lines[0].icon == "✓"
 
     def test_step_completed_with_tool_call_count(self) -> None:
