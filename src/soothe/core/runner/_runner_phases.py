@@ -772,23 +772,28 @@ class PhasesMixin:
     def _build_enriched_input(
         self,
         user_input: str,
-        projection: ContextProjection | None,
-        memories: list[MemoryItem],
+        projection: ContextProjection | None,  # noqa: ARG002
+        memories: list[MemoryItem],  # noqa: ARG002
     ) -> list[HumanMessage]:
-        """Build the enriched input messages with context and memories."""
-        parts: list[str] = []
+        """Build input message with user query only.
 
-        if projection and projection.entries:
-            context_text = "\n".join(f"- [{e.source}] {e.content[:200]}" for e in projection.entries[:10])
-            parts.append(f"<context>\n{context_text}\n</context>")
+        Context and memory now injected into SystemMessage by
+        SystemPromptOptimizationMiddleware (RFC-208). Parameters kept for
+        backward compatibility during migration.
 
-        if memories:
-            memory_text = "\n".join(f"- [{m.source_thread or 'unknown'}] {m.content[:200]}" for m in memories[:5])
-            parts.append(f"<memory>\n{memory_text}\n</memory>")
+        Args:
+            user_input: User's query text.
+            projection: Context projection (unused, in SystemMessage).
+            memories: Recalled memories (unused, in SystemMessage).
 
-        enriched = "\n\n".join(parts) + f"\n\n{user_input}" if parts else user_input
+        Returns:
+            Single HumanMessage with user query.
 
-        return [HumanMessage(content=enriched)]
+        Note:
+            Context/memory XML construction moved to middleware
+            for SystemMessage consolidation (RFC-208 alignment).
+        """
+        return [HumanMessage(content=user_input)]
 
     async def _collect_context_for_injection(self, state: Any) -> None:
         """Collect context for system prompt XML injection (RFC-104).

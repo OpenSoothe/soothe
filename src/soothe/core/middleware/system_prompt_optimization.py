@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     from soothe.config import SootheConfig
     from soothe.core.unified_classifier import UnifiedClassification
+    from soothe.protocols.context import ContextProjection
+    from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
 
@@ -99,14 +101,31 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         if complexity == "chitchat":
             return f"{base_core}\n\n{date_line}"
 
-        sections = build_context_sections_for_complexity(
-            config=self._config,
-            complexity=complexity,  # type: ignore[arg-type]
-            state=state or {},
-            include_workspace_extras=False,
+        # Build sections list
+        sections = [base_core]
+
+        # Environment, workspace, thread, protocols (existing logic)
+        sections.extend(
+            build_context_sections_for_complexity(
+                config=self._config,
+                complexity=complexity,  # type: ignore[arg-type]
+                state=state or {},
+                include_workspace_extras=False,
+            )
         )
-        body = "\n\n".join(sections)
-        return f"{base_core}\n\n{body}\n\n{date_line}"
+
+        # NEW (RFC-208): Context projection and memories (medium/complex only)
+        if state:
+            projection = state.get("context_projection")
+            if projection and projection.entries:
+                sections.append(self._build_context_section(projection))
+
+            memories = state.get("recalled_memories")
+            if memories:
+                sections.append(self._build_memory_section(memories))
+
+        sections.append(date_line)
+        return "\n\n".join(sections)
 
     def _get_domain_scoped_prompt(
         self, classification: UnifiedClassification, state: dict[str, Any] | None = None
@@ -124,6 +143,49 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             Formatted prompt based on complexity level with XML sections.
         """
         return self._get_prompt_for_complexity(classification.task_complexity, state)
+
+    def _build_context_section(self, projection: ContextProjection) -> str:
+        """Build <context> XML for context projection entries.
+
+        Args:
+            projection: Context projection with relevance-ranked entries.
+
+        Returns:
+            XML section string with top 10 entries, 200 chars each.
+
+        Example:
+            >>> projection = ContextProjection(entries=[
+            ...     ContextEntry(source="tool", content="Found 5 files", ...)
+            ... ])
+            >>> print(self._build_context_section(projection))
+            <context>
+            - [tool] Found 5 files
+            </context>
+        """
+        entries = projection.entries[:10]
+        lines = [f"- [{e.source}] {e.content[:200]}" for e in entries]
+        joined = "\n".join(lines)
+        return f"<context>\n{joined}\n</context>"
+
+    def _build_memory_section(self, memories: list[MemoryItem]) -> str:
+        """Build <memory> XML for recalled memories.
+
+        Args:
+            memories: Recalled memory items from MemoryProtocol.
+
+        Returns:
+            XML section string with top 5 memories, 200 chars each.
+
+        Example:
+            >>> memories = [MemoryItem(content="User prefers Python", ...)]
+            >>> print(self._build_memory_section(memories))
+            <memory>
+            - [thread_123] User prefers Python
+            </memory>
+        """
+        lines = [f"- [{m.source_thread or 'unknown'}] {m.content[:200]}" for m in memories[:5]]
+        joined = "\n".join(lines)
+        return f"<memory>\n{joined}\n</memory>"
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         """Replace system prompt based on LLM classification.
