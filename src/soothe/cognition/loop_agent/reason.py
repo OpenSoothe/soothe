@@ -100,7 +100,13 @@ class ReasonPhase:
                 "[Action Enhancement] Iteration %d: Applied enhancement",
                 state.iteration,
             )
-            result = result.model_copy(update={"soothe_next_action": enhanced_action})
+            # Update BOTH soothe_next_action AND user_summary (pipeline shows user_summary first)
+            result = result.model_copy(
+                update={
+                    "soothe_next_action": enhanced_action,
+                    "user_summary": enhanced_action,  # Critical: This is what gets displayed!
+                }
+            )
         else:
             logger.warning(
                 "[Action Enhancement] Iteration %d: No enhancement needed",

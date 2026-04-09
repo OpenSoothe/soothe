@@ -20,7 +20,8 @@ def test_on_loop_agent_reason_extracts_user_summary():
     lines = pipeline.process(event)
     assert len(lines) == 1
     assert "Counting files in project" in lines[0].content
-    assert "85% sure" in lines[0].content
+    # RFC-603: Percentage display removed per user request
+    assert "85% sure" not in lines[0].content
 
 
 def test_on_loop_agent_reason_extracts_soothe_next_action():
@@ -37,7 +38,8 @@ def test_on_loop_agent_reason_extracts_soothe_next_action():
     lines = pipeline.process(event)
     assert len(lines) == 1
     assert "Analyzing architecture" in lines[0].content
-    assert "90% sure" in lines[0].content
+    # RFC-603: Percentage display removed per user request
+    assert "90% sure" not in lines[0].content
 
 
 def test_on_loop_agent_reason_derives_from_status():
@@ -105,7 +107,8 @@ def test_on_loop_agent_reason_formats_confidence():
 
     lines = pipeline.process(event)
     assert len(lines) == 1
-    assert "92% sure" in lines[0].content
+    # RFC-603: Percentage display removed per user request
+    assert "92% sure" not in lines[0].content
 
 
 def test_on_loop_agent_reason_defaults_confidence_when_missing():
@@ -120,7 +123,8 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
         "status": "working",
     }
     lines1 = pipeline.process(event1)
-    assert "80% sure" in lines1[0].content
+    # RFC-603: Percentage display removed per user request
+    assert "80% sure" not in lines1[0].content
 
     # Test with confidence missing
     event2 = {
@@ -129,7 +133,8 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
         "status": "working",
     }
     lines2 = pipeline.process(event2)
-    assert "80% sure" in lines2[0].content
+    # RFC-603: Percentage display removed per user request
+    assert "80% sure" not in lines2[0].content
 
 
 def test_on_loop_agent_reason_returns_empty_when_missing_all():
