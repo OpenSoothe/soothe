@@ -247,9 +247,6 @@ class LoopState(BaseModel):
     total_tokens_used: int = 0
     context_percentage_consumed: float = 0.0
 
-    # Execution context flag (IG-133): True if Act will load checkpoint history
-    act_will_have_checkpoint_access: bool = True
-
     # Action history for progressive specificity tracking (RFC-603)
     action_history: list[str] = Field(
         default_factory=list, description="Chronological action descriptions for progression tracking"

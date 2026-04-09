@@ -1,8 +1,18 @@
 # IG-133: Conditional Injection of Prior Conversation to Avoid Duplication
 
-**Status:** Draft
+**Status:** DEPRECATED - Superseded by RFC-209
+
+This implementation guide is superseded by RFC-209 (Executor Thread Isolation Simplification), which eliminates the need for conditional prior conversation injection. With RFC-209:
+
+- All executions use parent thread_id (no isolated threads created manually)
+- Prior conversation is always available via checkpoint (no need for conditional logic)
+- The `act_will_have_checkpoint_access` flag becomes unnecessary and will be removed
+- Duplication is avoided naturally without conditional injection
+
+**No backward compatibility maintained**. Once RFC-209 is implemented, this guide becomes obsolete.
+
 **Spec traceability:** RFC-201 (Layer 2 Agentic Goal Execution), RFC-100 (CoreAgent Runtime)
-**Platonic phase:** Implementation (IMPL) — code + tests + verification
+**Platonic phase:** Implementation (IMPL) — superseded by architectural simplification
 
 ---
 

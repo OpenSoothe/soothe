@@ -25,7 +25,7 @@ Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 
 ### Layer Integration
 
-**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution with isolated threads `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])`.
+**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-209 simplifies to single thread_id for all executions).
 
 **CoreAgent Usage**: Foundation for Layer 2 ACT phase, CLI direct usage, daemon queries, subagent tool calls.
 
@@ -87,9 +87,9 @@ Single thread context: `astream(input, config={"thread_id": "tid"})`. Shared con
 
 ### Parallel Execution
 
-Isolated threads: `asyncio.gather([astream(step, thread_id=f"{tid}__step_{i}")])`. Parent → child threads, independent contexts, results merged after completion.
+Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in steps])`. All steps use parent thread_id, langgraph handles concurrent message queue safely.
 
-**Thread Naming**: Parent `thread-123`, parallel steps `thread-123__step_0/1/2`, goals `thread-123__goal_id`.
+**Thread Naming** (RFC-209 simplified): Parent `thread-123`, goals `thread-123__goal_id` (for Layer 3). No manual step thread suffixes.
 
 ## Built-in Capabilities
 
