@@ -10,6 +10,8 @@
 
 Soothe uses a **three-layer execution architecture** with distinct LLM communication patterns at each level. The system employs strategic LLM calls for classification, reasoning, and execution, with middleware-driven prompt optimization and bounded context projections for subagent delegations.
 
+**Recent Optimization (RFC-208)**: Layer 1 CoreAgent now consolidates context projection and memories into SystemMessage, following RFC-207's SystemMessage/HumanMessage separation pattern. This improves token efficiency, LLM response quality, and architectural clarity.
+
 ---
 
 ## Architecture Overview
@@ -41,6 +43,8 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture
 - RFC-201: Layer 2 Agentic Goal Execution Loop
+- RFC-207: Message Type Separation (Layer 2)
+- RFC-208: CoreAgent Message Optimization (Layer 1)
 - RFC-100: Layer 1 CoreAgent Runtime
 
 ---
@@ -350,7 +354,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 
 ### Phase 4.2: CoreAgent LLM Input Construction
 
-**System Prompt** (complexity-based optimization):
+**System Prompt** (complexity-based optimization, updated in RFC-208):
 
 **Chitchat Complexity**:
 ```
@@ -364,30 +368,50 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 ```
 [MEDIUM_SYSTEM_PROMPT]
 [Current date line]
-<SOOTHE_WORKSPACE>...</SOOTHE_WORKSPACE>
+<ENVIRONMENT>...</ENVIRONMENT>
+<WORKSPACE>...</WORKSPACE>
+<context>...</context> [RFC-208]
+<memory>...</memory> [RFC-208]
 <SOOTHE_THREAD_CONTEXT>...</SOOTHE_THREAD_CONTEXT>
 <SOOTHE_PROTOCOL_SUMMARY>...</SOOTHE_PROTOCOL_SUMMARY>
 ```
 - Standard prompt with guidelines
-- Context sections appended
+- Context and memory sections now in SystemMessage (RFC-208)
 
 **Complex Complexity**:
 ```
 [DEFAULT_SYSTEM_PROMPT or config.system_prompt]
 [Current date line]
-<SOOTHE_WORKSPACE>...</SOOTHE_WORKSPACE>
+<ENVIRONMENT>...</ENVIRONMENT>
+<WORKSPACE>...</WORKSPACE>
+<context>...</context> [RFC-208]
+<memory>...</memory> [RFC-208]
 <SOOTHE_THREAD_CONTEXT>...</SOOTHE_THREAD_CONTEXT>
 <SOOTHE_PROTOCOL_SUMMARY>...</SOOTHE_PROTOCOL_SUMMARY>
 ```
 - Full prompt with all context
-- Maximum context injection
+- Maximum context injection including context/memory
 
-**XML Context Sections** (RFC-104):
+**XML Context Sections** (RFC-104, RFC-208):
 
-- `<SOOTHE_WORKSPACE>`:
+- `<ENVIRONMENT>`:
+  - Platform, shell, OS version
+  - Model identifier and knowledge cutoff
+
+- `<WORKSPACE>`:
   - Workspace root path
   - Git status (branch, remote, file changes)
   - Recent commits summary
+
+- `<context>` (RFC-208 NEW):
+  - Context projection entries (top 10, 200 chars each)
+  - Relevant findings from tool/subagent results
+  - Moved from HumanMessage to SystemMessage
+
+- `<memory>` (RFC-208 NEW):
+  - Recalled memories (top 5, 200 chars each)
+  - Cross-thread long-term memory items
+  - Moved from HumanMessage to SystemMessage
 
 - `<SOOTHE_THREAD_CONTEXT>`:
   - Thread ID
@@ -420,23 +444,22 @@ Use this scoped context briefing while solving the task:
 - Scoped projection from orchestrator's context ledger
 - Injected into `task` tool prompt argument
 
-**Enriched Input Messages**:
+**HumanMessage** (simplified in RFC-208):
 
-1. **Context Projection Entries**:
-   - Entries from pre-stream projection
-   - Format: `<context>\n[entry list]\n</context>`
+**Before RFC-208**:
+- Context projection entries
+- Recalled memories
+- User query text
 
-2. **Recalled Memories**:
-   - Items from memory recall
-   - Format: `<memory>\n[memory list]\n</memory>`
+**After RFC-208**:
+- **User query text ONLY**
+- Context and memory moved to SystemMessage
+- Clear separation: SystemMessage = context, HumanMessage = user task
 
-3. **Prior Messages** (if resuming thread):
-   - Loaded from LangGraph checkpointer
-   - Full message history for thread context
-
-4. **Task Description**:
-   - Step goal from AgentDecision
-   - HumanMessage with specific instructions
+**Prior Messages** (if resuming thread):
+- Loaded from LangGraph checkpointer
+- Full message history for thread context
+- Maintained as conversation history
 
 ---
 
@@ -558,7 +581,7 @@ results = await asyncio.gather([
 | Tier-1 | Classification | fast | 1 | Recent messages (6) + query | Complexity + routing + piggybacked response |
 | Pre-stream | Memory/Context | - | 0 (retrieval) | User query | Memories (5) + projection (4000 tokens) |
 | Layer 2 | Reason | reasoning | ~8 max | System (static policies) + Human (goal, evidence, working memory, prior conversation) | ReasonResult (plan + progress + evidence) |
-| Layer 1 | Act (per step) | default | 1+ (per tool call) | System (complexity-optimized) + enriched input + hints + context briefing | Tool calls + AI response (streamed) |
+| Layer 1 | Act (per step) | default | 1+ (per tool call) | System (complexity-optimized + context + memory [RFC-208]) + Human (user query) + hints + context briefing | Tool calls + AI response (streamed) |
 | Subagent | Delegation | inherited | 1+ (isolated thread) | Scoped briefing (1200 tokens) + task description | Task results (no full context) |
 | Layer 3 | Autonomous | think | Goal-dependent | Goal DAG state + goal descriptions | Goal coordination + consensus |
 
@@ -806,7 +829,8 @@ results = await asyncio.gather([
 - RFC-201: Layer 2 agentic execution
 - RFC-104: Context XML injection
 - RFC-203: Working memory integration
-- RFC-207: Message type separation
+- RFC-207: Message type separation (Layer 2)
+- RFC-208: CoreAgent message optimization (Layer 1)
 - RFC-603: Action specificity enhancement
 
 ---
@@ -821,11 +845,13 @@ Key strengths:
 - **Middleware flexibility**: Dynamic prompt adjustment without code changes
 - **Streaming architecture**: Progressive result display with nested visibility
 - **Evidence accumulation**: Structured information flow from execution to reasoning
+- **Message separation** (RFC-207, RFC-208): SystemMessage for context, HumanMessage for tasks
 
 This architecture enables Soothe to handle complex multi-step goals with bounded LLM context windows while maintaining full cognitive context continuity across threads and restarts.
 
 ---
 
-**Document Status**: Analysis Complete
+**Document Status**: Analysis Updated (RFC-208 Integration)
 **Generated**: 2026-04-09 by Claude Code
+**Last Updated**: 2026-04-09 (RFC-208 CoreAgent message optimization)
 **Reviewed**: Pending human review
