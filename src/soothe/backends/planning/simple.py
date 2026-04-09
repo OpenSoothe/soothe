@@ -305,7 +305,7 @@ def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
     elif iteration == 1:
         action_desc = f"Continue investigation with focused approach for: {tail}"
     else:
-        action_desc = f"Refine approach (iteration {iteration}) for: {tail}"
+        action_desc = f"Refine approach for: {tail}"
 
     return AgentDecision(
         type="execute_steps",
