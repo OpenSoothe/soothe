@@ -460,7 +460,6 @@ class StreamDisplayPipeline:
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle Layer 2 Reason progress with condensed action summary."""
         status = event.get("status", "")
-        confidence = event.get("confidence", 0.0)
 
         # Extract action summary (priority order)
         action_text = (
@@ -472,9 +471,8 @@ class StreamDisplayPipeline:
         if not action_text:
             return []
 
-        # Format with confidence
-        confidence_pct = confidence if confidence > 0 else 0.8
-        formatted = f"{action_text} ({confidence_pct:.0%} sure)"
+        # RFC-603: Remove percentage sure for cleaner display
+        formatted = action_text
 
         # Deduplicate repeated actions
         if not self._presentation.should_emit_action(action_text=formatted):
