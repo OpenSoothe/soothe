@@ -284,26 +284,40 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     )
 
 
-def _default_agent_decision(goal: str) -> Any:
-    """Minimal single-step decision used when parsing fails."""
+def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
+    """Minimal single-step decision used when parsing fails.
+
+    Args:
+        goal: The goal description
+        iteration: Current iteration number for variation
+
+    Returns:
+        AgentDecision with iteration-specific action to prevent repetitions
+    """
     from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
 
     lim = _DEFAULT_DECISION_GOAL_SNIP_LEN
     tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
+
+    # RFC-603: Vary the default action based on iteration to prevent repetitions
+    if iteration == 0:
+        action_desc = f"Take initial steps toward: {tail}"
+    elif iteration == 1:
+        action_desc = f"Continue investigation with focused approach for: {tail}"
+    else:
+        action_desc = f"Refine approach (iteration {iteration}) for: {tail}"
+
     return AgentDecision(
         type="execute_steps",
         steps=[
             StepAction(
                 id="step_0",
-                description=(
-                    "Use file and shell tools in the workspace to gather facts and deliver "
-                    f"a direct result; context: {tail}"
-                ),
+                description=action_desc,
                 expected_output="Concrete findings or artifacts that satisfy the goal",
             )
         ],
         execution_mode="sequential",
-        reasoning="Default decision due to parse error",
+        reasoning=f"Default decision due to parse error at iteration {iteration}",
     )
 
 
@@ -410,18 +424,24 @@ def _calculate_evidence_based_progress(
     return min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
 
 
-def parse_reason_response_text(response: str, goal: str) -> Any:
-    """Parse unified Reason JSON into ReasonResult."""
+def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> Any:
+    """Parse unified Reason JSON into ReasonResult.
+
+    Args:
+        response: LLM response text
+        goal: Goal description
+        iteration: Current iteration number for varied fallback actions
+    """
     from soothe.cognition.loop_agent.schemas import ReasonResult
 
     try:
         data = _load_llm_json_dict(response)
     except Exception:
-        logger.exception("Failed to parse reason response")
+        logger.exception("[PARSE ERROR] Failed to parse LLM response")
         return ReasonResult(
             status="replan",
             plan_action="new",
-            decision=_default_agent_decision(goal),
+            decision=_default_agent_decision(goal, iteration),
             reasoning="Failed to parse model response",
             user_summary="Could not read the model plan — trying a fresh approach",
             soothe_next_action="I'll try again with a simpler plan.",
@@ -434,7 +454,7 @@ def parse_reason_response_text(response: str, goal: str) -> Any:
             decision = agent_decision_from_dict(data, goal)
         except Exception:
             logger.exception("Failed to parse legacy plan shape")
-            decision = _default_agent_decision(goal)
+            decision = _default_agent_decision(goal, iteration)
         return ReasonResult(
             status="continue",
             plan_action="new",
@@ -472,9 +492,9 @@ def parse_reason_response_text(response: str, goal: str) -> Any:
                 decision = agent_decision_from_dict(raw_decision, goal)
             except Exception:
                 logger.exception("Failed to parse nested decision")
-                decision = _default_agent_decision(goal) if status != "done" else None
+                decision = _default_agent_decision(goal, iteration) if status != "done" else None
         elif status != "done":
-            decision = _default_agent_decision(goal)
+            decision = _default_agent_decision(goal, iteration)
 
     if plan_action == "keep":
         decision = None
@@ -498,7 +518,7 @@ def parse_reason_response_text(response: str, goal: str) -> Any:
         return ReasonResult(
             status="replan",
             plan_action="new",
-            decision=_default_agent_decision(goal),
+            decision=_default_agent_decision(goal, iteration),
             reasoning="Invalid reason payload",
             user_summary="Adjusting the plan after an invalid model response",
             soothe_next_action="I'll adjust and try a cleaner plan.",
@@ -836,13 +856,13 @@ class SimplePlanner:
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
         try:
             response = await self._invoke_messages(messages)
-            result = parse_reason_response_text(response, goal)
+            result = parse_reason_response_text(response, goal, state.iteration)
         except Exception:
             logger.exception("SimplePlanner.reason failed")
             return ReasonResult(
                 status="replan",
                 plan_action="new",
-                decision=_default_agent_decision(goal),
+                decision=_default_agent_decision(goal, state.iteration),
                 reasoning="Reason call failed",
                 user_summary="Retrying with a simpler plan after a model error",
                 soothe_next_action="I'll retry with a simpler next step.",
