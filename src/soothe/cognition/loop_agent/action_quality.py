@@ -12,7 +12,7 @@ from soothe.cognition.loop_agent.schemas import StepResult
 logger = logging.getLogger(__name__)
 
 _SPECIFICITY_PATTERNS = [
-    r"\d+\s+(files?|components?|modules?|layers?|directories)",
+    r"\d+\s+(files?|components?|modules?|layers?|directories|implementations?|protocols?|backends?|systems?|packages?|classes?|functions?)",
     r"(examine|analyze|inspect|investigate|review)\s+\S+/",
     r"based on (the|my|these)\s+(findings|results|analysis|discoveries)",
     r"(identified|found|discovered|located)\s+\d+",
@@ -112,7 +112,11 @@ def _extract_paths_from_evidence(step_results: list[StepResult]) -> list[str]:
             continue
 
         # Extract paths like "src/", "docs/", etc.
-        path_pattern = r"(?:examine|analyze|read|list|inspect)\s+(\S+/)"
+        # Match both present tense (examine, analyze) and past tense (examined, analyzed)
+        path_pattern = (
+            r"(?:examine|examined|analyze|analyzed|read|list|listed|"
+            r"inspect|inspected|investigate|investigated|review|reviewed)\s+(\S+/)"
+        )
         matches = re.findall(path_pattern, result.output, re.IGNORECASE)
         paths.extend(matches)
 
