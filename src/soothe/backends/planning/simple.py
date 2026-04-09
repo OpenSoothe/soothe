@@ -307,6 +307,109 @@ def _default_agent_decision(goal: str) -> Any:
     )
 
 
+def _calculate_evidence_based_confidence(
+    state: LoopState,
+    reason_result: Any,
+) -> float:
+    """Calculate confidence from evidence, not just LLM self-assessment.
+
+    Formula:
+    confidence = (
+        llm_confidence * 0.5 +
+        success_rate * 0.3 +
+        evidence_volume_score * 0.3 +
+        iteration_efficiency * 0.4
+    ) / 1.5
+
+    Args:
+        state: Loop state with accumulated evidence
+        reason_result: Reason result with LLM confidence
+
+    Returns:
+        Float between 0.0 and 1.0
+    """
+    # LLM confidence (50% weight)
+    llm_confidence = reason_result.confidence or 0.5
+
+    # Success rate (30% weight)
+    if not state.step_results:
+        success_rate = 0.0
+    else:
+        successful = sum(1 for r in state.step_results if r.success)
+        success_rate = successful / len(state.step_results)
+
+    # Evidence volume (30% weight)
+    # 0 chars = 0.0, 2000+ chars = 1.0
+    total_evidence_length = sum(len(r.output or "") for r in state.step_results)
+    evidence_volume_score = min(total_evidence_length / 2000.0, 1.0)
+
+    # Iteration efficiency (40% weight)
+    # Higher efficiency = reaching goal faster
+    iteration = state.iteration or 1
+    max_iterations = 8
+    iteration_efficiency = max(0.0, 1.0 - (iteration - 1) / max_iterations)
+
+    # Combined score
+    confidence = (
+        llm_confidence * 0.5 + success_rate * 0.3 + evidence_volume_score * 0.3 + iteration_efficiency * 0.4
+    ) / 1.5
+
+    return min(max(confidence, 0.0), 1.0)  # Clamp to [0, 1]
+
+
+def _calculate_evidence_based_progress(
+    state: LoopState,
+    reason_result: Any,
+) -> float:
+    """Calculate progress from evidence, not just LLM estimate.
+
+    Formula:
+    progress = (
+        llm_progress * 0.6 +
+        step_completion_ratio * 0.2 +
+        evidence_growth_rate * 0.2
+    )
+
+    Args:
+        state: Loop state with accumulated evidence
+        reason_result: Reason result with LLM progress
+
+    Returns:
+        Float between 0.0 and 1.0
+    """
+    # Special case: if status is "done", return 1.0
+    if reason_result.status == "done":
+        return 1.0
+
+    # LLM progress (60% weight)
+    llm_progress = reason_result.goal_progress or 0.0
+
+    # Step completion ratio (20% weight)
+    if not state.step_results:
+        step_completion_ratio = 0.0
+    else:
+        completed = sum(1 for r in state.step_results if r.success)
+        step_completion_ratio = completed / len(state.step_results)
+
+    # Evidence growth rate (20% weight)
+    # Compare recent evidence to earlier evidence
+    min_results_for_growth = 2
+    if len(state.step_results) < min_results_for_growth:
+        evidence_growth_rate = 0.5  # Neutral if insufficient data
+    else:
+        # Recent evidence (last 3 results)
+        recent_length = sum(len(r.output or "") for r in state.step_results[-3:])
+        # Earlier evidence (first results)
+        earlier_length = sum(len(r.output or "") for r in state.step_results[:3])
+
+        evidence_growth_rate = 0.5 if earlier_length == 0 else min(recent_length / earlier_length, 1.0)
+
+    # Combined score
+    progress = llm_progress * 0.6 + step_completion_ratio * 0.2 + evidence_growth_rate * 0.2
+
+    return min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
+
+
 def parse_reason_response_text(response: str, goal: str) -> Any:
     """Parse unified Reason JSON into ReasonResult."""
     from soothe.cognition.loop_agent.schemas import ReasonResult
@@ -733,7 +836,7 @@ class SimplePlanner:
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
         try:
             response = await self._invoke_messages(messages)
-            return parse_reason_response_text(response, goal)
+            result = parse_reason_response_text(response, goal)
         except Exception:
             logger.exception("SimplePlanner.reason failed")
             return ReasonResult(
@@ -744,3 +847,8 @@ class SimplePlanner:
                 user_summary="Retrying with a simpler plan after a model error",
                 soothe_next_action="I'll retry with a simpler next step.",
             )
+        else:
+            # RFC-603: Apply evidence-based confidence and progress
+            result.confidence = _calculate_evidence_based_confidence(state, result)
+            result.goal_progress = _calculate_evidence_based_progress(state, result)
+            return result

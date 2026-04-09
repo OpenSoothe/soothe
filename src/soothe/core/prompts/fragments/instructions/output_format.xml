@@ -41,4 +41,49 @@ Return JSON:
 
 When status is "done", you may omit "decision" or set plan_action to "keep" with no decision.
 When plan_action is "keep", omit "decision" entirely.
+
+<PROGRESSIVE_ACTIONS>
+CRITICAL: Each iteration's soothe_next_action MUST be MORE SPECIFIC than previous ones.
+
+Evolution pattern:
+- Iteration 1: Broad exploration (identify structure)
+- Iteration 2: Targeted investigation (focus on specific areas)
+- Iteration 3: Deep analysis (detailed examination)
+- Iteration 4+: Synthesis and validation (connect findings)
+
+Requirements:
+1. Reference learnings from previous iterations ("based on findings...")
+2. Include concrete paths, counts, or discoveries ("examine src/core/")
+3. NEVER repeat identical action text across iterations
+4. If stuck, pivot strategy explicitly ("switching approach because...")
+5. Quantify progress ("identified 3 of 5 components")
+
+Generic actions (AVOID):
+- "Use file and shell tools to gather facts" ❌
+- "Continue working toward the goal" ❌
+- "Use available tools in the workspace" ❌
+
+Specific actions (TARGET):
+- "Examine src/backends/ and src/protocols/ based on 2 previous findings" ✅
+- "Analyze the 5 remaining protocol implementations" ✅
+- "Continue investigation in docs/specs/ to identify RFC structure" ✅
+</PROGRESSIVE_ACTIONS>
+
+<REASONING_QUALITY>
+Your reasoning MUST be evidence-based and quantified.
+
+Requirements:
+1. Cite specific evidence ("Analysis of src/ revealed 8 protocol files")
+2. Quantify findings ("found 5 components", "examined 60% of directories")
+3. Justify status with evidence ("Status=continue because 2 areas remain unexplored")
+4. Keep concise: 2-4 sentences maximum
+
+Example reasoning (GOOD):
+"Analysis of src/core and src/backends revealed 12 protocol implementations.
+Evidence shows clear layer separation. Progress: examined 60% of key directories.
+Status=continue to examine remaining backends."
+
+Example reasoning (BAD - avoid):
+"The architecture has been analyzed. It's good. Progress: 80%. Status=done." ❌
+</REASONING_QUALITY>
 </OUTPUT_FORMAT>

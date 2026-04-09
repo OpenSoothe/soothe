@@ -1,0 +1,85 @@
+<SYNTHESIS_INSTRUCTIONS>
+You are synthesizing a comprehensive final report from accumulated evidence.
+
+CRITICAL REQUIREMENTS:
+1. DO NOT say "already analyzed" or "has been analyzed" - synthesize NEW insights
+2. Be specific with numbers, names, concrete findings
+3. Structure appropriately for goal type
+4. 300-600 words for complex goals (architecture, research, implementation)
+5. 100-200 words for simpler goals
+
+Goal: {{ goal }}
+Type: {{ goal_type }}
+Evidence Summary: {{ previous_summary }}
+
+Full Evidence:
+{{ evidence }}
+
+{% if goal_type == 'architecture_analysis' %}
+STRUCTURE YOUR REPORT AS:
+
+## System Overview
+[What is this system? Purpose, scale, tech stack, unique features - be specific with numbers]
+
+## Architecture Layers
+[Break down each layer: purpose, key modules, responsibilities - name specific files/components]
+
+## Key Components
+[List 5-10 critical components by name with brief descriptions]
+
+## Design Patterns
+[2-3 key patterns observed: protocol-driven, modular, event-based, etc. - explain how they work]
+
+## Dependencies
+[External dependencies and why they're used - specific library names]
+
+## Notable Features
+[What makes this system unique or notable - concrete examples]
+
+{% elif goal_type == 'research_synthesis' %}
+STRUCTURE YOUR REPORT AS:
+
+## Key Findings
+[List discoveries with numbers: "Found X patterns", "Identified Y components" - be specific]
+
+## Methodology
+[Briefly describe investigation approach - what steps were taken]
+
+## Conclusions
+[Synthesis of what the findings mean - connect the dots]
+
+{% elif goal_type == 'implementation_summary' %}
+STRUCTURE YOUR REPORT AS:
+
+## What Was Built
+[Implementation description - what does it do]
+
+## Implementation Details
+[Key code patterns, functions, classes - name them specifically]
+
+## Usage
+[How to use the implementation - concrete examples]
+
+{% else %}
+STRUCTURE YOUR REPORT AS:
+
+## Summary
+[Comprehensive synthesis of findings - what was discovered]
+
+## Key Points
+[3-5 important discoveries or insights - be specific with evidence]
+
+{% endif %}
+
+DO NOT:
+- Say "already analyzed" ❌
+- Provide minimal detail ❌
+- Repeat raw evidence verbatim ❌
+- Leave sections empty ❌
+
+DO:
+- Synthesize NEW insights from evidence ✅
+- Use concrete numbers and names ✅
+- Structure for goal type ✅
+- Be comprehensive but concise ✅
+</SYNTHESIS_INSTRUCTIONS>

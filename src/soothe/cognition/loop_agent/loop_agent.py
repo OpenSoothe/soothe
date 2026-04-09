@@ -12,6 +12,7 @@ from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.reason import ReasonPhase
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
 from soothe.cognition.loop_agent.state_manager import Layer2StateManager
+from soothe.cognition.loop_agent.synthesis import SynthesisPhase
 from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
@@ -189,6 +190,27 @@ class LoopAgent:
                 state.previous_reason = reason_result
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+
+                # RFC-603: Attempt synthesis for comprehensive final report
+                final_output = reason_result.full_output or reason_result.evidence_summary
+                try:
+                    synthesis_llm = self.config.create_chat_model(role="reasoning")
+                    synthesis = SynthesisPhase(synthesis_llm)
+
+                    if synthesis.should_synthesize(goal, state, reason_result):
+                        # Generate comprehensive report
+                        synthesis_text = await synthesis.synthesize(goal, state, reason_result)
+                        final_output = synthesis_text
+                        reason_result.synthesis_performed = True
+                        logger.info("[Synthesis] Comprehensive report generated (%d chars)", len(synthesis_text))
+                except Exception as e:
+                    # Fallback to raw evidence on synthesis failure
+                    logger.warning("[Synthesis] Failed: %s, using raw evidence", e)
+
+                # Update reason_result with final output
+                if final_output != reason_result.full_output:
+                    reason_result = reason_result.model_copy(update={"full_output": final_output})
+
                 # Finalize checkpoint (RFC-205)
                 state_manager.finalize(status="completed")
                 logger.info(

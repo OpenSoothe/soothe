@@ -102,6 +102,9 @@ class ReasonResult(BaseModel):
         evidence_summary: Accumulated evidence text (often filled after parsing).
         next_steps_hint: Optional hint for the next cycle.
         full_output: Final user-visible answer when status is ``done``.
+        synthesis_performed: Whether synthesis phase was run for final report (RFC-603).
+        action_specificity_score: Post-processed action specificity score (0=generic, 1=specific).
+        evidence_quality_score: Calculated quality of accumulated evidence.
     """
 
     status: Literal["continue", "replan", "done"]
@@ -116,6 +119,18 @@ class ReasonResult(BaseModel):
     decision: AgentDecision | None = None
     next_steps_hint: str | None = None
     full_output: str | None = None
+
+    # RFC-603: Synthesis and quality tracking fields
+    synthesis_performed: bool = Field(default=False, description="Whether synthesis phase was run for final report")
+    action_specificity_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Post-processed action specificity score (0=generic, 1=highly specific)",
+    )
+    evidence_quality_score: float = Field(
+        default=0.0, ge=0.0, le=1.0, description="Calculated quality of accumulated evidence"
+    )
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> ReasonResult:
@@ -235,6 +250,11 @@ class LoopState(BaseModel):
     # Execution context flag (IG-133): True if Act will load checkpoint history
     act_will_have_checkpoint_access: bool = True
 
+    # Action history for progressive specificity tracking (RFC-603)
+    action_history: list[str] = Field(
+        default_factory=list, description="Chronological action descriptions for progression tracking"
+    )
+
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.
 
@@ -244,6 +264,26 @@ class LoopState(BaseModel):
         self.step_results.append(result)
         if result.success:
             self.completed_step_ids.add(result.step_id)
+
+    def add_action_to_history(self, action: str) -> None:
+        """Add action description to history for progression tracking.
+
+        Args:
+            action: Action description text
+        """
+        if action and action.strip():
+            self.action_history.append(action.strip())
+
+    def get_recent_actions(self, n: int = 3) -> list[str]:
+        """Get last N action descriptions.
+
+        Args:
+            n: Number of recent actions to retrieve
+
+        Returns:
+            List of last N actions (or all if fewer than N)
+        """
+        return self.action_history[-n:] if self.action_history else []
 
     def has_remaining_steps(self) -> bool:
         """Check if current decision has remaining steps.
