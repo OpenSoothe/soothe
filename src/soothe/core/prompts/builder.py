@@ -134,7 +134,7 @@ class PromptBuilder:
                 "has produced the requested output (translation, summary, etc.).\n"
                 '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
                 "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
-                "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
+                "- Do not claim the task is finished in soothe_next_action unless the evidence or step output contains "
                 "the actual result.\n"
                 "</FOLLOW_UP_POLICY>"
             )
@@ -206,7 +206,7 @@ class PromptBuilder:
             parts.append("\nYour previous assessment (for continuity):")
             parts.append(f"- Status: {prev.status}")
             parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
-            parts.append(f"- Summary: {prev.user_summary or prev.reasoning[:200]}")
+            parts.append(f"- Summary: {prev.soothe_next_action or prev.reasoning[:200]}")
 
         return "\n".join(parts)
 

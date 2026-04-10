@@ -18,11 +18,11 @@ def _mock_config(*, sandboxed: bool = True) -> MagicMock:
     return cfg
 
 
-def test_prefers_normalized_body_under_threshold_over_user_summary() -> None:
+def test_prefers_normalized_body_under_threshold_over_soothe_next_action() -> None:
     body = "Full architecture report here." * 10  # well under 5000
     assert (
         _agentic_final_stdout_text(
-            user_summary="Short headline only.",
+            soothe_next_action="I've completed the analysis.",
             full_output=body,
             thread_id="tid",
             workspace="/tmp",
@@ -34,7 +34,7 @@ def test_prefers_normalized_body_under_threshold_over_user_summary() -> None:
 
 def test_strips_leading_list_repr_then_prefers_body() -> None:
     out = _agentic_final_stdout_text(
-        user_summary="Ignored when body exists.",
+        soothe_next_action="Ignored when body exists.",
         full_output="['/x/README.md', '/y/README.md']Found **68** files.\n\nDetails below.",
         thread_id="tid",
         workspace="/tmp",
@@ -49,7 +49,7 @@ def test_strips_nested_or_repeated_list_prefixes() -> None:
     blob = "['/a']" + "['/b']" + "Final answer."
     assert (
         _agentic_final_stdout_text(
-            user_summary="",
+            soothe_next_action="",
             full_output=blob,
             thread_id="tid",
             workspace="/tmp",
@@ -59,23 +59,23 @@ def test_strips_nested_or_repeated_list_prefixes() -> None:
     )
 
 
-def test_user_summary_when_normalized_body_empty() -> None:
+def test_soothe_next_action_when_normalized_body_empty() -> None:
     assert (
         _agentic_final_stdout_text(
-            user_summary="Found 12 project READMEs.",
+            soothe_next_action="I've found 12 project READMEs.",
             full_output="['/a/README.md', '/b/y.md']",
             thread_id="tid",
             workspace="/tmp",
             config=_mock_config(),
         )
-        == "Found 12 project READMEs."
+        == "I've found 12 project READMEs."
     )
 
 
 def test_returns_none_for_empty() -> None:
     assert (
         _agentic_final_stdout_text(
-            user_summary="",
+            soothe_next_action="",
             full_output=None,
             thread_id="tid",
             workspace="/tmp",
@@ -85,7 +85,7 @@ def test_returns_none_for_empty() -> None:
     )
     assert (
         _agentic_final_stdout_text(
-            user_summary="   ",
+            soothe_next_action="   ",
             full_output="",
             thread_id="tid",
             workspace="/tmp",
@@ -99,7 +99,7 @@ def test_returns_none_when_only_list_blob_without_trailing_prose() -> None:
     """Strip loop consumes everything — runner should fall back to evidence_summary."""
     assert (
         _agentic_final_stdout_text(
-            user_summary="",
+            soothe_next_action="",
             full_output="['/a/x.md', '/b/y.md']",
             thread_id="tid",
             workspace="/tmp",
@@ -112,7 +112,7 @@ def test_returns_none_when_only_list_blob_without_trailing_prose() -> None:
 def test_exact_threshold_prints_full_without_spool() -> None:
     body = "x" * _AGENTIC_REPORT_FULL_DISPLAY_MAX
     out = _agentic_final_stdout_text(
-        user_summary="summary",
+        soothe_next_action="I've finished the analysis.",
         full_output=body,
         thread_id="tid",
         workspace="/tmp",
@@ -127,7 +127,7 @@ def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
     body = "y" * (_AGENTIC_REPORT_FULL_DISPLAY_MAX + 50)
     with patch("soothe.config.SOOTHE_HOME", str(root)):
         out = _agentic_final_stdout_text(
-            user_summary="summary",
+            soothe_next_action="I've generated the report.",
             full_output=body,
             thread_id="thread-a",
             workspace=str(root),
@@ -147,7 +147,7 @@ def test_over_threshold_spools_and_announces_path(tmp_path: Path) -> None:
 def test_over_threshold_without_workspace_skips_write_but_truncates() -> None:
     body = "z" * (_AGENTIC_REPORT_FULL_DISPLAY_MAX + 10)
     out = _agentic_final_stdout_text(
-        user_summary="",
+        soothe_next_action="",
         full_output=body,
         thread_id="tid",
         workspace=None,

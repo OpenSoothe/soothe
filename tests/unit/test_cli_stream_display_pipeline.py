@@ -400,14 +400,13 @@ class TestStreamDisplayPipeline:
             "progress": 0.5,
             "confidence": 0.8,
             "soothe_next_action": "I'll check your config files next.",
-            "user_summary": "Found structure; checking config files next",
             "progress_detail": "Still need to validate settings.",
             "iteration": 1,
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Found structure" in lines[0].content
+        assert "I'll check your config files next." in lines[0].content
         # RFC-603: Percentage display removed per user request
         assert "80% sure" not in lines[0].content
         assert lines[0].icon == "→"
@@ -422,14 +421,13 @@ class TestStreamDisplayPipeline:
             "progress": 1.0,
             "confidence": 0.95,
             "soothe_next_action": "I'm sharing the final result now.",
-            "user_summary": "Goal achieved",
             "progress_detail": "",
             "iteration": 3,
         }
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Goal achieved" in lines[0].content
+        assert "I'm sharing the final result now." in lines[0].content
         # RFC-603: Percentage display removed per user request
         assert "95% sure" not in lines[0].content
         assert lines[0].icon == "✓"
@@ -513,7 +511,7 @@ class TestStreamDisplayPipeline:
             "status": "continue",
             "progress": 0.4,
             "confidence": 0.8,
-            "user_summary": "Searching for README files",
+            "soothe_next_action": "I'm searching for README files.",
             "iteration": 1,
         }
 

@@ -93,7 +93,6 @@ class ReasonResult(BaseModel):
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
         reasoning: Internal analysis for tooling/LLM context only - not shown in CLI/TUI.
-        user_summary: Short headline for user-facing progress (CLI/TUI).
         soothe_next_action: One first-person sentence as Soothe (e.g. I will / I'll) for the
             immediate next action; primary line in CLI/TUI. Empty when omitted by the model.
         progress_detail: Optional friendly explanation of distance-to-goal.
@@ -108,7 +107,6 @@ class ReasonResult(BaseModel):
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
     reasoning: str = ""
-    user_summary: str = ""
     soothe_next_action: str = ""
     progress_detail: str | None = None
     plan_action: Literal["keep", "new"] = "new"

@@ -86,7 +86,6 @@ class ReasonStepRecord(BaseModel):
     decision: dict | None = Field(description="AgentDecision serialized")
 
     # Output
-    user_summary: str
     soothe_next_action: str
 
 

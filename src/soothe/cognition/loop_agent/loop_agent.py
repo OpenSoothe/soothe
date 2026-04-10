@@ -89,7 +89,6 @@ class LoopAgent:
             goal_progress=0.0,
             confidence=0.0,
             reasoning="No result produced",
-            user_summary="Stopped before completion",
             soothe_next_action="I need to stop here before completion.",
         )
 
@@ -178,7 +177,6 @@ class LoopAgent:
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
                     "confidence": reason_result.confidence,
-                    "user_summary": reason_result.user_summary,
                     "soothe_next_action": reason_result.soothe_next_action,
                     "progress_detail": reason_result.progress_detail,
                     "plan_action": reason_result.plan_action,
@@ -360,7 +358,7 @@ Use all tool results and AI responses available in the conversation history to c
                     "iteration": iteration_completed,  # Use pre-increment value
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
-                    "user_summary": reason_result.user_summary,
+                    "soothe_next_action": reason_result.soothe_next_action,
                 },
             )
 
@@ -389,7 +387,6 @@ Use all tool results and AI responses available in the conversation history to c
             goal_progress=0.0,
             confidence=0.0,
             reasoning="Max iterations reached without completion",
-            user_summary="Stopped after maximum iterations",
             soothe_next_action="I've hit the iteration limit; I'll pause here.",
         )
         yield (
