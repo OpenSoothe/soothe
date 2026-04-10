@@ -160,7 +160,7 @@ class StepResult(BaseModel):
     Attributes:
         step_id: ID of the step
         success: Whether execution succeeded
-        output: Result output (if successful)
+        outcome: Structured metadata from tool execution (RFC-211)
         error: Error message (if failed)
         error_type: Error classification
         duration_ms: Execution duration in milliseconds
@@ -172,7 +172,7 @@ class StepResult(BaseModel):
 
     step_id: str
     success: bool
-    output: str | None = None
+    outcome: dict = Field(default_factory=dict)  # RFC-211
     error: str | None = None
     error_type: Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None = None
     duration_ms: int
@@ -184,19 +184,81 @@ class StepResult(BaseModel):
     def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.
 
+        Uses outcome metadata to generate concise, informative summaries.
+
         Args:
-            truncate: If True, truncate output for concise display.
-                     If False, return full output for final response.
+            truncate: If True, generate concise summary.
+                     If False, return detailed summary for final response.
 
         Returns:
             Human-readable evidence string
         """
-        if self.success:
-            output_preview = self.output[:200] if self.output else "no output"
-            if not truncate and self.output:
-                return self.output
-            return f"Step {self.step_id}: ✓ {output_preview}"
-        return f"Step {self.step_id}: ✗ Error: {self.error}"
+        if not self.success:
+            return f"Step {self.step_id}: ✗ Error: {self.error}"
+
+        # Use outcome metadata (RFC-211)
+        return self._outcome_to_evidence_string(truncate)
+
+    def _outcome_to_evidence_string(self, truncate: bool) -> str:
+        """Generate evidence from outcome metadata.
+
+        Args:
+            truncate: Whether to generate concise summary
+
+        Returns:
+            Human-readable evidence string based on outcome type
+        """
+        outcome_type = self.outcome.get("type", "unknown")
+        tool_name = self.outcome.get("tool_name", "tool")
+        success_indicators = self.outcome.get("success_indicators", {})
+        entities = self.outcome.get("entities", [])
+
+        # Tool-specific summaries
+        if outcome_type == "file_read":
+            lines = success_indicators.get("lines", 0)
+            files_found = success_indicators.get("files_found", 0)
+            entity_preview = ", ".join(entities[:3]) if entities else "files"
+
+            if truncate:
+                return f"Step {self.step_id}: ✓ {tool_name} ({lines} lines, {files_found} files) - {entity_preview}"
+            else:
+                return f"Step {self.step_id}: ✓ Read {lines} lines from {files_found} files: {entity_preview}"
+
+        elif outcome_type == "file_write":
+            files_written = success_indicators.get("files_written", 0)
+            entity_preview = ", ".join(entities[:3]) if entities else "files"
+
+            return f"Step {self.step_id}: ✓ {tool_name} ({files_written} files) - {entity_preview}"
+
+        elif outcome_type == "web_search":
+            results_count = success_indicators.get("results_count", 0)
+            domains = entities[:3] if entities else []
+
+            if truncate:
+                return f"Step {self.step_id}: ✓ {tool_name} ({results_count} results)"
+            else:
+                domain_str = ", ".join(domains) if domains else "various sources"
+                return f"Step {self.step_id}: ✓ Found {results_count} results from: {domain_str}"
+
+        elif outcome_type == "code_exec":
+            exit_code = success_indicators.get("exit_code", 0)
+            stdout_lines = success_indicators.get("stdout_lines", 0)
+
+            status = "success" if exit_code == 0 else f"exit code {exit_code}"
+            return f"Step {self.step_id}: ✓ {tool_name} ({status}, {stdout_lines} lines)"
+
+        elif outcome_type == "subagent":
+            completed = success_indicators.get("completed", False)
+            artifacts = success_indicators.get("artifacts_created", 0)
+            entity_preview = ", ".join(entities[:3]) if entities else "artifacts"
+
+            status = "completed" if completed else "in progress"
+            return f"Step {self.step_id}: ✓ Subagent {status} ({artifacts} artifacts) - {entity_preview}"
+
+        else:
+            # Generic fallback
+            size = self.outcome.get("size_bytes", 0)
+            return f"Step {self.step_id}: ✓ {tool_name} (size: {size} bytes)"
 
 
 class LoopState(BaseModel):

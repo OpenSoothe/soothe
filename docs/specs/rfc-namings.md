@@ -92,6 +92,10 @@ This document defines the terminology and naming conventions used in this projec
 | Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-201 |
 | Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-201 |
 | Manual Thread ID Generation (deprecated) | Old pattern where executor created isolated thread IDs (`{thread_id}__l2act{uuid}`, `{thread_id}__step_{i}`) and manually merged results. Removed in RFC-209. | RFC-201 (deprecated), RFC-209 |
+| Outcome Metadata | Structured dict replacing full tool result content in StepResult. Contains type, tool_call_id, success_indicators, entities, size_bytes, optional file_ref. Enables Layer 2 reasoning without content bloat. | RFC-211 |
+| Tool Call ID | Unique identifier from LangChain for each tool invocation (format: `call_<uuid>`). Guaranteed unique even for same tool called multiple times. Used for file cache naming. | RFC-211 |
+| Tool Result Cache | File system cache for large tool results (>50KB) at `~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json`. Optional, cleaned up after thread completion. | RFC-211 |
+| Minimal Data Contract | Design principle where Layer 2 receives only outcome metadata from Layer 1, not full tool result content. Layer 1 owns final report generation. | RFC-211 |
 
 ### Prompt Architecture Terms (RFC-206)
 

@@ -137,7 +137,7 @@ async def test_thread_resume_from_disk(tmp_path: Path) -> None:
             messages_response = await await_event_type(client2.read_event, "thread_messages_response", timeout=5.0)
 
             messages = messages_response.get("messages", [])
-            user_messages = [m for m in messages if m.get("role") == "user"]
+            [m for m in messages if m.get("role") == "user"]
 
             # Continue conversation
             await client2.send_input("Say hello")
@@ -261,7 +261,7 @@ async def test_thread_cancellation(daemon_fixture: tuple[SootheDaemon, str, Soot
 
         # Wait for running state or proceed directly
         try:
-            status = await await_status_state(client.read_event, "running", timeout=5.0)
+            await await_status_state(client.read_event, "running", timeout=5.0)
 
             # Send cancel command
             await client.send_command("/cancel")

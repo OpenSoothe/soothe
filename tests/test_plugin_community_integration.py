@@ -36,7 +36,7 @@ async def test_community_plugins_load_via_lifecycle():
 
     # 5. Register all discovered plugins
     registry = PluginRegistry()
-    loader = PluginLoader(registry)
+    PluginLoader(registry)
 
     for module_path, _ in discovered.values():
         manifest = None

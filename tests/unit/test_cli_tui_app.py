@@ -5,10 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import pytest
 
 from soothe.config import SootheConfig
-from soothe.ux.cli.commands.thread_cmd import thread_continue
 from soothe.ux.tui import app as tui_app
 from soothe.ux.tui.utils import make_welcome_banner, shorten_display_path
 

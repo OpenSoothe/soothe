@@ -77,9 +77,7 @@ class SynthesisPhase:
 
         # Criterion 3: Sufficient evidence volume
         # Use full output, not truncated evidence strings
-        total_evidence_length = sum(
-            len(r.to_evidence_string(truncate=False) if r.success else (r.output or "")) for r in successful_steps
-        )
+        total_evidence_length = sum(len(r.to_evidence_string(truncate=False)) for r in successful_steps)
         if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
             return False
 
@@ -138,12 +136,13 @@ class SynthesisPhase:
         Raises:
             Exception: If synthesis fails (caller should fallback).
         """
-        # Gather evidence - use full output, not truncated strings
-        evidence_parts = [
-            result.to_evidence_string(truncate=False) if result.success else result.output
-            for result in state.step_results
-            if result.success and result.output
-        ]
+        # Gather evidence - use outcome metadata for full evidence
+        evidence_parts = []
+        for result in state.step_results:
+            if result.success:
+                # Use outcome metadata to get full evidence
+                evidence_str = result.to_evidence_string(truncate=False)
+                evidence_parts.append(evidence_str)
 
         evidence = "\n\n".join(evidence_parts)
 

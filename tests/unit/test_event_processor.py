@@ -13,12 +13,10 @@ from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
 
 from soothe.core.event_catalog import PLAN_CREATED
 from soothe.ux.shared.event_processor import EventProcessor
 from soothe.ux.shared.processor_state import ProcessorState
-from soothe.ux.shared.renderer_protocol import RendererProtocol
 
 
 @dataclass

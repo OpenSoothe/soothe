@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-from soothe.config.daemon_config import DaemonConfig, WebSocketConfig
+from soothe.config.daemon_config import WebSocketConfig
 from soothe.daemon.transports.websocket import WebSocketTransport
 from soothe.daemon.websocket_client import WebSocketClient
 

@@ -186,10 +186,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         # WORKSPACE (tool-triggered + condition)
         if "WORKSPACE" in triggered_sections and self._should_inject_workspace(state):
-            workspace_section = self._build_workspace_section(
-                state.get("workspace"),
-                state.get("git_status")
-            )
+            workspace_section = self._build_workspace_section(state.get("workspace"), state.get("git_status"))
             if workspace_section:
                 sections.append(workspace_section)
 
@@ -389,7 +386,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
 
         content = [
             f"<root>{workspace_path}</root>",
-            f"<vcs present=\"{str(is_git).lower()}\">",
+            f'<vcs present="{str(is_git).lower()}">',
         ]
 
         if git_status:
@@ -464,9 +461,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 proto_type = proto_info.get("type", "unknown")
                 stats = proto_info.get("stats", "")
                 if stats:
-                    content.append(f"<{proto_name} type=\"{proto_type}\" stats=\"{stats}\"/>")
+                    content.append(f'<{proto_name} type="{proto_type}" stats="{stats}"/>')
                 else:
-                    content.append(f"<{proto_name} type=\"{proto_type}\"/>")
+                    content.append(f'<{proto_name} type="{proto_type}"/>')
 
         if not content:
             return None

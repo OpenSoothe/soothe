@@ -1,6 +1,5 @@
 """Tests for CLI thread logging and review commands."""
 
-import asyncio
 from types import SimpleNamespace
 
 import pytest

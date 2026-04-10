@@ -1,7 +1,5 @@
 """Tests for URL validation utility."""
 
-import pytest
-
 from soothe.utils.url_validation import validate_url
 
 

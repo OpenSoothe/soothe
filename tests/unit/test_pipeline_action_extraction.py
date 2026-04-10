@@ -1,7 +1,5 @@
 """Unit tests for StreamDisplayPipeline action extraction (IG-143)."""
 
-import pytest
-
 from soothe.ux.cli.stream import StreamDisplayPipeline
 
 

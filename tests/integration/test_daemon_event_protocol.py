@@ -147,8 +147,7 @@ async def test_protocol_events(daemon_fixture: tuple[SootheDaemon, str]) -> None
     try:
         # Create thread
         await client.send_thread_create(initial_message="test protocol events")
-        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
+        await await_event_type(client.read_event, "thread_created", timeout=5.0)
 
         # Execute query that should trigger protocol events
         # Note: Protocol events (context.projected, memory.recalled, etc.)
@@ -264,8 +263,7 @@ async def test_error_events(daemon_fixture: tuple[SootheDaemon, str]) -> None:
     try:
         # Create thread
         await client.send_thread_create(initial_message="test error events")
-        created = await await_event_type(client.read_event, "thread_created", timeout=5.0)
-        thread_id = created["thread_id"]
+        await await_event_type(client.read_event, "thread_created", timeout=5.0)
 
         # Trigger an error condition
         # Try to access non-existent thread

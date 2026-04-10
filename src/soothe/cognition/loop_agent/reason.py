@@ -35,6 +35,63 @@ class ReasonPhase:
         evidence_lines = [result.to_evidence_string() for result in state.step_results]
         state.evidence_summary = "\n".join(evidence_lines)
 
+        # LLM tracing - verbose debug logs for reasoning analysis
+        logger.debug(
+            "[Reason Phase INPUT] ====== Iteration %d START ======",
+            state.iteration,
+        )
+        logger.debug("[Reason Phase INPUT] Goal:\n%s", goal)
+        logger.debug(
+            "[Reason Phase INPUT] State summary: iteration=%d, max=%d, step_results=%d, completed_steps=%d",
+            state.iteration,
+            state.max_iterations,
+            len(state.step_results),
+            len(state.completed_step_ids),
+        )
+        logger.debug(
+            "[Reason Phase INPUT] Wave metrics: tool_calls=%d, subagent_tasks=%d, cap_hit=%s, output_len=%d, errors=%d",
+            state.last_wave_tool_call_count,
+            state.last_wave_subagent_task_count,
+            state.last_wave_hit_subagent_cap,
+            state.last_wave_output_length,
+            state.last_wave_error_count,
+        )
+        logger.debug(
+            "[Reason Phase INPUT] Action history (size=%d, last 3):\n%s",
+            len(state.action_history),
+            "\n".join(state.get_recent_actions(3)),
+        )
+
+        # Log PlanContext inputs
+        logger.debug(
+            "[Reason Phase INPUT] Context: workspace=%s, capabilities=%d, completed_steps=%d, prior_msgs=%d",
+            context.workspace or "none",
+            len(context.available_capabilities),
+            len(context.completed_steps),
+            len(context.recent_messages),
+        )
+        logger.debug(
+            "[Reason Phase INPUT] Available capabilities:\n%s",
+            "\n".join(context.available_capabilities),
+        )
+        if context.recent_messages:
+            logger.debug(
+                "[Reason Phase INPUT] Prior messages (%d):\n%s",
+                len(context.recent_messages),
+                "\n".join(context.recent_messages[:5]),
+            )
+        if context.completed_steps:
+            logger.debug(
+                "[Reason Phase INPUT] Completed steps (%d):\n%s",
+                len(context.completed_steps),
+                "\n".join([f"  {s.step_id}: {s.outcome}" for s in context.completed_steps[:5]]),
+            )
+        if context.working_memory_excerpt:
+            logger.debug(
+                "[Reason Phase INPUT] Working memory excerpt:\n%s",
+                context.working_memory_excerpt,
+            )
+
         logger.info(
             "[Reason] BEFORE LLM: iteration=%d, history_size=%d, step_results=%d",
             state.iteration,
@@ -49,6 +106,59 @@ class ReasonPhase:
             (result.soothe_next_action or "")[:100],
         )
 
+        # LLM tracing - verbose debug logs for reasoning analysis
+        logger.debug(
+            "[Reason Phase OUTPUT] ====== LLM Response ======",
+        )
+        logger.debug("[Reason Phase OUTPUT] Status: %s", result.status)
+        logger.debug("[Reason Phase OUTPUT] Plan action: %s", result.plan_action)
+        logger.debug(
+            "[Reason Phase OUTPUT] Progress: %.0f%%, Confidence: %.0f%%",
+            result.goal_progress * 100,
+            result.confidence * 100,
+        )
+        logger.debug(
+            "[Reason Phase OUTPUT] User summary:\n%s",
+            result.user_summary if result.user_summary else "none",
+        )
+        logger.debug(
+            "[Reason Phase OUTPUT] Soothe next action:\n%s",
+            result.soothe_next_action if result.soothe_next_action else "none",
+        )
+        logger.debug(
+            "[Reason Phase OUTPUT] Reasoning:\n%s",
+            result.reasoning if result.reasoning else "none",
+        )
+        logger.debug(
+            "[Reason Phase OUTPUT] Decision: type=%s, steps=%d, mode=%s",
+            result.decision.type if result.decision else "none",
+            len(result.decision.steps) if result.decision else 0,
+            result.decision.execution_mode if result.decision else "none",
+        )
+        if result.decision and result.decision.steps:
+            logger.debug(
+                "[Reason Phase OUTPUT] Decision reasoning:\n%s",
+                result.decision.reasoning,
+            )
+            logger.debug(
+                "[Reason Phase OUTPUT] Step descriptions (%d):",
+                len(result.decision.steps),
+            )
+            for i, s in enumerate(result.decision.steps):
+                logger.debug(
+                    "  Step %d (id=%s): %s",
+                    i,
+                    s.id,
+                    s.description,
+                )
+                logger.debug(
+                    "    Tools: %s, Subagent: %s, Expected: %s",
+                    s.tools or "none",
+                    s.subagent or "none",
+                    s.expected_output,
+                )
+        logger.debug("[Reason Phase OUTPUT] ====== End LLM Response ======")
+
         if not result.evidence_summary and state.evidence_summary:
             result = result.model_copy(update={"evidence_summary": state.evidence_summary})
 
@@ -62,7 +172,7 @@ class ReasonPhase:
             )
 
         if result.is_done():
-            full_outputs = [r.to_evidence_string(truncate=False) for r in state.step_results if r.success and r.output]
+            full_outputs = [r.to_evidence_string(truncate=False) for r in state.step_results if r.success]
             if full_outputs:
                 result = result.model_copy(
                     update={"full_output": "\n\n".join(full_outputs)},

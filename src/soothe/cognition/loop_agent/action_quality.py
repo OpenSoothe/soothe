@@ -108,17 +108,16 @@ def _extract_paths_from_evidence(step_results: list[StepResult]) -> list[str]:
     paths = []
 
     for result in step_results[-5:]:  # Last 5 results
-        if not result.output:
+        # RFC-211: Use outcome metadata instead of output
+        if not result.success or not result.outcome:
             continue
 
-        # Extract paths like "src/", "docs/", etc.
-        # Match both present tense (examine, analyze) and past tense (examined, analyzed)
-        path_pattern = (
-            r"(?:examine|examined|analyze|analyzed|read|list|listed|"
-            r"inspect|inspected|investigate|investigated|review|reviewed)\s+(\S+/)"
-        )
-        matches = re.findall(path_pattern, result.output, re.IGNORECASE)
-        paths.extend(matches)
+        # Extract paths from outcome entities
+        entities = result.outcome.get("entities", [])
+        for entity in entities:
+            # Check if entity looks like a path
+            if isinstance(entity, str) and "/" in entity:
+                paths.append(entity)
 
     # Return last 3 unique paths
     seen = set()

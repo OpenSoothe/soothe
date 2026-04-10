@@ -21,7 +21,6 @@ from typing import Any
 
 import pytest
 
-from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from soothe.daemon.event_bus import EventBus
 from tests.integration.conftest import (
@@ -152,8 +151,8 @@ async def test_event_bus_overflow_protection() -> None:
         await bus.publish("thread:abc", {"type": "test", "data": i})
 
     # Should only receive first 2 events (rest dropped)
-    event1 = await queue.get()
-    event2 = await queue.get()
+    await queue.get()
+    await queue.get()
 
     # The exact values depend on timing, but queue should be empty after
     with pytest.raises(asyncio.TimeoutError):
@@ -528,7 +527,7 @@ async def test_unix_socket_session_cleanup_on_abrupt_disconnect(tmp_path: Path) 
         # Cleanup socket file
         Path(socket_path).unlink(missing_ok=True)
 
-    except Exception as e:
+    except Exception:
         # Cleanup on failure
         with contextlib.suppress(Exception):
             await daemon.stop()
@@ -769,7 +768,7 @@ async def test_event_delivery_latency(tmp_path: Path) -> None:
         await client.send_input("Quick response test")
 
         # Wait for first event
-        first_event = await asyncio.wait_for(client.read_event(), timeout=5.0)
+        await asyncio.wait_for(client.read_event(), timeout=5.0)
         latency = time.time() - start_time
 
         # Event should be delivered within reasonable time (< 2 seconds for local)

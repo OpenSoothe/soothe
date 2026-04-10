@@ -8,6 +8,7 @@ from soothe.core.concurrency import ConcurrencyController
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
 
+@pytest.mark.asyncio
 async def test_init_from_policy() -> None:
     policy = ConcurrencyPolicy(
         max_parallel_goals=2,
@@ -21,30 +22,35 @@ async def test_init_from_policy() -> None:
     assert controller.step_parallelism == "max"
 
 
+@pytest.mark.asyncio
 async def test_policy_property() -> None:
     policy = ConcurrencyPolicy(max_parallel_goals=3)
     controller = ConcurrencyController(policy)
     assert controller.policy is policy
 
 
+@pytest.mark.asyncio
 async def test_step_parallelism_property() -> None:
     policy = ConcurrencyPolicy(step_parallelism="sequential")
     controller = ConcurrencyController(policy)
     assert controller.step_parallelism == "sequential"
 
 
+@pytest.mark.asyncio
 async def test_max_parallel_steps_property() -> None:
     policy = ConcurrencyPolicy(max_parallel_steps=7)
     controller = ConcurrencyController(policy)
     assert controller.max_parallel_steps == 7
 
 
+@pytest.mark.asyncio
 async def test_max_parallel_goals_property() -> None:
     policy = ConcurrencyPolicy(max_parallel_goals=5)
     controller = ConcurrencyController(policy)
     assert controller.max_parallel_goals == 5
 
 
+@pytest.mark.asyncio
 async def test_acquire_step_releases() -> None:
     policy = ConcurrencyPolicy(max_parallel_steps=1)
     controller = ConcurrencyController(policy)
@@ -54,6 +60,7 @@ async def test_acquire_step_releases() -> None:
     assert entered
 
 
+@pytest.mark.asyncio
 async def test_acquire_goal_releases() -> None:
     policy = ConcurrencyPolicy(max_parallel_goals=1)
     controller = ConcurrencyController(policy)
@@ -63,6 +70,7 @@ async def test_acquire_goal_releases() -> None:
     assert entered
 
 
+@pytest.mark.asyncio
 async def test_acquire_llm_call_releases() -> None:
     policy = ConcurrencyPolicy(global_max_llm_calls=1)
     controller = ConcurrencyController(policy)
@@ -72,6 +80,7 @@ async def test_acquire_llm_call_releases() -> None:
     assert entered
 
 
+@pytest.mark.asyncio
 async def test_max_parallel_steps_blocks() -> None:
     policy = ConcurrencyPolicy(max_parallel_steps=1)
     controller = ConcurrencyController(policy)
@@ -98,6 +107,7 @@ async def test_max_parallel_steps_blocks() -> None:
     await asyncio.wait_for(t1, timeout=1.0)
 
 
+@pytest.mark.asyncio
 async def test_max_parallel_goals_blocks() -> None:
     policy = ConcurrencyPolicy(max_parallel_goals=1)
     controller = ConcurrencyController(policy)
@@ -124,6 +134,7 @@ async def test_max_parallel_goals_blocks() -> None:
     await asyncio.wait_for(t1, timeout=1.0)
 
 
+@pytest.mark.asyncio
 async def test_global_llm_limit_blocks() -> None:
     policy = ConcurrencyPolicy(global_max_llm_calls=2)
     controller = ConcurrencyController(policy)
@@ -151,6 +162,7 @@ async def test_global_llm_limit_blocks() -> None:
     await asyncio.wait_for(t1, timeout=1.0)
 
 
+@pytest.mark.asyncio
 async def test_concurrent_acquire_step() -> None:
     policy = ConcurrencyPolicy(max_parallel_steps=3)
     controller = ConcurrencyController(policy)
@@ -170,6 +182,7 @@ async def test_concurrent_acquire_step() -> None:
     await asyncio.gather(*tasks)
 
 
+@pytest.mark.asyncio
 async def test_unlimited_goal_passes_immediately() -> None:
     """Unlimited goals (limit=0) should allow any number of concurrent executions."""
     policy = ConcurrencyPolicy(max_parallel_goals=0)  # Unlimited
@@ -199,6 +212,7 @@ async def test_unlimited_goal_passes_immediately() -> None:
     await asyncio.gather(*tasks)
 
 
+@pytest.mark.asyncio
 async def test_unlimited_step_concurrent_execution() -> None:
     """Unlimited steps (limit=0) should allow any number of concurrent executions."""
     policy = ConcurrencyPolicy(max_parallel_steps=0)  # Unlimited
@@ -228,6 +242,7 @@ async def test_unlimited_step_concurrent_execution() -> None:
     await asyncio.gather(*tasks)
 
 
+@pytest.mark.asyncio
 async def test_unlimited_llm_calls() -> None:
     """Unlimited LLM calls (limit=0) should disable circuit breaker."""
     policy = ConcurrencyPolicy(global_max_llm_calls=0)  # Unlimited
@@ -257,6 +272,7 @@ async def test_unlimited_llm_calls() -> None:
     await asyncio.gather(*tasks)
 
 
+@pytest.mark.asyncio
 async def test_mixed_limits() -> None:
     """Test controller with some limits active, others unlimited."""
     policy = ConcurrencyPolicy(
@@ -303,6 +319,7 @@ async def test_mixed_limits() -> None:
     assert acquired_step == 3  # Third acquired after release
 
 
+@pytest.mark.asyncio
 async def test_zero_policy_initialization() -> None:
     """Verify controller handles all-0 policy correctly."""
     policy = ConcurrencyPolicy(

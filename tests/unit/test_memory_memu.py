@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.backends.memory.memu.models import MemoryFilter, MemoryItem as MemuMemoryItem
+from soothe.backends.memory.memu.models import MemoryItem as MemuMemoryItem
 from soothe.backends.memory.memu_adapter import MemUMemory
-from soothe.config import SootheConfig
 from soothe.protocols.memory import MemoryItem
 
 
@@ -89,7 +87,7 @@ class TestMemUMemoryInit:
         """Test initialization with custom memory directory."""
         mock_config.protocols.memory.persist_dir = "/custom/memory/dir"
 
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore") as mock_store_class:
+        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore"):
             memory = MemUMemory(config=mock_config)
             assert memory._store is not None
 

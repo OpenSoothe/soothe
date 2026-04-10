@@ -58,19 +58,61 @@ class Plan(BaseModel):
 
 
 class StepResult(BaseModel):
-    """Result of executing a plan step.
+    """Result of executing a plan step (RFC-211).
 
     Args:
         step_id: The step that was executed.
-        output: The step's output text.
         success: Whether the step succeeded.
+        outcome: Structured metadata from tool execution.
+        error: Error message if failed.
         duration_ms: Execution time in milliseconds.
+        thread_id: Thread used for execution.
     """
 
     step_id: str
-    output: str
     success: bool
+    outcome: dict = Field(default_factory=dict)  # RFC-211: outcome metadata
+    error: str | None = None
     duration_ms: int | None = None
+    thread_id: str | None = None
+
+    def to_evidence_string(self, *, truncate: bool = True) -> str:
+        """Convert to evidence string for reflection and planning (RFC-211).
+
+        Args:
+            truncate: If True, generate concise summary.
+                     If False, return detailed summary.
+
+        Returns:
+            Human-readable evidence string
+        """
+        if not self.success:
+            return f"Step {self.step_id}: ✗ Error: {self.error or 'unknown'}"
+
+        # Use outcome metadata to generate evidence
+        outcome_type = self.outcome.get("type", "generic")
+        tool_name = self.outcome.get("tool_name", "tool")
+        size_bytes = self.outcome.get("size_bytes", 0)
+
+        if outcome_type == "error":
+            return f"Step {self.step_id}: ✗ Error: {self.outcome.get('error', 'unknown')}"
+        elif outcome_type == "file_read":
+            lines = self.outcome.get("success_indicators", {}).get("lines", 0)
+            files = self.outcome.get("success_indicators", {}).get("files_found", 0)
+            entities = self.outcome.get("entities", [])
+            entity_preview = ", ".join(entities[:3]) if entities else "files"
+            return f"Step {self.step_id}: ✓ {tool_name} ({lines} lines, {files} files) - {entity_preview}"
+        elif outcome_type == "web_search":
+            results = self.outcome.get("success_indicators", {}).get("results_count", 0)
+            return f"Step {self.step_id}: ✓ {tool_name} ({results} results)"
+        elif outcome_type == "code_exec":
+            return f"Step {self.step_id}: ✓ {tool_name} (executed successfully)"
+        elif outcome_type == "subagent":
+            return f"Step {self.step_id}: ✓ {tool_name} (delegation completed)"
+        else:
+            # Generic outcome
+            preview = f"{size_bytes} bytes" if size_bytes > 0 else "completed"
+            return f"Step {self.step_id}: ✓ {tool_name} ({preview})"
 
 
 class PlanContext(BaseModel):

@@ -37,7 +37,7 @@ class TestEditFileLinesTool:
             code_file = Path(tmpdir) / "code.py"
             code_file.write_text("def hello():\n    print('world')\n    return True\n")
 
-            result = edit_tool._run(
+            edit_tool._run(
                 str(code_file),
                 start_line=2,
                 end_line=2,
@@ -57,7 +57,7 @@ class TestEditFileLinesTool:
             code_file = Path(tmpdir) / "multi.py"
             code_file.write_text("x = 1\ny = 2\nz = 3\n")
 
-            result = edit_tool._run(
+            edit_tool._run(
                 str(code_file),
                 start_line=1,
                 end_line=2,
@@ -91,7 +91,7 @@ class TestEditFileLinesTool:
             code_file = Path(tmpdir) / "indented.py"
             code_file.write_text("def foo():\n    x = 1\n    y = 2\n")
 
-            result = edit_tool._run(
+            edit_tool._run(
                 str(code_file),
                 start_line=2,
                 end_line=2,
@@ -107,7 +107,7 @@ class TestEditFileLinesTool:
             code_file = Path(tmpdir) / "end.txt"
             code_file.write_text("line1\nline2\nline3\n")
 
-            result = edit_tool._run(
+            edit_tool._run(
                 str(code_file),
                 start_line=3,
                 end_line=3,
@@ -140,7 +140,7 @@ class TestInsertLinesTool:
             code_file = Path(tmpdir) / "insert.txt"
             code_file.write_text("line1\nline2\n")
 
-            result = insert_tool._run(
+            insert_tool._run(
                 str(code_file),
                 line=2,  # Insert before line 2 (between line1 and line2)
                 content="new_line",
@@ -158,7 +158,7 @@ class TestInsertLinesTool:
             code_file = Path(tmpdir) / "beginning.txt"
             code_file.write_text("existing\n")
 
-            result = insert_tool._run(
+            insert_tool._run(
                 str(code_file),
                 line=1,  # Insert at line 1 (beginning)
                 content="first",
@@ -173,7 +173,7 @@ class TestInsertLinesTool:
             code_file = Path(tmpdir) / "multi.txt"
             code_file.write_text("original\n")
 
-            result = insert_tool._run(
+            insert_tool._run(
                 str(code_file),
                 line=2,  # Insert at end (after line 1)
                 content="line1\nline2\nline3",
@@ -190,7 +190,7 @@ class TestInsertLinesTool:
             code_file = Path(tmpdir) / "preserve.txt"
             code_file.write_text("before\nafter\n")
 
-            result = insert_tool._run(
+            insert_tool._run(
                 str(code_file),
                 line=2,  # Insert before "after"
                 content="inserted",
@@ -224,7 +224,7 @@ class TestDeleteLinesTool:
             code_file = Path(tmpdir) / "delete.txt"
             code_file.write_text("keep1\ndelete1\ndelete2\nkeep2\n")
 
-            result = delete_lines_tool._run(
+            delete_lines_tool._run(
                 str(code_file),
                 start_line=2,
                 end_line=3,
@@ -242,7 +242,7 @@ class TestDeleteLinesTool:
             code_file = Path(tmpdir) / "single.txt"
             code_file.write_text("keep1\ndelete\nkeep2\n")
 
-            result = delete_lines_tool._run(
+            delete_lines_tool._run(
                 str(code_file),
                 start_line=2,
                 end_line=2,
@@ -259,7 +259,7 @@ class TestDeleteLinesTool:
             code_file = Path(tmpdir) / "end.txt"
             code_file.write_text("keep\ndelete1\ndelete2\n")
 
-            result = delete_lines_tool._run(
+            delete_lines_tool._run(
                 str(code_file),
                 start_line=2,
                 end_line=3,

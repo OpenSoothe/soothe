@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
 
     from soothe.config import SootheConfig
+    from soothe.core.tool_context_registry import ToolContextRegistry
+    from soothe.core.tool_trigger_registry import ToolTriggerRegistry
     from soothe.protocols.context import ContextProtocol
     from soothe.protocols.policy import PolicyProtocol
 

@@ -1,6 +1,5 @@
 """Test plugin gap fixes: config_requirements, health_check, trust, discovery."""
 
-import asyncio
 import os
 import sys
 import tempfile
@@ -66,7 +65,7 @@ def test_config_dependency_resolution():
     config.model_settings = MagicMock()
     config.model_settings.temperature = None
 
-    manifest = PluginManifest(
+    PluginManifest(
         name="test-config-dep",
         version="1.0.0",
         description="Test",
@@ -272,8 +271,6 @@ def test_plugin_load_from_entry_points():
 async def test_lifecycle_loads_plugins():
     """PluginLifecycleManager should load discovered plugins including entry points."""
     from soothe.plugin.discovery import discover_all_plugins, discover_entry_points
-    from soothe.plugin.lifecycle import PluginLifecycleManager
-    from soothe.plugin.registry import PluginRegistry
 
     # Create mock config
     config = MagicMock()

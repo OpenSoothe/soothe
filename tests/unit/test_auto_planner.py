@@ -114,7 +114,7 @@ class TestAutoPlanner:
         auto = AutoPlanner(claude=claude)
 
         plan = Plan(goal="test", steps=[PlanStep(id="s1", description="step")])
-        results = [StepResult(step_id="s1", output="ok", success=True)]
+        results = [StepResult(step_id="s1", success=True, outcome={"type": "generic", "size_bytes": 2})]
         goal_ctx = GoalContext(
             current_goal_id="g1",
             all_goals=[],
@@ -133,7 +133,7 @@ class TestAutoPlanner:
         auto = AutoPlanner(simple=simple)
 
         plan = Plan(goal="test", steps=[PlanStep(id="s1", description="step")])
-        results = [StepResult(step_id="s1", output="ok", success=True)]
+        results = [StepResult(step_id="s1", success=True, outcome={"type": "generic", "size_bytes": 2})]
 
         await auto.reflect(plan, results)
         simple.reflect.assert_awaited_once_with(plan, results, None)

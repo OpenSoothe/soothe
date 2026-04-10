@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import importlib
-import logging
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -83,7 +81,7 @@ class TestFileOpsTools:
         test_file = tmp_path / "to_delete.txt"
         test_file.write_text("delete me")
         tool = DeleteFileTool(work_dir=str(tmp_path))
-        result = tool._run(path="to_delete.txt")
+        tool._run(path="to_delete.txt")
         assert not test_file.exists()
 
     def test_list_files_tool(self, tmp_path: Path) -> None:

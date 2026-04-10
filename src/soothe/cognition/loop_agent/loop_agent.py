@@ -12,7 +12,6 @@ from soothe.cognition.loop_agent.executor import Executor
 from soothe.cognition.loop_agent.reason import ReasonPhase
 from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
 from soothe.cognition.loop_agent.state_manager import Layer2StateManager
-from soothe.cognition.loop_agent.synthesis import SynthesisPhase
 from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
@@ -191,21 +190,45 @@ class LoopAgent:
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
-                # RFC-603: Attempt synthesis for comprehensive final report
+                # RFC-211: Layer 2 signals Layer 1 to generate final report
                 final_output = reason_result.full_output or reason_result.evidence_summary
                 try:
-                    synthesis_llm = self.config.create_chat_model(role="reasoning")
-                    synthesis = SynthesisPhase(synthesis_llm)
+                    from langchain_core.messages import HumanMessage
 
-                    if synthesis.should_synthesize(goal, state, reason_result):
-                        # Generate comprehensive report
-                        synthesis_text = await synthesis.synthesize(goal, state, reason_result)
-                        final_output = synthesis_text
-                        reason_result.synthesis_performed = True
-                        logger.info("[Synthesis] Comprehensive report generated (%d chars)", len(synthesis_text))
+                    # Layer 2 sends message to Layer 1 requesting final report
+                    report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
+
+The report should:
+1. Summarize what was accomplished
+2. Highlight key findings or outputs
+3. Provide actionable results or deliverables
+4. Be well-structured with clear sections
+
+Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
+
+                    # Send to Layer 1 CoreAgent
+                    async for chunk in self.core_agent.astream(
+                        {"messages": [HumanMessage(content=report_request)]},
+                        config={"configurable": {"thread_id": state.thread_id}},
+                        stream_mode=["messages"],
+                        subgraphs=False,
+                    ):
+                        # Extract final AI response
+                        if isinstance(chunk, tuple) and len(chunk) >= 2:
+                            mode, data = chunk[0], chunk[1]
+                            if mode == "messages":
+                                from langchain_core.messages import AIMessage
+
+                                if isinstance(data, tuple) and len(data) >= 2:
+                                    msg, _ = data
+                                    if isinstance(msg, AIMessage) and msg.content:
+                                        final_output = msg.content
+                                        break
+
+                    logger.info("[Layer1] Final report generated via CoreAgent (%d chars)", len(final_output))
                 except Exception as e:
-                    # Fallback to raw evidence on synthesis failure
-                    logger.warning("[Synthesis] Failed: %s, using raw evidence", e)
+                    # Fallback to evidence on failure
+                    logger.warning("[Layer1] Final report generation failed: %s, using evidence", e)
 
                 # Update reason_result with final output
                 if final_output != reason_result.full_output:
@@ -287,10 +310,12 @@ class LoopAgent:
             for result in step_results:
                 state.add_step_result(result)
                 if state.working_memory is not None:
+                    # RFC-211: Use outcome metadata for working memory
+                    outcome_summary = result.to_evidence_string(truncate=True)
                     state.working_memory.record_step_result(
                         step_id=result.step_id,
                         description=step_desc.get(result.step_id, ""),
-                        output=result.output,
+                        output=outcome_summary,  # Use outcome summary
                         error=result.error,
                         success=result.success,
                         workspace=state.workspace,
@@ -301,7 +326,7 @@ class LoopAgent:
                     {
                         "step_id": result.step_id,
                         "success": result.success,
-                        "output_preview": result.output[:100] if result.output else None,
+                        "output_preview": result.to_evidence_string()[:100],  # RFC-211: Use outcome
                         "error": result.error or None,
                         "duration_ms": result.duration_ms,
                         "tool_call_count": result.tool_call_count,
@@ -403,7 +428,7 @@ class LoopAgent:
         completed_steps = [
             StepResult(
                 step_id=r.step_id,
-                output=r.output or r.error or "",
+                outcome=r.outcome if r.success else {"type": "error", "error": r.error or ""},
                 success=r.success,
                 duration_ms=r.duration_ms,
             )

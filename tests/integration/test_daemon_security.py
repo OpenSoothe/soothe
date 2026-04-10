@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from tests.integration.conftest import (
     alloc_ephemeral_port,

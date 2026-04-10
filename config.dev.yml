@@ -107,6 +107,13 @@ subagents:
 # Enable/disable tool groups and configure their settings.
 # Each tool group can be enabled/disabled via the 'enabled' flag.
 
+execution:
+  tool_result_cache:
+    enabled: true
+    size_threshold_bytes: 50000  # Cache results larger than 50KB
+    cleanup_on_completion: true  # Remove cache after goal completes
+    cleanup_after_days: 7  # Remove old caches after 7 days
+
 tools:
   # Consolidated execution tools
   execution:

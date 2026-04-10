@@ -217,7 +217,7 @@ class TestHealthStateTracking:
         _shell_health_states.clear()
 
         # Execute a successful command
-        result = tool._run("echo 'test'")
+        tool._run("echo 'test'")
 
         # Check health state was updated
         health = _shell_health_states.get("default")
@@ -235,10 +235,9 @@ class TestHealthStateTracking:
         _shell_health_states.clear()
 
         # Execute a banned command
-        result = tool._run("rm -rf /")
+        tool._run("rm -rf /")
 
         # Should not have created health state
-        health = _shell_health_states.get("default")
         # Health state might exist from initialization, but shouldn't be updated
         # The banned command check happens before health tracking
 
@@ -248,8 +247,6 @@ class TestCleanup:
 
     def test_cleanup_clears_health_state(self) -> None:
         """Test that cleanup clears health state."""
-        tool = RunCommandTool()
-
         # Create health state
         from datetime import datetime
 

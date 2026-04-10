@@ -247,7 +247,7 @@ class TestMultimediaToolErrors:
         try:
             from soothe.tools.video import VideoAnalysisTool
 
-            tool = VideoAnalysisTool()
+            VideoAnalysisTool()
 
             # Should fail or skip gracefully without API key
             # (actual behavior depends on implementation)

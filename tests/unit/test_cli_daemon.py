@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -353,8 +352,6 @@ async def test_wait_for_thread_status_skips_empty_handshake_status() -> None:
 @pytest.mark.asyncio
 async def test_daemon_initial_status_no_thread_leak() -> None:
     """Test that daemon initial status doesn't leak cached thread_id to new clients."""
-    from asyncio import StreamWriter
-
     daemon = SootheDaemon(SootheConfig())
     # Set up a runner with an existing thread_id (simulating previous session)
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]

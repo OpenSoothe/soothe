@@ -6,9 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from soothe.config import SootheConfig
-from soothe.core.runner import SootheRunner
-
 
 class TestThreadDeletion:
     """Test that thread deletion removes runs/{thread_id}/ directory (RFC-0010)."""

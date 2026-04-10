@@ -6,10 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe.core.thread import (
-    EnhancedThreadInfo,
     ThreadContextManager,
     ThreadFilter,
-    ThreadStats,
 )
 from soothe.protocols.durability import ThreadInfo, ThreadMetadata
 
@@ -91,7 +89,6 @@ async def test_resume_thread(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_config, tmp_path):
     """If durability misses metadata but run artifacts exist, recover thread metadata."""
-    from pathlib import Path
     from types import SimpleNamespace
 
     mock_durability.resume_thread = AsyncMock(side_effect=KeyError("missing"))

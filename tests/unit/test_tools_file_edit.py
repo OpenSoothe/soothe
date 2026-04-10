@@ -10,8 +10,6 @@ import pytest
 
 from soothe.tools._internal.file_edit import (
     _detect_stripped_absolute_path,
-    _display_path,
-    _normalize_workspace_relative_input,
 )
 from soothe.tools.file_ops import (
     DeleteFileTool,
@@ -524,7 +522,7 @@ class TestStrippedAbsolutePathDetection:
 
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
-            result = tool._run(stripped_path, "Test content")
+            tool._run(stripped_path, "Test content")
 
         # Check that a log message was generated
         assert any("Path normalization" in record.message for record in caplog.records)
