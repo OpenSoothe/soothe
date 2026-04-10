@@ -590,7 +590,7 @@ class FileLoggingConfig(BaseModel):
 
     level: str = "INFO"
     path: str | None = None
-    max_bytes: int = 10485760  # 10 MB
+    max_bytes: int = 5242880  # 5 MB
     backup_count: int = 3
 
 

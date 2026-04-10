@@ -876,10 +876,12 @@ class SimplePlanner:
                 msg_type,
                 content_len,
             )
+            # Log message preview instead of full content to avoid bloat
+            content_preview = str(msg.content)[:200] if hasattr(msg, "content") else str(msg)[:200]
             logger.debug(
-                "[SimplePlanner.reason] Message %d FULL CONTENT:\n%s",
+                "[SimplePlanner.reason] Message %d preview (first 200 chars): %s",
                 i,
-                msg.content if hasattr(msg, "content") else str(msg),
+                content_preview,
             )
         logger.debug("[SimplePlanner.reason] ====== End Messages ======")
 

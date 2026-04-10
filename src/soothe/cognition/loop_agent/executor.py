@@ -455,9 +455,10 @@ class Executor:
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
             )
+            # Log output summary instead of full content to avoid truncation
             logger.debug(
-                "[Act Phase OUTPUT] FULL OUTPUT:\n%s",
-                output if output else "none",
+                "[Act Phase OUTPUT] Output length: %d chars (summary logged, not full content)",
+                len(output) if output else 0,
             )
             logger.info(
                 "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d "
@@ -505,10 +506,23 @@ class Executor:
                     sr.tool_call_count,
                     sr.subagent_task_completions,
                 )
-                logger.debug(
-                    "    FULL OUTCOME:\n%s",
-                    sr.outcome,
-                )
+                # Log outcome summary instead of full dict to avoid truncation
+                if sr.outcome:
+                    logger.debug(
+                        "    Outcome: type=%s, tool=%s, call_id=%s, size=%d bytes, entities=%d, file_ref=%s",
+                        sr.outcome.get("type"),
+                        sr.outcome.get("tool_name"),
+                        sr.outcome.get("tool_call_id"),
+                        sr.outcome.get("size_bytes", 0),
+                        len(sr.outcome.get("entities", [])),
+                        sr.outcome.get("file_ref", "none"),
+                    )
+                    success_indicators = sr.outcome.get("success_indicators", {})
+                    if success_indicators:
+                        logger.debug(
+                            "    Success indicators: %s",
+                            success_indicators,
+                        )
 
             # Aggregate metrics into LoopState
             self._aggregate_wave_metrics(step_results, output, state)
@@ -819,9 +833,11 @@ class Executor:
                                     elif isinstance(c, dict) and "text" in c:
                                         chunks.append(c["text"])
 
+                            # Log content summary instead of full content to avoid truncation
+                            content_preview = str(content)[:200] if content else "none"
                             logger.debug(
-                                "[Act Phase TOOL] FULL CONTENT:\n%s",
-                                content if content else "none",
+                                "[Act Phase TOOL] Content preview (first 200 chars): %s",
+                                content_preview,
                             )
 
                             # RFC-211: Generate structured metadata for Layer 2
@@ -840,15 +856,21 @@ class Executor:
                             outcomes.append(outcome)
 
                             logger.debug(
-                                "[Act Phase TOOL] Outcome: type=%s, size=%d bytes, entities=%d",
+                                "[Act Phase TOOL] Outcome: type=%s, tool=%s, call_id=%s, size=%d bytes, entities=%d, file_ref=%s",
                                 outcome.get("type"),
+                                outcome.get("tool_name"),
+                                outcome.get("tool_call_id"),
                                 outcome.get("size_bytes", 0),
                                 len(outcome.get("entities", [])),
+                                outcome.get("file_ref", "none"),
                             )
-                            logger.debug(
-                                "[Act Phase TOOL] FULL OUTCOME:\n%s",
-                                outcome,
-                            )
+                            # Log success indicators briefly
+                            success_indicators = outcome.get("success_indicators", {})
+                            if success_indicators:
+                                logger.debug(
+                                    "[Act Phase TOOL] Success indicators: %s",
+                                    success_indicators,
+                                )
                             logger.debug(
                                 "Tool %s (id=%s) executed, outcome type=%s, size=%d bytes",
                                 tool_name,
