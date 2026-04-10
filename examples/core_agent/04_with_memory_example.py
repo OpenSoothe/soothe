@@ -130,7 +130,6 @@ async def main() -> None:
     )
 
     print(f"[Agent] Memory: {type(agent.memory).__name__ if agent.memory else 'None'}")
-    print(f"[Agent] Context: {type(agent.context).__name__ if agent.context else 'None'}")
     print(f"[Agent] Policy: {type(agent.policy).__name__ if agent.policy else 'None'}")
 
     # Demonstrate memory protocol capabilities

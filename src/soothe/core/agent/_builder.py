@@ -16,7 +16,6 @@ from soothe.config import SootheConfig
 from soothe.core.agent._patch import *  # noqa: F403
 from soothe.core.middleware import build_soothe_middleware_stack
 from soothe.core.resolver import (
-    resolve_context,
     resolve_memory,
     resolve_planner,
     resolve_policy,
@@ -36,7 +35,6 @@ if TYPE_CHECKING:
     from langgraph.store.base import BaseStore
     from langgraph.types import Checkpointer
 
-    from soothe.protocols.context import ContextProtocol
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
@@ -53,7 +51,7 @@ class AgentBuilder:
     """Builder for CoreAgent instances.
 
     Encapsulates all construction concerns in a single class:
-    - Protocol resolution (context, memory, planner, policy)
+    - Protocol resolution (memory, planner, policy)
     - Middleware stack construction
     - Backend initialization
     - Plugin loading
@@ -87,7 +85,6 @@ class AgentBuilder:
         store: BaseStore | None = None,
         backend: BackendProtocol | BackendFactory | None = None,
         interrupt_on: dict[str, bool | InterruptOnConfig] | None = None,
-        context: ContextProtocol | None = None,
         memory_store: MemoryProtocol | None = None,
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
@@ -115,7 +112,6 @@ class AgentBuilder:
             store: LangGraph store for persistent storage.
             backend: deepagents backend for file/execution operations.
             interrupt_on: Tool interrupt configuration for human-in-the-loop.
-            context: Override ContextProtocol implementation. None uses config.
             memory_store: Override MemoryProtocol implementation. None uses config.
             planner: Override PlannerProtocol implementation. None uses config.
             policy: Override PolicyProtocol implementation. None uses config.
@@ -134,15 +130,12 @@ class AgentBuilder:
 
         # Resolve protocols
         resolve_start = time.perf_counter()
-        resolved_context = context or self._resolve_context()
         resolved_memory = memory_store or self._resolve_memory()
         resolved_planner = planner or self._resolve_planner(default_model_instance)
         resolved_policy = policy or self._resolve_policy()
         resolve_ms = (time.perf_counter() - resolve_start) * 1000
         logger.debug("[Init] Protocols resolved (%.1fms)", resolve_ms)
 
-        if resolved_context:
-            logger.info("[Init] Context: %s", type(resolved_context).__name__)
         if resolved_memory:
             logger.info("[Init] Memory: %s", type(resolved_memory).__name__)
         if resolved_planner:
@@ -186,7 +179,6 @@ class AgentBuilder:
         default_middleware = build_soothe_middleware_stack(
             self._config,
             resolved_policy,
-            resolved_context,
         )
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
@@ -218,7 +210,6 @@ class AgentBuilder:
         agent = CoreAgent(
             graph=graph,
             config=self._config,
-            context=resolved_context,
             memory=resolved_memory,
             planner=resolved_planner,
             policy=resolved_policy,
@@ -229,26 +220,6 @@ class AgentBuilder:
         logger.info("[Init] ✓ CoreAgent ready (%.1fms total)", total_ms)
 
         return agent
-
-    def _resolve_context(self) -> ContextProtocol | None:
-        """Resolve ContextProtocol with parallel resolution support."""
-        if self._config.performance.parallel_protocol_resolution:
-            try:
-                import asyncio
-
-                # Check if we're already in an async context
-                try:
-                    asyncio.get_running_loop()
-                    # Already in async context, use sequential
-                    logger.debug("[Init] Parallel protocol resolution not available in async context")
-                    return resolve_context(self._config)
-                except RuntimeError:
-                    # No running loop, safe to use asyncio.run()
-                    result = asyncio.run(asyncio.to_thread(resolve_context, self._config))
-                    return result if not isinstance(result, Exception) else None
-            except RuntimeError:
-                return resolve_context(self._config)
-        return resolve_context(self._config)
 
     def _resolve_memory(self) -> MemoryProtocol | None:
         """Resolve MemoryProtocol with parallel resolution support."""
@@ -342,7 +313,6 @@ def create_soothe_agent(
     store: BaseStore | None = None,
     backend: BackendProtocol | BackendFactory | None = None,
     interrupt_on: dict[str, bool | InterruptOnConfig] | None = None,
-    context: ContextProtocol | None = None,
     memory_store: MemoryProtocol | None = None,
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
@@ -365,7 +335,6 @@ def create_soothe_agent(
         store: LangGraph store for persistent storage.
         backend: deepagents backend for file/execution operations.
         interrupt_on: Tool interrupt configuration for HITL.
-        context: Override ContextProtocol implementation.
         memory_store: Override MemoryProtocol implementation.
         planner: Override PlannerProtocol implementation.
         policy: Override PolicyProtocol implementation.
@@ -382,7 +351,6 @@ def create_soothe_agent(
         store=store,
         backend=backend,
         interrupt_on=interrupt_on,
-        context=context,
         memory_store=memory_store,
         planner=planner,
         policy=policy,

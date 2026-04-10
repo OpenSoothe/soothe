@@ -170,7 +170,6 @@ class TestProtocolsSection:
     def test_protocols_section_with_all(self) -> None:
         """Protocols section shows all active protocols."""
         protocol_summary = {
-            "context": {"type": "VectorContext", "stats": "8 entries"},
             "memory": {"type": "KeywordMemory", "stats": "3 recalled"},
             "planner": {"type": "ClaudePlanner"},
             "policy": {"type": "ConfigDrivenPolicy"},
@@ -179,8 +178,6 @@ class TestProtocolsSection:
         section = build_soothe_protocols_section(protocol_summary)
 
         assert '<SOOTHE_PROTOCOLS version="1">' in section
-        assert 'id="context"' in section
-        assert "VectorContext" in section
         assert 'id="memory"' in section
         assert 'id="planner"' in section
         assert 'id="policy"' in section
@@ -194,7 +191,6 @@ class TestProtocolsSection:
     def test_protocols_section_partial(self) -> None:
         """Protocols section handles partial availability."""
         protocol_summary = {
-            "context": {"type": "VectorContext"},
             "memory": None,
             "planner": {"type": "ClaudePlanner"},
             "policy": None,
@@ -202,7 +198,6 @@ class TestProtocolsSection:
 
         section = build_soothe_protocols_section(protocol_summary)
 
-        assert 'id="context"' in section
         assert 'id="planner"' in section
         assert 'id="memory"' not in section
 

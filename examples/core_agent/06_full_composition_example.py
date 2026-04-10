@@ -1,19 +1,14 @@
 """CoreAgent full composition example -- Layer 1 with all protocols.
 
 This example demonstrates CoreAgent with FULL composition:
-- Context protocol: Knowledge accumulation and projection
 - Memory protocol: Cross-thread long-term memory
 - Tools: Built-in tools from config + custom tools
 - Subagents: Delegation to specialized agents
 
 Use case: Full-featured agent capable of:
-- Accumulating context within conversations
 - Remembering information across sessions
 - Executing commands and operations via tools
 - Delegating specialized tasks to subagents
-
-Note: This example overrides context backend to keyword-json for reliability.
-Vector context requires a working embedding model configuration.
 
 Run:
     python examples/core_agent/06_full_composition_example.py
@@ -30,7 +25,7 @@ from langchain_core.tools import tool
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
-from soothe import ContextEntry, MemoryItem, create_soothe_agent
+from soothe import MemoryItem, create_soothe_agent
 
 load_dotenv()
 
@@ -69,35 +64,9 @@ def log_decision(decision: str, rationale: str) -> str:
     return f"Logged decision: '{decision}' with rationale: '{rationale}'"
 
 
-async def setup_context_and_memory(agent) -> None:
-    """Set up initial context and memory for the session."""
-    print("\n[Setup] Pre-populating context and memory...")
-
-    # Context: Thread-specific knowledge
-    if agent.context:
-        context_entries = [
-            ContextEntry(
-                source="session-setup",
-                content="This session is focused on project planning and task coordination.",
-                tags=["session", "planning"],
-                importance=0.9,
-            ),
-            ContextEntry(
-                source="previous-work",
-                content="Previous session completed the API integration module.",
-                tags=["progress", "api"],
-                importance=0.8,
-            ),
-            ContextEntry(
-                source="team-input",
-                content="Team suggested focusing on testing infrastructure next.",
-                tags=["team", "testing"],
-                importance=0.7,
-            ),
-        ]
-        for entry in context_entries:
-            await agent.context.ingest(entry)
-        print(f"  Context: {len(context_entries)} entries added")
+async def setup_memory(agent) -> None:
+    """Set up initial memory for the session."""
+    print("\n[Setup] Pre-populating memory...")
 
     # Memory: Cross-thread persistent knowledge
     if agent.memory:
@@ -180,14 +149,8 @@ async def main() -> None:
     # Load configuration from config.dev.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
-    print(f"[Config] Context backend: {config.protocols.context.backend}")
     print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
     print(f"[Config] Tools: execution={config.tools.execution.enabled}, web_search={config.tools.web_search.enabled}")
-
-    # Override context backend to keyword-json for reliable demo
-    # (Vector context requires working embedding model)
-    print("[Config] Overriding context backend to keyword-json for demo reliability")
-    config.protocols.context.backend = "keyword-json"
 
     # Create CoreAgent with full composition
     # Everything is enabled from config by default
@@ -199,7 +162,6 @@ async def main() -> None:
 
     # Print agent composition
     print("\n[Agent Composition]")
-    print(f"  Context: {type(agent.context).__name__ if agent.context else 'None'}")
     print(f"  Memory: {type(agent.memory).__name__ if agent.memory else 'None'}")
     print(f"  Planner: {type(agent.planner).__name__ if agent.planner else 'None'}")
     print(f"  Policy: {type(agent.policy).__name__ if agent.policy else 'None'}")
@@ -208,20 +170,11 @@ async def main() -> None:
         name = getattr(subagent, "name", getattr(subagent, "__class__", "unknown"))
         print(f"    - {name}")
 
-    # Set up initial context and memory
-    await setup_context_and_memory(agent)
+    # Set up initial memory
+    await setup_memory(agent)
 
     # Demonstrate full agent capabilities
     await demonstrate_full_agent(agent)
-
-    # Show final context state
-    if agent.context:
-        print("\n[Final Context State]")
-        projection = await agent.context.project("project planning", token_budget=500)
-        print(f"  Total entries: {projection.total_entries}")
-        print(f"  Projected entries: {len(projection.entries)}")
-        summary = await agent.context.summarize()
-        print(f"  Summary: {summary[:100]}...")
 
     # Show final memory state
     if agent.memory:

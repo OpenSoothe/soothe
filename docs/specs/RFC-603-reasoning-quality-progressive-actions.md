@@ -80,33 +80,14 @@ Add new `<PROGRESSIVE_ACTIONS>` section requiring:
 
 #### 1.2 Action Post-Processing
 
-**Location**: `src/soothe/cognition/loop_agent/action_quality.py` (NEW)
+**Status**: ❌ **REMOVED** (2026-04-10)
 
-**Functions**:
+**Rationale**: The `action_quality.py` module was removed due to:
+- Persistent integration issues (repetitions in production despite passing unit tests)
+- Hardcoded keyword patterns requiring constant maintenance
+- Prompt engineering (Section 1.1) provides sufficient guidance for progressive actions
 
-```python
-def enhance_action_specificity(
-    action: str,
-    goal: str,
-    iteration: int,
-    previous_actions: list[str],
-    step_results: list[StepResult],
-) -> str
-```
-
-**Logic**:
-1. Check if action is already specific (paths, counts, references to prior work)
-2. Check for repetition against last 3 actions (normalized comparison)
-3. If repeated, derive new action from recent evidence
-4. If generic, add context from step results
-
-**Specificity Detection Patterns**:
-- Numbers: `\d+ (files|components|modules|layers)`
-- Paths: `(examine|analyze|investigate) \S+/`
-- References: `based on (findings|results|analysis)`
-- Discoveries: `(identified|found|discovered) \d+`
-
-**Integration**: Called in `reason.py` after LLM generates `ReasonResult`, before emitting event.
+**Replacement**: Rely entirely on `<PROGRESSIVE_ACTIONS>` prompt section as the primary mechanism. Action history tracking (Section 1.3) is retained for completion detection.
 
 #### 1.3 Action History Tracking
 
@@ -343,8 +324,8 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 **Files**:
 - `schemas.py`: Add action history
 - `output_format.xml`: Add progressive action guidance
-- `action_quality.py`: NEW, implement post-processing
-- `reason.py`: Integrate enhancement
+- ~~`action_quality.py`: NEW, implement post-processing~~ **REMOVED**
+- `reason.py`: Track actions in history (no enhancement)
 
 **Tests**:
 - Unit: Specificity detection, repetition checking, enhancement
@@ -524,15 +505,15 @@ benchmarks/reasoning-quality/
 
 | File | Change Type | Lines Changed |
 |------|-------------|----------------|
-| `action_quality.py` | NEW | ~150 |
+| ~~`action_quality.py`~~ | ~~NEW~~ **REMOVED** | ~~~150~~ **0** |
 | `synthesis.py` | NEW | ~200 |
-| `reason.py` | MODIFY | ~20 |
+| `reason.py` | MODIFY | ~10 |
 | `loop_agent.py` | MODIFY | ~30 |
 | `schemas.py` | MODIFY | ~40 |
 | `simple.py` | MODIFY | ~80 |
 | `output_format.xml` | MODIFY | ~50 |
 | `synthesis_format.xml` | NEW | ~100 |
-| **Total** | | **~670 lines** |
+| **Total** | | **~510 lines** |
 
 ---
 

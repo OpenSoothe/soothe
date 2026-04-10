@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
     from soothe.config import SootheConfig
-    from soothe.protocols.context import ContextProtocol
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
@@ -41,7 +40,6 @@ class CoreAgent:
     Attributes:
         graph: Underlying CompiledStateGraph for advanced LangGraph operations.
         config: SootheConfig used to create this agent.
-        context: ContextProtocol instance for context injection/persistence.
         memory: MemoryProtocol instance for memory recall/persistence.
         planner: PlannerProtocol instance for planning decisions.
         policy: PolicyProtocol instance for action policy checking.
@@ -66,7 +64,7 @@ class CoreAgent:
 
         Layer 1 (CoreAgent) provides:
         - astream(input, config) execution
-        - Protocol property access (context, memory, planner, policy)
+        - Protocol property access (memory, planner, policy)
         - Thread-aware execution via config.configurable
 
     Example:
@@ -78,7 +76,6 @@ class CoreAgent:
             print(chunk)
 
         # Access protocols via typed properties
-        context = agent.context
         memory = agent.memory
 
         # Advanced LangGraph operations via graph
@@ -89,7 +86,6 @@ class CoreAgent:
         self,
         graph: CompiledStateGraph,
         config: SootheConfig,
-        context: ContextProtocol | None = None,
         memory: MemoryProtocol | None = None,
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
@@ -100,7 +96,6 @@ class CoreAgent:
         Args:
             graph: CompiledStateGraph from deepagents create_deep_agent().
             config: SootheConfig used for agent creation.
-            context: ContextProtocol instance (or None if disabled).
             memory: MemoryProtocol instance (or None if disabled).
             planner: PlannerProtocol instance (or None if disabled).
             policy: PolicyProtocol instance (or None if disabled).
@@ -108,7 +103,6 @@ class CoreAgent:
         """
         self._graph = graph
         self._config = config
-        self._context = context
         self._memory = memory
         self._planner = planner
         self._policy = policy
@@ -124,11 +118,6 @@ class CoreAgent:
     def config(self) -> SootheConfig:
         """SootheConfig used to create this agent."""
         return self._config
-
-    @property
-    def context(self) -> ContextProtocol | None:
-        """ContextProtocol instance for context injection/persistence."""
-        return self._context
 
     @property
     def memory(self) -> MemoryProtocol | None:

@@ -103,14 +103,6 @@ class TestDreamingMode:
         await mode._run_consolidation()
         mock_memory.compact.assert_called_once()
 
-    async def test_run_consolidation_calls_context_compact(self, tmp_path: Path) -> None:
-        mock_memory = AsyncMock()
-        mock_context = AsyncMock()
-        mock_context.compact = AsyncMock()
-        mode = DreamingMode(soothe_home=tmp_path, memory_protocol=mock_memory, context_protocol=mock_context)
-        await mode._run_consolidation()
-        mock_context.compact.assert_called_once()
-
     async def test_run_health_check(self, tmp_path: Path) -> None:
         mode = DreamingMode(soothe_home=tmp_path)
         await mode._run_health_check()

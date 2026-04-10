@@ -190,11 +190,9 @@ async def test_archive_thread(mock_durability, mock_config):
 
 
 @pytest.mark.asyncio
-async def test_archive_thread_persists_context_and_cleans_mcp(mock_durability, mock_config):
-    """Archive persists context and cleans up MCP sessions."""
-    context = MagicMock()
-    context.persist = AsyncMock()
-    manager = ThreadContextManager(mock_durability, mock_config, context)
+async def test_archive_thread_cleans_mcp(mock_durability, mock_config):
+    """Archive cleans up MCP sessions."""
+    manager = ThreadContextManager(mock_durability, mock_config)
 
     mock_mcp_manager = MagicMock()
     mock_mcp_manager.cleanup = AsyncMock()
@@ -205,18 +203,15 @@ async def test_archive_thread_persists_context_and_cleans_mcp(mock_durability, m
     finally:
         ThreadContextManager._mcp_managers.pop("test123", None)
 
-    context.persist.assert_called_once_with("test123")
     mock_mcp_manager.cleanup.assert_called_once()
     mock_durability.archive_thread.assert_called_once_with("test123")
 
 
 @pytest.mark.asyncio
-async def test_suspend_thread_persists_context_and_cleans_mcp(mock_durability, mock_config):
-    """Suspend persists context and cleans up MCP sessions."""
-    context = MagicMock()
-    context.persist = AsyncMock()
+async def test_suspend_thread_cleans_mcp(mock_durability, mock_config):
+    """Suspend cleans up MCP sessions."""
     mock_durability.suspend_thread = AsyncMock()
-    manager = ThreadContextManager(mock_durability, mock_config, context)
+    manager = ThreadContextManager(mock_durability, mock_config)
 
     mock_mcp_manager = MagicMock()
     mock_mcp_manager.cleanup = AsyncMock()
@@ -227,7 +222,6 @@ async def test_suspend_thread_persists_context_and_cleans_mcp(mock_durability, m
     finally:
         ThreadContextManager._mcp_managers.pop("test123", None)
 
-    context.persist.assert_called_once_with("test123")
     mock_mcp_manager.cleanup.assert_called_once()
     mock_durability.suspend_thread.assert_called_once_with("test123")
 

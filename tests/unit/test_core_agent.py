@@ -29,7 +29,6 @@ class TestCoreAgentClass:
         agent = CoreAgent(
             graph=mock_graph,
             config=mock_config,
-            context=MagicMock(),
             memory=MagicMock(),
             planner=MagicMock(),
             policy=MagicMock(),
@@ -39,7 +38,6 @@ class TestCoreAgentClass:
         # Verify properties exist and return correct values
         assert agent.graph is mock_graph
         assert agent.config is mock_config
-        assert agent.context is not None
         assert agent.memory is not None
         assert agent.planner is not None
         assert agent.policy is not None
@@ -55,14 +53,12 @@ class TestCoreAgentClass:
         agent = CoreAgent(
             graph=mock_graph,
             config=mock_config,
-            context=None,
             memory=None,
             planner=None,
             policy=None,
             subagents=None,
         )
 
-        assert agent.context is None
         assert agent.memory is None
         assert agent.planner is None
         assert agent.policy is None
@@ -135,20 +131,19 @@ class TestCoreAgentClass:
 
         with patch("soothe.core.resolver.resolve_tools", return_value=[]):
             with patch("soothe.core.resolver.resolve_subagents", return_value=[]):
-                with patch("soothe.core.resolver.resolve_context", return_value=None):
-                    with patch("soothe.core.resolver.resolve_memory", return_value=None):
-                        with patch("soothe.core.resolver.resolve_planner", return_value=None):
-                            with patch("soothe.core.resolver.resolve_policy", return_value=None):
-                                with patch("deepagents.create_deep_agent") as mock_create:
-                                    mock_graph = _mock_graph()
-                                    mock_create.return_value = mock_graph
+                with patch("soothe.core.resolver.resolve_memory", return_value=None):
+                    with patch("soothe.core.resolver.resolve_planner", return_value=None):
+                        with patch("soothe.core.resolver.resolve_policy", return_value=None):
+                            with patch("deepagents.create_deep_agent") as mock_create:
+                                mock_graph = _mock_graph()
+                                mock_create.return_value = mock_graph
 
-                                    config = SootheConfig()
-                                    agent = create_soothe_agent(config)
+                                config = SootheConfig()
+                                agent = create_soothe_agent(config)
 
-                                    assert isinstance(agent, CoreAgent)
-                                    assert agent.graph is mock_graph
-                                    assert agent.config is config
+                                assert isinstance(agent, CoreAgent)
+                                assert agent.graph is mock_graph
+                                assert agent.config is config
 
     def test_no_goal_engine_in_core_agent(self) -> None:
         """CoreAgent does NOT have goal_engine (Layer 3 responsibility)."""
@@ -176,12 +171,10 @@ class TestCoreAgentClass:
         agent = CoreAgent(
             graph=mock_graph,
             config=mock_config,
-            context=MagicMock(),
             memory=MagicMock(),
         )
 
         # Old soothe_* attributes should NOT exist
-        assert not hasattr(agent, "soothe_context")
         assert not hasattr(agent, "soothe_memory")
         assert not hasattr(agent, "soothe_planner")
         assert not hasattr(agent, "soothe_policy")

@@ -13,7 +13,6 @@ from soothe.core.event_catalog import CHITCHAT_RESPONSE
 from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.foundation.slash_commands import (
-    _show_context,
     _show_memory,
     handle_slash_command,
 )
@@ -26,11 +25,6 @@ from soothe.foundation.slash_commands import (
 def test_show_memory_is_async() -> None:
     """Verify _show_memory is an async function."""
     assert inspect.iscoroutinefunction(_show_memory), "_show_memory should be async"
-
-
-def test_show_context_is_async() -> None:
-    """Verify _show_context is an async function."""
-    assert inspect.iscoroutinefunction(_show_context), "_show_context should be async"
 
 
 def test_handle_slash_command_is_async() -> None:
@@ -59,29 +53,6 @@ async def test_show_memory_calls_await() -> None:
     result = output.getvalue()
     assert "Memory Stats" in result
     assert "test" in result
-
-
-@pytest.mark.asyncio
-async def test_show_context_calls_await() -> None:
-    """Test that _show_context properly awaits the runner."""
-    from io import StringIO
-
-    from rich.console import Console
-
-    class FakeRunner:
-        async def context_stats(self) -> dict:
-            return {"context": "stats"}
-
-    output = StringIO()
-    console = Console(file=output, force_terminal=True, width=100)
-    runner = FakeRunner()
-
-    # This should work without raising RuntimeError about nested event loops
-    await _show_context(console, runner)
-
-    result = output.getvalue()
-    assert "Context Stats" in result
-    assert "context" in result
 
 
 # ---------------------------------------------------------------------------
@@ -384,27 +355,28 @@ async def test_slash_command_memory_in_daemon() -> None:
 
 @pytest.mark.asyncio
 async def test_slash_command_context_in_daemon() -> None:
-    """Test that /context command works in daemon context (no nested event loops)."""
+    """Test that /context command returns message about removal."""
     from io import StringIO
 
     from rich.console import Console
 
-    class FakeRunner:
-        async def context_stats(self) -> dict:
-            return {"backend": "test", "tokens": 1000}
-
-    runner = FakeRunner()
+    runner = MagicMock()
     output = StringIO()
     console = Console(file=output, force_terminal=True, width=100)
 
-    # This should work without RuntimeError about nested event loops
+    # /context should now return a message about removal
     result = await handle_slash_command(
         "/context", runner, console, current_plan=None, thread_logger=None, input_history=None
     )
 
     assert result is False  # Should not exit
-    assert "Context Stats" in output.getvalue()
-    assert "tokens" in output.getvalue()
+    raw = output.getvalue()
+    # Strip ANSI escape codes for assertion
+    import re
+
+    clean = re.sub(r"\x1b\[[0-9;]*m", "", raw)
+    assert "Context protocol removed" in clean
+    assert "/memory" in clean
 
 
 @pytest.mark.asyncio

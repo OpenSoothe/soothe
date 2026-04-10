@@ -29,7 +29,6 @@ class DreamingMode:
     Args:
         soothe_home: Root SOOTHE_HOME directory.
         memory_protocol: Optional MemoryProtocol for consolidation.
-        context_protocol: Optional ContextProtocol for indexing.
         consolidation_interval: Seconds between consolidation cycles.
         health_check_interval: Seconds between health checks.
     """
@@ -38,7 +37,6 @@ class DreamingMode:
         self,
         soothe_home: Path,
         memory_protocol: Any = None,
-        context_protocol: Any = None,
         consolidation_interval: int = 300,
         health_check_interval: int = 60,
     ) -> None:
@@ -47,13 +45,11 @@ class DreamingMode:
         Args:
             soothe_home: Root SOOTHE_HOME directory.
             memory_protocol: Optional MemoryProtocol instance.
-            context_protocol: Optional ContextProtocol instance.
             consolidation_interval: Seconds between consolidation cycles.
             health_check_interval: Seconds between health checks.
         """
         self._soothe_home = soothe_home
         self._memory = memory_protocol
-        self._context = context_protocol
         self._consolidation_interval = consolidation_interval
         self._health_check_interval = health_check_interval
         self._running = False
@@ -134,13 +130,6 @@ class DreamingMode:
                     await self._memory.compact()
             except Exception:
                 logger.debug("Memory consolidation failed", exc_info=True)
-
-        if self._context:
-            try:
-                if hasattr(self._context, "compact"):
-                    await self._context.compact()
-            except Exception:
-                logger.debug("Context compaction failed", exc_info=True)
 
         await self._anticipate_goals()
 

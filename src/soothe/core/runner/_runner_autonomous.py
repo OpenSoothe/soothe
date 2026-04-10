@@ -27,7 +27,6 @@ from soothe.core.event_catalog import (
     ThreadEndedEvent,
     ThreadSavedEvent,
 )
-from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import PlanContext, StepResult
 
 from ._runner_goal_directives import GoalDirectivesMixin
@@ -208,8 +207,6 @@ class AutonomousMixin(GoalDirectivesMixin):
             )
 
         try:
-            if self._context and hasattr(self._context, "persist"):
-                await self._context.persist(state.thread_id)
             async for chunk in self._save_checkpoint(
                 state,
                 user_input=user_input,
@@ -294,13 +291,9 @@ class AutonomousMixin(GoalDirectivesMixin):
                 except Exception:
                     logger.debug("Memory recall failed", exc_info=True)
 
-            if should_refresh_observation and self._context:
-                try:
-                    projection = await self._context.project(current_input, token_budget=4000)
-                    iter_state.context_projection = projection
-                    iter_state.observation_scope_key = current_input
-                except Exception:
-                    logger.debug("Context projection failed", exc_info=True)
+            if should_refresh_observation:
+                # Observation scope key set, but no context projection
+                iter_state.observation_scope_key = current_input
 
             parent_state.context_projection = iter_state.context_projection
             parent_state.recalled_memories = list(iter_state.recalled_memories)
@@ -373,18 +366,6 @@ class AutonomousMixin(GoalDirectivesMixin):
                         yield chunk
 
             response_text = "".join(iter_state.full_response)
-            if self._context and response_text:
-                try:
-                    await self._context.ingest(
-                        ContextEntry(
-                            source="agent",
-                            content=response_text[:2000],
-                            tags=["agent_response"],
-                            importance=0.7,
-                        )
-                    )
-                except Exception:
-                    logger.debug("Context ingestion failed", exc_info=True)
 
             if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
                 try:
@@ -636,19 +617,6 @@ class AutonomousMixin(GoalDirectivesMixin):
                     )
                     goal.report = goal_report
 
-                    if self._context:
-                        try:
-                            await self._context.ingest(
-                                ContextEntry(
-                                    source="goal_report",
-                                    content=f"[Goal {goal.id}] {goal_report.summary[:1000]}",
-                                    tags=["goal_report", f"goal:{goal.id}"],
-                                    importance=0.9,
-                                )
-                            )
-                        except Exception:
-                            logger.debug("Goal report ingestion failed", exc_info=True)
-
                     yield _custom(
                         GoalReportEvent(
                             goal_id=goal.id,
@@ -784,19 +752,8 @@ class AutonomousMixin(GoalDirectivesMixin):
                     await self._handle_suggested_goal(proposal)
 
                 elif proposal.type == "add_finding":
-                    content = proposal.payload.get("content", "")
-                    tags = proposal.payload.get("tags", [])
-                    if self._context and content:
-                        from soothe.protocols.context import ContextEntry
-
-                        await self._context.ingest(
-                            ContextEntry(
-                                source="layer2_finding",
-                                content=content[:1000],
-                                tags=["finding", f"goal:{goal_id}", *tags],
-                                importance=0.6,
-                            )
-                        )
+                    # Findings tracked in Layer 2 checkpoint, no context ingestion
+                    pass
 
                 elif proposal.type == "flag_blocker":
                     reason = proposal.payload.get("reason", "Unknown blocker")
@@ -1033,7 +990,6 @@ class AutonomousMixin(GoalDirectivesMixin):
             dreaming = DreamingMode(
                 soothe_home=SOOTHE_HOME,
                 memory_protocol=self._memory,
-                context_protocol=self._context,
             )
             logger.info("Entering autopilot dreaming mode")
 

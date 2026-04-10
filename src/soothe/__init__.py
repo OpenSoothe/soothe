@@ -33,9 +33,6 @@ warnings.filterwarnings(
 
 from soothe.protocols import (  # noqa: E402
     ConcurrencyPolicy,
-    ContextEntry,
-    ContextProjection,
-    ContextProtocol,
     DurabilityProtocol,
     MemoryItem,
     MemoryProtocol,
@@ -53,9 +50,6 @@ from soothe.protocols import (  # noqa: E402
 __all__ = [
     "SOOTHE_HOME",
     "ConcurrencyPolicy",
-    "ContextEntry",
-    "ContextProjection",
-    "ContextProtocol",
     "DurabilityProtocol",
     "MemoryItem",
     "MemoryProtocol",

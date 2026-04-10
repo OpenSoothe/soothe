@@ -106,7 +106,7 @@ class TestLoggingConfig:
         cfg = SootheConfig()
         assert cfg.logging.file.level == "INFO"
         assert cfg.logging.file.path is None
-        assert cfg.logging.file.max_bytes == 10485760  # 10 MB
+        assert cfg.logging.file.max_bytes == 5242880  # 5 MB
         assert cfg.logging.file.backup_count == 3
 
     def test_console_logging_defaults(self) -> None:
@@ -414,12 +414,6 @@ class TestPropagateEnv:
 
 
 class TestProtocolConfig:
-    def test_context_backend_options(self) -> None:
-        """Test context backend with combined format."""
-        for backend in ("keyword-json", "keyword-rocksdb", "keyword-postgresql", "vector-postgresql", "none"):
-            cfg = SootheConfig(protocols={"context": {"backend": backend}})
-            assert cfg.protocols.context.backend == backend
-
     def test_memory_backend_options(self) -> None:
         """Test MemU memory backend configuration."""
         # Test enabled/disabled
@@ -439,14 +433,12 @@ class TestProtocolConfig:
         assert cfg.protocols.memory.llm_embed_role == "embedding"
 
     def test_combined_backend_options(self) -> None:
-        """Test combined backend format for context and memory."""
+        """Test combined backend format for memory."""
         cfg = SootheConfig(
             protocols={
-                "context": {"backend": "keyword-rocksdb"},
                 "memory": {"persist_dir": "/custom/memory/dir"},
             }
         )
-        assert cfg.protocols.context.backend == "keyword-rocksdb"
         assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
 
     def test_vector_store_config(self) -> None:
@@ -462,30 +454,26 @@ class TestProtocolConfig:
             ],
             vector_store_router={
                 "default": "pgvector_prod:soothe_default",
-                "context": "pgvector_prod:soothe_context",
             },
         )
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "pgvector_prod"
         assert cfg.vector_stores[0].provider_type == "pgvector"
         assert cfg.vector_store_router.default == "pgvector_prod:soothe_default"
-        assert cfg.vector_store_router.context == "pgvector_prod:soothe_context"
 
     def test_resolve_vector_store_role_with_default(self) -> None:
         """Test that role resolution falls back to default."""
         cfg = SootheConfig(
             vector_store_router={
                 "default": "in_memory:soothe_default",
-                "context": "in_memory:soothe_context",
             }
         )
-        assert cfg.resolve_vector_store_role("context") == "in_memory:soothe_context"
         assert cfg.resolve_vector_store_role("unknown_role") == "in_memory:soothe_default"
 
     def test_resolve_vector_store_role_no_default(self) -> None:
         """Test that role resolution returns None when no assignment and no default."""
         cfg = SootheConfig()
-        assert cfg.resolve_vector_store_role("context") is None
+        assert cfg.resolve_vector_store_role("unknown_role") is None
 
     def test_vector_store_instance_caching(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that vector store instances are cached."""
@@ -574,7 +562,7 @@ class TestProtocolConfig:
     def test_missing_role_assignment(self) -> None:
         """Test ValueError when role has no assignment and no default."""
         cfg = SootheConfig(
-            vector_store_router={"context": "provider:collection"}  # No default
+            vector_store_router={"some_role": "provider:collection"}  # No default
         )
         with pytest.raises(ValueError, match="has no assignment and no default"):
             cfg.create_vector_store_for_role("my_role")
@@ -593,19 +581,15 @@ class TestProtocolConfig:
             ],
             vector_store_router={
                 "default": "in_memory_dev:soothe_default",
-                "context": "pgvector_prod:soothe_context",
             },
         )
 
-        # Create for context role (uses pgvector)
-        cfg.create_vector_store_for_role("context")
-        # Create for unknown role (falls back to default, uses in_memory)
-        cfg.create_vector_store_for_role("my_role")
+        # Create for default role - uses in_memory provider
+        cfg.create_vector_store_for_role("default")
 
-        # Verify each call had the correct provider type
+        # Verify the call used in_memory provider
         calls = mock_create.call_args_list
-        assert calls[0][0][0] == "pgvector"
-        assert calls[1][0][0] == "in_memory"
+        assert calls[0][0][0] == "in_memory"
 
 
 class TestToolsSettings:

@@ -10,6 +10,40 @@ You are the Reason step in a ReAct loop. In ONE response you must:
 7. For "decision" when plan_action is "new", use the same shape as before: type, steps[], execution_mode, adaptive_granularity, reasoning (plan-focused).
 8. Do NOT repeat work already shown in evidence or completed summaries.
 
+<COMPLETION_CRITERIA>
+CRITICAL: Set status="done" when ANY of these conditions are met:
+
+1. **Direct Answer**: Tool output or evidence contains the complete answer to the goal question
+   - Example: Goal "analyze project structure" → Step output shows complete structure analysis
+   - Example: Goal "find X" → Tool output shows X found with details
+
+2. **Repetition Detection**: Next action would repeat what was already done
+   - Same action description as previous iteration
+   - Same tools on same paths/files already examined
+   - Re-reading same files without new purpose
+
+3. **Diminishing Returns**: Evidence shows diminishing new information
+   - Last 1-2 steps found no new relevant data
+   - Progress ≥ 90% with no remaining unknowns
+   - Working memory shows complete coverage
+
+4. **User Signal**: Evidence shows goal is satisfied
+   - Goal asks for analysis → Analysis report generated
+   - Goal asks for specific info → Info found and presented
+   - Goal asks to create/modify → Artifact created/modified
+
+5. **No Remaining Actions**: All planned steps completed without errors
+   - plan_action="keep" but no steps remain
+   - All steps succeeded and produced expected outputs
+
+When setting status="done":
+- goal_progress should be 0.95-1.0
+- confidence should reflect evidence quality (0.8-1.0)
+- soothe_next_action should summarize what was accomplished
+- Omit "decision" or set plan_action="keep" with no decision
+- Optionally include progress_detail with final summary
+</COMPLETION_CRITERIA>
+
 Return JSON:
 {
   "status": "done" | "continue" | "replan",
@@ -81,6 +115,6 @@ Evidence shows clear layer separation. Progress: examined 60% of key directories
 Status=continue to examine remaining backends."
 
 Example reasoning (BAD - avoid):
-"The architecture has been analyzed. It's good. Progress: 80%. Status=done." ❌
+"The architecture has been analyzed. It's good. Progress: 80%." ❌ (vague, no evidence cited)
 </REASONING_QUALITY>
 </OUTPUT_FORMAT>

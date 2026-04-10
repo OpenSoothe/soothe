@@ -258,12 +258,6 @@ protocols:
   policy:
     profile: standard  # Named profile from policy_profiles.yml
 
-  # Context Protocol: Accumulates and projects knowledge within a thread
-  context:
-    enabled: true
-    backend: keyword-sqlite  # {behavior}-{storage}: keyword-json, keyword-sqlite, keyword-rocksdb, keyword-postgresql, vector-sqlite, vector-postgresql, none
-    persist_dir: ""   # Empty = SOOTHE_HOME/context/
-
   # Memory Protocol: Cross-thread long-term memory
   memory:
     enabled: true
@@ -295,7 +289,7 @@ persistence:
   # sqlite_path: ""  # Empty = SOOTHE_HOME/soothe.db
 
   # PostgreSQL DSN for Soothe metadata backends
-  # (checkpointer, durability, keyword context/memory backends)
+  # (checkpointer, durability, memory backends)
   soothe_postgres_dsn: "postgresql://postgres:postgres@localhost:5432/soothe"
 
 # =============================================================================
@@ -314,7 +308,6 @@ vector_stores:
 
 vector_store_router:
   # Map component roles to "provider_name:collection_name"
-  # Roles: context (VectorContext)
   #
   # Format: "provider_name:collection_name"
   # - provider_name must match a name from vector_stores list above
@@ -322,7 +315,6 @@ vector_store_router:
   #
   # All roles use pgvector with the configured DSN by default
   default: pgvector_default:soothe_default
-  context: pgvector_default:soothe_context
 
 # =============================================================================
 # Autonomous Operation
@@ -349,7 +341,7 @@ performance:
   classification_mode: llm           # llm | disabled
   optimize_system_prompts: true      # Enable dynamic system prompt adjustment
   template_planning: true            # Use template plans for simple queries
-  parallel_pre_stream: true          # Run memory/context operations in parallel
+  parallel_pre_stream: true          # Run memory operations in parallel
   parallel_tool_loading: true        # Load tool groups concurrently at startup
   parallel_subagent_loading: true    # Load subagent specs concurrently at startup
   parallel_protocol_resolution: true # Resolve protocols in parallel at startup
