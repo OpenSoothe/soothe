@@ -57,7 +57,6 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    user_summary="Outlined three steps to reach the goal",
                     soothe_next_action="I'll run these three steps next.",
                     progress_detail="Next, the agent will run them in order.",
                     reasoning="First pass",
@@ -65,7 +64,6 @@ class MockLoopReasoner:
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                user_summary="Goal finished",
                 soothe_next_action="I'm done and sharing the outcome.",
                 progress_detail="Outputs from the run look sufficient.",
                 reasoning="Done",
@@ -79,7 +77,6 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    user_summary="Starting with a three-step approach",
                     soothe_next_action="I'll start with this three-step approach.",
                     reasoning="v1",
                 )
@@ -88,7 +85,6 @@ class MockLoopReasoner:
                     status="replan",
                     plan_action="new",
                     decision=_two_step_replan_decision(),
-                    user_summary="Switching to a tighter two-step plan",
                     soothe_next_action="I'll switch to a tighter two-step plan.",
                     progress_detail="Earlier steps were not enough on their own.",
                     reasoning="replan",
@@ -97,7 +93,6 @@ class MockLoopReasoner:
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                user_summary="All good after the revised plan",
                 soothe_next_action="I'm wrapping up after the revised plan.",
                 goal_progress=1.0,
                 confidence=0.9,
@@ -109,14 +104,12 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    user_summary="Executing the first chunk of work",
                     soothe_next_action="I'll execute the first chunk of work now.",
                     reasoning="start",
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                user_summary="Wrapped up after the remaining work",
                 soothe_next_action="I'm done with the remaining work.",
                 goal_progress=1.0,
                 confidence=0.95,
@@ -125,7 +118,6 @@ class MockLoopReasoner:
         return ReasonResult(
             status="done",
             plan_action="keep",
-            user_summary="Default complete",
             soothe_next_action="I'm done.",
             goal_progress=1.0,
             confidence=0.9,
@@ -244,7 +236,6 @@ async def test_loop_agent_max_iterations() -> None:
                     execution_mode="sequential",
                     reasoning="more work",
                 ),
-                user_summary="Still working on it",
                 soothe_next_action="I'll take another step toward the goal.",
                 goal_progress=0.1,
                 confidence=0.5,
@@ -295,13 +286,11 @@ async def test_loop_agent_parallel_execution() -> None:
                         execution_mode="parallel",
                         reasoning="parallel batch",
                     ),
-                    user_summary="Running three steps in parallel",
                     soothe_next_action="I'll run these three steps in parallel.",
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                user_summary="Parallel work finished",
                 soothe_next_action="I'm finished with the parallel work.",
                 goal_progress=1.0,
                 confidence=0.95,

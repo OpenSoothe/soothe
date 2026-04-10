@@ -15,7 +15,6 @@ class LoopAgentReasonEvent(ProtocolEvent):
     status: str
     progress: float
     confidence: float
-    user_summary: str
     soothe_next_action: str
     progress_detail: str | None
     iteration: int
@@ -24,5 +23,5 @@ class LoopAgentReasonEvent(ProtocolEvent):
 register_event(
     LoopAgentReasonEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="{user_summary}",
+    summary_template="{soothe_next_action}",
 )

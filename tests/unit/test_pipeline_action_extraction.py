@@ -3,13 +3,12 @@
 from soothe.ux.cli.stream import StreamDisplayPipeline
 
 
-def test_on_loop_agent_reason_extracts_user_summary():
-    """Verify user_summary extraction priority."""
+def test_on_loop_agent_reason_extracts_soothe_next_action():
+    """Verify soothe_next_action extraction."""
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Counting files in project",
         "soothe_next_action": "Gathering metrics",
         "confidence": 0.85,
         "status": "working",
@@ -17,31 +16,13 @@ def test_on_loop_agent_reason_extracts_user_summary():
 
     lines = pipeline.process(event)
     assert len(lines) == 1
-    assert "Counting files in project" in lines[0].content
+    assert "Gathering metrics" in lines[0].content
     # RFC-603: Percentage display removed per user request
     assert "85% sure" not in lines[0].content
 
 
-def test_on_loop_agent_reason_extracts_soothe_next_action():
-    """Verify soothe_next_action fallback when user_summary missing."""
-    pipeline = StreamDisplayPipeline(verbosity="normal")
-
-    event = {
-        "type": "soothe.cognition.loop_agent.reason",
-        "soothe_next_action": "Analyzing architecture",
-        "confidence": 0.90,
-        "status": "working",
-    }
-
-    lines = pipeline.process(event)
-    assert len(lines) == 1
-    assert "Analyzing architecture" in lines[0].content
-    # RFC-603: Percentage display removed per user request
-    assert "90% sure" not in lines[0].content
-
-
 def test_on_loop_agent_reason_derives_from_status():
-    """Verify status → action fallback when metadata missing."""
+    """Verify status → action fallback when soothe_next_action missing."""
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     # Test valid status values
@@ -78,7 +59,7 @@ def test_on_loop_agent_reason_deduplicates_repeated():
 
     event = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Working on task",
+        "soothe_next_action": "Working on task",
         "confidence": 0.80,
         "status": "working",
     }
@@ -98,7 +79,7 @@ def test_on_loop_agent_reason_formats_confidence():
 
     event = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Building summary",
+        "soothe_next_action": "Building summary",
         "confidence": 0.923,
         "status": "working",
     }
@@ -116,7 +97,7 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
     # Test with confidence=0
     event1 = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Analyzing",
+        "soothe_next_action": "Analyzing",
         "confidence": 0,
         "status": "working",
     }
@@ -127,7 +108,7 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
     # Test with confidence missing
     event2 = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Processing",
+        "soothe_next_action": "Processing",
         "status": "working",
     }
     lines2 = pipeline.process(event2)
@@ -154,7 +135,7 @@ def test_on_loop_agent_reason_uses_complete_action_for_done():
 
     event = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Finishing analysis",
+        "soothe_next_action": "Finishing analysis",
         "confidence": 0.95,
         "status": "done",
     }
@@ -171,7 +152,7 @@ def test_on_loop_agent_reason_uses_continue_icon_for_working():
 
     event = {
         "type": "soothe.cognition.loop_agent.reason",
-        "user_summary": "Processing files",
+        "soothe_next_action": "Processing files",
         "confidence": 0.85,
         "status": "working",
     }

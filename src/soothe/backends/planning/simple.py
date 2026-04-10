@@ -451,7 +451,6 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
             reasoning="Failed to parse model response",
-            user_summary="Could not read the model plan — trying a fresh approach",
             soothe_next_action="I'll try again with a simpler plan.",
             progress_detail=None,
         )
@@ -468,7 +467,6 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=decision,
             reasoning=decision.reasoning,
-            user_summary="Planned next steps",
             soothe_next_action="I'll run the steps in this plan next.",
             progress_detail=None,
         )
@@ -482,9 +480,6 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
         plan_action = "new"
 
     reasoning = str(data.get("reasoning", "") or "")
-    user_summary = str(data.get("user_summary", "") or "").strip()
-    if not user_summary:
-        user_summary = "Working toward the goal"
 
     soothe_next_action = str(data.get("soothe_next_action", "") or "").strip()
 
@@ -515,7 +510,6 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             goal_progress=float(data.get("goal_progress", 0.0)),
             confidence=float(data.get("confidence", 0.8)),
             reasoning=reasoning,
-            user_summary=user_summary,
             soothe_next_action=soothe_next_action,
             progress_detail=progress_detail,
             evidence_summary=str(data.get("evidence_summary", "") or ""),
@@ -528,7 +522,6 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
             reasoning="Invalid reason payload",
-            user_summary="Adjusting the plan after an invalid model response",
             soothe_next_action="I'll adjust and try a cleaner plan.",
         )
 
@@ -911,7 +904,6 @@ class SimplePlanner:
                 plan_action="new",
                 decision=_default_agent_decision(goal, state.iteration),
                 reasoning="Reason call failed",
-                user_summary="Retrying with a simpler plan after a model error",
                 soothe_next_action="I'll retry with a simpler next step.",
             )
         else:

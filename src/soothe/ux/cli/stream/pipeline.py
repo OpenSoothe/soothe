@@ -462,11 +462,8 @@ class StreamDisplayPipeline:
         status = event.get("status", "")
 
         # Extract action summary (priority order)
-        action_text = (
-            event.get("user_summary", "").strip()
-            or event.get("soothe_next_action", "").strip()
-            or self._derive_action_from_status(status)
-        )
+        # Priority: soothe_next_action > derived from status
+        action_text = event.get("soothe_next_action", "").strip() or self._derive_action_from_status(status)
 
         if not action_text:
             return []

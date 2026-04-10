@@ -177,7 +177,6 @@ class ClaudePlanner:
                 plan_action="new",
                 decision=_default_agent_decision(goal),
                 reasoning="Claude planner failed",
-                user_summary="Switching to a minimal plan after a planner error",
                 soothe_next_action="I'll fall back to a minimal plan and continue.",
             )
 
