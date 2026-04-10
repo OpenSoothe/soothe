@@ -361,7 +361,7 @@ logging:
   file:
     level: DEBUG              # File logging level (DEBUG, INFO, WARNING, ERROR)
     path: ""                 # Empty = SOOTHE_HOME/logs/soothe.log
-    max_bytes: 10485760      # 10 MB before rotation
+    max_bytes: 5242880       # 5 MB before rotation
     backup_count: 3          # Number of rotating backups
 
   # Console logging (disabled by default for TUI compatibility)

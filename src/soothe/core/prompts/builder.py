@@ -174,8 +174,9 @@ class PromptBuilder:
             parts.append("\nPlanner context — completed step summaries (do not repeat work):")
             for step in context.completed_steps:
                 status = "✓" if step.success else "✗"
-                output_preview = step.output[:100] if step.output else "no output"
-                parts.append(f"- {step.step_id}: {status} {output_preview}")
+                # RFC-211: Use outcome metadata instead of output field
+                outcome_preview = step.to_evidence_string(truncate=True)
+                parts.append(f"- {step.step_id}: {status} {outcome_preview}")
 
         # Working memory excerpt (RFC-203)
         if context.working_memory_excerpt:
