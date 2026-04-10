@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
 from tests.integration.conftest import (
     await_event_type,
@@ -139,7 +138,7 @@ async def test_client_disconnection_during_stream(daemon_fixture: tuple[SootheDa
         thread_id = created["thread_id"]
 
         await client.send_input("Start a long-running operation")
-        status = await await_status_state(client.read_event, "running", timeout=5.0)
+        await await_status_state(client.read_event, "running", timeout=5.0)
 
         await client.close()
 
@@ -223,11 +222,10 @@ async def test_daemon_shutdown_during_operation(daemon_fixture: tuple[SootheDaem
 
     try:
         await client.send_thread_create(initial_message="test shutdown")
-        created = await await_event_type(client.read_event, "thread_created", timeout=3.0)
-        thread_id = created["thread_id"]
+        await await_event_type(client.read_event, "thread_created", timeout=3.0)
 
         await client.send_input("Start an operation")
-        status = await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
+        await await_status_state(client.read_event, {"running", "idle"}, timeout=5.0)
 
     finally:
         await client.close()

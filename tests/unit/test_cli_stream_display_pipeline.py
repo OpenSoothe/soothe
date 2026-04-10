@@ -7,9 +7,8 @@ Tool formatters remain for subagent dispatch display.
 
 from __future__ import annotations
 
-import pytest
 
-from soothe.ux.cli.stream.context import PipelineContext, ToolCallInfo
+from soothe.ux.cli.stream.context import PipelineContext
 from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
 from soothe.ux.cli.stream.formatter import (
     format_goal_done,

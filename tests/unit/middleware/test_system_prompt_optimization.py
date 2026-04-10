@@ -1,6 +1,5 @@
 """Tests for SystemPromptOptimizationMiddleware."""
 
-import pytest
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.messages import SystemMessage
 

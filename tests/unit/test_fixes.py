@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -308,7 +308,6 @@ async def test_tui_sends_thread_id_on_connection() -> None:
 def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
     """Empty handshake thread_id must not clear an already selected TUI thread."""
     from dataclasses import dataclass, field
-    from typing import Any
 
     from soothe.ux.shared.event_processor import EventProcessor
 

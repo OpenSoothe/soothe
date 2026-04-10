@@ -93,4 +93,4 @@ def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
     )
     state.completed_step_ids = {"a"}
     builder = PromptBuilder()
-    text = builder.build_reason_prompt("g", state, PlanContext())
+    builder.build_reason_prompt("g", state, PlanContext())

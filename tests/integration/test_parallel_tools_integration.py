@@ -20,7 +20,7 @@ async def test_parallel_tools_config_propagation():
     )
 
     # Create agent
-    agent = create_soothe_agent(
+    create_soothe_agent(
         model=config.create_chat_model("agent"),
         tools=[],  # No tools needed for this test
         config=config,
@@ -63,7 +63,7 @@ async def test_parallel_tools_performance_improvement():
         execution={"concurrency": {"max_parallel_tools": 3}},
     )
 
-    agent_parallel = create_soothe_agent(
+    create_soothe_agent(
         model=config_parallel.create_chat_model("agent"),
         tools=[slow_tool_1, slow_tool_2, slow_tool_3],
         config=config_parallel,
@@ -74,7 +74,7 @@ async def test_parallel_tools_performance_improvement():
         execution={"concurrency": {"max_parallel_tools": 1}},
     )
 
-    agent_sequential = create_soothe_agent(
+    create_soothe_agent(
         model=config_sequential.create_chat_model("agent"),
         tools=[slow_tool_1, slow_tool_2, slow_tool_3],
         config=config_sequential,
@@ -105,7 +105,7 @@ async def test_parallel_tools_mixed_sync_async():
         execution={"concurrency": {"max_parallel_tools": 5}},
     )
 
-    agent = create_soothe_agent(
+    create_soothe_agent(
         model=config.create_chat_model("agent"),
         tools=[sync_tool, async_tool],
         config=config,
@@ -123,7 +123,7 @@ async def test_parallel_tools_default_is_10():
     # Check default value
     assert config.execution.concurrency.max_parallel_tools == 10
 
-    agent = create_soothe_agent(
+    create_soothe_agent(
         model=config.create_chat_model("agent"),
         tools=[],
         config=config,
@@ -147,7 +147,7 @@ async def test_parallel_tools_extreme_cases():
         execution={"concurrency": {"max_parallel_tools": 1}},
     )
 
-    agent_seq = create_soothe_agent(
+    create_soothe_agent(
         model=config_seq.create_chat_model("agent"),
         tools=[dummy_tool],
         config=config_seq,
@@ -158,7 +158,7 @@ async def test_parallel_tools_extreme_cases():
         execution={"concurrency": {"max_parallel_tools": 50}},
     )
 
-    agent_high = create_soothe_agent(
+    create_soothe_agent(
         model=config_high.create_chat_model("agent"),
         tools=[dummy_tool],
         config=config_high,

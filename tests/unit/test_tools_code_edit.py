@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
 
 from soothe.tools.code_edit import (
     ApplyDiffTool,

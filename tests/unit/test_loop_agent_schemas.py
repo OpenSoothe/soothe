@@ -268,13 +268,21 @@ class TestStepResult:
         result = StepResult(
             step_id="s1",
             success=True,
-            output="File read successfully",
+            outcome={
+                "type": "file_read",
+                "tool_name": "read_file",
+                "tool_call_id": "call_abc123",
+                "success_indicators": {"lines": 100},
+                "entities": ["file.txt"],
+                "size_bytes": 1024,
+            },
             duration_ms=150,
             thread_id="thread_1",
         )
 
         assert result.success is True
-        assert result.output == "File read successfully"
+        assert result.outcome is not None
+        assert result.outcome["type"] == "file_read"
         assert result.error is None
 
     def test_failed_step_result(self):
@@ -282,6 +290,7 @@ class TestStepResult:
         result = StepResult(
             step_id="s1",
             success=False,
+            outcome={"type": "error", "error": "File not found"},
             error="File not found",
             error_type="execution",
             duration_ms=10,
@@ -297,14 +306,21 @@ class TestStepResult:
         result = StepResult(
             step_id="s1",
             success=True,
-            output="Output text",
+            outcome={
+                "type": "file_read",
+                "tool_name": "read_file",
+                "tool_call_id": "call_abc123",
+                "success_indicators": {"lines": 100, "files_found": 1},
+                "entities": ["file.txt"],
+                "size_bytes": 1024,
+            },
             duration_ms=100,
             thread_id="t1",
         )
 
         evidence = result.to_evidence_string()
         assert "✓" in evidence
-        assert "Output text" in evidence
+        assert "read_file" in evidence
 
     def test_to_evidence_string_failure(self):
         """Test evidence string for failed step."""

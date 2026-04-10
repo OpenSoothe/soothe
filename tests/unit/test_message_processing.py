@@ -3,8 +3,6 @@
 Tests for whitespace normalization and internal tag stripping.
 """
 
-import pytest
-
 from soothe.ux.shared.message_processing import (
     coerce_tool_call_args_to_dict,
     format_tool_call_args,

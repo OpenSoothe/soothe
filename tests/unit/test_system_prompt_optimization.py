@@ -1,7 +1,5 @@
 """Unit tests for System Prompt Optimization feature."""
 
-import pytest
-
 from soothe.config import SootheConfig
 
 

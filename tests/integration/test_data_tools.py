@@ -182,9 +182,7 @@ class TestDocumentTools:
         pytest.importorskip("docx2txt")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            import docx2txt
-
-            docx_file = Path(tmpdir) / "test.docx"
+            Path(tmpdir) / "test.docx"
             # Create a simple docx file
             # (docx2txt can extract from created files)
             pytest.skip("Requires docx creation library")

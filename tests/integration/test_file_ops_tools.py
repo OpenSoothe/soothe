@@ -110,7 +110,7 @@ class TestWriteFileTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             new_file = Path(tmpdir) / "new.txt"
 
-            result = write_tool._run(str(new_file), content="Test content")
+            write_tool._run(str(new_file), content="Test content")
 
             assert new_file.exists()
             assert "Test content" in new_file.read_text()
@@ -121,7 +121,7 @@ class TestWriteFileTool:
             existing_file = Path(tmpdir) / "existing.txt"
             existing_file.write_text("Old content")
 
-            result = write_tool._run(str(existing_file), content="New content")
+            write_tool._run(str(existing_file), content="New content")
 
             assert "New content" in existing_file.read_text()
             assert "Old content" not in existing_file.read_text()
@@ -131,7 +131,7 @@ class TestWriteFileTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             nested_file = Path(tmpdir) / "subdir" / "deep" / "file.txt"
 
-            result = write_tool._run(str(nested_file), content="Nested content")
+            write_tool._run(str(nested_file), content="Nested content")
 
             assert nested_file.exists()
             assert "Nested content" in nested_file.read_text()
@@ -141,7 +141,7 @@ class TestWriteFileTool:
         with tempfile.TemporaryDirectory() as tmpdir:
             unicode_file = Path(tmpdir) / "unicode.txt"
 
-            result = write_tool._run(str(unicode_file), content="Hello 世界 🌍")
+            write_tool._run(str(unicode_file), content="Hello 世界 🌍")
 
             assert "世界" in unicode_file.read_text()
             assert "🌍" in unicode_file.read_text()
@@ -169,7 +169,7 @@ class TestDeleteFileTool:
             test_file = Path(tmpdir) / "delete_me.txt"
             test_file.write_text("content")
 
-            result = delete_tool._run(str(test_file))
+            delete_tool._run(str(test_file))
 
             assert not test_file.exists()
 

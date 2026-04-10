@@ -1,11 +1,11 @@
 """Integration tests for Layer 2 → Layer 1 execution hints bridge."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from soothe.cognition.loop_agent.executor import Executor
-from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+from soothe.cognition.loop_agent.schemas import StepAction
 from soothe.core.middleware import ExecutionHintsMiddleware
 
 

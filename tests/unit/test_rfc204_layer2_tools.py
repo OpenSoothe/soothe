@@ -22,7 +22,7 @@ class TestToolProposalQueueWiring:
     @pytest.mark.asyncio
     async def test_report_progress_enqueues(self) -> None:
         q = ProposalQueue()
-        tool = ReportProgressTool.model_construct(proposal_queue=q)
+        ReportProgressTool.model_construct(proposal_queue=q)
         q.enqueue(
             Proposal(
                 type="report_progress",
@@ -38,7 +38,7 @@ class TestToolProposalQueueWiring:
     @pytest.mark.asyncio
     async def test_suggest_goal_enqueues(self) -> None:
         q = ProposalQueue()
-        tool = SuggestGoalTool.model_construct(proposal_queue=q)
+        SuggestGoalTool.model_construct(proposal_queue=q)
         q.enqueue(
             Proposal(
                 type="suggest_goal",
@@ -53,7 +53,7 @@ class TestToolProposalQueueWiring:
     @pytest.mark.asyncio
     async def test_flag_blocker_enqueues(self) -> None:
         q = ProposalQueue()
-        tool = FlagBlockerTool.model_construct(proposal_queue=q)
+        FlagBlockerTool.model_construct(proposal_queue=q)
         q.enqueue(
             Proposal(
                 type="flag_blocker",
@@ -68,7 +68,7 @@ class TestToolProposalQueueWiring:
     @pytest.mark.asyncio
     async def test_add_finding_enqueues(self) -> None:
         q = ProposalQueue()
-        tool = AddFindingTool.model_construct(proposal_queue=q)
+        AddFindingTool.model_construct(proposal_queue=q)
         q.enqueue(
             Proposal(
                 type="add_finding",
@@ -119,7 +119,7 @@ class TestAddFindingToolWiring:
     async def test_enqueues_to_queue(self) -> None:
         """AddFindingTool should enqueue proposals when queue is set."""
         q = ProposalQueue()
-        tool = AddFindingTool.model_construct(proposal_queue=q)
+        AddFindingTool.model_construct(proposal_queue=q)
         q.enqueue(Proposal(type="add_finding", goal_id="g1", payload={"content": "test", "tags": []}))
         assert not q.is_empty()
         props = q.drain()

@@ -8,15 +8,11 @@ import os
 import socket
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
 from soothe.config import SootheConfig
 from soothe.core.runner import SootheRunner
-
-if TYPE_CHECKING:
-    from soothe.daemon import DaemonClient
 
 
 def pytest_addoption(parser) -> None:

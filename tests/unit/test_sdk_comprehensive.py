@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -640,7 +640,7 @@ class TestPluginContext:
         mock_logger = MagicMock()
         mock_emit = MagicMock()
 
-        context = PluginContext(
+        PluginContext(
             config={},
             soothe_config=mock_config,
             logger=mock_logger,

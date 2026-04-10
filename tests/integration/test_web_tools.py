@@ -180,7 +180,7 @@ class TestWebToolErrors:
 
         from soothe.tools.web_search import SearchWebTool
 
-        tool = SearchWebTool()
+        SearchWebTool()
 
         # Make multiple rapid requests
         # (would need specific test setup for reliable rate limit testing)

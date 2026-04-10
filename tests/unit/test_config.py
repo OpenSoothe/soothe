@@ -8,7 +8,6 @@ from soothe.config import (
     ModelRouter,
     SootheConfig,
     SubagentConfig,
-    ToolConfig,
     ToolsConfig,
     WebSearchConfig,
     _resolve_env,

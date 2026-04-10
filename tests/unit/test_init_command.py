@@ -4,8 +4,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 
 def test_init_command_creates_config():
     """Test that init creates config from package resources."""

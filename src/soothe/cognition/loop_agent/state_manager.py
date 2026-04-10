@@ -206,7 +206,7 @@ class Layer2StateManager:
             f"<assistant>\n{step.output}\n</assistant>"
             for act_wave in self._checkpoint.act_history
             for step in act_wave.steps
-            if step.success and step.output
+            if step.success and step.output  # StepExecutionRecord still has output field
         ]
 
         return conversation[-limit:]
@@ -266,12 +266,15 @@ class Layer2StateManager:
             # Use step description as input (what was sent to execution)
             step_input = step_desc_map.get(result.step_id, "")
 
+            # RFC-211: Use outcome metadata instead of output
+            outcome_summary = result.to_evidence_string(truncate=False) if result.success else ""
+
             step_record = StepExecutionRecord(
                 step_id=result.step_id,
                 description=step_desc_map.get(result.step_id, ""),
                 step_input=step_input,
                 success=result.success,
-                output=result.output or "",
+                output=outcome_summary,  # RFC-211: Use outcome summary
                 error=result.error,
                 tool_calls=[],  # Reserved for future extraction from result
                 subagent_calls=[],  # Reserved for future extraction from result

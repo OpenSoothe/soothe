@@ -1,9 +1,6 @@
 """Tests for Autopilot channel protocol modules (models, inbox, outbox)."""
 
 import json
-import time
-
-import pytest
 
 from soothe.cognition.channel.inbox import ChannelInbox
 from soothe.cognition.channel.models import (
@@ -32,7 +29,7 @@ class TestChannelMessageDefaults:
         assert msg.payload == {"rating": 5, "text": "Great"}
 
     def test_custom_timestamp_preserved(self) -> None:
-        from datetime import UTC, datetime, timedelta
+        from datetime import UTC, datetime
 
         fixed_time = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         msg = ChannelMessage(type="status_update", timestamp=fixed_time)

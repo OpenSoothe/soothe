@@ -1,7 +1,5 @@
 """Unit tests for tool display name auto-conversion."""
 
-import pytest
-
 from soothe.tools.display_names import get_tool_display_name
 
 

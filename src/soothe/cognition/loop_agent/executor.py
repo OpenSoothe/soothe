@@ -225,7 +225,7 @@ class Executor:
                     StepResult(
                         step_id=step.id,
                         success=True,
-                        output=output,
+                        outcome={"type": "generic", "size_bytes": len(output.encode("utf-8"))},  # RFC-211
                         duration_ms=durations[i],
                         thread_id=thread_id,
                         tool_call_count=tool_counts[i],
@@ -238,6 +238,7 @@ class Executor:
                     StepResult(
                         step_id=step.id,
                         success=False,
+                        outcome={"type": "error", "error": error or ""},  # RFC-211
                         error=error or "",
                         error_type=error_type,
                         duration_ms=durations[i],
@@ -298,6 +299,7 @@ class Executor:
                 step_result = StepResult(
                     step_id=steps[i].id,
                     success=False,
+                    outcome={"type": "error", "error": str(result)},  # RFC-211
                     error=str(result),
                     error_type=self._classify_error_severity(result),
                     duration_ms=0,
@@ -319,7 +321,8 @@ class Executor:
         # Aggregate metrics from parallel execution
         if all_step_results:
             # For parallel, use max output length across steps
-            output_lengths = [len(r.output or "") for r in all_step_results if r.output]
+            # RFC-211: Use outcome metadata to get size
+            output_lengths = [r.outcome.get("size_bytes", 0) for r in all_step_results if r.success and r.outcome]
             max_output_len = max(output_lengths) if output_lengths else 0
             self._aggregate_wave_metrics(all_step_results, "", state)
             state.last_wave_output_length = max_output_len
@@ -357,6 +360,50 @@ class Executor:
 
         combined_description = self._build_sequential_input(steps)
 
+        # LLM tracing - verbose debug logs for act phase analysis
+        logger.debug(
+            "[Act Phase INPUT] ====== Sequential Wave START (steps=%d) ======",
+            len(steps),
+        )
+        logger.debug(
+            "[Act Phase INPUT] Steps (%d):",
+            len(steps),
+        )
+        for i, s in enumerate(steps):
+            logger.debug(
+                "  Step %d (id=%s): %s",
+                i,
+                s.id,
+                s.description,
+            )
+            logger.debug(
+                "    Tools: %s, Subagent: %s, Expected: %s, Dependencies: %s",
+                s.tools or "none",
+                s.subagent or "none",
+                s.expected_output,
+                s.dependencies or "none",
+            )
+        logger.debug(
+            "[Act Phase INPUT] Combined description length: %d chars",
+            len(combined_description),
+        )
+        logger.debug(
+            "[Act Phase INPUT] FULL COMBINED DESCRIPTION:\n%s",
+            combined_description,
+        )
+        logger.debug(
+            "[Act Phase INPUT] Thread ID: %s, Workspace: %s",
+            state.thread_id,
+            state.workspace or "none",
+        )
+
+        logger.info(
+            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
+            len(steps),
+            state.current_decision.execution_mode if state.current_decision else "sequential",
+            self._max_parallel_steps,
+        )
+
         start = time.perf_counter()
         output = ""
         event_count = 0  # Track events for debugging
@@ -366,12 +413,20 @@ class Executor:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
             if state.workspace:
                 configurable["workspace"] = state.workspace
+
+            logger.debug(
+                "[Act Phase INPUT] Configurable: %s",
+                configurable,
+            )
+
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": configurable},
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             )
+
+            logger.debug("[Act Phase EXECUTION] ====== Streaming from Layer 1 ======")
 
             tool_call_count = 0
             async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
@@ -384,6 +439,26 @@ class Executor:
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
+            # LLM tracing - verbose debug logs for act phase output
+            logger.debug(
+                "[Act Phase OUTPUT] ====== Sequential Wave COMPLETED ======",
+            )
+            logger.debug(
+                "[Act Phase OUTPUT] Duration: %dms, Output length: %d chars, Events: %d, Tool calls: %d",
+                duration_ms,
+                len(output),
+                event_count,
+                tool_call_count,
+            )
+            logger.debug(
+                "[Act Phase OUTPUT] Subagent tasks: %d, Cap hit: %s",
+                budget.subagent_task_completions,
+                budget.hit_subagent_cap,
+            )
+            logger.debug(
+                "[Act Phase OUTPUT] FULL OUTPUT:\n%s",
+                output if output else "none",
+            )
             logger.info(
                 "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d "
                 "(subagent_tasks=%d cap_hit=%s)",
@@ -412,8 +487,40 @@ class Executor:
                 )
             )
 
+            logger.debug(
+                "[Act Phase OUTPUT] Step results (%d):",
+                len(step_results),
+            )
+            for i, sr in enumerate(step_results):
+                logger.debug(
+                    "  Step result %d (id=%s): success=%s, outcome_type=%s",
+                    i,
+                    sr.step_id,
+                    sr.success,
+                    sr.outcome.get("type", "unknown") if sr.outcome else "none",
+                )
+                logger.debug(
+                    "    Duration: %dms, Tool calls: %d, Subagent completions: %d",
+                    sr.duration_ms,
+                    sr.tool_call_count,
+                    sr.subagent_task_completions,
+                )
+                logger.debug(
+                    "    FULL OUTCOME:\n%s",
+                    sr.outcome,
+                )
+
             # Aggregate metrics into LoopState
             self._aggregate_wave_metrics(step_results, output, state)
+
+            logger.debug(
+                "[Act Phase OUTPUT] Updated state metrics: tool_calls=%d, subagent_tasks=%d, output_len=%d, errors=%d",
+                state.last_wave_tool_call_count,
+                state.last_wave_subagent_task_count,
+                state.last_wave_output_length,
+                state.last_wave_error_count,
+            )
+            logger.debug("[Act Phase OUTPUT] ====== End Sequential Wave ======")
 
             # Yield step results
             for sr in step_results:
@@ -492,20 +599,23 @@ class Executor:
         Used for parallel execution where we can't yield in real-time.
         Events are collected and returned with the final result.
 
+        RFC-211: Collects outcome metadata instead of full output string.
+
         Args:
             step: StepAction with description and optional hints
             thread_id: Thread ID for execution
             workspace: Thread-specific workspace path (RFC-103)
 
         Returns:
-            Tuple of (collected events, StepResult)
+            Tuple of (collected events, StepResult with outcome metadata)
         """
         from langchain_core.messages import HumanMessage
 
         start = time.perf_counter()
         events: list[StreamEvent] = []
-        output = ""
+        output = ""  # Still collect for Layer 1 final report
         budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
+        outcomes: list[dict] = []  # RFC-211: Collect outcome metadata
 
         try:
             logger.debug(
@@ -534,7 +644,7 @@ class Executor:
                 subgraphs=True,
             )
 
-            # Stream events and collect for parallel execution
+            # Stream events and collect outcome metadata (RFC-211)
             tool_call_count = 0
             async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
@@ -544,6 +654,21 @@ class Executor:
                     tool_call_count = tc_count
 
             duration_ms = int((time.perf_counter() - start) * 1000)
+
+            # RFC-211: Aggregate outcomes from all tools in this step
+            # Use the first outcome as primary (future: merge multiple)
+            primary_outcome = (
+                outcomes[0]
+                if outcomes
+                else {
+                    "type": "generic",
+                    "tool_name": "unknown",
+                    "tool_call_id": f"step_{step.id}",
+                    "success_indicators": {},
+                    "entities": [],
+                    "size_bytes": len(output.encode("utf-8")),
+                }
+            )
 
             logger.info(
                 "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d, subagent_cap_hit=%s)",
@@ -557,7 +682,7 @@ class Executor:
             return events, StepResult(
                 step_id=step.id,
                 success=True,
-                output=output,
+                outcome=primary_outcome,  # RFC-211: outcome metadata
                 duration_ms=duration_ms,
                 thread_id=thread_id,
                 tool_call_count=tool_call_count,
@@ -580,6 +705,7 @@ class Executor:
             return events, StepResult(
                 step_id=step.id,
                 success=False,
+                outcome={"type": "error", "error": error_msg},  # RFC-211: error outcome
                 error=error_msg,
                 error_type=self._classify_error_severity(e),
                 duration_ms=duration_ms,
@@ -600,6 +726,8 @@ class Executor:
         for real-time display, while also collecting output content for the final
         result.
 
+        RFC-211: Also extracts tool_call_id and generates outcome metadata.
+
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
@@ -611,8 +739,17 @@ class Executor:
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
+        from soothe.cognition.loop_agent.result_cache import ToolResultCache
+        from soothe.tools.metadata_generator import generate_outcome_metadata
+
         chunks: list[str] = []
         tool_call_count = 0
+
+        # RFC-211: Initialize cache and collect outcomes
+        cache = ToolResultCache(budget.thread_id if budget and hasattr(budget, "thread_id") else "unknown")
+        outcomes: list[dict] = []
+
+        stream_chunk_count = 0  # Debug counter
 
         def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
             """Return True if the stream must stop (cap exceeded)."""
@@ -633,6 +770,15 @@ class Executor:
             return False
 
         async for chunk in stream:
+            stream_chunk_count += 1
+
+            # LLM tracing - log every 50th chunk at debug level
+            if stream_chunk_count % 50 == 0:
+                logger.debug(
+                    "[Act Phase STREAM] Chunk %d: type=%s",
+                    stream_chunk_count,
+                    type(chunk).__name__,
+                )
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 namespace, mode, data = chunk
@@ -649,9 +795,20 @@ class Executor:
                         if isinstance(msg, ToolMessage):
                             # Count tool calls
                             tool_call_count += 1
+                            tool_call_id = msg.tool_call_id
+                            tool_name = msg.name or "unknown"
+
+                            logger.debug(
+                                "[Act Phase TOOL] Tool call %d: name=%s, id=%s",
+                                tool_call_count,
+                                tool_name,
+                                tool_call_id,
+                            )
+
                             if _maybe_cap_subagent_tasks(msg):
                                 break
-                            # Extract tool result content
+
+                            # Extract tool result content (still needed for Layer 1)
                             content = msg.content
                             if isinstance(content, str) and content:
                                 chunks.append(content)
@@ -661,6 +818,44 @@ class Executor:
                                         chunks.append(c)
                                     elif isinstance(c, dict) and "text" in c:
                                         chunks.append(c["text"])
+
+                            logger.debug(
+                                "[Act Phase TOOL] FULL CONTENT:\n%s",
+                                content if content else "none",
+                            )
+
+                            # RFC-211: Generate structured metadata for Layer 2
+                            outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
+
+                            # RFC-211: Cache large results
+                            content_str = content if isinstance(content, str) else str(content)
+                            file_ref = cache.save(tool_call_id, content_str, outcome)
+                            if file_ref:
+                                outcome["file_ref"] = file_ref
+                                logger.debug(
+                                    "[Act Phase TOOL] Cached to file: %s",
+                                    file_ref,
+                                )
+
+                            outcomes.append(outcome)
+
+                            logger.debug(
+                                "[Act Phase TOOL] Outcome: type=%s, size=%d bytes, entities=%d",
+                                outcome.get("type"),
+                                outcome.get("size_bytes", 0),
+                                len(outcome.get("entities", [])),
+                            )
+                            logger.debug(
+                                "[Act Phase TOOL] FULL OUTCOME:\n%s",
+                                outcome,
+                            )
+                            logger.debug(
+                                "Tool %s (id=%s) executed, outcome type=%s, size=%d bytes",
+                                tool_name,
+                                tool_call_id,
+                                outcome.get("type"),
+                                outcome.get("size_bytes", 0),
+                            )
                         elif isinstance(msg, AIMessage):
                             # Extract AI response content
                             if isinstance(msg.content, str) and msg.content:
@@ -676,8 +871,12 @@ class Executor:
                         msg_chunk = data[0]
                         if isinstance(msg_chunk, ToolMessage):
                             tool_call_count += 1
+                            tool_call_id = msg_chunk.tool_call_id
+                            tool_name = msg_chunk.name or "unknown"
+
                             if _maybe_cap_subagent_tasks(msg_chunk):
                                 break
+
                         if hasattr(msg_chunk, "content"):
                             content = msg_chunk.content
                             if isinstance(content, str):
@@ -688,6 +887,17 @@ class Executor:
                                         chunks.append(c)
                                     elif isinstance(c, dict) and "text" in c:
                                         chunks.append(c["text"])
+
+                            # RFC-211: Generate metadata for legacy format
+                            if isinstance(msg_chunk, ToolMessage):
+                                outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
+
+                                content_str = content if isinstance(content, str) else str(content)
+                                file_ref = cache.save(tool_call_id, content_str, outcome)
+                                if file_ref:
+                                    outcome["file_ref"] = file_ref
+
+                                outcomes.append(outcome)
             # Handle dict chunks (standard LangGraph format)
             elif isinstance(chunk, dict):
                 if "model" in chunk:
@@ -697,9 +907,13 @@ class Executor:
                         for msg in model_data["messages"]:
                             if isinstance(msg, ToolMessage):
                                 tool_call_count += 1
+                                tool_call_id = msg.tool_call_id
+                                tool_name = msg.name or "unknown"
+
                                 if _maybe_cap_subagent_tasks(msg):
                                     cap_break = True
                                     break
+
                             if hasattr(msg, "content"):
                                 content = msg.content
                                 if isinstance(content, str) and content:
@@ -710,6 +924,18 @@ class Executor:
                                             chunks.append(c)
                                         elif isinstance(c, dict) and "text" in c:
                                             chunks.append(c["text"])
+
+                                # RFC-211: Generate metadata for dict format
+                                if isinstance(msg, ToolMessage):
+                                    outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
+
+                                    content_str = content if isinstance(content, str) else str(content)
+                                    file_ref = cache.save(tool_call_id, content_str, outcome)
+                                    if file_ref:
+                                        outcome["file_ref"] = file_ref
+
+                                    outcomes.append(outcome)
+
                         if cap_break:
                             break
                 elif "content" in chunk:

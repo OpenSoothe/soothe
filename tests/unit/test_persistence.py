@@ -133,12 +133,9 @@ class TestRocksDBPersistStore:
     @pytest.fixture
     def rocksdb_available(self) -> bool | None:
         """Check if rocksdict is available."""
-        try:
-            import rocksdict
+        import importlib.util
 
-            return True
-        except ImportError:
-            return False
+        return importlib.util.find_spec("rocksdict") is not None
 
     def test_import_error_without_rocksdict(self, tmp_path: Path, monkeypatch) -> None:
         """Test that ImportError is raised if rocksdict is not installed."""

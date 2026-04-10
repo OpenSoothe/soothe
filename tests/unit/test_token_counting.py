@@ -1,7 +1,5 @@
 """Unit tests for shared classification utilities (RFC-0012)."""
 
-import pytest
-
 from soothe.utils import count_tokens
 
 

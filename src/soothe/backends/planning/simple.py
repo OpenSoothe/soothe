@@ -354,7 +354,10 @@ def _calculate_evidence_based_confidence(
 
     # Evidence volume (30% weight)
     # 0 chars = 0.0, 2000+ chars = 1.0
-    total_evidence_length = sum(len(r.output or "") for r in state.step_results)
+    # RFC-211: Use outcome metadata to get size
+    total_evidence_length = sum(
+        r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
+    )
     evidence_volume_score = min(total_evidence_length / 2000.0, 1.0)
 
     # Iteration efficiency (40% weight)
@@ -412,9 +415,14 @@ def _calculate_evidence_based_progress(
         evidence_growth_rate = 0.5  # Neutral if insufficient data
     else:
         # Recent evidence (last 3 results)
-        recent_length = sum(len(r.output or "") for r in state.step_results[-3:])
+        # RFC-211: Use outcome metadata to get size
+        recent_length = sum(
+            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results[-3:]
+        )
         # Earlier evidence (first results)
-        earlier_length = sum(len(r.output or "") for r in state.step_results[:3])
+        earlier_length = sum(
+            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results[:3]
+        )
 
         evidence_growth_rate = 0.5 if earlier_length == 0 else min(recent_length / earlier_length, 1.0)
 
@@ -742,7 +750,8 @@ class SimplePlanner:
             completed_lines = []
             for step in context.completed_steps:
                 status = "✓" if step.success else "✗"
-                output_preview = step.output[:80] if step.output else "no output"
+                # RFC-211: Use outcome metadata instead of output
+                output_preview = step.to_evidence_string(truncate=True)[:80]
                 completed_lines.append(f"{step.step_id}: {status} {output_preview}")
             sections.append("<PLANNING_COMPLETED>\n" + "\n".join(completed_lines) + "\n</PLANNING_COMPLETED>")
 
@@ -854,9 +863,57 @@ class SimplePlanner:
         from soothe.cognition.loop_agent.schemas import ReasonResult
 
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
+
+        # LLM tracing - verbose debug logs for prompt analysis
+        logger.debug("[SimplePlanner.reason] ====== Messages to LLM ======")
+        logger.debug("[SimplePlanner.reason] Message count: %d", len(messages))
+        for i, msg in enumerate(messages):
+            msg_type = type(msg).__name__
+            content_len = len(str(msg.content)) if hasattr(msg, "content") else len(str(msg))
+            logger.debug(
+                "[SimplePlanner.reason] Message %d: type=%s, content_len=%d",
+                i,
+                msg_type,
+                content_len,
+            )
+            logger.debug(
+                "[SimplePlanner.reason] Message %d FULL CONTENT:\n%s",
+                i,
+                msg.content if hasattr(msg, "content") else str(msg),
+            )
+        logger.debug("[SimplePlanner.reason] ====== End Messages ======")
+
         try:
             response = await self._invoke_messages(messages)
+
+            # LLM tracing - verbose debug logs for response analysis
+            logger.debug("[SimplePlanner.reason] ====== Raw LLM Response ======")
+            logger.debug(
+                "[SimplePlanner.reason] Response length: %d chars",
+                len(response),
+            )
+            logger.debug(
+                "[SimplePlanner.reason] FULL RESPONSE:\n%s",
+                response,
+            )
+            logger.debug("[SimplePlanner.reason] ====== End Raw Response ======")
+
             result = parse_reason_response_text(response, goal, state.iteration)
+
+            # LLM tracing - verbose debug logs for parsed result
+            logger.debug("[SimplePlanner.reason] ====== Parsed ReasonResult ======")
+            logger.debug("[SimplePlanner.reason] Status: %s", result.status)
+            logger.debug(
+                "[SimplePlanner.reason] Plan action: %s, has_decision: %s",
+                result.plan_action,
+                result.decision is not None,
+            )
+            logger.debug(
+                "[SimplePlanner.reason] Progress: %.0f%%, Confidence: %.0f%%",
+                result.goal_progress * 100,
+                result.confidence * 100,
+            )
+            logger.debug("[SimplePlanner.reason] ====== End Parsed Result ======")
         except Exception:
             logger.exception("SimplePlanner.reason failed")
             return ReasonResult(

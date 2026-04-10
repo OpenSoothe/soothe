@@ -3,7 +3,6 @@
 import pytest
 
 from soothe.ux.shared.tool_formatters import (
-    ExecutionFormatter,
     FileOpsFormatter,
     WebFormatter,
 )

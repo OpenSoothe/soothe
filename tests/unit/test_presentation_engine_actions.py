@@ -1,9 +1,5 @@
 """Unit tests for PresentationEngine action deduplication (IG-143)."""
 
-import time
-
-import pytest
-
 from soothe.ux.shared.presentation_engine import PresentationEngine
 
 

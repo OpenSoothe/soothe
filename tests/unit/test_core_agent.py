@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from langgraph.graph.state import CompiledStateGraph
 
 
@@ -67,6 +68,7 @@ class TestCoreAgentClass:
         assert agent.policy is None
         assert agent.subagents == []
 
+    @pytest.mark.asyncio
     async def test_core_agent_astream_delegates_to_graph(self) -> None:
         """CoreAgent.astream() delegates to underlying graph."""
         from soothe.core.agent import CoreAgent
@@ -94,6 +96,7 @@ class TestCoreAgentClass:
 
         assert chunks == ["chunk1", "chunk2"]
 
+    @pytest.mark.asyncio
     async def test_core_agent_astream_with_none_config(self) -> None:
         """CoreAgent.astream() handles None config."""
         from soothe.core.agent import CoreAgent
@@ -205,7 +208,6 @@ class TestCoreAgentModuleExports:
     def test_core_agent_create_factory_method(self) -> None:
         """CoreAgent.create() factory method works."""
         from soothe.core.agent import CoreAgent
-        from soothe.core.agent._builder import create_soothe_agent
 
         with patch("soothe.core.agent._builder.create_soothe_agent") as mock_factory:
             mock_agent = MagicMock(spec=CoreAgent)

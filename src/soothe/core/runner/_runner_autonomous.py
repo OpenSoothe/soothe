@@ -317,7 +317,16 @@ class AutonomousMixin(GoalDirectivesMixin):
                 try:
                     capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
                     completed = [
-                        StepResult(step_id=r.goal_id, output=r.actions_summary[:200], success=r.outcome != "failed")
+                        StepResult(
+                            step_id=r.goal_id,
+                            success=r.outcome != "failed",
+                            outcome={
+                                "type": "generic",
+                                "size_bytes": len((r.actions_summary or "").encode("utf-8")),
+                            },  # RFC-211
+                            duration_ms=0,
+                            thread_id=goal.thread_id,
+                        )
                         for r in iteration_records[-3:]
                     ]
                     context = PlanContext(
@@ -395,7 +404,13 @@ class AutonomousMixin(GoalDirectivesMixin):
             if self._planner and iter_state.plan and response_text:
                 try:
                     step_results = [
-                        StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
+                        StepResult(
+                            step_id=s.id,
+                            success=s.status == "completed",
+                            outcome={"type": "generic", "size_bytes": len((s.result or "").encode("utf-8"))},  # RFC-211
+                            duration_ms=0,
+                            thread_id=goal.thread_id,
+                        )
                         for s in iter_state.plan.steps
                         if s.status in ("completed", "failed")
                     ]

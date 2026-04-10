@@ -736,7 +736,13 @@ class PhasesMixin:
                     )
 
                 step_results = [
-                    StepResult(step_id=s.id, output=s.result or "", success=s.status == "completed")
+                    StepResult(
+                        step_id=s.id,
+                        success=s.status == "completed",
+                        outcome={"type": "generic", "size_bytes": len((s.result or "").encode("utf-8"))},  # RFC-211
+                        duration_ms=0,
+                        thread_id=state.thread_id,
+                    )
                     for s in state.plan.steps
                     if s.status in ("completed", "failed")
                 ]
@@ -891,4 +897,138 @@ class PhasesMixin:
                     action_requests = value.get("action_requests", [])
                 decisions = [{"type": "approve"} for _ in (action_requests or [value])]
                 payload[iid] = {"decisions": decisions}
-        return payload
+
+
+async def generate_final_report_from_checkpoint(
+    thread_id: str,
+    goal: str,
+    checkpointer: Any,
+    model: Any,
+) -> str:
+    """Generate final report from Layer 1 checkpoint using LLM synthesis.
+
+    Layer 1 CoreAgent owns execution history and synthesizes final report
+    from full ToolMessage contents when Layer 2 signals goal is done.
+
+    Uses LLM to create comprehensive, coherent final report from execution history.
+
+    Args:
+        thread_id: Thread identifier
+        goal: Goal description for context
+        checkpointer: LangGraph checkpointer instance
+        model: Chat model for synthesis
+
+    Returns:
+        Synthesized final report string
+    """
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    # Load full thread state from checkpointer
+    state = await checkpointer.aget_state({"configurable": {"thread_id": thread_id}})
+
+    if not state or not state.values:
+        return "No execution results available."
+
+    messages = state.values.get("messages", [])
+
+    # Extract tool results and AI responses
+    tool_results = []
+    ai_responses = []
+
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            content = msg.content
+            if isinstance(content, str):
+                tool_results.append(content)
+            elif isinstance(content, list):
+                # Extract text from content blocks
+                text_parts = []
+                for block in content:
+                    if isinstance(block, str):
+                        text_parts.append(block)
+                    elif isinstance(block, dict) and "text" in block:
+                        text_parts.append(block["text"])
+                if text_parts:
+                    tool_results.append("\n".join(text_parts))
+        elif isinstance(msg, AIMessage) and msg.content:
+            ai_responses.append(msg.content)
+
+    # Check for cached large results
+    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+
+    cache = ToolResultCache(thread_id)
+    cache_stats = cache.get_cache_stats()
+
+    if cache_stats["file_count"] > 0:
+        logger.info(
+            "Final report includes %d cached tool results (%d bytes)",
+            cache_stats["file_count"],
+            cache_stats["total_bytes"],
+        )
+
+    # If no tool results, return last AI response or simple message
+    if not tool_results and not ai_responses:
+        return "Goal completed successfully."
+
+    if not tool_results:
+        return ai_responses[-1] if ai_responses else "Goal completed successfully."
+
+    # Build synthesis prompt
+    synthesis_prompt = f"""Synthesize a comprehensive final report for the following goal execution.
+
+**Goal**: {goal}
+
+**Execution History**:
+- Total tool executions: {len(tool_results)}
+- AI responses: {len(ai_responses)}
+
+**Tool Results** (last 5, truncated for synthesis):
+"""
+
+    # Add last 5 tool results (truncated to avoid token limits)
+    for i, result in enumerate(tool_results[-5:], 1):
+        truncated = result[:2000] if len(result) > 2000 else result
+        synthesis_prompt += f"\n--- Tool Result {i} ---\n{truncated}\n"
+
+    if ai_responses:
+        synthesis_prompt += "\n**Recent AI Responses**:\n"
+        for i, response in enumerate(ai_responses[-3:], 1):
+            truncated = response[:1000] if len(response) > 1000 else response
+            synthesis_prompt += f"\n--- AI Response {i} ---\n{truncated}\n"
+
+    synthesis_prompt += """
+**Instructions**:
+Generate a comprehensive, well-structured final report that:
+1. Summarizes what was accomplished
+2. Highlights key findings or outputs
+3. Provides actionable results or deliverables
+4. Is concise yet comprehensive (aim for 500-1500 words)
+
+Format the report with clear sections and bullet points where appropriate."""
+
+    # Use LLM to synthesize final report
+    try:
+        response = await model.ainvoke([HumanMessage(content=synthesis_prompt)])
+        final_report = response.content if hasattr(response, "content") else str(response)
+
+        logger.info(
+            "Generated final report from checkpoint (goal: %s, report length: %d chars)", goal[:50], len(final_report)
+        )
+
+        return final_report
+
+    except Exception:
+        logger.exception("Failed to generate LLM synthesis for final report, using fallback")
+
+        # Fallback: concatenate last AI response and recent tool results
+        report_parts = []
+
+        if ai_responses:
+            report_parts.append(ai_responses[-1])
+
+        if tool_results:
+            for result in tool_results[-3:]:
+                if len(result) > 200:
+                    report_parts.append(f"\n\n**Tool Output:**\n{result[:1000]}...")
+
+        return "\n".join(report_parts) if report_parts else "Goal completed successfully."

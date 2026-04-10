@@ -1,7 +1,5 @@
 """Tests for tool error handler decorator."""
 
-import pytest
-
 from soothe.utils.tool_error_handler import _simplify_error, tool_error_handler
 
 

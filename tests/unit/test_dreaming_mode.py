@@ -1,7 +1,6 @@
 """Tests for Autopilot dreaming mode (soothe.cognition.dreaming)."""
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

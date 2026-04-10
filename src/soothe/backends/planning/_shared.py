@@ -115,7 +115,7 @@ def reflect_heuristic(
         else:
             direct_failed.append(r.step_id)
 
-    failed_details = {r.step_id: (r.output[:200] if r.output else "no output") for r in failed_list}
+    failed_details = {r.step_id: (r.to_evidence_string()[:200] if not r.success else "no output") for r in failed_list}
 
     parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
     if direct_failed:
@@ -257,7 +257,7 @@ def _build_reflection_prompt(
         step = next((s for s in plan.steps if s.id == sr.step_id), None)
         desc = step.description if step else sr.step_id
         status = "SUCCESS" if sr.success else "FAILED"
-        output_preview = sr.output[:150] if sr.output else "(no output)"
+        output_preview = sr.to_evidence_string()[:150]
         parts.append(f"  - [{status}] {sr.step_id}: {desc}")
         parts.append(f"    Output: {output_preview}")
 

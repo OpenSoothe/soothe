@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from soothe.config.daemon_config import DaemonConfig, TransportConfig, WebSocketConfig
 from soothe.daemon.protocol_v2 import (
     ERROR_INVALID_MESSAGE,
-    ProtocolError,
     create_error_response,
     validate_message,
     validate_message_size,

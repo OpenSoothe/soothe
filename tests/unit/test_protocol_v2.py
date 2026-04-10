@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from soothe.daemon.protocol_v2 import (
     ERROR_AUTHENTICATION_REQUIRED,

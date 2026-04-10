@@ -67,8 +67,8 @@ class TestReflectHeuristic:
             ],
         )
         results = [
-            StepResult(step_id="s1", output="ok", success=True),
-            StepResult(step_id="s2", output="ok", success=True),
+            StepResult(step_id="s1", success=True, outcome={"type": "generic", "size_bytes": 2}),
+            StepResult(step_id="s2", success=True, outcome={"type": "generic", "size_bytes": 2}),
         ]
         ref = reflect_heuristic(plan, results)
         assert not ref.should_revise
@@ -80,7 +80,14 @@ class TestReflectHeuristic:
             goal="test",
             steps=[PlanStep(id="s1", description="A")],
         )
-        results = [StepResult(step_id="s1", output="error", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "error",
+            )
+        ]
         ref = reflect_heuristic(plan, results)
         assert ref.should_revise
         assert "s1" in ref.failed_details
@@ -94,8 +101,18 @@ class TestReflectHeuristic:
             ],
         )
         results = [
-            StepResult(step_id="s1", output="err", success=False),
-            StepResult(step_id="s2", output="blocked", success=False),
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "err",
+            ),
+            StepResult(
+                step_id="s2",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "blocked",
+            ),
         ]
         ref = reflect_heuristic(plan, results)
         assert "s2" in ref.blocked_steps
@@ -108,7 +125,14 @@ class TestReflectHeuristic:
                 PlanStep(id="s1", description="Install lib", result="library not found"),
             ],
         )
-        results = [StepResult(step_id="s1", output="lib not found", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "lib not found",
+            )
+        ]
         goal_ctx = GoalContext(
             current_goal_id="g1",
             all_goals=[{"id": "g1", "priority": 50}],
@@ -125,7 +149,14 @@ class TestReflectHeuristic:
                 PlanStep(id="s1", description="Install lib", result="not found"),
             ],
         )
-        results = [StepResult(step_id="s1", output="not found", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "not found",
+            )
+        ]
         ref = reflect_heuristic(plan, results, goal_context=None)
         assert ref.goal_directives == []
 
@@ -140,7 +171,14 @@ class TestReflectWithLLM:
             goal="test",
             steps=[PlanStep(id="s1", description="A")],
         )
-        results = [StepResult(step_id="s1", output="ok", success=True)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=True,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "True" == "True" else "ok",
+            )
+        ]
 
         ref = await reflect_with_llm(model, plan, results)
         assert not ref.should_revise
@@ -161,7 +199,14 @@ class TestReflectWithLLM:
             goal="test",
             steps=[PlanStep(id="s1", description="A")],
         )
-        results = [StepResult(step_id="s1", output="error", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "error",
+            )
+        ]
 
         ref = await reflect_with_llm(model, plan, results)
         assert ref.should_revise
@@ -177,7 +222,14 @@ class TestReflectWithLLM:
             goal="test",
             steps=[PlanStep(id="s1", description="A")],
         )
-        results = [StepResult(step_id="s1", output="error", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "error",
+            )
+        ]
 
         ref = await reflect_with_llm(model, plan, results)
         assert ref.should_revise
@@ -201,7 +253,14 @@ class TestReflectWithLLM:
             goal="test",
             steps=[PlanStep(id="s1", description="Use library")],
         )
-        results = [StepResult(step_id="s1", output="not installed", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "not installed",
+            )
+        ]
         goal_ctx = GoalContext(current_goal_id="g1")
 
         ref = await reflect_with_llm(model, plan, results, goal_ctx)
@@ -220,7 +279,14 @@ class TestReflectWithLLM:
             goal="test",
             steps=[PlanStep(id="s1", description="A")],
         )
-        results = [StepResult(step_id="s1", output="err", success=False)]
+        results = [
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "generic", "size_bytes": 2},
+                error=None if "False" == "True" else "err",
+            )
+        ]
 
         ref = await reflect_with_llm(model, plan, results)
         assert ref.should_revise

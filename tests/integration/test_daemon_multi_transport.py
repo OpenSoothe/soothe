@@ -75,8 +75,8 @@ async def test_all_transports_simultaneous_lifecycle(multi_transport_daemon: dic
     """Test that all three transports can start and stop together."""
     daemon = multi_transport_daemon["daemon"]
     unix_path = multi_transport_daemon["unix_path"]
-    ws_port = multi_transport_daemon["ws_port"]
-    http_port = multi_transport_daemon["http_port"]
+    multi_transport_daemon["ws_port"]
+    multi_transport_daemon["http_port"]
 
     # Verify all transports are running
     assert daemon._transport_manager is not None
