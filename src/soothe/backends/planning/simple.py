@@ -886,24 +886,12 @@ class SimplePlanner:
         logger.debug("[SimplePlanner.reason] ====== End Messages ======")
 
         try:
-            response = await self._invoke_messages(messages)
+            # Use structured output to enforce ReasonResult schema (fixes tool-call token issue)
+            structured_model = self._model.with_structured_output(ReasonResult)
+            result = await structured_model.ainvoke(messages)
 
-            # LLM tracing - verbose debug logs for response analysis
-            logger.debug("[SimplePlanner.reason] ====== Raw LLM Response ======")
-            logger.debug(
-                "[SimplePlanner.reason] Response length: %d chars",
-                len(response),
-            )
-            logger.debug(
-                "[SimplePlanner.reason] FULL RESPONSE:\n%s",
-                response,
-            )
-            logger.debug("[SimplePlanner.reason] ====== End Raw Response ======")
-
-            result = parse_reason_response_text(response, goal, state.iteration)
-
-            # LLM tracing - verbose debug logs for parsed result
-            logger.debug("[SimplePlanner.reason] ====== Parsed ReasonResult ======")
+            # LLM tracing - verbose debug logs for structured result
+            logger.debug("[SimplePlanner.reason] ====== Structured ReasonResult ======")
             logger.debug("[SimplePlanner.reason] Status: %s", result.status)
             logger.debug(
                 "[SimplePlanner.reason] Plan action: %s, has_decision: %s",
@@ -915,7 +903,7 @@ class SimplePlanner:
                 result.goal_progress * 100,
                 result.confidence * 100,
             )
-            logger.debug("[SimplePlanner.reason] ====== End Parsed Result ======")
+            logger.debug("[SimplePlanner.reason] ====== End Structured Result ======")
         except Exception:
             logger.exception("SimplePlanner.reason failed")
             return ReasonResult(

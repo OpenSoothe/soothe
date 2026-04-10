@@ -337,9 +337,16 @@ Use all tool results and AI responses available in the conversation history to c
             state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)
             state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
 
-            # Record iteration to checkpoint (RFC-205)
+            state.previous_reason = reason_result
+
+            # Capture iteration BEFORE increment for event/checkpoint consistency
+            iteration_completed = state.iteration
+            state.iteration += 1
+            state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
+
+            # Record iteration to checkpoint (RFC-205) with pre-increment value
             state_manager.record_iteration(
-                iteration=state.iteration,
+                iteration=iteration_completed,  # Use pre-increment value
                 reason_result=reason_result,
                 decision=decision,
                 step_results=step_results,
@@ -347,14 +354,10 @@ Use all tool results and AI responses available in the conversation history to c
                 working_memory=state.working_memory,
             )
 
-            state.previous_reason = reason_result
-            state.iteration += 1
-            state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
-
             yield (
                 "iteration_completed",
                 {
-                    "iteration": state.iteration,
+                    "iteration": iteration_completed,  # Use pre-increment value
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
                     "user_summary": reason_result.user_summary,

@@ -21,7 +21,6 @@ Return JSON:
   "soothe_next_action": "I will ... (first person, Soothe)",
   "progress_detail": "Optional extra context for the user",
   "plan_action": "keep" | "new",
-  "next_steps_hint": null,
   "decision": {
     "type": "execute_steps",
     "steps": [

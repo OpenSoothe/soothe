@@ -192,7 +192,7 @@ def build_shared_environment_workspace_prefix(
         include_layout_preview=include_workspace_extras,
         include_readme_excerpt=include_workspace_extras,
     )
-    return f"{env}\n\n{ws}\n\n"
+    return f"{env}\n\n{ws}\n"
 
 
 def build_context_sections_for_complexity(

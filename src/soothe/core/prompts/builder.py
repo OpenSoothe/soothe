@@ -98,12 +98,12 @@ class PromptBuilder:
         elif context.workspace:
             from soothe.core.prompts.context_xml import build_soothe_workspace_section
 
-            parts.append(build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n\n")
+            parts.append(build_soothe_workspace_section(Path(context.workspace), context.git_status) + "\n")
 
         # Workspace rules (static when workspace present)
         if context.workspace:
             parts.append(
-                "\n<WORKSPACE_RULES>\n"
+                "<WORKSPACE_RULES>\n"
                 "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
                 "Rules:\n"
                 "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
@@ -111,34 +111,32 @@ class PromptBuilder:
                 "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
                 "a different project outside this directory.\n"
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-                "</WORKSPACE_RULES>\n"
+                "</WORKSPACE_RULES>"
             )
 
         # Loop iteration limits (system-level configuration context)
         if state is not None:
-            parts.append(
-                f"\n<LOOP_CONFIG>\nIteration: {state.iteration} (max {state.max_iterations})\n</LOOP_CONFIG>\n"
-            )
+            parts.append(f"<LOOP_CONFIG>\nIteration: {state.iteration} (max {state.max_iterations})\n</LOOP_CONFIG>")
 
         # Available capabilities (system-level resource context)
         if context.available_capabilities:
             parts.append(
-                f"\n<AVAILABLE_CAPABILITIES>\n"
+                f"<AVAILABLE_CAPABILITIES>\n"
                 f"Tools/subagents: {', '.join(context.available_capabilities)}\n"
-                f"</AVAILABLE_CAPABILITIES>\n"
+                f"</AVAILABLE_CAPABILITIES>"
             )
 
         # Prior conversation follow-up policy (static)
         if context.recent_messages:
             parts.append(
-                "\n<FOLLOW_UP_POLICY>\n"
+                "<FOLLOW_UP_POLICY>\n"
                 '- If the goal depends on prior conversation text, status MUST NOT be "done" until CoreAgent execution '
                 "has produced the requested output (translation, summary, etc.).\n"
                 '- With plan_action "new", include at least one concrete execute_steps item that performs the work '
                 "(e.g. invoke the main assistant to translate or rewrite the relevant excerpt).\n"
                 "- Do not claim the task is finished in user_summary unless the evidence or step output contains "
                 "the actual result.\n"
-                "</FOLLOW_UP_POLICY>\n"
+                "</FOLLOW_UP_POLICY>"
             )
 
         # Static policy fragments (delegation, granularity)
@@ -209,8 +207,6 @@ class PromptBuilder:
             parts.append(f"- Status: {prev.status}")
             parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
             parts.append(f"- Summary: {prev.user_summary or prev.reasoning[:200]}")
-            if prev.next_steps_hint:
-                parts.append(f"- Hint: {prev.next_steps_hint}")
 
         return "\n".join(parts)
 

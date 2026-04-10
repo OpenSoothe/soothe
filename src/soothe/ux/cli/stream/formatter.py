@@ -214,6 +214,7 @@ def format_judgement(
     """Format a judgement line for LLM decision reasoning.
 
     IG-089: Shows meaningful judgement info without raw intermediate data.
+    IG-XXX: Prominent reasoning display with "Reason:" prefix for clarity.
 
     Args:
         judgement: Human-readable summary of the decision.
@@ -225,11 +226,15 @@ def format_judgement(
         DisplayLine for judgement.
     """
     action_icon = "→" if action == "continue" else "✓"
+
+    # Polish: Add "Reason:" prefix to make LLM reasoning prominent
+    content = f"Reason: {judgement}"
+
     return DisplayLine(
-        level=3,
-        content=judgement,
+        level=2,  # Use level 2 for more prominence (like step headers)
+        content=content,
         icon=action_icon,
-        indent=indent_for_level(3),
+        indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 
