@@ -100,11 +100,7 @@ class ReasonResult(BaseModel):
         plan_action: Reuse the in-flight ``AgentDecision`` or supply a new one.
         decision: New steps to run when ``plan_action`` is ``new``; None when ``keep``.
         evidence_summary: Accumulated evidence text (often filled after parsing).
-        next_steps_hint: Optional hint for the next cycle.
         full_output: Final user-visible answer when status is ``done``.
-        synthesis_performed: Whether synthesis phase was run for final report (RFC-603).
-        action_specificity_score: Post-processed action specificity score (0=generic, 1=specific).
-        evidence_quality_score: Calculated quality of accumulated evidence.
     """
 
     status: Literal["continue", "replan", "done"]
@@ -117,20 +113,7 @@ class ReasonResult(BaseModel):
     progress_detail: str | None = None
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
-    next_steps_hint: str | None = None
     full_output: str | None = None
-
-    # RFC-603: Synthesis and quality tracking fields
-    synthesis_performed: bool = Field(default=False, description="Whether synthesis phase was run for final report")
-    action_specificity_score: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Post-processed action specificity score (0=generic, 1=highly specific)",
-    )
-    evidence_quality_score: float = Field(
-        default=0.0, ge=0.0, le=1.0, description="Calculated quality of accumulated evidence"
-    )
 
     @model_validator(mode="after")
     def _validate_plan_action(self) -> ReasonResult:

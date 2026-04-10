@@ -458,7 +458,7 @@ class StreamDisplayPipeline:
         ]
 
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle Layer 2 Reason progress with condensed action summary."""
+        """Handle Layer 2 Reason progress with prominent reasoning display."""
         status = event.get("status", "")
 
         # Extract action summary (priority order)
@@ -471,11 +471,23 @@ class StreamDisplayPipeline:
         if not action_text:
             return []
 
-        # RFC-603: Remove percentage sure for cleaner display
-        formatted = action_text
+        # Polish: Capitalize first letter if not already
+        if action_text and action_text[0].islower():
+            action_text = action_text[0].upper() + action_text[1:]
+
+        # Polish: Truncate long messages to 120 chars for readability
+        max_len = 120
+        if len(action_text) > max_len:
+            # Find last complete word before cutoff
+            truncated = action_text[:max_len]
+            last_space = truncated.rfind(" ")
+            if last_space > max_len - 20:  # Keep at least 100 chars
+                action_text = truncated[:last_space] + "…"
+            else:
+                action_text = truncated.rstrip() + "…"
 
         # Deduplicate repeated actions
-        if not self._presentation.should_emit_action(action_text=formatted):
+        if not self._presentation.should_emit_action(action_text=action_text):
             return []
 
         # Determine action type
@@ -483,7 +495,7 @@ class StreamDisplayPipeline:
 
         return [
             format_judgement(
-                formatted,
+                action_text,
                 action,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
