@@ -112,7 +112,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             ).to_dict()
         )
 
-        from soothe.cognition.proposal_queue import ProposalQueue
+        from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
 
         from ._types import IterationRecord
 
@@ -480,7 +480,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
             # RFC-204: Consensus loop — validate goal completion before accepting
             if self._goal_engine and self._model and not should_continue:
-                from soothe.cognition.consensus import evaluate_goal_completion
+                from soothe.cognition.goal_engine.consensus import evaluate_goal_completion
 
                 success_criteria = getattr(goal, "_success_criteria", None)
                 c_decision, c_reasoning = await evaluate_goal_completion(
@@ -779,7 +779,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         Args:
             proposal: Proposal with type 'suggest_goal'.
         """
-        from soothe.cognition.criticality import evaluate_criticality_async
+        from soothe.cognition.goal_engine.criticality import evaluate_criticality_async
 
         description = proposal.payload.get("description", "")
         priority = proposal.payload.get("priority", 50)
@@ -873,7 +873,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             payload: Event-specific payload dict.
         """
         try:
-            from soothe.cognition.webhooks import WebhookConfig, WebhookService
+            from soothe.cognition.goal_engine.webhooks import WebhookConfig, WebhookService
 
             webhook_url = None
             if self._config and hasattr(self._config, "autopilot"):
@@ -906,7 +906,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             return []
 
         try:
-            from soothe.cognition.relationship_detector import (
+            from soothe.cognition.goal_engine.relationship_detector import (
                 auto_apply_relationships,
                 detect_relationships,
             )
@@ -985,7 +985,7 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         # No scheduled tasks — enter dreaming mode
         try:
-            from soothe.cognition.dreaming import DreamingMode
+            from soothe.cognition.goal_engine.dreaming import DreamingMode
 
             dreaming = DreamingMode(
                 soothe_home=SOOTHE_HOME,

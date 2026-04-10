@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
+from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
 
 # Maximum evidence summary length before truncating model-supplied evidence
 _EVIDENCE_SUMMARY_MAX_CHARS = 600

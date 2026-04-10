@@ -116,7 +116,7 @@ def resolve_planner(
 
     resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
-    from soothe.backends.planning.simple import SimplePlanner
+    from soothe.cognition.planning.simple import SimplePlanner
 
     # Use fast model for unified planning (structured output generation)
     simple_planner_model = fast_model or planner_model
@@ -137,7 +137,7 @@ def resolve_planner(
         logger.info("Claude subagent disabled in config, skipping ClaudePlanner")
     elif not inside_claude_code:
         try:
-            from soothe.backends.planning.claude import ClaudePlanner
+            from soothe.cognition.planning.claude import ClaudePlanner
 
             claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model, config=config)
         except Exception:
@@ -148,7 +148,7 @@ def resolve_planner(
     if config.protocols.planner.routing == "always_claude":
         return claude_planner or simple  # type: ignore[return-value]
 
-    from soothe.backends.planning.router import AutoPlanner
+    from soothe.cognition.planning.router import AutoPlanner
 
     return AutoPlanner(
         claude=claude_planner,

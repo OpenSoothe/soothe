@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
@@ -79,7 +79,7 @@ def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
 
 
 def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
-    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+    from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
 
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
     state.current_decision = AgentDecision(

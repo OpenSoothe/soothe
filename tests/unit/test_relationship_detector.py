@@ -1,7 +1,7 @@
 """Tests for Autopilot relationship detector (soothe.cognition.relationship_detector)."""
 
 from soothe.cognition import Goal
-from soothe.cognition.relationship_detector import (
+from soothe.cognition.goal_engine.relationship_detector import (
     _AUTO_APPLY_CONFIDENCE,
     _FLAG_FOR_REVIEW_CONFIDENCE,
     Relationship,

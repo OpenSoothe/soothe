@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -753,7 +753,7 @@ class Executor:
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
-        from soothe.cognition.loop_agent.result_cache import ToolResultCache
+        from soothe.cognition.agent_loop.result_cache import ToolResultCache
         from soothe.tools.metadata_generator import generate_outcome_metadata
 
         chunks: list[str] = []

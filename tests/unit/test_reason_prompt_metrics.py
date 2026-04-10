@@ -6,7 +6,7 @@ Wave metrics are now internal tracking only (logged by LLMTracingMiddleware).
 
 import pytest
 
-from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.config import SootheConfig
 from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext

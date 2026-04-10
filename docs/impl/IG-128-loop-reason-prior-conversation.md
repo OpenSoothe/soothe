@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This guide covers work to make **follow-up goals** in the same thread (e.g. translate prior assistant output) work reliably in the **Layer 2 LoopAgent**, and follow-on fixes for **truncation**, **duplicate “Done” walls**, **final report UX**, and **TUI progress prefix colors** for completion lines.
+This guide covers work to make **follow-up goals** in the same thread (e.g. translate prior assistant output) work reliably in the **Layer 2 AgentLoop**, and follow-on fixes for **truncation**, **duplicate “Done” walls**, **final report UX**, and **TUI progress prefix colors** for completion lines.
 
 ---
 
@@ -49,12 +49,12 @@ This guide covers work to make **follow-up goals** in the same thread (e.g. tran
 
 | Area | Path | Change |
 |------|------|--------|
-| Loop state | `src/soothe/cognition/loop_agent/schemas.py` | `reason_conversation_excerpts: list[str]` on `LoopState` |
-| Loop agent | `src/soothe/cognition/loop_agent/loop_agent.py` | `run_with_progress(..., reason_conversation_excerpts=...)`; `_build_plan_context` uses `reason_conversation_excerpts` for `recent_messages` |
+| Loop state | `src/soothe/cognition/agent_loop/schemas.py` | `reason_conversation_excerpts: list[str]` on `LoopState` |
+| Loop agent | `src/soothe/cognition/agent_loop/loop_agent.py` | `run_with_progress(..., reason_conversation_excerpts=...)`; `_build_plan_context` uses `reason_conversation_excerpts` for `recent_messages` |
 | Runner phases | `src/soothe/core/runner/_runner_phases.py` | `_format_thread_messages_for_reason` (last AIMessage **100_000** cap, others **8_000**) |
 | Runner agentic | `src/soothe/core/runner/_runner_agentic.py` | Single `_load_recent_messages` tail for routing + reason; `_clip_agentic_step_description`; `completion_summary` + `AgenticLoopCompletedEvent`; constants **200_000** final cap / preview; `_agentic_final_stdout_text` ellipsis + `Full report:` |
-| Planning prompt | `src/soothe/backends/planning/simple.py` | `<SOOTHE_PRIOR_CONVERSATION>` + `<SOOTHE_FOLLOW_UP_POLICY>` when `context.recent_messages` |
-| Reason phase | `src/soothe/cognition/loop_agent/reason.py` | If model `evidence_summary` **> 600** chars → prefer compact step-derived evidence or **400** + ellipsis |
+| Planning prompt | `src/soothe/cognition/planning/simple.py` | `<SOOTHE_PRIOR_CONVERSATION>` + `<SOOTHE_FOLLOW_UP_POLICY>` when `context.recent_messages` |
+| Reason phase | `src/soothe/cognition/agent_loop/reason.py` | If model `evidence_summary` **> 600** chars → prefer compact step-derived evidence or **400** + ellipsis |
 | Events | `src/soothe/core/event_catalog.py` | `AgenticLoopCompletedEvent.completion_summary`; registry template **`Done: {completion_summary}`** |
 | TUI formatter | `src/soothe/ux/shared/event_formatter.py` | `build_event_summary`: default `completion_summary` for legacy payloads |
 | TUI renderer | `src/soothe/ux/tui/renderer.py` | Subagent streams **full** text via `_stream_assistant_panel_text`; `_progress_event_dot_color` for green completion |
@@ -94,7 +94,7 @@ This guide covers work to make **follow-up goals** in the same thread (e.g. tran
 |----------|----------|
 | Implementation guide (this doc) | `docs/impl/IG-128-loop-reason-prior-conversation.md` |
 | Specs | RFC-0008 agentic loop; RFC-0020 presentation tiers (event summaries, TUI dots) |
-| Next maintenance | If context-window metrics are required, add a dedicated IG + hooks (callbacks / `usage_metadata`), not ad-hoc logs in LoopAgent only |
+| Next maintenance | If context-window metrics are required, add a dedicated IG + hooks (callbacks / `usage_metadata`), not ad-hoc logs in AgentLoop only |
 
 ---
 

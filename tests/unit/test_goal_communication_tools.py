@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.cognition import Goal, GoalEngine
-from soothe.cognition.proposal_queue import ProposalQueue
+from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
 from soothe.tools.goals.implementation import (
     AddFindingTool,
     FlagBlockerTool,

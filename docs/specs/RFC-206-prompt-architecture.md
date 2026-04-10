@@ -250,7 +250,7 @@ Check PRIOR_CONVERSATION in USER_TASK?
 
 ### SimplePlanner Refactor
 
-**Before** (`src/soothe/backends/planning/simple.py`):
+**Before** (`src/soothe/cognition/planning/simple.py`):
 ```python
 async def reason(self, goal, state, context):
     prompt = self._build_reason_prompt(goal, state, context)
@@ -325,8 +325,8 @@ class SimplePlanner:
 
 ### Affected Code
 
-- `src/soothe/backends/planning/simple.py`
-- `src/soothe/backends/planning/claude.py` (if exists)
+- `src/soothe/cognition/planning/simple.py`
+- `src/soothe/cognition/planning/claude.py` (if exists)
 - Any tests that construct prompts directly
 
 ---

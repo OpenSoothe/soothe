@@ -58,7 +58,7 @@ async def check_protocols(config: SootheConfig | None = None) -> CategoryResult:
     checks.append(_check_import("soothe.backends.vector_store.weaviate", "Weaviate"))
 
     # Remote agent protocol backend
-    checks.append(_check_import("soothe.backends.remote.langgraph", "LangGraph RemoteAgent"))
+    checks.append(_check_import("soothe.core.remote_agent.langgraph", "LangGraph RemoteAgent"))
 
     overall_status = aggregate_status([check.status for check in checks])
 

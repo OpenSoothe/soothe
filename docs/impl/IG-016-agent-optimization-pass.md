@@ -52,10 +52,10 @@ prompts so the agent works correctly out of the box and presents a professional 
 | File | Change |
 |------|--------|
 | `config.py` | Routing: `auto \| always_direct \| always_planner \| always_claude` (no `none`) |
-| `backends/planning/direct.py` | No change |
-| `backends/planning/subagent.py` | **New** -- SubagentPlanner via compiled planner subagent |
-| `backends/planning/claude.py` | **New** -- ClaudePlanner via compiled Claude subagent with planning prompt |
-| `backends/planning/router.py` | **New** -- AutoPlanner hybrid complexity router |
+| `cognition/planning/direct.py` | No change |
+| `cognition/planning/subagent.py` | **New** -- SubagentPlanner via compiled planner subagent |
+| `cognition/planning/claude.py` | **New** -- ClaudePlanner via compiled Claude subagent with planning prompt |
+| `cognition/planning/router.py` | **New** -- AutoPlanner hybrid complexity router |
 | `core/resolver.py` | Updated `resolve_planner()` with fallback chain |
 
 ### 4. System Prompts

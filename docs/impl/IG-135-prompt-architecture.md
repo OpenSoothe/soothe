@@ -74,7 +74,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import LoopState
+    from soothe.cognition.agent_loop.schemas import LoopState
     from soothe.config import SootheConfig
     from soothe.protocols.planner import PlanContext
 
@@ -347,7 +347,7 @@ When plan_action is "keep", omit "decision" entirely.
 
 ## Step 3: Update SimplePlanner
 
-### File: `src/soothe/backends/planning/simple.py`
+### File: `src/soothe/cognition/planning/simple.py`
 
 **Changes**:
 
@@ -368,7 +368,7 @@ class SimplePlanner:
 
     async def reason(self, goal, state, context):
         """Layer 2 Reason phase."""
-        from soothe.cognition.loop_agent.schemas import ReasonResult
+        from soothe.cognition.agent_loop.schemas import ReasonResult
 
         prompt = self._prompt_builder.build_reason_prompt(goal, state, context)  # UPDATED
 
@@ -401,7 +401,7 @@ class SimplePlanner:
 import pytest
 
 from soothe.prompts import PromptBuilder
-from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.protocols.planner import PlanContext
 
 

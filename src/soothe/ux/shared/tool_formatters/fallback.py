@@ -89,7 +89,7 @@ class FallbackFormatter(BaseFormatter):
 
         # Handle ToolOutput (if available)
         try:
-            from soothe.cognition.loop_agent.core.schemas import ToolOutput
+            from soothe.cognition.agent_loop.core.schemas import ToolOutput
 
             if isinstance(result, ToolOutput):
                 if not result.success:

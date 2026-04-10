@@ -4,7 +4,7 @@
 **RFC**: RFC-100 (Layer 1), RFC-201 (Layer 2)
 **Status**: Draft
 **Created**: 2026-03-29
-**Related**: IG-097 (Layer 2 LoopAgent)
+**Related**: IG-097 (Layer 2 AgentLoop)
 
 ## Overview
 
@@ -15,7 +15,7 @@ This implementation guide addresses two critical architectural gaps:
 
 ### Current Gap Analysis
 
-**Problem**: The Executor (`cognition/loop_agent/executor.py`) currently ignores StepAction's `tools` and `subagent` fields:
+**Problem**: The Executor (`cognition/agent_loop/executor.py`) currently ignores StepAction's `tools` and `subagent` fields:
 
 ```python
 # Current implementation (executor.py:211)
@@ -299,7 +299,7 @@ async def _execute_step(self, step, thread_id: str) -> StepResult:
 ```
 
 **Files Modified**:
-- `src/soothe/cognition/loop_agent/executor.py`
+- `src/soothe/cognition/agent_loop/executor.py`
 
 **Tests**:
 - `tests/integration/test_executor_hints.py`

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.backends.planning.simple import SimplePlanner
+from soothe.cognition.planning.simple import SimplePlanner
 from soothe.protocols.planner import Plan, PlanStep, StepResult
 
 

@@ -69,7 +69,7 @@ src/soothe/core/
 │   ├── Keep QueryClassifier-specific patterns
 │   └── Fixed boundary conditions
 │
-└── backends/planning/
+└── cognition/planning/
     └── router.py            # UPDATED: Use shared module
         ├── Import from classification
         ├── Remove duplicate keywords
@@ -180,7 +180,7 @@ Exactly 30 words → "complex" (not "medium")
 
 ### 3. AutoPlanner Updates
 
-**File**: `src/soothe/backends/planning/router.py`
+**File**: `src/soothe/cognition/planning/router.py`
 
 **Changes**:
 1. Import keywords from `classification.py`
@@ -402,7 +402,7 @@ COMPLEX_KEYWORDS = frozenset({
 Key changes to review:
 1. `src/soothe/core/classification.py` - New shared module
 2. `src/soothe/core/query_classifier.py` - Imports from shared, removes duplicates
-3. `src/soothe/backends/planning/router.py` - Imports from shared, removes duplicates
+3. `src/soothe/cognition/planning/router.py` - Imports from shared, removes duplicates
 4. `tests/unit_tests/test_classification.py` - New test file
 5. `tests/unit_tests/test_query_classifier.py` - Updated with bug fix tests
 

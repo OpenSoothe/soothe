@@ -35,7 +35,7 @@ This implementation guide documents two major improvements:
 **Changes**:
 
 1. **Moved implementation**:
-   - `src/soothe/cognition/loop_working_memory/memory.py` → `src/soothe/cognition/loop_agent/working_memory.py`
+   - `src/soothe/cognition/loop_working_memory/memory.py` → `src/soothe/cognition/agent_loop/working_memory.py`
 
 2. **Updated imports**:
    - `loop_agent/__init__.py` - Added `LoopWorkingMemory` to exports
@@ -48,10 +48,10 @@ This implementation guide documents two major improvements:
 4. **Protocol preserved**: `LoopWorkingMemoryProtocol` remains in `protocols/loop_working_memory.py`
 
 **Files Changed**:
-- `src/soothe/cognition/loop_agent/__init__.py`
-- `src/soothe/cognition/loop_agent/loop_agent.py`
-- `src/soothe/cognition/loop_agent/state_manager.py`
-- `src/soothe/cognition/loop_agent/working_memory.py` (new)
+- `src/soothe/cognition/agent_loop/__init__.py`
+- `src/soothe/cognition/agent_loop/loop_agent.py`
+- `src/soothe/cognition/agent_loop/state_manager.py`
+- `src/soothe/cognition/agent_loop/working_memory.py` (new)
 - `tests/unit/test_loop_working_memory.py`
 - `src/soothe/cognition/loop_working_memory/` (deleted)
 
@@ -70,8 +70,8 @@ This implementation guide documents two major improvements:
    - `prompts/__init__.py` - Added all context_xml exports
    - `prompts/builder.py` - Changed to local imports
    - `core/middleware/system_prompt_optimization.py`
-   - `backends/planning/claude.py`
-   - `backends/planning/simple.py`
+   - `cognition/planning/claude.py`
+   - `cognition/planning/simple.py`
    - `tests/unit/test_dynamic_system_context.py`
 
 3. **Removed old module**: Deleted `src/soothe/core/prompts/` directory
@@ -85,8 +85,8 @@ This implementation guide documents two major improvements:
 - `src/soothe/prompts/builder.py`
 - `src/soothe/prompts/context_xml.py` (new)
 - `src/soothe/core/middleware/system_prompt_optimization.py`
-- `src/soothe/backends/planning/claude.py`
-- `src/soothe/backends/planning/simple.py`
+- `src/soothe/cognition/planning/claude.py`
+- `src/soothe/cognition/planning/simple.py`
 - `tests/unit/test_dynamic_system_context.py`
 - `src/soothe/core/prompts/` (deleted)
 
@@ -224,7 +224,7 @@ from soothe.core.prompts.context_xml import build_soothe_environment_section
 
 **New**:
 ```python
-from soothe.cognition.loop_agent import LoopWorkingMemory
+from soothe.cognition.agent_loop import LoopWorkingMemory
 from soothe.prompts import build_soothe_environment_section
 ```
 

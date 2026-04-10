@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.utils import count_tokens
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import LoopState
+    from soothe.cognition.agent_loop.schemas import LoopState
     from soothe.protocols.planner import (
         GoalContext,
         Plan,

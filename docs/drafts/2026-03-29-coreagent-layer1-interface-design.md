@@ -206,7 +206,7 @@ Layer 3: Autonomous Goal Management (RFC-200)
   └─ GoalEngine, goal_tools, SootheRunner orchestration
 
 Layer 2: Agentic Goal Execution (RFC-201)
-  └─ LoopAgent with ACT/VERIFY/DECIDE phases
+  └─ AgentLoop with ACT/VERIFY/DECIDE phases
   └─ Calls CoreAgent.astream() for ACT phase
 
 Layer 1: CoreAgent Runtime (RFC-100) ← This design
@@ -221,7 +221,7 @@ Layer 1: CoreAgent Runtime (RFC-100) ← This design
 |------|--------|
 | `src/soothe/core/agent.py` | Add CoreAgent class, update factory |
 | `src/soothe/core/__init__.py` | Export CoreAgent |
-| `src/soothe/cognition/loop_agent/executor.py` | Type hint: `CompiledStateGraph` → `CoreAgent` |
+| `src/soothe/cognition/agent_loop/executor.py` | Type hint: `CompiledStateGraph` → `CoreAgent` |
 | `src/soothe/core/runner/__init__.py` | Type hint updates |
 | `tests/unit/test_core_agent.py` | New test file |
 

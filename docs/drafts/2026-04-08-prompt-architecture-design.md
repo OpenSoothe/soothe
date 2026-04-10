@@ -191,7 +191,7 @@ class PromptBuilder:
 
 ### 5. Caller Integration
 
-**SimplePlanner update** (`src/soothe/backends/planning/simple.py`):
+**SimplePlanner update** (`src/soothe/cognition/planning/simple.py`):
 ```python
 class SimplePlanner:
     def __init__(self, model, config=None):
@@ -283,8 +283,8 @@ Parsed ReasonResult
 **Breaking change**: Direct callers of `build_loop_reason_prompt()` must update to use `PromptBuilder`.
 
 **Affected code**:
-- `src/soothe/backends/planning/simple.py`
-- `src/soothe/backends/planning/claude.py` (if exists)
+- `src/soothe/cognition/planning/simple.py`
+- `src/soothe/cognition/planning/claude.py` (if exists)
 - Any tests that construct prompts directly
 
 **No backward compatibility**: Clean break from old prompt construction approach.

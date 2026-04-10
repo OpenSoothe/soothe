@@ -16,7 +16,7 @@ This RFC simplifies the thread isolation implementation in Layer 2's executor by
 
 ### Current Problem
 
-The executor in `src/soothe/cognition/loop_agent/executor.py` manually manages thread isolation:
+The executor in `src/soothe/cognition/agent_loop/executor.py` manually manages thread isolation:
 
 1. **Manual Thread ID Generation**: Creates isolated thread IDs for subagent steps and parallel tool executions
 2. **Manual Merge Logic**: `_merge_isolated_act_into_parent_thread()` combines isolated thread messages back to parent

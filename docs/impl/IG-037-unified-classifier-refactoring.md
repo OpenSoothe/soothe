@@ -22,14 +22,14 @@ Successfully optimized planning intent classification by consolidating two separ
   - null: chitchat or queries that don't fit other categories
 
 ### 3. Updated SimplePlanner
-- **File**: `src/soothe/backends/planning/simple.py`
+- **File**: `src/soothe/cognition/planning/simple.py`
 - Modified `create_plan()` to check for pre-computed `template_intent` from `context.unified_classification`
 - Removed `classify_intent()` call (previously made a second LLM call)
 - Removed `fast_model` parameter from constructor (no longer needed)
 - Updated docstrings to reflect new optimization
 
 ### 4. Removed classify_intent Function
-- **File**: `src/soothe/backends/planning/_templates.py`
+- **File**: `src/soothe/cognition/planning/_templates.py`
 - Deleted `_INTENT_CLASSIFY_PROMPT` constant
 - Deleted `classify_intent()` async function
 - Removed import from `simple.py`

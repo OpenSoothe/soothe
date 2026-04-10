@@ -305,7 +305,7 @@ grep -E "(workspace|LangGraph configurable)" ~/.soothe/logs/soothe.log | tail -2
 - `src/soothe/tools/file_ops/implementation.py` - `_get_effective_work_dir()`, `ListFilesTool._resolve_directory()`, `SearchFilesTool._resolve_directory()`
 - `src/soothe/tools/execution/implementation.py` - `_get_effective_workspace()`
 - `src/soothe/tools/code_edit/implementation.py` - `_get_effective_work_dir()`
-- `src/soothe/backends/planning/simple.py` - `_build_plan_prompt()`
+- `src/soothe/cognition/planning/simple.py` - `_build_plan_prompt()`
 - `src/soothe/protocols/planner.py` - `PlanContext.workspace`
 
 ---

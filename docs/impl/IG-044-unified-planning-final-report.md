@@ -60,10 +60,10 @@ These failures are **unrelated to unified planning**:
 - `src/soothe/tools/_internal/python_session_manager.py`: Fixed missing Lock import
 
 ### Module Reorganization
-- **Moved**: `src/soothe/backends/planning/` → `src/soothe/cognition/planning/`
+- **Moved**: `src/soothe/cognition/planning/` → `src/soothe/cognition/planning/`
 - **Created**: `src/soothe/safety/`
 - **Moved**: `src/soothe/backends/policy/` → `src/soothe/safety/`
-- **Deleted**: `src/soothe/backends/planning/_templates.py`
+- **Deleted**: `src/soothe/cognition/planning/_templates.py`
 
 ### Test Updates
 - `tests/unit_tests/test_unified_classifier.py`: Completely rewritten for new architecture

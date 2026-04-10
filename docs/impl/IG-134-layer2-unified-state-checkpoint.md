@@ -17,7 +17,7 @@ Implement Layer 2's independent checkpoint system that stores step-level semanti
 
 1. Create `Layer2Checkpoint` model with unified state
 2. Implement `Layer2StateManager` for persistence and recovery
-3. Refactor `LoopAgent` to use independent checkpoint
+3. Refactor `AgentLoop` to use independent checkpoint
 4. Update Reason to derive prior conversation from step outputs
 5. Integrate working memory state serialization
 
@@ -26,7 +26,7 @@ Implement Layer 2's independent checkpoint system that stores step-level semanti
 ## Module Organization
 
 ```
-src/soothe/cognition/loop_agent/
+src/soothe/cognition/agent_loop/
 ├── checkpoint.py              # NEW: Layer2Checkpoint model
 ├── state_manager.py           # NEW: Layer2StateManager
 ├── loop_agent.py              # REFACTOR: Use state manager
@@ -39,7 +39,7 @@ src/soothe/cognition/loop_agent/
 
 ## Step 1: Create Checkpoint Models
 
-### File: `src/soothe/cognition/loop_agent/checkpoint.py`
+### File: `src/soothe/cognition/agent_loop/checkpoint.py`
 
 Create models for Layer 2 checkpoint state:
 
@@ -195,7 +195,7 @@ class Layer2Checkpoint(BaseModel):
 
 ## Step 2: Implement State Manager
 
-### File: `src/soothe/cognition/loop_agent/state_manager.py`
+### File: `src/soothe/cognition/agent_loop/state_manager.py`
 
 Create persistence layer for Layer 2 checkpoint:
 
@@ -214,7 +214,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent.checkpoint import (
+from soothe.cognition.agent_loop.checkpoint import (
     ActWaveRecord,
     Layer2Checkpoint,
     ReasonStepRecord,
@@ -223,9 +223,9 @@ from soothe.cognition.loop_agent.checkpoint import (
 from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.executor import ActWaveResult
-    from soothe.cognition.loop_agent.reason import ReasonResult
-    from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
+    from soothe.cognition.agent_loop.executor import ActWaveResult
+    from soothe.cognition.agent_loop.reason import ReasonResult
+    from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +438,7 @@ class Layer2StateManager:
 
     def _build_act_wave_record(self, act_wave: ActWaveResult) -> ActWaveRecord:
         """Convert ActWaveResult to ActWaveRecord."""
-        from soothe.cognition.loop_agent.checkpoint import (
+        from soothe.cognition.agent_loop.checkpoint import (
             StepExecutionRecord,
             ToolCallRecord,
             SubagentCallRecord,
@@ -492,7 +492,7 @@ class Layer2StateManager:
         self, working_memory: LoopWorkingMemory
     ) -> WorkingMemoryState:
         """Serialize working memory state to checkpoint."""
-        from soothe.cognition.loop_agent.checkpoint import WorkingMemoryEntry
+        from soothe.cognition.agent_loop.checkpoint import WorkingMemoryEntry
 
         entries = []
         spill_files = []
@@ -518,15 +518,15 @@ class Layer2StateManager:
 
 ---
 
-## Step 3: Refactor LoopAgent Integration
+## Step 3: Refactor AgentLoop Integration
 
-### Update: `src/soothe/cognition/loop_agent/loop_agent.py`
+### Update: `src/soothe/cognition/agent_loop/loop_agent.py`
 
-Inject state manager into LoopAgent execution flow:
+Inject state manager into AgentLoop execution flow:
 
 ```python
 # Add import
-from soothe.cognition.loop_agent.state_manager import Layer2StateManager
+from soothe.cognition.agent_loop.state_manager import Layer2StateManager
 
 # In run_with_progress():
 async def run_with_progress(...):
@@ -537,7 +537,7 @@ async def run_with_progress(...):
     checkpoint = state_manager.load()
     if checkpoint and checkpoint.status == "running":
         logger.info(
-            "[LoopAgent] Recovering Layer 2 from checkpoint at iteration %d",
+            "[AgentLoop] Recovering Layer 2 from checkpoint at iteration %d",
             checkpoint.iteration
         )
         state = self._restore_state_from_checkpoint(checkpoint)
@@ -572,7 +572,7 @@ async def run_with_progress(...):
 
 ## Step 4: Update Executor for Step I/O
 
-### Update: `src/soothe/cognition/loop_agent/executor.py`
+### Update: `src/soothe/cognition/agent_loop/executor.py`
 
 Ensure executor records step_input and step_output:
 
@@ -613,7 +613,7 @@ async def _execute_step(...):
 
 ## Step 5: Update Reason Context Derivation
 
-### Update: `src/soothe/cognition/loop_agent/reason.py`
+### Update: `src/soothe/cognition/agent_loop/reason.py`
 
 Replace Layer 1 message loading with step I/O derivation:
 
@@ -638,7 +638,7 @@ async def reason(...):
 
 ## Step 6: Update Runner Integration
 
-### Update: `src/soothe/cognition/loop_agent/loop_agent.py`
+### Update: `src/soothe/cognition/agent_loop/loop_agent.py`
 
 Pass state_manager to Reason phase:
 

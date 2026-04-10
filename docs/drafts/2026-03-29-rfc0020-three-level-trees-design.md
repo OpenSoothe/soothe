@@ -162,7 +162,7 @@ register_event(
 )
 ```
 
-### 2. LoopAgent (`cognition/loop_agent/loop_agent.py`)
+### 2. AgentLoop (`cognition/agent_loop/loop_agent.py`)
 
 Add `run_with_progress()` generator:
 

@@ -9,7 +9,7 @@
 
 ## Abstract
 
-This RFC defines an independent checkpoint system for Layer 2 (LoopAgent) that stores step-level semantic traces instead of Layer 1's message-level execution history. Layer 2 checkpoint captures "what was attempted and what resulted" at the agentic level, enabling architectural separation from Layer 1, improved recovery, and more efficient Reason context derivation.
+This RFC defines an independent checkpoint system for Layer 2 (AgentLoop) that stores step-level semantic traces instead of Layer 1's message-level execution history. Layer 2 checkpoint captures "what was attempted and what resulted" at the agentic level, enabling architectural separation from Layer 1, improved recovery, and more efficient Reason context derivation.
 
 ## Motivation
 
@@ -38,7 +38,7 @@ Give Layer 2 its own checkpoint system that:
 
 ### Layer 1 vs Layer 2 Checkpoint Semantics
 
-| Aspect | Layer 1 (CoreAgent) | Layer 2 (LoopAgent) |
+| Aspect | Layer 1 (CoreAgent) | Layer 2 (AgentLoop) |
 |--------|---------------------|---------------------|
 | **Granularity** | Message-level | Step-level |
 | **Data** | HumanMessage, AIMessage, ToolMessage | Step input/output, decisions |
@@ -354,7 +354,7 @@ JSON with schema versioning:
 ### New File Structure
 
 ```
-src/soothe/cognition/loop_agent/
+src/soothe/cognition/agent_loop/
 ├── checkpoint.py              # Layer2Checkpoint model
 ├── state_manager.py           # Persistence + recovery
 ├── loop_agent.py              # Main orchestrator (refactored)
@@ -398,12 +398,12 @@ class Layer2StateManager:
 
 ---
 
-## Integration with LoopAgent
+## Integration with AgentLoop
 
 ### Refactored Execution Flow
 
 ```python
-class LoopAgent:
+class AgentLoop:
     async def run_with_progress(self, goal: str, thread_id: str, ...):
         # Initialize state manager
         state_manager = Layer2StateManager(thread_id, workspace)
@@ -488,7 +488,7 @@ class LoopAgent:
 
 1. Create `Layer2Checkpoint` model in `checkpoint.py`
 2. Implement `Layer2StateManager` in `state_manager.py`
-3. Refactor `LoopAgent` to use state manager
+3. Refactor `AgentLoop` to use state manager
 4. Update Reason context derivation in `reason.py`
 5. Add working memory state serialization
 6. Add recovery tests

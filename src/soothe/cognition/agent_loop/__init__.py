@@ -1,5 +1,6 @@
-"""Layer 2: Agentic Goal Execution Loop (RFC-0008, RFC-205)."""
+"""Layer 2: Agent Loop - Reason-Act execution (RFC-0008, RFC-205)."""
 
+from .agent_loop import AgentLoop
 from .checkpoint import (
     ActWaveRecord,
     Layer2Checkpoint,
@@ -7,7 +8,6 @@ from .checkpoint import (
     StepExecutionRecord,
     WorkingMemoryState,
 )
-from .loop_agent import LoopAgent
 from .schemas import (
     AgentDecision,
     LoopState,
@@ -21,9 +21,9 @@ from .working_memory import LoopWorkingMemory
 __all__ = [
     "ActWaveRecord",
     "AgentDecision",
+    "AgentLoop",
     "Layer2Checkpoint",
     "Layer2StateManager",
-    "LoopAgent",
     "LoopState",
     "LoopWorkingMemory",
     "ReasonResult",

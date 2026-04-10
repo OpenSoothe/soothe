@@ -107,7 +107,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 
 #### 2.1 Synthesis Trigger Logic
 
-**Location**: `src/soothe/cognition/loop_agent/synthesis.py` (NEW)
+**Location**: `src/soothe/cognition/agent_loop/synthesis.py` (NEW)
 
 **Class**: `SynthesisPhase`
 
@@ -171,7 +171,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 2.4 Integration
 
-**Location**: `src/soothe/cognition/loop_agent/loop_agent.py`
+**Location**: `src/soothe/cognition/agent_loop/loop_agent.py`
 
 **Trigger Point**: After `reason_result.is_done()` returns True
 
@@ -190,7 +190,7 @@ Evidence-based heuristics only (no keyword matching).
 
 #### 3.1 Evidence-Based Confidence
 
-**Location**: `src/soothe/backends/planning/simple.py`
+**Location**: `src/soothe/cognition/planning/simple.py`
 
 **Function**:
 ```python
@@ -219,7 +219,7 @@ confidence = (
 
 #### 3.2 Evidence-Based Progress
 
-**Location**: `src/soothe/backends/planning/simple.py`
+**Location**: `src/soothe/cognition/planning/simple.py`
 
 **Function**:
 ```python
@@ -270,7 +270,7 @@ Status=continue to examine remaining backends."
 
 #### 4.1 ReasonResult Updates
 
-**Location**: `src/soothe/cognition/loop_agent/schemas.py`
+**Location**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **New Fields**:
 
@@ -297,7 +297,7 @@ evidence_quality_score: float = Field(
 
 #### 4.2 LoopState Updates
 
-**Location**: `src/soothe/cognition/loop_agent/schemas.py`
+**Location**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **New Fields**:
 
@@ -450,8 +450,8 @@ No backward compatibility maintained.
 - IG-143: CLI Display Architecture Refactoring
 - RFC-0008: Layer 2 Agentic Loop
 - RFC-000: System Conceptual Design
-- `src/soothe/cognition/loop_agent/` - Agentic loop implementation
-- `src/soothe/backends/planning/` - Reasoning backend
+- `src/soothe/cognition/agent_loop/` - Agentic loop implementation
+- `src/soothe/cognition/planning/` - Reasoning backend
 
 ---
 

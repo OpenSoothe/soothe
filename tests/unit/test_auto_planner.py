@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.backends.planning.router import AutoPlanner
+from soothe.cognition.planning.router import AutoPlanner
 from soothe.protocols.planner import (
     GoalContext,
     Plan,

@@ -32,10 +32,10 @@ align naming with user-facing concepts, and prepare for future extensibility
 | `context/vector_context.py` | `backends/context/vector.py` |
 | `memory_store/store_backed.py` | `backends/memory/store.py` |
 | `memory_store/vector_memory.py` | `backends/memory/vector.py` |
-| `planning/direct.py` | `backends/planning/direct.py` |
+| `planning/direct.py` | `cognition/planning/direct.py` |
 | `policy/config_driven.py` | `backends/policy/config_driven.py` |
 | `durability/in_memory.py` | `backends/durability/in_memory.py` |
-| `remote/langgraph_remote.py` | `backends/remote/langgraph.py` |
+| `remote/langgraph_remote.py` | `core/remote_agent/langgraph.py` |
 | `persistence/__init__.py` | `backends/persistence/__init__.py` |
 | `persistence/json_store.py` | `backends/persistence/json_store.py` |
 | `persistence/rocksdb_store.py` | `backends/persistence/rocksdb_store.py` |

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from soothe.cognition import Goal
+    from soothe.cognition.goal_engine.models import Goal
 
 logger = logging.getLogger(__name__)
 

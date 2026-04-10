@@ -501,7 +501,7 @@ class TuiRenderer:
         if event_type == "soothe.agentic.loop.completed":
             status = str(data.get("status", "done")).lower()
             return DOT_COLORS["plan_step_done"] if status == "done" else DOT_COLORS["protocol"]
-        if event_type == "soothe.cognition.loop_agent.reason":
+        if event_type == "soothe.cognition.agent_loop.reason":
             status = str(data.get("status", "")).lower()
             if status == "done":
                 return DOT_COLORS["plan_step_done"]

@@ -659,7 +659,7 @@ Add in Recent Changes:
    - Add metadata to `ainvoke()` call
    - Wrap model
 
-9. `src/soothe/backends/planning/_shared.py`:
+9. `src/soothe/cognition/planning/_shared.py`:
    - Add metadata to reflection calls
    - Wrap model
 

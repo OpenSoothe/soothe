@@ -1,4 +1,4 @@
-"""TUI progress line prefix colors (agentic / LoopAgent completion)."""
+"""TUI progress line prefix colors (agentic / AgentLoop completion)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def test_loop_completed_done_prefix_is_green() -> None:
 
 def test_loop_reason_done_prefix_is_green() -> None:
     r = TuiRenderer(on_panel_write=lambda _x: None)
-    c = r._progress_event_dot_color("soothe.cognition.loop_agent.reason", {"status": "done"}, ())
+    c = r._progress_event_dot_color("soothe.cognition.agent_loop.reason", {"status": "done"}, ())
     assert c == DOT_COLORS["plan_step_done"]
 
 

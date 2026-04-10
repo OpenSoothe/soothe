@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from soothe.backends.planning.simple import _load_llm_json_dict
+from soothe.cognition.planning.simple import _load_llm_json_dict
 
 
 def test_load_plain_object() -> None:

@@ -395,7 +395,7 @@ class TestStreamDisplayPipeline:
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.loop_agent.reason",
+            "type": "soothe.cognition.agent_loop.reason",
             "status": "continue",
             "progress": 0.5,
             "confidence": 0.8,
@@ -416,7 +416,7 @@ class TestStreamDisplayPipeline:
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.loop_agent.reason",
+            "type": "soothe.cognition.agent_loop.reason",
             "status": "done",
             "progress": 1.0,
             "confidence": 0.95,
@@ -507,7 +507,7 @@ class TestStreamDisplayPipeline:
     def test_loop_agent_reason_deduped_in_short_window(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
         event = {
-            "type": "soothe.cognition.loop_agent.reason",
+            "type": "soothe.cognition.agent_loop.reason",
             "status": "continue",
             "progress": 0.4,
             "confidence": 0.8,

@@ -1,4 +1,4 @@
-# IG-097: RFC-201 (Layer 2) Implementation - LoopAgent System
+# IG-097: RFC-201 (Layer 2) Implementation - AgentLoop System
 
 > **SUPERSEDED** (2026-04-05): This guide describes the old PLAN → ACT → JUDGE architecture
 > which was replaced by Reason → Act in IG-115. The `JudgeEngine`, `JudgeResult`, and
@@ -20,7 +20,7 @@ This implementation guide addresses the major gaps in RFC-201 (Layer 2: Agentic 
 2. **Implement AgentDecision** with hybrid multi-step model (1 or N steps)
 3. **Implement goal-directed judgment** with evidence accumulation
 4. **Integrate with Layer 1 CoreAgent** for step execution
-5. **Create LoopAgent** as self-contained Layer 2 component
+5. **Create AgentLoop** as self-contained Layer 2 component
 6. **Remove all old scaffolding** and create fresh implementation
 
 ### Breaking Changes
@@ -28,15 +28,15 @@ This implementation guide addresses the major gaps in RFC-201 (Layer 2: Agentic 
 This implementation will make breaking changes:
 - API signatures changed (no backward compatibility)
 - Event names changed (new PLAN/ACT/JUDGE taxonomy)
-- Old `cognition/loop_agent/` deleted entirely
-- New fresh `cognition/loop_agent/` created
+- Old `cognition/agent_loop/` deleted entirely
+- New fresh `cognition/agent_loop/` created
 
 ## Architecture Summary
 
 ### Component Structure
 
 ```
-cognition/loop_agent/
+cognition/agent_loop/
 ├── __init__.py              # Public interface
 ├── schemas.py               # AgentDecision, StepAction, JudgeResult, LoopState, StepResult
 ├── loop_agent.py            # Main loop orchestration
@@ -52,13 +52,13 @@ backends/judgment/
 └── llm_judge.py             # LLMJudgeEngine implementation
 
 core/runner/
-└── _runner_agentic.py       # Refactored to use LoopAgent
+└── _runner_agentic.py       # Refactored to use AgentLoop
 ```
 
 ### Loop Flow
 
 ```
-LoopAgent.run(goal, thread_id, max_iterations)
+AgentLoop.run(goal, thread_id, max_iterations)
     |
     v
 while iteration < max_iterations:
@@ -80,8 +80,8 @@ while iteration < max_iterations:
 **Objective**: Implement all Layer 2 data models
 
 **Tasks**:
-1. Delete old `cognition/loop_agent/` directory
-2. Create new `cognition/loop_agent/schemas.py`
+1. Delete old `cognition/agent_loop/` directory
+2. Create new `cognition/agent_loop/schemas.py`
 3. Implement schemas:
    - `StepAction` - single step specification
    - `AgentDecision` - hybrid multi-step decision
@@ -114,9 +114,9 @@ while iteration < max_iterations:
 - ✅ LLMJudgeEngine implemented
 - ✅ Config integration working
 
-### Phase 3: Implement LoopAgent (Days 5-8)
+### Phase 3: Implement AgentLoop (Days 5-8)
 
-**Objective**: Create complete LoopAgent system
+**Objective**: Create complete AgentLoop system
 
 **Tasks**:
 1. Implement `planner.py` - PLAN phase with decision reuse
@@ -130,16 +130,16 @@ while iteration < max_iterations:
 - ✅ PLAN phase working (create/reuse decisions)
 - ✅ ACT phase working (parallel/sequential/dependency execution)
 - ✅ JUDGE phase working (evidence accumulation)
-- ✅ LoopAgent orchestration complete
+- ✅ AgentLoop orchestration complete
 - ✅ Decision reuse logic working
 - ✅ Error handling (errors → evidence)
 
 ### Phase 4: Runner Integration (Days 9-10)
 
-**Objective**: Integrate LoopAgent with runner
+**Objective**: Integrate AgentLoop with runner
 
 **Tasks**:
-1. Refactor `_runner_agentic.py` to use LoopAgent
+1. Refactor `_runner_agentic.py` to use AgentLoop
 2. Remove old observe/act/verify methods
 3. Update event emission
 4. Wire judge protocol creation
@@ -147,7 +147,7 @@ while iteration < max_iterations:
 6. Test end-to-end flow
 
 **Success Criteria**:
-- ✅ Runner uses LoopAgent
+- ✅ Runner uses AgentLoop
 - ✅ Old observe/act/verify removed
 - ✅ New event system working
 - ✅ Layer 3 integration tested
@@ -174,7 +174,7 @@ while iteration < max_iterations:
 
 ### 1. Schemas Implementation
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 Key schemas to implement:
 
@@ -312,7 +312,7 @@ async def decide_steps(
 
 ```python
 from typing import Protocol
-from soothe.cognition.loop_agent.schemas import JudgeResult, StepResult, StepAction
+from soothe.cognition.agent_loop.schemas import JudgeResult, StepResult, StepAction
 
 class JudgeProtocol(Protocol):
     """Protocol for evaluating goal progress during Layer 2 execution."""
@@ -337,9 +337,9 @@ class JudgeProtocol(Protocol):
         ...
 ```
 
-### 3. LoopAgent Implementation
+### 3. AgentLoop Implementation
 
-**File**: `src/soothe/cognition/loop_agent/loop_agent.py`
+**File**: `src/soothe/cognition/agent_loop/loop_agent.py`
 
 Main orchestration class - see design draft for full implementation.
 
@@ -349,15 +349,15 @@ Key methods:
 - `_act_phase()` - ACT phase
 - `_judge_phase()` - JUDGE phase
 
-**File**: `src/soothe/cognition/loop_agent/planner.py`
+**File**: `src/soothe/cognition/agent_loop/planner.py`
 
 PLAN phase implementation - handles decision creation and reuse.
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 ACT phase implementation - executes steps via CoreAgent with parallel/sequential/dependency modes.
 
-**File**: `src/soothe/cognition/loop_agent/judge.py`
+**File**: `src/soothe/cognition/agent_loop/judge.py`
 
 JUDGE phase implementation - calls JudgeProtocol and accumulates evidence.
 
@@ -368,7 +368,7 @@ JUDGE phase implementation - calls JudgeProtocol and accumulates evidence.
 ```python
 from langchain_core.language_models import BaseChatModel
 from soothe.protocols.judge import JudgeProtocol
-from soothe.cognition.loop_agent.schemas import JudgeResult, StepResult, StepAction
+from soothe.cognition.agent_loop.schemas import JudgeResult, StepResult, StepAction
 
 class LLMJudgeEngine:
     """LLM-based judge implementation."""
@@ -435,10 +435,10 @@ Return JSON:
 
 **File**: `src/soothe/core/runner/_runner_agentic.py`
 
-Refactor to use LoopAgent:
+Refactor to use AgentLoop:
 
 ```python
-from soothe.cognition.loop_agent import LoopAgent
+from soothe.cognition.agent_loop import AgentLoop
 from soothe.backends.judgment.llm_judge import LLMJudgeEngine
 
 class AgenticMixin:
@@ -455,8 +455,8 @@ class AgenticMixin:
         # Create judge
         judge = LLMJudgeEngine(self.config.create_chat_model("fast"))
 
-        # Create LoopAgent
-        loop_agent = LoopAgent(
+        # Create AgentLoop
+        loop_agent = AgentLoop(
             core_agent=self.agent,
             planner=self._planner,
             judge=judge,
@@ -568,7 +568,7 @@ agentic:
 
 - **Days 1-2**: Schemas implementation
 - **Days 3-4**: Protocol extensions
-- **Days 5-8**: LoopAgent implementation
+- **Days 5-8**: AgentLoop implementation
 - **Days 9-10**: Runner integration
 - **Days 11-12**: Testing & documentation
 

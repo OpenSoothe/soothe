@@ -81,7 +81,7 @@ This creates three issues:
 
 **Files Modified**:
 - `src/soothe/core/prompts/builder.py` - Return message list instead of string
-- `src/soothe/backends/planning/simple.py` - Pass message list to model invocation
+- `src/soothe/cognition/planning/simple.py` - Pass message list to model invocation
 - `src/soothe/core/prompts/context_xml.py` - Update XML tag names (remove SOOTHE_ prefix)
 - Tests - Update assertions to check message structure
 
@@ -269,7 +269,7 @@ def build_shared_environment_workspace_prefix(context: ReasonContext) -> str:
    - Verify SystemMessage contains environment, workspace, policies, instructions
    - Verify HumanMessage contains goal, evidence, working memory, prior conversation
 
-2. **SimplePlanner tests** (`tests/unit/backends/planning/`):
+2. **SimplePlanner tests** (`tests/unit/cognition/planning/`):
    - Update mocks to expect message list instead of string
    - Update assertions on message types and content separation
 

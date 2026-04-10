@@ -9,7 +9,7 @@
 
 ## Summary
 
-Move `src/soothe/prompts` into `src/soothe/core/prompts` and consolidate hardcoded system prompts from `backends/planning/simple.py` into the centralized prompt architecture. This completes RFC-206 prompt architecture implementation.
+Move `src/soothe/prompts` into `src/soothe/core/prompts` and consolidate hardcoded system prompts from `cognition/planning/simple.py` into the centralized prompt architecture. This completes RFC-206 prompt architecture implementation.
 
 ---
 
@@ -44,8 +44,8 @@ mv src/soothe/prompts src/soothe/core/prompts
 #### 1.2 Update Imports
 
 Files to update:
-- `src/soothe/backends/planning/simple.py` (imports PromptBuilder, context_xml)
-- `src/soothe/backends/planning/claude.py` (imports build_loop_reason_prompt - will be removed)
+- `src/soothe/cognition/planning/simple.py` (imports PromptBuilder, context_xml)
+- `src/soothe/cognition/planning/claude.py` (imports build_loop_reason_prompt - will be removed)
 - Tests: `test_reason_prompt_workspace.py`, `test_reason_prompt_metrics.py`, `test_reason_prior_conversation_conditional.py`
 
 **Import changes**:
@@ -230,8 +230,8 @@ Replace `_build_plan_prompt()` with `self._prompt_builder.build_plan_prompt()`.
 ### Direct Changes
 - `src/soothe/prompts/` → `src/soothe/core/prompts/` (move entire directory)
 - `src/soothe/core/__init__.py` (add exports)
-- `src/soothe/backends/planning/simple.py` (remove build_loop_reason_prompt, update _build_plan_prompt)
-- `src/soothe/backends/planning/claude.py` (remove import, use PromptBuilder)
+- `src/soothe/cognition/planning/simple.py` (remove build_loop_reason_prompt, update _build_plan_prompt)
+- `src/soothe/cognition/planning/claude.py` (remove import, use PromptBuilder)
 
 ### Import Updates
 - Tests: `test_reason_prompt_workspace.py`, `test_reason_prompt_metrics.py`, `test_reason_prior_conversation_conditional.py`
@@ -278,8 +278,8 @@ Replace `_build_plan_prompt()` with `self._prompt_builder.build_plan_prompt()`.
    - Fragments directory preserved with all XML policy files
 
 2. **Import Updates** (8 files):
-   - `src/soothe/backends/planning/simple.py` - 3 import updates
-   - `src/soothe/backends/planning/claude.py` - removed `build_loop_reason_prompt` import, added `PromptBuilder`
+   - `src/soothe/cognition/planning/simple.py` - 3 import updates
+   - `src/soothe/cognition/planning/claude.py` - removed `build_loop_reason_prompt` import, added `PromptBuilder`
    - `src/soothe/core/middleware/system_prompt_optimization.py` - updated context_xml import
    - `tests/unit/test_reason_prompt_workspace.py` - replaced function with `PromptBuilder`
    - `tests/unit/test_reason_prompt_metrics.py` - replaced function with `PromptBuilder`
@@ -318,8 +318,8 @@ Replace `_build_plan_prompt()` with `self._prompt_builder.build_plan_prompt()`.
 - `src/soothe/core/prompts/builder.py` (enhanced)
 - `src/soothe/core/prompts/fragments/system/policies/delegation.xml` (updated)
 - `src/soothe/core/__init__.py` (added export)
-- `src/soothe/backends/planning/simple.py` (removed function, updated imports)
-- `src/soothe/backends/planning/claude.py` (updated to use PromptBuilder)
+- `src/soothe/cognition/planning/simple.py` (removed function, updated imports)
+- `src/soothe/cognition/planning/claude.py` (updated to use PromptBuilder)
 - `src/soothe/core/middleware/system_prompt_optimization.py` (updated import)
 
 **Test files (3)**:
