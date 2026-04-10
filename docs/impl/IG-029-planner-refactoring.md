@@ -76,7 +76,7 @@ All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_cont
 
 ### Phase 1: Shared Module and RFC-200 (merged) Fix
 
-**`backends/planning/_shared.py`** (NEW)
+**`cognition/planning/_shared.py`** (NEW)
 
 | Component | Description |
 |-----------|-------------|
@@ -84,27 +84,27 @@ All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_cont
 | `reflect_heuristic()` | Shared heuristic reflection with `goal_context` and `goal_directives` |
 | `reflect_with_llm()` | LLM-assisted reflection for failure analysis |
 
-**`backends/planning/router.py`** (EDIT)
+**`cognition/planning/router.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
 | `AutoPlanner.reflect()` | Add `goal_context` param, forward to delegate |
 
-**`backends/planning/subagent.py`** (EDIT)
+**`cognition/planning/subagent.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
 | `SubagentPlanner.reflect()` | Add `goal_context` param, delegate to shared |
 | `_parse_plan_from_text()` | Remove, use shared |
 
-**`backends/planning/claude.py`** (EDIT)
+**`cognition/planning/claude.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
 | `ClaudePlanner.reflect()` | Add `goal_context` param, delegate to shared |
 | `_parse_plan_from_text()` | Remove, use shared |
 
-**`backends/planning/direct.py`** (EDIT)
+**`cognition/planning/direct.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
@@ -118,7 +118,7 @@ All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_cont
 |-------|------|---------|-------------|
 | `routing_mode` | `Literal["heuristic", "llm", "hybrid"]` | `"hybrid"` | Routing classification mode |
 
-**`backends/planning/router.py`** (EDIT)
+**`cognition/planning/router.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
@@ -147,19 +147,19 @@ All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_cont
 
 ### Phase 4: LLM-Assisted Reflection
 
-**`backends/planning/_shared.py`** (EDIT)
+**`cognition/planning/_shared.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
 | `reflect_with_llm()` | Build prompt with step results and goal context, structured output for `Reflection` with `goal_directives`, fallback to heuristic |
 
-**`backends/planning/subagent.py`** (EDIT)
+**`cognition/planning/subagent.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
 | `SubagentPlanner.reflect()` | Use `reflect_with_llm()` when failures exist |
 
-**`backends/planning/claude.py`** (EDIT)
+**`cognition/planning/claude.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|
@@ -167,7 +167,7 @@ All four planners (Direct, Subagent, Claude, Auto) accept and process `goal_cont
 
 ### Phase 5: DirectPlanner i18n Enhancement
 
-**`backends/planning/direct.py`** (EDIT)
+**`cognition/planning/direct.py`** (EDIT)
 
 | Component | Description |
 |-----------|-------------|

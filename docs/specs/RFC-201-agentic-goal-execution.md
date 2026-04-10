@@ -176,7 +176,7 @@ class PlannerProtocol:
 |-------|-------------|
 | `soothe.agentic.loop.started` | Loop began |
 | `soothe.agentic.iteration.started` | Iteration began |
-| `soothe.cognition.loop_agent.reason` | Reason phase completed (ReasonResult) |
+| `soothe.cognition.agent_loop.reason` | Reason phase completed (ReasonResult) |
 | `soothe.agentic.act.started` | ACT phase began |
 | `soothe.agentic.act.step_completed` | Step completed |
 | `soothe.agentic.loop.completed` | Loop completed |
@@ -301,7 +301,7 @@ agentic:
 - RFC-100: Layer 1 CoreAgent runtime
 - RFC-209: Executor thread isolation simplification (upcoming refactoring)
 - RFC-203: Loop working memory
-- IG-115: LoopAgent ReAct (Reason + Act) migration
+- IG-115: AgentLoop ReAct (Reason + Act) migration
 - IG-130: Subagent task cap tracking
 - IG-131: Sequential Act isolated thread
 - IG-128: Prior conversation for Reason

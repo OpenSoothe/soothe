@@ -8,7 +8,7 @@
 
 ## Abstract
 
-This design addresses the major implementation gaps in RFC-201 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture. We will replace the existing implementation entirely with a fresh `cognition/loop_agent/` module that implements the three-phase loop with AgentDecision (hybrid multi-step), goal-directed judgment (evidence accumulation), and Layer 1 CoreAgent integration.
+This design addresses the major implementation gaps in RFC-201 (Layer 2: Agentic Goal Execution Loop). The current implementation uses an observe → act → verify model that doesn't match the intended PLAN → ACT → JUDGE architecture. We will replace the existing implementation entirely with a fresh `cognition/agent_loop/` module that implements the three-phase loop with AgentDecision (hybrid multi-step), goal-directed judgment (evidence accumulation), and Layer 1 CoreAgent integration.
 
 ---
 
@@ -36,7 +36,7 @@ This design addresses the major implementation gaps in RFC-201 (Layer 2: Agentic
 
 ### 1.2 Existing Scaffolding
 
-Current `cognition/loop_agent/` contains partial scaffolding:
+Current `cognition/agent_loop/` contains partial scaffolding:
 - `core/schemas.py`: AgentDecision (single tool), JudgeResult, ToolOutput
 - `execution/judge.py`: JudgeEngine stub
 - `integration/tool_loop_adapter.py`: Returns "not fully implemented yet"
@@ -50,8 +50,8 @@ Current `cognition/loop_agent/` contains partial scaffolding:
 ### 2.1 Module Structure
 
 ```
-cognition/loop_agent/
-├── __init__.py              # Public interface (LoopAgent)
+cognition/agent_loop/
+├── __init__.py              # Public interface (AgentLoop)
 ├── schemas.py               # AgentDecision, StepAction, JudgeResult, LoopState, StepResult
 ├── loop_agent.py            # Main loop orchestration (PLAN → ACT → JUDGE)
 ├── planner.py               # PLAN phase logic
@@ -63,35 +63,35 @@ protocols/
 └── judge.py                 # New JudgeProtocol
 
 core/runner/
-├── _runner_agentic.py       # Refactored to use LoopAgent
+├── _runner_agentic.py       # Refactored to use AgentLoop
 └── _runner_steps.py         # Step execution (existing, reused)
 ```
 
 ### 2.2 Component Responsibilities
 
-**Schemas (`cognition/loop_agent/schemas.py`)**:
+**Schemas (`cognition/agent_loop/schemas.py`)**:
 - Data models for Layer 2 loop
 - No business logic, pure Pydantic models
 - Reusable across modules
 
-**LoopAgent (`cognition/loop_agent/loop_agent.py`)**:
+**AgentLoop (`cognition/agent_loop/loop_agent.py`)**:
 - Main orchestration for PLAN → ACT → JUDGE loop
 - Iteration management and decision reuse logic
 - State management (LoopState)
 - Returns JudgeResult to caller (Layer 3)
 
-**Planner (`cognition/loop_agent/planner.py`)**:
+**Planner (`cognition/agent_loop/planner.py`)**:
 - PLAN phase implementation
 - Calls PlannerProtocol.decide_steps()
 - Handles decision reuse logic
 
-**Executor (`cognition/loop_agent/executor.py`)**:
+**Executor (`cognition/agent_loop/executor.py`)**:
 - ACT phase implementation
 - Executes steps via CoreAgent.astream()
 - Hybrid execution modes (parallel, sequential, dependency)
 - Error handling (errors become evidence)
 
-**Judge (`cognition/loop_agent/judge.py`)**:
+**Judge (`cognition/agent_loop/judge.py`)**:
 - JUDGE phase implementation
 - Calls JudgeProtocol.judge()
 - Evidence accumulation
@@ -105,7 +105,7 @@ core/runner/
 - Implementation: LLMJudgeEngine
 
 **Runner Integration**:
-- Create LoopAgent with dependencies
+- Create AgentLoop with dependencies
 - Call loop_agent.run()
 - Return JudgeResult to Layer 3
 
@@ -330,12 +330,12 @@ class JudgeProtocol(Protocol):
 
 ---
 
-## 5. LoopAgent Implementation
+## 5. AgentLoop Implementation
 
 ### 5.1 Main Orchestration (`loop_agent.py`)
 
 ```python
-class LoopAgent:
+class AgentLoop:
     """Layer 2: Agentic Goal Execution Loop.
 
     Executes single goals through PLAN → ACT → JUDGE iterations.
@@ -696,7 +696,7 @@ class JudgePhase:
 ### 6.1 SimplePlanner Extension
 
 ```python
-# In backends/planning/simple.py
+# In cognition/planning/simple.py
 
 class SimplePlanner:
     """Simple planner implementation."""
@@ -840,7 +840,7 @@ Return your evaluation as JSON:
 ```python
 # In core/runner/_runner_agentic.py
 
-from soothe.cognition.loop_agent import LoopAgent
+from soothe.cognition.agent_loop import AgentLoop
 from soothe.protocols.judge import JudgeProtocol
 
 class AgenticMixin:
@@ -856,7 +856,7 @@ class AgenticMixin:
         """
         Run Layer 2: Agentic Goal Execution Loop.
 
-        Implements PLAN → ACT → JUDGE via LoopAgent.
+        Implements PLAN → ACT → JUDGE via AgentLoop.
 
         Args:
             user_input: Goal description
@@ -869,7 +869,7 @@ class AgenticMixin:
         Returns:
             JudgeResult (final status)
         """
-        from soothe.cognition.loop_agent import LoopAgent
+        from soothe.cognition.agent_loop import AgentLoop
         from soothe.core.event_catalog import (
             AgenticLoopStartedEvent,
             AgenticLoopCompletedEvent,
@@ -881,8 +881,8 @@ class AgenticMixin:
         # Create judge instance
         judge = self._create_judge()
 
-        # Create LoopAgent
-        loop_agent = LoopAgent(
+        # Create AgentLoop
+        loop_agent = AgentLoop(
             core_agent=self.agent,
             planner=self._planner,
             judge=judge,
@@ -1003,14 +1003,14 @@ class StepResult(BaseModel):
 ### Phase 1: Create Schemas (Week 1, Days 1-2)
 
 **Tasks**:
-1. Delete old `cognition/loop_agent/` directory
-2. Create new `cognition/loop_agent/schemas.py`
+1. Delete old `cognition/agent_loop/` directory
+2. Create new `cognition/agent_loop/schemas.py`
 3. Implement AgentDecision, StepAction, JudgeResult, LoopState, StepResult
 4. Write unit tests for schemas
 5. Add validation logic
 
 **Deliverables**:
-- ✅ Fresh `cognition/loop_agent/schemas.py`
+- ✅ Fresh `cognition/agent_loop/schemas.py`
 - ✅ Unit tests passing
 - ✅ Schemas validated against RFC-201 spec
 
@@ -1030,7 +1030,7 @@ class StepResult(BaseModel):
 - ✅ LLMJudgeEngine implementation
 - ✅ Configuration support
 
-### Phase 3: Implement LoopAgent (Week 1-2, Days 5-8)
+### Phase 3: Implement AgentLoop (Week 1-2, Days 5-8)
 
 **Tasks**:
 1. Implement `planner.py` - PLAN phase with decision reuse
@@ -1042,7 +1042,7 @@ class StepResult(BaseModel):
 7. Test error handling (errors → evidence)
 
 **Deliverables**:
-- ✅ Complete LoopAgent implementation
+- ✅ Complete AgentLoop implementation
 - ✅ PLAN phase working
 - ✅ ACT phase with parallel/sequential/dependency modes
 - ✅ JUDGE phase with evidence accumulation
@@ -1052,7 +1052,7 @@ class StepResult(BaseModel):
 ### Phase 4: Runner Integration (Week 2, Days 9-10)
 
 **Tasks**:
-1. Refactor `_runner_agentic.py` to use LoopAgent
+1. Refactor `_runner_agentic.py` to use AgentLoop
 2. Remove observe/act/verify methods
 3. Update event emission for new taxonomy
 4. Wire judge protocol creation
@@ -1060,7 +1060,7 @@ class StepResult(BaseModel):
 6. Test Layer 3 integration (PERFORM delegation)
 
 **Deliverables**:
-- ✅ Refactored runner using LoopAgent
+- ✅ Refactored runner using AgentLoop
 - ✅ Old observe/act/verify removed
 - ✅ New event system working
 - ✅ Integration tests passing
@@ -1069,7 +1069,7 @@ class StepResult(BaseModel):
 ### Phase 5: Testing & Documentation (Week 2, Days 11-12)
 
 **Tasks**:
-1. Comprehensive unit tests (schemas, protocols, LoopAgent)
+1. Comprehensive unit tests (schemas, protocols, AgentLoop)
 2. Integration tests (full loop, error scenarios)
 3. Performance tests (parallel vs sequential)
 4. Update documentation
@@ -1114,7 +1114,7 @@ class StepResult(BaseModel):
 - Progress evaluation
 - Status decision (done/continue/replan)
 
-**LoopAgent**:
+**AgentLoop**:
 - Full loop orchestration
 - Iteration management
 - Max iterations handling
@@ -1211,7 +1211,7 @@ agentic:
 ✅ ACT phase handles errors → StepResult with error details
 ✅ JUDGE phase evaluates goal progress (evidence accumulation)
 ✅ JUDGE phase returns JudgeResult with status/progress/confidence
-✅ LoopAgent orchestrates full PLAN → ACT → JUDGE loop
+✅ AgentLoop orchestrates full PLAN → ACT → JUDGE loop
 ✅ Iteration management works (max iterations, decision reuse)
 ✅ State management via LoopState (tracks decisions, judgments, steps)
 ✅ Error handling: errors become evidence for judgment
@@ -1321,5 +1321,5 @@ agentic:
 ### 2026-03-29
 - Initial design draft
 - Complete architecture for RFC-201 implementation
-- Defined schemas, protocols, LoopAgent, runner integration
+- Defined schemas, protocols, AgentLoop, runner integration
 - Specified error handling, testing, and migration strategies

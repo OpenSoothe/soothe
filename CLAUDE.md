@@ -126,10 +126,10 @@ This runs:
 |---------|------------|
 | `backends/context/` | ContextProtocol (KeywordContext, VectorContext) |
 | `backends/memory/` | MemoryProtocol (KeywordMemory, VectorMemory) |
-| `backends/planning/` | PlannerProtocol (Simple, Subagent, Claude, Auto) |
+| `cognition/planning/` | PlannerProtocol (Simple, Subagent, Claude, Auto) |
 | `backends/policy/` | PolicyProtocol (ConfigDrivenPolicy) |
 | `backends/durability/` | DurabilityProtocol (Json, RocksDB, PostgreSQL) |
-| `backends/remote/` | RemoteAgentProtocol (LangGraphRemoteAgent) |
+| `core/remote_agent/` | RemoteAgentProtocol (LangGraphRemoteAgent) |
 | `backends/persistence/` | PersistStore for context/memory/durability |
 | `backends/vector_store/` | VectorStoreProtocol (PGVector, Weaviate, InMemory) |
 

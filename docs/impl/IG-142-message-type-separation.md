@@ -184,7 +184,7 @@ def build_reason_prompt(self, goal: str, state: LoopState, context: ReasonContex
 
 #### 2.1 Update reason() Method
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Current**:
 ```python
@@ -282,7 +282,7 @@ Tests to update:
 
 #### 5.2 SimplePlanner Tests
 
-**Files**: `tests/unit/backends/planning/`
+**Files**: `tests/unit/cognition/planning/`
 
 Tests to update:
 - `test_simple_planner.py`
@@ -407,7 +407,7 @@ Example:
    - Add `_build_*_section()` helper methods (7 methods)
    - Deprecate `build_reason_prompt()` temporarily
 
-2. `src/soothe/backends/planning/simple.py`:
+2. `src/soothe/cognition/planning/simple.py`:
    - Update `reason()` to use `build_reason_messages()`
    - Rename `_invoke()` to `_invoke_messages()`
    - Remove HumanMessage wrapping logic
@@ -423,7 +423,7 @@ Example:
    - Verify SystemMessage/HumanMessage types
    - Verify content separation
 
-5. `tests/unit/backends/planning/`:
+5. `tests/unit/cognition/planning/`:
    - Update mocks for message list invocation
    - Rename `_invoke` to `_invoke_messages`
 

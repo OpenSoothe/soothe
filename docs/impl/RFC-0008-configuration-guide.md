@@ -219,7 +219,7 @@ soothe -p "What is 2+2?"
 1. `src/soothe/config/config.yml` - Added agentic config section
 2. `src/soothe/config/models.py` - Added `use_judge_engine` field
 3. `src/soothe/core/event_catalog.py` - Event registration
-4. `src/soothe/cognition/loop_agent/core/events.py` - Event self-registration
+4. `src/soothe/cognition/agent_loop/core/events.py` - Event self-registration
 5. `src/soothe/core/runner/_runner_agentic.py` - Added v2 routing
 
 ### Files Created

@@ -479,7 +479,7 @@ soothe --no-tui -p "analyze the project structure"
 - Current log case: `full_case.log` (attached)
 - Architecture: RFC-000, RFC-001
 - Event catalog: `src/soothe/core/event_catalog.py`
-- Loop agent events: `src/soothe/cognition/loop_agent/events.py`
+- Loop agent events: `src/soothe/cognition/agent_loop/events.py`
 - Verbosity tiers: RFC-0020 (implied)
 
 ---

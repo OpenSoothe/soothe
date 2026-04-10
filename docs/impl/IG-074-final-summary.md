@@ -13,13 +13,13 @@
 ### Phase 3: Event System Registration ✅
 
 **Changes:**
-1. LoopAgent events already existed in `loop_agent/core/events.py`
+1. AgentLoop events already existed in `loop_agent/core/events.py`
 2. Added self-registration function `_register_events()`
 3. Added import to `event_catalog.py` for auto-registration
 4. Events use `soothe.cognition.loop.*` namespace (per RFC-201)
 
 **Files Modified:**
-- `src/soothe/cognition/loop_agent/core/events.py` - Added self-registration
+- `src/soothe/cognition/agent_loop/core/events.py` - Added self-registration
 - `src/soothe/core/event_catalog.py` - Added import hook
 
 **Events Registered:**
@@ -196,7 +196,7 @@ print(meta)  # Should show LoopStartedEvent
 ### 4. Test Judge Engine
 
 ```python
-from soothe.cognition.loop_agent.execution.judge import JudgeEngine
+from soothe.cognition.agent_loop.execution.judge import JudgeEngine
 from langchain_openai import ChatOpenAI
 
 model = ChatOpenAI(model="gpt-4o-mini")
@@ -211,7 +211,7 @@ judge = JudgeEngine(model=model)
 ### Modified Files (5)
 1. `src/soothe/config/models.py` - Added `use_judge_engine` flag
 2. `src/soothe/core/event_catalog.py` - Added loop_agent events import
-3. `src/soothe/cognition/loop_agent/core/events.py` - Added self-registration
+3. `src/soothe/cognition/agent_loop/core/events.py` - Added self-registration
 4. `src/soothe/core/runner/_runner_agentic.py` - Added v2 routing + methods
 5. `src/soothe/core/runner/_runner_agentic.py.backup` - Backup of original
 

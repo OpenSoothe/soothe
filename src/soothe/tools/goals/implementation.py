@@ -344,7 +344,7 @@ class ReportProgressTool(BaseTool):
             return {"error": f"Goal {goal_id} not found"}
         logger.info("Goal %s progress reported: status=%s, findings=%s", goal_id, status, findings[:100])
         if self.proposal_queue:
-            from soothe.cognition.proposal_queue import Proposal
+            from soothe.cognition.goal_engine.proposal_queue import Proposal
 
             self.proposal_queue.enqueue(
                 Proposal(
@@ -378,7 +378,7 @@ class SuggestGoalTool(BaseTool):
             return {"error": "description is required"}
         logger.info("Goal proposed: %s (priority=%d)", description, priority)
         if self.proposal_queue:
-            from soothe.cognition.proposal_queue import Proposal
+            from soothe.cognition.goal_engine.proposal_queue import Proposal
 
             self.proposal_queue.enqueue(
                 Proposal(
@@ -420,7 +420,7 @@ class FlagBlockerTool(BaseTool):
         blocker_deps = f" (depends on: {dependencies})" if dependencies else ""
         logger.warning("Goal %s blocked: %s%s", goal_id, reason, blocker_deps)
         if self.proposal_queue:
-            from soothe.cognition.proposal_queue import Proposal
+            from soothe.cognition.goal_engine.proposal_queue import Proposal
 
             self.proposal_queue.enqueue(
                 Proposal(
@@ -516,7 +516,7 @@ class AddFindingTool(BaseTool):
             return {"error": f"Goal {goal_id} not found"}
         # Queue the finding for post-iteration application
         if self.proposal_queue:
-            from soothe.cognition.proposal_queue import Proposal
+            from soothe.cognition.goal_engine.proposal_queue import Proposal
 
             self.proposal_queue.enqueue(
                 Proposal(

@@ -192,12 +192,12 @@ async def _run_single_pass(self, user_input: str, ...) -> AsyncGenerator[StreamC
 ### 3. SubagentPlanner Removal
 
 **Files Modified**:
-- `src/soothe/backends/planning/router.py` (AutoPlanner)
+- `src/soothe/cognition/planning/router.py` (AutoPlanner)
 - `src/soothe/core/resolver.py` (planner resolution)
 - `src/soothe/core/_runner_phases.py` (removed template planning)
 
 **File Deleted**:
-- `src/soothe/backends/planning/subagent.py` ❌
+- `src/soothe/cognition/planning/subagent.py` ❌
 
 #### AutoPlanner Routing Updated
 
@@ -235,7 +235,7 @@ def _best_available(self) -> Any:
 ```python
 subagent_planner = None
 try:
-    from soothe.backends.planning.subagent import SubagentPlanner
+    from soothe.cognition.planning.subagent import SubagentPlanner
     # ... initialization
     subagent_planner = SubagentPlanner(model=planner_model, cwd=resolved_cwd, skills=planner_skills)
 except Exception:

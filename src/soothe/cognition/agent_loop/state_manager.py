@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent.checkpoint import (
+from soothe.cognition.agent_loop.checkpoint import (
     ActWaveRecord,
     Layer2Checkpoint,
     ReasonStepRecord,
@@ -22,8 +22,8 @@ from soothe.cognition.loop_agent.checkpoint import (
 from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult, StepResult
-    from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
+    from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult, StepResult
+    from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
 

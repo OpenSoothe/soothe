@@ -25,7 +25,7 @@ Keeping the file name in sync with the class name is a Python convention that im
 
 ### Phase 1: File Renaming
 
-1. Rename `src/soothe/backends/planning/direct.py` to `simple.py`
+1. Rename `src/soothe/cognition/planning/direct.py` to `simple.py`
 2. Update module docstring from "DirectPlanner" to "SimplePlanner"
 
 ### Phase 2: Class Renaming
@@ -36,7 +36,7 @@ Keeping the file name in sync with the class name is a Python convention that im
 
 ### Phase 3: Import Updates
 
-1. Update `src/soothe/backends/planning/__init__.py`:
+1. Update `src/soothe/cognition/planning/__init__.py`:
    - Import `SimplePlanner` from `simple.py`
    - Update `__all__` exports
 
@@ -44,12 +44,12 @@ Keeping the file name in sync with the class name is a Python convention that im
    - Import `SimplePlanner` instead of `DirectPlanner`
    - Update variable names (`direct` → `simple`)
 
-3. Update `src/soothe/backends/planning/router.py`:
+3. Update `src/soothe/cognition/planning/router.py`:
    - Rename parameter `direct` to `simple`
    - Rename instance variable `self._direct` to `self._simple`
    - Update docstrings
 
-4. Update `src/soothe/backends/planning/_shared.py`:
+4. Update `src/soothe/cognition/planning/_shared.py`:
    - Update module docstring
 
 ### Phase 4: Test Updates
@@ -63,7 +63,7 @@ Keeping the file name in sync with the class name is a Python convention that im
 ### Files Modified
 
 ```
-src/soothe/backends/planning/
+src/soothe/cognition/planning/
 ├── direct.py → simple.py          # Renamed file
 ├── __init__.py                    # Updated exports
 ├── router.py                      # Updated parameter names
@@ -127,12 +127,12 @@ def _planner_for_level(self, level: str) -> Any:
 
 ```python
 # Before
-from soothe.backends.planning.direct import DirectPlanner
+from soothe.cognition.planning.direct import DirectPlanner
 direct = DirectPlanner(model=planner_model, fast_model=fast_model)
 return AutoPlanner(..., direct=direct, ...)
 
 # After
-from soothe.backends.planning.simple import SimplePlanner
+from soothe.cognition.planning.simple import SimplePlanner
 simple = SimplePlanner(model=planner_model, fast_model=fast_model)
 return AutoPlanner(..., simple=simple, ...)
 ```
@@ -140,11 +140,11 @@ return AutoPlanner(..., simple=simple, ...)
 ### 4. Test Files
 
 **test_planning.py**:
-- Import: `from soothe.backends.planning.simple import SimplePlanner`
+- Import: `from soothe.cognition.planning.simple import SimplePlanner`
 - Class: `class TestSimplePlanner` (formerly `TestDirectPlanner`)
 
 **test_enhanced_reflection.py**:
-- Import: `from soothe.backends.planning.simple import SimplePlanner`
+- Import: `from soothe.cognition.planning.simple import SimplePlanner`
 - Fixture: `planner() -> SimplePlanner`
 - Method signatures: Updated type hints
 
@@ -179,7 +179,7 @@ pytest tests/unit_tests/test_auto_planner.py -v
 
 2. **Import Check**: Ensure all imports resolve correctly
    ```bash
-   python -c "from soothe.backends.planning import SimplePlanner; print('✓ Import successful')"
+   python -c "from soothe.cognition.planning import SimplePlanner; print('✓ Import successful')"
    ```
 
 3. **Test Suite**: All tests pass

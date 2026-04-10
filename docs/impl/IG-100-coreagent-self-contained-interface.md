@@ -91,7 +91,7 @@ __all__ = ["CoreAgent", "create_soothe_agent", "SootheRunner"]
 
 Update files that reference `CompiledStateGraph` for CoreAgent:
 
-- `src/soothe/cognition/loop_agent/executor.py`: `core_agent: CompiledStateGraph` → `core_agent: CoreAgent`
+- `src/soothe/cognition/agent_loop/executor.py`: `core_agent: CompiledStateGraph` → `core_agent: CoreAgent`
 - `src/soothe/core/runner/__init__.py`: Update type hints
 - Other consumers using `agent.soothe_*` → use `agent.context`, `agent.memory`, etc.
 
@@ -111,7 +111,7 @@ Create `tests/unit/test_core_agent.py`:
 |------|--------|
 | `src/soothe/core/agent.py` | Add CoreAgent class, update factory |
 | `src/soothe/core/__init__.py` | Export CoreAgent |
-| `src/soothe/cognition/loop_agent/executor.py` | Type hint update |
+| `src/soothe/cognition/agent_loop/executor.py` | Type hint update |
 | `src/soothe/core/runner/__init__.py` | Type hint update |
 | `tests/unit/test_core_agent.py` | New test file |
 

@@ -485,7 +485,7 @@ performance:
 
 ### Step 4: Update AutoPlanner to Skip LLM Classification
 
-**File**: `src/soothe/backends/planning/router.py`
+**File**: `src/soothe/cognition/planning/router.py`
 
 Modify `_route` method to remove LLM classification:
 
@@ -709,7 +709,7 @@ performance_embedding_cache_size: int = 100
 
 ### Step 7: Add Template Matching to DirectPlanner
 
-**File**: `src/soothe/backends/planning/direct.py`
+**File**: `src/soothe/cognition/planning/direct.py`
 
 Add template matching:
 

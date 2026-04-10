@@ -1,10 +1,10 @@
-"""Unit tests for Layer 2 LoopAgent schemas (RFC-0008)."""
+"""Unit tests for Layer 2 AgentLoop schemas (RFC-0008)."""
 
 from __future__ import annotations
 
 import pytest
 
-from soothe.cognition.loop_agent.schemas import (
+from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     LoopState,
     ReasonResult,

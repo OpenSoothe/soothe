@@ -25,7 +25,7 @@ This implementation guide simplifies Layer 2's executor by removing manual threa
 
 ### Phase 1: Remove Thread Isolation Methods
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 #### 1.1 Remove `_should_use_isolated_sequential_thread()`
 
@@ -102,7 +102,7 @@ async def _merge_isolated_act_into_parent_thread(
 
 #### 2.1 Simplify `_execute_sequential_chunk()`
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (lines 439-448)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (lines 439-448)
 
 ```python
 # BEFORE
@@ -133,7 +133,7 @@ if isolated_child_id is not None:
 
 #### 2.2 Simplify `_execute_parallel()`
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (lines 325-350)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (lines 325-350)
 
 ```python
 # BEFORE
@@ -155,7 +155,7 @@ tasks = [
 
 #### 2.3 Update `_execute_step_collecting_events()` error handling
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (lines 373-384)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (lines 373-384)
 
 ```python
 # BEFORE
@@ -187,7 +187,7 @@ step_result = StepResult(
 
 #### 3.1 Update `LoopState`
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 ```python
 # DELETE THIS FIELD
@@ -198,7 +198,7 @@ class LoopState(BaseModel):
 
 #### 3.2 Remove checkpoint access logic
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (lines 215-225)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (lines 215-225)
 
 ```python
 # DELETE THIS BLOCK
@@ -216,7 +216,7 @@ else:
 
 #### 4.1 Remove conditional logic in reason.py
 
-**File**: `src/soothe/cognition/loop_agent/reason.py`
+**File**: `src/soothe/cognition/agent_loop/reason.py`
 
 Find and remove any logic checking `state.act_will_have_checkpoint_access`. Prior conversation should always be injected (same thread_id).
 
@@ -305,9 +305,9 @@ Measure before/after:
 
 | File | Change Type | Lines Changed |
 |------|-------------|---------------|
-| `src/soothe/cognition/loop_agent/executor.py` | Simplify | -80 lines |
-| `src/soothe/cognition/loop_agent/schemas.py` | Remove field | -1 line |
-| `src/soothe/cognition/loop_agent/reason.py` | Simplify | -5 lines |
+| `src/soothe/cognition/agent_loop/executor.py` | Simplify | -80 lines |
+| `src/soothe/cognition/agent_loop/schemas.py` | Remove field | -1 line |
+| `src/soothe/cognition/agent_loop/reason.py` | Simplify | -5 lines |
 | `src/soothe/config/config.py` | Remove field | -1 line |
 | `config/config.yml` | Remove config | -1 line |
 | `config.dev.yml` | Remove config | -1 line |

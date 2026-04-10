@@ -180,14 +180,14 @@ def on_assistant_text(self, text, *, is_main, is_streaming):
 
 ---
 
-## Additional Bug: `soothe.cognition.loop_agent.reason` Not Handled
+## Additional Bug: `soothe.cognition.agent_loop.reason` Not Handled
 
 ### Renderer Backup Logic (Lines 324-330)
 
 ```python
 # Backup if loop.started was filtered on the wire:
 # suppress after iteration 1+.
-if event_type == "soothe.cognition.loop_agent.reason":
+if event_type == "soothe.cognition.agent_loop.reason":
     try:
         it = int(data.get("iteration", 0))
     except (TypeError, ValueError):

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.cognition.dreaming import DreamingMode
+from soothe.cognition.goal_engine.dreaming import DreamingMode
 
 
 class TestDreamingModeInit:

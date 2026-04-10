@@ -1,4 +1,4 @@
-"""Main LoopAgent orchestration for Layer 2 (RFC-0008)."""
+"""Main AgentLoop orchestration for Layer 2 (RFC-0008)."""
 
 from __future__ import annotations
 
@@ -7,12 +7,12 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.backends.planning.simple import _default_agent_decision
-from soothe.cognition.loop_agent.executor import Executor
-from soothe.cognition.loop_agent.reason import ReasonPhase
-from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, ReasonResult
-from soothe.cognition.loop_agent.state_manager import Layer2StateManager
-from soothe.cognition.loop_agent.working_memory import LoopWorkingMemory
+from soothe.cognition.planning.simple import _default_agent_decision
+from soothe.cognition.agent_loop.executor import Executor
+from soothe.cognition.agent_loop.reason import ReasonPhase
+from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult
+from soothe.cognition.agent_loop.state_manager import Layer2StateManager
+from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK_LEN = 3
 
 
-class LoopAgent:
+class AgentLoop:
     """Layer 2: Agentic goal execution as ReAct (Reason then Act).
 
     Attributes:
@@ -43,7 +43,7 @@ class LoopAgent:
         loop_reasoner: LoopReasonerProtocol,
         config: SootheConfig,
     ) -> None:
-        """Initialize LoopAgent.
+        """Initialize AgentLoop.
 
         Args:
             core_agent: Layer 1 CoreAgent runtime

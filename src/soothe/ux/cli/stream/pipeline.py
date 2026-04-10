@@ -181,7 +181,7 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return self._on_goal_completed(event)
 
-        if event_type == "soothe.cognition.loop_agent.reason":
+        if event_type == "soothe.cognition.agent_loop.reason":
             return self._on_loop_agent_reason(event)
 
         return []

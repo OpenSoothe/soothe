@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.cognition.loop_agent.executor import Executor
-from soothe.cognition.loop_agent.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.cognition.agent_loop.executor import Executor
+from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 async def _empty_agent_stream() -> None:

@@ -131,7 +131,7 @@ def detect_result_type(result: Any) -> str:
     # Check for ToolOutput (from agentic loop)
     # Import here to avoid circular imports
     try:
-        from soothe.cognition.loop_agent.core.schemas import ToolOutput
+        from soothe.cognition.agent_loop.core.schemas import ToolOutput
 
         if isinstance(result, ToolOutput):
             return "tool_output"

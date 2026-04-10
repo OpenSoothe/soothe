@@ -141,7 +141,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 **When**: Each iteration of the agentic loop (up to 8 times max)
 **Model**: Reasoning model (role="reasoning")
 **Purpose**: Assess progress and produce next plan fragment
-**Location**: `src/soothe/cognition/loop_agent/reason.py`
+**Location**: `src/soothe/cognition/agent_loop/reason.py`
 
 #### Call Frequency Pattern
 
@@ -290,7 +290,7 @@ Soothe uses a **three-layer execution architecture** with distinct LLM communica
 **When**: Each step in the AgentDecision (parallel or sequential)
 **Model**: Default model (role="default") or subagent-specific model
 **Purpose**: Execute tools/subagents to accomplish step goal
-**Location**: `src/soothe/cognition/loop_agent/executor.py`
+**Location**: `src/soothe/cognition/agent_loop/executor.py`
 
 #### Thread Isolation Strategy
 
@@ -743,7 +743,7 @@ This section analyzes the message flow between Layer 1 CoreAgent and Layer 2 Loo
 
 **Layer 2's Independent Checkpoint** (RFC-205):
 
-From `src/soothe/cognition/loop_agent/loop_agent.py` lines 124-137:
+From `src/soothe/cognition/agent_loop/loop_agent.py` lines 124-137:
 
 ```python
 # Layer 2 uses its OWN checkpoint, not Layer 1 messages
@@ -800,7 +800,7 @@ Layer 1 → Layer 2:
 
 #### 3. What's Passed to Next Iteration
 
-**LoopState Carried Forward** (from `src/soothe/cognition/loop_agent/schemas.py`):
+**LoopState Carried Forward** (from `src/soothe/cognition/agent_loop/schemas.py`):
 
 ```python
 # State passed to next iteration
@@ -823,7 +823,7 @@ state.total_tokens_used
 state.context_percentage_consumed
 ```
 
-**Loop Continuity Mechanism** (`src/soothe/cognition/loop_agent/loop_agent.py` lines 158-346):
+**Loop Continuity Mechanism** (`src/soothe/cognition/agent_loop/loop_agent.py` lines 158-346):
 
 ```python
 while state.iteration < state.max_iterations:
@@ -859,7 +859,7 @@ while state.iteration < state.max_iterations:
 
 **Created at**:
 - CLI user input (`src/soothe/core/runner/_runner_phases.py` line 796)
-- Executor for Act phase (`src/soothe/cognition/loop_agent/executor.py` lines 370, 531)
+- Executor for Act phase (`src/soothe/cognition/agent_loop/executor.py` lines 370, 531)
 
 **Stored in**:
 - Layer 1 checkpointer (full conversation)
@@ -874,7 +874,7 @@ while state.iteration < state.max_iterations:
 
 **Created at**:
 - Model response (Layer 1 execution)
-- Executor accumulation (`src/soothe/cognition/loop_agent/executor.py` line 667)
+- Executor accumulation (`src/soothe/cognition/agent_loop/executor.py` line 667)
 
 **Stored in**:
 - Layer 1 checkpointer (with tool calls)
@@ -1034,16 +1034,16 @@ Translation scenario (contamination risk):
 - `src/soothe/core/runner/_runner_agentic.py`: Thread loading (lines 191-195)
 
 **Layer 2 State Management**:
-- `src/soothe/cognition/loop_agent/loop_agent.py`: Checkpoint recovery (lines 124-137)
-- `src/soothe/cognition/loop_agent/state_manager.py`: Layer 2 checkpoint operations
-- `src/soothe/cognition/loop_agent/schemas.py`: LoopState schema definition
+- `src/soothe/cognition/agent_loop/loop_agent.py`: Checkpoint recovery (lines 124-137)
+- `src/soothe/cognition/agent_loop/state_manager.py`: Layer 2 checkpoint operations
+- `src/soothe/cognition/agent_loop/schemas.py`: LoopState schema definition
 
 **Message Formatting**:
 - `src/soothe/core/runner/_runner_phases.py`: XML excerpt formatting (lines 259-296)
 
 **Evidence Accumulation**:
-- `src/soothe/cognition/loop_agent/reason.py`: Evidence aggregation (lines 35-62)
-- `src/soothe/cognition/loop_agent/executor.py`: Step result collection
+- `src/soothe/cognition/agent_loop/reason.py`: Evidence aggregation (lines 35-62)
+- `src/soothe/cognition/agent_loop/executor.py`: Step result collection
 
 ---
 
@@ -1122,9 +1122,9 @@ Translation scenario (contamination risk):
 - `src/soothe/core/runner/_runner_phases.py`: Stream phases
 
 **Loop Agent**:
-- `src/soothe/cognition/loop_agent/loop_agent.py`: LoopAgent class
-- `src/soothe/cognition/loop_agent/reason.py`: Reason phase
-- `src/soothe/cognition/loop_agent/executor.py`: Act executor
+- `src/soothe/cognition/agent_loop/loop_agent.py`: AgentLoop class
+- `src/soothe/cognition/agent_loop/reason.py`: Reason phase
+- `src/soothe/cognition/agent_loop/executor.py`: Act executor
 
 **Middleware Stack**:
 - `src/soothe/core/middleware/_builder.py`: Stack construction

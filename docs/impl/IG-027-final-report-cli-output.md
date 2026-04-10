@@ -57,8 +57,8 @@ the full report to stdout with a visual separator.
 
 | File | Changes |
 |------|---------|
-| `backends/planning/direct.py` | Add `_invoke` method |
-| `backends/planning/router.py` | Add `_invoke` delegation |
+| `cognition/planning/direct.py` | Add `_invoke` method |
+| `cognition/planning/router.py` | Add `_invoke` delegation |
 | `core/runner.py` | Rewrite synthesis prompt, improve heuristic, emit final report event |
 | `cli/main.py` | Handle `soothe.autonomous.final_report` in headless CLI |
 | `core/artifact_store.py` | Improve goal report markdown when summary is substantial |

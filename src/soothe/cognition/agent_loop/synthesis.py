@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
+from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel

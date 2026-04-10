@@ -15,7 +15,7 @@ This design addresses four contamination problems in Layer 2 agentic loops throu
 The duplicate output and cross-wave contamination problems stem from:
 
 1. **L1 unbounded ReAct** — CoreAgent allows unlimited tool_call → think → tool_call cycles
-2. **L2 multi-iteration** — LoopAgent Reason may `continue` after satisfactory Act output
+2. **L2 multi-iteration** — AgentLoop Reason may `continue` after satisfactory Act output
 3. **Full thread context** — Act steps share same thread, seeing all prior messages
 4. **Main model repetition** — LLM tendency to paste tool output verbatim after delegation
 
@@ -324,7 +324,7 @@ Reason → read metrics → build prompt → LLM decision
            ↓
 ReasonResult → done/continue/replan
            ↓
-LoopAgent → next iteration or exit
+AgentLoop → next iteration or exit
 ```
 
 ### Executor Changes
@@ -389,12 +389,12 @@ Context: {state.context_percentage_consumed:.1%} used
 
 | Module | Path | Changes |
 |--------|------|---------|
-| Executor | `cognition/loop_agent/executor.py` | Thread isolation trigger logic, metrics aggregation |
-| Reason | `cognition/loop_agent/reason.py` | Metrics-aware prompt building |
-| LoopState | `cognition/loop_agent/schemas.py` | New metric fields (output_length, error_count, context_window) |
-| LoopAgent | `cognition/loop_agent/loop_agent.py` | Metrics aggregation coordinator |
+| Executor | `cognition/agent_loop/executor.py` | Thread isolation trigger logic, metrics aggregation |
+| Reason | `cognition/agent_loop/reason.py` | Metrics-aware prompt building |
+| LoopState | `cognition/agent_loop/schemas.py` | New metric fields (output_length, error_count, context_window) |
+| AgentLoop | `cognition/agent_loop/loop_agent.py` | Metrics aggregation coordinator |
 | Config | `config/models.py` | Cap defaults, isolation flags refinement |
-| Planner | `backends/planning/simple.py` | Clear step semantics in schema/prompt |
+| Planner | `cognition/planning/simple.py` | Clear step semantics in schema/prompt |
 
 ---
 

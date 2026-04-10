@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.cognition.criticality import (
+from soothe.cognition.goal_engine.criticality import (
     _MUST_REASONS_THRESHOLD,
     _PRIORITY_MUST_THRESHOLD,
     HIGH_RISK_KEYWORDS,

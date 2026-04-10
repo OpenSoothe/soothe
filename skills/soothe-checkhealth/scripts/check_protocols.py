@@ -70,7 +70,7 @@ def check_planning_protocols() -> dict[str, Any]:
     checks = []
 
     # Check simple planner
-    result = check_import("soothe.backends.planning.simple", "SimplePlanner")
+    result = check_import("soothe.cognition.planning.simple", "SimplePlanner")
     checks.append(
         {
             "name": "planning_simple",
@@ -80,7 +80,7 @@ def check_planning_protocols() -> dict[str, Any]:
     )
 
     # Check auto planner
-    result = check_import("soothe.backends.planning.router", "AutoPlanner")
+    result = check_import("soothe.cognition.planning.router", "AutoPlanner")
     checks.append(
         {
             "name": "planning_auto",
@@ -90,7 +90,7 @@ def check_planning_protocols() -> dict[str, Any]:
     )
 
     # Check claude planner
-    result = check_import("soothe.backends.planning.claude", "ClaudePlanner")
+    result = check_import("soothe.cognition.planning.claude", "ClaudePlanner")
     checks.append(
         {
             "name": "planning_claude",
@@ -200,7 +200,7 @@ def check_vector_store_protocols() -> dict[str, Any]:
 
 def check_remote_agent_protocols() -> dict[str, Any]:
     """Check remote agent protocol backend."""
-    result = check_import("soothe.backends.remote.langgraph", "LangGraphRemoteAgent")
+    result = check_import("soothe.core.remote_agent.langgraph", "LangGraphRemoteAgent")
     return {
         "name": "remote_agent_protocols",
         "status": result["status"],

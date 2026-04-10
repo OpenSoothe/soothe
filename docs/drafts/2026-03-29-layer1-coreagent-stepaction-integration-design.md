@@ -414,7 +414,7 @@ default_middleware: list[AgentMiddleware] = [
 
 ### 5.1 Module Location
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 **Method**: `_execute_step()`
 

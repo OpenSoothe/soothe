@@ -33,7 +33,7 @@ Successfully implemented the scout-then-plan skill to optimize subagent planning
 
 ### 2. Rewrote SubagentPlanner
 
-**Location**: `src/soothe/backends/planning/subagent.py`
+**Location**: `src/soothe/cognition/planning/subagent.py`
 
 **Key Changes**:
 
@@ -206,7 +206,7 @@ User → SubagentPlanner → Agent with Scout + Planner
 - `src/soothe/skills/scout-then-plan/references/OUTPUT_TEMPLATES.md`
 
 ### Modified
-- `src/soothe/backends/planning/subagent.py` - Rewrote to provide both scout and planner subagents
+- `src/soothe/cognition/planning/subagent.py` - Rewrote to provide both scout and planner subagents
 
 ### No Changes Required
 - `src/soothe/skills/__init__.py` - Automatic discovery already works

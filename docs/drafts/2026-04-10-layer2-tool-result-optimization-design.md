@@ -333,7 +333,7 @@ def _extract_key_terms(text: str) -> list[str]:
 
 **Purpose**: Cache large tool results (>50KB) to file system.
 
-**File**: `src/soothe/cognition/loop_agent/result_cache.py` (new)
+**File**: `src/soothe/cognition/agent_loop/result_cache.py` (new)
 
 ```python
 """File system cache for large tool results."""
@@ -490,7 +490,7 @@ class ToolResultCache:
 
 **Purpose**: Extract tool_call_id, generate metadata, and cache large results.
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (modify existing)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (modify existing)
 
 **Changes to `_stream_and_collect` method**:
 
@@ -517,7 +517,7 @@ async def _stream_and_collect(
     """
     from langchain_core.messages import AIMessage, ToolMessage
 
-    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+    from soothe.cognition.agent_loop.result_cache import ToolResultCache
     from soothe.tools.metadata_generator import generate_outcome_metadata
 
     # Initialize cache for this thread
@@ -677,7 +677,7 @@ async def _stream_and_collect(
 
 **Purpose**: Replace `output` string with `outcome` metadata dict.
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py` (modify existing)
+**File**: `src/soothe/cognition/agent_loop/schemas.py` (modify existing)
 
 ```python
 class StepResult(BaseModel):
@@ -780,7 +780,7 @@ class StepResult(BaseModel):
 
 **Purpose**: Update executor to create StepResult with outcome metadata.
 
-**File**: `src/soothe/cognition/loop_agent/executor.py` (modify existing)
+**File**: `src/soothe/cognition/agent_loop/executor.py` (modify existing)
 
 **Changes to `_execute_step_collecting_events`**:
 
@@ -803,7 +803,7 @@ async def _execute_step_collecting_events(
     """
     from langchain_core.messages import HumanMessage
 
-    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+    from soothe.cognition.agent_loop.result_cache import ToolResultCache
     from soothe.tools.metadata_generator import generate_outcome_metadata
 
     start = time.perf_counter()
@@ -957,7 +957,7 @@ async def generate_final_report_from_checkpoint(
             ai_responses.append(msg.content)
 
     # Check for cached large results
-    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+    from soothe.cognition.agent_loop.result_cache import ToolResultCache
 
     cache = ToolResultCache(thread_id)
     cache_stats = cache.get_cache_stats()

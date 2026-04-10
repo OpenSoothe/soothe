@@ -25,7 +25,7 @@ Stop emitting the synthetic `AIMessage` on agentic loop completion. Consumers st
 Additionally, suppress multi-step assistant body replay in headless CLI renderer:
 - when `multi_step_active=True`, `on_assistant_text()` no longer buffers/prints step body text;
 - `on_turn_end()` no longer flushes suppressed multi-step bodies to stdout.
-- `soothe.cognition.loop_agent.reason` now emits a single concise judgement line
+- `soothe.cognition.agent_loop.reason` now emits a single concise judgement line
   (prefer `user_summary`), instead of splitting one reason event into multiple arrow lines.
 - Introduced shared `PresentationEngine` policy module for reason dedup/rate-limit
   and tool-result payload summarization to reduce CLI noise.

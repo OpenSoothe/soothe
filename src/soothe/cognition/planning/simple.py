@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Any
 
-from soothe.backends.planning._shared import reflect_heuristic
-from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.cognition.planning._shared import reflect_heuristic
+from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.config import SootheConfig
 from soothe.protocols.planner import (
     GoalContext,
@@ -221,7 +221,7 @@ def _load_llm_json_dict(response: str) -> dict[str, Any]:
 
 def _align_layer2_step_descriptions(goal: str, steps: list[Any]) -> None:
     """Rewrite step text that only echoes the user goal (Layer 1/Layer 2 alignment)."""
-    from soothe.cognition.loop_agent.schemas import StepAction
+    from soothe.cognition.agent_loop.schemas import StepAction
 
     g = (goal or "").strip().casefold()
     if not g:
@@ -241,7 +241,7 @@ def _align_layer2_step_descriptions(goal: str, steps: list[Any]) -> None:
 
 def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
     """Build AgentDecision from a parsed JSON object (step list at top level)."""
-    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+    from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
 
     known_subagents = {"browser", "claude", "research"}
 
@@ -294,7 +294,7 @@ def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
     Returns:
         AgentDecision with iteration-specific action to prevent repetitions
     """
-    from soothe.cognition.loop_agent.schemas import AgentDecision, StepAction
+    from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
 
     lim = _DEFAULT_DECISION_GOAL_SNIP_LEN
     tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
@@ -578,7 +578,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
         goal: Goal description
         iteration: Current iteration number for varied fallback actions
     """
-    from soothe.cognition.loop_agent.schemas import ReasonResult
+    from soothe.cognition.agent_loop.schemas import ReasonResult
 
     try:
         data = _load_llm_json_dict(response)
@@ -991,7 +991,7 @@ class SimplePlanner:
         context: PlanContext,
     ) -> Any:
         """Layer 2 Reason phase: assess progress and plan the next act in one LLM call."""
-        from soothe.cognition.loop_agent.schemas import ReasonResult
+        from soothe.cognition.agent_loop.schemas import ReasonResult
 
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
 

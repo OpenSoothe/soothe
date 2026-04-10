@@ -2,8 +2,8 @@
 
 import pytest
 
-from soothe.cognition.loop_agent.executor import Executor
-from soothe.cognition.loop_agent.schemas import LoopState, StepResult
+from soothe.cognition.agent_loop.executor import Executor
+from soothe.cognition.agent_loop.schemas import LoopState, StepResult
 from soothe.config import SootheConfig
 
 

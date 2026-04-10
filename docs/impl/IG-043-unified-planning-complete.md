@@ -13,7 +13,7 @@
 **File**: `src/soothe/protocols/planner.py`
 
 ### Phase 2: Remove Template System
-- Deleted `src/soothe/backends/planning/_templates.py`
+- Deleted `src/soothe/cognition/planning/_templates.py`
 - Removed `use_templates` parameter from `SimplePlanner.__init__()`
 - Removed template matching logic from `SimplePlanner.create_plan()`
 - Updated all template-related tests
@@ -185,7 +185,7 @@ plan = await planner.create_plan(goal, context)
 - `src/soothe/core/resolver.py`: Use fast model, update imports
 
 ### Module Moves
-- `src/soothe/backends/planning/*` → `src/soothe/cognition/planning/`
+- `src/soothe/cognition/planning/*` → `src/soothe/cognition/planning/`
 - `src/soothe/backends/policy/*` → `src/soothe/safety/`
 
 ### Tests Updated
@@ -194,8 +194,8 @@ plan = await planner.create_plan(goal, context)
 - Multiple test files: Import path updates
 
 ### Files Deleted
-- `src/soothe/backends/planning/_templates.py`
-- `src/soothe/backends/planning/` (entire directory moved)
+- `src/soothe/cognition/planning/_templates.py`
+- `src/soothe/cognition/planning/` (entire directory moved)
 - `src/soothe/backends/policy/` (entire directory moved)
 
 ## ✨ Benefits

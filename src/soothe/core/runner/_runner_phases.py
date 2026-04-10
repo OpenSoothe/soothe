@@ -887,7 +887,7 @@ async def generate_final_report_from_checkpoint(
             ai_responses.append(msg.content)
 
     # Check for cached large results
-    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+    from soothe.cognition.agent_loop.result_cache import ToolResultCache
 
     cache = ToolResultCache(thread_id)
     cache_stats = cache.get_cache_stats()

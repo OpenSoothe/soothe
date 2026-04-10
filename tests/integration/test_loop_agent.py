@@ -1,4 +1,4 @@
-"""Integration tests for Layer 2 LoopAgent (RFC-0008)."""
+"""Integration tests for Layer 2 AgentLoop (RFC-0008)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.cognition.loop_agent import LoopAgent
-from soothe.cognition.loop_agent.schemas import (
+from soothe.cognition.agent_loop import AgentLoop
+from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     ReasonResult,
     StepAction,
@@ -149,10 +149,10 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
 
 @pytest.mark.asyncio
 async def test_loop_agent_success() -> None:
-    """Test LoopAgent with successful execution."""
+    """Test AgentLoop with successful execution."""
     reasoner = MockLoopReasoner(scenario="success")
     core_agent = MockCoreAgent()
-    loop_agent = LoopAgent(
+    loop_agent = AgentLoop(
         core_agent=core_agent,
         loop_reasoner=reasoner,
         config=_make_config(),
@@ -171,10 +171,10 @@ async def test_loop_agent_success() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_replan() -> None:
-    """Test LoopAgent with replan scenario."""
+    """Test AgentLoop with replan scenario."""
     reasoner = MockLoopReasoner(scenario="replan")
     core_agent = MockCoreAgent()
-    loop_agent = LoopAgent(
+    loop_agent = AgentLoop(
         core_agent=core_agent,
         loop_reasoner=reasoner,
         config=_make_config(),
@@ -192,10 +192,10 @@ async def test_loop_agent_with_replan() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_with_continue() -> None:
-    """Test LoopAgent with continue-then-done scenario."""
+    """Test AgentLoop with continue-then-done scenario."""
     reasoner = MockLoopReasoner(scenario="continue")
     core_agent = MockCoreAgent()
-    loop_agent = LoopAgent(
+    loop_agent = AgentLoop(
         core_agent=core_agent,
         loop_reasoner=reasoner,
         config=_make_config(),
@@ -213,7 +213,7 @@ async def test_loop_agent_with_continue() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_max_iterations() -> None:
-    """Test LoopAgent respects max iterations."""
+    """Test AgentLoop respects max iterations."""
 
     class NeverDoneReasoner:
         def __init__(self) -> None:
@@ -243,7 +243,7 @@ async def test_loop_agent_max_iterations() -> None:
 
     reasoner = NeverDoneReasoner()
     core_agent = MockCoreAgent()
-    loop_agent = LoopAgent(
+    loop_agent = AgentLoop(
         core_agent=core_agent,
         loop_reasoner=reasoner,
         config=_make_config(max_iterations=3),
@@ -261,7 +261,7 @@ async def test_loop_agent_max_iterations() -> None:
 
 @pytest.mark.asyncio
 async def test_loop_agent_parallel_execution() -> None:
-    """Test LoopAgent with parallel execution mode."""
+    """Test AgentLoop with parallel execution mode."""
 
     class ParallelReasoner:
         def __init__(self) -> None:
@@ -298,7 +298,7 @@ async def test_loop_agent_parallel_execution() -> None:
 
     reasoner = ParallelReasoner()
     core_agent = MockCoreAgent()
-    loop_agent = LoopAgent(
+    loop_agent = AgentLoop(
         core_agent=core_agent,
         loop_reasoner=reasoner,
         config=_make_config(),

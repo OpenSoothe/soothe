@@ -10,7 +10,7 @@ Simple queries like "read first 10 lines of readme" run for 10 iterations withou
 
 ### Issue 1: Wrong Data Format Check in `_stream_and_collect`
 
-**Location**: `src/soothe/cognition/loop_agent/executor.py:349`
+**Location**: `src/soothe/cognition/agent_loop/executor.py:349`
 
 The method checks `isinstance(data, list)` but the actual format from deepagents streaming is:
 ```python
@@ -31,7 +31,7 @@ Even if the format check is fixed, the code only extracts `msg_chunk.content` as
 
 ### Issue 3: Continue Strategy Reuses Exhausted Decision
 
-**Location**: `src/soothe/cognition/loop_agent/loop_agent.py:238-244`
+**Location**: `src/soothe/cognition/agent_loop/loop_agent.py:238-244`
 
 When judgment is "continue" but all steps are already completed:
 - The executor says "No ready steps to execute"
@@ -53,8 +53,8 @@ In `loop_agent.py`, after continue strategy, check if there are actually ready s
 
 ## Files Changed
 
-- `src/soothe/cognition/loop_agent/executor.py` - Fixed message format handling
-- `src/soothe/cognition/loop_agent/loop_agent.py` - Fixed continue strategy
+- `src/soothe/cognition/agent_loop/executor.py` - Fixed message format handling
+- `src/soothe/cognition/agent_loop/loop_agent.py` - Fixed continue strategy
 
 ## Verification
 

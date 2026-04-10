@@ -44,7 +44,7 @@ This implementation guide optimizes Layer 2 message handling by replacing full t
 
 #### 1.2 Large Result Cache
 
-**File**: `src/soothe/cognition/loop_agent/result_cache.py` (new)
+**File**: `src/soothe/cognition/agent_loop/result_cache.py` (new)
 
 **Purpose**: Manage file system cache for large tool results.
 
@@ -66,7 +66,7 @@ This implementation guide optimizes Layer 2 message handling by replacing full t
 
 #### 2.1 StepResult Schema Enhancement
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **Changes**:
 
@@ -126,14 +126,14 @@ def _outcome_to_evidence_string(self, truncate: bool) -> str:
 
 #### 2.2 Executor Enhancement
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 **Changes to `_stream_and_collect` method**:
 
 1. Import new modules:
 
 ```python
-from soothe.cognition.loop_agent.result_cache import ToolResultCache
+from soothe.cognition.agent_loop.result_cache import ToolResultCache
 from soothe.tools.metadata_generator import generate_outcome_metadata
 ```
 
@@ -270,7 +270,7 @@ async def generate_final_report_from_checkpoint(
             ai_responses.append(msg.content)
 
     # Check for cached large results
-    from soothe.cognition.loop_agent.result_cache import ToolResultCache
+    from soothe.cognition.agent_loop.result_cache import ToolResultCache
 
     cache = ToolResultCache(thread_id)
     cache_stats = cache.get_cache_stats()
@@ -330,7 +330,7 @@ if reason_result.is_done():
 
 #### 4.1 Remove output field from StepResult
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 ```python
 class StepResult(BaseModel):
@@ -348,7 +348,7 @@ Find all references to `step_result.output` and replace with `step_result.outcom
 
 ```bash
 # Find all usages
-grep -r "\.output" src/soothe/cognition/loop_agent/ | grep -v "\.output_length"
+grep -r "\.output" src/soothe/cognition/agent_loop/ | grep -v "\.output_length"
 ```
 
 **Expected locations**:
@@ -579,11 +579,11 @@ Expected: All 900+ tests pass with backward-compatible implementation (Phase 1-2
 | File | Change Type | Lines Changed |
 |------|-------------|---------------|
 | `src/soothe/tools/metadata_generator.py` | New | +250 |
-| `src/soothe/cognition/loop_agent/result_cache.py` | New | +150 |
-| `src/soothe/cognition/loop_agent/schemas.py` | Modify | +100 |
-| `src/soothe/cognition/loop_agent/executor.py` | Modify | +80 |
+| `src/soothe/cognition/agent_loop/result_cache.py` | New | +150 |
+| `src/soothe/cognition/agent_loop/schemas.py` | Modify | +100 |
+| `src/soothe/cognition/agent_loop/executor.py` | Modify | +80 |
 | `src/soothe/core/runner/_runner_phases.py` | Add function | +80 |
-| `src/soothe/cognition/loop_agent/loop_agent.py` | Modify | +10 |
+| `src/soothe/cognition/agent_loop/loop_agent.py` | Modify | +10 |
 | `src/soothe/config/config.py` | Modify | +10 |
 | `config/config.yml` | Modify | +6 |
 | `config.dev.yml` | Modify | +6 |

@@ -71,7 +71,7 @@ This document provides detailed specifications for each health check item, organ
 
 ### Check: Planner Protocol Backend
 - **What**: Validate planner backends (direct, subagent, claude)
-- **How**: Import from `soothe.backends.planning`, check each backend
+- **How**: Import from `soothe.cognition.planning`, check each backend
 - **Expected**: All configured planner backends initialize correctly
 - **On Failure**:
   - Check config planner section
@@ -108,7 +108,7 @@ This document provides detailed specifications for each health check item, organ
 
 ### Check: Remote Agent Protocol Backend
 - **What**: Validate remote agent backend (LangGraph)
-- **How**: Import from `soothe.backends.remote`, test LangGraph connection
+- **How**: Import from `soothe.core.remote_agent`, test LangGraph connection
 - **Expected**: Remote agent backend initializes, can reach configured endpoints
 - **On Failure**:
   - Check LangGraph service running

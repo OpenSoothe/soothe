@@ -48,7 +48,7 @@ the goal DAG based on execution insights.
 | `_check_goal_dag_consistency()` | Handle DAG mutations mid-execution |
 | DAG consistency handling | Reset goals to pending when dependencies added |
 
-### 4. Planner Implementation (`backends/planning/direct.py` -- EDIT)
+### 4. Planner Implementation (`cognition/planning/direct.py` -- EDIT)
 
 | Component | Description |
 |-----------|-------------|
@@ -119,7 +119,7 @@ Modify `core/_runner_autonomous.py` to build goal context, process directives, a
 
 ### Step 4: Enhance DirectPlanner
 
-Update `backends/planning/direct.py` to accept goal context and generate directives heuristically.
+Update `cognition/planning/direct.py` to accept goal context and generate directives heuristically.
 
 ### Step 5: Add Configuration
 

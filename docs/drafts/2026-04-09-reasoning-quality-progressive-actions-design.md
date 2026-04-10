@@ -78,7 +78,7 @@ Loop → Reason (enhanced) → Execute → Reason (enhanced) → ... → Done
 ### File Structure
 
 ```
-src/soothe/cognition/loop_agent/
+src/soothe/cognition/agent_loop/
 ├── reason.py                    # Enhanced ReasonPhase
 ├── synthesis.py                 # NEW: SynthesisPhase
 ├── action_quality.py            # NEW: Post-processing for actions
@@ -89,7 +89,7 @@ src/soothe/core/prompts/fragments/
 │   ├── output_format.xml        # Enhanced: Progressive action guidance
 │   └── synthesis_format.xml     # NEW: Synthesis output format
 
-src/soothe/backends/planning/
+src/soothe/cognition/planning/
 └── simple.py                    # Enhanced: Better confidence/progress
 
 benchmarks/reasoning-quality/
@@ -140,7 +140,7 @@ GOOD: "Examine the 3 key protocols I identified to understand their interfaces"
 
 #### 1.2 Action Post-Processing
 
-**File**: `src/soothe/cognition/loop_agent/action_quality.py` (NEW)
+**File**: `src/soothe/cognition/agent_loop/action_quality.py` (NEW)
 
 ```python
 """Post-processing to enhance action quality and prevent regression."""
@@ -149,7 +149,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import StepResult
+    from soothe.cognition.agent_loop.schemas import StepResult
 
 
 def enhance_action_specificity(
@@ -279,7 +279,7 @@ def _summarize_recent_findings(step_results: list[StepResult]) -> str | None:
 
 #### 1.3 Integration
 
-**File**: `src/soothe/cognition/loop_agent/reason.py`
+**File**: `src/soothe/cognition/agent_loop/reason.py`
 
 ```python
 # In ReasonPhase.reason(), after getting result from loop_reasoner:
@@ -309,7 +309,7 @@ Generate structured, comprehensive summaries when `status="done"` instead of jus
 
 #### 2.1 Synthesis Trigger Logic
 
-**File**: `src/soothe/cognition/loop_agent/synthesis.py` (NEW)
+**File**: `src/soothe/cognition/agent_loop/synthesis.py` (NEW)
 
 ```python
 """Synthesis phase for comprehensive final reports."""
@@ -321,7 +321,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-    from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
+    from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
     from soothe.protocols.planner import PlanContext
 
 logger = logging.getLogger(__name__)
@@ -633,14 +633,14 @@ Make it comprehensive, specific, and valuable to the user.
 
 #### 2.3 Integration into Loop Agent
 
-**File**: `src/soothe/cognition/loop_agent/loop_agent.py`
+**File**: `src/soothe/cognition/agent_loop/loop_agent.py`
 
 ```python
 # In agentic_loop() generator, after reason returns status="done":
 
 if reason_result.is_done():
     # Initialize synthesis phase (lazy, only when needed)
-    from soothe.cognition.loop_agent.synthesis import SynthesisPhase
+    from soothe.cognition.agent_loop.synthesis import SynthesisPhase
     
     # Create synthesis client
     synthesis_llm = config.create_chat_model("synthesis")
@@ -698,7 +698,7 @@ Improve confidence estimation and progress tracking to be more accurate and evid
 
 #### 3.1 Enhanced Confidence Estimation
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 Add new function:
 
@@ -777,7 +777,7 @@ result.goal_progress = _calculate_evidence_based_progress(state, result)
 
 #### 3.2 Improved Progress Tracking
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 Add new function:
 
@@ -881,7 +881,7 @@ BAD reasoning:
 
 ### ReasonResult Updates
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 ```python
 class ReasonResult(BaseModel):
@@ -921,7 +921,7 @@ class ReasonResult(BaseModel):
 
 ### LoopState Updates
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 ```python
 class LoopState(BaseModel):

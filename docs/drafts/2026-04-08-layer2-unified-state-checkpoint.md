@@ -6,7 +6,7 @@
 
 ## Problem Statement
 
-Layer 2 (LoopAgent) currently depends on Layer 1's LangGraph checkpoint for state persistence and recovery. This creates architectural coupling and loses semantic clarity about what Layer 2 execution means.
+Layer 2 (AgentLoop) currently depends on Layer 1's LangGraph checkpoint for state persistence and recovery. This creates architectural coupling and loses semantic clarity about what Layer 2 execution means.
 
 ### Current Issues
 
@@ -35,7 +35,7 @@ Layer 2 should own its complete state lifecycle with:
 - **Storage**: LangGraph checkpointer (SQLite/PostgreSQL)
 - **Consumer**: CoreAgent runtime
 
-**Layer 2 (LoopAgent)**:
+**Layer 2 (AgentLoop)**:
 - **Granularity**: Step-level (step input/output, decisions, reasoning)
 - **Purpose**: Semantic goal execution trace
 - **Storage**: JSON files in `runs/{thread_id}/`
@@ -242,7 +242,7 @@ JSON with schema versioning:
 ### New Structure
 
 ```
-src/soothe/cognition/loop_agent/
+src/soothe/cognition/agent_loop/
 ├── checkpoint.py              # Layer2Checkpoint model
 ├── state_manager.py           # Persistence + recovery
 ├── loop_agent.py              # Main orchestrator (refactored)
@@ -321,7 +321,7 @@ class Layer2StateManager:
 
 1. Create `Layer2Checkpoint` model
 2. Implement `Layer2StateManager`
-3. Refactor `LoopAgent` to use state manager
+3. Refactor `AgentLoop` to use state manager
 4. Update Reason context derivation
 5. Add recovery tests
 
@@ -339,4 +339,4 @@ Expected: All tests pass, Layer 2 has independent checkpoint.
 
 ---
 
-**Next steps**: Implement Layer2StateManager and refactor LoopAgent integration.
+**Next steps**: Implement Layer2StateManager and refactor AgentLoop integration.

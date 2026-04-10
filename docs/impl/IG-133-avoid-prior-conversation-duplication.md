@@ -102,7 +102,7 @@ if context.recent_messages and not will_have_checkpoint_access:
 
 **1. Add execution context flag to LoopState**
 
-`src/soothe/cognition/loop_agent/schemas.py`:
+`src/soothe/cognition/agent_loop/schemas.py`:
 ```python
 class LoopState(BaseModel):
     # ... existing fields ...
@@ -113,7 +113,7 @@ class LoopState(BaseModel):
 
 **2. Update Executor to set the flag**
 
-`src/soothe/cognition/loop_agent/executor.py`:
+`src/soothe/cognition/agent_loop/executor.py`:
 ```python
 async def execute(self, decision: AgentDecision, state: LoopState):
     # Determine if Act will have checkpoint access
@@ -129,7 +129,7 @@ async def execute(self, decision: AgentDecision, state: LoopState):
 
 **3. Update Reason prompt builder to conditionally inject**
 
-`src/soothe/backends/planning/simple.py`:
+`src/soothe/cognition/planning/simple.py`:
 ```python
 # Only inject prior conversation if Act won't load checkpoint
 if context.recent_messages and not state.act_will_have_checkpoint_access:
@@ -156,9 +156,9 @@ if context.recent_messages and not state.act_will_have_checkpoint_access:
 
 | File | Changes |
 |------|---------|
-| `src/soothe/cognition/loop_agent/schemas.py` | Add `act_will_have_checkpoint_access` field to LoopState |
-| `src/soothe/cognition/loop_agent/executor.py` | Set flag based on execution mode and isolation |
-| `src/soothe/backends/planning/simple.py` | Conditional injection in `build_loop_reason_prompt()` |
+| `src/soothe/cognition/agent_loop/schemas.py` | Add `act_will_have_checkpoint_access` field to LoopState |
+| `src/soothe/cognition/agent_loop/executor.py` | Set flag based on execution mode and isolation |
+| `src/soothe/cognition/planning/simple.py` | Conditional injection in `build_loop_reason_prompt()` |
 
 ---
 

@@ -368,8 +368,8 @@ Update `config/config.yml`.
 | `cli/main.py` | Delete migration, update thread deletion |
 | `cli/tui_app.py` | Remove sessions/threads fallback |
 | `cli/thread_logger.py` | Accept explicit log path |
-| `backends/planning/direct.py` | Enhanced `reflect()` |
-| `backends/planning/claude.py` | Enhanced `reflect()` |
-| `backends/planning/subagent.py` | Enhanced `reflect()` |
+| `cognition/planning/direct.py` | Enhanced `reflect()` |
+| `cognition/planning/claude.py` | Enhanced `reflect()` |
+| `cognition/planning/subagent.py` | Enhanced `reflect()` |
 | `config.py` | RecoveryConfig |
 | `config/config.yml` | execution.recovery section |

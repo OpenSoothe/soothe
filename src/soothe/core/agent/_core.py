@@ -56,7 +56,7 @@ class CoreAgent:
             - soothe_step_expected_output: expected result description
 
     Layer 2 Contract:
-        Layer 2 (SootheRunner/LoopAgent) provides:
+        Layer 2 (SootheRunner/AgentLoop) provides:
         - Execution hints via config.configurable (advisory suggestions)
         - Classification state (for SystemPromptOptimization)
         - Thread/workspace management

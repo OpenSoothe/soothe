@@ -85,7 +85,7 @@ Implementations provide:
 - `render_for_reason(*, max_chars: int | None = None) -> str`  
   Return a single prompt section (empty if disabled / no entries).
 - `clear() -> None`  
-  Reset for a new goal (optional; LoopAgent may create a fresh instance per run).
+  Reset for a new goal (optional; AgentLoop may create a fresh instance per run).
 
 Concrete classes:
 
@@ -94,7 +94,7 @@ Concrete classes:
 
 ### Integration points (RFC-201 alignment)
 
-1. **Loop start**: Runner / `LoopAgent` constructs working memory from config.
+1. **Loop start**: Runner / `AgentLoop` constructs working memory from config.
 2. **Post-Act**: After each batch of `StepResult` objects, call `record_step_result` for each.
 3. **Pre-Reason**: `build_loop_reason_prompt` (or `PlanContext`) receives `working_memory_excerpt: str` from `render_for_reason()`.
 

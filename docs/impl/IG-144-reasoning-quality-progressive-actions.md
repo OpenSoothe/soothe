@@ -32,7 +32,7 @@ Implement RFC-603 to improve reasoning quality with progressive action descripti
 
 #### Step 1.1: Add Action History to Schema
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **Changes**:
 
@@ -57,7 +57,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]:
 
 #### Step 1.2: Create Action Quality Post-Processing
 
-**File**: `src/soothe/cognition/loop_agent/action_quality.py` (NEW)
+**File**: `src/soothe/cognition/agent_loop/action_quality.py` (NEW)
 
 **Implementation**:
 
@@ -68,7 +68,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import LoopState, StepResult
+    from soothe.cognition.agent_loop.schemas import LoopState, StepResult
 
 
 _SPECIFICITY_PATTERNS = [
@@ -234,13 +234,13 @@ def enhance_action_specificity(
 
 #### Step 1.3: Integrate Enhancement in Reason Layer
 
-**File**: `src/soothe/cognition/loop_agent/reason.py`
+**File**: `src/soothe/cognition/agent_loop/reason.py`
 
 **Changes**:
 
 ```python
 # Add import at top
-from soothe.cognition.loop_agent.action_quality import enhance_action_specificity
+from soothe.cognition.agent_loop.action_quality import enhance_action_specificity
 
 # In reason_loop() function, after ReasonResult construction:
 async def reason_loop(...) -> ReasonResult:
@@ -367,7 +367,7 @@ def test_progressive_iterations():
 
 #### Step 2.1: Add Evidence-Based Confidence
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Changes**:
 
@@ -578,7 +578,7 @@ def test_done_status_progress():
 
 #### Step 3.1: Add Synthesis Fields to Schema
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **Changes to ReasonResult**:
 
@@ -608,7 +608,7 @@ evidence_quality_score: float = Field(
 
 #### Step 3.2: Create Synthesis Module
 
-**File**: `src/soothe/cognition/loop_agent/synthesis.py` (NEW)
+**File**: `src/soothe/cognition/agent_loop/synthesis.py` (NEW)
 
 **Implementation**:
 
@@ -620,7 +620,7 @@ from typing import TYPE_CHECKING
 from langchain_core.language_models.chat_models import BaseChatModel
 
 if TYPE_CHECKING:
-    from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
+    from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
 
 
 # Synthesis trigger thresholds (internal constants, not exposed to users)
@@ -887,13 +887,13 @@ DO:
 
 #### Step 3.4: Integrate Synthesis in Loop Agent
 
-**File**: `src/soothe/cognition/loop_agent/loop_agent.py`
+**File**: `src/soothe/cognition/agent_loop/loop_agent.py`
 
 **Changes**:
 
 ```python
 # Add import at top
-from soothe.cognition.loop_agent.synthesis import SynthesisPhase
+from soothe.cognition.agent_loop.synthesis import SynthesisPhase
 
 # In agentic_loop.astream() or equivalent main loop function:
 async def astream(...) -> JudgeResult:

@@ -15,7 +15,7 @@ scope: Layer 2 executor.py thread management simplification
 
 ## Problem Statement
 
-The current thread isolation implementation in `src/soothe/cognition/loop_agent/executor.py` is verbose and potentially redundant:
+The current thread isolation implementation in `src/soothe/cognition/agent_loop/executor.py` is verbose and potentially redundant:
 
 1. **Manual Thread ID Generation**: executor creates isolated thread IDs like `{thread_id}__l2act{uuid}` and `{thread_id}__step_{i}`
 2. **Manual Merge Logic**: `_merge_isolated_act_into_parent_thread()` combines isolated thread messages back to parent
@@ -102,7 +102,7 @@ Total: executor focuses on orchestration, not thread mechanics
 
 ## Code Changes
 
-### File: `src/soothe/cognition/loop_agent/executor.py`
+### File: `src/soothe/cognition/agent_loop/executor.py`
 
 #### Methods to Remove (~80 lines total)
 
@@ -171,7 +171,7 @@ Total: executor focuses on orchestration, not thread mechanics
    # Remove from LoopState schema entirely
    ```
 
-### File: `src/soothe/cognition/loop_agent/schemas.py`
+### File: `src/soothe/cognition/agent_loop/schemas.py`
 
 Remove `act_will_have_checkpoint_access` field from `LoopState`:
 ```python
@@ -186,7 +186,7 @@ class LoopState(BaseModel):
     # Removed - always True (same thread_id)
 ```
 
-### File: `src/soothe/cognition/loop_agent/reason.py`
+### File: `src/soothe/cognition/agent_loop/reason.py`
 
 Remove logic that checks `state.act_will_have_checkpoint_access`:
 - Prior conversation injection decision (IG-133)

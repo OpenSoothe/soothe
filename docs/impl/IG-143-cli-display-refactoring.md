@@ -328,7 +328,7 @@ Mark IG-143 as **Completed** when:
 - Design Draft: `docs/drafts/2026-04-08-cli-display-refactoring-design.md`
 - RFC-0020: CLI Stream Display Pipeline (implied)
 - Event Catalog: `src/soothe/core/event_catalog.py`
-- Loop Agent Events: `src/soothe/cognition/loop_agent/events.py`
+- Loop Agent Events: `src/soothe/cognition/agent_loop/events.py`
 
 ---
 

@@ -8,16 +8,16 @@ import shutil
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.backends.planning._shared import (
+from soothe.cognition.planning._shared import (
     parse_plan_from_text,
     reflect_heuristic,
     reflect_with_llm,
 )
-from soothe.backends.planning.simple import (
+from soothe.cognition.planning.simple import (
     _default_agent_decision,
     parse_reason_response_text,
 )
-from soothe.cognition.loop_agent.schemas import LoopState
+from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.config import SootheConfig
 from soothe.protocols.planner import (
     GoalContext,
@@ -162,7 +162,7 @@ class ClaudePlanner:
         context: PlanContext,
     ) -> object:
         """Layer 2 Reason phase via Claude subagent (same JSON contract as SimplePlanner)."""
-        from soothe.cognition.loop_agent.schemas import ReasonResult
+        from soothe.cognition.agent_loop.schemas import ReasonResult
         from soothe.core.prompts import PromptBuilder
 
         prompt_builder = PromptBuilder(self._config)

@@ -1,4 +1,4 @@
-# IG-115: LoopAgent ReAct (Reason + Act)
+# IG-115: AgentLoop ReAct (Reason + Act)
 
 **Status**: Completed  
 **Related**: RFC-201 Layer 2, RFC-0008
@@ -11,7 +11,7 @@ Replace PLAN → ACT → JUDGE (two LLM calls per iteration) with **Reason → A
 
 - **Reason**: `LoopReasonerProtocol.reason(goal, state, context) -> ReasonResult`
 - **Act**: Existing `Executor` unchanged
-- **Breaking**: `JudgeProtocol` removed; `PlannerProtocol.decide_steps` removed; event type `soothe.cognition.loop_agent.judgment` → `soothe.cognition.loop_agent.reason`
+- **Breaking**: `JudgeProtocol` removed; `PlannerProtocol.decide_steps` removed; event type `soothe.cognition.agent_loop.judgment` → `soothe.cognition.agent_loop.reason`
 
 ## Schema
 
@@ -26,8 +26,8 @@ Replace PLAN → ACT → JUDGE (two LLM calls per iteration) with **Reason → A
 
 - `src/soothe/protocols/loop_reasoner.py` (new)
 - `src/soothe/protocols/judge.py` (removed)
-- `src/soothe/cognition/loop_agent/reason.py` (new), `loop_agent.py`, `schemas.py`, `events.py`, `__init__.py`
-- `src/soothe/backends/planning/simple.py`, `claude.py`, `router.py`
+- `src/soothe/cognition/agent_loop/reason.py` (new), `loop_agent.py`, `schemas.py`, `events.py`, `__init__.py`
+- `src/soothe/cognition/planning/simple.py`, `claude.py`, `router.py`
 - `src/soothe/backends/judgment/` (remove `llm_judge` if unused)
 - `src/soothe/core/runner/_runner_agentic.py`
 - `src/soothe/ux/cli/stream/pipeline.py`

@@ -1,6 +1,6 @@
 """Layer 2 Agentic Loop Runner (RFC-0008).
 
-Implements Reason → Act (ReAct) loop using LoopAgent.
+Implements Reason → Act (ReAct) loop using AgentLoop.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent import LoopAgent
-from soothe.cognition.loop_agent.events import LoopAgentReasonEvent
+from soothe.cognition.agent_loop import AgentLoop
+from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
 from soothe.config import SootheConfig
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
@@ -173,7 +173,7 @@ class AgenticMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
-        Implements Reason → Act via LoopAgent with RFC-0020 progress events.
+        Implements Reason → Act via AgentLoop with RFC-0020 progress events.
 
         Args:
             user_input: Goal description to execute
@@ -220,7 +220,7 @@ class AgenticMixin:
             logger.error("[Runner] Agentic loop requires a planner that implements LoopReasonerProtocol.reason")
             return
 
-        loop_agent = LoopAgent(
+        loop_agent = AgentLoop(
             core_agent=self._agent,
             loop_reasoner=self._planner,
             config=self._config,

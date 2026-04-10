@@ -2,7 +2,7 @@
 
 ## Problem
 
-The LoopAgent repeats the same steps (e.g., "list workspace", "read README") across iterations because:
+The AgentLoop repeats the same steps (e.g., "list workspace", "read README") across iterations because:
 
 1. `_build_plan_context()` never passes `completed_steps` to the planner
 2. `state.completed_step_ids.clear()` clears tracking on replan

@@ -178,24 +178,24 @@ pytest tests/unit_tests/test_runner.py -v
 **Objective**: Eliminate all template-based planning logic.
 
 **Files to modify**:
-- `src/soothe/backends/planning/simple.py`
-- `src/soothe/backends/planning/_templates.py` (DELETE)
+- `src/soothe/cognition/planning/simple.py`
+- `src/soothe/cognition/planning/_templates.py` (DELETE)
 - `src/soothe/config/models.py`
 
 #### Step 2.1: Delete Template File
 
 ```bash
-git rm src/soothe/backends/planning/_templates.py
+git rm src/soothe/cognition/planning/_templates.py
 ```
 
 #### Step 2.2: Remove Template Logic from SimplePlanner
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Remove imports**:
 ```python
 # DELETE THIS LINE:
-from soothe.backends.planning._templates import PlanTemplates
+from soothe.cognition.planning._templates import PlanTemplates
 ```
 
 **Simplify `create_plan()` method** (lines 61-100):
@@ -511,11 +511,11 @@ pytest tests/integration_tests/test_runner_integration.py -v
 **Objective**: Create unified prompt that handles classification + planning.
 
 **Files to modify**:
-- `src/soothe/backends/planning/simple.py`
+- `src/soothe/cognition/planning/simple.py`
 
 #### Step 4.1: Update `_build_plan_prompt()`
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Replace `_build_plan_prompt()` method** (around lines 124-142):
 
@@ -579,7 +579,7 @@ def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
 
 #### Step 4.2: Update `_create_plan_via_llm()`
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Update method** (around lines 143-153):
 
@@ -650,7 +650,7 @@ from pydantic import ValidationError
 
 ```python
 import pytest
-from soothe.backends.planning.simple import SimplePlanner
+from soothe.cognition.planning.simple import SimplePlanner
 from soothe.protocols.planner import PlanContext
 
 @pytest.mark.asyncio
@@ -911,7 +911,7 @@ grep -r "is_plan_only\|template_intent" src/soothe/core --include="*.py"
 
 #### Step 6.2: Update Logging
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Update log messages**:
 ```python
@@ -1139,7 +1139,7 @@ parts.extend([
 
 ## References
 
-- **Current architecture**: `src/soothe/backends/planning/`
+- **Current architecture**: `src/soothe/cognition/planning/`
 - **Planning protocol**: `src/soothe/protocols/planner.py`
 - **Runner flow**: `src/soothe/core/runner.py`
 - **Unified classifier**: `src/soothe/cognition/unified_classifier.py`

@@ -50,7 +50,7 @@ These features prevent cross-wave contamination, output duplication, and prematu
 **Desired behavior**: Automatic semantic rule — if any step has `subagent` field set, isolate. No config dependency for the decision itself.
 
 **Files affected**:
-- `src/soothe/cognition/loop_agent/executor.py` — Simplify trigger logic
+- `src/soothe/cognition/agent_loop/executor.py` — Simplify trigger logic
 
 **Implementation**:
 
@@ -109,8 +109,8 @@ class LoopState(BaseModel):
    - Calculate `context_percentage_consumed` (relative to model context limit)
 
 **Files affected**:
-- `src/soothe/cognition/loop_agent/schemas.py` — Add new LoopState fields
-- `src/soothe/cognition/loop_agent/executor.py` — Aggregation logic
+- `src/soothe/cognition/agent_loop/schemas.py` — Add new LoopState fields
+- `src/soothe/cognition/agent_loop/executor.py` — Aggregation logic
 - `src/soothe/config/models.py` — Context window limit config (optional)
 
 ---
@@ -119,7 +119,7 @@ class LoopState(BaseModel):
 
 **Goal**: Build `<SOOTHE_WAVE_METRICS>` section in Reason prompt.
 
-**Location**: `src/soothe/backends/planning/simple.py` — `build_loop_reason_prompt()`
+**Location**: `src/soothe/cognition/planning/simple.py` — `build_loop_reason_prompt()`
 
 **Prompt section**:
 
@@ -143,7 +143,7 @@ Last Act wave completed:
 - Insert before `<SOOTHE_PRIOR_CONVERSATION>` if present
 
 **Files affected**:
-- `src/soothe/backends/planning/simple.py` — Prompt building
+- `src/soothe/cognition/planning/simple.py` — Prompt building
 - Tests: `tests/unit/test_reason_prompt_metrics.py` — New test file
 
 ---
@@ -152,9 +152,9 @@ Last Act wave completed:
 
 | Area | Path | Change |
 |------|------|--------|
-| LoopState schema | `src/soothe/cognition/loop_agent/schemas.py` | Add `last_wave_output_length`, `last_wave_error_count`, `total_tokens_used`, `context_percentage_consumed` |
-| Executor | `src/soothe/cognition/loop_agent/executor.py` | Simplify isolation trigger; add metrics aggregation after sequential/parallel waves |
-| Reason prompt | `src/soothe/backends/planning/simple.py` | Build `<SOOTHE_WAVE_METRICS>` section |
+| LoopState schema | `src/soothe/cognition/agent_loop/schemas.py` | Add `last_wave_output_length`, `last_wave_error_count`, `total_tokens_used`, `context_percentage_consumed` |
+| Executor | `src/soothe/cognition/agent_loop/executor.py` | Simplify isolation trigger; add metrics aggregation after sequential/parallel waves |
+| Reason prompt | `src/soothe/cognition/planning/simple.py` | Build `<SOOTHE_WAVE_METRICS>` section |
 | Config | `src/soothe/config/models.py` | Remove `sequential_act_isolate_when_step_subagent_hint` (unused) |
 | Tests | `tests/unit/test_executor_isolation_trigger.py` | New test: automatic trigger based on step.subagent |
 | Tests | `tests/unit/test_executor_wave_metrics.py` | New test: metrics aggregation |
@@ -166,7 +166,7 @@ Last Act wave completed:
 
 ### 5.1 Phase A: Automatic Isolation Trigger
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 **Current code** (lines 88-94):
 ```python
@@ -205,7 +205,7 @@ def _should_use_isolated_sequential_thread(self, steps: list) -> bool:
 
 ### 5.2 Phase B: Metrics Aggregation
 
-**File**: `src/soothe/cognition/loop_agent/schemas.py`
+**File**: `src/soothe/cognition/agent_loop/schemas.py`
 
 **Add to LoopState** (after line 229):
 ```python
@@ -216,7 +216,7 @@ def _should_use_isolated_sequential_thread(self, steps: list) -> bool:
     context_percentage_consumed: float = 0.0
 ```
 
-**File**: `src/soothe/cognition/loop_agent/executor.py`
+**File**: `src/soothe/cognition/agent_loop/executor.py`
 
 **Add helper method**:
 ```python
@@ -291,7 +291,7 @@ def _aggregate_wave_metrics(
 
 ### 5.3 Phase C: Reason Metrics-Aware Prompts
 
-**File**: `src/soothe/backends/planning/simple.py`
+**File**: `src/soothe/cognition/planning/simple.py`
 
 **Add to `build_loop_reason_prompt()`** (after line ~200, before rendering prior conversation):
 

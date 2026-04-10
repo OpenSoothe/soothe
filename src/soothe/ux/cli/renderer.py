@@ -329,7 +329,7 @@ class CliRenderer:
                 self._state.agentic_final_stdout_emitted = False
 
         # Backup if loop.started was filtered on the wire: suppress after iteration 1+.
-        if event_type == "soothe.cognition.loop_agent.reason":
+        if event_type == "soothe.cognition.agent_loop.reason":
             try:
                 it = int(data.get("iteration", 0))
             except (TypeError, ValueError):

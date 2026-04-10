@@ -273,7 +273,7 @@ def build_shared_environment_workspace_prefix(context: ReasonContext) -> str:
    - Add `_build_*_section()` helper methods
    - Deprecate `build_reason_prompt()` (keep temporarily for migration)
 
-2. `src/soothe/backends/planning/simple.py`:
+2. `src/soothe/cognition/planning/simple.py`:
    - Update `reason()` to use `build_reason_messages()`
    - Rename `_invoke()` to `_invoke_messages()`
    - Remove HumanMessage wrapping logic
@@ -377,7 +377,7 @@ class PromptBuilder:
 - Verify conditional sections (prior conversation, workspace) work correctly
 - Verify XML tags: `<ENVIRONMENT>`, `<WORKSPACE>` (no SOOTHE_ prefix)
 
-**SimplePlanner Tests** (`tests/unit/backends/planning/`):
+**SimplePlanner Tests** (`tests/unit/cognition/planning/`):
 - Update mocks to expect message list instead of string
 - Verify `_invoke_messages()` receives message list
 - Verify response parsing unchanged

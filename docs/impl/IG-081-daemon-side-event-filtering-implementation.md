@@ -41,7 +41,7 @@ This guide implements RFC-401: Daemon-Side Event Filtering Protocol. The impleme
 **Files Modified**:
 6. `src/soothe/core/runner.py` - Main event emission
 7. `src/soothe/cognition/goal_engine.py` - Goal events
-8. `src/soothe/cognition/loop_agent/core/agent.py` - Agentic loop events
+8. `src/soothe/cognition/agent_loop/core/agent.py` - Agentic loop events
 9. Backend modules (context, memory, plan, policy, durability)
 10. Subagent modules (browser, claude, research, skillify, weaver)
 11. Tool modules (execution, file_ops, web_search, etc.)
@@ -443,13 +443,13 @@ await self._event_bus.publish(topic, event_dict, event_meta=event_meta)
 **4.2** `src/soothe/cognition/goal_engine.py`:
 - Goal events emission
 
-**4.3** `src/soothe/cognition/loop_agent/core/agent.py`:
+**4.3** `src/soothe/cognition/agent_loop/core/agent.py`:
 - Agentic loop events
 
 **4.4** Backend modules:
 - `src/soothe/backends/context/` - Context events
 - `src/soothe/backends/memory/` - Memory events
-- `src/soothe/backends/planning/` - Plan events
+- `src/soothe/cognition/planning/` - Plan events
 - `src/soothe/backends/policy/` - Policy events
 - `src/soothe/backends/durability/` - Durability events
 

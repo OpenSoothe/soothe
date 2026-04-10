@@ -8,7 +8,7 @@ def test_on_loop_agent_reason_extracts_soothe_next_action():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Gathering metrics",
         "confidence": 0.85,
         "status": "working",
@@ -34,7 +34,7 @@ def test_on_loop_agent_reason_derives_from_status():
 
     for status, expected_text in test_cases:
         event = {
-            "type": "soothe.cognition.loop_agent.reason",
+            "type": "soothe.cognition.agent_loop.reason",
             "status": status,
             "confidence": 0.75,
         }
@@ -45,7 +45,7 @@ def test_on_loop_agent_reason_derives_from_status():
 
     # Unknown/invalid status should return empty (skip emission)
     unknown_event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "status": "unknown",
         "confidence": 0.75,
     }
@@ -58,7 +58,7 @@ def test_on_loop_agent_reason_deduplicates_repeated():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Working on task",
         "confidence": 0.80,
         "status": "working",
@@ -78,7 +78,7 @@ def test_on_loop_agent_reason_formats_confidence():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Building summary",
         "confidence": 0.923,
         "status": "working",
@@ -96,7 +96,7 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
 
     # Test with confidence=0
     event1 = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Analyzing",
         "confidence": 0,
         "status": "working",
@@ -107,7 +107,7 @@ def test_on_loop_agent_reason_defaults_confidence_when_missing():
 
     # Test with confidence missing
     event2 = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Processing",
         "status": "working",
     }
@@ -121,7 +121,7 @@ def test_on_loop_agent_reason_returns_empty_when_missing_all():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "status": "",  # Empty status
     }
 
@@ -134,7 +134,7 @@ def test_on_loop_agent_reason_uses_complete_action_for_done():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Finishing analysis",
         "confidence": 0.95,
         "status": "done",
@@ -151,7 +151,7 @@ def test_on_loop_agent_reason_uses_continue_icon_for_working():
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     event = {
-        "type": "soothe.cognition.loop_agent.reason",
+        "type": "soothe.cognition.agent_loop.reason",
         "soothe_next_action": "Processing files",
         "confidence": 0.85,
         "status": "working",
