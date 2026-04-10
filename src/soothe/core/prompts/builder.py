@@ -49,7 +49,7 @@ class PromptBuilder:
         """Build SystemMessage + HumanMessage for Reason phase (RFC-207).
 
         Constructs proper message type separation:
-        - SystemMessage: environment, workspace, policies, instructions
+        - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
         - HumanMessage: goal, evidence, working memory, prior conversation
 
         Args:
@@ -60,7 +60,7 @@ class PromptBuilder:
         Returns:
             List of [SystemMessage, HumanMessage] to send to LLM.
         """
-        system_content = self._build_system_message(context)
+        system_content = self._build_system_message(context, state)
         human_content = self._build_human_message(goal, state, context)
 
         return [
@@ -71,10 +71,15 @@ class PromptBuilder:
     def _build_system_message(
         self,
         context: PlanContext,
+        state: LoopState | None = None,
     ) -> str:
         """Construct static context: environment, workspace, policies, instructions.
 
         Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
+
+        Args:
+            context: Planning context with workspace, capabilities
+            state: Optional loop state for iteration limits and capability context
         """
         parts: list[str] = []
 
@@ -107,6 +112,20 @@ class PromptBuilder:
                 "a different project outside this directory.\n"
                 "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
                 "</WORKSPACE_RULES>\n"
+            )
+
+        # Loop iteration limits (system-level configuration context)
+        if state is not None:
+            parts.append(
+                f"\n<LOOP_CONFIG>\nIteration: {state.iteration} (max {state.max_iterations})\n</LOOP_CONFIG>\n"
+            )
+
+        # Available capabilities (system-level resource context)
+        if context.available_capabilities:
+            parts.append(
+                f"\n<AVAILABLE_CAPABILITIES>\n"
+                f"Tools/subagents: {', '.join(context.available_capabilities)}\n"
+                f"</AVAILABLE_CAPABILITIES>\n"
             )
 
         # Prior conversation follow-up policy (static)
@@ -143,13 +162,8 @@ class PromptBuilder:
         """
         parts: list[str] = []
 
-        # Goal and iteration info
-        parts.extend(
-            [
-                f"Goal: {goal}\n",
-                f"Loop iteration: {state.iteration} (max {state.max_iterations})\n",
-            ]
-        )
+        # Goal (iteration info moved to SystemMessage per RFC-207 optimization)
+        parts.append(f"Goal: {goal}\n")
 
         # Prior conversation (IG-128, RFC-209)
         # Always inject prior conversation when available (same thread_id for all executions)
@@ -197,10 +211,6 @@ class PromptBuilder:
             parts.append(f"- Summary: {prev.user_summary or prev.reasoning[:200]}")
             if prev.next_steps_hint:
                 parts.append(f"- Hint: {prev.next_steps_hint}")
-
-        # Available capabilities
-        if context.available_capabilities:
-            parts.append(f"\nAvailable tools/subagents: {', '.join(context.available_capabilities)}")
 
         return "\n".join(parts)
 
