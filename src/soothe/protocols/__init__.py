@@ -1,7 +1,6 @@
 """Soothe protocol definitions -- runtime-agnostic interfaces."""
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
-from soothe.protocols.context import ContextEntry, ContextProjection, ContextProtocol
 from soothe.protocols.durability import (
     DurabilityProtocol,
     ThreadFilter,
@@ -39,9 +38,6 @@ __all__ = [
     "ActionRequest",
     "CheckpointEnvelope",
     "ConcurrencyPolicy",
-    "ContextEntry",
-    "ContextProjection",
-    "ContextProtocol",
     "DurabilityProtocol",
     "GoalReport",
     "LoopReasonerProtocol",

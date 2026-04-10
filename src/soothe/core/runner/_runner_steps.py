@@ -17,7 +17,6 @@ from soothe.core.event_catalog import (
     PlanStepFailedEvent,
     PlanStepStartedEvent,
 )
-from soothe.protocols.context import ContextEntry
 from soothe.protocols.planner import Plan, PlanStep
 from soothe.utils.progress import reset_step_context, set_step_context
 
@@ -299,18 +298,6 @@ class StepLoopMixin:
                     ).to_dict()
                 )
 
-            if self._context and step.result:
-                try:
-                    await self._context.ingest(
-                        ContextEntry(
-                            source="step_result",
-                            content=f"[Step {step.id}: {step.description}]\n{step.result[:1500]}",
-                            tags=["step_result", f"step:{step.id}"],
-                            importance=0.85,
-                        )
-                    )
-                except Exception:
-                    logger.debug("Step result ingestion failed", exc_info=True)
         finally:
             # Reset step context when step completes
             reset_step_context(token)

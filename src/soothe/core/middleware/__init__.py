@@ -2,7 +2,6 @@
 
 This package provides middleware implementations that wrap deepagents:
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
-- SubagentContextMiddleware: Inject context briefings into subagent delegations
 - SystemPromptOptimizationMiddleware: Dynamic prompt adjustment based on classification
 - ExecutionHintsMiddleware: Layer 2 → Layer 1 execution hints injection
 - WorkspaceContextMiddleware: Thread-aware workspace ContextVar management
@@ -20,7 +19,6 @@ from ._utils import create_llm_call_metadata
 from .execution_hints import ExecutionHintsMiddleware
 from .llm_tracing import LLMTracingMiddleware
 from .policy import SoothePolicyMiddleware
-from .subagent_context import SubagentContextMiddleware
 from .system_prompt_optimization import SystemPromptOptimizationMiddleware
 from .workspace_context import WorkspaceContextMiddleware
 
@@ -28,7 +26,6 @@ __all__ = [
     "ExecutionHintsMiddleware",
     "LLMTracingMiddleware",
     "SoothePolicyMiddleware",
-    "SubagentContextMiddleware",
     "SystemPromptOptimizationMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",

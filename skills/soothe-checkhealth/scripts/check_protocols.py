@@ -44,37 +44,6 @@ def check_import(module_path: str, class_name: str) -> dict[str, Any]:
         }
 
 
-def check_context_protocols() -> dict[str, Any]:
-    """Check context protocol backends."""
-    checks = []
-
-    # Check vector context backend
-    result = check_import("soothe.backends.context.vector", "VectorContext")
-    checks.append(
-        {
-            "name": "context_vector",
-            "status": result["status"],
-            "message": "Vector context backend: " + result["message"],
-        }
-    )
-
-    # Check keyword context backend
-    result = check_import("soothe.backends.context.keyword", "KeywordContext")
-    checks.append(
-        {
-            "name": "context_keyword",
-            "status": result["status"],
-            "message": "Keyword context backend: " + result["message"],
-        }
-    )
-
-    return {
-        "name": "context_protocols",
-        "status": "ok" if all(c["status"] == "ok" for c in checks) else "error",
-        "checks": checks,
-    }
-
-
 def check_memory_protocols() -> dict[str, Any]:
     """Check memory protocol backend."""
     checks = []
@@ -244,7 +213,6 @@ def run_checks() -> dict[str, Any]:
     all_checks = []
 
     # Check each protocol category
-    all_checks.append(check_context_protocols())
     all_checks.append(check_memory_protocols())
     all_checks.append(check_planner_protocols())
     all_checks.append(check_policy_protocols())

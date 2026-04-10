@@ -15,8 +15,6 @@ from langgraph.types import Command, Interrupt
 from soothe.core.event_catalog import (
     ChitchatResponseEvent,
     ChitchatStartedEvent,
-    ContextIngestedEvent,
-    ContextProjectedEvent,
     MemoryRecalledEvent,
     MemoryStoredEvent,
     PlanCreatedEvent,
@@ -31,7 +29,6 @@ from soothe.core.event_catalog import (
     ThreadSavedEvent,
     ThreadStartedEvent,
 )
-from soothe.protocols.context import ContextEntry, ContextProjection
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.protocols.policy import ActionRequest, PolicyContext
 
@@ -337,7 +334,7 @@ class PhasesMixin:
 
         enriched_messages = self._build_enriched_input(
             user_input,
-            state.context_projection,
+            None,
             state.recalled_memories,
         )
 
@@ -500,15 +497,6 @@ class PhasesMixin:
             store._manifest.query = user_input[:200]
             store.save_manifest()
 
-        if self._context and hasattr(self._context, "restore") and requested_thread_id:
-            try:
-                async with self._context_restore_lock:
-                    restored = await self._context.restore(state.thread_id)
-                if restored:
-                    logger.info("Context restored for thread %s", state.thread_id)
-            except Exception:
-                logger.debug("Context restore failed", exc_info=True)
-
         if requested_thread_id:
             async for chunk in self._try_recover_checkpoint(state):
                 yield chunk
@@ -546,30 +534,19 @@ class PhasesMixin:
             except Exception:
                 logger.debug("Policy check failed", exc_info=True)
 
-        should_run_memory_context = not self._config.performance.enabled or complexity in ("medium", "complex")
+        should_run_memory = not self._config.performance.enabled or complexity in ("medium", "complex")
 
-        if should_run_memory_context:
+        if should_run_memory:
             if self._config.performance.enabled and self._config.performance.parallel_pre_stream:
-                memory_items, context_projection = await self._pre_stream_parallel_memory_context(
-                    user_input, complexity
-                )
+                memory_items, _ = await self._pre_stream_parallel_memory_context(user_input, complexity)
 
                 state.recalled_memories = memory_items
-                state.context_projection = context_projection
 
                 if memory_items:
                     yield _custom(
                         MemoryRecalledEvent(
                             count=len(memory_items),
                             query=user_input[:100],
-                        ).to_dict()
-                    )
-                if context_projection:
-                    state.observation_scope_key = user_input
-                    yield _custom(
-                        ContextProjectedEvent(
-                            entries=context_projection.total_entries,
-                            tokens=context_projection.token_count,
                         ).to_dict()
                     )
             else:
@@ -585,20 +562,6 @@ class PhasesMixin:
                         )
                     except Exception:
                         logger.debug("Memory recall failed", exc_info=True)
-
-                if self._context:
-                    try:
-                        projection = await self._context.project(user_input, token_budget=4000)
-                        state.context_projection = projection
-                        state.observation_scope_key = user_input
-                        yield _custom(
-                            ContextProjectedEvent(
-                                entries=projection.total_entries,
-                                tokens=projection.token_count,
-                            ).to_dict()
-                        )
-                    except Exception:
-                        logger.debug("Context projection failed", exc_info=True)
 
         # Collect context for system prompt XML injection (RFC-104)
         if complexity in ("medium", "complex"):
@@ -675,31 +638,6 @@ class PhasesMixin:
     ) -> AsyncGenerator[StreamChunk]:
         """Run protocol post-processing after the LangGraph stream."""
         response_text = "".join(state.full_response)
-
-        if self._context and response_text:
-            try:
-                await self._context.ingest(
-                    ContextEntry(
-                        source="agent",
-                        content=response_text[:2000],
-                        tags=["agent_response"],
-                        importance=0.7,
-                    )
-                )
-                yield _custom(
-                    ContextIngestedEvent(
-                        source="agent",
-                        content_preview=response_text[:80],
-                    ).to_dict()
-                )
-            except Exception:
-                logger.debug("Context ingestion failed", exc_info=True)
-
-        if self._context and hasattr(self._context, "persist"):
-            try:
-                await self._context.persist(state.thread_id)
-            except Exception:
-                logger.debug("Context persistence failed", exc_info=True)
 
         if self._memory and response_text and len(response_text) > _MIN_MEMORY_STORAGE_LENGTH:
             try:
@@ -778,7 +716,7 @@ class PhasesMixin:
     def _build_enriched_input(
         self,
         user_input: str,
-        projection: ContextProjection | None,  # noqa: ARG002
+        projection: Any | None,  # noqa: ARG002
         memories: list[MemoryItem],  # noqa: ARG002
     ) -> list[HumanMessage]:
         """Build input message with user query only.
@@ -839,16 +777,11 @@ class PhasesMixin:
         }
 
         # Protocol summary
-        context_stats = None
-        if self._context and hasattr(self._context, "_entries"):
-            context_stats = f"{len(self._context._entries)} entries"
-
         memory_stats = None
         if self._memory and hasattr(state, "recalled_memories"):
             memory_stats = f"{len(state.recalled_memories or [])} recalled"
 
         state.protocol_summary = {
-            "context": {"type": type(self._context).__name__, "stats": context_stats} if self._context else None,
             "memory": {"type": type(self._memory).__name__, "stats": memory_stats} if self._memory else None,
             "planner": {"type": type(self._planner).__name__} if self._planner else None,
             "policy": {"type": type(self._policy).__name__} if self._policy else None,

@@ -46,7 +46,6 @@ async def main() -> None:
         subagents=[],  # No subagents
     )
 
-    print(f"[Agent] Context: {agent.context}")
     print(f"[Agent] Memory: {agent.memory}")
     print(f"[Agent] Subagents: {len(agent.subagents)}")
 

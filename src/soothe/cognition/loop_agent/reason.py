@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.cognition.loop_agent.action_quality import enhance_action_specificity
 from soothe.cognition.loop_agent.schemas import LoopState, ReasonResult
 
 # Maximum evidence summary length before truncating model-supplied evidence
@@ -126,28 +125,8 @@ class ReasonPhase:
                     update={"full_output": "\n\n".join(full_outputs)},
                 )
 
-        # RFC-603: Enhance action specificity
-        original_action = result.soothe_next_action or ""
-
-        enhanced_action = enhance_action_specificity(
-            action=original_action,
-            _goal=goal,
-            iteration=state.iteration,
-            previous_actions=state.get_recent_actions(3),
-            step_results=state.step_results,
-        )
-
-        if enhanced_action != original_action:
-            logger.debug(
-                "[Reason] action enhanced (iter=%d): %.80s -> %.80s",
-                state.iteration,
-                original_action[:80],
-                enhanced_action[:80],
-            )
-            result = result.model_copy(update={"soothe_next_action": enhanced_action})
-
-        # Add to action history
-        state.add_action_to_history(enhanced_action)
+        # Track action in history (used by completion detection)
+        state.add_action_to_history(result.soothe_next_action or "")
 
         successes = sum(1 for r in state.step_results if r.success)
         failures = sum(1 for r in state.step_results if not r.success)

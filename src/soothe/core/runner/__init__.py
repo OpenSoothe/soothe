@@ -32,7 +32,6 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 from soothe.core.workspace_resolution import resolve_workspace_for_stream
-from soothe.protocols.context import ContextProtocol
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
@@ -141,7 +140,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         logger.info("CoreAgent created in %.1fms", agent_ms)
 
         # Access protocols via CoreAgent typed properties
-        self._context: ContextProtocol | None = self._agent.context
         self._memory: MemoryProtocol | None = self._agent.memory
         self._planner: PlannerProtocol | None = self._agent.planner
         self._policy: PolicyProtocol | None = self._agent.policy
@@ -214,7 +212,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """
         from soothe.core.thread import ThreadContextManager
 
-        return ThreadContextManager(self._durability, self._config, self._context)
+        return ThreadContextManager(self._durability, self._config)
 
     async def resume_persisted_thread(self, thread_id: str) -> Any:
         """Resume thread metadata from durability (wrapper for daemon/CLI)."""
@@ -299,22 +297,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
     def protocol_summary(self) -> dict[str, str]:
         """Return a summary of active protocol implementations."""
         return {
-            "context": type(self._context).__name__ if self._context else "none",
             "memory": type(self._memory).__name__ if self._memory else "none",
             "planner": type(self._planner).__name__ if self._planner else "none",
             "policy": type(self._policy).__name__ if self._policy else "none",
             "durability": type(self._durability).__name__,
-        }
-
-    async def context_stats(self) -> dict[str, Any]:
-        """Return context statistics for the /context slash command."""
-        if not self._context:
-            return {"status": "disabled"}
-        entries = getattr(self._context, "entries", [])
-        return {
-            "status": "active",
-            "backend": type(self._context).__name__,
-            "entries": len(entries) if isinstance(entries, list) else "unknown",
         }
 
     async def memory_stats(self) -> dict[str, Any]:
@@ -399,40 +385,19 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             complexity: Query complexity level.
 
         Returns:
-            Tuple of (memory_items, context_projection).
+            Tuple of (memory_items, None).
         """
-        import asyncio
-
         if complexity not in ("medium", "complex"):
             return ([], None)
 
-        tasks = []
-
         if self._memory:
-            tasks.append(self._memory.recall(user_input, limit=5))
-        else:
-            tasks.append(asyncio.sleep(0, result=[]))
-
-        if self._context:
-            tasks.append(self._context.project(user_input, token_budget=4000))
-        else:
-            tasks.append(asyncio.sleep(0, result=None))
-
-        try:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            memory_items = [] if isinstance(results[0], Exception) else results[0]
-            context_projection = None if isinstance(results[1], Exception) else results[1]
-
-            if isinstance(results[0], Exception):
-                logger.debug("Memory recall failed in parallel execution", exc_info=results[0])
-            if isinstance(results[1], Exception):
-                logger.debug("Context projection failed in parallel execution", exc_info=results[1])
-        except Exception:
-            logger.debug("Parallel execution failed", exc_info=True)
-            return ([], None)
-        else:
-            return memory_items, context_projection
+            try:
+                memory_items = await self._memory.recall(user_input, limit=5)
+                return memory_items, None
+            except Exception:
+                logger.debug("Memory recall failed", exc_info=True)
+                return ([], None)
+        return ([], None)
 
     # -- main stream --------------------------------------------------------
 

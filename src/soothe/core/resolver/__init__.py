@@ -1,6 +1,6 @@
 """Protocol, subagent, and tool resolution logic for create_soothe_agent.
 
-Protocol resolution (context, memory, planner, policy) lives here.
+Protocol resolution (memory, planner, policy) lives here.
 Tool/subagent resolution is in ``_resolver_tools.py`` and infrastructure
 (durability, checkpointer) in ``_resolver_infra.py``.  All public names
 are re-exported for backward compatibility.
@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.config import SootheConfig
 from soothe.utils import expand_path
 
 from ._resolver_infra import resolve_checkpointer, resolve_durability
@@ -28,7 +28,6 @@ from ._resolver_tools import (
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from soothe.protocols.context import ContextProtocol
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
@@ -38,7 +37,6 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "SUBAGENT_FACTORIES",
     "resolve_checkpointer",
-    "resolve_context",
     "resolve_durability",
     "resolve_goal_engine",
     "resolve_goal_tools",
@@ -51,84 +49,8 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Protocol resolution (context, memory, planner, policy)
+# Protocol resolution (memory, planner, policy)
 # ---------------------------------------------------------------------------
-
-
-def resolve_context(config: SootheConfig) -> ContextProtocol | None:
-    """Instantiate the ContextProtocol implementation from config.
-
-    Falls back to keyword backend when vector initialisation fails.
-
-    Args:
-        config: Soothe configuration.
-
-    Returns:
-        A ContextProtocol instance, or None if disabled.
-    """
-    if config.protocols.context.backend == "none":
-        return None
-
-    parts = config.protocols.context.backend.split("-")
-    if len(parts) != 2:  # noqa: PLR2004
-        logger.warning(
-            "Invalid context backend '%s', expected format: {behavior}-{storage}",
-            config.protocols.context.backend,
-        )
-        return None
-
-    behavior, storage = parts
-
-    # Only attempt vector backend if vector store role is configured
-    if behavior == "vector":
-        router_str = config.resolve_vector_store_role("context")
-        if not router_str:
-            logger.info(
-                "Context backend is 'vector' but no vector store assigned for 'context' role; falling back to keyword"
-            )
-            behavior = "keyword"
-
-    if behavior == "vector":
-        try:
-            from soothe.backends.context.vector import VectorContext
-
-            vs = config.create_vector_store_for_role("context")
-            embeddings = config.create_embedding_model()
-            logger.info("Using vector context backend")
-            return VectorContext(
-                vector_store=vs,
-                embeddings=embeddings,
-                use_tiktoken=config.performance.thresholds.use_tiktoken,
-            )
-        except Exception:
-            logger.warning("Vector context init failed, falling back to keyword", exc_info=True)
-
-    # Keyword backend (default or fallback)
-    from soothe.backends.context.keyword import KeywordContext
-    from soothe.backends.persistence import create_persist_store
-
-    persist_dir = config.protocols.context.persist_dir or str(Path(SOOTHE_HOME) / "context" / "data")
-
-    try:
-        persist_store = create_persist_store(
-            persist_dir=persist_dir,
-            backend=storage,
-            dsn=config.resolve_persistence_postgres_dsn() if storage == "postgresql" else None,
-            db_path=config.persistence.sqlite_path if storage == "sqlite" else None,
-            namespace="context",
-        )
-    except Exception as e:
-        logger.warning("Failed to create context persist store, falling back to json: %s", e)
-        persist_store = create_persist_store(
-            persist_dir=persist_dir,
-            backend="json",
-        )
-
-    logger.info("Using keyword context backend with %s storage", storage)
-    return KeywordContext(
-        persist_store=persist_store,
-        use_tiktoken=config.performance.thresholds.use_tiktoken,
-    )
 
 
 def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:

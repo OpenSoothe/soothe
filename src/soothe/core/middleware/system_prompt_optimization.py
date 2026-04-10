@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from soothe.core.tool_context_registry import ToolContextRegistry
     from soothe.core.tool_trigger_registry import ToolTriggerRegistry
     from soothe.core.unified_classifier import UnifiedClassification
-    from soothe.protocols.context import ContextProjection
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -322,29 +321,6 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             Formatted prompt based on complexity level with XML sections.
         """
         return self._get_prompt_for_complexity(classification.task_complexity, state)
-
-    def _build_context_section(self, projection: ContextProjection) -> str:
-        """Build <context> XML for context projection entries.
-
-        Args:
-            projection: Context projection with relevance-ranked entries.
-
-        Returns:
-            XML section string with top 10 entries, 200 chars each.
-
-        Example:
-            >>> projection = ContextProjection(entries=[
-            ...     ContextEntry(source="tool", content="Found 5 files", ...)
-            ... ])
-            >>> print(self._build_context_section(projection))
-            <context>
-            - [tool] Found 5 files
-            </context>
-        """
-        entries = projection.entries[:10]
-        lines = [f"- [{e.source}] {e.content[:200]}" for e in entries]
-        joined = "\n".join(lines)
-        return f"<context>\n{joined}\n</context>"
 
     def _build_memory_section(self, memories: list[MemoryItem]) -> str:
         """Build <memory> XML for recalled memories.

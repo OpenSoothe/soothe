@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.core.tool_context_registry import ToolContextRegistry
     from soothe.core.tool_trigger_registry import ToolTriggerRegistry
-    from soothe.protocols.context import ContextProtocol
     from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
@@ -61,7 +60,6 @@ def _build_tool_registries(
 def build_soothe_middleware_stack(
     config: SootheConfig,
     policy: PolicyProtocol | None,
-    context: ContextProtocol | None,
 ) -> tuple[AgentMiddleware, ...]:
     """Build Soothe middleware stack in correct order.
 
@@ -88,17 +86,12 @@ def build_soothe_middleware_stack(
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    6. **SubagentContextMiddleware** - Injects context briefings into
-       task tool delegations via awrap_tool_call hook. Provides subagents
-       with scoped context projections from ContextProtocol.
-
     Note: Tool parallelism is handled by langchain's built-in asyncio.gather
     in ToolNode. No explicit ParallelToolsMiddleware needed.
 
     Args:
         config: SootheConfig with performance settings.
         policy: PolicyProtocol instance for safety enforcement.
-        context: ContextProtocol instance for subagent briefing injection.
 
     Returns:
         Tuple of middleware instances in execution order.
@@ -106,7 +99,6 @@ def build_soothe_middleware_stack(
     from .execution_hints import ExecutionHintsMiddleware
     from .llm_tracing import LLMTracingMiddleware
     from .policy import SoothePolicyMiddleware
-    from .subagent_context import SubagentContextMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
     from .workspace_context import WorkspaceContextMiddleware
 
@@ -167,10 +159,5 @@ def build_soothe_middleware_stack(
     # 5. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
-
-    # 6. Subagent context briefing injection
-    if context:
-        stack.append(SubagentContextMiddleware(context=context))
-        logger.debug("[Middleware] Subagent context briefing enabled")
 
     return tuple(stack)

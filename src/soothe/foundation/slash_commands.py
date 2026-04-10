@@ -33,7 +33,7 @@ SLASH_COMMANDS: dict[str, str] = {
     "/cancel": "Cancel the current running job",
     "/plan": "Show current task plan",
     "/memory": "Show memory stats",
-    "/context": "Show context stats",
+    "/context": "Removed (use /memory instead)",
     "/policy": "Show active policy profile",
     "/history": "Show recent prompt history",
     "/review": "Review recent conversation and action history",
@@ -131,7 +131,7 @@ async def handle_slash_command(
         return False
 
     if command == "/context":
-        await _show_context(console, runner)
+        console.print("[dim]Context protocol removed. Use /memory for knowledge management.[/dim]")
         return False
 
     if command == "/policy":
@@ -212,30 +212,9 @@ async def _show_memory(console: Console, runner: SootheRunner) -> None:
         console.print(f"[red]{format_cli_error(exc, context='Memory stats')}[/red]")
 
 
-async def _show_context(console: Console, runner: SootheRunner) -> None:
-    try:
-        stats = await runner.context_stats()
-        console.print(
-            Panel(
-                json.dumps(stats, indent=2, default=str),
-                title="Context Stats",
-                border_style="cyan",
-            )
-        )
-    except Exception as exc:
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.exception("Context stats error")
-        from soothe.utils.error_format import format_cli_error
-
-        console.print(f"[red]{format_cli_error(exc, context='Context stats')}[/red]")
-
-
 def _show_policy(console: Console, runner: SootheRunner) -> None:
     console.print(f"[dim]Policy profile: {runner.config.protocols.policy.profile}[/dim]")
     console.print(f"[dim]Planner routing: {runner.config.protocols.planner.routing}[/dim]")
-    console.print(f"[dim]Context backend: {runner.config.protocols.context.backend}[/dim]")
     console.print(f"[dim]Memory backend: {runner.config.protocols.memory.backend}[/dim]")
 
 
@@ -332,7 +311,7 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
         from soothe.core.thread import ThreadContextManager
 
         try:
-            manager = ThreadContextManager(runner._durability, runner._config, getattr(runner, "_context", None))
+            manager = ThreadContextManager(runner._durability, runner._config)
             threads = await manager.list_threads(include_last_message=True)
             if not threads:
                 console.print("[dim]No threads.[/dim]")

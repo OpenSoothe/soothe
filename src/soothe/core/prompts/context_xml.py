@@ -159,7 +159,7 @@ def build_soothe_thread_section(thread_context: dict[str, Any]) -> str:
 def build_soothe_protocols_section(protocol_summary: dict[str, Any]) -> str:
     """Build SOOTHE_PROTOCOLS XML block, or empty string when nothing is active."""
     entries: list[str] = []
-    proto_names = ["context", "memory", "planner", "policy"]
+    proto_names = ["memory", "planner", "policy"]
     for proto_name in proto_names:
         proto_info = protocol_summary.get(proto_name)
         if not proto_info:

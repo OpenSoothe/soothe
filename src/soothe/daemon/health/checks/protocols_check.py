@@ -44,10 +44,6 @@ async def check_protocols(config: SootheConfig | None = None) -> CategoryResult:
     """
     checks = []
 
-    # Context protocol backends
-    checks.append(_check_import("soothe.backends.context.vector", "VectorContext"))
-    checks.append(_check_import("soothe.backends.context.keyword", "KeywordContext"))
-
     # Memory protocol backend (MemU)
     checks.append(_check_import("soothe.backends.memory.memu_adapter", "MemU Memory"))
 

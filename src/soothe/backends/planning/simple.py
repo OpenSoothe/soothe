@@ -374,6 +374,144 @@ def _calculate_evidence_based_confidence(
     return min(max(confidence, 0.0), 1.0)  # Clamp to [0, 1]
 
 
+def _detect_completion_fallback(
+    state: LoopState,
+    reason_result: Any,
+    goal: str,
+) -> Any:
+    """Detect completion when LLM fails to set status="done" despite evidence.
+
+    This is a fallback mechanism to prevent infinite loops when the LLM
+    doesn't recognize clear completion signals.
+
+    Criteria for forced completion:
+    1. High evidence volume (≥10,000 chars) with no new discoveries
+    2. Action repetition across iterations
+    3. Diminishing returns (no evidence growth in recent iterations)
+    4. All steps successful with substantial output
+
+    Args:
+        state: Current loop state with step results
+        reason_result: Reason result from LLM
+        goal: The original goal
+
+    Returns:
+        ReasonResult with status potentially updated to "done"
+    """
+    # Only override if LLM returned status != "done"
+    if reason_result.status == "done":
+        return reason_result
+
+    # Check completion indicators
+    completion_indicators = []
+
+    # 1. Action repetition detection
+    if len(state.action_history) >= 2:
+        recent_actions = state.get_recent_actions(2)
+        if len(recent_actions) == 2:
+            # Normalize actions for comparison
+            action1 = recent_actions[0].lower().strip()
+            action2 = recent_actions[1].lower().strip()
+            if action1 == action2 or _actions_semantically_similar(action1, action2):
+                completion_indicators.append("action_repetition")
+                logger.info(
+                    "[Completion Detection] Detected action repetition: '%s' -> '%s'",
+                    action1[:50],
+                    action2[:50],
+                )
+
+    # 2. Evidence volume threshold
+    total_evidence_chars = sum(
+        r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
+    )
+    if total_evidence_chars >= 10_000 and reason_result.goal_progress >= 0.8:
+        completion_indicators.append("high_evidence_volume")
+        logger.info(
+            "[Completion Detection] High evidence volume: %d chars, progress %.0f%%",
+            total_evidence_chars,
+            reason_result.goal_progress * 100,
+        )
+
+    # 3. Diminishing returns (no evidence growth in last iteration)
+    if len(state.step_results) >= 2:
+        recent_size = sum(
+            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results[-2:]
+        )
+        earlier_size = sum(
+            r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results[:-2]
+        )
+        # If recent iterations added < 10% new evidence
+        if earlier_size > 0 and recent_size < earlier_size * 0.1:
+            completion_indicators.append("diminishing_returns")
+            logger.info(
+                "[Completion Detection] Diminishing returns: earlier=%d, recent=%d",
+                earlier_size,
+                recent_size,
+            )
+
+    # 4. All steps successful with substantial output
+    if state.step_results:
+        all_successful = all(r.success for r in state.step_results)
+        has_substantial_output = any(
+            r.outcome.get("size_bytes", 0) > 5000 for r in state.step_results if r.success and r.outcome
+        )
+        if all_successful and has_substantial_output and reason_result.goal_progress >= 0.85:
+            completion_indicators.append("all_steps_successful")
+            logger.info(
+                "[Completion Detection] All %d steps successful with substantial output",
+                len(state.step_results),
+            )
+
+    # Decision: force completion if ≥2 indicators OR action repetition
+    if len(completion_indicators) >= 2 or "action_repetition" in completion_indicators:
+        logger.warning(
+            "[Completion Detection] Forcing status='done' due to: %s (LLM returned status='%s')",
+            ", ".join(completion_indicators),
+            reason_result.status,
+        )
+        # Update result to mark as done
+        updated = reason_result.model_copy(
+            update={
+                "status": "done",
+                "goal_progress": max(reason_result.goal_progress, 0.95),
+                "soothe_next_action": reason_result.soothe_next_action or "I've completed the task.",
+            }
+        )
+        return updated
+
+    return reason_result
+
+
+def _actions_semantically_similar(action1: str, action2: str) -> bool:
+    """Check if two actions are semantically similar despite wording differences.
+
+    Args:
+        action1: First action description
+        action2: Second action description
+
+    Returns:
+        True if actions are semantically similar
+    """
+    # Normalize both actions
+    norm1 = action1.lower().strip()
+    norm2 = action2.lower().strip()
+
+    # Remove common filler words
+    fillers = {"use", "using", "will", "to", "the", "in", "for", "and", "with"}
+    words1 = set(w for w in norm1.split() if w not in fillers)
+    words2 = set(w for w in norm2.split() if w not in fillers)
+
+    # Check Jaccard similarity
+    if not words1 or not words2:
+        return False
+
+    intersection = words1 & words2
+    union = words1 | words2
+    similarity = len(intersection) / len(union)
+
+    return similarity >= 0.7  # 70% word overlap indicates similar actions
+
+
 def _calculate_evidence_based_progress(
     state: LoopState,
     reason_result: Any,
@@ -910,4 +1048,8 @@ class SimplePlanner:
             # RFC-603: Apply evidence-based confidence and progress
             result.confidence = _calculate_evidence_based_confidence(state, result)
             result.goal_progress = _calculate_evidence_based_progress(state, result)
+
+            # Fallback completion detection (IG-134)
+            result = _detect_completion_fallback(state, result, goal)
+
             return result

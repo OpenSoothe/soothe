@@ -12,8 +12,6 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage
 
-from soothe.protocols.context import ContextEntry
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,20 +23,8 @@ class GoalDirectivesMixin:
     """
 
     async def _store_iteration_record(self, record: Any, _thread_id: str) -> None:
-        """Persist an iteration record via ContextProtocol (RFC-0007)."""
-        if not self._context:
-            return
-        try:
-            await self._context.ingest(
-                ContextEntry(
-                    source="iteration_journal",
-                    content=record.model_dump_json(),
-                    tags=["iteration_record", f"iteration:{record.iteration}"],
-                    importance=0.9,
-                )
-            )
-        except Exception:
-            logger.debug("Failed to store iteration record", exc_info=True)
+        """Persist an iteration record (no-op, tracked by Layer 2 checkpoint)."""
+        pass
 
     async def _synthesize_continuation(
         self,

@@ -84,11 +84,10 @@ class VectorStoreRouter(BaseModel):
 
     Args:
         default: Default assignment for unspecified roles.
-        context: VectorContext protocol assignment.
+        context: Reserved for future use.
     """
 
     default: str | None = None
-    context: str | None = None
 
 
 class SubagentConfig(BaseModel):
@@ -299,32 +298,6 @@ class PersistenceConfig(BaseModel):
     sqlite_path: str | None = None
 
 
-class ContextProtocolConfig(BaseModel):
-    """Context Protocol configuration.
-
-    Args:
-        enabled: Whether Context Protocol is enabled.
-        backend: Combined behavior and storage backend.
-                 Format: {behavior}-{storage} or 'none'
-                 Behaviors: keyword, vector
-                 Storage: json, rocksdb, postgresql
-                 Examples: keyword-postgresql, vector-postgresql, keyword-json
-        persist_dir: Directory for context persistence.
-    """
-
-    enabled: bool = True
-    backend: Literal[
-        "keyword-json",
-        "keyword-rocksdb",
-        "keyword-postgresql",
-        "keyword-sqlite",
-        "vector-postgresql",
-        "vector-sqlite",
-        "none",
-    ] = "keyword-sqlite"
-    persist_dir: str | None = None
-
-
 class MemUConfig(BaseModel):
     """MemU memory backend configuration.
 
@@ -399,14 +372,12 @@ class ProtocolsConfig(BaseModel):
     """Protocol backends configuration.
 
     Args:
-        context: Context Protocol configuration.
         memory: MemU memory backend configuration.
         planner: Planner Protocol configuration.
         policy: Policy Protocol configuration.
         durability: Durability Protocol configuration.
     """
 
-    context: ContextProtocolConfig = Field(default_factory=ContextProtocolConfig)
     memory: MemUConfig = Field(default_factory=MemUConfig)
     planner: PlannerProtocolConfig = Field(default_factory=PlannerProtocolConfig)
     policy: PolicyProtocolConfig = Field(default_factory=PolicyProtocolConfig)

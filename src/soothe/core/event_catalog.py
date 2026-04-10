@@ -82,8 +82,6 @@ RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
 DAEMON_HEARTBEAT = "soothe.lifecycle.daemon.heartbeat"
 
 # -- Protocol events ---------------------------------------------------------
-CONTEXT_PROJECTED = "soothe.protocol.context.projected"
-CONTEXT_INGESTED = "soothe.protocol.context.ingested"
 MEMORY_RECALLED = "soothe.protocol.memory.recalled"
 MEMORY_STORED = "soothe.protocol.memory.stored"
 PLAN_CREATED = "soothe.cognition.plan.created"
@@ -243,18 +241,6 @@ class AgenticStepCompletedEvent(LifecycleEvent):
 # ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
-
-
-class ContextProjectedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.context.projected"] = "soothe.protocol.context.projected"
-    entries: int = 0
-    tokens: int = 0
-
-
-class ContextIngestedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.context.ingested"] = "soothe.protocol.context.ingested"
-    source: str = ""
-    content_preview: str = ""
 
 
 class MemoryRecalledEvent(ProtocolEvent):
@@ -657,10 +643,6 @@ _reg(
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",
 )
-
-# -- Protocol: context -------------------------------------------------------
-_reg(CONTEXT_PROJECTED, ContextProjectedEvent, summary_template="{entries} entries, {tokens} tokens")
-_reg(CONTEXT_INGESTED, ContextIngestedEvent, summary_template="Ingested from {source}")
 
 # -- Protocol: memory --------------------------------------------------------
 _reg(MEMORY_RECALLED, MemoryRecalledEvent, summary_template="{count} items recalled")

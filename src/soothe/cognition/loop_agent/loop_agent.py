@@ -183,6 +183,14 @@ class LoopAgent:
                 },
             )
 
+            import sys as _sys
+
+            print(
+                f"[DEBUG-LOOP] reason_result.status={reason_result.status}, is_done()={reason_result.is_done()}",
+                file=_sys.stderr,
+                flush=True,
+            )
+
             if reason_result.is_done():
                 state.previous_reason = reason_result
                 state.iteration += 1
@@ -190,6 +198,19 @@ class LoopAgent:
 
                 # RFC-211: Layer 2 signals Layer 1 to generate final report
                 final_output = reason_result.full_output or reason_result.evidence_summary
+                import sys as _sys
+
+                print(
+                    f"[DEBUG-LOOP] is_done=True, full_output={len(reason_result.full_output or '')} chars, evidence={len(reason_result.evidence_summary or '')} chars",
+                    file=_sys.stderr,
+                    flush=True,
+                )
+                logger.info(
+                    "[Layer1] Starting final report generation (full_output=%d chars, evidence=%d chars)",
+                    len(reason_result.full_output or ""),
+                    len(reason_result.evidence_summary or ""),
+                )
+
                 try:
                     from langchain_core.messages import HumanMessage
 
@@ -204,26 +225,53 @@ The report should:
 
 Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
 
-                    # Send to Layer 1 CoreAgent
+                    # Send to Layer 1 CoreAgent — accumulate the last complete AI text response
+                    last_ai_text = ""
+                    chunk_count = 0
+                    ai_msg_count = 0
                     async for chunk in self.core_agent.astream(
                         {"messages": [HumanMessage(content=report_request)]},
                         config={"configurable": {"thread_id": state.thread_id}},
                         stream_mode=["messages"],
                         subgraphs=False,
                     ):
-                        # Extract final AI response
+                        chunk_count += 1
                         if isinstance(chunk, tuple) and len(chunk) >= 2:
                             mode, data = chunk[0], chunk[1]
                             if mode == "messages":
-                                from langchain_core.messages import AIMessage
+                                from langchain_core.messages import AIMessage, AIMessageChunk
 
                                 if isinstance(data, tuple) and len(data) >= 2:
                                     msg, _ = data
-                                    if isinstance(msg, AIMessage) and msg.content:
-                                        final_output = msg.content
-                                        break
+                                    # AIMessage (non-chunk) marks a completed turn;
+                                    # keep the last one with text content.
+                                    if isinstance(msg, (AIMessage, AIMessageChunk)):
+                                        ai_msg_count += 1
+                                        if isinstance(msg, AIMessage) and msg.content:
+                                            content = msg.content
+                                            if isinstance(content, str):
+                                                last_ai_text = content
+                                            elif isinstance(content, list):
+                                                parts = []
+                                                for block in content:
+                                                    if isinstance(block, dict) and "text" in block:
+                                                        parts.append(block["text"])
+                                                    elif isinstance(block, str):
+                                                        parts.append(block)
+                                                last_ai_text = "".join(parts)
 
-                    logger.info("[Layer1] Final report generated via CoreAgent (%d chars)", len(final_output))
+                    logger.info(
+                        "[Layer1] Stream completed: %d chunks, %d AI messages, last_ai_text=%d chars",
+                        chunk_count,
+                        ai_msg_count,
+                        len(last_ai_text),
+                    )
+                    if last_ai_text:
+                        final_output = last_ai_text
+                        logger.info("[Layer1] Final report generated via CoreAgent (%d chars)", len(final_output))
+                    else:
+                        logger.warning("[Layer1] No AI text response from CoreAgent, using evidence")
+
                 except Exception as e:
                     # Fallback to evidence on failure
                     logger.warning("[Layer1] Final report generation failed: %s, using evidence", e)
