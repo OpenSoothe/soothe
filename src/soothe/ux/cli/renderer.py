@@ -98,12 +98,12 @@ class CliRenderer:
     @property
     def full_response(self) -> list[str]:
         """Get accumulated response text."""
-        return self._state.full_response
+        return self._state.suppression.full_response
 
     @property
     def multi_step_active(self) -> bool:
         """Whether multi-step plan is active."""
-        return self._state.multi_step_active
+        return self._state.suppression.multi_step_active
 
     @property
     def presentation_engine(self) -> PresentationEngine:
@@ -133,7 +133,7 @@ class CliRenderer:
         if not stripped:
             return
 
-        self._state.full_response.append(stripped)
+        self._state.suppression.full_response.append(stripped)
 
         if self._state.stderr_just_written:
             self._state.stderr_just_written = False

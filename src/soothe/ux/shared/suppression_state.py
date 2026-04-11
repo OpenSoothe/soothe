@@ -79,7 +79,12 @@ class SuppressionState:
         if self.agentic_final_stdout_emitted:
             return False
 
-        return self.multi_step_active or self.agentic_stdout_suppressed
+        # Mark flag when emitting
+        should_emit = self.multi_step_active or self.agentic_stdout_suppressed
+        if should_emit:
+            self.agentic_final_stdout_emitted = True
+
+        return should_emit
 
     def track_from_event(self, event_type: str, data: dict) -> str:
         """Track suppression state from progress event.
@@ -114,11 +119,8 @@ class SuppressionState:
         payload = dict(data)
         final_stdout = (payload.pop("final_stdout_message", None) or "").strip()
 
-        # Mark final emitted on loop completion
-        if event_type == "soothe.agentic.loop.completed":
-            self.agentic_final_stdout_emitted = True
-            # Note: Keep agentic_stdout_suppressed=True to prevent late tool result leaks
-            # Will be cleared on status=idle or new thread session
+        # Note: agentic_final_stdout_emitted flag is set in should_emit_final_report()
+        # after checking the condition, not here (order matters for rendering logic)
 
         return final_stdout
 

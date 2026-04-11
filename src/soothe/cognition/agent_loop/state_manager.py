@@ -174,7 +174,7 @@ class AgentLoopStateManager:
             status=reason_result.status,
             goal_progress=reason_result.goal_progress,
             decision=decision.model_dump() if decision else None,
-            soothe_next_action=reason_result.soothe_next_action,
+            next_action=reason_result.next_action,
         )
         self._checkpoint.reason_history.append(reason_record)
 

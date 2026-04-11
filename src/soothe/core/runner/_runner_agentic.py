@@ -82,7 +82,7 @@ def _spool_agentic_overflow_report(body: str, *, run_dir: Path) -> Path | None:
 
 def _agentic_final_stdout_text(
     *,
-    soothe_next_action: str,
+    next_action: str,
     full_output: str | None,
     thread_id: str,
     workspace: str | None,
@@ -124,7 +124,7 @@ def _agentic_final_stdout_text(
             f"(file not written; exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters — see logs)"
         )
 
-    summary = (soothe_next_action or "").strip()
+    summary = (next_action or "").strip()
     if summary:
         cap = _AGENTIC_FINAL_STDOUT_CAP
         return summary[:cap] if len(summary) > cap else summary
@@ -295,8 +295,7 @@ class AgenticMixin:
                         status=event_data["status"],
                         progress=event_data["progress"],
                         confidence=event_data["confidence"],
-                        soothe_next_action=event_data.get("soothe_next_action", ""),
-                        progress_detail=event_data.get("progress_detail"),
+                        next_action=event_data.get("next_action", ""),
                         iteration=event_data["iteration"],
                     ).to_dict()
                 )
@@ -324,7 +323,7 @@ class AgenticMixin:
                 # attach a one-shot final line/block so the user still sees the outcome (IG-119 follow-up).
 
                 evidence = (final_result.evidence_summary or "")[:500]
-                completion_summary = (final_result.soothe_next_action or "").strip()
+                completion_summary = (final_result.next_action or "").strip()
                 if not completion_summary:
                     completion_summary = (
                         f"{n_act_steps} step(s) complete" if n_act_steps else (final_result.status or "complete")
@@ -333,9 +332,9 @@ class AgenticMixin:
                 final_stdout: str | None = None
                 if final_result.status == "done":
                     body = (final_result.full_output or "").strip()
-                    summary = (final_result.soothe_next_action or "").strip()
+                    summary = (final_result.next_action or "").strip()
                     text = _agentic_final_stdout_text(
-                        soothe_next_action=final_result.soothe_next_action,
+                        next_action=final_result.next_action,
                         full_output=final_result.full_output,
                         thread_id=tid,
                         workspace=workspace,

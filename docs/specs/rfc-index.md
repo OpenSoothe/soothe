@@ -79,6 +79,9 @@ RFCs are organized by numeric prefix:
 |-----|-------|--------|------|--------------|
 | [RFC-600](./RFC-600-plugin-extension-system.md) | Plugin Extension System | Implemented | Architecture Design | RFC-000, RFC-001, RFC-100 |
 | [RFC-601](./RFC-601-built-in-agents.md) | Built-in Plugin Agents | Implemented | Architecture Design | RFC-600, RFC-301 |
+| [RFC-602](./RFC-602-sqlite-backend.md) | SQLite Backend Specification | Draft | Architecture Design + Impl Interface | RFC-000, RFC-001, RFC-300, RFC-401 |
+| [RFC-603](./RFC-603-reasoning-quality-progressive-actions.md) | Reasoning Quality & Progressive Actions | Draft | Architecture Design | RFC-201 |
+| [RFC-604](./RFC-604-reason-phase-robustness.md) | Reason Phase Robustness (Three-Layer Defense) | Draft | Architecture Design | RFC-603, RFC-201 |
 
 ---
 
@@ -148,8 +151,8 @@ RFC-000 (System Conceptual Design)
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 1 | 3 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
-| Plugin System (6xx) | 2 | 0 | 2 |
-| **Total** | **14** | **8** | **22** |
+| Plugin System (6xx) | 2 | 3 | 5 |
+| **Total** | **14** | **11** | **25** |
 
 ---
 
@@ -158,8 +161,9 @@ RFC-000 (System Conceptual Design)
 | Kind | Count | Purpose |
 |------|-------|---------|
 | Conceptual Design | 1 | Principles, abstractions, taxonomy |
-| Architecture Design | 10 | Components, diagrams, data flow |
+| Architecture Design | 13 | Components, diagrams, data flow |
 | Impl Interface Design | 6 | Contracts, naming, data structures |
+| Hybrid (Arch + Impl) | 1 | Combined architecture and interface design |
 
 ---
 

@@ -545,7 +545,7 @@ def _detect_completion_fallback(
             update={
                 "status": "done",
                 "goal_progress": max(reason_result.goal_progress, 0.95),
-                "soothe_next_action": reason_result.soothe_next_action or "I've completed the task.",
+                "next_action": reason_result.next_action or "I've completed the task.",
             }
         )
         return updated
@@ -660,8 +660,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
             reasoning="Failed to parse model response",
-            soothe_next_action="I'll try again with a simpler plan.",
-            progress_detail=None,
+            next_action="I'll try again with a simpler plan.",
         )
 
     # Legacy flat plan (steps at root, no reason fields)
@@ -676,8 +675,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=decision,
             reasoning=decision.reasoning,
-            soothe_next_action="I'll run the steps in this plan next.",
-            progress_detail=None,
+            next_action="I'll run the steps in this plan next.",
         )
 
     status = data.get("status", "replan")
@@ -690,11 +688,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
 
     reasoning = str(data.get("reasoning", "") or "")
 
-    soothe_next_action = str(data.get("soothe_next_action", "") or "").strip()
-
-    progress_detail = data.get("progress_detail")
-    if progress_detail is not None:
-        progress_detail = str(progress_detail).strip() or None
+    next_action = str(data.get("next_action", "") or str(data.get("soothe_next_action", "") or "")).strip()
 
     decision = None
     if plan_action == "new":
@@ -719,10 +713,8 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             goal_progress=float(data.get("goal_progress", 0.0)),
             confidence=float(data.get("confidence", 0.8)),
             reasoning=reasoning,
-            soothe_next_action=soothe_next_action,
-            progress_detail=progress_detail,
+            next_action=next_action,
             evidence_summary=str(data.get("evidence_summary", "") or ""),
-            next_steps_hint=data.get("next_steps_hint"),
         )
     except Exception:
         logger.exception("Invalid ReasonResult fields")
@@ -731,7 +723,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
             reasoning="Invalid reason payload",
-            soothe_next_action="I'll adjust and try a cleaner plan.",
+            next_action="I'll adjust and try a cleaner plan.",
         )
 
 
@@ -1055,23 +1047,175 @@ class LLMPlanner:
                         step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
         return data
 
+    async def _assess_status(
+        self,
+        messages: list[Any],
+        goal: str,
+        iteration: int,
+    ) -> Any:
+        """Phase 1: Quick status assessment (RFC-604 Layer 2).
+
+        Lightweight call to assess goal progress without full plan generation.
+        Generates ~200-250 tokens per call.
+
+        Args:
+            messages: Prompt messages from build_reason_messages()
+            goal: Goal description for fallback decision
+            iteration: Current iteration for varied fallback
+
+        Returns:
+            StatusAssessment with status, progress, confidence, brief_reasoning, next_action
+        """
+        from soothe.cognition.agent_loop.schemas import StatusAssessment
+
+        structured_model = self._model.with_structured_output(StatusAssessment)
+
+        logger.debug("[LLMPlanner] Calling StatusAssessment")
+
+        try:
+            assessment = await structured_model.ainvoke(messages)
+
+            if assessment is None:
+                raise ValueError("StatusAssessment returned None")
+
+            logger.debug(
+                "[LLMPlanner] StatusAssessment result: status=%s, progress=%.0f%%, action=%s",
+                assessment.status,
+                assessment.goal_progress * 100,
+                assessment.next_action[:50] if assessment.next_action else "",
+            )
+
+            return assessment
+
+        except Exception as e:
+            logger.warning("[LLMPlanner] StatusAssessment failed: %s", str(e)[:200])
+            # Fallback: return conservative assessment
+            return StatusAssessment(
+                status="replan",
+                goal_progress=0.0,
+                confidence=0.5,
+                brief_reasoning="Status assessment failed, proceeding with conservative defaults",
+                next_action="I'll retry with a simpler approach.",
+            )
+
+    async def _generate_plan(
+        self,
+        messages: list[Any],
+        assessment: Any,
+        goal: str,
+        iteration: int,
+    ) -> Any:
+        """Phase 2: Generate execution plan (RFC-604 Layer 2).
+
+        Conditional call to generate plan when status != "done".
+        Generates ~500-800 tokens per call.
+
+        Args:
+            messages: Original prompt messages
+            assessment: Phase 1 status assessment
+            goal: Goal description for fallback decision
+            iteration: Current iteration for varied fallback
+
+        Returns:
+            PlanGeneration with plan_action, decision, brief_reasoning, next_action
+        """
+        from langchain_core.messages import SystemMessage
+        from soothe.cognition.agent_loop.schemas import PlanGeneration
+
+        # Add assessment context to plan generation prompt
+        context_msg = SystemMessage(content=f"Status: {assessment.status}, Progress: {assessment.goal_progress:.0%}")
+        plan_messages = messages + [context_msg]
+
+        structured_model = self._model.with_structured_output(PlanGeneration)
+
+        logger.debug(
+            "[LLMPlanner] Calling PlanGeneration (status=%s, progress=%.0f%%)",
+            assessment.status,
+            assessment.goal_progress * 100,
+        )
+
+        try:
+            plan_result = await structured_model.ainvoke(plan_messages)
+
+            if plan_result is None:
+                raise ValueError("PlanGeneration returned None")
+
+            logger.debug(
+                "[LLMPlanner] PlanGeneration result: plan_action=%s, steps=%d, action=%s",
+                plan_result.plan_action,
+                len(plan_result.decision.steps) if plan_result.decision else 0,
+                plan_result.next_action[:50] if plan_result.next_action else "",
+            )
+
+            return plan_result
+
+        except Exception as e:
+            logger.warning("[LLMPlanner] PlanGeneration failed: %s", str(e)[:200])
+            # Fallback: return default plan
+            return PlanGeneration(
+                plan_action="new",
+                decision=_default_agent_decision(goal, iteration),
+                brief_reasoning="Plan generation failed, using default plan",
+                next_action="I'll proceed with a fallback plan.",
+            )
+
+    def _combine_results(
+        self,
+        assessment: Any,
+        plan_result: Any,
+    ) -> Any:
+        """Combine Phase 1 and Phase 2 results (RFC-604 Layer 2).
+
+        Concatenates reasoning and next_action from both phases.
+
+        Args:
+            assessment: Phase 1 StatusAssessment
+            plan_result: Phase 2 PlanGeneration
+
+        Returns:
+            ReasonResult with combined reasoning and next_action
+        """
+        from soothe.cognition.agent_loop.schemas import ReasonResult
+
+        # Concatenate reasoning from both phases
+        combined_reasoning = f"[Assessment] {assessment.brief_reasoning}\n[Plan] {plan_result.brief_reasoning}"
+
+        # Concatenate next_action from both phases
+        combined_next_action = f"{assessment.next_action}\n{plan_result.next_action}"
+
+        # Build final ReasonResult
+        return ReasonResult(
+            status=assessment.status,
+            goal_progress=assessment.goal_progress,
+            confidence=assessment.confidence,
+            reasoning=combined_reasoning,
+            plan_action=plan_result.plan_action,
+            decision=plan_result.decision,
+            next_action=combined_next_action,
+        )
+
     async def reason(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Layer 2 Reason phase: assess progress and plan the next act in one LLM call."""
-        from soothe.cognition.agent_loop.schemas import ReasonResult
+        """Layer 2 Reason phase: two-call architecture (RFC-604).
+
+        Phase 1: StatusAssessment (lightweight, ~200-250 tokens)
+        Phase 2: PlanGeneration (conditional, ~500-800 tokens)
+
+        Returns combined ReasonResult with evidence-based metrics applied.
+        """
+        from soothe.cognition.agent_loop.schemas import ReasonResult, StatusAssessment
 
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
 
-        # Compact LLM input summary with preview of HumanMessage content
+        # Compact LLM input summary
         msg_summary = {
             "count": len(messages),
             "types": [type(m).__name__ for m in messages],
         }
-        # Preview first 300 and last 200 chars of HumanMessage content
         from langchain_core.messages import HumanMessage
 
         for msg in messages:
@@ -1081,21 +1225,36 @@ class LLMPlanner:
                 break
         logger.debug("[LLMPlanner] Input messages: %s", msg_summary)
 
-        # Retry logic: structured output can fail with truncated JSON (3 attempts)
+        # RFC-604 Layer 3: Retry logic with fallback
         max_retries = 3
         result = None
 
         for attempt in range(max_retries):
             try:
-                # Use structured output to enforce ReasonResult schema
-                structured_model = self._model.with_structured_output(ReasonResult)
-                result = await structured_model.ainvoke(messages)
+                # Status Assessment
+                assessment = await self._assess_status(messages, goal, state.iteration)
 
-                # Defensive check: structured output can return None in edge cases
-                if result is None:
-                    raise ValueError("Structured output returned None - model may have refused to generate")
+                # Early completion optimization: skip plan generation if status="done"
+                if assessment.status == "done":
+                    logger.debug("[LLMPlanner] Early completion: status=done, skipping plan generation")
+                    # Build ReasonResult from assessment only
+                    result = ReasonResult(
+                        status=assessment.status,
+                        goal_progress=assessment.goal_progress,
+                        confidence=assessment.confidence,
+                        reasoning=assessment.brief_reasoning,
+                        plan_action="keep",  # No plan needed
+                        decision=None,
+                        next_action=assessment.next_action,
+                    )
+                else:
+                    # Plan Generation
+                    plan_result = await self._generate_plan(messages, assessment, goal, state.iteration)
 
-                # Compact LLM output summary with full result in original JSON format
+                    # Combine results
+                    result = self._combine_results(assessment, plan_result)
+
+                # Success
                 result_dict = {
                     "status": result.status,
                     "plan": result.plan_action,
@@ -1110,16 +1269,25 @@ class LLMPlanner:
                     }
                 if result.reasoning:
                     result_dict["reasoning"] = result.reasoning[:200]
-                logger.debug("[LLMPlanner] LLM output: %s", result_dict)
+                logger.debug("[LLMPlanner] Combined output: %s", result_dict)
                 break  # Success, exit retry loop
 
             except Exception as e:
-                # Log the specific error
                 error_type = type(e).__name__
                 error_msg = str(e)
 
-                # Check if it's a JSON parsing error
                 is_json_error = "json_invalid" in error_msg.lower() or "JSON" in error_type
+                if is_json_error:
+                    import re
+
+                    input_value_match = re.search(r"input_value='([^']+)'", error_msg)
+                    if input_value_match:
+                        truncated_json = input_value_match.group(1)
+                        logger.debug(
+                            "[LLMPlanner] Invalid JSON payload (length ~%d chars): %s",
+                            len(truncated_json),
+                            create_output_summary(truncated_json, first_chars=800, last_chars=400),
+                        )
 
                 if attempt < max_retries - 1:
                     logger.warning(
@@ -1129,25 +1297,57 @@ class LLMPlanner:
                         error_type,
                         error_msg[:200] if is_json_error else error_msg,
                     )
-                    # Try fallback: regular invocation with manual JSON parsing
+                    # Fallback: regular model + manual JSON parsing (Layer 3)
                     if is_json_error and attempt == max_retries - 2:
-                        # Last retry attempt: use regular model and parse JSON manually
                         logger.info("[LLMPlanner] Trying fallback: regular model + manual JSON parsing")
                         try:
                             response = await self._model.ainvoke(messages)
                             raw_content = _extract_text_content(response.content)
 
-                            # Extract and clean JSON
+                            logger.debug(
+                                "[LLMPlanner] Fallback raw response: %s",
+                                create_output_summary(raw_content, first_chars=500, last_chars=300),
+                            )
+
+                            # Extract and repair JSON
                             json_str = _strip_markdown_json_fence(raw_content)
                             json_obj = _extract_balanced_json_object(json_str)
 
                             if json_obj:
-                                # Try to repair truncated JSON by closing open strings/brackets
                                 repaired_json = _repair_truncated_json(json_obj)
                                 parsed_dict = _try_parse_json_dict(repaired_json)
 
                                 if parsed_dict:
-                                    result = ReasonResult(**parsed_dict)
+                                    # Try to parse as StatusAssessment first, then as PlanGeneration
+                                    try:
+                                        assessment = StatusAssessment(**parsed_dict)
+                                        # If status != "done", try to get plan
+                                        if assessment.status != "done":
+                                            # Need to parse plan separately
+                                            # For simplicity, use default decision
+                                            result = ReasonResult(
+                                                status=assessment.status,
+                                                goal_progress=assessment.goal_progress,
+                                                confidence=assessment.confidence,
+                                                reasoning=assessment.brief_reasoning,
+                                                plan_action="new",
+                                                decision=_default_agent_decision(goal, state.iteration),
+                                                next_action=assessment.next_action,
+                                            )
+                                        else:
+                                            result = ReasonResult(
+                                                status=assessment.status,
+                                                goal_progress=assessment.goal_progress,
+                                                confidence=assessment.confidence,
+                                                reasoning=assessment.brief_reasoning,
+                                                plan_action="keep",
+                                                decision=None,
+                                                next_action=assessment.next_action,
+                                            )
+                                    except Exception:
+                                        # Fallback: parse as ReasonResult directly
+                                        result = ReasonResult(**parsed_dict)
+
                                     logger.info("[LLMPlanner] Manual JSON parsing succeeded on retry %d", attempt + 1)
                                     break
                         except Exception as fallback_error:
@@ -1160,8 +1360,9 @@ class LLMPlanner:
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
                         reasoning=f"Reason call failed after {max_retries} retries: {error_msg[:100]}",
-                        soothe_next_action="I'll retry with a simpler next step.",
+                        next_action="I'll retry with a simpler next step.",
                     )
+
         # RFC-603: Apply evidence-based confidence and progress
         result.confidence = _calculate_evidence_based_confidence(state, result)
         result.goal_progress = _calculate_evidence_based_progress(state, result)

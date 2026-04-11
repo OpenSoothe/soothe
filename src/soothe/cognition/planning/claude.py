@@ -177,7 +177,7 @@ class ClaudePlanner:
                 plan_action="new",
                 decision=_default_agent_decision(goal),
                 reasoning="Claude planner failed",
-                soothe_next_action="I'll fall back to a minimal plan and continue.",
+                next_action="I'll fall back to a minimal plan and continue.",
             )
 
     async def _invoke(self, prompt: str) -> str:
