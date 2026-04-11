@@ -78,11 +78,15 @@ class WebSocketTransport(TransportServer):
                 logger.warning("TLS enabled but no certificate/key configured")
 
         # Start WebSocket server
+        # Disable WebSocket library ping/pong since daemon uses application-level heartbeats
+        # (RFC-0013: daemon sends heartbeat events every 5 seconds during query execution)
         self._server = await websockets.asyncio.server.serve(
             self._handle_client,
             host=self._config.host,
             port=self._config.port,
             ssl=ssl_context,
+            ping_interval=None,  # Disable ping/pong mechanism
+            ping_timeout=None,  # Use application-level heartbeats instead
         )
 
         protocol = "wss" if self._config.tls_enabled else "ws"

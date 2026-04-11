@@ -345,7 +345,6 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
-        await self._close_attached_store(self._context)
         await self._close_attached_store(self._memory)
 
     async def _close_attached_store(self, owner: Any | None) -> None:

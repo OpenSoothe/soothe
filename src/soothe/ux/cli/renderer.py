@@ -135,7 +135,9 @@ class CliRenderer:
 
         self._state.suppression.full_response.append(stripped)
 
+        # Add newline before final report if stderr was just written (goal completion)
         if self._state.stderr_just_written:
+            sys.stdout.write("\n")
             self._state.stderr_just_written = False
 
         sys.stdout.write(stripped)

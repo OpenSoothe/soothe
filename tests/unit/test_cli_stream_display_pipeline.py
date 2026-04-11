@@ -11,6 +11,7 @@ from __future__ import annotations
 from soothe.ux.cli.stream.context import PipelineContext
 from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
 from soothe.ux.cli.stream.formatter import (
+    abbreviate_text,
     format_goal_done,
     format_goal_header,
     format_step_done,
@@ -91,28 +92,48 @@ class TestIndentForLevel:
 class TestFormatters:
     """Tests for formatter functions."""
 
+    def test_abbreviate_text_short(self) -> None:
+        """Short text is not abbreviated."""
+        result = abbreviate_text("Short text")
+        assert result == "Short text"
+
+    def test_abbreviate_text_long(self) -> None:
+        """Long text is abbreviated with ellipsis."""
+        text = "Run cloc on src/ and tests/ directories to count Soothe source and test code"
+        result = abbreviate_text(text, max_length=50)
+        assert "Run cloc on src/ and" in result
+        assert "..." in result
+        assert "test code" in result
+        assert len(result) < len(text)
+
+    def test_abbreviate_text_preserves_threshold(self) -> None:
+        """Text at max_length threshold is not abbreviated."""
+        text = "Exactly fifty characters long text here okay"
+        result = abbreviate_text(text, max_length=50)
+        assert result == text  # Should not be abbreviated
+
     def test_format_goal_header(self) -> None:
         line = format_goal_header("Analyze codebase")
         assert line.level == 1
-        assert line.content == "Analyze codebase"
+        assert line.content == "🚩 Analyze codebase"
         assert line.icon == "●"
 
     def test_format_step_header_sequential(self) -> None:
         line = format_step_header("Read files", parallel=False)
         assert line.level == 2
-        assert line.content == "Read files"
+        assert line.content == "⏩ Read files"
         assert line.icon == "○"  # Hollow circle for in-progress
         assert line.status is None
 
     def test_format_step_header_parallel(self) -> None:
         line = format_step_header("Read files", parallel=True)
-        assert line.content == "Read files (parallel)"
+        assert line.content == "⏩ Read files (parallel)"
         assert line.icon == "○"
 
     def test_format_tool_call_sequential(self) -> None:
         line = format_tool_call("read_file", '"config.yml"', running=False)
         assert line.level == 2
-        assert line.content == 'read_file("config.yml")'
+        assert line.content == '🔧 read_file("config.yml")'
         assert line.status is None
 
     def test_format_tool_call_parallel(self) -> None:
@@ -122,7 +143,7 @@ class TestFormatters:
     def test_format_tool_result_success(self) -> None:
         line = format_tool_result("Read 42 lines", 150, is_error=False)
         assert line.level == 3
-        assert line.content == "Read 42 lines"
+        assert line.content == "✨ Read 42 lines"
         assert line.icon == "✓"
         assert line.duration_ms == 150
 
@@ -133,20 +154,37 @@ class TestFormatters:
     def test_format_subagent_milestone(self) -> None:
         line = format_subagent_milestone("arxiv: 15 results")
         assert line.level == 3
-        assert line.content == "arxiv: 15 results"
+        assert line.content == "🕵🏻‍♂️ arxiv: 15 results"
         assert line.icon == "✓"
 
     def test_format_subagent_done(self) -> None:
         line = format_subagent_done("5 papers found", 45.2)
-        assert line.content == "Done: 5 papers found"
+        assert line.content == "🕵🏻‍♂️ Done: 5 papers found"
         assert line.duration_ms == 45200
 
     def test_format_step_done(self) -> None:
         line = format_step_done("Read files", 3.2)
         assert line.level == 2
-        assert line.content == "Read files"
+        assert line.content == "✅ Read files"
         assert line.icon == "●"  # Solid circle for completed
         assert line.duration_ms == 3200
+
+    def test_format_step_done_with_long_description(self) -> None:
+        """Long step descriptions are abbreviated."""
+        description = "Run cloc on src/ and tests/ directories to count Soothe source and test code"
+        line = format_step_done(description, 11.4, tool_call_count=1)
+
+        assert "Run cloc on src/ and" in line.content
+        assert "... test code" in line.content
+        assert "[1 tools]" in line.content
+        assert len(line.content) < len(description) + 20  # Should be shorter
+
+    def test_format_step_done_with_short_description(self) -> None:
+        """Short step descriptions are not abbreviated."""
+        line = format_step_done("Read config", 3.2, tool_call_count=2)
+
+        assert "Read config" in line.content
+        assert "..." not in line.content
 
     def test_format_goal_done(self) -> None:
         line = format_goal_done("Analyze codebase", 3, 38.1)
@@ -213,7 +251,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert lines[0].content == "Analyze codebase"
+        assert lines[0].content == "🚩 Analyze codebase"
         assert lines[0].icon == "●"
 
     def test_step_started(self) -> None:
@@ -229,7 +267,7 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert lines[0].icon == "○"  # Hollow circle for started step
-        assert "Read config" in lines[0].content
+        assert lines[0].content == "⏩ Read config"
 
     def test_subagent_dispatched(self) -> None:
         """Test subagent dispatch shows as tool call."""
@@ -243,7 +281,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "research_subagent" in lines[0].content
+        assert "🔧 research_subagent" in lines[0].content
         assert lines[0].icon == "⚙"
 
     def test_subagent_step_hidden_at_normal(self) -> None:
@@ -275,6 +313,7 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert lines[0].icon == "✓"
+        assert "🕵🏻‍♂️" in lines[0].content
 
     def test_subagent_judgement_shown_at_normal(self) -> None:
         """IG-089: Subagent judgement visible at normal verbosity."""
@@ -288,7 +327,7 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Need more sources" in lines[0].content
+        assert "🌀 Need more sources" in lines[0].content
         assert lines[0].icon == "→"  # Arrow for continue action
 
     def test_subagent_step_hidden_for_internal(self) -> None:
@@ -336,6 +375,7 @@ class TestStreamDisplayPipeline:
 
         assert len(lines) == 1
         assert lines[0].icon == "●"
+        assert "🏆" in lines[0].content
         assert "complete" in lines[0].content
         assert "3 steps" in lines[0].content
 

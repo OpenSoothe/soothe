@@ -49,7 +49,12 @@ class WebSocketClient:
             ConnectionError: If connection fails.
         """
         try:
-            self._ws = await websockets.asyncio.client.connect(self._url)
+            # Disable WebSocket ping/pong to use application-level heartbeats (RFC-0013)
+            self._ws = await websockets.asyncio.client.connect(
+                self._url,
+                ping_interval=None,  # Disable client-side ping/pong
+                ping_timeout=None,  # Use daemon heartbeats instead
+            )
             self._connected = True
 
             # Send auth message if token provided
