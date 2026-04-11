@@ -67,13 +67,13 @@ class ToolResultCache:
             metadata: Tool metadata (tool_name, type, etc.)
 
         Returns:
-            File reference if cached, None if not cached
+            File reference if spilled, None if not spilled
         """
         size_bytes = len(content.encode("utf-8"))
 
         if not self.should_cache(size_bytes):
             logger.debug(
-                "Tool result %s not cached (size %d < threshold %d)",
+                "Tool result %s not spilled (size %d < threshold %d)",
                 tool_call_id,
                 size_bytes,
                 self.size_threshold,

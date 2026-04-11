@@ -16,6 +16,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.text_preview import create_output_summary
 
 logger = logging.getLogger(__name__)
 
@@ -995,17 +996,20 @@ class LLMPlanner:
 
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
 
-        # Compact LLM input summary with full messages
+        # Compact LLM input summary with preview of HumanMessage content
         msg_summary = {
             "count": len(messages),
             "types": [type(m).__name__ for m in messages],
         }
-        # Include full HumanMessage content (original format)
-        for i, msg in enumerate(messages):
-            from langchain_core.messages import HumanMessage
+        # Preview first 300 and last 200 chars of HumanMessage content
+        from langchain_core.messages import HumanMessage
 
+        for msg in messages:
             if isinstance(msg, HumanMessage):
-                msg_summary["human_msg"] = msg.content
+                preview = create_output_summary(
+                    msg.content, first_chars=300, last_chars=200
+                )
+                msg_summary["human_msg_preview"] = preview
                 break
         logger.debug("[LLMPlanner] Input messages: %s", msg_summary)
 
