@@ -113,7 +113,7 @@ class LLMTracingMiddleware(AgentMiddleware):
         return self._trace_counter
 
     def _log_request(self, trace_id: int, request: ModelRequest[ContextT]) -> None:
-        """Log comprehensive request details.
+        """Log compact request details in structured format.
 
         Args:
             trace_id: Unique trace identifier.
@@ -127,106 +127,51 @@ class LLMTracingMiddleware(AgentMiddleware):
             len(msg.content) if isinstance(msg.content, str) else len(str(msg.content)) for msg in messages
         )
 
-        logger.debug(
-            "[LLM Trace #%d] Request: %d messages (%s chars)",
-            trace_id,
-            message_count,
-            self._format_size(total_chars),
-        )
-
-        # Log message breakdown by type with RFC-207 context (IG-143)
+        # Message breakdown by type
         system_count = sum(1 for msg in messages if isinstance(msg, SystemMessage))
         human_count = sum(1 for msg in messages if isinstance(msg, HumanMessage))
         ai_count = sum(1 for msg in messages if isinstance(msg, AIMessage))
 
-        if system_count > 0 or human_count > 0 or ai_count > 0:
-            # Detect RFC-207 pattern: SystemMessage + HumanMessage (no prior AI messages)
-            rfc207_pattern = system_count == 1 and human_count >= 1 and ai_count == 0
+        # Compact request summary in dict format
+        req_summary = {
+            "msg_count": message_count,
+            "chars": self._format_size(total_chars),
+            "types": {"sys": system_count, "human": human_count, "ai": ai_count},
+        }
 
-            logger.debug(
-                "[LLM Trace #%d] Messages: system=%d, human=%d, ai=%d%s",
-                trace_id,
-                system_count,
-                human_count,
-                ai_count,
-                " (RFC-207 separation)" if rfc207_pattern else "",
-            )
-
-        # Log system prompt preview
-        for msg in messages:
-            if isinstance(msg, SystemMessage):
-                preview = self._preview(msg.content)
-                logger.debug(
-                    "[LLM Trace #%d] System prompt (preview): %s",
-                    trace_id,
-                    preview,
-                )
-                break
-
-        # NEW: Extract metadata tags (IG-143)
+        # Extract metadata tags (IG-143)
         if hasattr(request, "config") and request.config:
             metadata = request.config.get("metadata", {})
-
             purpose = metadata.get("soothe_call_purpose", "unknown")
-            component = metadata.get("soothe_call_component", "unknown")
-            phase = metadata.get("soothe_call_phase", "unknown")
-
             if purpose != "unknown":
-                logger.debug(
-                    "[LLM Trace #%d] Purpose: %s (component=%s, phase=%s)",
-                    trace_id,
-                    purpose,
-                    component,
-                    phase,
-                )
+                req_summary["purpose"] = purpose
+                req_summary["component"] = metadata.get("soothe_call_component", "unknown")
+                req_summary["phase"] = metadata.get("soothe_call_phase", "unknown")
 
-            # Purpose-specific previews (IG-143)
-            if purpose == "classify":
-                # For classification: show user query
+            # Purpose-specific: include query/goal preview
+            if purpose in ("classify", "plan"):
                 for msg in messages:
                     if isinstance(msg, HumanMessage):
-                        query_preview = str(msg.content)[:200]
-                        logger.debug(
-                            "[LLM Trace #%d] Query: %s",
-                            trace_id,
-                            query_preview,
-                        )
+                        preview_len = 200 if purpose == "classify" else 400
+                        req_summary["input"] = self._preview(msg.content, max_length=preview_len)
                         break
 
-            elif purpose == "plan":
-                # For planning: show goal excerpt (longer preview)
-                for msg in messages:
-                    if isinstance(msg, HumanMessage):
-                        goal_preview = self._preview(msg.content, max_length=400)
-                        logger.debug(
-                            "[LLM Trace #%d] Goal (preview): %s",
-                            trace_id,
-                            goal_preview,
-                        )
-                        break
-
-            # Thread ID from configurable (existing code)
+            # Thread ID
             configurable = request.config.get("configurable", {})
             thread_id = configurable.get("thread_id", "unknown")
             if thread_id != "unknown":
-                logger.debug(
-                    "[LLM Trace #%d] Thread: %s",
-                    trace_id,
-                    thread_id,
-                )
+                req_summary["thread"] = thread_id
 
-        # Log state/configurable info
+        # State keys
         if hasattr(request, "state") and request.state:
             state_keys = list(request.state.keys()) if hasattr(request.state, "keys") else []
             if state_keys:
-                logger.debug(
-                    "[LLM Trace #%d] State keys: %s",
-                    trace_id,
-                    state_keys,
-                )
+                req_summary["state"] = state_keys[:5]  # Limit to first 5 keys
+
+        logger.debug("[LLM Trace #%d] Request: %s", trace_id, req_summary)
 
     def _log_response(self, trace_id: int, response: ModelResponse[Any], duration_ms: int) -> None:
-        """Log comprehensive response details.
+        """Log compact response details in structured format.
 
         Args:
             trace_id: Unique trace identifier.
@@ -244,47 +189,32 @@ class LLMTracingMiddleware(AgentMiddleware):
                 break
 
         if ai_message:
-            # Log response preview
-            content_preview = self._preview(ai_message.content)
-            logger.debug(
-                "[LLM Trace #%d] Response: %dms, preview: %s",
-                trace_id,
-                duration_ms,
-                content_preview,
-            )
+            # Compact response summary in dict format
+            resp_summary = {
+                "duration_ms": duration_ms,
+                "preview": self._preview(ai_message.content),
+            }
 
-            # Log token usage if available
+            # Token usage if available
             if hasattr(ai_message, "response_metadata"):
                 metadata = ai_message.response_metadata
                 token_usage = metadata.get("token_usage", {})
                 if token_usage:
-                    prompt_tokens = token_usage.get("prompt_tokens", 0)
-                    completion_tokens = token_usage.get("completion_tokens", 0)
-                    total_tokens = token_usage.get("total_tokens", 0)
+                    resp_summary["tokens"] = {
+                        "prompt": token_usage.get("prompt_tokens", 0),
+                        "completion": token_usage.get("completion_tokens", 0),
+                        "total": token_usage.get("total_tokens", 0),
+                    }
 
-                    logger.debug(
-                        "[LLM Trace #%d] Token usage: prompt=%d, completion=%d, total=%d",
-                        trace_id,
-                        prompt_tokens,
-                        completion_tokens,
-                        total_tokens,
-                    )
-
-            # Log tool calls if present
+            # Tool calls if present
             if hasattr(ai_message, "tool_calls") and ai_message.tool_calls:
-                tool_count = len(ai_message.tool_calls)
-                tool_names = [tc.get("name", "unknown") for tc in ai_message.tool_calls]
-                logger.debug(
-                    "[LLM Trace #%d] Tool calls: %d (%s)",
-                    trace_id,
-                    tool_count,
-                    ", ".join(tool_names[:5]),
-                )
+                tool_names = [tc.get("name", "unknown") for tc in ai_message.tool_calls[:5]]
+                resp_summary["tools"] = {"count": len(ai_message.tool_calls), "names": tool_names}
+
+            logger.debug("[LLM Trace #%d] Response: %s", trace_id, resp_summary)
         else:
             logger.debug(
-                "[LLM Trace #%d] Response: %dms (no AI message in response)",
-                trace_id,
-                duration_ms,
+                "[LLM Trace #%d] Response: %s", trace_id, {"duration_ms": duration_ms, "error": "no AI message"}
             )
 
     def _log_error(self, trace_id: int, error: Exception, duration_ms: int) -> None:

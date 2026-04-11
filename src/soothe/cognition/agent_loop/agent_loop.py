@@ -124,7 +124,7 @@ class AgentLoop:
         checkpoint = state_manager.load()
         if checkpoint and checkpoint.status == "running":
             logger.info(
-                "[Layer2] Recovering from checkpoint at iteration %d",
+                "Recovering from checkpoint at iteration %d",
                 checkpoint.iteration,
             )
             # Derive prior conversation from step outputs (RFC-205)
@@ -209,7 +209,7 @@ class AgentLoop:
                     flush=True,
                 )
                 logger.info(
-                    "[Layer1] Starting final report generation (full_output=%d chars, evidence=%d chars)",
+                    "Starting final report generation (full_output=%d chars, evidence=%d chars)",
                     len(reason_result.full_output or ""),
                     len(reason_result.evidence_summary or ""),
                 )
@@ -264,20 +264,20 @@ Use all tool results and AI responses available in the conversation history to c
                                                 last_ai_text = "".join(parts)
 
                     logger.info(
-                        "[Layer1] Stream completed: %d chunks, %d AI messages, last_ai_text=%d chars",
+                        "Stream completed: %d chunks, %d AI messages, last_ai_text=%d chars",
                         chunk_count,
                         ai_msg_count,
                         len(last_ai_text),
                     )
                     if last_ai_text:
                         final_output = last_ai_text
-                        logger.info("[Layer1] Final report generated via CoreAgent (%d chars)", len(final_output))
+                        logger.info("Final report generated via CoreAgent (%d chars)", len(final_output))
                     else:
-                        logger.warning("[Layer1] No AI text response from CoreAgent, using evidence")
+                        logger.warning("No AI text response from CoreAgent, using evidence")
 
                 except Exception as e:
                     # Fallback to evidence on failure
-                    logger.warning("[Layer1] Final report generation failed: %s, using evidence", e)
+                    logger.warning("Final report generation failed: %s, using evidence", e)
 
                 # Update reason_result with final output
                 if final_output != reason_result.full_output:

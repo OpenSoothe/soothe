@@ -16,7 +16,6 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
-from soothe.utils.text_preview import preview_lines
 
 logger = logging.getLogger(__name__)
 
@@ -996,47 +995,41 @@ class LLMPlanner:
 
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
 
-        # LLM tracing - verbose debug logs for prompt analysis
-        logger.debug("[LLMPlanner.reason] ====== Messages to LLM ======")
-        logger.debug("[LLMPlanner.reason] Message count: %d", len(messages))
+        # Compact LLM input summary with full messages
+        msg_summary = {
+            "count": len(messages),
+            "types": [type(m).__name__ for m in messages],
+        }
+        # Include full HumanMessage content (original format)
         for i, msg in enumerate(messages):
-            msg_type = type(msg).__name__
-            content_len = len(str(msg.content)) if hasattr(msg, "content") else len(str(msg))
-            logger.debug(
-                "[SimplePlanner.reason] Message %d: type=%s, content_len=%d",
-                i,
-                msg_type,
-                content_len,
-            )
-            # Log preview (beginning and last lines) for visibility
-            full_content = str(msg.content) if hasattr(msg, "content") else str(msg)
-            content_preview = preview_lines(full_content, first=5, last=3)
-            logger.debug(
-                "[SimplePlanner.reason] Message %d PREVIEW:\n%s",
-                i,
-                content_preview,
-            )
-        logger.debug("[LLMPlanner.reason] ====== End Messages ======")
+            from langchain_core.messages import HumanMessage
+
+            if isinstance(msg, HumanMessage):
+                msg_summary["human_msg"] = msg.content
+                break
+        logger.debug("[LLMPlanner] Input messages: %s", msg_summary)
 
         try:
             # Use structured output to enforce ReasonResult schema (fixes tool-call token issue)
             structured_model = self._model.with_structured_output(ReasonResult)
             result = await structured_model.ainvoke(messages)
 
-            # LLM tracing - verbose debug logs for structured result
-            logger.debug("[LLMPlanner.reason] ====== Structured ReasonResult ======")
-            logger.debug("[LLMPlanner.reason] Status: %s", result.status)
-            logger.debug(
-                "[LLMPlanner.reason] Plan action: %s, has_decision: %s",
-                result.plan_action,
-                result.decision is not None,
-            )
-            logger.debug(
-                "[LLMPlanner.reason] Progress: %.0f%%, Confidence: %.0f%%",
-                result.goal_progress * 100,
-                result.confidence * 100,
-            )
-            logger.debug("[LLMPlanner.reason] ====== End Structured Result ======")
+            # Compact LLM output summary with full result in original JSON format
+            result_dict = {
+                "status": result.status,
+                "plan": result.plan_action,
+                "progress": f"{result.goal_progress * 100:.0f}%",
+                "conf": f"{result.confidence * 100:.0f}%",
+            }
+            if result.decision:
+                result_dict["decision"] = {
+                    "type": result.decision.type,
+                    "mode": result.decision.execution_mode,
+                    "steps": len(result.decision.steps),
+                }
+            if result.reasoning:
+                result_dict["reasoning"] = result.reasoning[:200]
+            logger.debug("[LLMPlanner] LLM output: %s", result_dict)
         except Exception:
             logger.exception("LLMPlanner.reason failed")
             return ReasonResult(

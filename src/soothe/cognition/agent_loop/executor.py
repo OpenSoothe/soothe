@@ -72,19 +72,6 @@ class Executor:
             return 0
         return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
 
-    def _layer2_output_contract_suffix(self) -> str:
-        """Anti-repetition instructions appended to Layer 2 Act user messages."""
-        if self._config is None or not self._config.agentic.layer2_output_contract_enabled:
-            return ""
-        return (
-            "\n\n<SOOTHE_LAYER2_OUTPUT_CONTRACT>\n"
-            "- After tool or subagent results arrive, add at most two short wrap-up sentences in your own words.\n"
-            "- Do NOT paste the full tool/subagent output again unless the user explicitly asked for a "
-            "verbatim repeat.\n"
-            "- If the tool output already satisfies the user-visible deliverable, stop there.\n"
-            "</SOOTHE_LAYER2_OUTPUT_CONTRACT>\n"
-        )
-
     def _aggregate_wave_metrics(
         self,
         step_results: list[StepResult],
@@ -361,41 +348,13 @@ class Executor:
 
         combined_description = self._build_sequential_input(steps)
 
-        # LLM tracing - verbose debug logs for act phase analysis
+        # Compact input summary log
         logger.debug(
-            "[Act Phase INPUT] ====== Sequential Wave START (steps=%d) ======",
+            "[Act Phase INPUT] Wave: %d steps, thread=%s, workspace=%s, desc_len=%d",
             len(steps),
-        )
-        logger.debug(
-            "[Act Phase INPUT] Steps (%d):",
-            len(steps),
-        )
-        for i, s in enumerate(steps):
-            logger.debug(
-                "  Step %d (id=%s): %s",
-                i,
-                s.id,
-                s.description,
-            )
-            logger.debug(
-                "    Tools: %s, Subagent: %s, Expected: %s, Dependencies: %s",
-                s.tools or "none",
-                s.subagent or "none",
-                s.expected_output,
-                s.dependencies or "none",
-            )
-        logger.debug(
-            "[Act Phase INPUT] Combined description length: %d chars",
-            len(combined_description),
-        )
-        logger.debug(
-            "[Act Phase INPUT] FULL COMBINED DESCRIPTION:\n%s",
-            combined_description,
-        )
-        logger.debug(
-            "[Act Phase INPUT] Thread ID: %s, Workspace: %s",
             state.thread_id,
             state.workspace or "none",
+            len(combined_description),
         )
 
         logger.info(
@@ -414,11 +373,9 @@ class Executor:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
             if state.workspace:
                 configurable["workspace"] = state.workspace
-
-            logger.debug(
-                "[Act Phase INPUT] Configurable: %s",
-                configurable,
-            )
+            # Pass current_decision for middleware to inject agent loop output contract
+            if state.current_decision:
+                configurable["current_decision"] = state.current_decision
 
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
@@ -426,8 +383,6 @@ class Executor:
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             )
-
-            logger.debug("[Act Phase EXECUTION] ====== Streaming from Layer 1 ======")
 
             tool_call_count = 0
             async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
@@ -440,26 +395,15 @@ class Executor:
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
-            # LLM tracing - verbose debug logs for act phase output
+            # Compact wave completion summary log
             logger.debug(
-                "[Act Phase OUTPUT] ====== Sequential Wave COMPLETED ======",
-            )
-            logger.debug(
-                "[Act Phase OUTPUT] Duration: %dms, Output length: %d chars, Events: %d, Tool calls: %d",
+                "[Act Phase OUTPUT] Wave completed: %dms, %d chars, %d events, %d tool_calls, %d subagent_tasks (cap=%s)",
                 duration_ms,
                 len(output),
                 event_count,
                 tool_call_count,
-            )
-            logger.debug(
-                "[Act Phase OUTPUT] Subagent tasks: %d, Cap hit: %s",
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
-            )
-            # Log output summary instead of full content to avoid truncation
-            logger.debug(
-                "[Act Phase OUTPUT] Output length: %d chars (summary logged, not full content)",
-                len(output) if output else 0,
             )
             logger.info(
                 "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d "
@@ -489,53 +433,8 @@ class Executor:
                 )
             )
 
-            logger.debug(
-                "[Act Phase OUTPUT] Step results (%d):",
-                len(step_results),
-            )
-            for i, sr in enumerate(step_results):
-                logger.debug(
-                    "  Step result %d (id=%s): success=%s, outcome_type=%s",
-                    i,
-                    sr.step_id,
-                    sr.success,
-                    sr.outcome.get("type", "unknown") if sr.outcome else "none",
-                )
-                logger.debug(
-                    "    Duration: %dms, Tool calls: %d, Subagent completions: %d",
-                    sr.duration_ms,
-                    sr.tool_call_count,
-                    sr.subagent_task_completions,
-                )
-                # Log outcome summary instead of full dict to avoid truncation
-                if sr.outcome:
-                    logger.debug(
-                        "    Outcome: type=%s, tool=%s, call_id=%s, size=%d bytes, entities=%d, file_ref=%s",
-                        sr.outcome.get("type"),
-                        sr.outcome.get("tool_name"),
-                        sr.outcome.get("tool_call_id"),
-                        sr.outcome.get("size_bytes", 0),
-                        len(sr.outcome.get("entities", [])),
-                        sr.outcome.get("file_ref", "none"),
-                    )
-                    success_indicators = sr.outcome.get("success_indicators", {})
-                    if success_indicators:
-                        logger.debug(
-                            "    Success indicators: %s",
-                            success_indicators,
-                        )
-
             # Aggregate metrics into LoopState
             self._aggregate_wave_metrics(step_results, output, state)
-
-            logger.debug(
-                "[Act Phase OUTPUT] Updated state metrics: tool_calls=%d, subagent_tasks=%d, output_len=%d, errors=%d",
-                state.last_wave_tool_call_count,
-                state.last_wave_subagent_task_count,
-                state.last_wave_output_length,
-                state.last_wave_error_count,
-            )
-            logger.debug("[Act Phase OUTPUT] ====== End Sequential Wave ======")
 
             # Yield step results
             for sr in step_results:
@@ -649,9 +548,12 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            # Pass current_decision for middleware to inject agent loop output contract
+            # Note: For single step execution, we don't have LoopState here
+            # The middleware should check for absence and not inject contract
             config = {"configurable": configurable}
 
-            step_body = f"Execute: {step.description}{self._layer2_output_contract_suffix()}"
+            step_body = f"Execute: {step.description}"
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=step_body)]},
                 config=config,
@@ -787,13 +689,6 @@ class Executor:
         async for chunk in stream:
             stream_chunk_count += 1
 
-            # LLM tracing - log every 50th chunk at debug level
-            if stream_chunk_count % 50 == 0:
-                logger.debug(
-                    "[Act Phase STREAM] Chunk %d: type=%s",
-                    stream_chunk_count,
-                    type(chunk).__name__,
-                )
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                 namespace, mode, data = chunk
@@ -813,13 +708,6 @@ class Executor:
                             tool_call_id = msg.tool_call_id
                             tool_name = msg.name or "unknown"
 
-                            logger.debug(
-                                "[Act Phase TOOL] Tool call %d: name=%s, id=%s",
-                                tool_call_count,
-                                tool_name,
-                                tool_call_id,
-                            )
-
                             if _maybe_cap_subagent_tasks(msg):
                                 break
 
@@ -834,13 +722,6 @@ class Executor:
                                     elif isinstance(c, dict) and "text" in c:
                                         chunks.append(c["text"])
 
-                            # Log content summary instead of full content to avoid truncation
-                            content_preview = preview_first(str(content), 200) if content else "none"
-                            logger.debug(
-                                "[Act Phase TOOL] Content preview (first 200 chars): %s",
-                                content_preview,
-                            )
-
                             # RFC-211: Generate structured metadata for Layer 2
                             outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
 
@@ -849,35 +730,18 @@ class Executor:
                             file_ref = cache.save(tool_call_id, content_str, outcome)
                             if file_ref:
                                 outcome["file_ref"] = file_ref
-                                logger.debug(
-                                    "[Act Phase TOOL] Cached to file: %s",
-                                    file_ref,
-                                )
 
                             outcomes.append(outcome)
 
+                            # Compact tool execution log: one line with essential info
                             logger.debug(
-                                "[Act Phase TOOL] Outcome: type=%s, tool=%s, call_id=%s, size=%d bytes, entities=%d, file_ref=%s",
-                                outcome.get("type"),
-                                outcome.get("tool_name"),
-                                outcome.get("tool_call_id"),
-                                outcome.get("size_bytes", 0),
-                                len(outcome.get("entities", [])),
-                                outcome.get("file_ref", "none"),
-                            )
-                            # Log success indicators briefly
-                            success_indicators = outcome.get("success_indicators", {})
-                            if success_indicators:
-                                logger.debug(
-                                    "[Act Phase TOOL] Success indicators: %s",
-                                    success_indicators,
-                                )
-                            logger.debug(
-                                "Tool %s (id=%s) executed, outcome type=%s, size=%d bytes",
+                                "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
+                                tool_call_count,
                                 tool_name,
                                 tool_call_id,
-                                outcome.get("type"),
+                                outcome.get("type", "unknown"),
                                 outcome.get("size_bytes", 0),
+                                f", cached={file_ref}" if file_ref else "",
                             )
                         elif isinstance(msg, AIMessage):
                             # Extract AI response content
@@ -984,7 +848,7 @@ class Executor:
         """
         descriptions = [f"{i + 1}. {step.description}" for i, step in enumerate(steps)]
         body = "Execute these steps sequentially:\n" + "\n".join(descriptions)
-        return body + self._layer2_output_contract_suffix()
+        return body
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.

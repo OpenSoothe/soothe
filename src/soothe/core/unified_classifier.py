@@ -12,7 +12,7 @@ Architecture Decision (RFC-0016):
 - Planning handles intent classification and plan generation in a single call.
 - Returns safe default ("medium") if LLM fails or unavailable.
 
-Classification Tiers:
+Complexity Levels:
 - chitchat: Simple greetings and conversational fillers (skips planning/memory)
 - medium: Questions requiring research/planning, multi-step tasks (default)
 - complex: Architecture design, migrations, large refactoring
@@ -47,7 +47,7 @@ CapabilityDomain = Literal["research", "workspace", "execute", "data", "browse",
 
 
 class RoutingResult(BaseModel):
-    """Tier-1 fast routing result (2 fields only)."""
+    """Fast routing result from unified classification."""
 
     task_complexity: Literal["chitchat", "medium", "complex"] = Field(description="chitchat | medium | complex")
     chitchat_response: str | None = Field(
@@ -200,7 +200,7 @@ class UnifiedClassifier:
         else:
             self._routing_model = None
 
-    # -- two-tier public API ------------------------------------------------
+    # -- public API ------------------------------------------------
 
     async def classify_routing(
         self,
@@ -208,7 +208,7 @@ class UnifiedClassifier:
         *,
         recent_messages: list[Any] | None = None,
     ) -> RoutingResult:
-        """Tier-1: fast routing classification (~2-4s).
+        """Unified fast classification (~2-4s).
 
         Returns task_complexity and, for chitchat, a piggybacked response.
         This is the minimum information needed to decide the execution path.
@@ -260,14 +260,14 @@ class UnifiedClassifier:
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "Tier-1 routing classification attempt failed (%s), retrying...",
+                    "Unified classification attempt failed (%s), retrying...",
                     label,
                 )
                 logger.debug("Routing failure details: %s", exc, exc_info=True)
 
         if result is None:
             logger.warning(
-                "Tier-1 routing classification failed after retry, using default 'medium' (last error: %s)",
+                "Unified classification failed after retry, using default 'medium' (last error: %s)",
                 type(last_error).__name__ if last_error else "unknown",
             )
             return RoutingResult(task_complexity="medium")
@@ -276,7 +276,7 @@ class UnifiedClassifier:
             result.chitchat_response = self._fallback_chitchat_response(query)
             logger.debug("Patched missing chitchat_response for query: %s", preview_first(query, 50))
 
-        logger.debug("Tier-1 routing: task_complexity=%s", result.task_complexity)
+        logger.debug("Unified classification: task_complexity=%s", result.task_complexity)
         return result
 
     # -- internal LLM calls -------------------------------------------------
@@ -288,7 +288,7 @@ class UnifiedClassifier:
         conversation_context: str = "",
         retry_mode: bool = False,
     ) -> RoutingResult:
-        """Tier-1 LLM call with compact routing prompt."""
+        """Fast LLM call with compact routing prompt."""
         from datetime import UTC, datetime
 
         current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")

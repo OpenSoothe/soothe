@@ -452,7 +452,7 @@ class PhasesMixin:
         Args:
             user_input: User query text.
             state: Mutable RunnerState.
-            complexity: Override complexity (when known from tier-1 routing).
+            complexity: Override complexity (when known from unified classification).
                 Falls back to state.unified_classification or "medium".
         """
         self._ensure_runner_state_workspace(state)
