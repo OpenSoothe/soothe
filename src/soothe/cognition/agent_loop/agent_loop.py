@@ -180,7 +180,7 @@ class AgentLoop:
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
                     "confidence": reason_result.confidence,
-                    "next_action": reason_result.next_action,
+                    "next_action": reason_result.next_action,  # Full action (no truncation)
                     "plan_action": reason_result.plan_action,
                 },
             )
@@ -426,7 +426,7 @@ Use all tool results and AI responses available in the conversation history to c
                     "iteration": iteration_completed,  # Use pre-increment value
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
-                    "next_action": reason_result.next_action,
+                    "next_action": reason_result.next_action,  # Full action (no truncation)
                 },
             )
 

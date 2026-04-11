@@ -82,11 +82,11 @@ class ReasonStepRecord(BaseModel):
     status: Literal["done", "continue", "replan"]
     goal_progress: float
 
+    # Action (IG-152: full text, no truncation)
+    next_action: str = Field(default="", description="Complete action text (500 chars)")
+
     # Decision
     decision: dict | None = Field(description="AgentDecision serialized")
-
-    # Output
-    next_action: str
 
 
 class WorkingMemoryEntry(BaseModel):
