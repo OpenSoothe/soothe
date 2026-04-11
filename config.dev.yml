@@ -286,6 +286,9 @@ agentic:
   # Only used when Act execution uses isolated threads (no checkpoint access)
   prior_conversation_limit: 10
 
+  # Model context window token limit for percentage calculation (IG-151)
+  context_window_limit: 200000  # Claude models default
+
 # =============================================================================
 # Autonomous Operation
 # =============================================================================

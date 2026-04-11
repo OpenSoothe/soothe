@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from langchain_core.messages import AIMessage, BaseMessage
+
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, StepAction, StepResult
 from soothe.utils.text_preview import create_output_summary, preview_first
 
@@ -72,10 +74,33 @@ class Executor:
             return 0
         return max(0, int(self._config.agentic.max_subagent_tasks_per_wave))
 
+    def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
+        """Extract token usage from last AIMessage response metadata.
+
+        Args:
+            messages: List of messages from CoreAgent execution
+
+        Returns:
+            Dict with prompt_tokens, completion_tokens, total_tokens (or empty dict if unavailable)
+        """
+        # Find last AIMessage with usage_metadata
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage) and hasattr(msg, "response_metadata"):
+                metadata = msg.response_metadata
+                token_usage = metadata.get("token_usage", {})
+                if token_usage:
+                    return {
+                        "prompt": token_usage.get("prompt_tokens", 0),
+                        "completion": token_usage.get("completion_tokens", 0),
+                        "total": token_usage.get("total_tokens", 0),
+                    }
+        return {}
+
     def _aggregate_wave_metrics(
         self,
         step_results: list[StepResult],
         output: str,
+        messages: list[BaseMessage],
         state: LoopState,
     ) -> None:
         """Aggregate metrics from wave execution into LoopState.
@@ -85,6 +110,7 @@ class Executor:
         Args:
             step_results: List of step results from the wave
             output: Combined output text from the wave
+            messages: Messages from CoreAgent execution (for token extraction)
             state: LoopState to update with aggregated metrics
         """
         # Sum tool calls and subagent tasks
@@ -107,14 +133,30 @@ class Executor:
         state.last_wave_output_length = output_length
         state.last_wave_error_count = error_count
 
-        # Context window metrics estimation from output length
-        # Note: In future, extract from model response usage_metadata for accuracy
-        if output_length > 0 and self._config is not None:
-            # Rough estimate: ~4 chars per token (varies by language/model)
-            estimated_tokens = output_length // 4
+        # Context window metrics with actual token usage (IG-151)
+        token_usage = self._extract_token_usage(messages)
+
+        if token_usage and "total" in token_usage:
+            # Use actual token count from LLM response
+            actual_tokens = token_usage["total"]
+            state.total_tokens_used += actual_tokens
+            logger.debug(
+                "[Tokens] LLM actual=%d (prompt=%d completion=%d)",
+                actual_tokens,
+                token_usage.get("prompt", 0),
+                token_usage.get("completion", 0),
+            )
+        elif output:
+            # Fallback: use tiktoken for accurate estimation
+            from soothe.utils.token_counting import count_tokens
+
+            estimated_tokens = count_tokens(output)
             state.total_tokens_used += estimated_tokens
-            # Assume 200k context limit for estimation (configurable in future)
-            context_limit = 200_000
+            logger.debug("[Tokens] tiktoken estimated=%d", estimated_tokens)
+
+        # Use configurable context limit (IG-151)
+        if self._config is not None:
+            context_limit = self._config.agentic.context_window_limit
             state.context_percentage_consumed = min(1.0, state.total_tokens_used / context_limit)
 
     async def execute(
@@ -141,7 +183,7 @@ class Executor:
             return
 
         logger.info(
-            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
+            "[Execute] steps=%d mode=%s max_parallel=%d",
             len(ready_steps),
             decision.execution_mode,
             self._max_parallel_steps,
@@ -325,7 +367,9 @@ class Executor:
             # RFC-211: Use outcome metadata to get size
             output_lengths = [r.outcome.get("size_bytes", 0) for r in all_step_results if r.success and r.outcome]
             max_output_len = max(output_lengths) if output_lengths else 0
-            self._aggregate_wave_metrics(all_step_results, "", state)
+            # IG-151: For parallel execution, we don't have unified messages (each step has its own)
+            # This is acceptable as token tracking is more relevant for sequential mode
+            self._aggregate_wave_metrics(all_step_results, "", [], state)
             state.last_wave_output_length = max_output_len
 
     async def _execute_sequential_waves(
@@ -363,15 +407,15 @@ class Executor:
 
         # Compact input summary log
         logger.debug(
-            "[Act Phase INPUT] Wave: %d steps, thread=%s, workspace=%s, desc_len=%d",
+            "[Execute-Seq] steps=%d thread=%s workspace=%s desc_len=%d",
             len(steps),
-            state.thread_id,
-            state.workspace or "none",
+            state.thread_id[:12] if state.thread_id else "none",
+            state.workspace[:30] if state.workspace else "none",
             len(combined_description),
         )
 
         logger.info(
-            "Executing %d steps in mode: %s (max_parallel_steps=%d)",
+            "[Execute-Seq] steps=%d mode=%s max_parallel=%d",
             len(steps),
             state.current_decision.execution_mode if state.current_decision else "sequential",
             self._max_parallel_steps,
@@ -398,19 +442,21 @@ class Executor:
             )
 
             tool_call_count = 0
-            async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
+            messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
+            async for final_output, event, tc_count, msg_list in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     event_count += 1
                     yield event
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
+                    messages = msg_list  # IG-151: Save messages for metrics
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
             # Compact wave completion summary log
             logger.debug(
-                "[Act Phase OUTPUT] Wave completed: %dms, %d chars, %d events, %d tool_calls, %d subagent_tasks (cap=%s)",
+                "[Wave-Seq] duration=%dms output=%d events=%d tools=%d subagents=%d cap=%s",
                 duration_ms,
                 len(output),
                 event_count,
@@ -419,12 +465,10 @@ class Executor:
                 budget.hit_subagent_cap,
             )
             logger.info(
-                "Sequential wave (%d steps) completed in %dms — output len %d, events %d, tool_calls %d "
-                "(subagent_tasks=%d cap_hit=%s)",
+                "[Wave-Seq] steps=%d duration=%dms output=%d tools=%d subagents=%d cap=%s",
                 len(steps),
                 duration_ms,
                 len(output),
-                event_count,
                 tool_call_count,
                 budget.subagent_task_completions,
                 budget.hit_subagent_cap,
@@ -448,7 +492,7 @@ class Executor:
             )
 
             # Aggregate metrics into LoopState
-            self._aggregate_wave_metrics(step_results, output, state)
+            self._aggregate_wave_metrics(step_results, output, messages, state)
 
             # Yield step results
             for sr in step_results:
@@ -478,7 +522,7 @@ class Executor:
             )
 
             # Aggregate metrics (includes error count)
-            self._aggregate_wave_metrics(step_results, "", state)
+            self._aggregate_wave_metrics(step_results, "", [], state)  # No messages on error
 
             # Yield step results
             for sr in step_results:
@@ -577,12 +621,14 @@ class Executor:
 
             # Stream events and collect outcome metadata (RFC-211)
             tool_call_count = 0
-            async for final_output, event, tc_count in self._stream_and_collect(stream, budget=budget):
+            async for final_output, event, tc_count, _msg_list in self._stream_and_collect(stream, budget=budget):
                 if event is not None:
                     events.append(event)
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
+                    # Note: Single step execution doesn't need messages for token tracking
+                    # Token tracking is primarily for sequential Act waves
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -654,7 +700,7 @@ class Executor:
         stream: AsyncGenerator,
         *,
         budget: _ActStreamBudget | None = None,
-    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None, int], None]:
+    ) -> AsyncGenerator[tuple[str | None, StreamEvent | None, int, list[BaseMessage]], None]:
         """Stream events immediately while accumulating output and counting tool calls.
 
         This is the canonical streaming method that yields events as they arrive
@@ -662,15 +708,16 @@ class Executor:
         result.
 
         RFC-211: Also extracts tool_call_id and generates outcome metadata.
+        IG-151: Collects AIMessage objects for token usage extraction.
 
         Args:
             stream: Async iterator from agent.astream()
             budget: Optional Act wave budget (subagent ``task`` cap, IG-130).
 
         Yields:
-            Tuple of (output, event, tool_call_count):
-            - When event is not None: yield (None, event, 0) for immediate display
-            - At end: yield (combined_output, None, tool_call_count) for final result
+            Tuple of (output, event, tool_call_count, messages):
+            - When event is not None: yield (None, event, 0, []) for immediate display
+            - At end: yield (combined_output, None, tool_call_count, messages) for final result
         """
         from langchain_core.messages import AIMessage, ToolMessage
 
@@ -679,6 +726,7 @@ class Executor:
 
         chunks: list[str] = []
         tool_call_count = 0
+        messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
 
         # RFC-211: Initialize cache and collect outcomes
         cache = ToolResultCache(budget.thread_id if budget and hasattr(budget, "thread_id") else "unknown")
@@ -713,7 +761,7 @@ class Executor:
 
                 # Yield event immediately for real-time display
                 # EventProcessor will handle filtering and rendering
-                yield None, chunk, 0
+                yield None, chunk, 0, []
 
                 # Also extract content for output collection
                 if mode == "messages" and not namespace:
@@ -762,6 +810,8 @@ class Executor:
                                 f", cached={file_ref}" if file_ref else "",
                             )
                         elif isinstance(msg, AIMessage):
+                            # IG-151: Collect AIMessage for token extraction
+                            messages.append(msg)
                             # Extract AI response content
                             if isinstance(msg.content, str) and msg.content:
                                 chunks.append(msg.content)
@@ -853,7 +903,7 @@ class Executor:
                 chunks.append(str(chunk.content))
 
         # Final yield with combined output and tool call count
-        yield "".join(chunks), None, tool_call_count
+        yield "".join(chunks), None, tool_call_count, messages
 
     def _build_sequential_input(self, steps: list) -> str:
         """Build combined input for sequential execution.

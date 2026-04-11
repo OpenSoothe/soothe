@@ -131,7 +131,7 @@ def reflect_heuristic(
         parts.append(f"Blocked by dependencies: {blocked}")
 
     logger.debug(
-        "Reflection: completed=%d failed=%d blocked=%d direct_failed=%d",
+        "[Reflect] completed=%d failed=%d blocked=%d direct=%d",
         completed,
         len(failed_list),
         len(blocked),
@@ -524,7 +524,7 @@ def _repair_truncated_json(text: str) -> str:
 
     if repair:
         logger.debug(
-            "[LLMPlanner] JSON repair: added %d closing chars (%s) to truncated JSON",
+            "[JSON-Repair] added %d chars (%s) to truncated JSON",
             len(repair),
             repair,
         )

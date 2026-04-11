@@ -91,7 +91,7 @@ class ReasonPhase:
                     update={"full_output": "\n\n".join(full_outputs)},
                 )
 
-        # Track action in history (used by completion detection)
+        # Track action in history (full reasoning chain for progression detection)
         state.add_action_to_history(result.next_action or "")
 
         successes = sum(1 for r in state.step_results if r.success)

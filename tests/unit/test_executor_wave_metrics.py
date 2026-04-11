@@ -60,7 +60,8 @@ def test_aggregate_metrics_basic(mock_core_agent, config, state):
     ]
 
     output = "Combined output text"
-    executor._aggregate_wave_metrics(step_results, output, state)
+    messages = []  # Empty messages for test
+    executor._aggregate_wave_metrics(step_results, output, messages, state)
 
     assert state.last_wave_tool_call_count == 5  # 2 + 3
     assert state.last_wave_subagent_task_count == 1  # 1 + 0
@@ -97,7 +98,7 @@ def test_aggregate_metrics_with_errors(mock_core_agent, config, state):
         ),
     ]
 
-    executor._aggregate_wave_metrics(step_results, "Output", state)
+    executor._aggregate_wave_metrics(step_results, "Output", [], state)
 
     assert state.last_wave_error_count == 1
 
@@ -119,7 +120,7 @@ def test_aggregate_metrics_cap_hit(mock_core_agent, config, state):
         ),
     ]
 
-    executor._aggregate_wave_metrics(step_results, "Output", state)
+    executor._aggregate_wave_metrics(step_results, "Output", [], state)
 
     assert state.last_wave_hit_subagent_cap is True
 
@@ -128,7 +129,7 @@ def test_aggregate_metrics_empty_results(mock_core_agent, config, state):
     """Metrics aggregation handles empty results."""
     executor = Executor(mock_core_agent, config=config)
 
-    executor._aggregate_wave_metrics([], "", state)
+    executor._aggregate_wave_metrics([], "", [], state)
 
     assert state.last_wave_tool_call_count == 0
     assert state.last_wave_subagent_task_count == 0
@@ -157,12 +158,12 @@ def test_aggregate_metrics_context_window_estimation(mock_core_agent, config, st
         ),
     ]
 
-    executor._aggregate_wave_metrics(step_results, output, state)
+    executor._aggregate_wave_metrics(step_results, output, [], state)
 
-    # Should estimate ~1000 tokens (4000 chars / 4)
-    assert state.total_tokens_used == 1000
-    # Should be ~0.5% of 200k context limit
-    assert 0.004 <= state.context_percentage_consumed <= 0.006
+    # Tiktoken estimates 500 tokens for 4000 'x' chars (IG-151)
+    assert state.total_tokens_used == 500
+    # Should be ~0.25% of 200k context limit
+    assert 0.002 <= state.context_percentage_consumed <= 0.003
 
 
 def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
@@ -183,7 +184,7 @@ def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
             hit_subagent_cap=False,
         ),
     ]
-    executor._aggregate_wave_metrics(step_results1, output1, state)
+    executor._aggregate_wave_metrics(step_results1, output1, [], state)
     first_total = state.total_tokens_used
 
     # Second wave
@@ -200,12 +201,14 @@ def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
             hit_subagent_cap=False,
         ),
     ]
-    executor._aggregate_wave_metrics(step_results2, output2, state)
+    executor._aggregate_wave_metrics(step_results2, output2, [], state)
 
-    # Should accumulate: 1000 + 2000 = 3000
+    # Tiktoken estimates: 500 (first) + 2000 (second) = 2500 total
+    # First: 4000 'x' chars = 500 tokens
+    # Second: 8000 'y' chars = 2000 tokens
     assert state.total_tokens_used == first_total + 2000
-    # Should be ~1.5% of 200k context limit
-    assert 0.014 <= state.context_percentage_consumed <= 0.016
+    # Should be ~1.25% of 200k context limit
+    assert 0.012 <= state.context_percentage_consumed <= 0.013
 
 
 def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
@@ -235,7 +238,7 @@ def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
         ),
     ]
 
-    executor._aggregate_wave_metrics(step_results, "Output", state)
+    executor._aggregate_wave_metrics(step_results, "Output", [], state)
 
     # Any cap hit = True
     assert state.last_wave_hit_subagent_cap is True

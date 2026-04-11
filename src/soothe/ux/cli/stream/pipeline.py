@@ -459,11 +459,10 @@ class StreamDisplayPipeline:
         ]
 
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle AgentLoop Reason progress with prominent reasoning display."""
+        """Handle AgentLoop Reason progress with prominent reasoning display (IG-152)."""
         status = event.get("status", "")
 
-        # Extract action summary (priority order)
-        # Priority: next_action > derived from status
+        # Extract action text (IG-152: full text, no truncation in schema or display)
         action_text = event.get("next_action", "").strip() or self._derive_action_from_status(status)
 
         if not action_text:
@@ -473,16 +472,9 @@ class StreamDisplayPipeline:
         if action_text and action_text[0].islower():
             action_text = action_text[0].upper() + action_text[1:]
 
-        # Polish: Truncate long messages to 120 chars for readability
-        max_len = 120
-        if len(action_text) > max_len:
-            # Find last complete word before cutoff
-            truncated = action_text[:max_len]
-            last_space = truncated.rfind(" ")
-            if last_space > max_len - 20:  # Keep at least 100 chars
-                action_text = truncated[:last_space] + "…"
-            else:
-                action_text = truncated.rstrip() + "…"
+        # IG-152: Show full action text to user (no truncation)
+        # Word boundary respect happens at schema level (preview_first in planner)
+        # CLI display should show complete reasoning chain for transparency
 
         # Deduplicate repeated actions
         if not self._presentation.should_emit_action(action_text=action_text):

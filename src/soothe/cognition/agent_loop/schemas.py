@@ -86,14 +86,15 @@ class AgentDecision(BaseModel):
 
 
 class ReasonResult(BaseModel):
-    """Simplified Reason phase output for token efficiency (RFC-604).
+    """Reason phase output with full reasoning chain (RFC-604, IG-152).
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
         reasoning: Internal analysis truncated to 500 chars for token efficiency.
-        next_action: User-facing action summary, max 100 chars.
+        next_action: User-facing action summary (smart truncation to 100 chars).
+        full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
         decision: New steps to run when plan_action is new; None when keep.
         evidence_summary: Accumulated evidence text (often filled after parsing).
@@ -108,8 +109,8 @@ class ReasonResult(BaseModel):
     reasoning: str = Field(default="", max_length=500)
     """Internal analysis, truncated to 500 chars for token efficiency."""
 
-    next_action: str = Field(default="", max_length=100)
-    """User-facing action summary, max 100 chars."""
+    next_action: str = Field(default="", max_length=500)
+    """Complete action text from both phases (no truncation, full reasoning chain visible)."""
 
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
@@ -157,8 +158,8 @@ class StatusAssessment(BaseModel):
     brief_reasoning: str = Field(default="", max_length=100)
     """1-2 sentence status justification."""
 
-    next_action: str = Field(default="", max_length=100)
-    """User-facing next step description."""
+    next_action: str = Field(default="", max_length=300)
+    """User-facing next step description (allows longer text for complex goals)."""
 
 
 class PlanGeneration(BaseModel):
@@ -179,8 +180,8 @@ class PlanGeneration(BaseModel):
     brief_reasoning: str = Field(default="", max_length=100)
     """Why this plan strategy was chosen."""
 
-    next_action: str = Field(default="", max_length=100)
-    """User-facing next step (plan-specific)."""
+    next_action: str = Field(default="", max_length=300)
+    """User-facing next step (plan-specific, allows longer concrete actions)."""
 
 
 class StepResult(BaseModel):

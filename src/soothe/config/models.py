@@ -539,6 +539,13 @@ class AgenticLoopConfig(BaseModel):
         le=50,
     )
 
+    context_window_limit: int = Field(
+        default=200_000,
+        description="Model context window token limit for percentage calculation",
+        ge=10_000,
+        le=1_000_000,
+    )
+
     planning: PlanningConfig = Field(
         default_factory=PlanningConfig,
         description="Planning configuration",
