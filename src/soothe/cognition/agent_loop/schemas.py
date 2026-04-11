@@ -86,29 +86,31 @@ class AgentDecision(BaseModel):
 
 
 class ReasonResult(BaseModel):
-    """Single Reason-phase output: assessment plus optional new plan (ReAct Layer 2).
+    """Simplified Reason phase output for token efficiency (RFC-604).
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
-        reasoning: Internal analysis for tooling/LLM context only - not shown in CLI/TUI.
-        soothe_next_action: One first-person sentence as Soothe (e.g. I will / I'll) for the
-            immediate next action; primary line in CLI/TUI. Empty when omitted by the model.
-        progress_detail: Optional friendly explanation of distance-to-goal.
-        plan_action: Reuse the in-flight ``AgentDecision`` or supply a new one.
-        decision: New steps to run when ``plan_action`` is ``new``; None when ``keep``.
+        reasoning: Internal analysis truncated to 500 chars for token efficiency.
+        next_action: User-facing action summary, max 100 chars (formerly soothe_next_action).
+        plan_action: Reuse the in-flight AgentDecision or supply a new one.
+        decision: New steps to run when plan_action is new; None when keep.
         evidence_summary: Accumulated evidence text (often filled after parsing).
-        full_output: Final user-visible answer when status is ``done``.
+        full_output: Final user-visible answer when status is done.
     """
 
     status: Literal["continue", "replan", "done"]
     evidence_summary: str = ""
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
-    reasoning: str = ""
-    soothe_next_action: str = ""
-    progress_detail: str | None = None
+
+    reasoning: str = Field(default="", max_length=500)
+    """Internal analysis, truncated to 500 chars for token efficiency."""
+
+    next_action: str = Field(default="", max_length=100)
+    """User-facing action summary, max 100 chars."""
+
     plan_action: Literal["keep", "new"] = "new"
     decision: AgentDecision | None = None
     full_output: str | None = None
@@ -133,6 +135,52 @@ class ReasonResult(BaseModel):
     def is_done(self) -> bool:
         """Check if goal is achieved."""
         return self.status == "done"
+
+
+class StatusAssessment(BaseModel):
+    """Phase 1: Quick progress/status check (RFC-604 Layer 2).
+
+    Lightweight schema for status assessment, generates ~200-250 tokens.
+
+    Attributes:
+        status: Whether to finish, continue current plan, or replan.
+        goal_progress: Estimated progress toward the goal (0.0-1.0).
+        confidence: Model confidence in the assessment (0.0-1.0).
+        brief_reasoning: 1-2 sentence status justification (max 100 chars).
+        next_action: User-facing next step description (max 100 chars).
+    """
+
+    status: Literal["continue", "replan", "done"]
+    goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+
+    brief_reasoning: str = Field(default="", max_length=100)
+    """1-2 sentence status justification."""
+
+    next_action: str = Field(default="", max_length=100)
+    """User-facing next step description."""
+
+
+class PlanGeneration(BaseModel):
+    """Phase 2: Generate execution plan (conditional) (RFC-604 Layer 2).
+
+    Focused schema for plan generation, generates ~500-800 tokens.
+
+    Attributes:
+        plan_action: Reuse in-flight AgentDecision or supply a new one.
+        decision: New steps to execute.
+        brief_reasoning: Why this plan strategy was chosen (max 100 chars).
+        next_action: User-facing next step (plan-specific, max 100 chars).
+    """
+
+    plan_action: Literal["keep", "new"] = "new"
+    decision: AgentDecision
+
+    brief_reasoning: str = Field(default="", max_length=100)
+    """Why this plan strategy was chosen."""
+
+    next_action: str = Field(default="", max_length=100)
+    """User-facing next step (plan-specific)."""
 
 
 class StepResult(BaseModel):

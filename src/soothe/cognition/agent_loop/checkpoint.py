@@ -86,7 +86,7 @@ class ReasonStepRecord(BaseModel):
     decision: dict | None = Field(description="AgentDecision serialized")
 
     # Output
-    soothe_next_action: str
+    next_action: str
 
 
 class WorkingMemoryEntry(BaseModel):

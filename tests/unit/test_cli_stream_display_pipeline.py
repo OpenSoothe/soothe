@@ -399,8 +399,7 @@ class TestStreamDisplayPipeline:
             "status": "continue",
             "progress": 0.5,
             "confidence": 0.8,
-            "soothe_next_action": "I'll check your config files next.",
-            "progress_detail": "Still need to validate settings.",
+            "next_action": "I'll check your config files next.",
             "iteration": 1,
         }
         lines = pipeline.process(event)
@@ -420,8 +419,7 @@ class TestStreamDisplayPipeline:
             "status": "done",
             "progress": 1.0,
             "confidence": 0.95,
-            "soothe_next_action": "I'm sharing the final result now.",
-            "progress_detail": "",
+            "next_action": "I'm sharing the final result now.",
             "iteration": 3,
         }
         lines = pipeline.process(event)
@@ -511,7 +509,7 @@ class TestStreamDisplayPipeline:
             "status": "continue",
             "progress": 0.4,
             "confidence": 0.8,
-            "soothe_next_action": "I'm searching for README files.",
+            "next_action": "I'm searching for README files.",
             "iteration": 1,
         }
 

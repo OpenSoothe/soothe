@@ -160,7 +160,7 @@ class TestReasonResult:
         result = ReasonResult(
             status="done",
             plan_action="keep",
-            soothe_next_action="I've completed the task.",
+            next_action="I've completed the task.",
             goal_progress=1.0,
             confidence=0.95,
             reasoning="Goal achieved",
@@ -176,7 +176,7 @@ class TestReasonResult:
         done = ReasonResult(
             status="done",
             plan_action="keep",
-            soothe_next_action="I'm done.",
+            next_action="I'm done.",
             goal_progress=1.0,
             reasoning="Done",
         )
@@ -193,7 +193,7 @@ class TestReasonResult:
                 execution_mode="sequential",
                 reasoning="x",
             ),
-            soothe_next_action="I'll continue working.",
+            next_action="I'll continue working.",
             goal_progress=0.5,
             reasoning="Continue",
         )
@@ -209,7 +209,7 @@ class TestReasonResult:
                 execution_mode="sequential",
                 reasoning="r",
             ),
-            soothe_next_action="I'll replan.",
+            next_action="I'll replan.",
             goal_progress=0.3,
             reasoning="Replan",
         )

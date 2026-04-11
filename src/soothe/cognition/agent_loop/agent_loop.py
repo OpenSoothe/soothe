@@ -90,7 +90,7 @@ class AgentLoop:
             goal_progress=0.0,
             confidence=0.0,
             reasoning="No result produced",
-            soothe_next_action="I need to stop here before completion.",
+            next_action="I need to stop here before completion.",
         )
 
     async def run_with_progress(
@@ -180,8 +180,7 @@ class AgentLoop:
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
                     "confidence": reason_result.confidence,
-                    "soothe_next_action": reason_result.soothe_next_action,
-                    "progress_detail": reason_result.progress_detail,
+                    "next_action": reason_result.next_action,
                     "plan_action": reason_result.plan_action,
                 },
             )
@@ -427,7 +426,7 @@ Use all tool results and AI responses available in the conversation history to c
                     "iteration": iteration_completed,  # Use pre-increment value
                     "status": reason_result.status,
                     "progress": reason_result.goal_progress,
-                    "soothe_next_action": reason_result.soothe_next_action,
+                    "next_action": reason_result.next_action,
                 },
             )
 
@@ -456,7 +455,7 @@ Use all tool results and AI responses available in the conversation history to c
             goal_progress=0.0,
             confidence=0.0,
             reasoning="Max iterations reached without completion",
-            soothe_next_action="I've hit the iteration limit; I'll pause here.",
+            next_action="I've hit the iteration limit; I'll pause here.",
         )
         yield (
             "completed",

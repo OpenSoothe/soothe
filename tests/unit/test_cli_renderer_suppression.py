@@ -20,8 +20,8 @@ def test_on_assistant_text_hard_suppress_multi_step():
         # Verify nothing written to stdout
         assert mock_stdout.getvalue() == ""
 
-    # Verify text not accumulated in main response (but accumulated in suppression)
-    assert renderer._state.suppression.full_response == []
+    # Verify text accumulated in suppression for final report (IG-143)
+    assert renderer._state.suppression.full_response == ["This should not appear"]
 
 
 def test_on_assistant_text_emits_after_multi_step_clears():
@@ -113,8 +113,8 @@ def test_on_assistant_text_blocks_during_multi_step_even_with_chunks():
         # Verify nothing written
         assert mock_stdout.getvalue() == ""
 
-    # Verify nothing accumulated in main response (but accumulated in suppression)
-    assert renderer._state.suppression.full_response == []
+    # Verify chunks accumulated in suppression for final report (IG-143)
+    assert renderer._state.suppression.full_response == ["Chunk 1", "Chunk 2", "Chunk 3"]
 
 
 def test_on_assistant_text_allows_text_in_single_step_mode():
