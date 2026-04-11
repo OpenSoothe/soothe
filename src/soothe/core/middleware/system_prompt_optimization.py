@@ -11,6 +11,8 @@ from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -338,7 +340,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             - [thread_123] User prefers Python
             </memory>
         """
-        lines = [f"- [{m.source_thread or 'unknown'}] {m.content[:200]}" for m in memories[:5]]
+        lines = [f"- [{m.source_thread or 'unknown'}] {preview_first(m.content, 200)}" for m in memories[:5]]
         joined = "\n".join(lines)
         return f"<memory>\n{joined}\n</memory>"
 

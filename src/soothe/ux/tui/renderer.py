@@ -28,6 +28,7 @@ from soothe.ux.tui.utils import (
     make_dot_line,
     make_tool_block,
 )
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -404,7 +405,7 @@ class TuiRenderer:
         result_line = Text()
         result_line.append("  └ ", style="dim")
         result_line.append(icon + " ", style=color)
-        result_line.append(brief[:80], style="dim")  # RFC-0020 compliance: 80 char limit
+        result_line.append(preview_first(brief, 80), style="dim")  # RFC-0020 compliance: 80 char limit
 
         # Add duration with appropriate styling
         if duration_ms > 0:
@@ -451,7 +452,7 @@ class TuiRenderer:
         if context:
             error_line.append(f"[{context}] ", style="dim red")
 
-        error_line.append(error[:80], style=color)  # RFC-0020 compliance: 80 char limit
+        error_line.append(preview_first(error, 80), style=color)  # RFC-0020 compliance: 80 char limit
 
         self._on_panel_write(error_line)
 

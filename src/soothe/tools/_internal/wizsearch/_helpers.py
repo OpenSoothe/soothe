@@ -8,6 +8,8 @@ import os
 from collections.abc import Awaitable
 from typing import TypeVar
 
+from soothe.utils.text_preview import preview_first
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -106,7 +108,7 @@ def _save_raw_results(query: str, result: object) -> None:
         search_dir = run_dir / "search_results"
         search_dir.mkdir(parents=True, exist_ok=True)
 
-        slug = re.sub(r"[^\w]+", "_", query)[:60].strip("_")
+        slug = preview_first(re.sub(r"[^\w]+", "_", query), 60).strip("_")
         ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = f"{ts}_{slug}.json"
 

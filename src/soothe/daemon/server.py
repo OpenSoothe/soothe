@@ -30,6 +30,7 @@ from soothe.daemon.singleton import (
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
 from soothe.logging import ThreadLogger
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +322,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     if isinstance(data, dict) and data.get("status") == "in_progress":
                         thread_info = {
                             "thread_id": checkpoint_file.parent.name,
-                            "query": data.get("last_query", "")[:60],
+                            "query": preview_first(data.get("last_query", ""), 60),
                             "mode": data.get("mode", ""),
                             "completed_steps": len(data.get("completed_step_ids", [])),
                             "goals": len(data.get("goals", [])),

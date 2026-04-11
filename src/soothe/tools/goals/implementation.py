@@ -19,6 +19,7 @@ from langchain_core.tools import BaseTool
 from pydantic import Field
 
 from soothe.cognition import GoalEngine
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +343,7 @@ class ReportProgressTool(BaseTool):
         goal = await self.goal_engine.get_goal(goal_id)
         if not goal:
             return {"error": f"Goal {goal_id} not found"}
-        logger.info("Goal %s progress reported: status=%s, findings=%s", goal_id, status, findings[:100])
+        logger.info("Goal %s progress reported: status=%s, findings=%s", goal_id, status, preview_first(findings, 100))
         if self.proposal_queue:
             from soothe.cognition.goal_engine.proposal_queue import Proposal
 
@@ -525,7 +526,7 @@ class AddFindingTool(BaseTool):
                     payload={"content": content, "tags": tags.split(",") if tags else []},
                 )
             )
-        return {"status": "queued", "goal_id": goal_id, "content_preview": content[:100]}
+        return {"status": "queued", "goal_id": goal_id, "content_preview": preview_first(content, 100)}
 
 
 def create_layer2_tools(

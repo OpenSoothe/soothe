@@ -21,6 +21,7 @@ from soothe.ux.cli.stream.formatter import (
 )
 from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.shared.presentation_engine import PresentationEngine
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -274,7 +275,7 @@ class StreamDisplayPipeline:
 
         # Emit tool call for subagent dispatch
         query = event.get("query", event.get("task", event.get("topic", "")))
-        args_summary = f'"{query[:40]}"' if query else ""
+        args_summary = f'"{preview_first(query, 40)}"' if query else ""
         return [
             format_tool_call(
                 f"{name}_subagent",
@@ -335,7 +336,7 @@ class StreamDisplayPipeline:
 
         return [
             format_subagent_milestone(
-                brief[:60],
+                preview_first(brief, 60),
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
@@ -371,7 +372,7 @@ class StreamDisplayPipeline:
 
         return [
             format_subagent_done(
-                summary[:50],
+                preview_first(summary, 50),
                 duration_s,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,

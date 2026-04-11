@@ -13,6 +13,7 @@ from typing import Any
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
 from soothe.logging import InputHistory, ThreadLogger
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,9 @@ class MessageRouter:
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
                 logger.debug(
-                    "[MsgRouter] Putting input in queue: text=%s, client=%s", text[:30], _client_label(client_id)
+                    "[MsgRouter] Putting input in queue: text=%s, client=%s",
+                    preview_first(text, 30),
+                    _client_label(client_id),
                 )
                 await d._current_input_queue.put(
                     {

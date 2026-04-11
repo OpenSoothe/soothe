@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Literal
 
+from soothe.utils.text_preview import preview, preview_first
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -142,10 +144,10 @@ def _build_consensus_prompt(
     parts = [
         "You are evaluating whether an AI agent has successfully completed a goal.",
         f"\nGoal: {goal}",
-        f"\nAgent Response Preview: {response[:500]}",
+        f"\nAgent Response Preview: {preview_first(response, 500)}",
     ]
     if evidence:
-        parts.append(f"\nEvidence Summary: {evidence[:500]}")
+        parts.append(f"\nEvidence Summary: {preview_first(evidence, 500)}")
     if criteria:
         parts.append("\nSuccess Criteria:")
         parts.extend(f"  - {c}" for c in criteria)
@@ -173,4 +175,5 @@ def _extract_reasoning(content: str) -> str:
     for line in content.splitlines():
         if line.lower().startswith("reasoning:"):
             return line.split(":", 1)[1].strip()
-    return content[:200]
+    # Use preview with empty marker to stay within 200 char limit (test expects <= 200)
+    return preview(content, mode="chars", first=200, marker="")

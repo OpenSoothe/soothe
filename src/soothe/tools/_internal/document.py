@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.tools import BaseTool
+
+from soothe.utils.text_preview import preview_first
 from pydantic import Field
 
 logger = logging.getLogger(__name__)
@@ -163,7 +165,7 @@ class DocumentQATool(BaseTool):
 
             prompt = f"""Summarize the following document content:
 
-{text[:5000]}
+{preview_first(text, 5000)}
 
 Provide a concise summary highlighting the key points:"""
 
@@ -201,7 +203,7 @@ Provide a concise summary highlighting the key points:"""
             prompt = f"""Based on the following document content, answer the question.
 
 Document content:
-{text[:10000]}
+{preview_first(text, 10000)}
 
 Question: {question}
 

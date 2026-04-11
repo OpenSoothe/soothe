@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from soothe.utils.text_preview import preview_first
+
 logger = logging.getLogger(__name__)
 
 
@@ -243,7 +245,7 @@ class DreamingMode:
 
         timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
         draft_path = draft_dir / f"DRAFT-{timestamp}.md"
-        goals_text = "\n".join(f"- [{g['id']}] {g['summary'][:200]}" for g in goal_summaries[:5])
+        goals_text = "\n".join(f"- [{g['id']}] {preview_first(g['summary'], 200)}" for g in goal_summaries[:5])
         draft_path.write_text(
             f"---\n"
             f"type: task_submit\n"

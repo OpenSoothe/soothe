@@ -8,6 +8,7 @@ from typing import Any
 from rich.text import Text
 
 from soothe.protocols.planner import Plan
+from soothe.utils.text_preview import preview_first
 
 
 @dataclass
@@ -46,7 +47,7 @@ class SubagentTracker:
             if st.status == "done":
                 lines.append(Text.assemble(("  ", ""), (f"[{tag}] ", "green"), ("done", "green")))
             else:
-                activity = st.last_activity[:50] or "running..."
+                activity = preview_first(st.last_activity, 50) or "running..."
                 lines.append(Text.assemble(("  ", ""), (f"[{tag}] ", "magenta"), (activity, "yellow")))
         return lines
 

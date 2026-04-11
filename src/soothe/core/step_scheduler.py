@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from soothe.protocols.planner import Plan, PlanStep
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ class StepScheduler:
         if step:
             step.status = "failed"
             step.result = error
-            logger.warning("Step %s failed: %s", step_id, error[:100])
+            logger.warning("Step %s failed: %s", step_id, preview_first(error, 100))
 
     def mark_in_progress(self, step_id: str) -> None:
         """Mark a step as in-progress.
@@ -143,7 +144,7 @@ class StepScheduler:
         step = self._step_map.get(step_id)
         if step:
             step.status = "in_progress"
-            logger.info("Step %s started: %s", step_id, step.description[:60])
+            logger.info("Step %s started: %s", step_id, preview_first(step.description, 60))
 
     def is_complete(self) -> bool:
         """Check if all steps are terminal (completed or failed)."""

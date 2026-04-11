@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -234,7 +236,7 @@ class UnifiedClassifier:
                 content = getattr(msg, "content", "")
                 if not isinstance(content, str):
                     content = str(content)
-                preview = content[:200].strip()
+                preview = preview_first(content, 200).strip()
                 if preview:
                     lines.append(f"{role}: {preview}")
             if lines:
@@ -272,7 +274,7 @@ class UnifiedClassifier:
 
         if result.task_complexity == "chitchat" and not result.chitchat_response:
             result.chitchat_response = self._fallback_chitchat_response(query)
-            logger.debug("Patched missing chitchat_response for query: %s", query[:50])
+            logger.debug("Patched missing chitchat_response for query: %s", preview_first(query, 50))
 
         logger.debug("Tier-1 routing: task_complexity=%s", result.task_complexity)
         return result

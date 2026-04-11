@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ class LLMTracingWrapper:
                 # Show user query for classification
                 for msg in messages:
                     if isinstance(msg, HumanMessage):
-                        query_preview = str(msg.content)[:200]
+                        query_preview = preview_first(str(msg.content), 200)
                         logger.debug(
                             "[LLM Trace #%d] Query: %s",
                             trace_id,
@@ -180,7 +181,7 @@ class LLMTracingWrapper:
             duration_ms: Request duration in milliseconds
         """
         if hasattr(response, "content"):
-            preview = str(response.content)[:200]
+            preview = preview_first(str(response.content), 200)
             logger.debug(
                 "[LLM Trace #%d] Response: %dms, preview: %s",
                 trace_id,
@@ -234,7 +235,7 @@ class LLMTracingWrapper:
             trace_id,
             duration_ms,
             type(error).__name__,
-            str(error)[:200],
+            preview_first(str(error), 200),
         )
 
     def _format_size(self, char_count: int) -> str:

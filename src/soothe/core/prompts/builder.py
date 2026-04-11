@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from soothe.cognition.agent_loop.schemas import LoopState
     from soothe.config import SootheConfig
@@ -206,7 +208,7 @@ class PromptBuilder:
             parts.append("\nYour previous assessment (for continuity):")
             parts.append(f"- Status: {prev.status}")
             parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
-            parts.append(f"- Summary: {prev.soothe_next_action or prev.reasoning[:200]}")
+            parts.append(f"- Summary: {prev.soothe_next_action or preview_first(prev.reasoning, 200)}")
 
         return "\n".join(parts)
 

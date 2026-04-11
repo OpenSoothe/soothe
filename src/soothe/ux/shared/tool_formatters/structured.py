@@ -6,6 +6,7 @@ from typing import Any
 
 from soothe.ux.shared.tool_formatters.base import BaseFormatter
 from soothe.ux.shared.tool_output_formatter import ToolBrief
+from soothe.utils.text_preview import preview_first
 
 
 class StructuredFormatter(BaseFormatter):
@@ -53,7 +54,7 @@ class StructuredFormatter(BaseFormatter):
 
             # Handle failure
             if not result.success:
-                error_msg = result.error[:80] if result.error else "Unknown error"
+                error_msg = preview_first(result.error, 80) if result.error else "Unknown error"
                 error_type = result.error_type or "unknown"
 
                 return ToolBrief(
@@ -176,7 +177,7 @@ class StructuredFormatter(BaseFormatter):
 
         if isinstance(result, dict):
             if "error" in result:
-                error_msg = str(result["error"])[:80]
+                error_msg = preview_first(str(result["error"]), 80)
                 return ToolBrief(
                     icon="✗",
                     summary="Failed",

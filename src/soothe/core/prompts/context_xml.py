@@ -8,6 +8,8 @@ import platform as platform_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
@@ -150,7 +152,7 @@ def build_soothe_thread_section(thread_context: dict[str, Any]) -> str:
         goals_preview = goals[:5]
         parts.append(f"<active_goals>{_xml_text(json.dumps(goals_preview))}</active_goals>")
     if plan:
-        parts.append(f"<current_plan>{_xml_text(str(plan)[:100])}</current_plan>")
+        parts.append(f"<current_plan>{_xml_text(preview_first(str(plan), 100))}</current_plan>")
     inner = "\n".join(parts)
     ver = RFC104_CONTEXT_XML_VERSION
     return f'<SOOTHE_THREAD version="{_xml_attr(ver)}">\n{inner}\n</SOOTHE_THREAD>'

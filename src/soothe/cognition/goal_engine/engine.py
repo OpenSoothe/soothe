@@ -11,6 +11,7 @@ from typing import Any
 
 from soothe.cognition.goal_engine.models import Goal, GoalStatus, TERMINAL_STATES
 from soothe.protocols.planner import GoalReport
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -625,7 +626,7 @@ class GoalEngine:
             if goal.parent_id:
                 parent = self._goals.get(goal.parent_id)
                 if parent:
-                    parent_str = f' parent={goal.parent_id} "{parent.description[:30]}"'
+                    parent_str = f' parent={goal.parent_id} "{preview_first(parent.description, 30)}"'
                 else:
                     parent_str = f" parent={goal.parent_id}"
 
@@ -634,7 +635,7 @@ class GoalEngine:
             for dep_id in goal.depends_on:
                 dep = self._goals.get(dep_id)
                 if dep:
-                    deps_with_desc.append(f'{dep_id} "{dep.description[:30]}"')
+                    deps_with_desc.append(f'{dep_id} "{preview_first(dep.description, 30)}"')
                 else:
                     deps_with_desc.append(dep_id)
             deps_str = f" depends_on=[{', '.join(deps_with_desc)}]" if goal.depends_on else ""

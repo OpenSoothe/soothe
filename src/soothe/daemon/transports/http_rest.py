@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from soothe.config.daemon_config import HttpRestConfig
 from soothe.daemon.transports.base import TransportServer
+from soothe.utils.text_preview import preview_first
 
 
 def _get_client_id(request: Request) -> str:
@@ -609,7 +610,7 @@ class HttpRestTransport(TransportServer):
             tasks = []
             for f in sorted(inbox_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
                 content = f.read_text()
-                tasks.append({"file": f.name, "content_preview": content[:200]})
+                tasks.append({"file": f.name, "content_preview": preview_first(content, 200)})
             return {"tasks": tasks}
 
     async def start(

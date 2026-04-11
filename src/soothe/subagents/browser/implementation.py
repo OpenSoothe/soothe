@@ -23,6 +23,7 @@ from soothe.subagents.browser.events import (
     BrowserDispatchedEvent,
     BrowserStepEvent,
 )
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
@@ -98,7 +99,7 @@ Examples:
         logger.warning("LLM intent detection failed: %s", e)
         return False  # Fallback to new instance
     else:
-        logger.debug("Intent detection for '%s...': %s", prompt[:50], result)
+        logger.debug("Intent detection for '%s...': %s", preview_first(prompt, 50), result)
         return result
 
 
@@ -217,7 +218,7 @@ def _build_browser_graph(
         messages = state.get("messages", [])
         task = messages[-1].content if messages else ""
         _emit(
-            BrowserDispatchedEvent(task=task[:200]).to_dict(),
+            BrowserDispatchedEvent(task=preview_first(task, 200)).to_dict(),
             logger,
         )
 
@@ -293,10 +294,10 @@ def _build_browser_graph(
                         if hasattr(last, "model_output") and last.model_output:
                             action = getattr(last.model_output, "action", None)
                             if action:
-                                action_desc = str(action)[:80]
+                                action_desc = preview_first(str(action), 80)
                         if hasattr(last, "state"):
                             url = getattr(last.state, "url", None)
-                            page_title = getattr(last.state, "title", "")[:60]
+                            page_title = preview_first(getattr(last.state, "title", ""), 60)
                     _emit(
                         BrowserStepEvent(
                             step=step_num,

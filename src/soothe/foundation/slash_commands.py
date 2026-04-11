@@ -13,6 +13,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from soothe.plan.rich_tree import render_plan_tree
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -279,7 +280,7 @@ def _show_review(console: Console, thread_logger: ThreadLogger | None, scope: st
                     if isinstance(data, dict)
                     else ""
                 )
-                table.add_row(source, event_type, str(summary)[:100])
+                table.add_row(source, event_type, preview_first(str(summary), 100))
             console.print(table)
         elif normalized == "actions":
             console.print("[dim]No action records in this thread yet.[/dim]")
@@ -332,8 +333,8 @@ async def _handle_thread_command(console: Console, runner: SootheRunner, subcomm
                     if len(t.thread_id) <= _THREAD_ID_DISPLAY_WIDTH
                     else t.thread_id[:_THREAD_ID_TRUNCATE_KEEP] + "..."
                 )
-                created = str(t.created_at)[:19]
-                last_msg = str(t.updated_at)[:19]
+                created = preview_first(str(t.created_at), 19)
+                last_msg = preview_first(str(t.updated_at), 19)
                 topic = (
                     (t.last_human_message or "")[:_TOPIC_TRUNCATE_KEEP] + "..."
                     if t.last_human_message and len(t.last_human_message) > _TOPIC_DISPLAY_LIMIT

@@ -9,6 +9,8 @@ from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Button, OptionList, Static
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
@@ -102,8 +104,8 @@ class ThreadSelectionModal(ModalScreen[str | None]):
             # Add thread options with metadata
             for thread in self._threads[:20]:  # Limit to 20 most recent
                 tid = thread.get("thread_id", "?")
-                created = str(thread.get("created_at", "?"))[:10]
-                updated = str(thread.get("updated_at", "?"))[:19]
+                created = preview_first(str(thread.get("created_at", "?")), 10)
+                updated = preview_first(str(thread.get("updated_at", "?")), 19)
 
                 option_text = f"{tid}  |  {updated}  |  Created: {created}"
                 thread_list.add_option(option_text)
