@@ -180,6 +180,54 @@ class StepResult(BaseModel):
         # Use outcome metadata (RFC-211)
         return self._outcome_to_evidence_string(truncate)
 
+    def get_detailed_evidence_string(self) -> str:
+        """Generate detailed evidence with CoreAgent input/output (IG-148).
+
+        Used for Layer 2 Reason phase messages to provide concrete execution
+        evidence: what was requested (step_input) and what was found (output_summary).
+
+        Returns:
+            Multi-line evidence string with:
+            - Step ID and outcome type
+            - Input: CoreAgent HumanMessage content (what was requested)
+            - Output summary: First 300 + last 200 chars of execution output
+            - Entities: Key files/functions/URLs discovered (if available)
+        """
+        if not self.success:
+            return f"Step {self.step_id}: ✗ Error: {self.error}"
+
+        # IG-148: Extract CoreAgent input/output from outcome metadata
+        step_input = self.outcome.get("step_input", "")
+        output_summary = self.outcome.get("output_summary", {})
+        entities = self.outcome.get("entities", [])
+        outcome_type = self.outcome.get("type", "unknown")
+
+        # Build detailed evidence string
+        lines = [f"Step {self.step_id} [{outcome_type}]:"]
+
+        # Add input (what was requested from CoreAgent)
+        if step_input:
+            # Truncate very long inputs (show first 150 chars)
+            input_preview = step_input[:150] if len(step_input) > 150 else step_input
+            lines.append(f"  Input: {input_preview}")
+
+        # Add output summary (concrete findings)
+        if output_summary:
+            first_part = output_summary.get("first", "")
+            last_part = output_summary.get("last", "")
+
+            if first_part:
+                lines.append(f"  Output (first): {first_part}")
+            if last_part and last_part != first_part:
+                lines.append(f"  Output (last): {last_part}")
+
+        # Add entities (key discoveries)
+        if entities:
+            entity_preview = ", ".join(entities[:5])
+            lines.append(f"  Entities: {entity_preview}")
+
+        return "\n".join(lines)
+
     def _outcome_to_evidence_string(self, truncate: bool) -> str:
         """Generate evidence from outcome metadata.
 

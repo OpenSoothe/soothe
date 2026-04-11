@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, StepAction, StepResult
-from soothe.utils.text_preview import preview_first
+from soothe.utils.text_preview import create_output_summary, preview_first
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -186,6 +186,7 @@ class Executor:
     def _step_results_for_chunk(
         self,
         steps: list[StepAction],
+        combined_description: str | None = None,
         *,
         success: bool,
         output: str | None,
@@ -209,11 +210,23 @@ class Executor:
         results: list[StepResult] = []
         for i, step in enumerate(steps):
             if success:
+                # IG-148: Add CoreAgent input/output evidence for sequential execution
+                outcome_data = {
+                    "type": "generic",
+                    "size_bytes": len(output.encode("utf-8")) if output else 0,
+                }
+                # Add step input (combined_description for sequential waves)
+                if combined_description:
+                    outcome_data["step_input"] = combined_description
+                # Add output summary (truncated)
+                if output:
+                    outcome_data["output_summary"] = create_output_summary(output)
+
                 results.append(
                     StepResult(
                         step_id=step.id,
                         success=True,
-                        outcome={"type": "generic", "size_bytes": len(output.encode("utf-8"))},  # RFC-211
+                        outcome=outcome_data,  # RFC-211 + IG-148
                         duration_ms=durations[i],
                         thread_id=thread_id,
                         tool_call_count=tool_counts[i],
@@ -421,6 +434,7 @@ class Executor:
             step_results = list(
                 self._step_results_for_chunk(
                     steps,
+                    combined_description=combined_description,  # IG-148: CoreAgent input evidence
                     success=True,
                     output=output,
                     error=None,
@@ -586,6 +600,10 @@ class Executor:
                     "size_bytes": len(output.encode("utf-8")),
                 }
             )
+
+            # IG-148: Add CoreAgent input/output evidence
+            primary_outcome["step_input"] = step_body  # HumanMessage content sent to Layer 1
+            primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
             logger.info(
                 "Step %s completed successfully in %dms (hints: tools=%s, tool_calls: %d, subagent_cap_hit=%s)",

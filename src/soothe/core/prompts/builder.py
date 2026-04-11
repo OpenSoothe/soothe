@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from soothe.utils.text_preview import preview_first
-
 if TYPE_CHECKING:
     from soothe.cognition.agent_loop.schemas import LoopState
     from soothe.config import SootheConfig
@@ -159,11 +157,29 @@ class PromptBuilder:
         """Construct dynamic task: goal, evidence, working memory, prior conversation.
 
         Maps RFC-206 USER_TASK layer to HumanMessage.
+
+        IG-148: Enhanced evidence ordering - concrete findings first, working memory,
+        prior conversation, then previous assessment. Removed redundant completed_steps.
         """
         parts: list[str] = []
 
         # Goal (iteration info moved to SystemMessage per RFC-207 optimization)
         parts.append(f"Goal: {goal}\n")
+
+        # IG-148: Evidence from steps (using detailed evidence with CoreAgent input/output)
+        if state.step_results:
+            parts.append("\nCONCRETE EVIDENCE (highest priority):")
+            parts.extend(r.get_detailed_evidence_string() for r in state.step_results)
+
+        # Working memory excerpt (RFC-203)
+        if context.working_memory_excerpt:
+            parts.append("\n<WORKING_MEMORY>")
+            parts.append(
+                "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
+                "Prefer read_file on referenced paths instead of repeating large listings.\n"
+            )
+            parts.append(context.working_memory_excerpt)
+            parts.append("</WORKING_MEMORY>\n")
 
         # Prior conversation (IG-128, RFC-209)
         # Always inject prior conversation when available (same thread_id for all executions)
@@ -178,37 +194,13 @@ class PromptBuilder:
                 parts.append("\n")
             parts.append("</PRIOR_CONVERSATION>\n")
 
-        # Evidence from steps
-        if state.step_results:
-            parts.append("\nEvidence from steps run so far in this goal:")
-            parts.extend(r.to_evidence_string() for r in state.step_results)
-
-        # Completed steps summary
-        if context.completed_steps:
-            parts.append("\nPlanner context — completed step summaries (do not repeat work):")
-            for step in context.completed_steps:
-                status = "✓" if step.success else "✗"
-                # RFC-211: Use outcome metadata instead of output field
-                outcome_preview = step.to_evidence_string(truncate=True)
-                parts.append(f"- {step.step_id}: {status} {outcome_preview}")
-
-        # Working memory excerpt (RFC-203)
-        if context.working_memory_excerpt:
-            parts.append("\n<WORKING_MEMORY>")
-            parts.append(
-                "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
-                "Prefer read_file on referenced paths instead of repeating large listings.\n"
-            )
-            parts.append(context.working_memory_excerpt)
-            parts.append("</WORKING_MEMORY>\n")
-
-        # Previous reason assessment
+        # IG-148: Simplified previous reason assessment (status + progress + next_action only)
         prev = state.previous_reason
         if prev:
-            parts.append("\nYour previous assessment (for continuity):")
-            parts.append(f"- Status: {prev.status}")
-            parts.append(f"- Progress estimate: {prev.goal_progress:.0%}")
-            parts.append(f"- Summary: {prev.soothe_next_action or preview_first(prev.reasoning, 200)}")
+            parts.append("\nPREVIOUS ASSESSMENT (continuity):")
+            parts.append(f"- Status: {prev.status}, Progress: {prev.goal_progress:.0%}")
+            if prev.soothe_next_action:
+                parts.append(f"- Next action: {prev.soothe_next_action}")
 
         return "\n".join(parts)
 

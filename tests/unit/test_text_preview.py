@@ -95,15 +95,19 @@ class TestPreviewLines:
     def test_truncated_with_default_marker(self) -> None:
         text = "\n".join(f"Line{i}" for i in range(10))
         result = preview(text, mode="lines", first=3)
-        assert result.startswith("Line0\nLine1\nLine2")
+        assert result.startswith("Line0\nLine1\nLine2\n")
         assert "[...7 lines abbr...]" in result
+        # Marker should be on its own line
+        assert "\n[...7 lines abbr...]" in result
 
     def test_first_and_last_lines(self) -> None:
         text = "\n".join(f"Line{i}" for i in range(10))
         result = preview(text, mode="lines", first=2, last=2)
-        assert result.startswith("Line0\nLine1")
+        assert result.startswith("Line0\nLine1\n")
         assert result.endswith("Line8\nLine9")
         assert "[...6 lines abbr...]" in result
+        # Marker should be on its own line between first and last
+        assert "\n[...6 lines abbr...]\n" in result
 
     def test_first_and_last_overlap_returns_full(self) -> None:
         text = "Line1\nLine2\nLine3"
@@ -113,8 +117,10 @@ class TestPreviewLines:
     def test_custom_marker(self) -> None:
         text = "\n".join(f"Line{i}" for i in range(10))
         result = preview(text, mode="lines", first=2, marker="MORE")
-        assert result.startswith("Line0\nLine1")
+        assert result.startswith("Line0\nLine1\n")
         assert result.endswith("MORE")
+        # Custom marker should also be on its own line
+        assert "\nMORE" in result
 
     def test_empty_string(self) -> None:
         assert preview("", mode="lines", first=5) == ""
@@ -125,13 +131,17 @@ class TestPreviewLines:
     def test_preserves_line_endings_in_first(self) -> None:
         text = "Line1\nLine2\nLine3\nLine4"
         result = preview(text, mode="lines", first=2)
-        assert "Line1\nLine2" in result
+        assert "Line1\nLine2\n" in result
+        # Marker should be on its own line after first lines
+        assert "\n[...2 lines abbr...]" in result
 
     def test_preserves_line_endings_first_and_last(self) -> None:
         text = "Line1\nLine2\nLine3\nLine4\nLine5"
         result = preview(text, mode="lines", first=1, last=1)
         assert "Line1" in result
         assert "Line5" in result
+        # Marker should be on its own line between first and last
+        assert "\n[...3 lines abbr...]\n" in result
 
     def test_default_first_value(self) -> None:
         lines = [f"Line{i}" for i in range(20)]
@@ -139,11 +149,15 @@ class TestPreviewLines:
         result = preview(text, mode="lines")
         assert result.startswith("Line0")
         assert f"[...{20 - DEFAULT_PREVIEW_LINES} lines abbr...]" in result
+        # Marker should be on its own line
+        assert "\n[...15 lines abbr...]" in result
 
     def test_trailing_newline_handled(self) -> None:
         text = "Line1\nLine2\nLine3\n"
         result = preview(text, mode="lines", first=2)
         assert "Line1\nLine2\n" in result
+        # Marker should be on its own line after first lines
+        assert "\n[...1 lines abbr...]" in result
 
 
 # ---------------------------------------------------------------------------
@@ -198,12 +212,16 @@ class TestPreviewLinesFunc:
         result = preview_lines(text)
         assert "Line0" in result
         assert "lines abbr" in result
+        # Marker should be on its own line
+        assert "\n[...15 lines abbr...]" in result
 
     def test_with_last(self) -> None:
         text = "\n".join(f"Line{i}" for i in range(10))
         result = preview_lines(text, first=2, last=2)
         assert "Line0" in result
         assert "Line9" in result
+        # Marker should be on its own line between first and last
+        assert "\n[...6 lines abbr...]\n" in result
 
     def test_last_zero_means_no_last(self) -> None:
         text = "\n".join(f"Line{i}" for i in range(10))
@@ -284,6 +302,8 @@ class TestEdgeCases:
         result = preview(text, mode="lines", first=2)
         # Empty lines are valid lines
         assert "Line1" in result
+        # Marker should be on its own line after first lines
+        assert "\n[...3 lines abbr...]" in result
 
     def test_marker_template_constants(self) -> None:
         """Verify the marker template produces expected output."""
@@ -311,3 +331,5 @@ class TestEdgeCases:
         text = "\n".join(f"Line{i}" for i in range(6))
         result = preview(text, mode="lines", first=5)
         assert "[...1 lines abbr...]" in result
+        # Marker should be on its own line after first lines
+        assert "\n[...1 lines abbr...]" in result
