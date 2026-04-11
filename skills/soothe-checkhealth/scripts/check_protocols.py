@@ -69,13 +69,13 @@ def check_planning_protocols() -> dict[str, Any]:
     """Check planning protocol backends."""
     checks = []
 
-    # Check simple planner
-    result = check_import("soothe.cognition.planning.simple", "SimplePlanner")
+    # Check LLM planner
+    result = check_import("soothe.cognition.planning.llm", "LLMPlanner")
     checks.append(
         {
-            "name": "planning_simple",
+            "name": "planning_llm",
             "status": result["status"],
-            "message": "Simple planner: " + result["message"],
+            "message": "LLM planner: " + result["message"],
         }
     )
 

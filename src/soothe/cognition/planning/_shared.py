@@ -1,7 +1,7 @@
 """Shared utilities for planner backends.
 
 Consolidates duplicate plan parsing and reflection logic used by
-ClaudePlanner and SimplePlanner.
+ClaudePlanner and LLMPlanner.
 """
 
 from __future__ import annotations

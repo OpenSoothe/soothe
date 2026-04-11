@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.cognition.planning.simple import _default_agent_decision
+from soothe.cognition.planning.llm import _default_agent_decision
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.reason import ReasonPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult

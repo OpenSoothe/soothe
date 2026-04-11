@@ -161,7 +161,7 @@ class ClaudePlanner:
         state: LoopState,
         context: PlanContext,
     ) -> object:
-        """Layer 2 Reason phase via Claude subagent (same JSON contract as SimplePlanner)."""
+        """Layer 2 Reason phase via Claude subagent (same JSON contract as LLMPlanner)."""
         from soothe.cognition.agent_loop.schemas import ReasonResult
         from soothe.core.prompts import PromptBuilder
 

@@ -28,11 +28,11 @@ class AutoPlanner:
 
     Routes to:
     - Claude (complex problems)
-    - SimplePlanner (medium complexity)
+    - LLMPlanner (medium complexity)
 
     Args:
         claude: ClaudePlanner instance (or None if unavailable).
-        simple: SimplePlanner instance (or None -- should always be present).
+        simple: LLMPlanner instance (or None -- should always be present).
         fast_model: Fast LLM (kept for potential future use, unused in RFC-0012).
         medium_token_threshold: Min tokens for medium planning (default: 30).
         complex_token_threshold: Min tokens for complex planning (default: 160).
@@ -53,7 +53,7 @@ class AutoPlanner:
 
         Args:
             claude: ClaudePlanner instance (or None if unavailable).
-            simple: SimplePlanner instance (or None -- should always be present).
+            simple: LLMPlanner instance (or None -- should always be present).
             fast_model: Fast LLM (kept for potential future use, unused in RFC-0012).
             medium_token_threshold: Min tokens for medium planning.
             complex_token_threshold: Min tokens for complex planning.
@@ -101,14 +101,14 @@ class AutoPlanner:
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Delegate Layer 2 Reason phase to SimplePlanner (fast JSON), not Claude agent (RFC-0008)."""
+        """Delegate Layer 2 Reason phase to LLMPlanner (fast JSON), not Claude agent (RFC-0008)."""
         planner = self._simple or self._best_available()
         return await planner.reason(goal, state, context)
 
     async def _invoke(self, prompt: str) -> str:
         """Delegate a free-form LLM call (e.g. synthesis) to a lightweight planner.
 
-        Uses SimplePlanner (direct LLM call) rather than ClaudePlanner which
+        Uses LLMPlanner (direct LLM call) rather than ClaudePlanner which
         runs a full agent with tools.  Synthesis only needs summarisation, not
         independent web searches or tool invocations.
         """
