@@ -579,7 +579,7 @@ class TuiRenderer:
         return build_event_summary(event_type, data)
 
     def _write_panel_final_report(self, text: str) -> None:
-        """Write aggregated final answer to panel (multi-step/agentic loops, IG-143).
+        """Write aggregated final answer to panel (multi-step/agentic loops, IG-153).
 
         Args:
             text: Final response text to display.
@@ -588,7 +588,7 @@ class TuiRenderer:
         if not stripped:
             return
 
-        self._state.full_response.append(stripped)
+        self._state.suppression.full_response.append(stripped)
 
         # Use main assistant style (cyan dot)
         color = DOT_COLORS["assistant"]

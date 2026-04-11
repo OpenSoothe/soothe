@@ -6,6 +6,44 @@ from soothe.foundation.verbosity_tier import VerbosityTier
 from soothe.ux.cli.stream.display_line import DisplayLine, indent_for_level
 
 
+def abbreviate_text(text: str, max_length: int = 50) -> str:
+    """Abbreviate text to max_length, preserving start and end.
+
+    Args:
+        text: Text to abbreviate.
+        max_length: Maximum length before abbreviation.
+
+    Returns:
+        Abbreviated text with "..." in middle if too long.
+
+    Examples:
+        >>> abbreviate_text("Short text")
+        "Short text"
+        >>> abbreviate_text("Run cloc on src/ and tests/ directories to count Soothe source and test code")
+        "Run cloc on src/ and ... test code"
+    """
+    if len(text) <= max_length:
+        return text
+
+    # Find word boundary in first ~25 chars
+    first_end = min(25, len(text))
+    while first_end > 0 and text[first_end] != " ":
+        first_end -= 1
+    if first_end == 0:
+        first_end = 25  # No space found, use fixed position
+
+    # Find word boundary in last ~10 chars
+    last_start = max(len(text) - 10, 0)
+    while last_start < len(text) and text[last_start] != " ":
+        last_start += 1
+    if last_start == len(text):
+        last_start = len(text) - 10  # No space found, use fixed position
+
+    first_part = text[:first_end].rstrip()
+    last_part = text[last_start:].lstrip()
+    return f"{first_part} ... {last_part}"
+
+
 def _derive_source_prefix(
     namespace: tuple[str, ...],
     verbosity_tier: VerbosityTier,
@@ -53,9 +91,11 @@ def format_goal_header(
     Returns:
         DisplayLine for goal header.
     """
+    # Add inline symbol for goal marker
+    content = f"🚩 {goal}"
     return DisplayLine(
         level=1,
-        content=goal,
+        content=content,
         icon="●",
         indent=indent_for_level(1),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -81,9 +121,11 @@ def format_step_header(
         DisplayLine for step header with hollow circle icon.
     """
     suffix = " (parallel)" if parallel else ""
+    # Add inline symbol for step progression
+    content = f"⏩ {description}{suffix}"
     return DisplayLine(
         level=2,
-        content=f"{description}{suffix}",
+        content=content,
         icon="○",  # Hollow circle for in-progress step
         indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -110,9 +152,11 @@ def format_tool_call(
     Returns:
         DisplayLine for tool call.
     """
+    # Add inline symbol for tool execution
+    content = f"🔧 {name}({args_summary})"
     return DisplayLine(
         level=2,
-        content=f"{name}({args_summary})",
+        content=content,
         icon="⚙",
         indent=indent_for_level(2),
         status="running" if running else None,
@@ -140,9 +184,12 @@ def format_tool_result(
     Returns:
         DisplayLine for tool result.
     """
+    # Add inline symbol for result status
+    inline_symbol = "❌" if is_error else "✨"
+    content = f"{inline_symbol} {summary}"
     return DisplayLine(
         level=3,
-        content=summary,
+        content=content,
         icon="✗" if is_error else "✓",
         indent=indent_for_level(3),
         duration_ms=duration_ms,
@@ -166,9 +213,11 @@ def format_subagent_milestone(
     Returns:
         DisplayLine for milestone.
     """
+    # Add inline symbol for subagent investigation
+    content = f"🕵🏻‍♂️ {brief}"
     return DisplayLine(
         level=3,
-        content=brief,
+        content=content,
         icon="✓",
         indent=indent_for_level(3),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
@@ -194,9 +243,11 @@ def format_subagent_done(
         DisplayLine for subagent done.
     """
     duration_ms = int(duration_s * 1000)
+    # Add inline symbol for subagent investigation complete
+    content = f"🕵🏻‍♂️ Done: {summary}"
     return DisplayLine(
         level=3,
-        content=f"Done: {summary}",
+        content=content,
         icon="✓",
         indent=indent_for_level(3),
         duration_ms=duration_ms,
@@ -260,8 +311,10 @@ def format_step_done(
         DisplayLine for step done with solid circle icon.
     """
     duration_ms = int(duration_s * 1000)
-    # Add tool call count to content if > 0
-    content = f"{description} [{tool_call_count} tools]" if tool_call_count > 0 else description
+    # Abbreviate description for cleaner display
+    abbreviated = abbreviate_text(description, max_length=50)
+    tool_info = f" [{tool_call_count} tools]" if tool_call_count > 0 else ""
+    content = f"✅ {abbreviated}{tool_info}"
     return DisplayLine(
         level=2,
         content=content,
@@ -293,9 +346,11 @@ def format_goal_done(
         DisplayLine for goal done.
     """
     duration_ms = int(total_s * 1000)
+    # Add inline symbol for goal completion celebration
+    content = f"🏆 {goal} (complete, {steps} steps)"
     return DisplayLine(
         level=1,
-        content=f"{goal} (complete, {steps} steps)",
+        content=content,
         icon="●",
         indent=indent_for_level(1),
         duration_ms=duration_ms,
@@ -304,6 +359,7 @@ def format_goal_done(
 
 
 __all__ = [
+    "abbreviate_text",
     "format_goal_done",
     "format_goal_header",
     "format_judgement",

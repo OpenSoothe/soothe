@@ -1,2 +1,0 @@
-- Support Dual protocols, domain socket and WebSocket
-- Support safety query processing, inspired by EdgeClaw
