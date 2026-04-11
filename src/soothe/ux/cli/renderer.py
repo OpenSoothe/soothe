@@ -19,6 +19,7 @@ from soothe.ux.cli.utils import make_tool_block
 from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
 from soothe.ux.shared.message_processing import format_tool_call_args
 from soothe.ux.shared.presentation_engine import PresentationEngine
+from soothe.ux.shared.suppression_state import SuppressionState
 
 if TYPE_CHECKING:
     from soothe.protocols.planner import Plan
@@ -34,16 +35,8 @@ class CliRendererState:
     # Track if stderr was just written (to add spacing before next stdout)
     stderr_just_written: bool = False
 
-    # Suppress step text during multi-step plans
-    multi_step_active: bool = False
-
-    # Agentic loop (max_iterations>1): keep suppressing main stdout until loop.completed even if
-    # status idle/on_turn_end cleared multi_step_active first (avoids late AIMessage leaks).
-    agentic_stdout_suppressed: bool = False
-    agentic_final_stdout_emitted: bool = False
-
-    # Accumulated response text
-    full_response: list[str] = field(default_factory=list)
+    # Multi-step/agentic suppression state (IG-143)
+    suppression: SuppressionState = field(default_factory=SuppressionState)
 
     # Track current plan for status display
     current_plan: Plan | None = None
@@ -173,14 +166,14 @@ class CliRenderer:
         if not is_main:
             return  # Subagent text not shown in CLI headless mode
 
-        # HARD BLOCK: No text during multi-step execution
-        if self._state.multi_step_active:
-            return
-        if self._state.agentic_stdout_suppressed and not self._state.agentic_final_stdout_emitted:
+        # HARD BLOCK: No text during multi-step execution (IG-143)
+        if self._state.suppression.should_suppress_output():
+            # Accumulate for final report instead
+            self._state.suppression.accumulate_text(text)
             return
 
         # Emit only on final iteration (after flags cleared)
-        self._state.full_response.append(text)
+        self._state.suppression.full_response.append(text)
 
         if self._state.stderr_just_written:
             self._state.stderr_just_written = False
@@ -212,7 +205,7 @@ class CliRenderer:
             return
 
         # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.multi_step_active or self._state.agentic_stdout_suppressed:
+        if self._state.suppression.should_suppress_output():
             return
 
         self._stderr_begin_icon_block()
@@ -256,7 +249,7 @@ class CliRenderer:
             return
 
         # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.multi_step_active or self._state.agentic_stdout_suppressed:
+        if self._state.suppression.should_suppress_output():
             return
 
         self._stderr_begin_icon_block()
@@ -318,40 +311,21 @@ class CliRenderer:
             data: Event payload.
             namespace: Subagent namespace.
         """
-        # Track multi-step state from agentic loop start
-        if event_type == "soothe.agentic.loop.started":
-            if data.get("max_iterations", 1) > 1:
-                self._state.multi_step_active = True
-                self._state.agentic_stdout_suppressed = True
-                self._state.agentic_final_stdout_emitted = False
-            else:
-                self._state.agentic_stdout_suppressed = False
-                self._state.agentic_final_stdout_emitted = False
-
-        # Backup if loop.started was filtered on the wire: suppress after iteration 1+.
-        if event_type == "soothe.cognition.agent_loop.reason":
-            try:
-                it = int(data.get("iteration", 0))
-            except (TypeError, ValueError):
-                it = 0
-            if it >= 1 and not self._state.agentic_final_stdout_emitted:
-                self._state.agentic_stdout_suppressed = True
+        # Track suppression state from event (IG-143)
+        final_stdout = self._state.suppression.track_from_event(event_type, data)
 
         payload = dict(data)
-        final_stdout = (payload.pop("final_stdout_message", None) or "").strip()
+        payload.pop("final_stdout_message", None)
 
         # Build event dict for pipeline
         event = {"type": event_type, **payload}
         lines = self._pipeline.process(event)
         self.write_lines(lines)
 
-        if event_type == "soothe.agentic.loop.completed":
-            want_final = final_stdout and (self._state.multi_step_active or self._state.agentic_stdout_suppressed)
-            if want_final and not self._state.agentic_final_stdout_emitted:
-                self._write_stdout_final_report(final_stdout)
-            self._state.agentic_final_stdout_emitted = True
-            # Note: Keep agentic_stdout_suppressed=True to prevent late tool result leaks
-            # Will be cleared on status=idle or new thread session
+        # Emit final report on loop completion (IG-143)
+        if self._state.suppression.should_emit_final_report(event_type, final_stdout):
+            response = self._state.suppression.get_final_response(final_stdout)
+            self._write_stdout_final_report(response)
 
     def on_plan_created(self, plan: Plan) -> None:
         """Write plan creation to stderr.
@@ -360,12 +334,7 @@ class CliRenderer:
             plan: Created plan object.
         """
         self._state.current_plan = plan
-        self._state.multi_step_active = len(plan.steps) > 1
-        # max_iterations==1 does not arm agentic_stdout_suppressed in loop.started; multi-step
-        # plans still clear multi_step_active on on_turn_end before loop.completed (test-case1).
-        if len(plan.steps) > 1:
-            self._state.agentic_stdout_suppressed = True
-            self._state.agentic_final_stdout_emitted = False
+        self._state.suppression.track_from_plan(len(plan.steps))
 
         # Use pipeline for consistent formatting
         event = {
@@ -436,13 +405,12 @@ class CliRenderer:
         response to stdout now that the plan is complete.
         """
         # Capture state BEFORE resetting
-        was_multi_step = self._state.multi_step_active
-        accumulated_response = self._state.full_response
+        was_multi_step = self._state.suppression.multi_step_active
+        accumulated_response = self._state.suppression.full_response
 
         # Reset state for next turn FIRST (before output logic)
         self._state.needs_stdout_newline = False
-        self._state.multi_step_active = False
-        self._state.full_response = []
+        self._state.suppression.reset_turn()
 
         # Multi-step mode intentionally suppresses step body output in headless CLI.
         # For single-step mode, keep existing newline flush behavior.
