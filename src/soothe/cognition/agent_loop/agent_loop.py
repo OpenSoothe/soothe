@@ -131,7 +131,7 @@ class AgentLoop:
             prior_outputs = state_manager.derive_reason_conversation(limit=10)
             reason_excerpts = prior_outputs
         else:
-            # Initialize new checkpoint - NO Layer 1 messages (RFC-205)
+            # Initialize new checkpoint - NO CoreAgent messages (RFC-205)
             checkpoint = state_manager.initialize(goal, max_iterations)
             reason_excerpts = []  # Start fresh, no prior conversation from Layer 1
 
@@ -228,8 +228,9 @@ The report should:
 
 Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
 
-                    # Send to Layer 1 CoreAgent — accumulate the last complete AI text response
-                    last_ai_text = ""
+                    # Send to Layer 1 CoreAgent — accumulate streaming chunks and final AI text
+                    accumulated_chunks = ""  # Accumulate AIMessageChunk content during streaming
+                    final_ai_message_text = ""  # Capture final AIMessage (non-chunk) content
                     chunk_count = 0
                     ai_msg_count = 0
                     async for chunk in self.core_agent.astream(
@@ -246,27 +247,44 @@ Use all tool results and AI responses available in the conversation history to c
 
                                 if isinstance(data, tuple) and len(data) >= 2:
                                     msg, _ = data
-                                    # AIMessage (non-chunk) marks a completed turn;
-                                    # keep the last one with text content.
                                     if isinstance(msg, (AIMessage, AIMessageChunk)):
                                         ai_msg_count += 1
-                                        if isinstance(msg, AIMessage) and msg.content:
-                                            content = msg.content
-                                            if isinstance(content, str):
-                                                last_ai_text = content
-                                            elif isinstance(content, list):
-                                                parts = []
-                                                for block in content:
-                                                    if isinstance(block, dict) and "text" in block:
-                                                        parts.append(block["text"])
-                                                    elif isinstance(block, str):
-                                                        parts.append(block)
-                                                last_ai_text = "".join(parts)
+                                        content = msg.content
+                                        # Extract text from content (handle str or list formats)
+                                        extracted_text = ""
+                                        if isinstance(content, str):
+                                            extracted_text = content
+                                        elif isinstance(content, list):
+                                            parts = []
+                                            for block in content:
+                                                if isinstance(block, dict) and "text" in block:
+                                                    parts.append(block["text"])
+                                                elif isinstance(block, str):
+                                                    parts.append(block)
+                                            extracted_text = "".join(parts)
+
+                                        # AIMessageChunk: accumulate streaming text
+                                        if isinstance(msg, AIMessageChunk) and extracted_text:
+                                            accumulated_chunks += extracted_text
+                                        # AIMessage (non-chunk): capture final message text
+                                        elif isinstance(msg, AIMessage) and extracted_text:
+                                            final_ai_message_text = extracted_text
+
+                    # Prefer accumulated chunks (streaming content) over final AIMessage
+                    # because streaming sends 100s of AIMessageChunk instances with actual text,
+                    # while final AIMessage may only contain synthesized metadata or minimal content.
+                    last_ai_text = (
+                        accumulated_chunks
+                        if len(accumulated_chunks) >= len(final_ai_message_text)
+                        else final_ai_message_text
+                    )
 
                     logger.info(
-                        "Stream completed: %d chunks, %d AI messages, last_ai_text=%d chars",
+                        "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
                         chunk_count,
                         ai_msg_count,
+                        len(accumulated_chunks),
+                        len(final_ai_message_text),
                         len(last_ai_text),
                     )
                     if last_ai_text:
