@@ -15,7 +15,7 @@ from soothe.tools.goals.implementation import (
     ReportProgressTool,
     SearchMemoryTool,
     SuggestGoalTool,
-    create_layer2_tools,
+    create_agent_loop_tools,
 )
 
 
@@ -374,15 +374,15 @@ class TestAddFindingTool:
         assert result["status"] == "queued"
 
 
-class TestCreateLayer2Tools:
-    """Tests for create_layer2_tools() factory function."""
+class TestCreateAgentLoopTools:
+    """Tests for create_agent_loop_tools() factory function."""
 
     def test_returns_all_tools_with_full_params(self) -> None:
         engine = GoalEngine()
         queue = ProposalQueue()
         memory = MagicMock()
 
-        tools = create_layer2_tools(
+        tools = create_agent_loop_tools(
             goal_engine=engine,
             proposal_queue=queue,
             memory_protocol=memory,
@@ -422,7 +422,7 @@ class TestCreateLayer2Tools:
         """Backward compat: only goal_engine is required."""
         engine = GoalEngine()
 
-        tools = create_layer2_tools(goal_engine=engine)
+        tools = create_agent_loop_tools(goal_engine=engine)
 
         tool_names = {t.name for t in tools}
         expected = {
@@ -441,6 +441,6 @@ class TestCreateLayer2Tools:
         engine = GoalEngine()
         memory = MagicMock()
 
-        tools = create_layer2_tools(goal_engine=engine, memory_protocol=memory)
+        tools = create_agent_loop_tools(goal_engine=engine, memory_protocol=memory)
         tool_names = {t.name for t in tools}
         assert "search_memory" in tool_names

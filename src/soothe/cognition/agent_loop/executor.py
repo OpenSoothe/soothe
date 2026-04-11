@@ -1,4 +1,4 @@
-"""ACT phase logic for Layer 2 agentic loop (RFC-0008)."""
+"""ACT phase logic for AgentLoop (RFC-201)."""
 
 from __future__ import annotations
 

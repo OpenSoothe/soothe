@@ -1,4 +1,4 @@
-"""Main AgentLoop orchestration for Layer 2 (RFC-0008)."""
+"""Main AgentLoop orchestration (RFC-201)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from soothe.cognition.planning.llm import _default_agent_decision
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.reason import ReasonPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult
-from soothe.cognition.agent_loop.state_manager import Layer2StateManager
+from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
 from soothe.utils.text_preview import log_preview, preview_first
@@ -117,8 +117,8 @@ class AgentLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
-        # Initialize Layer 2 state manager (RFC-205)
-        state_manager = Layer2StateManager(thread_id, Path(workspace) if workspace else None)
+        # Initialize AgentLoop state manager (RFC-205)
+        state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
 
         # Try to recover from checkpoint
         checkpoint = state_manager.load()

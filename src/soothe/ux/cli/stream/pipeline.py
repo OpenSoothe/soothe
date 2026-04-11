@@ -459,7 +459,7 @@ class StreamDisplayPipeline:
         ]
 
     def _on_loop_agent_reason(self, event: dict[str, Any]) -> list[DisplayLine]:
-        """Handle Layer 2 Reason progress with prominent reasoning display."""
+        """Handle AgentLoop Reason progress with prominent reasoning display."""
         status = event.get("status", "")
 
         # Extract action summary (priority order)

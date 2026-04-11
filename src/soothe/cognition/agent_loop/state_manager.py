@@ -1,4 +1,4 @@
-"""Layer 2 State Manager (RFC-205).
+"""AgentLoop State Manager (RFC-205).
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 """
@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop.checkpoint import (
     ActWaveRecord,
-    Layer2Checkpoint,
+    AgentLoopCheckpoint,
     ReasonStepRecord,
     StepExecutionRecord,
     WorkingMemoryState,
@@ -28,8 +28,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Layer2StateManager:
-    """Manages Layer 2 checkpoint lifecycle."""
+class AgentLoopStateManager:
+    """Manages AgentLoop checkpoint lifecycle."""
 
     def __init__(self, thread_id: str, workspace: Path | None = None) -> None:  # noqa: ARG002
         """Initialize with thread context.
@@ -42,10 +42,10 @@ class Layer2StateManager:
         # Checkpoint is ALWAYS stored in SOOTHE_HOME, not project workspace (IG-134)
         sothe_home = Path(SOOTHE_HOME).expanduser()
         self.run_dir = sothe_home / "runs" / thread_id
-        self.checkpoint_path = self.run_dir / "layer2_checkpoint.json"
-        self._checkpoint: Layer2Checkpoint | None = None
+        self.checkpoint_path = self.run_dir / "agent_loop_checkpoint.json"
+        self._checkpoint: AgentLoopCheckpoint | None = None
 
-    def initialize(self, goal: str, max_iterations: int = 10) -> Layer2Checkpoint:
+    def initialize(self, goal: str, max_iterations: int = 10) -> AgentLoopCheckpoint:
         """Create new checkpoint for goal execution.
 
         Args:
@@ -53,10 +53,10 @@ class Layer2StateManager:
             max_iterations: Maximum loop iterations
 
         Returns:
-            New Layer2Checkpoint instance
+            New AgentLoopCheckpoint instance
         """
         now = datetime.now(UTC)
-        checkpoint = Layer2Checkpoint(
+        checkpoint = AgentLoopCheckpoint(
             thread_id=self.thread_id,
             goal=goal,
             created_at=now,
@@ -72,35 +72,41 @@ class Layer2StateManager:
         )
         return checkpoint
 
-    def load(self) -> Layer2Checkpoint | None:
+    def load(self) -> AgentLoopCheckpoint | None:
         """Load existing checkpoint for recovery.
 
         Returns:
-            Layer2Checkpoint if exists and valid, None otherwise
+            AgentLoopCheckpoint if exists and valid, None otherwise
         """
-        if not self.checkpoint_path.exists():
-            return None
+        # Try new filename first, fallback to old filename for backwards compatibility
+        checkpoint_paths = [
+            self.checkpoint_path,
+            self.run_dir / "layer2_checkpoint.json",  # Old filename
+        ]
 
-        try:
-            data = json.loads(self.checkpoint_path.read_text(encoding="utf-8"))
-            checkpoint = Layer2Checkpoint.model_validate(data)
-            self._checkpoint = checkpoint
-            logger.info(
-                "Loaded checkpoint for thread %s (iteration %d, status %s)",
-                self.thread_id,
-                checkpoint.iteration,
-                checkpoint.status,
-            )
-        except (json.JSONDecodeError, ValueError):
-            logger.exception(
-                "Failed to load checkpoint for thread %s",
-                self.thread_id,
-            )
-            return None
-        else:
-            return checkpoint
+        for checkpoint_path in checkpoint_paths:
+            if checkpoint_path.exists():
+                try:
+                    data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                    checkpoint = AgentLoopCheckpoint.model_validate(data)
+                    self._checkpoint = checkpoint
+                    logger.info(
+                        "Loaded checkpoint for thread %s (iteration %d, status %s)",
+                        self.thread_id,
+                        checkpoint.iteration,
+                        checkpoint.status,
+                    )
+                    return checkpoint
+                except (json.JSONDecodeError, ValueError):
+                    logger.exception(
+                        "Failed to load checkpoint for thread %s",
+                        self.thread_id,
+                    )
+                    return None
 
-    def save(self, checkpoint: Layer2Checkpoint) -> None:
+        return None
+
+    def save(self, checkpoint: AgentLoopCheckpoint) -> None:
         """Persist checkpoint to disk atomically.
 
         Write to temp file, then rename to avoid partial writes.

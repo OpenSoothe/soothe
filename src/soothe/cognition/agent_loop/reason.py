@@ -1,4 +1,4 @@
-"""Reason phase for Layer 2 ReAct loop (RFC-0008)."""
+"""Reason phase for AgentLoop ReAct execution (RFC-201)."""
 
 from __future__ import annotations
 

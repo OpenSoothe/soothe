@@ -523,7 +523,7 @@ class AgenticLoopConfig(BaseModel):
 
     layer2_output_contract_enabled: bool = Field(
         default=True,
-        description="Instruct Layer 1 not to paste full tool outputs again during Layer 2 Act",
+        description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Act phase",
     )
 
     prior_conversation_limit: int = Field(

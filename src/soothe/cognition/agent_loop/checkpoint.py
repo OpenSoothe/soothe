@@ -1,4 +1,4 @@
-"""Layer 2 Checkpoint Models (RFC-205).
+"""AgentLoop Checkpoint Models (RFC-205).
 
 Defines step-level semantic traces for agentic goal execution.
 """
@@ -106,8 +106,8 @@ class WorkingMemoryState(BaseModel):
     spill_files: list[str] = Field(default_factory=list, description="Relative paths to spill files")
 
 
-class Layer2Checkpoint(BaseModel):
-    """Complete Layer 2 state for a goal execution."""
+class AgentLoopCheckpoint(BaseModel):
+    """Complete AgentLoop state for goal execution."""
 
     # Identity
     thread_id: str
