@@ -1,4 +1,4 @@
-"""Agent loop events for Layer 2 agentic execution."""
+"""Agent loop events for agentic execution."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from soothe.foundation.base_events import ProtocolEvent
 
 
 class LoopAgentReasonEvent(ProtocolEvent):
-    """User-visible progress after the Reason phase (ReAct Layer 2)."""
+    """User-visible progress after the Reason phase (ReAct loop)."""
 
     type: Literal["soothe.cognition.agent_loop.reason"] = "soothe.cognition.agent_loop.reason"
     status: str

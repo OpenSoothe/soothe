@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.cognition.planning.llm import _default_agent_decision
+from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.reason import ReasonPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult
@@ -30,7 +30,7 @@ _STREAM_CHUNK_LEN = 3
 
 
 class AgentLoop:
-    """Layer 2: Agentic goal execution as ReAct (Reason then Act).
+    """Agentic goal execution as ReAct (Reason then Act).
 
     Attributes:
         core_agent: Layer 1 CoreAgent for step execution
@@ -198,7 +198,7 @@ class AgentLoop:
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
-                # RFC-211: Layer 2 signals Layer 1 to generate final report
+                # RFC-211: Agentic loop signals core agent to generate final report
                 final_output = reason_result.full_output or reason_result.evidence_summary
                 import sys as _sys
 
@@ -216,7 +216,7 @@ class AgentLoop:
                 try:
                     from langchain_core.messages import HumanMessage
 
-                    # Layer 2 sends message to Layer 1 requesting final report
+                    # Agentic loop sends message to core agent requesting final report
                     report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
 
 The report should:

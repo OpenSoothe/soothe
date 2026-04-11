@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.cognition.planning.llm import LLMPlanner
+from soothe.cognition.agent_loop.planner import LLMPlanner
 from soothe.protocols.planner import Plan, PlanContext, PlanStep, StepResult
 
 

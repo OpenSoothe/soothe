@@ -334,10 +334,16 @@ class PlannerProtocolConfig(BaseModel):
     """Planner Protocol configuration.
 
     Args:
-        routing: Routing strategy (auto, always_direct, always_planner, always_claude).
-        planner_model: Model role used for planning (resolved via ModelRouter).
+        model: Model role used for planning (resolved via ModelRouter).
+        use_fast_model: Use fast model for structured output (default: True).
+        routing: Deprecated routing field (kept for backward compatibility).
+        planner_model: Deprecated planner_model field (kept for backward compatibility).
     """
 
+    model: str = "think"
+    use_fast_model: bool = True
+
+    # Deprecated fields (kept for backward compatibility, IG-150 Phase 4)
     routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
     planner_model: str = "think"
 

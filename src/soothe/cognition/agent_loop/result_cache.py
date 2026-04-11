@@ -1,10 +1,10 @@
 """File system cache for large tool results.
 
 This module implements a file-based cache for tool results that exceed a size
-threshold, enabling Layer 2 to avoid context bloat while preserving access
+threshold, enabling the agentic loop to avoid context bloat while preserving access
 to full content when needed.
 
-RFC-211: Layer 2 Tool Result Optimization
+RFC-211: Agentic Loop Tool Result Optimization
 """
 
 from __future__ import annotations

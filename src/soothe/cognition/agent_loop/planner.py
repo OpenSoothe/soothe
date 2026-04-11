@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from soothe.cognition.planning._shared import reflect_heuristic
+from soothe.cognition.agent_loop.planning_utils import (
+    _default_agent_decision,
+    _extract_balanced_json_object,
+    _extract_text_content,
+    _load_llm_json_dict,
+    _repair_truncated_json,
+    _strip_markdown_json_fence,
+    _try_parse_json_dict,
+    reflect_heuristic,
+)
 from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.config import SootheConfig
 from soothe.protocols.planner import (
@@ -19,377 +27,6 @@ from soothe.protocols.planner import (
 from soothe.utils.text_preview import create_output_summary
 
 logger = logging.getLogger(__name__)
-
-_LAYER2_GOAL_ALIGN_SNIP_LEN = 400
-_DEFAULT_DECISION_GOAL_SNIP_LEN = 350
-
-
-def _strip_leading_bom(text: str) -> str:
-    """Remove UTF-8 BOM if present."""
-    return text.lstrip("\ufeff")
-
-
-def _strip_markdown_json_fence(response: str) -> str:
-    """Extract JSON from ```json ... ``` or generic ``` ... ``` blocks."""
-    json_str = response.strip()
-
-    if "```json" in json_str:
-        start = json_str.find("```json") + 7
-        end = json_str.find("```", start)
-        if end > start:
-            return json_str[start:end].strip()
-    elif "```" in json_str:
-        start = json_str.find("```") + 3
-        newline_pos = json_str.find("\n", start)
-        if newline_pos > start:
-            start = newline_pos + 1
-        end = json_str.find("```", start)
-        if end > start:
-            return json_str[start:end].strip()
-
-    return json_str
-
-
-def _extract_balanced_json_object(text: str, start: int | None = None) -> str | None:
-    """Return the substring from first ``{`` through its matching ``}``, string-aware.
-
-    Avoids greedy ``{.*}`` mistakes when strings contain ``}`` or when prose follows JSON.
-    """
-    if start is None:
-        start = text.find("{")
-    if start < 0:
-        return None
-
-    depth = 0
-    in_string = False
-    backslash = False
-    i = start
-    while i < len(text):
-        c = text[i]
-        if backslash:
-            backslash = False
-        elif in_string:
-            if c == "\\":
-                backslash = True
-            elif c == '"':
-                in_string = False
-        elif c == '"':
-            in_string = True
-        elif c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : i + 1]
-        i += 1
-    return None
-
-
-def _strip_trailing_commas_json(text: str) -> str:
-    """Remove JSON trailing commas (`,}` / `,]`) outside of string literals."""
-    out: list[str] = []
-    in_string = False
-    backslash = False
-    n = len(text)
-    i = 0
-    while i < n:
-        c = text[i]
-        if backslash:
-            out.append(c)
-            backslash = False
-            i += 1
-            continue
-        if in_string:
-            if c == "\\":
-                backslash = True
-                out.append(c)
-            elif c == '"':
-                in_string = False
-                out.append(c)
-            else:
-                out.append(c)
-            i += 1
-            continue
-
-        if c == '"':
-            in_string = True
-            out.append(c)
-            i += 1
-            continue
-
-        if c == ",":
-            j = i + 1
-            while j < n and text[j] in " \t\n\r":
-                j += 1
-            if j < n and text[j] in "}]":
-                i += 1
-                continue
-
-        out.append(c)
-        i += 1
-
-    return "".join(out)
-
-
-def _try_parse_json_dict(raw: str) -> dict[str, Any] | None:
-    """Parse ``raw`` as a JSON object; try trailing-comma repair on failure."""
-    relaxed = _strip_trailing_commas_json(raw)
-    variants = [raw] if raw == relaxed else [raw, relaxed]
-    for candidate in variants:
-        try:
-            loaded = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(loaded, dict):
-            return loaded
-    return None
-
-
-def _repair_truncated_json(text: str) -> str:
-    """Repair truncated JSON by closing unclosed strings and brackets.
-
-    Handles cases where LLM output is cut off mid-string or mid-structure.
-    Attempt to make it parseable by adding necessary closing characters.
-
-    Args:
-        text: Potentially truncated JSON string
-
-    Returns:
-        Repaired JSON string (may still be invalid if severely truncated)
-    """
-    # Track bracket depth and string state
-    bracket_stack: list[str] = []
-    in_string = False
-    backslash = False
-    last_char = ""
-
-    # Scan the string to find unclosed structures
-    for c in text:
-        if backslash:
-            backslash = False
-        elif in_string:
-            if c == "\\":
-                backslash = True
-            elif c == '"':
-                in_string = False
-        elif c == '"':
-            in_string = True
-        elif c in "{[":
-            bracket_stack.append(c)
-        elif c == "}":
-            if bracket_stack and bracket_stack[-1] == "{":
-                bracket_stack.pop()
-        elif c == "]":
-            if bracket_stack and bracket_stack[-1] == "[":
-                bracket_stack.pop()
-        last_char = c
-
-    # Build repair: close unclosed structures
-    repair = ""
-
-    # If still in a string, close it
-    if in_string:
-        repair += '"'
-
-    # Close any remaining brackets in reverse order
-    while bracket_stack:
-        open_bracket = bracket_stack.pop()
-        if open_bracket == "{":
-            repair += "}"
-        elif open_bracket == "[":
-            repair += "]"
-
-    # If the text ends with a comma (truncated before next value), remove it
-    if last_char == ",":
-        text = text[:-1]
-
-    repaired = text + repair
-
-    if repair:
-        logger.debug(
-            "[LLMPlanner] JSON repair: added %d closing chars (%s) to truncated JSON",
-            len(repair),
-            repair,
-        )
-
-    return repaired
-
-
-def _extract_text_content(content: Any) -> str:
-    """Normalise LLM response content to a plain string.
-
-    Handles both the simple string case and the Anthropic-style list-of-blocks
-    case (e.g. ``[{'type': 'text', 'text': '...'}, {'type': 'tool_use', ...}]``).
-
-    Args:
-        content: The ``content`` attribute from a LangChain AIMessage.
-
-    Returns:
-        Plain text, joining all ``text``-type blocks when content is a list.
-    """
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        return "\n".join(parts)
-    return str(content)
-
-
-def _load_llm_json_dict(response: str) -> dict[str, Any]:
-    """Extract the first JSON object from an LLM response string.
-
-    Tolerates markdown fences, leading prose, trailing commas, and stray text after JSON
-    via balanced-brace extraction (string-aware).
-    """
-    json_str = _strip_leading_bom(_strip_markdown_json_fence(response)).strip()
-
-    if not json_str:
-        raise ValueError("Empty LLM response — cannot parse JSON")
-
-    candidates: list[str] = []
-    seen: set[str] = set()
-
-    def _add_candidate(s: str) -> None:
-        s = s.strip()
-        if s and s not in seen:
-            seen.add(s)
-            candidates.append(s)
-
-    _add_candidate(json_str)
-
-    balanced = _extract_balanced_json_object(json_str)
-    if balanced:
-        _add_candidate(balanced)
-
-    last_error: json.JSONDecodeError | None = None
-    for cand in candidates:
-        parsed = _try_parse_json_dict(cand)
-        if parsed is not None:
-            if cand != candidates[0]:
-                logger.debug("Parsed LLM JSON using fallback candidate (length=%d)", len(cand))
-            return parsed
-        try:
-            loaded = json.loads(_strip_trailing_commas_json(cand))
-        except json.JSONDecodeError as e:
-            last_error = e
-        else:
-            if not isinstance(loaded, dict):
-                last_error = json.JSONDecodeError(
-                    "LLM JSON root must be an object (got non-object)",
-                    cand,
-                    0,
-                )
-
-    if last_error is not None:
-        raise last_error
-    raise TypeError("LLM JSON root must be an object")
-
-
-def _align_layer2_step_descriptions(goal: str, steps: list[Any]) -> None:
-    """Rewrite step text that only echoes the user goal (Layer 1/Layer 2 alignment)."""
-    from soothe.cognition.agent_loop.schemas import StepAction
-
-    g = (goal or "").strip().casefold()
-    if not g:
-        return
-    for s in steps:
-        if not isinstance(s, StepAction):
-            continue
-        d = (s.description or "").strip()
-        if d.casefold() == g:
-            lim = _LAYER2_GOAL_ALIGN_SNIP_LEN
-            tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
-            s.description = (
-                "Using tools in the open workspace, take concrete actions toward this goal "
-                f"(do not use the goal text alone as the step): {tail}"
-            )
-
-
-def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
-    """Build AgentDecision from a parsed JSON object (step list at top level)."""
-    from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
-
-    known_subagents = {"browser", "claude", "research"}
-
-    steps = []
-    for i, step_data in enumerate(data.get("steps", [])):
-        if not isinstance(step_data, dict):
-            continue
-        deps = step_data.get("dependencies")
-        deps = [] if deps is None or not isinstance(deps, list) else [str(d) for d in deps if d is not None]
-
-        tools = step_data.get("tools") or []
-        if tools:
-            subagent_tools = [t for t in tools if t in known_subagents]
-            if subagent_tools:
-                if not step_data.get("subagent"):
-                    step_data["subagent"] = subagent_tools[0]
-                    logger.debug("Normalized subagent '%s' from tools to subagent field", subagent_tools[0])
-                remaining_tools = [t for t in tools if t not in known_subagents]
-                step_data["tools"] = remaining_tools or None
-
-        steps.append(
-            StepAction(
-                id=f"step_{i}",
-                description=step_data.get("description", ""),
-                tools=step_data.get("tools"),
-                subagent=step_data.get("subagent"),
-                expected_output=step_data.get("expected_output", ""),
-                dependencies=deps,
-            )
-        )
-
-    _align_layer2_step_descriptions(_goal, steps)
-
-    return AgentDecision(
-        type=data.get("type", "execute_steps"),
-        steps=steps,
-        execution_mode=data.get("execution_mode", "sequential"),
-        reasoning=data.get("reasoning", ""),
-        adaptive_granularity=data.get("adaptive_granularity"),
-    )
-
-
-def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
-    """Minimal single-step decision used when parsing fails.
-
-    Args:
-        goal: The goal description
-        iteration: Current iteration number for variation
-
-    Returns:
-        AgentDecision with iteration-specific action to prevent repetitions
-    """
-    from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
-
-    lim = _DEFAULT_DECISION_GOAL_SNIP_LEN
-    tail = goal if len(goal) <= lim else goal[: lim - 3] + "…"
-
-    # RFC-603: Vary the default action based on iteration to prevent repetitions
-    if iteration == 0:
-        action_desc = f"Take initial steps toward: {tail}"
-    elif iteration == 1:
-        action_desc = f"Continue investigation with focused approach for: {tail}"
-    else:
-        action_desc = f"Refine approach for: {tail}"
-
-    return AgentDecision(
-        type="execute_steps",
-        steps=[
-            StepAction(
-                id="step_0",
-                description=action_desc,
-                expected_output="Concrete findings or artifacts that satisfy the goal",
-            )
-        ],
-        execution_mode="sequential",
-        reasoning=f"Default decision due to parse error at iteration {iteration}",
-    )
 
 
 def _calculate_evidence_based_confidence(
@@ -639,92 +276,6 @@ def _calculate_evidence_based_progress(
     progress = llm_progress * 0.6 + step_completion_ratio * 0.2 + evidence_growth_rate * 0.2
 
     return min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
-
-
-def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> Any:
-    """Parse unified Reason JSON into ReasonResult.
-
-    Args:
-        response: LLM response text
-        goal: Goal description
-        iteration: Current iteration number for varied fallback actions
-    """
-    from soothe.cognition.agent_loop.schemas import ReasonResult
-
-    try:
-        data = _load_llm_json_dict(response)
-    except Exception:
-        logger.exception("[PARSE ERROR] Failed to parse LLM response")
-        return ReasonResult(
-            status="replan",
-            plan_action="new",
-            decision=_default_agent_decision(goal, iteration),
-            reasoning="Failed to parse model response",
-            next_action="I'll try again with a simpler plan.",
-        )
-
-    # Legacy flat plan (steps at root, no reason fields)
-    if "status" not in data and "steps" in data:
-        try:
-            decision = agent_decision_from_dict(data, goal)
-        except Exception:
-            logger.exception("Failed to parse legacy plan shape")
-            decision = _default_agent_decision(goal, iteration)
-        return ReasonResult(
-            status="continue",
-            plan_action="new",
-            decision=decision,
-            reasoning=decision.reasoning,
-            next_action="I'll run the steps in this plan next.",
-        )
-
-    status = data.get("status", "replan")
-    if status not in ("continue", "replan", "done"):
-        status = "replan"
-
-    plan_action = data.get("plan_action", "new")
-    if plan_action not in ("keep", "new"):
-        plan_action = "new"
-
-    reasoning = str(data.get("reasoning", "") or "")
-
-    next_action = str(data.get("next_action", "") or str(data.get("soothe_next_action", "") or "")).strip()
-
-    decision = None
-    if plan_action == "new":
-        raw_decision = data.get("decision")
-        if isinstance(raw_decision, dict):
-            try:
-                decision = agent_decision_from_dict(raw_decision, goal)
-            except Exception:
-                logger.exception("Failed to parse nested decision")
-                decision = _default_agent_decision(goal, iteration) if status != "done" else None
-        elif status != "done":
-            decision = _default_agent_decision(goal, iteration)
-
-    if plan_action == "keep":
-        decision = None
-
-    try:
-        return ReasonResult(
-            status=status,
-            plan_action=plan_action,
-            decision=decision,
-            goal_progress=float(data.get("goal_progress", 0.0)),
-            confidence=float(data.get("confidence", 0.8)),
-            reasoning=reasoning,
-            next_action=next_action,
-            evidence_summary=str(data.get("evidence_summary", "") or ""),
-        )
-    except Exception:
-        logger.exception("Invalid ReasonResult fields")
-        return ReasonResult(
-            status="replan",
-            plan_action="new",
-            decision=_default_agent_decision(goal, iteration),
-            reasoning="Invalid reason payload",
-            next_action="I'll adjust and try a cleaner plan.",
-        )
 
 
 _SIMPLE_PLANNER_HINT_MAP = {
@@ -1053,7 +604,7 @@ class LLMPlanner:
         goal: str,
         iteration: int,
     ) -> Any:
-        """Phase 1: Quick status assessment (RFC-604 Layer 2).
+        """Phase 1: Quick status assessment (RFC-604).
 
         Lightweight call to assess goal progress without full plan generation.
         Generates ~200-250 tokens per call.
@@ -1105,7 +656,7 @@ class LLMPlanner:
         goal: str,
         iteration: int,
     ) -> Any:
-        """Phase 2: Generate execution plan (RFC-604 Layer 2).
+        """Phase 2: Generate execution plan (RFC-604).
 
         Conditional call to generate plan when status != "done".
         Generates ~500-800 tokens per call.
@@ -1164,7 +715,7 @@ class LLMPlanner:
         assessment: Any,
         plan_result: Any,
     ) -> Any:
-        """Combine Phase 1 and Phase 2 results (RFC-604 Layer 2).
+        """Combine Phase 1 and Phase 2 results (RFC-604).
 
         Concatenates reasoning and next_action from both phases.
 
@@ -1180,8 +731,9 @@ class LLMPlanner:
         # Concatenate reasoning from both phases
         combined_reasoning = f"[Assessment] {assessment.brief_reasoning}\n[Plan] {plan_result.brief_reasoning}"
 
-        # Concatenate next_action from both phases
+        # Concatenate next_action from both phases (truncate to max 100 chars)
         combined_next_action = f"{assessment.next_action}\n{plan_result.next_action}"
+        combined_next_action = combined_next_action[:100]
 
         # Build final ReasonResult
         return ReasonResult(
@@ -1200,7 +752,7 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Layer 2 Reason phase: two-call architecture (RFC-604).
+        """Reason phase: two-call architecture (RFC-604).
 
         Phase 1: StatusAssessment (lightweight, ~200-250 tokens)
         Phase 2: PlanGeneration (conditional, ~500-800 tokens)
