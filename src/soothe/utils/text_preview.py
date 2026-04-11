@@ -15,7 +15,7 @@ Usage:
     >>> preview("Hello world!", mode="chars", first=5, last=3)
     'Hello[...4 chars abbr...]d!'
 
-    # Line-based
+    # Line-based (marker on its own line)
     >>> preview("Line1\\nLine2\\nLine3\\nLine4", mode="lines", first=1, last=1)
     'Line1\\n[...2 lines abbr...]\\nLine4'
 
@@ -113,6 +113,11 @@ def preview(
 
         >>> preview("Any text", mode="full")
         'Any text'
+
+    Note:
+        In line mode, the truncation marker appears on its own single line
+        between the first and last sections, formatted as:
+        ``first_lines\\n[...N lines abbr...]\\nlast_lines``
     """
     if mode == "full" or not text:
         return text
@@ -251,7 +256,12 @@ def _preview_lines(
     if last_n <= 0:
         omitted = total - first_n
         m = _build_marker(omitted, "lines", marker)
-        return "".join(lines[:first_n]) + m
+        # Ensure marker is on its own line after first lines
+        first_part = "".join(lines[:first_n])
+        # Add newline before marker if first part doesn't end with newline
+        if first_part and not first_part.endswith("\n"):
+            first_part += "\n"
+        return first_part + m
 
     # First + last: check overlap
     if first_n + last_n >= total:
@@ -259,4 +269,71 @@ def _preview_lines(
 
     omitted = total - first_n - last_n
     m = _build_marker(omitted, "lines", marker)
-    return "".join(lines[:first_n]) + m + "".join(lines[total - last_n :])
+    # Build result with proper formatting: first lines \n [marker] \n last lines
+    first_part = "".join(lines[:first_n])
+    last_part = "".join(lines[total - last_n :])
+
+    # Ensure newline between first part and marker
+    if first_part and not first_part.endswith("\n"):
+        first_part += "\n"
+
+    # Ensure newline between marker and last part
+    result = first_part + m
+    if last_part:
+        result += "\n"
+
+    return result + last_part
+
+
+# ---------------------------------------------------------------------------
+# Evidence-specific utilities (IG-148)
+# ---------------------------------------------------------------------------
+
+
+def create_output_summary(
+    content: str,
+    first_chars: int = 300,
+    last_chars: int = 200,
+) -> dict[str, str]:
+    """Create truncated output summary for Reason phase evidence (IG-148).
+
+    Captures initial findings and final results without full output bloat.
+    Used for CoreAgent execution evidence in Layer 2 Reason phase.
+
+    Args:
+        content: Full output content from AIMessage + ToolMessage accumulation
+        first_chars: Number of chars from beginning (default: 300)
+        last_chars: Number of chars from end (default: 200)
+
+    Returns:
+        Dict with "first" and "last" keys containing truncated sections.
+        Empty strings if content is empty.
+
+    Examples:
+        >>> create_output_summary("Found async patterns in file.py...", first_chars=50, last_chars=30)
+        {'first': 'Found async patterns in file.py...', 'last': '...'}
+
+        >>> create_output_summary("")
+        {'first': '', 'last': ''}
+    """
+    if not content:
+        return {"first": "", "last": ""}
+
+    total_len = len(content)
+
+    # If content shorter than both sections, just return full content in "first"
+    if total_len <= first_chars + last_chars:
+        return {"first": content, "last": ""}
+
+    first_section = content[:first_chars]
+    last_section = content[total_len - last_chars :]
+
+    # Clean truncation: avoid cutting mid-word if possible (look back for space)
+    # Only apply to first section (last section is end of text, harder to clean)
+
+    # Find last space in first_chars range to avoid mid-word cut
+    last_space_in_first = first_section.rfind(" ")
+    if last_space_in_first > first_chars * 0.8:  # Only if space is reasonably close to target
+        first_section = first_section[:last_space_in_first]
+
+    return {"first": first_section.strip(), "last": last_section.strip()}
