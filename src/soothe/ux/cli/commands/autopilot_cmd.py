@@ -10,6 +10,8 @@ from pathlib import Path
 
 import typer
 
+from soothe.utils.text_preview import preview_first
+
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
 
 
@@ -114,7 +116,7 @@ def list_goals(
         if status_filter and g.get("status", "") != status_filter:
             continue
         sid = g.get("id", "?")[:8]
-        sdesc = g.get("description", "")[:60]
+        sdesc = preview_first(g.get("description", ""), 60)
         sstat = g.get("status", "pending")
         spri = g.get("priority", 50)
         typer.echo(f"  [{sid}] {sstat:10s} pri={spri:3d}  {sdesc}")
@@ -292,7 +294,7 @@ def view_inbox(
             if stripped.startswith(("--", "type:", "priority:")):
                 continue
             if stripped:
-                desc = stripped[:80]
+                desc = preview_first(stripped, 80)
                 break
         if not desc:
             desc = "(no description)"
@@ -363,7 +365,7 @@ def _parse_single_goal(text: str, source: str) -> dict | None:
 
     return {
         "id": fm.get("id", source.split("/")[-2]),
-        "description": desc or body[:100],
+        "description": desc or preview_first(body, 100),
         "priority": int(fm.get("priority", 50)),
         "status": fm.get("status", "pending"),
         "depends_on": fm.get("depends_on", []),

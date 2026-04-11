@@ -15,6 +15,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from soothe.utils.text_preview import preview_first
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,7 +134,7 @@ class SchedulerService:
         logger.info(
             "Scheduled task %s: %s (%s=%s)",
             tid,
-            description[:50],
+            preview_first(description, 50),
             schedule_kind,
             schedule_value,
         )

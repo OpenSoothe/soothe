@@ -15,6 +15,7 @@ from typing import Any
 
 from soothe.backends.memory.memu.config.markdown_config import get_config_manager
 from soothe.backends.memory.memu.llm_client import BaseLLMClient
+from soothe.utils.text_preview import preview_first
 
 from .actions import ACTION_REGISTRY
 from .embeddings import create_embedding_client
@@ -369,7 +370,9 @@ respond with "PROCESSING_COMPLETE"."""
                         # No tool calls, add response and continue
                         messages.append(assistant_message)
                         if response.content:
-                            results["processing_log"].append(f"Iteration {iteration + 1}: {response.content[:100]}...")
+                            results["processing_log"].append(
+                                f"Iteration {iteration + 1}: {preview_first(response.content, 100)}..."
+                            )
 
                 except Exception:
                     logger.exception("Error in iteration %d", iteration + 1)

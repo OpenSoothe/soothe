@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.backends.memory.memu.config.markdown_config import get_config_manager
+from soothe.utils.text_preview import preview_first
 
 from .embeddings import get_default_embedding_client
 from .file_manager import MemoryFileManager
@@ -170,7 +171,7 @@ class RecallAgent:
                         # Generate embeddings for query and content
                         query_embedding = self.embedding_client.embed(query)
                         content_embedding = self.embedding_client.embed(
-                            content[:1000]
+                            preview_first(content, 1000)
                         )  # Limit content length for embedding
 
                         # Calculate semantic similarity

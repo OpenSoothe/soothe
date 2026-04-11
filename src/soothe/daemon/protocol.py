@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 from typing import Any
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -65,5 +66,5 @@ def decode(line: bytes) -> dict[str, Any] | None:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        logger.debug("Invalid daemon protocol line: %s", text[:120])
+        logger.debug("Invalid daemon protocol line: %s", preview_first(text, 120))
         return None

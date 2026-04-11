@@ -19,6 +19,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,9 @@ def reflect_heuristic(
         else:
             direct_failed.append(r.step_id)
 
-    failed_details = {r.step_id: (r.to_evidence_string()[:200] if not r.success else "no output") for r in failed_list}
+    failed_details = {
+        r.step_id: (preview_first(r.to_evidence_string(), 200) if not r.success else "no output") for r in failed_list
+    }
 
     parts = [f"{completed}/{total} steps completed, {len(failed_list)} failed"]
     if direct_failed:
@@ -174,7 +177,7 @@ def _generate_prerequisite_directives(
             directives.append(
                 GoalDirective(
                     action="create",
-                    description=f"Resolve prerequisite for: {step.description[:80]}",
+                    description=f"Resolve prerequisite for: {preview_first(step.description, 80)}",
                     priority=min(current_priority + 10, 100),
                     parent_id=None,
                     depends_on=[],
@@ -257,7 +260,7 @@ def _build_reflection_prompt(
         step = next((s for s in plan.steps if s.id == sr.step_id), None)
         desc = step.description if step else sr.step_id
         status = "SUCCESS" if sr.success else "FAILED"
-        output_preview = sr.to_evidence_string()[:150]
+        output_preview = preview_first(sr.to_evidence_string(), 150)
         parts.append(f"  - [{status}] {sr.step_id}: {desc}")
         parts.append(f"    Output: {output_preview}")
 

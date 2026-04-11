@@ -29,6 +29,7 @@ from soothe.tools._internal.shell import (
     _shell_instances,
 )
 from soothe.utils import expand_path
+from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +167,7 @@ class RunCommandTool(BaseTool):
 
             # Validate initialization marker
             if "__init__" not in output:
-                msg = f"Shell initialization failed. Expected '__init__' in output, got: {output[:100]}"
+                msg = f"Shell initialization failed. Expected '__init__' in output, got: {preview_first(output, 100)}"
                 raise RuntimeError(msg)
 
             # Set working directory if specified
@@ -227,7 +228,9 @@ class RunCommandTool(BaseTool):
                     logger.debug("Shell responsiveness test passed (attempt %d)", attempt + 1)
                     return True
 
-                logger.warning("Shell test attempt %d failed: unexpected output '%s'", attempt + 1, output[:50])
+                logger.warning(
+                    "Shell test attempt %d failed: unexpected output '%s'", attempt + 1, preview_first(output, 50)
+                )
 
             except pexpect.TIMEOUT:
                 logger.warning("Shell test attempt %d timed out after %ds", attempt + 1, self.responsiveness_timeout)

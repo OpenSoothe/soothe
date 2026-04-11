@@ -19,6 +19,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from soothe.config import SOOTHE_HOME
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -73,7 +74,7 @@ class GoalDagWidget(Static):
             if g.get("informs"):
                 informs = f" [dim](→ {', '.join(g['informs'][:3])})[/]"
             gid = g.get("id", "?")
-            desc = g.get("description", "")[:50]
+            desc = preview_first(g.get("description", ""), 50)
             lines.append(f"  [{color}]{icon}[/] [{color}]{gid}[/] {desc}{deps}{informs}")
         return "\n".join(lines)
 
@@ -127,7 +128,7 @@ class FindingsWidget(ScrollableContainer):
             return "[dim]No findings yet[/]"
         lines = ["[bold cyan]Findings[/]", ""]
         for i, f in enumerate(self.findings[-20:], 1):
-            lines.append(f"  {i}. {f[:80]}")
+            lines.append(f"  {i}. {preview_first(f, 80)}")
         return "\n".join(lines)
 
 
