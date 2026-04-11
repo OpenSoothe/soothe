@@ -16,8 +16,8 @@ No transport or UI dependencies.
 ┌──────────────────────▼──────────────────────────────┐
 │  soothe.core  (this package)                        │
 │                                                     │
-│  agent/        Layer 1 — CoreAgent (deepagents)    │
-│  runner/       Layer 2 — SootheRunner orchestration │
+│  agent/        CoreAgent (deepagents)              │
+│  runner/       AgentLoop Orchestration             │
 │  thread/       Thread lifecycle, execution, rate    │
 │  middleware/   5-middleware stack around CoreAgent  │
 │  resolver/     Checkpointer, durability, tool wire  │
@@ -40,8 +40,8 @@ No transport or UI dependencies.
 
 | Path | Responsibility |
 |------|----------------|
-| `agent/` | **Layer 1**: `CoreAgent` wraps `create_deep_agent()`. Owns the deepagents/langgraph boundary. 5 Soothe-specific middlewares injected here. |
-| `runner/` | **Layer 2+**: `SootheRunner` — protocol pre/post processing, agentic loop (RFC-0008), autonomous iteration (RFC-0007), DAG step execution (RFC-0009), checkpointing (RFC-0010). Decomposed into mixins (`_runner_*.py`). |
+| `agent/` | `CoreAgent` wraps `create_deep_agent()`. Owns the deepagents/langgraph boundary. 5 Soothe-specific middlewares injected here. |
+| `runner/` | `AgentLoop` orchestration — protocol pre/post processing, agentic loop (RFC-201), autonomous iteration (RFC-200), DAG step execution, checkpointing. Decomposed into mixins (`_runner_*.py`). |
 | `thread/` | Thread lifecycle manager, concurrent executor with rate limiting. Used by daemon and runner. |
 | `middleware/` | `SoothePolicyMiddleware`, `SystemPromptOptimizationMiddleware`, `ExecutionHintsMiddleware`, `WorkspaceContextMiddleware`, `SubagentContextMiddleware`. |
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
@@ -74,8 +74,8 @@ Contains the smallest framework primitives that are imported by every layer.
 ## Public API (`soothe.core`)
 
 ```python
-from soothe.core import CoreAgent           # Layer 1 runtime
-from soothe.core import SootheRunner        # Layer 2+ orchestration
+from soothe.core import CoreAgent           # Core runtime
+from soothe.core import SootheRunner        # Agentic orchestration
 from soothe.core import create_soothe_agent # Agent factory
 from soothe.core import ConfigDrivenPolicy  # Policy implementation
 from soothe.core import FrameworkFilesystem # File backend

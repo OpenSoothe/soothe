@@ -529,7 +529,7 @@ class AddFindingTool(BaseTool):
         return {"status": "queued", "goal_id": goal_id, "content_preview": preview_first(content, 100)}
 
 
-def create_layer2_tools(
+def create_agent_loop_tools(
     goal_engine: GoalEngine,
     *,
     proposal_queue: Any = None,
@@ -538,7 +538,7 @@ def create_layer2_tools(
     workspace: str = "",
     available_subagents: list[str] | None = None,
 ) -> list[BaseTool]:
-    """Create Layer 2 <-> Layer 3 communication tools (RFC-204).
+    """Create AgentLoop <-> Layer 3 communication tools (RFC-204).
 
     Args:
         goal_engine: The GoalEngine to bind.

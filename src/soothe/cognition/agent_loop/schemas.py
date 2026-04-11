@@ -1,4 +1,4 @@
-"""Schemas for Layer 2 Agentic Loop (RFC-0008)."""
+"""Schemas for AgentLoop execution (RFC-201)."""
 
 from __future__ import annotations
 

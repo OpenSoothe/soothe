@@ -228,7 +228,7 @@ def format_judgement(
     action_icon = "→" if action == "continue" else "✓"
 
     # Polish: Add "Reason:" prefix to make LLM reasoning prominent
-    content = f"Reason: {judgement}"
+    content = f"ᦠ {judgement}"
 
     return DisplayLine(
         level=2,  # Use level 2 for more prominence (like step headers)

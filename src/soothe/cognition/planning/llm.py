@@ -145,6 +145,76 @@ def _try_parse_json_dict(raw: str) -> dict[str, Any] | None:
     return None
 
 
+def _repair_truncated_json(text: str) -> str:
+    """Repair truncated JSON by closing unclosed strings and brackets.
+
+    Handles cases where LLM output is cut off mid-string or mid-structure.
+    Attempt to make it parseable by adding necessary closing characters.
+
+    Args:
+        text: Potentially truncated JSON string
+
+    Returns:
+        Repaired JSON string (may still be invalid if severely truncated)
+    """
+    # Track bracket depth and string state
+    bracket_stack: list[str] = []
+    in_string = False
+    backslash = False
+    last_char = ""
+
+    # Scan the string to find unclosed structures
+    for c in text:
+        if backslash:
+            backslash = False
+        elif in_string:
+            if c == "\\":
+                backslash = True
+            elif c == '"':
+                in_string = False
+        elif c == '"':
+            in_string = True
+        elif c in "{[":
+            bracket_stack.append(c)
+        elif c == "}":
+            if bracket_stack and bracket_stack[-1] == "{":
+                bracket_stack.pop()
+        elif c == "]":
+            if bracket_stack and bracket_stack[-1] == "[":
+                bracket_stack.pop()
+        last_char = c
+
+    # Build repair: close unclosed structures
+    repair = ""
+
+    # If still in a string, close it
+    if in_string:
+        repair += '"'
+
+    # Close any remaining brackets in reverse order
+    while bracket_stack:
+        open_bracket = bracket_stack.pop()
+        if open_bracket == "{":
+            repair += "}"
+        elif open_bracket == "[":
+            repair += "]"
+
+    # If the text ends with a comma (truncated before next value), remove it
+    if last_char == ",":
+        text = text[:-1]
+
+    repaired = text + repair
+
+    if repair:
+        logger.debug(
+            "[LLMPlanner] JSON repair: added %d closing chars (%s) to truncated JSON",
+            len(repair),
+            repair,
+        )
+
+    return repaired
+
+
 def _extract_text_content(content: Any) -> str:
     """Normalise LLM response content to a plain string.
 
@@ -1006,49 +1076,97 @@ class LLMPlanner:
 
         for msg in messages:
             if isinstance(msg, HumanMessage):
-                preview = create_output_summary(
-                    msg.content, first_chars=300, last_chars=200
-                )
+                preview = create_output_summary(msg.content, first_chars=300, last_chars=200)
                 msg_summary["human_msg_preview"] = preview
                 break
         logger.debug("[LLMPlanner] Input messages: %s", msg_summary)
 
-        try:
-            # Use structured output to enforce ReasonResult schema (fixes tool-call token issue)
-            structured_model = self._model.with_structured_output(ReasonResult)
-            result = await structured_model.ainvoke(messages)
+        # Retry logic: structured output can fail with truncated JSON (3 attempts)
+        max_retries = 3
+        result = None
 
-            # Compact LLM output summary with full result in original JSON format
-            result_dict = {
-                "status": result.status,
-                "plan": result.plan_action,
-                "progress": f"{result.goal_progress * 100:.0f}%",
-                "conf": f"{result.confidence * 100:.0f}%",
-            }
-            if result.decision:
-                result_dict["decision"] = {
-                    "type": result.decision.type,
-                    "mode": result.decision.execution_mode,
-                    "steps": len(result.decision.steps),
+        for attempt in range(max_retries):
+            try:
+                # Use structured output to enforce ReasonResult schema
+                structured_model = self._model.with_structured_output(ReasonResult)
+                result = await structured_model.ainvoke(messages)
+
+                # Defensive check: structured output can return None in edge cases
+                if result is None:
+                    raise ValueError("Structured output returned None - model may have refused to generate")
+
+                # Compact LLM output summary with full result in original JSON format
+                result_dict = {
+                    "status": result.status,
+                    "plan": result.plan_action,
+                    "progress": f"{result.goal_progress * 100:.0f}%",
+                    "conf": f"{result.confidence * 100:.0f}%",
                 }
-            if result.reasoning:
-                result_dict["reasoning"] = result.reasoning[:200]
-            logger.debug("[LLMPlanner] LLM output: %s", result_dict)
-        except Exception:
-            logger.exception("LLMPlanner.reason failed")
-            return ReasonResult(
-                status="replan",
-                plan_action="new",
-                decision=_default_agent_decision(goal, state.iteration),
-                reasoning="Reason call failed",
-                soothe_next_action="I'll retry with a simpler next step.",
-            )
-        else:
-            # RFC-603: Apply evidence-based confidence and progress
-            result.confidence = _calculate_evidence_based_confidence(state, result)
-            result.goal_progress = _calculate_evidence_based_progress(state, result)
+                if result.decision:
+                    result_dict["decision"] = {
+                        "type": result.decision.type,
+                        "mode": result.decision.execution_mode,
+                        "steps": len(result.decision.steps),
+                    }
+                if result.reasoning:
+                    result_dict["reasoning"] = result.reasoning[:200]
+                logger.debug("[LLMPlanner] LLM output: %s", result_dict)
+                break  # Success, exit retry loop
 
-            # Fallback completion detection (IG-134)
-            result = _detect_completion_fallback(state, result, goal)
+            except Exception as e:
+                # Log the specific error
+                error_type = type(e).__name__
+                error_msg = str(e)
 
-            return result
+                # Check if it's a JSON parsing error
+                is_json_error = "json_invalid" in error_msg.lower() or "JSON" in error_type
+
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "[LLMPlanner] Reason call failed (attempt %d/%d): %s - %s. Retrying...",
+                        attempt + 1,
+                        max_retries,
+                        error_type,
+                        error_msg[:200] if is_json_error else error_msg,
+                    )
+                    # Try fallback: regular invocation with manual JSON parsing
+                    if is_json_error and attempt == max_retries - 2:
+                        # Last retry attempt: use regular model and parse JSON manually
+                        logger.info("[LLMPlanner] Trying fallback: regular model + manual JSON parsing")
+                        try:
+                            response = await self._model.ainvoke(messages)
+                            raw_content = _extract_text_content(response.content)
+
+                            # Extract and clean JSON
+                            json_str = _strip_markdown_json_fence(raw_content)
+                            json_obj = _extract_balanced_json_object(json_str)
+
+                            if json_obj:
+                                # Try to repair truncated JSON by closing open strings/brackets
+                                repaired_json = _repair_truncated_json(json_obj)
+                                parsed_dict = _try_parse_json_dict(repaired_json)
+
+                                if parsed_dict:
+                                    result = ReasonResult(**parsed_dict)
+                                    logger.info("[LLMPlanner] Manual JSON parsing succeeded on retry %d", attempt + 1)
+                                    break
+                        except Exception as fallback_error:
+                            logger.warning("[LLMPlanner] Fallback parsing also failed: %s", str(fallback_error)[:200])
+                else:
+                    # Final attempt failed
+                    logger.exception("[LLMPlanner] Reason call failed after %d attempts", max_retries)
+                    return ReasonResult(
+                        status="replan",
+                        plan_action="new",
+                        decision=_default_agent_decision(goal, state.iteration),
+                        reasoning=f"Reason call failed after {max_retries} retries: {error_msg[:100]}",
+                        soothe_next_action="I'll retry with a simpler next step.",
+                    )
+        # RFC-603: Apply evidence-based confidence and progress
+        result.confidence = _calculate_evidence_based_confidence(state, result)
+        result.goal_progress = _calculate_evidence_based_progress(state, result)
+
+        # Fallback completion detection (IG-134)
+        result = _detect_completion_fallback(state, result, goal)
+
+        return result

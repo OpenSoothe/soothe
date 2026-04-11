@@ -77,7 +77,7 @@ agentic:
   # Cap subagent ``task`` tool completions per Act wave (0 = unlimited). Use 1 to stop double-delegation.
   max_subagent_tasks_per_wave: 2
 
-  # Ask Layer 1 not to paste full tool output again during Layer 2 Act
+  # Ask CoreAgent not to paste full tool output again during AgentLoop Act phase
   layer2_output_contract_enabled: true
 
   # Maximum prior messages to inject into Reason prompts

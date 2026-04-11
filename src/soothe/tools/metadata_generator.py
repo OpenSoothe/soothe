@@ -1,9 +1,9 @@
-"""Generate structured metadata from tool results for Layer 2 reasoning.
+"""Generate structured metadata from tool results for AgentLoop reasoning.
 
 This module extracts concise, structured metadata from tool execution results
-to enable Layer 2 reasoning without full content bloat.
+to enable AgentLoop reasoning without full content bloat.
 
-RFC-211: Layer 2 Tool Result Optimization
+RFC-211: AgentLoop Tool Result Optimization
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
-"""RFC-204: Consensus Loop for Layer 3 validation of Layer 2 completions.
+"""RFC-204: Consensus Loop for Layer 3 validation of AgentLoop completions.
 
-Layer 3 validates Layer 2's "done" judgment before accepting goal completion.
+Layer 3 validates AgentLoop's "done" judgment before accepting goal completion.
 If not satisfied, Layer 3 can send the goal back with refined instructions.
 """
 
