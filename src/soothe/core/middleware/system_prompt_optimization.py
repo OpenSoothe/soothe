@@ -294,6 +294,12 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
+        # Agent loop output contract (Layer 2 only)
+        if state and state.get("current_decision"):
+            contract_section = self._build_agent_loop_output_contract_section(self._config)
+            if contract_section:
+                static_sections.append(contract_section)
+
         # Build DYNAMIC sections
         dynamic_section = ""
         if state:
@@ -447,6 +453,27 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return None
 
         return "<PROTOCOLS>\n" + "\n".join(content) + "\n</PROTOCOLS>"
+
+    def _build_agent_loop_output_contract_section(self, config: SootheConfig | None = None) -> str | None:
+        """Build <AGENT_LOOP_OUTPUT_CONTRACT> section for Layer 2 agent loop.
+
+        Args:
+            config: Optional SootheConfig to check if contract is enabled.
+
+        Returns:
+            XML section string, or None if contract is disabled.
+        """
+        if config is None or not config.agentic.layer2_output_contract_enabled:
+            return None
+
+        return (
+            "<AGENT_LOOP_OUTPUT_CONTRACT>\n"
+            "- After tool or subagent results arrive, add at most two short wrap-up sentences in your own words.\n"
+            "- Do NOT paste the full tool/subagent output again unless the user explicitly asked for a "
+            "verbatim repeat.\n"
+            "- If the tool output already satisfies the user-visible deliverable, stop there.\n"
+            "</AGENT_LOOP_OUTPUT_CONTRACT>"
+        )
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
         """Replace system prompt based on LLM classification.

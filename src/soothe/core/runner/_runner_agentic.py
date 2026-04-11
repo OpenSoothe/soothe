@@ -188,7 +188,7 @@ class AgenticMixin:
         # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
 
-        # One load for Tier-1 routing (tail) and Layer-2 Reason (full excerpt list, IG-128, IG-133).
+        # One load for unified classification (tail) and Layer-2 Reason (full excerpt list, IG-128, IG-133).
         await self._ensure_checkpointer_initialized()
         # Use configurable limit for prior conversation (default 10, IG-133)
         prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10

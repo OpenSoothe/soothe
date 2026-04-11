@@ -73,7 +73,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         state.thread_id = thread_id or self._current_thread_id or ""
         state.workspace = workspace
 
-        # Two-tier classification for proper routing
+        # Unified classification for proper routing
         if self._unified_classifier:
             from soothe.core.unified_classifier import UnifiedClassification
 
@@ -83,7 +83,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             recent = await self._load_recent_messages(thread_id_for_context, limit=6)
             routing = await self._unified_classifier.classify_routing(user_input, recent_messages=recent)
             logger.info(
-                "Autonomous mode: tier-1 routing task_complexity=%s - %s",
+                "Autonomous mode: unified classification task_complexity=%s - %s",
                 routing.task_complexity,
                 user_input[:50],
             )

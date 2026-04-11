@@ -66,7 +66,7 @@ class Layer2StateManager:
         self._checkpoint = checkpoint
         self.save(checkpoint)
         logger.info(
-            "[Layer2] Initialized checkpoint for thread %s (goal: %s)",
+            "Initialized checkpoint for thread %s (goal: %s)",
             self.thread_id,
             goal[:50],
         )
@@ -86,14 +86,14 @@ class Layer2StateManager:
             checkpoint = Layer2Checkpoint.model_validate(data)
             self._checkpoint = checkpoint
             logger.info(
-                "[Layer2] Loaded checkpoint for thread %s (iteration %d, status %s)",
+                "Loaded checkpoint for thread %s (iteration %d, status %s)",
                 self.thread_id,
                 checkpoint.iteration,
                 checkpoint.status,
             )
         except (json.JSONDecodeError, ValueError):
             logger.exception(
-                "[Layer2] Failed to load checkpoint for thread %s",
+                "Failed to load checkpoint for thread %s",
                 self.thread_id,
             )
             return None
@@ -130,7 +130,7 @@ class Layer2StateManager:
         self._checkpoint = checkpoint
 
         logger.debug(
-            "[Layer2] Saved checkpoint for thread %s (iteration %d)",
+            "Saved checkpoint for thread %s (iteration %d)",
             self.thread_id,
             checkpoint.iteration,
         )
@@ -155,7 +155,7 @@ class Layer2StateManager:
             working_memory: Current working memory state (optional)
         """
         if self._checkpoint is None:
-            logger.error("[Layer2] No checkpoint to update")
+            logger.error("No checkpoint to update")
             return
 
         # Record Reason step
@@ -222,7 +222,7 @@ class Layer2StateManager:
         self._checkpoint.status = status
         self.save(self._checkpoint)
         logger.info(
-            "[Layer2] Finalized checkpoint for thread %s (status: %s)",
+            "Finalized checkpoint for thread %s (status: %s)",
             self.thread_id,
             status,
         )
