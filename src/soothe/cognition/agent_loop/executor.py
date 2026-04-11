@@ -740,7 +740,7 @@ class Executor:
                                     elif isinstance(c, dict) and "text" in c:
                                         chunks.append(c["text"])
 
-                            # RFC-211: Generate structured metadata for Layer 2
+                            # RFC-211: Generate structured metadata for agentic loop
                             outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
 
                             # RFC-211: Cache large results

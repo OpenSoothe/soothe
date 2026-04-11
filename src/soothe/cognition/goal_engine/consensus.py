@@ -32,12 +32,12 @@ async def evaluate_goal_completion(
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion.
 
-    Layer 3 reflection LLM evaluates whether Layer 2's output truly
+    Goal manager reflection LLM evaluates whether the agentic loop's output truly
     satisfies the goal criteria.
 
     Args:
         goal_description: The original goal text.
-        response_text: Layer 2's response/output.
+        response_text: Agentic loop's response/output.
         evidence_summary: Accumulated evidence from execution.
         success_criteria: List of success criteria to check.
         model: LLM for evaluation. If None, uses heuristic fallback.

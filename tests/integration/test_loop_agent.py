@@ -57,15 +57,13 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    soothe_next_action="I'll run these three steps next.",
-                    progress_detail="Next, the agent will run them in order.",
+                    next_action="I'll run these three steps next.",
                     reasoning="First pass",
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                soothe_next_action="I'm done and sharing the outcome.",
-                progress_detail="Outputs from the run look sufficient.",
+                next_action="I'm done and sharing the outcome.",
                 reasoning="Done",
                 goal_progress=1.0,
                 confidence=0.95,
@@ -77,7 +75,7 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    soothe_next_action="I'll start with this three-step approach.",
+                    next_action="I'll start with this three-step approach.",
                     reasoning="v1",
                 )
             if self.reason_count == 2:
@@ -85,15 +83,14 @@ class MockLoopReasoner:
                     status="replan",
                     plan_action="new",
                     decision=_two_step_replan_decision(),
-                    soothe_next_action="I'll switch to a tighter two-step plan.",
-                    progress_detail="Earlier steps were not enough on their own.",
+                    next_action="I'll switch to a tighter two-step plan.",
                     reasoning="replan",
                     goal_progress=0.3,
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                soothe_next_action="I'm wrapping up after the revised plan.",
+                next_action="I'm wrapping up after the revised plan.",
                 goal_progress=1.0,
                 confidence=0.9,
             )
@@ -104,13 +101,13 @@ class MockLoopReasoner:
                     status="continue",
                     plan_action="new",
                     decision=_three_step_decision(),
-                    soothe_next_action="I'll execute the first chunk of work now.",
+                    next_action="I'll execute the first chunk of work now.",
                     reasoning="start",
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                soothe_next_action="I'm done with the remaining work.",
+                next_action="I'm done with the remaining work.",
                 goal_progress=1.0,
                 confidence=0.95,
             )
@@ -118,7 +115,7 @@ class MockLoopReasoner:
         return ReasonResult(
             status="done",
             plan_action="keep",
-            soothe_next_action="I'm done.",
+            next_action="I'm done.",
             goal_progress=1.0,
             confidence=0.9,
         )
@@ -236,7 +233,7 @@ async def test_loop_agent_max_iterations() -> None:
                     execution_mode="sequential",
                     reasoning="more work",
                 ),
-                soothe_next_action="I'll take another step toward the goal.",
+                next_action="I'll take another step toward the goal.",
                 goal_progress=0.1,
                 confidence=0.5,
             )
@@ -286,12 +283,12 @@ async def test_loop_agent_parallel_execution() -> None:
                         execution_mode="parallel",
                         reasoning="parallel batch",
                     ),
-                    soothe_next_action="I'll run these three steps in parallel.",
+                    next_action="I'll run these three steps in parallel.",
                 )
             return ReasonResult(
                 status="done",
                 plan_action="keep",
-                soothe_next_action="I'm finished with the parallel work.",
+                next_action="I'm finished with the parallel work.",
                 goal_progress=1.0,
                 confidence=0.95,
             )

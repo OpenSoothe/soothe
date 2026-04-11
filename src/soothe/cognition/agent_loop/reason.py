@@ -92,7 +92,7 @@ class ReasonPhase:
                 )
 
         # Track action in history (used by completion detection)
-        state.add_action_to_history(result.soothe_next_action or "")
+        state.add_action_to_history(result.next_action or "")
 
         successes = sum(1 for r in state.step_results if r.success)
         failures = sum(1 for r in state.step_results if not r.success)

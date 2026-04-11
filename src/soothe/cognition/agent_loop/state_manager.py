@@ -81,7 +81,7 @@ class AgentLoopStateManager:
         # Try new filename first, fallback to old filename for backwards compatibility
         checkpoint_paths = [
             self.checkpoint_path,
-            self.run_dir / "layer2_checkpoint.json",  # Old filename
+            self.run_dir / "loop_checkpoint.json",  # Old filename (backward compat)
         ]
 
         for checkpoint_path in checkpoint_paths:

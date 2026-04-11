@@ -93,7 +93,7 @@ class ReasonResult(BaseModel):
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
         reasoning: Internal analysis truncated to 500 chars for token efficiency.
-        next_action: User-facing action summary, max 100 chars (formerly soothe_next_action).
+        next_action: User-facing action summary, max 100 chars.
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
         decision: New steps to run when plan_action is new; None when keep.
         evidence_summary: Accumulated evidence text (often filled after parsing).
@@ -138,7 +138,7 @@ class ReasonResult(BaseModel):
 
 
 class StatusAssessment(BaseModel):
-    """Phase 1: Quick progress/status check (RFC-604 Layer 2).
+    """Phase 1: Quick progress/status check (RFC-604).
 
     Lightweight schema for status assessment, generates ~200-250 tokens.
 
@@ -162,7 +162,7 @@ class StatusAssessment(BaseModel):
 
 
 class PlanGeneration(BaseModel):
-    """Phase 2: Generate execution plan (conditional) (RFC-604 Layer 2).
+    """Phase 2: Generate execution plan (conditional) (RFC-604).
 
     Focused schema for plan generation, generates ~500-800 tokens.
 
@@ -231,7 +231,7 @@ class StepResult(BaseModel):
     def get_detailed_evidence_string(self) -> str:
         """Generate detailed evidence with CoreAgent input/output (IG-148).
 
-        Used for Layer 2 Reason phase messages to provide concrete execution
+        Used for Reason phase messages to provide concrete execution
         evidence: what was requested (step_input) and what was found (output_summary).
 
         Returns:
@@ -339,7 +339,7 @@ class StepResult(BaseModel):
 
 
 class LoopState(BaseModel):
-    """State for Layer 2 agentic loop.
+    """State for agentic loop.
 
     Attributes:
         goal: Goal description

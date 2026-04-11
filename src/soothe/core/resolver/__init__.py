@@ -10,11 +10,9 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.config import SootheConfig
-from soothe.utils import expand_path
 
 from ._resolver_infra import resolve_checkpointer, resolve_durability
 from ._resolver_tools import (
@@ -88,18 +86,16 @@ def resolve_planner(
     config: SootheConfig,
     model: BaseChatModel | None,
 ) -> PlannerProtocol:
-    """Instantiate the PlannerProtocol implementation from config.
-
-    Always returns a planner -- at minimum LLMPlanner is used as fallback.
+    """Instantiate LLMPlanner as the sole planner implementation.
 
     Args:
         config: Soothe configuration.
         model: The resolved chat model.
 
     Returns:
-        A PlannerProtocol instance.
+        LLMPlanner instance.
     """
-    planner_role = config.protocols.planner.planner_model or "think"
+    planner_role = config.protocols.planner.model or "think"
     planner_model = model
     if planner_model is None:
         try:
@@ -110,54 +106,16 @@ def resolve_planner(
             except Exception:
                 logger.warning("Failed to create model for planner")
 
+    # Use fast model for planning (structured output generation)
     fast_model = None
     with contextlib.suppress(Exception):
         fast_model = config.create_chat_model("fast")
 
-    resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
+    planner_model = fast_model or planner_model
 
-    from soothe.cognition.planning.llm import LLMPlanner
+    from soothe.cognition.agent_loop.planner import LLMPlanner
 
-    # Use fast model for unified planning (structured output generation)
-    simple_planner_model = fast_model or planner_model
-    simple = LLMPlanner(model=simple_planner_model, config=config) if simple_planner_model else None
-
-    if config.protocols.planner.routing == "always_direct":
-        return simple or LLMPlanner(model=planner_model, config=config)
-
-    # Check if we're running inside Claude Code (nested session not allowed)
-    import os
-
-    inside_claude_code = os.environ.get("CLAUDECODE") is not None
-
-    claude_planner = None
-    # Check if claude subagent is enabled in config before creating ClaudePlanner
-    claude_enabled = config.subagents.get("claude", None)
-    if claude_enabled is not None and not claude_enabled.enabled:
-        logger.info("Claude subagent disabled in config, skipping ClaudePlanner")
-    elif not inside_claude_code:
-        try:
-            from soothe.cognition.planning.claude import ClaudePlanner
-
-            claude_planner = ClaudePlanner(cwd=resolved_cwd, reflection_model=planner_model, config=config)
-        except Exception:
-            logger.info("Claude CLI not available for planning")
-    else:
-        logger.info("Running inside Claude Code, skipping ClaudePlanner (nested session not allowed)")
-
-    if config.protocols.planner.routing == "always_claude":
-        return claude_planner or simple  # type: ignore[return-value]
-
-    from soothe.cognition.planning.router import AutoPlanner
-
-    return AutoPlanner(
-        claude=claude_planner,
-        simple=simple,
-        fast_model=fast_model,
-        medium_token_threshold=30,
-        complex_token_threshold=160,
-        use_tiktoken=config.performance.thresholds.use_tiktoken,
-    )
+    return LLMPlanner(model=planner_model, config=config)
 
 
 def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
