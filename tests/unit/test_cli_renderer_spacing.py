@@ -46,7 +46,7 @@ def test_consecutive_stderr_icon_lines_no_blank_between_blocks(capsys: CaptureFi
 
 def test_multi_step_suppresses_assistant_text_and_no_turn_end_replay(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
-    r._state.multi_step_active = True
+    r._state.suppression.multi_step_active = True
 
     r.on_assistant_text("intermediate step body", is_main=True, is_streaming=True)
     r.on_assistant_text("final step dump", is_main=True, is_streaming=False)
@@ -104,7 +104,7 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
         namespace=(),
     )
     r.on_turn_end()
-    assert not r._state.multi_step_active
+    assert not r._state.suppression.multi_step_active
     r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST" not in capsys.readouterr().out
     r.on_progress_event(
@@ -141,8 +141,8 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
     )
     r.on_plan_created(plan)
     r.on_turn_end()
-    assert not r._state.multi_step_active
-    assert r._state.agentic_stdout_suppressed
+    assert not r._state.suppression.multi_step_active
+    assert r._state.suppression.agentic_stdout_suppressed
     r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST" not in capsys.readouterr().out
     r.on_progress_event(

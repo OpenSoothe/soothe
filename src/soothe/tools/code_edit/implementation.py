@@ -42,7 +42,6 @@ def _get_effective_work_dir(fallback_work_dir: str) -> str:
         configurable = config.get("configurable", {})
         workspace = configurable.get("workspace")
         if workspace:
-            logger.debug("Using workspace from LangGraph configurable: %s", workspace)
             return str(workspace)
     except Exception:  # noqa: S110
         pass

@@ -20,6 +20,7 @@ from soothe.tools.display_names import get_tool_display_name
 from soothe.ux.shared.event_formatter import build_event_summary
 from soothe.ux.shared.message_processing import format_tool_call_args
 from soothe.ux.shared.presentation_engine import PresentationEngine
+from soothe.ux.shared.suppression_state import SuppressionState
 from soothe.ux.shared.tui_trace_log import log_tui_trace
 from soothe.ux.tui.utils import (
     DOT_COLORS,
@@ -79,6 +80,9 @@ class TuiRendererState:
     suppress_duplicate_main_stream: bool = False
     # Subagent body used to suppress main streams that re-embed the same text (IG-130)
     subagent_embed_dedup_text: str = ""
+
+    # Multi-step/agentic suppression state (IG-143)
+    suppression: SuppressionState = field(default_factory=SuppressionState)
 
 
 class TuiRenderer:
@@ -160,6 +164,9 @@ class TuiRenderer:
     ) -> None:
         """Stream assistant text to panel.
 
+        HARD SUPPRESS during multi-step execution to prevent intermediate
+        LLM response text from flooding output (IG-143).
+
         Args:
             text: Text content to display.
             is_main: True if from main agent.
@@ -172,8 +179,24 @@ class TuiRenderer:
             is_streaming=is_streaming,
             chars=len(text),
         )
-        role = "main" if is_main else "subagent"
-        self._stream_assistant_panel_text(text, role=role, is_streaming=is_streaming)
+
+        # HARD SUPPRESS during multi-step execution (IG-143)
+        if is_main and self._state.suppression.should_suppress_output():
+            # Accumulate for final report instead
+            self._state.suppression.accumulate_text(text)
+            return
+
+        if not is_main:
+            # Subagent text shown in TUI (with [subagent] prefix)
+            role = "subagent"
+            self._stream_assistant_panel_text(text, role=role, is_streaming=is_streaming)
+        else:
+            # Main text: accumulate for final report if multi-step
+            if self._state.suppression.should_suppress_output():
+                self._state.suppression.accumulate_text(text)
+            else:
+                role = "main"
+                self._stream_assistant_panel_text(text, role=role, is_streaming=is_streaming)
 
     @staticmethod
     def _normalize_for_dedup_compare(text: str, max_chars: int) -> str:
@@ -305,6 +328,8 @@ class TuiRenderer:
     ) -> None:
         """Write tool call block with progress indicator.
 
+        HARD SUPPRESS during multi-step execution (IG-143).
+
         Args:
             name: Tool name.
             args: Parsed arguments.
@@ -318,6 +343,10 @@ class TuiRenderer:
             tool_call_id=tool_call_id,
         )
         if not self._on_panel_write:
+            return
+
+        # HARD SUPPRESS during multi-step execution (IG-143)
+        if self._state.suppression.should_suppress_output():
             return
 
         display_name = get_tool_display_name(name)
@@ -364,6 +393,8 @@ class TuiRenderer:
     ) -> None:
         """Write tool result with enhanced duration formatting.
 
+        HARD SUPPRESS during multi-step execution (IG-143).
+
         Args:
             name: Tool name.
             result: Result content (truncated).
@@ -379,6 +410,10 @@ class TuiRenderer:
             result_chars=len(result),
         )
         if not self._on_panel_write:
+            return
+
+        # HARD SUPPRESS during multi-step execution (IG-143)
+        if self._state.suppression.should_suppress_output():
             return
 
         # Clear tracked tool call
@@ -474,16 +509,24 @@ class TuiRenderer:
     ) -> None:
         """Write progress event to panel with two-level tree structure.
 
+        HARD SUPPRESS during multi-step execution for non-essential events (IG-143).
+
         Args:
             event_type: Event type string.
             data: Event payload.
             namespace: Subagent namespace.
         """
+        # Track suppression state from event (IG-143)
+        final_stdout = self._state.suppression.track_from_event(event_type, data)
+
         if not self._on_panel_write:
             return
 
+        payload = dict(data)
+        payload.pop("final_stdout_message", None)
+
         # Build top-level summary from registry template
-        summary = self._build_event_summary(event_type, data)
+        summary = self._build_event_summary(event_type, payload)
         if not summary:
             return
 
@@ -491,6 +534,11 @@ class TuiRenderer:
 
         # Create simple one-level display (consistent with CLI)
         self._on_panel_write(make_dot_line(color, summary))
+
+        # Emit final report on loop completion (IG-143)
+        if self._state.suppression.should_emit_final_report(event_type, final_stdout):
+            response = self._state.suppression.get_final_response(final_stdout)
+            self._write_panel_final_report(response)
 
     def _progress_event_dot_color(
         self,
@@ -530,12 +578,36 @@ class TuiRenderer:
         # Delegate to shared logic
         return build_event_summary(event_type, data)
 
+    def _write_panel_final_report(self, text: str) -> None:
+        """Write aggregated final answer to panel (multi-step/agentic loops, IG-143).
+
+        Args:
+            text: Final response text to display.
+        """
+        stripped = text.strip()
+        if not stripped:
+            return
+
+        self._state.full_response.append(stripped)
+
+        # Use main assistant style (cyan dot)
+        color = DOT_COLORS["assistant"]
+        display_text = make_dot_line(color, stripped)
+
+        if self._on_panel_write:
+            self._on_panel_write(display_text)
+            self._presentation.mark_final_answer_locked()
+
     def on_plan_created(self, plan: Plan) -> None:  # noqa: ARG002
         """Handle plan creation.
+
+        Track multi-step plan state for suppression (IG-143).
 
         Args:
             plan: Created plan object.
         """
+        self._state.suppression.track_from_plan(len(plan.steps))
+
         if self._on_plan_refresh:
             self._on_plan_refresh()
 
@@ -566,7 +638,10 @@ class TuiRenderer:
             self._on_plan_refresh()
 
     def on_turn_end(self) -> None:
-        """Finalize streaming on turn end."""
+        """Finalize streaming on turn end.
+
+        Reset multi-step/agentic suppression state (IG-143).
+        """
         log_tui_trace(
             tui_debug=self._tui_debug,
             event="renderer.turn_end",
@@ -580,6 +655,9 @@ class TuiRenderer:
             self._state.current_stream_role = None
         self._state.suppress_duplicate_main_stream = False
         self._state.subagent_embed_dedup_text = ""
+
+        # Reset multi-step/agentic suppression state for next turn (IG-143)
+        self._state.suppression.reset_turn()
 
     def _is_long_running_tool(self, name: str) -> bool:
         """Detect if tool typically takes >5 seconds.
