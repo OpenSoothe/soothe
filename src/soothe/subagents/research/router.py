@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from soothe.utils.text_preview import log_preview
+
 if TYPE_CHECKING:
     from .protocol import InformationSource, ResearchConfig, SourceType
 
@@ -84,9 +86,9 @@ class SourceRouter:
             selected = [scored[0][0]]
 
         logger.debug(
-            "Router selected %d source(s) for query '%.60s': %s",
+            "Router selected %d source(s) for query '%s': %s",
             len(selected),
-            query,
+            log_preview(query, 60),
             [(s.name, f"{sc:.2f}") for s, sc in scored[: len(selected)]],
         )
         return selected

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
+from soothe.utils.text_preview import preview, preview_first
 from soothe.config import SootheConfig
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
@@ -96,7 +97,7 @@ def _agentic_final_stdout_text(
     if body:
         if len(body) <= _AGENTIC_REPORT_FULL_DISPLAY_MAX:
             return body
-        preview = body[:_AGENTIC_REPORT_PREVIEW_MAX].rstrip()
+        preview_text = preview(body, mode="chars", first=_AGENTIC_REPORT_PREVIEW_MAX, marker="").rstrip()
         tid = thread_id.strip()
         run_dir_hint: Path | None = None
         if workspace and config and tid:
@@ -109,7 +110,7 @@ def _agentic_final_stdout_text(
         if run_dir_hint is not None:
             saved = _spool_agentic_overflow_report(body, run_dir=run_dir_hint)
         if saved is not None:
-            return f"{preview}...\n\nFull report: {saved}"
+            return f"{preview_text}...\n\nFull report: {saved}"
         if run_dir_hint is not None:
             pattern = f"{run_dir_hint.as_posix()}/final_report_*.md"
         elif tid:
@@ -119,7 +120,7 @@ def _agentic_final_stdout_text(
         else:
             pattern = "runs/<thread_id>/final_report_*.md"
         return (
-            f"{preview}...\n\nFull report: {pattern}\n"
+            f"{preview_text}...\n\nFull report: {pattern}\n"
             f"(file not written; exceeds {_AGENTIC_REPORT_FULL_DISPLAY_MAX} characters — see logs)"
         )
 
@@ -211,7 +212,7 @@ class AgenticMixin:
         yield _custom(
             AgenticLoopStartedEvent(
                 thread_id=tid,
-                goal=user_input[:100],
+                goal=preview_first(user_input, 100),
                 max_iterations=max_iterations,
             ).to_dict()
         )

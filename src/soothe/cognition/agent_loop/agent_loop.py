@@ -14,6 +14,7 @@ from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, Reason
 from soothe.cognition.agent_loop.state_manager import Layer2StateManager
 from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
+from soothe.utils.text_preview import log_preview, preview_first
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -151,7 +152,9 @@ class AgentLoop:
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
 
-        logger.info("[Goal] %s (max_iterations=%d, iteration=%d)", goal[:80], max_iterations, state.iteration)
+        logger.info(
+            "[Goal] %s (max_iterations=%d, iteration=%d)", log_preview(goal, 80), max_iterations, state.iteration
+        )
 
         while state.iteration < state.max_iterations:
             iteration_start = time.perf_counter()
@@ -313,7 +316,7 @@ Use all tool results and AI responses available in the conversation history to c
                 "plan_decision",
                 {
                     "iteration": state.iteration,
-                    "steps": [{"id": s.id, "description": s.description[:80]} for s in decision.steps],
+                    "steps": [{"id": s.id, "description": preview_first(s.description, 80)} for s in decision.steps],
                     "execution_mode": decision.execution_mode,
                 },
             )
@@ -372,7 +375,7 @@ Use all tool results and AI responses available in the conversation history to c
                     {
                         "step_id": result.step_id,
                         "success": result.success,
-                        "output_preview": result.to_evidence_string()[:100],  # RFC-211: Use outcome
+                        "output_preview": preview_first(result.to_evidence_string(), 100),  # RFC-211: Use outcome
                         "error": result.error or None,
                         "duration_ms": result.duration_ms,
                         "tool_call_count": result.tool_call_count,

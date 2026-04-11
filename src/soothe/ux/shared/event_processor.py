@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
 from soothe.foundation.verbosity_tier import VerbosityTier, classify_event_to_tier
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
+from soothe.utils.text_preview import preview_first
 from soothe.ux.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe.ux.shared.message_processing import (
     accumulate_tool_call_chunks,
@@ -325,7 +326,7 @@ class EventProcessor:
                             "tool_call name=%s id=%s args=%s is_main=%s",
                             name,
                             tool_call_id,
-                            str(coerced)[:200] if coerced else "{}",
+                            preview_first(str(coerced), 200) if coerced else "{}",
                             is_main,
                         )
         elif is_main and isinstance(msg.content, str) and msg.content:
@@ -369,7 +370,7 @@ class EventProcessor:
                         "tool_call name=%s id=%s args=%s is_main=%s",
                         name,
                         tool_call_id,
-                        str(tc_args)[:200] if tc_args else "{}",
+                        preview_first(str(tc_args), 200) if tc_args else "{}",
                         is_main,
                     )
 
@@ -420,7 +421,7 @@ class EventProcessor:
             tool_name,
             tool_call_id,
             "error" if is_error else "success",
-            brief[:300] if brief else "",
+            preview_first(brief, 300) if brief else "",
             is_main,
         )
 
@@ -511,7 +512,7 @@ class EventProcessor:
                         "tool_call name=%s id=%s args=%s is_main=%s",
                         name,
                         tool_call_id,
-                        str(args)[:200] if args else "{}",
+                        preview_first(str(args), 200) if args else "{}",
                         is_main,
                     )
 
@@ -543,7 +544,7 @@ class EventProcessor:
                             "tool_call name=%s id=%s args=%s is_main=%s",
                             name,
                             tool_call_id,
-                            str(args)[:200] if args else "{}",
+                            preview_first(str(args), 200) if args else "{}",
                             is_main,
                         )
 
@@ -601,7 +602,7 @@ class EventProcessor:
             tool_name,
             tool_call_id,
             "error" if is_error else "success",
-            brief[:300] if brief else "",
+            preview_first(brief, 300) if brief else "",
             is_main,
         )
 

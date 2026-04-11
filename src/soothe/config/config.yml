@@ -404,6 +404,11 @@ logging:
     retention_days: 30       # Auto-delete threads older than N days
     max_size_mb: 100         # Max total size (not enforced yet)
 
+  # Default text preview settings (unified truncation utility)
+  preview_defaults:
+    chars: 200               # Default character limit for char-based previews
+    lines: 5                 # Default line limit for line-based previews
+
 # =============================================================================
 # Daemon Multi-Transport Configuration (RFC-0013)
 # =============================================================================

@@ -11,6 +11,8 @@ import threading
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
+from soothe.utils.text_preview import preview_first
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
@@ -60,8 +62,8 @@ def wrap_tool_with_logging(
                     make_subagent_tool_started(
                         subagent_name,
                         tool=tool_name,
-                        args=str(args)[:200] if args else "",
-                        kwargs=str(kwargs)[:200] if kwargs else "",
+                        args=preview_first(str(args), 200) if args else "",
+                        kwargs=preview_first(str(kwargs), 200) if kwargs else "",
                     ),
                     logger,
                 )
@@ -72,7 +74,7 @@ def wrap_tool_with_logging(
                         make_subagent_tool_failed(
                             subagent_name,
                             tool=tool_name,
-                            error=str(e)[:200],
+                            error=preview_first(str(e), 200),
                         ),
                         logger,
                     )
@@ -82,7 +84,7 @@ def wrap_tool_with_logging(
                         make_subagent_tool_completed(
                             subagent_name,
                             tool=tool_name,
-                            result_preview=str(result)[:300] if result else "",
+                            result_preview=preview_first(str(result), 300) if result else "",
                         ),
                         logger,
                     )
@@ -102,8 +104,8 @@ def wrap_tool_with_logging(
             make_subagent_tool_started(
                 subagent_name,
                 tool=tool_name,
-                args=str(args)[:200] if args else "",
-                kwargs=str(kwargs)[:200] if kwargs else "",
+                args=preview_first(str(args), 200) if args else "",
+                kwargs=preview_first(str(kwargs), 200) if kwargs else "",
             ),
             logger,
         )
@@ -114,7 +116,7 @@ def wrap_tool_with_logging(
                 make_subagent_tool_failed(
                     subagent_name,
                     tool=tool_name,
-                    error=str(e)[:200],
+                    error=preview_first(str(e), 200),
                 ),
                 logger,
             )
@@ -124,7 +126,7 @@ def wrap_tool_with_logging(
                 make_subagent_tool_completed(
                     subagent_name,
                     tool=tool_name,
-                    result_preview=str(result)[:300] if result else "",
+                    result_preview=preview_first(str(result), 300) if result else "",
                 ),
                 logger,
             )

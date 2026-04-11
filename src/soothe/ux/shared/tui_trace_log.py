@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.utils.text_preview import log_preview
+
 _logger = logging.getLogger("soothe.ux.tui.trace")
 
 _PREVIEW_CHARS = 180
@@ -17,7 +19,7 @@ _PREVIEW_CHARS = 180
 
 def _fmt_field(key: str, value: Any) -> str:
     if isinstance(value, str) and len(value) > _PREVIEW_CHARS:
-        value = value[:_PREVIEW_CHARS] + "..."
+        value = log_preview(value, _PREVIEW_CHARS)
     return f"{key}={value!r}"
 
 

@@ -612,6 +612,21 @@ class ReportOutputConfig(BaseModel):
     synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
 
 
+class PreviewDefaults(BaseModel):
+    """Default settings for the unified text preview utility.
+
+    Args:
+        chars: Default character limit for char-based previews.
+        lines: Default line limit for line-based previews.
+    """
+
+    chars: int = Field(default=200, ge=50, le=1000)
+    """Default character limit for char-based previews."""
+
+    lines: int = Field(default=5, ge=1, le=20)
+    """Default line limit for line-based previews."""
+
+
 class LoggingConfig(BaseModel):
     """Logging and observability configuration.
 
@@ -621,6 +636,7 @@ class LoggingConfig(BaseModel):
         verbosity: Verbosity level (TUI/headless activity display).
         thread_logging: Thread logging configuration.
         report_output: Report output configuration.
+        preview_defaults: Default settings for text preview utility.
     """
 
     file: FileLoggingConfig = Field(default_factory=FileLoggingConfig)
@@ -628,6 +644,7 @@ class LoggingConfig(BaseModel):
     verbosity: Literal["quiet", "normal", "detailed", "debug"] = "normal"
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
     report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
+    preview_defaults: PreviewDefaults = Field(default_factory=PreviewDefaults)
 
 
 class RecoveryConfig(BaseModel):
