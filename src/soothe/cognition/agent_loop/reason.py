@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
+from soothe.utils.text_preview import log_preview, preview_first
 
 # Maximum evidence summary length before truncating model-supplied evidence
 _EVIDENCE_SUMMARY_MAX_CHARS = 600
@@ -36,11 +37,11 @@ class ReasonPhase:
 
         # --- Debug: pre-LLM snapshot ---
         logger.debug(
-            "[Reason] iter=%d | goal=%.80s | steps=%d ok=%d fail=%d | "
+            "[Reason] iter=%d | goal=%s | steps=%d ok=%d fail=%d | "
             "wave: calls=%d sub=%d cap=%s out=%d err=%d | "
             "ctx: caps=%d msgs=%d done=%d",
             state.iteration,
-            goal,
+            log_preview(goal, 80),
             len(state.step_results),
             len(state.completed_step_ids),
             0,
@@ -68,7 +69,7 @@ class ReasonPhase:
                 ", ".join(f"{s.step_id}={s.outcome}" for s in context.completed_steps[:5]),
             )
         if context.working_memory_excerpt:
-            logger.debug("[Reason] mem: %.200s", context.working_memory_excerpt)
+            logger.debug("[Reason] mem: %s", log_preview(context.working_memory_excerpt, 200))
         if state.action_history:
             logger.debug(
                 "[Reason] actions(%d): %s",
@@ -87,17 +88,17 @@ class ReasonPhase:
 
         # --- Debug: post-LLM snapshot ---
         logger.debug(
-            "[Reason] LLM out: status=%s plan=%s progress=%.0f%% conf=%.0f%% action=%.100s",
+            "[Reason] LLM out: status=%s plan=%s progress=%.0f%% conf=%.0f%% action=%s",
             result.status,
             result.plan_action,
             result.goal_progress * 100,
             result.confidence * 100,
-            (result.soothe_next_action or "none")[:100],
+            log_preview(result.soothe_next_action or "none", 100),
         )
         if result.reasoning:
-            logger.debug("[Reason] reasoning: %.300s", result.reasoning)
+            logger.debug("[Reason] reasoning: %s", log_preview(result.reasoning, 300))
         if result.decision:
-            step_summary = ", ".join(f"{s.id}={s.description[:40]}" for s in result.decision.steps[:5])
+            step_summary = ", ".join(f"{s.id}={preview_first(s.description, 40)}" for s in result.decision.steps[:5])
             logger.debug(
                 "[Reason] decision: type=%s mode=%s steps=%d [%s]",
                 result.decision.type,

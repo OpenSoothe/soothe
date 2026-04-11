@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 
+from soothe.utils.text_preview import log_preview
+
 logger = logging.getLogger(__name__)
 
 _MAX_ERROR_MSG_LENGTH = 100
-_TRUNCATED_MSG_LENGTH = _MAX_ERROR_MSG_LENGTH - 3  # Leave room for "..."
 
 
 def format_cli_error(
@@ -106,7 +107,7 @@ def _simplify_error_message(error_type: str, error_msg: str) -> str:
         return error_msg
 
     # Truncate long messages
-    return error_msg[:_TRUNCATED_MSG_LENGTH] + "..."
+    return log_preview(error_msg, _MAX_ERROR_MSG_LENGTH)
 
 
 def log_exception_simplified(

@@ -6,6 +6,7 @@ from typing import Any
 
 from soothe.ux.shared.tool_formatters.base import BaseFormatter
 from soothe.ux.shared.tool_output_formatter import ToolBrief
+from soothe.utils.text_preview import preview_first
 
 # RFC-0020 display constraints
 MAX_SUMMARY_LENGTH = 50
@@ -44,7 +45,7 @@ class FallbackFormatter(BaseFormatter):
             if is_error:
                 # Extract error message (first line or first 80 chars)
                 first_line = result.split("\n")[0].strip()
-                error_msg = self._truncate_text(first_line, 80)
+                error_msg = preview_first(first_line, 80)
                 return ToolBrief(
                     icon="✗",
                     summary="Failed",
@@ -53,16 +54,12 @@ class FallbackFormatter(BaseFormatter):
                 )
 
             # Success - truncate to 50 chars for summary
-            summary = result.replace("\n", " ").strip()[:MAX_SUMMARY_LENGTH]
-            if len(result) > MAX_SUMMARY_LENGTH:
-                summary = summary[:47] + "..."
+            summary = preview_first(result.replace("\n", " ").strip(), MAX_SUMMARY_LENGTH)
 
             # Detail is first 80 chars if longer than summary
             detail = None
             if len(result) > MAX_SUMMARY_LENGTH:
-                detail = result.replace("\n", " ").strip()[:MAX_DETAIL_LENGTH]
-                if len(result) > MAX_DETAIL_LENGTH:
-                    detail = detail[:77] + "..."
+                detail = preview_first(result.replace("\n", " ").strip(), MAX_DETAIL_LENGTH)
 
             return ToolBrief(icon="✓", summary=summary, detail=detail)
 
@@ -70,7 +67,7 @@ class FallbackFormatter(BaseFormatter):
         if isinstance(result, dict):
             # Check for error field
             if "error" in result:
-                error_msg = str(result["error"])[:80]
+                error_msg = preview_first(str(result["error"]), 80)
                 return ToolBrief(
                     icon="✗",
                     summary="Failed",
@@ -93,7 +90,7 @@ class FallbackFormatter(BaseFormatter):
 
             if isinstance(result, ToolOutput):
                 if not result.success:
-                    error_msg = result.error[:80] if result.error else "Unknown error"
+                    error_msg = preview_first(result.error, 80) if result.error else "Unknown error"
                     return ToolBrief(
                         icon="✗",
                         summary="Failed",

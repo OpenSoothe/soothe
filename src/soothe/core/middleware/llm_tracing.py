@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from soothe.utils.text_preview import preview, preview_first
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -298,7 +300,7 @@ class LLMTracingMiddleware(AgentMiddleware):
             trace_id,
             duration_ms,
             type(error).__name__,
-            str(error)[:200],
+            preview_first(str(error), 200),
         )
 
     def _preview(self, content: str | list | dict, max_length: int | None = None) -> str:
@@ -314,10 +316,7 @@ class LLMTracingMiddleware(AgentMiddleware):
         length = max_length or self._log_preview_length
 
         if isinstance(content, str):
-            preview = content.strip()
-            if len(preview) > length:
-                preview = preview[: length - 3] + "..."
-            return preview
+            return preview(content.strip(), mode="chars", first=length, marker="...")
 
         if isinstance(content, list):
             # Handle list of content blocks
@@ -326,7 +325,7 @@ class LLMTracingMiddleware(AgentMiddleware):
         if isinstance(content, dict):
             return f"[dict with keys: {list(content.keys())[:5]}]"
 
-        return str(content)[:length]
+        return preview(str(content), mode="chars", first=length, marker="...")
 
     def _format_size(self, char_count: int) -> str:
         """Format character count as human-readable size.

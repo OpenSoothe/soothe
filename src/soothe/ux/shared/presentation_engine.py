@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from soothe.foundation.verbosity_tier import VerbosityTier, should_show
 from soothe.ux.shared.display_policy import VerbosityLevel
+from soothe.utils.text_preview import log_preview
 
 
 @dataclass
@@ -115,9 +116,7 @@ class PresentationEngine:
         if (compact.startswith("[") and compact.endswith("]")) or (compact.startswith("{") and compact.endswith("}")):
             return "Tool result received (structured payload)."
 
-        if len(compact) <= self._TOOL_RESULT_MAX_CHARS:
-            return compact
-        return compact[: self._TOOL_RESULT_MAX_CHARS - 3] + "..."
+        return log_preview(compact, self._TOOL_RESULT_MAX_CHARS)
 
     @staticmethod
     def _normalize_reason(content: str) -> str:

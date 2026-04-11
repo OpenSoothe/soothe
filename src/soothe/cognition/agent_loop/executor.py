@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -635,7 +636,7 @@ class Executor:
             logger.debug(
                 "Executing step %s: %s [hints: tools=%s, subagent=%s]",
                 step.id,
-                step.description[:100],
+                preview_first(step.description, 100),
                 step.tools,
                 step.subagent,
             )
@@ -834,7 +835,7 @@ class Executor:
                                         chunks.append(c["text"])
 
                             # Log content summary instead of full content to avoid truncation
-                            content_preview = str(content)[:200] if content else "none"
+                            content_preview = preview_first(str(content), 200) if content else "none"
                             logger.debug(
                                 "[Act Phase TOOL] Content preview (first 200 chars): %s",
                                 content_preview,
@@ -1024,7 +1025,7 @@ class Executor:
         exc_type = type(exc).__name__
         if exc_type != "Exception":
             # Include exception type but truncate long messages
-            return f"{exc_type}: {error_str[:200]}"
+            return f"{exc_type}: {preview_first(error_str, 200)}"
 
         return fallback
 
