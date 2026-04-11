@@ -1,20 +1,20 @@
-"""Tests for planning implementation (SimplePlanner)."""
+"""Tests for planning implementation (LLMPlanner)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.cognition.planning.simple import SimplePlanner
+from soothe.cognition.planning.llm import LLMPlanner
 from soothe.protocols.planner import Plan, PlanContext, PlanStep, StepResult
 
 
-class TestSimplePlanner:
-    """Unit tests for SimplePlanner."""
+class TestLLMPlanner:
+    """Unit tests for LLMPlanner."""
 
     def test_initialization(self) -> None:
         """Test initialization with a model."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         assert planner._model == mock_model
 
@@ -34,7 +34,7 @@ class TestSimplePlanner:
         mock_structured.ainvoke = AsyncMock(return_value=expected_plan)
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
         context = PlanContext(available_capabilities=["tool1", "tool2"])
 
         plan = await planner.create_plan("test goal", context)
@@ -51,7 +51,7 @@ class TestSimplePlanner:
         mock_structured.ainvoke = AsyncMock(side_effect=Exception("Model error"))
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
         context = PlanContext()
 
         plan = await planner.create_plan("test goal", context)
@@ -74,7 +74,7 @@ class TestSimplePlanner:
         mock_structured.ainvoke = AsyncMock(return_value=expected_plan)
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
         context = PlanContext(
             available_capabilities=["tool1", "tool2"],
             completed_steps=[
@@ -111,7 +111,7 @@ class TestSimplePlanner:
         mock_structured.ainvoke = AsyncMock(return_value=revised_plan)
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         result = await planner.revise_plan(original_plan, "Add more steps")
 
@@ -126,7 +126,7 @@ class TestSimplePlanner:
         mock_structured.ainvoke = AsyncMock(side_effect=Exception("Model error"))
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
         original_plan = Plan(
             goal="test goal",
             steps=[PlanStep(id="S_1", description="Step", execution_hint="tool")],
@@ -141,7 +141,7 @@ class TestSimplePlanner:
     async def test_reflect_all_steps_succeeded(self) -> None:
         """Test reflection when all steps succeeded."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         plan = Plan(
             goal="test goal",
@@ -166,7 +166,7 @@ class TestSimplePlanner:
     async def test_reflect_some_steps_failed(self) -> None:
         """Test reflection when some steps failed."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         plan = Plan(
             goal="test goal",
@@ -192,7 +192,7 @@ class TestSimplePlanner:
     async def test_reflect_all_steps_failed(self) -> None:
         """Test reflection when all steps failed."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         plan = Plan(
             goal="test goal",
@@ -216,7 +216,7 @@ class TestSimplePlanner:
     def test_build_plan_prompt_basic(self) -> None:
         """Test building plan prompt with basic goal."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         context = PlanContext()
         prompt = planner._build_plan_prompt("test goal", context)
@@ -231,7 +231,7 @@ class TestSimplePlanner:
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         context = PlanContext(available_capabilities=["tool1", "tool2", "agent1"])
         prompt = planner._build_plan_prompt("test goal", context)
@@ -245,7 +245,7 @@ class TestSimplePlanner:
     def test_build_plan_prompt_with_completed_steps(self) -> None:
         """Test building plan prompt with completed steps."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         completed = [
             StepResult(step_id="S_1", success=True, outcome={"type": "generic", "size_bytes": 4}),
@@ -262,7 +262,7 @@ class TestSimplePlanner:
     def test_normalize_hints_in_dict_invalid_values(self) -> None:
         """Test normalizing invalid execution_hint values in dictionary."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         data = {
             "goal": "test goal",
@@ -286,7 +286,7 @@ class TestSimplePlanner:
     def test_parse_json_from_response_markdown_block(self) -> None:
         """Test parsing Plan from JSON wrapped in markdown code blocks."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         content = """```json
 {
@@ -308,7 +308,7 @@ class TestSimplePlanner:
     def test_parse_json_from_response_plain_json(self) -> None:
         """Test parsing Plan from plain JSON."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         content = """{
   "goal": "test goal",
@@ -326,7 +326,7 @@ class TestSimplePlanner:
     def test_parse_json_from_response_normalizes_hints(self) -> None:
         """Test that parsing normalizes invalid execution hints."""
         mock_model = MagicMock()
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
 
         content = """{
   "goal": "test goal",
@@ -360,7 +360,7 @@ class TestSimplePlanner:
         mock_model.ainvoke = AsyncMock(return_value=mock_response)
         mock_model.with_structured_output = MagicMock(return_value=mock_structured)
 
-        planner = SimplePlanner(mock_model)
+        planner = LLMPlanner(mock_model)
         context = PlanContext()
 
         plan = await planner.create_plan("test goal", context)

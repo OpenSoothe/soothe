@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.cognition.planning.simple import SimplePlanner
+from soothe.cognition.planning.llm import LLMPlanner
 from soothe.protocols.planner import Plan, PlanStep, StepResult
 
 
 @pytest.fixture
-def planner() -> SimplePlanner:
-    return SimplePlanner(model=MagicMock())
+def planner() -> LLMPlanner:
+    return LLMPlanner(model=MagicMock())
 
 
 def _plan_with_deps() -> Plan:
@@ -31,7 +31,7 @@ class TestEnhancedReflection:
     """Test dependency-aware reflection."""
 
     @pytest.mark.asyncio
-    async def test_all_success(self, planner: SimplePlanner) -> None:
+    async def test_all_success(self, planner: LLMPlanner) -> None:
         plan = _plan_with_deps()
         results = [
             StepResult(step_id="s1", success=True, outcome={"type": "generic", "size_bytes": 2}),
@@ -45,7 +45,7 @@ class TestEnhancedReflection:
         assert "3/3" in reflection.assessment
 
     @pytest.mark.asyncio
-    async def test_direct_failure(self, planner: SimplePlanner) -> None:
+    async def test_direct_failure(self, planner: LLMPlanner) -> None:
         """s1 fails directly (no dependencies)."""
         plan = _plan_with_deps()
         results = [
@@ -58,7 +58,7 @@ class TestEnhancedReflection:
         assert "timeout" in reflection.failed_details["s1"]
 
     @pytest.mark.asyncio
-    async def test_blocked_by_dependency(self, planner: SimplePlanner) -> None:
+    async def test_blocked_by_dependency(self, planner: LLMPlanner) -> None:
         """s1 fails, s2 depends on s1 so s2 is blocked."""
         plan = _plan_with_deps()
         results = [
@@ -83,7 +83,7 @@ class TestEnhancedReflection:
         assert "Blocked by dependencies" in reflection.assessment
 
     @pytest.mark.asyncio
-    async def test_cascading_block(self, planner: SimplePlanner) -> None:
+    async def test_cascading_block(self, planner: LLMPlanner) -> None:
         """s1 fails, s2 blocked by s1, s3 blocked by both."""
         plan = _plan_with_deps()
         results = [
@@ -99,7 +99,7 @@ class TestEnhancedReflection:
         assert len(reflection.failed_details) == 3
 
     @pytest.mark.asyncio
-    async def test_independent_failure_no_block(self, planner: SimplePlanner) -> None:
+    async def test_independent_failure_no_block(self, planner: LLMPlanner) -> None:
         """s1 and s2 fail independently (s2 depends on s1, but s1 also fails)."""
         plan = Plan(
             goal="Test",

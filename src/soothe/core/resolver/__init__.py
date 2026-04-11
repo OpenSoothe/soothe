@@ -90,7 +90,7 @@ def resolve_planner(
 ) -> PlannerProtocol:
     """Instantiate the PlannerProtocol implementation from config.
 
-    Always returns a planner -- at minimum SimplePlanner is used as fallback.
+    Always returns a planner -- at minimum LLMPlanner is used as fallback.
 
     Args:
         config: Soothe configuration.
@@ -116,14 +116,14 @@ def resolve_planner(
 
     resolved_cwd = str(expand_path(config.workspace_dir)) if config.workspace_dir else str(Path.cwd())
 
-    from soothe.cognition.planning.simple import SimplePlanner
+    from soothe.cognition.planning.llm import LLMPlanner
 
     # Use fast model for unified planning (structured output generation)
     simple_planner_model = fast_model or planner_model
-    simple = SimplePlanner(model=simple_planner_model, config=config) if simple_planner_model else None
+    simple = LLMPlanner(model=simple_planner_model, config=config) if simple_planner_model else None
 
     if config.protocols.planner.routing == "always_direct":
-        return simple or SimplePlanner(model=planner_model, config=config)
+        return simple or LLMPlanner(model=planner_model, config=config)
 
     # Check if we're running inside Claude Code (nested session not allowed)
     import os

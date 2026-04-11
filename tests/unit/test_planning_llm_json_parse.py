@@ -1,4 +1,4 @@
-"""Tests for resilient JSON extraction in SimplePlanner (`_load_llm_json_dict`)."""
+"""Tests for resilient JSON extraction in LLMPlanner (`_load_llm_json_dict`)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from soothe.cognition.planning.simple import _load_llm_json_dict
+from soothe.cognition.planning.llm import _load_llm_json_dict
 
 
 def test_load_plain_object() -> None:

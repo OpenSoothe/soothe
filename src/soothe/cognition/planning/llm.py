@@ -1,4 +1,4 @@
-"""SimplePlanner -- single LLM call planner for simple/medium tasks."""
+"""LLMPlanner -- single LLM call planner for simple/medium tasks."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
+from soothe.utils.text_preview import preview_lines
 
 logger = logging.getLogger(__name__)
 
@@ -672,7 +673,7 @@ _SIMPLE_PLANNER_HINT_MAP = {
 }
 
 
-class SimplePlanner:
+class LLMPlanner:
     """PlannerProtocol using single LLM call for planning.
 
     For simple/medium tasks. Produces flat plans (typically 1-3 steps).
@@ -691,7 +692,7 @@ class SimplePlanner:
         model: Any,
         config: SootheConfig | None = None,
     ) -> None:
-        """Initialize SimplePlanner.
+        """Initialize LLMPlanner.
 
         Args:
             model: Langchain BaseChatModel supporting structured output.
@@ -792,7 +793,7 @@ class SimplePlanner:
             content = getattr(response, "content", str(response))
             return _extract_text_content(content)
         except Exception as e:
-            logger.warning("SimplePlanner._invoke failed: %s", e)
+            logger.warning("LLMPlanner._invoke failed: %s", e)
             return ""
 
     async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
@@ -996,8 +997,8 @@ class SimplePlanner:
         messages = self._prompt_builder.build_reason_messages(goal, state, context)
 
         # LLM tracing - verbose debug logs for prompt analysis
-        logger.debug("[SimplePlanner.reason] ====== Messages to LLM ======")
-        logger.debug("[SimplePlanner.reason] Message count: %d", len(messages))
+        logger.debug("[LLMPlanner.reason] ====== Messages to LLM ======")
+        logger.debug("[LLMPlanner.reason] Message count: %d", len(messages))
         for i, msg in enumerate(messages):
             msg_type = type(msg).__name__
             content_len = len(str(msg.content)) if hasattr(msg, "content") else len(str(msg))
@@ -1007,14 +1008,15 @@ class SimplePlanner:
                 msg_type,
                 content_len,
             )
-            # Log FULL message content for complete visibility
+            # Log preview (beginning and last lines) for visibility
             full_content = str(msg.content) if hasattr(msg, "content") else str(msg)
+            content_preview = preview_lines(full_content, first=5, last=3)
             logger.debug(
-                "[SimplePlanner.reason] Message %d FULL CONTENT:\n%s",
+                "[SimplePlanner.reason] Message %d PREVIEW:\n%s",
                 i,
-                full_content,
+                content_preview,
             )
-        logger.debug("[SimplePlanner.reason] ====== End Messages ======")
+        logger.debug("[LLMPlanner.reason] ====== End Messages ======")
 
         try:
             # Use structured output to enforce ReasonResult schema (fixes tool-call token issue)
@@ -1022,21 +1024,21 @@ class SimplePlanner:
             result = await structured_model.ainvoke(messages)
 
             # LLM tracing - verbose debug logs for structured result
-            logger.debug("[SimplePlanner.reason] ====== Structured ReasonResult ======")
-            logger.debug("[SimplePlanner.reason] Status: %s", result.status)
+            logger.debug("[LLMPlanner.reason] ====== Structured ReasonResult ======")
+            logger.debug("[LLMPlanner.reason] Status: %s", result.status)
             logger.debug(
-                "[SimplePlanner.reason] Plan action: %s, has_decision: %s",
+                "[LLMPlanner.reason] Plan action: %s, has_decision: %s",
                 result.plan_action,
                 result.decision is not None,
             )
             logger.debug(
-                "[SimplePlanner.reason] Progress: %.0f%%, Confidence: %.0f%%",
+                "[LLMPlanner.reason] Progress: %.0f%%, Confidence: %.0f%%",
                 result.goal_progress * 100,
                 result.confidence * 100,
             )
-            logger.debug("[SimplePlanner.reason] ====== End Structured Result ======")
+            logger.debug("[LLMPlanner.reason] ====== End Structured Result ======")
         except Exception:
-            logger.exception("SimplePlanner.reason failed")
+            logger.exception("LLMPlanner.reason failed")
             return ReasonResult(
                 status="replan",
                 plan_action="new",

@@ -57,7 +57,7 @@ class TestAutoPlanner:
 
     @pytest.mark.asyncio
     async def test_chitchat_goal_routes_to_simple_planner(self) -> None:
-        """Chitchat classification routes to SimplePlanner (shouldn't reach here normally)."""
+        """Chitchat classification routes to LLMPlanner (shouldn't reach here normally)."""
         simple = _make_planner("simple")
         auto = AutoPlanner(simple=simple)
 
@@ -67,7 +67,7 @@ class TestAutoPlanner:
 
     @pytest.mark.asyncio
     async def test_medium_goal_routes_to_simple_planner(self) -> None:
-        """Medium classification routes to SimplePlanner."""
+        """Medium classification routes to LLMPlanner."""
         simple = _make_planner("simple")
         auto = AutoPlanner(simple=simple)
 
@@ -88,7 +88,7 @@ class TestAutoPlanner:
 
     @pytest.mark.asyncio
     async def test_complex_fallback_to_simple_when_no_claude(self) -> None:
-        """Complex classification falls back to SimplePlanner when Claude is unavailable."""
+        """Complex classification falls back to LLMPlanner when Claude is unavailable."""
         simple = _make_planner("simple")
         auto = AutoPlanner(claude=None, simple=simple)
 
@@ -144,7 +144,7 @@ class TestAutoPlannerFallback:
 
     @pytest.mark.asyncio
     async def test_fallback_simple_threshold(self) -> None:
-        """Fallback routes short goals to SimplePlanner."""
+        """Fallback routes short goals to LLMPlanner."""
         simple = _make_planner("simple")
         auto = AutoPlanner(simple=simple, use_tiktoken=False)
 
@@ -169,7 +169,7 @@ class TestAutoPlannerFallback:
 
     @pytest.mark.asyncio
     async def test_fallback_medium_range(self) -> None:
-        """Fallback routes medium-length goals to SimplePlanner."""
+        """Fallback routes medium-length goals to LLMPlanner."""
         simple = _make_planner("simple")
         auto = AutoPlanner(
             simple=simple,
