@@ -15,7 +15,7 @@ The agentic Plan-and-Execute loop (Layer 2, RFC-201) passes progress to the next
 
 1. **Truncation**: Evidence strings are capped (hundreds of characters). Directory listings and long reads disappear from the Reason context.
 2. **No deduplication key**: The LLM cannot tell “already listed `src/`” from a short “✓ …” line.
-3. **Layer boundary**: Layer 1 has rich tool transcripts; Reason in the agentic loop only sees what the Act phase forwards.
+3. **Layer boundary**: Layer 1 has rich tool transcripts; Reason in the agentic loop only sees what the Execute phase forwards.
 
 Loop working memory is **not** a second context ledger (see RFC-300). It is a **bounded scratchpad** scoped to one agentic goal run, optimized for planner-facing summaries and spill artifacts.
 
@@ -98,7 +98,7 @@ Concrete classes:
 2. **Post-Act**: After each batch of `StepResult` objects, call `record_step_result` for each.
 3. **Pre-Reason**: `build_loop_reason_prompt` (or `PlanContext`) receives `working_memory_excerpt: str` from `render_for_reason()`.
 
-`PlanContext` carries `working_memory_excerpt: str | None` so `ClaudePlanner` / `SimplePlanner` share the same surface.
+`PlanContext` carries `working_memory_excerpt: str | None` so `` / `LLMPlanner` share the same surface.
 
 ## Prompt Contract
 

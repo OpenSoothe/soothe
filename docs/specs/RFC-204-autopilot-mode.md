@@ -45,7 +45,7 @@ Layer 3: Autonomous Goal Management (RFC-200)
 Layer 3 treats Layer 2 as a black-box Plan-and-Execute engine:
 
 **Input**: Rich context envelope
-**Output**: ReasonResult with status, evidence, confidence, goal_progress
+**Output**: PlanResult with status, evidence, confidence, goal_progress
 **Visibility**: No intermediate step visibility
 
 **Context Envelope Structure**:
@@ -81,7 +81,7 @@ Layer 2 can query and propose updates through tools:
 Layer 3 validates Layer 2's completion judgment:
 
 **Process**:
-1. Layer 2 returns `ReasonResult` with `status: "done"` and confidence
+1. Layer 2 returns `PlanResult` with `status: "done"` and confidence
 2. Layer 3 reflection LLM evaluates holistically:
    - Evidence quality and completeness
    - Success criteria satisfaction

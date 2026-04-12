@@ -85,7 +85,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 
 5. **Durable by default** -- Agent state is persistable and resumable. Crashes recover from the last persisted state. The durability protocol abstracts over the persistence backend (could be LangGraph Checkpointer, a database, or a file).
 
-6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. Three planner tiers: `SimplePlanner` (single LLM call for simple tasks), `AutoPlanner` (complexity router that delegates), and `ClaudePlanner` (multi-turn reasoning for complex tasks). Architectural evolution: IG-036 removed `SubagentPlanner` indirection, routing directly from `AutoPlanner`. Simple queries bypass planning entirely.
+6. **Plan-driven execution** -- Complex goals are decomposed into plans with steps. The planner (`LLMPlanner`) uses two-phase architecture (StatusAssessment + PlanGeneration per RFC-604) for token efficiency across all complexity levels. Architectural evolution: IG-150 removed multiple planner tiers (`AutoPlanner`, `ClaudePlanner`, `SubagentPlanner`) and consolidated to `LLMPlanner`, merging the planning module into `cognition.agent_loop`. Simple queries bypass planning entirely.
 
 7. **Least-privilege delegation** -- Every tool invocation and subagent spawn passes through a policy protocol. Permissions are structured (category + action + scope), enabling fine-grained control down to individual shell commands or file paths. Subagents inherit a narrower permission set than their parent.
 

@@ -91,7 +91,7 @@ To maximize prefix-cache hits on supported providers:
 2. **Structured context next**: `<SOOTHE_ENVIRONMENT>`, then `<SOOTHE_WORKSPACE>`, then (complex only) `<SOOTHE_THREAD>`, `<SOOTHE_PROTOCOLS>`.
 3. **Most volatile last**: lines that change every request (e.g. current date) are appended **after** all `<SOOTHE_*>` blocks.
 
-Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent**, **SimplePlanner**, and **ClaudePlanner** emit the same ENV+WORKSPACE shape where config is available.
+Shared builders live in `src/soothe/core/prompts/context_xml.py` so **main agent**, **LLMPlanner**, and **** emit the same ENV+WORKSPACE shape where config is available.
 
 ## Architecture
 
@@ -130,7 +130,7 @@ Four context sections with dedicated **outer** tags. Each outer tag includes `ve
 <SOOTHE_PROTOCOLS version="1">
 <protocol id="context" type="VectorContext" stats="8 entries"/>
 <protocol id="memory" type="KeywordMemory" stats="3 recalled"/>
-<protocol id="planner" type="ClaudePlanner"/>
+<protocol id="planner" type=""/>
 <protocol id="policy" type="ConfigDrivenPolicy"/>
 </SOOTHE_PROTOCOLS>
 ```

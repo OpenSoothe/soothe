@@ -81,7 +81,7 @@ RFCs are organized by numeric prefix:
 | [RFC-601](./RFC-601-built-in-agents.md) | Built-in Plugin Agents | Implemented | Architecture Design | RFC-600, RFC-301 |
 | [RFC-602](./RFC-602-sqlite-backend.md) | SQLite Backend Specification | Draft | Architecture Design + Impl Interface | RFC-000, RFC-001, RFC-300, RFC-401 |
 | [RFC-603](./RFC-603-reasoning-quality-progressive-actions.md) | Reasoning Quality & Progressive Actions | Draft | Architecture Design | RFC-201 |
-| [RFC-604](./RFC-604-reason-phase-robustness.md) | Reason Phase Robustness (Three-Layer Defense) | Draft | Architecture Design | RFC-603, RFC-201 |
+| [RFC-604](./RFC-604-reason-phase-robustness.md) | Plan Phase Robustness (Three-Layer Defense) | Implemented | Architecture Design | RFC-603, RFC-201 |
 
 ---
 

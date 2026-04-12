@@ -1,19 +1,19 @@
-# RFC-604: Reason Phase Robustness (Three-Layer Defense)
+# RFC-604: Plan Phase Robustness (Three-Layer Defense)
 
-**Status**: Draft
+**Status**: Implemented
 **Authors**: Claude Sonnet 4.6
 **Created**: 2026-04-11
-**Last Updated**: 2026-04-11
+**Last Updated**: 2026-04-12 (IG-153 terminology refactoring)
 **Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-201-agentic-goal-execution
 **Supersedes**: ---
-**Stage**: Cognition/Planning
+**Stage**: Cognition/AgentLoop
 **Kind**: Architecture Design
 
 ---
 
 ## 1. Abstract
 
-This RFC defines a three-layer defense strategy to prevent JSON truncation failures in the Reason phase structured output generation. The strategy combines proactive prevention (schema simplification and query splitting) with reactive fallback (existing retry logic) to ensure reliable operation across all LLM providers, particularly those with constrained output token budgets (DashScope/Kimi). The architecture separates status assessment from plan generation, reducing per-call token requirements while preserving reasoning quality through concatenated phase outputs.
+This RFC defines a three-layer defense strategy to prevent JSON truncation failures in the Plan phase structured output generation. The strategy combines proactive prevention (schema simplification and query splitting) with reactive fallback (existing retry logic) to ensure reliable operation across all LLM providers, particularly those with constrained output token budgets (DashScope/Kimi). The architecture separates status assessment from plan generation, reducing per-call token requirements while preserving reasoning quality through concatenated phase outputs.
 
 ---
 
@@ -22,7 +22,7 @@ This RFC defines a three-layer defense strategy to prevent JSON truncation failu
 ### 2.1 Scope
 
 This RFC defines:
-- **Schema simplification strategy** for ReasonResult to reduce token footprint
+- **Schema simplification strategy** for PlanResult to reduce token footprint
 - **Query splitting architecture** that separates status assessment from plan generation
 - **Integration patterns** for three-layer defense with existing fallback mechanisms
 - **Token budget allocation** across phases and fields
@@ -47,19 +47,19 @@ This RFC does **not** define:
 
 **Observed Failure Pattern**:
 ```
-ValidationError: 1 validation error for ReasonResult
+ValidationError: 1 validation error for PlanResult
   Invalid JSON: EOF while parsing a string at line 1 column 2644
 ```
 
 **Root Cause Analysis**:
-- ReasonResult schema produces large outputs: 1500-3000 tokens in worst cases
+- PlanResult schema produces large outputs: 1500-3000 tokens in worst cases
 - Provider truncates JSON at ~1500-5000 character limit mid-string
 - Unlimited `reasoning` field (500-2000 tokens) dominates output budget
 - Complex nested `decision` schema contributes 250-500 tokens
 - Optional fields (`progress_detail`, verbose `soothe_next_action`) add overhead
 
 **Impact**:
-- Validation failures block Reason phase execution
+- Validation failures block Plan phase execution
 - 3-tier retry + fallback cannot recover from truncation (JSON irrecoverably corrupted)
 - User sees generic error, no progress feedback
 - Agent execution halts, goal cannot complete
@@ -69,7 +69,7 @@ ValidationError: 1 validation error for ReasonResult
 **Existing Fallback Logic** (lines 1088-1189 in `llm.py`):
 - Tier 1: 3 retry attempts with structured output
 - Tier 2: Regular model + manual JSON extraction/repair
-- Tier 3: Default ReasonResult with conservative defaults
+- Tier 3: Default PlanResult with conservative defaults
 
 **Limitations**:
 - Fallback assumes transient validation errors, not permanent truncation
@@ -99,7 +99,7 @@ ValidationError: 1 validation error for ReasonResult
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Layer 1: Schema Diet                                   │
-│  - Simplify ReasonResult schema                         │
+│  - Simplify PlanResult schema                         │
 │  - Add max_length constraints                           │
 │  - Remove optional fields                               │
 │  - Rename verbose fields                                │
@@ -129,11 +129,11 @@ ValidationError: 1 validation error for ReasonResult
 
 ## 6. Layer 1: Schema Diet
 
-### 6.1 Simplified ReasonResult Schema
+### 6.1 Simplified PlanResult Schema
 
 **Current Schema** (problematic):
 ```python
-class ReasonResult(BaseModel):
+class PlanResult(BaseModel):
     status: Literal["continue", "replan", "done"]
     evidence_summary: str = ""
     goal_progress: float = Field(default=0.0)
@@ -148,8 +148,8 @@ class ReasonResult(BaseModel):
 
 **Simplified Schema** (Layer 1):
 ```python
-class ReasonResult(BaseModel):
-    """Simplified Reason phase output for token efficiency."""
+class PlanResult(BaseModel):
+    """Simplified Plan phase output for token efficiency."""
 
     status: Literal["continue", "replan", "done"]
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -230,7 +230,7 @@ next_action: str = Field(default="", max_length=100)
 
 ### 6.3 Token Budget Analysis
 
-**Before** (Current ReasonResult):
+**Before** (Current PlanResult):
 ```
 reasoning:         ~500-2000 tokens (unlimited)
 decision.steps:    ~250-500 tokens (5 steps)
@@ -265,7 +265,7 @@ Total: ~800-1200 tokens (worst case)
 ```python
 # LLMPlanner.reason() - One complex call
 result = await structured_model.ainvoke(messages)
-# Returns: full ReasonResult (status + progress + reasoning + decision)
+# Returns: full PlanResult (status + progress + reasoning + decision)
 ```
 
 **Problem**: Single call asks model to:
@@ -357,8 +357,8 @@ combined_next_action = (
     f"{plan_result.next_action}"
 )
 
-# Build final ReasonResult
-return ReasonResult(
+# Build final PlanResult
+return PlanResult(
     status=assessment.status,
     goal_progress=assessment.goal_progress,
     confidence=assessment.confidence,
@@ -424,7 +424,7 @@ Total Phase 2:     ~500-800 tokens ✅ (safe margin)
 
 ### 8.1 Existing Fallback Logic
 
-**Location**: `src/soothe/cognition/planning/llm.py` (lines 1088-1189)
+**Location**: `src/soothe/cognition/agent_loop/llm.py` (lines 1088-1189)
 
 **Current Pipeline**:
 ```python
@@ -441,7 +441,7 @@ for attempt in range(3):
         logger.info("Trying fallback: regular model + manual JSON parsing")
         response = await model.ainvoke(messages)
         json_str = _extract_and_repair_json(response.content)
-        result = ReasonResult.model_validate(json_dict)
+        result = PlanResult.model_validate(json_dict)
 ```
 
 ### 8.2 Integration Strategy
@@ -629,20 +629,20 @@ for attempt in range(3):
 
 ### 13.1 Dependencies
 
-* **RFC-603-reasoning-quality-progressive-actions**: Provides Reason phase architecture and quality improvements that this RFC builds upon
-* **RFC-201-agentic-goal-execution**: Defines Layer 2 AgentLoop architecture where Reason phase operates
+* **RFC-603-reasoning-quality-progressive-actions**: Provides Plan phase architecture and quality improvements that this RFC builds upon
+* **RFC-201-agentic-goal-execution**: Defines Layer 2 AgentLoop architecture where Plan phase operates
 
 ### 13.2 Integration Points
 
-* **RFC-603 Section 4.1 (Schema Changes)**: This RFC modifies ReasonResult schema defined there
-* **RFC-201 Section 5 (Reason Phase)**: This RFC refactors Reason phase execution pattern defined there
+* **RFC-603 Section 4.1 (Schema Changes)**: This RFC modifies PlanResult schema defined there
+* **RFC-201 Section 5 (Reason Phase)**: This RFC refactors Plan phase execution pattern defined there
 * **RFC-603 Section 3 (Quality Improvements)**: This RFC preserves evidence-based confidence/progress calculations
 
 ---
 
 ## 14. Conclusion
 
-This RFC defines a robust three-layer defense strategy to prevent JSON truncation failures in structured output generation. By combining proactive schema simplification (Layer 1) and query splitting (Layer 2) with reactive fallback (Layer 3), the architecture ensures reliable Reason phase operation across all LLM providers. The design reduces token budgets by 40-60% while preserving critical reasoning quality through concatenated phase outputs and evidence-based metrics. The universal approach eliminates provider-specific complexity while gracefully handling edge cases through existing fallback mechanisms.
+This RFC defines a robust three-layer defense strategy to prevent JSON truncation failures in structured output generation. By combining proactive schema simplification (Layer 1) and query splitting (Layer 2) with reactive fallback (Layer 3), the architecture ensures reliable Plan phase operation across all LLM providers. The design reduces token budgets by 40-60% while preserving critical reasoning quality through concatenated phase outputs and evidence-based metrics. The universal approach eliminates provider-specific complexity while gracefully handling edge cases through existing fallback mechanisms.
 
 > **Reliability through layered defense: proactive prevention before reactive fallback**
 
@@ -660,7 +660,7 @@ This RFC defines a robust three-layer defense strategy to prevent JSON truncatio
 
 ### A.2 Schema Token Budgets
 
-**Current ReasonResult** (Problematic):
+**Current PlanResult** (Problematic):
 - Total: ~2000-3000 tokens (worst case)
 - Risk: Exceeds DashScope limit → truncation
 

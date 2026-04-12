@@ -124,7 +124,7 @@ def build_reason_messages(
     state: LoopState,
     context: ReasonContext
 ) -> List[BaseMessage]:
-    """Build SystemMessage + HumanMessage for Reason phase.
+    """Build SystemMessage + HumanMessage for Plan phase.
 
     Args:
         goal: User's goal statement.
@@ -212,11 +212,11 @@ def _build_human_message(self, goal: str, state: LoopState, context: ReasonConte
     return "\n\n".join(sections)
 ```
 
-### SimplePlanner Changes
+### LLMPlanner Changes
 
 **Current**:
 ```python
-async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> ReasonResult:
+async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> PlanResult:
     prompt = self._prompt_builder.build_reason_prompt(goal, state, context)
     response = await self._invoke(prompt)
     return self._parse_response(response)
@@ -228,7 +228,7 @@ async def _invoke(self, prompt: str) -> str:
 
 **New**:
 ```python
-async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> ReasonResult:
+async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> PlanResult:
     messages = self._prompt_builder.build_reason_messages(goal, state, context)
     response = await self._invoke_messages(messages)
     return self._parse_response(response)
@@ -273,7 +273,7 @@ def build_shared_environment_workspace_prefix(context: ReasonContext) -> str:
    - Add `_build_*_section()` helper methods
    - Deprecate `build_reason_prompt()` (keep temporarily for migration)
 
-2. `src/soothe/cognition/planning/simple.py`:
+2. `src/soothe/cognition/agent_loop/simple.py`:
    - Update `reason()` to use `build_reason_messages()`
    - Rename `_invoke()` to `_invoke_messages()`
    - Remove HumanMessage wrapping logic
@@ -320,7 +320,7 @@ class PromptBuilder:
 ### Migration Steps
 
 1. Implement `build_reason_messages()` with backward-compatible `build_reason_prompt()` wrapper
-2. Update SimplePlanner to use new method
+2. Update LLMPlanner to use new method
 3. Update tests incrementally (can use either method during transition)
 4. Remove deprecated `build_reason_prompt()` once all tests updated
 5. Run `./scripts/verify_finally.sh` (format, lint, tests)
@@ -377,7 +377,7 @@ class PromptBuilder:
 - Verify conditional sections (prior conversation, workspace) work correctly
 - Verify XML tags: `<ENVIRONMENT>`, `<WORKSPACE>` (no SOOTHE_ prefix)
 
-**SimplePlanner Tests** (`tests/unit/cognition/planning/`):
+**LLMPlanner Tests** (`tests/unit/cognition/agent_loop/`):
 - Update mocks to expect message list instead of string
 - Verify `_invoke_messages()` receives message list
 - Verify response parsing unchanged

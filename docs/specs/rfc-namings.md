@@ -30,8 +30,7 @@ This document defines the terminology and naming conventions used in this projec
 | `MemoryProtocol` | Protocol for cross-thread long-term memory (remember, recall, forget). | RFC-001 |
 | `MemoryItem` | A unit of long-term knowledge (id, content, tags, importance, metadata). | RFC-001 |
 | `PlannerProtocol` | Protocol for goal decomposition, plan creation, reflection, and revision. | RFC-001 |
-| `DirectPlanner` | Simple planner using single LLM call with structured output. For routine tasks. | RFC-001 |
-| `SubagentPlanner` | Complex planner using a dedicated subagent for multi-turn reasoning. | RFC-001 |
+| `LLMPlanner` | Unified planner using two-phase architecture (StatusAssessment + PlanGeneration) for token efficiency. Replaces SimplePlanner, ClaudePlanner, AutoPlanner after IG-150 consolidation. | RFC-001, RFC-604 |
 | `PolicyProtocol` | Protocol for permission checking and enforcement. | RFC-001 |
 | `Permission` | A structured permission with category, action, and scope (e.g., `Permission("shell", "execute", "!rm")`). | RFC-001 |
 | `PolicyMiddleware` | deepagents `AgentMiddleware` that enforces `PolicyProtocol`. | RFC-001 |
