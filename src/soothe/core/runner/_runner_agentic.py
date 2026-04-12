@@ -15,6 +15,7 @@ from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
 from soothe.utils.text_preview import preview, preview_first
 from soothe.config import SootheConfig
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,
     AgenticLoopStartedEvent,
@@ -170,7 +171,7 @@ class AgenticMixin:
         *,
         thread_id: str | None = None,
         workspace: str | None = None,
-        max_iterations: int = 8,
+        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
     ) -> AsyncGenerator[StreamChunk]:
         """Run Layer 2: Agentic Goal Execution Loop (RFC-0008).
 
@@ -331,9 +332,10 @@ class AgenticMixin:
                     )
                 completion_summary = completion_summary[:240]
                 final_stdout: str | None = None
-                if final_result.status == "done":
-                    body = (final_result.full_output or "").strip()
-                    summary = (final_result.next_action or "").strip()
+                # Only attach final_stdout when max_iterations > 1 (multi-step mode).
+                # In single-step mode (max_iterations == 1), stdout is NOT suppressed,
+                # so adding final_stdout would duplicate normal stdout (IG-119 follow-up).
+                if max_iterations > 1 and final_result.status == "done":
                     text = _agentic_final_stdout_text(
                         next_action=final_result.next_action,
                         full_output=final_result.full_output,
@@ -341,15 +343,11 @@ class AgenticMixin:
                         workspace=workspace,
                         config=self._config,
                     )
-                    used_evidence_fallback = False
                     if text is None:
                         ev = (final_result.evidence_summary or "").strip()
                         if ev:
                             cap = _AGENTIC_FINAL_STDOUT_CAP
                             text = ev[:cap] if len(ev) > cap else ev
-                            used_evidence_fallback = True
-                    # Stream events are suppressed during agentic execution, so
-                    # always attach final_stdout for the UI to emit as the report.
                     if text:
                         final_stdout = text
 

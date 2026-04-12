@@ -12,6 +12,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.schemas import PlanResult
 from soothe.core.event_catalog import (
@@ -355,7 +356,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 thread_id=thread_id,
                 workspace=getattr(parent_state, "workspace", None),
                 git_status=getattr(parent_state, "git_status", None),
-                max_iterations=8,  # AgentLoop iteration budget
+                max_iterations=DEFAULT_AGENT_LOOP_MAX_ITERATIONS,  # AgentLoop iteration budget
             ):
                 # Propagate AgentLoop events to autonomous stream
                 if event_type == "completed":

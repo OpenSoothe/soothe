@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+
 
 @dataclass
 class SuppressionState:
@@ -97,12 +99,15 @@ class SuppressionState:
             Final stdout message if present (for emission after tracking).
         """
         # Track suppression state from agentic loop start.
-        # Always suppress intermediate output during agentic execution;
-        # only step_started/step_completed/reason and the final report are shown.
+        # Suppress intermediate output only when max_iterations > 1 (multi-step mode).
+        # In single-step mode (max_iterations == 1), stdout flows normally and final_stdout
+        # should NOT be emitted separately to avoid duplication (IG-143 follow-up).
         if event_type == "soothe.cognition.agent_loop.started":
-            self.multi_step_active = True
-            self.agentic_stdout_suppressed = True
-            self.agentic_final_stdout_emitted = False
+            max_iterations = data.get("max_iterations", DEFAULT_AGENT_LOOP_MAX_ITERATIONS)
+            if max_iterations > 1:
+                self.multi_step_active = True
+                self.agentic_stdout_suppressed = True
+                self.agentic_final_stdout_emitted = False
 
         # Backup suppression: suppress after iteration 1+ if loop.started was filtered
         if event_type == "soothe.cognition.agent_loop.reason":

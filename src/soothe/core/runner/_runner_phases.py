@@ -395,6 +395,10 @@ class PhasesMixin:
                     except StopAsyncIteration:
                         # Stream finished normally
                         break
+                    except Exception:
+                        # Graph node error (e.g. model API failure).
+                        # Re-raise so the outer handler can emit an error event.
+                        raise
 
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
                         continue
