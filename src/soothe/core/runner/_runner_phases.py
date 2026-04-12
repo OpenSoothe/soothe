@@ -5,6 +5,7 @@ Extracted from ``runner.py`` to keep the main module focused on orchestration.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -376,6 +377,12 @@ class PhasesMixin:
                     subgraphs=True,
                     config=config,
                 ):
+                    # IG-157: Check for task cancellation
+                    current_task = asyncio.current_task()
+                    if current_task and current_task.cancelling():
+                        logger.info("Runner stream detected cancellation request, stopping")
+                        break
+
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
                         continue
 

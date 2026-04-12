@@ -128,6 +128,11 @@ class QueryEngine:
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
                         async for chunk in d._runner.astream(text, **stream_kwargs):
+                            # IG-157: Check for task cancellation from cancel_current_query()
+                            if d._current_query_task and d._current_query_task.done():
+                                logger.info("Stream loop detected cancelled task, stopping")
+                                break
+
                             chunk_count += 1
 
                             # Check for warning threshold (80% of timeout)
@@ -189,6 +194,11 @@ class QueryEngine:
                 else:
                     # No timeout - original behavior
                     async for chunk in d._runner.astream(text, **stream_kwargs):
+                        # IG-157: Check for task cancellation from cancel_current_query()
+                        if d._current_query_task and d._current_query_task.done():
+                            logger.info("Stream loop detected cancelled task, stopping")
+                            break
+
                         chunk_count += 1
                         if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LENGTH:
                             logger.debug("Skipping invalid chunk #%d: type=%s", chunk_count, type(chunk).__name__)
@@ -374,6 +384,11 @@ class QueryEngine:
                 stream_tuple_length = 3
                 msg_pair_length = 2
                 async for chunk in d._thread_executor.execute_thread(thread_id, text, **stream_kwargs):
+                    # IG-157: Check for task cancellation from cancel_current_query()
+                    if d._current_query_task and d._current_query_task.done():
+                        logger.info("Multithreaded stream loop detected cancelled task, stopping")
+                        break
+
                     if not isinstance(chunk, tuple) or len(chunk) != stream_tuple_length:
                         continue
                     namespace, mode, data = chunk
@@ -474,6 +489,7 @@ class QueryEngine:
         has_current_task = bool(d._current_query_task and not d._current_query_task.done())
         # Rely on concrete tasks, not only _query_running (avoids races / stale flags).
         if not active_thread_tasks and not has_current_task:
+            logger.debug("No active queries to cancel")
             return
 
         cancelled_any = False
@@ -485,8 +501,11 @@ class QueryEngine:
                 if task and not task.done():
                     task.cancel()
                     logger.info("Cancelling thread %s (multithreaded mode)", tid)
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await task
+                    try:
+                        # IG-157: Wait for task to actually stop
+                        await asyncio.wait_for(task, timeout=2.0)
+                    except (asyncio.CancelledError, asyncio.TimeoutError):
+                        logger.warning("Thread %s did not stop cleanly within 2s", tid)
                     cancelled_any = True
                     d._runner.set_current_thread_id(None)
 
@@ -497,8 +516,11 @@ class QueryEngine:
         if not cancelled_any and d._current_query_task and not d._current_query_task.done():
             logger.info("Cancelling current query task (single-threaded mode)")
             d._current_query_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await d._current_query_task
+            try:
+                # IG-157: Wait for task to actually stop with timeout
+                await asyncio.wait_for(d._current_query_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                logger.warning("Query task did not stop cleanly within 2s")
 
             d._query_running = False
             d._current_query_task = None
@@ -510,10 +532,12 @@ class QueryEngine:
             await d._broadcast(
                 {
                     "type": "command_response",
-                    "content": "[green]Query cancelled.[/green]",
+                    "content": "[green]Query cancelled successfully.[/green]",
                 }
             )
-            await d._broadcast({"type": "status", "state": "idle", "thread_id": ""})
+            # IG-157: Broadcast idle status immediately after cancel
+            final_thread_id = d._runner.current_thread_id or ""
+            await d._broadcast({"type": "status", "state": "idle", "thread_id": final_thread_id})
 
     async def cancel_thread(self, thread_id: str) -> None:
         """Cancel a specific thread's execution."""
