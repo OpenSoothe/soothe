@@ -1,4 +1,4 @@
-# Soothe
+# ✨ Soothe — Beyond Yet-Another Agent
 
 <div align="center">
   <img src="assets/soothe-logo.png" alt="Soothe Logo" width="350" />
@@ -13,18 +13,34 @@
 
 </div>
 
-**Your 24/7 Autonomous AI Agent that Plans, Acts, and Delivers Results**
+Soothe is **not** another Claude Code / OpenClaw clone.
 
-## What is Soothe?
+Its ambition is to become an **agent-harnessing framework**, an *Agentic OS*, designed to push humans **out of the execution loop**.
 
-Soothe is a protocol-driven AI orchestration framework that transforms how you work with AI. Unlike traditional chatbots that merely answer questions, Soothe acts as your intelligent digital colleague that:
+After months of real-world "vibe coding" with coding agents, a clear pain emerged:  
+humans are still responsible for holding everything together, driving agents across sessions, verifying intermediate results, recovering lost context, re-aligning goals, and manually relaying critical information between tools and skills. This constant supervision creates a heavy cognitive burden.
 
-- ✨ **Thinks Ahead** - Automatically plans multi-step workflows and adapts strategies based on results
-- 🚀 **Acts Autonomously** - Executes complex tasks spanning web research, code execution, file operations, and browser automation
-- 🧠 **Learns & Remembers** - Maintains persistent memory across sessions, so you never repeat yourself
-- 🔒 **Stays Secure** - Enforces least-privilege policies and keeps your data under your control
-- 🔌 **Extends Easily** - Plugin architecture lets you add custom tools and specialized subagents
-- 🌐 **Works Anywhere** - Multi-transport daemon supports Unix, WebSocket, and HTTP REST connections
+**Soothe was built to eliminate that loop.**
+
+Instead of treating agents as isolated executors, Soothe introduces a higher-order orchestration layer. Built on top of LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that can:
+
+- maintain context across sessions  
+- sustain and recover long-running goals  
+- coordinate multiple objectives simultaneously  
+- autonomously steer complex, long-horizon tasks  
+
+In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-loop** systems—where humans define intent, and the system handles execution, continuity, and adaptation.
+
+---
+
+## 🚀 Key Features
+
+- ✨ **Thinks Ahead** — Plans multi-step workflows and adapts dynamically based on outcomes  
+- 🚀 **Acts Autonomously** — Executes tasks across research, coding, file ops, and browser automation  
+- 🧠 **Learns & Remembers** — Persistent memory across sessions—no more repeating yourself  
+- 🔒 **Stays Secure** — Enforces least-privilege access and keeps data under your control  
+- 🔌 **Extends Easily** — Plugin system for custom tools and specialized sub-agents  
+- 🌐 **Works Anywhere** — Multi-transport daemon (Unix, WebSocket, HTTP REST)
 
 ## Architecture
 
@@ -51,6 +67,13 @@ Soothe is a protocol-driven AI orchestration framework that transforms how you w
 **Long-Running Operations**: Background daemon mode with thread management, persistent state, and resume capabilities.
 
 **Custom Plugins**: Extend with decorator-based tools, specialized subagents, and MCP server integration.
+
+## Milestones
+
+- ✅ **Single-Session Autonomy** — Solve a complex goal end-to-end within a single session, fully out of the human loop  
+- ⏳ **Cross-Session Continuity** — Sustain and complete complex tasks across multiple sessions with persistent context  
+- ⏳ **Multi-Goal Orchestration** — Handle multiple interdependent goals over long-horizon workflows  
+- ⏳ **Benchmark Reproduction** — Reproduce the Anthropic C Compiler [experiment](https://github.com/anthropics/claudes-c-compiler)  
 
 ## Getting Started
 
@@ -97,43 +120,6 @@ soothe daemon attach
 # Or connect via WebSocket/HTTP
 soothe daemon start --enable-websocket --enable-http
 ```
-
-## Architecture Highlights
-
-Soothe is built on a **protocol-driven architecture** that ensures flexibility and maintainability:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  CLI / TUI Layer (User Interface)                       │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Daemon Layer (Multi-Transport Server)                  │
-│  Unix Socket | WebSocket | HTTP REST                    │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Core Framework (Agent Factory & Runner)                │
-│  Plan → Execute Loop                                    │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Protocol Layer (8 Swappable Protocols)                 │
-│  Context | Memory | Planning | Policy | Durability |    │
-│  Remote | Persistence | VectorStore                     │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────┐
-│  Capability Layer (Plugins)                             │
-│  Tools | Subagents | MCP Servers                        │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Why This Matters**:
-- **Swap any component** without changing your code
-- **Add custom capabilities** via the plugin system
-- **Scale from local CLI to remote daemon** seamlessly
-- **Maintain isolation** between threads and sessions
 
 ## Learn More
 
