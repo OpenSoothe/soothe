@@ -520,12 +520,21 @@ class TuiRenderer:
 
         # IG-158: Show essential milestones for CLI-style brevity
         # IG-160: Show next_action from agent_loop.reason
+        # IG-161: Show agentic step descriptions and results (like CLI)
         # NOTE: These are shown even during suppression (unlike LLM text)
         essential_events = {
             "soothe.cognition.plan.created",
             "soothe.agentic.loop.completed",
             "soothe.cognition.agent_loop.reason",  # IG-160: Show next_action
+            "soothe.agentic.step.started",  # IG-161: Show step descriptions (from AgentLoop)
+            "soothe.agentic.step.completed",  # IG-161: Show step results (from AgentLoop)
         }
+
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"[TUI] on_progress_event called: event_type={event_type}")
+
         if event_type not in essential_events:
             # Emit final report on loop completion (IG-143)
             if self._state.suppression.should_emit_final_report(event_type, final_stdout):
@@ -539,8 +548,9 @@ class TuiRenderer:
         # IG-160: Special handling for next_action (like CLI's format_judgement)
         if event_type == "soothe.cognition.agent_loop.reason":
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.info(f"[TUI] agent_loop.reason event received: next_action={payload.get('next_action', '')[:50]}")
+            logger.info(f"[TUI] agent_loop.reason event: next_action={payload.get('next_action', '')[:50]}")
 
             # Extract next_action
             next_action = str(payload.get("next_action", "")).strip()
@@ -554,7 +564,7 @@ class TuiRenderer:
                 elif status == "working":
                     next_action = "Processing next step"
                 else:
-                    logger.warning(f"[TUI] agent_loop.reason: no next_action and invalid status={status}")
+                    logger.warning(f"[TUI] agent_loop.reason: no next_action, status={status}")
                     return  # Skip if no valid status
 
             # Capitalize first letter (like CLI)
@@ -574,7 +584,46 @@ class TuiRenderer:
             action_line.append(icon + " ", style=color)
             action_line.append(summary)
             self._on_panel_write(action_line)
-            logger.info(f"[TUI] agent_loop.reason line written to panel: {summary}")
+            logger.info(f"[TUI] agent_loop.reason written: {summary}")
+            return
+
+        # IG-161: Handle agentic step events (from AgentLoop executor)
+        if event_type == "soothe.agentic.step.started":
+            import logging
+
+            logger = logging.getLogger(__name__)
+            description = str(payload.get("description", ""))
+            logger.info(f"[TUI] agentic.step.started: {description[:50]}")
+
+            # Show step description (like plan step started)
+            step_line = Text()
+            step_line.append("○ ⏩ ", style=DOT_COLORS["plan_step_active"])
+            step_line.append(description)
+            self._on_panel_write(step_line)
+            return
+
+        if event_type == "soothe.agentic.step.completed":
+            import logging
+
+            logger = logging.getLogger(__name__)
+            success = bool(payload.get("success", False))
+            summary = str(payload.get("summary", ""))
+            duration_ms = int(payload.get("duration_ms", 0))
+            tool_count = int(payload.get("tool_call_count", 0))
+
+            logger.info(f"[TUI] agentic.step.completed: success={success}, summary={summary[:30]}")
+
+            # Show step result (like plan step completed)
+            result_line = Text()
+            result_line.append("  |__ ", style="dim")
+            result_line.append(
+                "Done" if success else "Failed",
+                style=DOT_COLORS["plan_step_done"] if success else DOT_COLORS["plan_step_failed"],
+            )
+            if tool_count > 0:
+                result_line.append(f" [{tool_count} tools]", style="dim")
+            result_line.append(f" ({duration_ms / 1000:.1f}s)", style="dim")
+            self._on_panel_write(result_line)
             return
 
         # IG-158: Use brief summaries for essential events
@@ -678,6 +727,7 @@ class TuiRenderer:
             description: Step description.
         """
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info(f"[TUI] on_plan_step_started: step_id={step_id}, description={description[:50]}")
 
