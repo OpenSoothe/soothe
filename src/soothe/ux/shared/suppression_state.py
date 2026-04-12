@@ -96,15 +96,13 @@ class SuppressionState:
         Returns:
             Final stdout message if present (for emission after tracking).
         """
-        # Track multi-step state from agentic loop start
+        # Track suppression state from agentic loop start.
+        # Always suppress intermediate output during agentic execution;
+        # only step_started/step_completed/reason and the final report are shown.
         if event_type == "soothe.cognition.agent_loop.started":
-            if data.get("max_iterations", 1) > 1:
-                self.multi_step_active = True
-                self.agentic_stdout_suppressed = True
-                self.agentic_final_stdout_emitted = False
-            else:
-                self.agentic_stdout_suppressed = False
-                self.agentic_final_stdout_emitted = False
+            self.multi_step_active = True
+            self.agentic_stdout_suppressed = True
+            self.agentic_final_stdout_emitted = False
 
         # Backup suppression: suppress after iteration 1+ if loop.started was filtered
         if event_type == "soothe.cognition.agent_loop.reason":

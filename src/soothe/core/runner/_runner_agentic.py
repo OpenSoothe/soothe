@@ -285,9 +285,10 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # Propagate stream events from tool execution (namespace, mode, data)
-                # event_data is a StreamChunk tuple
-                yield event_data
+                # Suppress intermediate stream events during agentic execution.
+                # Only step_started, step_completed, reason, and final report
+                # are shown to the user; raw LLM/tool chunks are not propagated.
+                pass
 
             elif event_type == "reason":
                 yield _custom(
@@ -347,9 +348,9 @@ class AgenticMixin:
                             cap = _AGENTIC_FINAL_STDOUT_CAP
                             text = ev[:cap] if len(ev) > cap else ev
                             used_evidence_fallback = True
-                    # Multi-iteration loop: headless CLI suppresses assistant stdout (IG-119 removed replay).
-                    # Multi-step plan with max_iterations=1 still sets multi_step_active via plan.created.
-                    if text and (max_iterations > 1 or body or summary or used_evidence_fallback):
+                    # Stream events are suppressed during agentic execution, so
+                    # always attach final_stdout for the UI to emit as the report.
+                    if text:
                         final_stdout = text
 
                 yield _custom(

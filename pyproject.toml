@@ -1,6 +1,6 @@
 [project]
 name = "soothe"
-version = "0.2.8"
+version = "0.2.9"
 description = "Multi-agent harness built on deepagents and langchain/langgraph."
 readme = "README.md"
 license = { text = "MIT" }
