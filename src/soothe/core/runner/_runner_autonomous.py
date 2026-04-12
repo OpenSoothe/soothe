@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
@@ -44,12 +45,47 @@ _BACKOFF_BASE_SECONDS = 2.0
 
 
 class AutonomousMixin(GoalDirectivesMixin):
-    """Autonomous iteration loop (RFC-0007, RFC-0009).
+    """Autonomous iteration loop (RFC-0007, RFC-0009, IG-155).
 
     Mixed into ``SootheRunner`` -- all ``self.*`` attributes are defined
     on the concrete class.  Inherits goal directive processing from
     ``GoalDirectivesMixin``.
     """
+
+    async def initialize_autopilot(self, soothe_home: Path) -> None:
+        """Initialize autopilot mode from goal files (RFC-200, IG-155).
+
+        Args:
+            soothe_home: Path to $SOOTHE_HOME
+        """
+        from soothe.cognition.goal_engine.discovery import discover_goals
+
+        autopilot_dir = soothe_home / "autopilot"
+
+        # Ensure directory structure exists
+        autopilot_dir.mkdir(parents=True, exist_ok=True)
+        (autopilot_dir / "goals").mkdir(exist_ok=True)
+
+        # Discover goals from files
+        goal_definitions = discover_goals(autopilot_dir)
+
+        if not goal_definitions:
+            logger.warning("No goals discovered from autopilot directory")
+            return
+
+        # Create goals in GoalEngine
+        for goal_def in goal_definitions:
+            try:
+                await self._goal_engine.create_goal(
+                    description=goal_def.description,
+                    priority=goal_def.priority,
+                    goal_id=goal_def.id,
+                    depends_on=goal_def.depends_on,
+                    source_file=str(goal_def.source_file) if goal_def.source_file else None,
+                )
+                logger.info("Loaded goal %s from file", goal_def.id)
+            except Exception:
+                logger.exception("Failed to create goal %s", goal_def.id)
 
     async def _run_autonomous(
         self,
@@ -59,15 +95,18 @@ class AutonomousMixin(GoalDirectivesMixin):
         workspace: str | None = None,
         max_iterations: int = 10,
     ) -> AsyncGenerator[StreamChunk]:
-        """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009).
+        """Autonomous iteration loop with DAG-based goal scheduling (RFC-0007, RFC-0009, IG-155).
 
         Creates goals, executes plans via the step loop, reflects, revises,
         and iterates until goals are complete or max_iterations is reached.
         Independent goals can run in parallel with isolated threads.
+
+        IG-155: When user_input is empty, discovers goals from autopilot directory.
         """
         import asyncio
 
         from ._types import RunnerState
+        from soothe.config import SOOTHE_HOME
 
         if self._goal_engine is None:
             raise RuntimeError("Goal engine not initialized")
@@ -76,7 +115,21 @@ class AutonomousMixin(GoalDirectivesMixin):
         state.thread_id = thread_id or self._current_thread_id or ""
         state.workspace = workspace
 
-        # Unified classification for proper routing
+        # IG-155: Autopilot mode - discover goals from files when no input
+        if not user_input or user_input.strip() == "":
+            logger.info("Autopilot mode: discovering goals from files")
+            await self.initialize_autopilot(SOOTHE_HOME)
+
+            # Check if goals were discovered
+            if not self._goal_engine.list_goals():
+                yield _custom(
+                    {
+                        "type": "soothe.autopilot.error",
+                        "code": "NO_GOALS",
+                        "message": "No goals found in autopilot directory",
+                    }
+                )
+                return
         if self._unified_classifier:
             from soothe.core.unified_classifier import UnifiedClassification
 
