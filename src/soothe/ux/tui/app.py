@@ -804,10 +804,10 @@ class SootheApp(App):
                 pass
         self._connected = False
 
-        from soothe.daemon import pid_path
+        from soothe.daemon import SootheDaemon, pid_path
 
         pf = pid_path()
-        pid = pf.read_text().strip() if pf.exists() else "?"
+        pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
         thread_msg = "Thread still running. " if self._is_running else ""
         self.exit(
             message=f"{thread_msg}Detached from TUI. Daemon running (PID: {pid}).\n"
@@ -825,10 +825,10 @@ class SootheApp(App):
                 pass
         self._connected = False
 
-        from soothe.daemon import pid_path
+        from soothe.daemon import SootheDaemon, pid_path
 
         pf = pid_path()
-        pid = pf.read_text().strip() if pf.exists() else "?"
+        pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
         self.exit(
             message=f"Thread stopped. TUI exited. Daemon running (PID: {pid}).\nUse 'soothe daemon stop' to shutdown."
         )
@@ -848,26 +848,19 @@ class SootheApp(App):
         """Detach from thread, leave it running, exit TUI client (RFC-0013 daemon lifecycle).
 
         Behavior:
-        - If thread running: Show confirmation, detach on confirm
-        - If thread idle: Detach immediately
+        - Detach immediately without confirmation (IG-157)
         - Daemon keeps running
         """
-        if self._is_running:
-            await self.push_screen(_DetachConfirmModal(), callback=self._on_detach_confirm_result)
-            return
         await self._finalize_detach()
 
     async def action_quit_app(self) -> None:
         """Stop running thread and exit TUI client (RFC-0013 daemon lifecycle update 2026-03-28).
 
         Behavior:
-        - If thread running: Show confirmation, stop thread on confirm
-        - If thread idle: Exit immediately
+        - Stop thread and exit immediately without confirmation (IG-157)
         - Daemon keeps running
         """
-        if self._is_running:
-            await self.push_screen(_QuitConfirmModal(), callback=self._on_quit_confirm_result)
-            return
+        await self._stop_current_thread()
         await self._finalize_quit_app()
 
     async def action_cancel_job(self) -> None:
@@ -903,10 +896,10 @@ class SootheApp(App):
                 await self._client.send_command("/cancel")
                 # Leave _is_running True until daemon broadcasts idle (query may still be winding down).
                 # Show cancel message with daemon PID (RFC-0013)
-                from soothe.daemon import pid_path
+                from soothe.daemon import SootheDaemon, pid_path
 
                 pf = pid_path()
-                pid = pf.read_text().strip() if pf.exists() else "?"
+                pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
                 self._on_panel_write(
                     make_dot_line(
                         DOT_COLORS["protocol"],
@@ -917,10 +910,10 @@ class SootheApp(App):
             # No query running - show brief message and start timeout
             self._ctrl_c_pressed_time = current_time
             # Show daemon PID in message (RFC-0013)
-            from soothe.daemon import pid_path
+            from soothe.daemon import SootheDaemon, pid_path
 
             pf = pid_path()
-            pid = pf.read_text().strip() if pf.exists() else "?"
+            pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
             self._on_panel_write(
                 make_dot_line(
                     DOT_COLORS["protocol"],
