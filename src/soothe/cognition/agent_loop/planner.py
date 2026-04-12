@@ -848,7 +848,7 @@ class LLMPlanner:
             next_action=action_text,  # User sees concrete plan action (no duplication)
         )
 
-    async def reason(
+    async def plan(
         self,
         goal: str,
         state: LoopState,
