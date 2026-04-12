@@ -6,6 +6,7 @@
 **Scope**: Prompt architecture refinement, message type separation
 **RFC**: RFC-207
 **Dependencies**: RFC-206 (implemented via IG-137)
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
@@ -47,25 +48,25 @@ RFC-206 established hierarchical prompt architecture with XML containers, but im
 
 **File**: `src/soothe/core/prompts/builder.py`
 
-**Current Method**: `build_reason_prompt(goal, state, context) -> str`
+**Current Method**: `build_plan_prompt(goal, state, context) -> str`
 
-**New Method**: `build_reason_messages(goal, state, context) -> List[BaseMessage]`
+**New Method**: `build_plan_messages(goal, state, context) -> List[BaseMessage]`
 
 ```python
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
-def build_reason_messages(
+def build_plan_messages(
     self,
     goal: str,
     state: LoopState,
-    context: ReasonContext
+    context: PlanContext
 ) -> List[BaseMessage]:
-    """Build SystemMessage + HumanMessage for Reason phase.
+    """Build SystemMessage + HumanMessage for Plan phase.
 
     Args:
         goal: User's goal statement.
         state: Current LoopState with iteration, evidence, working memory.
-        context: ReasonContext with environment, workspace, capabilities.
+        context: PlanContext with environment, workspace, capabilities.
 
     Returns:
         List of [SystemMessage, HumanMessage] to send to LLM.
@@ -111,7 +112,7 @@ def _build_system_message(self, state: LoopState, context: ReasonContext) -> str
 #### 1.3 Add HumanMessage Helper
 
 ```python
-def _build_human_message(self, goal: str, state: LoopState, context: ReasonContext) -> str:
+def _build_human_message(self, goal: str, state: LoopState, context: PlanContext) -> str:
     """Construct dynamic task: goal, evidence, working memory, prior conversation.
 
     Maps RFC-206 USER_TASK layer to HumanMessage.
@@ -133,9 +134,9 @@ def _build_human_message(self, goal: str, state: LoopState, context: ReasonConte
     if state.working_memory_excerpt:
         sections.append(self._build_working_memory_section(state))
 
-    # Previous reason assessment (USER_TASK)
-    if state.previous_reason:
-        sections.append(self._build_previous_reason_section(state))
+    # Previous plan assessment (USER_TASK)
+    if state.previous_plan:
+        sections.append(self._build_previous_plan_section(state))
 
     # Completed steps summary (USER_TASK)
     if state.completed_steps:
@@ -153,7 +154,7 @@ Add private methods for each section:
 - `_build_prior_conversation_section(context)` - Previous messages
 - `_build_evidence_section(state)` - Step results
 - `_build_working_memory_section(state)` - Scratchpad excerpts
-- `_build_previous_reason_section(state)` - Last assessment
+- `_build_previous_plan_section(state)` - Last assessment
 - `_build_completed_steps_section(state)` - Step summaries
 
 Each method returns formatted XML section string.
@@ -163,18 +164,18 @@ Each method returns formatted XML section string.
 Keep old method temporarily for migration:
 
 ```python
-def build_reason_prompt(self, goal: str, state: LoopState, context: ReasonContext) -> str:
-    """Deprecated: Use build_reason_messages() instead.
+def build_plan_prompt(self, goal: str, state: LoopState, context: PlanContext) -> str:
+    """Deprecated: Use build_plan_messages() instead.
 
     Provided for backward compatibility during migration.
     """
     import warnings
     warnings.warn(
-        "build_reason_prompt() is deprecated, use build_reason_messages()",
+        "build_plan_prompt() is deprecated, use build_plan_messages()",
         DeprecationWarning,
         stacklevel=2
     )
-    messages = self.build_reason_messages(goal, state, context)
+    messages = self.build_plan_messages(goal, state, context)
     return "\n\n".join([m.content for m in messages])
 ```
 
@@ -182,22 +183,22 @@ def build_reason_prompt(self, goal: str, state: LoopState, context: ReasonContex
 
 ### Phase 2: SimplePlanner Update
 
-#### 2.1 Update reason() Method
+#### 2.1 Update plan() Method
 
 **File**: `src/soothe/cognition/planning/simple.py`
 
 **Current**:
 ```python
-async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> ReasonResult:
-    prompt = self._prompt_builder.build_reason_prompt(goal, state, context)
+async def plan(self, goal: str, state: LoopState, context: PlanContext) -> PlanResult:
+    prompt = self._prompt_builder.build_plan_prompt(goal, state, context)
     response = await self._invoke(prompt)
     return self._parse_response(response)
 ```
 
 **New**:
 ```python
-async def reason(self, goal: str, state: LoopState, context: ReasonContext) -> ReasonResult:
-    messages = self._prompt_builder.build_reason_messages(goal, state, context)
+async def plan(self, goal: str, state: LoopState, context: PlanContext) -> PlanResult:
+    messages = self._prompt_builder.build_plan_messages(goal, state, context)
     response = await self._invoke_messages(messages)
     return self._parse_response(response)
 ```
@@ -264,13 +265,13 @@ Wave metrics (tool call counts, subagent counts, wave duration) should not be in
 **Files**: `tests/unit/prompts/` and `tests/unit/core/prompts/`
 
 Tests to update:
-- `test_reason_prompt_workspace.py`
-- `test_reason_prompt_metrics.py`
-- `test_reason_prior_conversation_conditional.py`
-- Any tests checking `build_reason_prompt()` output
+- `test_plan_prompt_workspace.py`
+- `test_plan_prompt_metrics.py`
+- `test_plan_prior_conversation_conditional.py`
+- Any tests checking `build_plan_prompt()` output
 
 **Updates**:
-- Change assertions to call `build_reason_messages()` instead
+- Change assertions to call `build_plan_messages()` instead
 - Assert return type is `List[BaseMessage]`
 - Assert length is 2 (SystemMessage + HumanMessage)
 - Assert first message is `SystemMessage` instance
@@ -362,10 +363,11 @@ SystemMessage/HumanMessage separation instead of single HumanMessage approach.
 Add implementation history entry:
 ```markdown
 **2026-04-08**: RFC-207 implementation (IG-142)
-- Added build_reason_messages() returning List[BaseMessage]
+- Added build_plan_messages() returning List[BaseMessage]
 - SystemMessage/HumanMessage separation
 - Removed SOOTHE_ prefix from XML tags
 - Removed wave metrics from prompts
+**2026-04-12**: Terminology refactoring per IG-153 (Reason→Plan)
 ```
 
 #### 8.3 Update CLAUDE.md
@@ -401,14 +403,14 @@ Example:
 ### Primary Implementation
 
 1. `src/soothe/core/prompts/builder.py`:
-   - Add `build_reason_messages()` method
+   - Add `build_plan_messages()` method
    - Add `_build_system_message()` helper
    - Add `_build_human_message()` helper
    - Add `_build_*_section()` helper methods (7 methods)
-   - Deprecate `build_reason_prompt()` temporarily
+   - Deprecate `build_plan_prompt()` temporarily
 
 2. `src/soothe/cognition/planning/simple.py`:
-   - Update `reason()` to use `build_reason_messages()`
+   - Update `plan()` to use `build_plan_messages()`
    - Rename `_invoke()` to `_invoke_messages()`
    - Remove HumanMessage wrapping logic
 

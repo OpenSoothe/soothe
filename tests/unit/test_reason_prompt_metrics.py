@@ -1,6 +1,6 @@
-"""Tests for metrics section in Reason prompt.
+"""Tests for metrics section in Plan prompt.
 
-Note: RFC-207 removed wave metrics from Reason prompts.
+Note: RFC-207 removed wave metrics from Plan prompts.
 Wave metrics are now internal tracking only (logged by LLMTracingMiddleware).
 """
 
@@ -52,7 +52,7 @@ def test_metrics_section_removed_rfc207(config, state, context):
     state.context_percentage_consumed = 0.15
 
     builder = PromptBuilder(config)
-    prompt = builder.build_reason_prompt("Test goal", state, context)
+    prompt = builder.build_plan_prompt("Test goal", state, context)
 
     # RFC-207: Wave metrics removed from prompts (internal tracking only)
     assert "<SOOTHE_WAVE_METRICS>" not in prompt
@@ -70,7 +70,7 @@ def test_last_act_wave_metrics_removed_rfc207(config, state, context):
     state.last_wave_subagent_task_count = 1
 
     builder = PromptBuilder(config)
-    prompt = builder.build_reason_prompt("Test goal", state, context)
+    prompt = builder.build_plan_prompt("Test goal", state, context)
 
     # RFC-207: Last Act wave metrics removed from prompts
     assert "<SOOTHE_LAST_ACT_WAVE_METRICS>" not in prompt

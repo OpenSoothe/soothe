@@ -65,10 +65,10 @@ Learn more: [Getting Started](getting-started.md#execution-modes)
 
 ### Architecture Overview
 
-Soothe uses a **Reason → Act** execution loop:
+Soothe uses a **Plan → Execute** execution loop:
 
 ```
-User Query → REASON (LLM plans, assesses progress, decides steps) → ACT (execute tools)
+User Query → PLAN (LLM plans, assesses progress, decides steps) → EXECUTE (execute tools)
                 ↑                                                                                ↓
                 └────────────────── Retry/Adjust ←───────────────────────┘
 ```

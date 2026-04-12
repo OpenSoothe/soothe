@@ -2,8 +2,9 @@
 
 **Status**: In Progress
 **Started**: 2026-04-11
-**RFC References**: RFC-604 (Reason Phase Robustness), RFC-0002 (Planner Protocol)
+**RFC References**: RFC-604 (Plan Phase Robustness), RFC-0002 (Planner Protocol)
 **Related IGs**: IG-036 (SubagentPlanner removal), IG-028 (Direct→Simple→LLMPlanner evolution)
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ## Overview
 

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def _calculate_evidence_based_confidence(
     state: LoopState,
-    reason_result: Any,
+    plan_result: Any,
 ) -> float:
     """Calculate confidence from evidence, not just LLM self-assessment.
 
@@ -45,13 +45,13 @@ def _calculate_evidence_based_confidence(
 
     Args:
         state: Loop state with accumulated evidence
-        reason_result: Reason result with LLM confidence
+        plan_result: Plan result with LLM confidence
 
     Returns:
         Float between 0.0 and 1.0
     """
     # LLM confidence (50% weight)
-    llm_confidence = reason_result.confidence or 0.5
+    llm_confidence = plan_result.confidence or 0.5
 
     # Success rate (30% weight)
     if not state.step_results:
@@ -84,7 +84,7 @@ def _calculate_evidence_based_confidence(
 
 def _detect_completion_fallback(
     state: LoopState,
-    reason_result: Any,
+    plan_result: Any,
     goal: str,
 ) -> Any:
     """Detect completion when LLM fails to set status="done" despite evidence.
@@ -100,15 +100,15 @@ def _detect_completion_fallback(
 
     Args:
         state: Current loop state with step results
-        reason_result: Reason result from LLM
+        plan_result: Plan result from LLM
         goal: The original goal
 
     Returns:
-        ReasonResult with status potentially updated to "done"
+        PlanResult with status potentially updated to "done"
     """
     # Only override if LLM returned status != "done"
-    if reason_result.status == "done":
-        return reason_result
+    if plan_result.status == "done":
+        return plan_result
 
     # Check completion indicators
     completion_indicators = []
@@ -132,12 +132,12 @@ def _detect_completion_fallback(
     total_evidence_chars = sum(
         r.outcome.get("size_bytes", 0) if r.success and r.outcome else 0 for r in state.step_results
     )
-    if total_evidence_chars >= 10_000 and reason_result.goal_progress >= 0.8:
+    if total_evidence_chars >= 10_000 and plan_result.goal_progress >= 0.8:
         completion_indicators.append("high_evidence_volume")
         logger.info(
             "[Completion] high-evidence: %d chars prog=%.0f%%",
             total_evidence_chars,
-            reason_result.goal_progress * 100,
+            plan_result.goal_progress * 100,
         )
 
     # 3. Diminishing returns (no evidence growth in last iteration)
@@ -163,12 +163,12 @@ def _detect_completion_fallback(
         has_substantial_output = any(
             r.outcome.get("size_bytes", 0) > 5000 for r in state.step_results if r.success and r.outcome
         )
-        if all_successful and has_substantial_output and reason_result.goal_progress >= 0.85:
+        if all_successful and has_substantial_output and plan_result.goal_progress >= 0.85:
             completion_indicators.append("all_steps_successful")
             logger.info(
                 "[Completion] all-success: %d steps prog=%.0f%%",
                 len(state.step_results),
-                reason_result.goal_progress * 100,
+                plan_result.goal_progress * 100,
             )
 
     # Decision: force completion if ≥2 indicators OR action repetition
@@ -176,19 +176,19 @@ def _detect_completion_fallback(
         logger.warning(
             "[Completion] force-done: %s (LLM=%s)",
             ", ".join(completion_indicators),
-            reason_result.status,
+            plan_result.status,
         )
         # Update result to mark as done
-        updated = reason_result.model_copy(
+        updated = plan_result.model_copy(
             update={
                 "status": "done",
-                "goal_progress": max(reason_result.goal_progress, 0.95),
-                "next_action": reason_result.next_action or "I've completed the task.",
+                "goal_progress": max(plan_result.goal_progress, 0.95),
+                "next_action": plan_result.next_action or "I've completed the task.",
             }
         )
         return updated
 
-    return reason_result
+    return plan_result
 
 
 def _actions_semantically_similar(action1: str, action2: str) -> bool:
@@ -223,7 +223,7 @@ def _actions_semantically_similar(action1: str, action2: str) -> bool:
 
 def _calculate_evidence_based_progress(
     state: LoopState,
-    reason_result: Any,
+    plan_result: Any,
 ) -> float:
     """Calculate progress from evidence, not just LLM estimate.
 
@@ -236,17 +236,17 @@ def _calculate_evidence_based_progress(
 
     Args:
         state: Loop state with accumulated evidence
-        reason_result: Reason result with LLM progress
+        plan_result: Plan result with LLM progress
 
     Returns:
         Float between 0.0 and 1.0
     """
     # Special case: if status is "done", return 1.0
-    if reason_result.status == "done":
+    if plan_result.status == "done":
         return 1.0
 
     # LLM progress (60% weight)
-    llm_progress = reason_result.goal_progress or 0.0
+    llm_progress = plan_result.goal_progress or 0.0
 
     # Step completion ratio (20% weight)
     if not state.step_results:
@@ -359,7 +359,7 @@ class LLMPlanner:
     async def _invoke_messages(self, messages: list[Any]) -> str:
         """Invoke the LLM with a message list and return the response (RFC-207).
 
-        Used for Reason phase with SystemMessage/HumanMessage separation.
+        Used for Plan phase with SystemMessage/HumanMessage separation.
 
         Args:
             messages: List of BaseMessage objects (SystemMessage, HumanMessage)
@@ -611,7 +611,7 @@ class LLMPlanner:
         Generates ~200-250 tokens per call.
 
         Args:
-            messages: Prompt messages from build_reason_messages()
+            messages: Prompt messages from build_plan_messages()
             goal: Goal description for fallback decision
             iteration: Current iteration for varied fallback
 
@@ -717,9 +717,9 @@ class LLMPlanner:
             plan_result: Phase 2 PlanGeneration
 
         Returns:
-            ReasonResult with combined reasoning and both action fields
+            PlanResult with combined reasoning and both action fields
         """
-        from soothe.cognition.agent_loop.schemas import ReasonResult
+        from soothe.cognition.agent_loop.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
 
         # Concatenate reasoning from both phases (shows complete reasoning chain)
@@ -732,12 +732,12 @@ class LLMPlanner:
         action_text = plan_result.next_action.strip()
 
         logger.debug(
-            "[Reason] plan_action=%s",
+            "[Plan] plan_action=%s",
             preview_first(action_text, chars=80),
         )
 
-        # Build final ReasonResult
-        return ReasonResult(
+        # Build final PlanResult
+        return PlanResult(
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
@@ -753,16 +753,16 @@ class LLMPlanner:
         state: LoopState,
         context: PlanContext,
     ) -> Any:
-        """Reason phase: two-call architecture (RFC-604).
+        """Plan phase: two-call architecture (RFC-604).
 
         Phase 1: StatusAssessment (lightweight, ~200-250 tokens)
         Phase 2: PlanGeneration (conditional, ~500-800 tokens)
 
-        Returns combined ReasonResult with evidence-based metrics applied.
+        Returns combined PlanResult with evidence-based metrics applied.
         """
-        from soothe.cognition.agent_loop.schemas import ReasonResult, StatusAssessment
+        from soothe.cognition.agent_loop.schemas import PlanResult, StatusAssessment
 
-        messages = self._prompt_builder.build_reason_messages(goal, state, context)
+        messages = self._prompt_builder.build_plan_messages(goal, state, context)
 
         # Compact input summary
         msg_types = [type(m).__name__ for m in messages]
@@ -773,7 +773,7 @@ class LLMPlanner:
             if isinstance(msg, HumanMessage):
                 human_preview = create_output_summary(msg.content, first_chars=200, last_chars=100)
                 break
-        logger.debug("[Reason] msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
+        logger.debug("[Plan] msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
 
         # RFC-604 Layer 3: Retry logic with fallback
         max_retries = 3
@@ -786,9 +786,9 @@ class LLMPlanner:
 
                 # Early completion optimization: skip plan generation if status="done"
                 if assessment.status == "done":
-                    logger.debug("[Reason] early-complete status=done (skip plan gen)")
-                    # Build ReasonResult from assessment only (IG-152: full text, no truncation)
-                    result = ReasonResult(
+                    logger.debug("[Plan] early-complete status=done (skip plan gen)")
+                    # Build PlanResult from assessment only (IG-152: full text, no truncation)
+                    result = PlanResult(
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
@@ -809,7 +809,7 @@ class LLMPlanner:
                 if result.decision:
                     decision_info = f" steps={len(result.decision.steps)} mode={result.decision.execution_mode}"
                 logger.debug(
-                    "[Reason] result status=%s plan=%s prog=%.0f%% conf=%.0f%%%s",
+                    "[Plan] result status=%s plan=%s prog=%.0f%% conf=%.0f%%%s",
                     result.status,
                     result.plan_action,
                     result.goal_progress * 100,
@@ -872,7 +872,7 @@ class LLMPlanner:
                                         if assessment.status != "done":
                                             # Need to parse plan separately
                                             # For simplicity, use default decision
-                                            result = ReasonResult(
+                                            result = PlanResult(
                                                 status=assessment.status,
                                                 goal_progress=assessment.goal_progress,
                                                 confidence=assessment.confidence,
@@ -882,7 +882,7 @@ class LLMPlanner:
                                                 next_action=assessment.next_action,
                                             )
                                         else:
-                                            result = ReasonResult(
+                                            result = PlanResult(
                                                 status=assessment.status,
                                                 goal_progress=assessment.goal_progress,
                                                 confidence=assessment.confidence,
@@ -892,8 +892,8 @@ class LLMPlanner:
                                                 next_action=assessment.next_action,
                                             )
                                     except Exception:
-                                        # Fallback: parse as ReasonResult directly
-                                        result = ReasonResult(**parsed_dict)
+                                        # Fallback: parse as PlanResult directly
+                                        result = PlanResult(**parsed_dict)
 
                                     logger.info("[Retry] manual JSON parse OK attempt %d", attempt + 1)
                                     break
@@ -902,11 +902,11 @@ class LLMPlanner:
                 else:
                     # Final attempt failed
                     logger.exception("[Retry] failed after %d attempts", max_retries)
-                    return ReasonResult(
+                    return PlanResult(
                         status="replan",
                         plan_action="new",
                         decision=_default_agent_decision(goal, state.iteration),
-                        reasoning=f"Reason call failed after {max_retries} retries: {error_msg[:100]}",
+                        reasoning=f"Plan call failed after {max_retries} retries: {error_msg[:100]}",
                         next_action="I'll retry with a simpler next step.",
                     )
 

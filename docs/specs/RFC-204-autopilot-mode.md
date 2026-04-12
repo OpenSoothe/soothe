@@ -42,7 +42,7 @@ Layer 3: Autonomous Goal Management (RFC-200)
 
 ### 1.1 Layer Delegation Model
 
-Layer 3 treats Layer 2 as a black-box ReAct engine:
+Layer 3 treats Layer 2 as a black-box Plan-and-Execute engine:
 
 **Input**: Rich context envelope
 **Output**: ReasonResult with status, evidence, confidence, goal_progress
@@ -91,7 +91,7 @@ Layer 3 validates Layer 2's completion judgment:
 **Send-Back Mechanics**:
 - Separate send-back budget per goal (default: 3 rounds)
 - Refined instructions accompany send-back
-- Independent from Layer 2's ReAct iteration budget
+- Independent from Layer 2's Plan-and-Execute iteration budget
 
 **Budget Exhaustion**:
 - Suspended goals preserved with current state

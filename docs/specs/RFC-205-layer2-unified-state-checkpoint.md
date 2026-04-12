@@ -28,7 +28,7 @@ Give Layer 2 its own checkpoint system that:
 - Stores step I/O (input/output) with tool/subagent metadata
 - Includes Reason decision history
 - Integrates working memory state
-- Persists per-iteration (Reason + Act cycle)
+- Persists per-iteration (Plan + Execute cycle)
 - Enables independent recovery without Layer 1 dependency
 - Derives Reason context from step outputs, not messages
 
@@ -255,7 +255,7 @@ SOOTHE_HOME/
 
 ### Write Timing
 
-- **Per-iteration**: After each Reason-Act cycle completes
+- **Per-iteration**: After each Plan-Execute cycle completes
 - **Atomic**: Write to temp file, then rename
 - **Co-located**: Same directory as working memory and step reports
 
@@ -460,13 +460,13 @@ class AgentLoop:
    - `act_history` (2 complete Act waves)
    - `working_memory_state` (spill files still exist)
 5. Resumes from iteration 3, Reason phase
-6. Reason derives prior context from `act_history` step outputs
+6. Plan phase derives prior context from `execute_history` step outputs
 
 ### Recovery Benefits
 
 - ✅ Layer 2 state fully recoverable
 - ✅ Working memory spill files preserved
-- ✅ Reason history intact
+- ✅ Plan history intact
 - ✅ No Layer 1 dependency
 
 ---
@@ -523,6 +523,6 @@ Expected:
 
 **2026-04-08 (created)**:
 - Initial RFC defining Layer 2 independent checkpoint
-- Unified state model including Reason history, Act waves, working memory
+- Unified state model including Plan history, Execute waves, working memory
 - Step I/O semantics instead of message traces
 - Per-iteration persistence

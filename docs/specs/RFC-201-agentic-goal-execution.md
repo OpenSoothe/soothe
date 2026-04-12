@@ -5,12 +5,12 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-16
-**Updated**: 2026-04-07
+**Updated**: 2026-04-12
 **Dependencies**: RFC-000, RFC-001, RFC-200, RFC-100
 
 ## Abstract
 
-This RFC defines Layer 2 of Soothe's three-layer execution architecture: agentic goal execution for single-goal completion through iterative refinement. Layer 2 uses a **Reason → Act** loop where the LLM reasons about planning, progress assessment, and goal-distance estimation in a single structured response (ReasonResult), then executes steps via Layer 1 CoreAgent (Act phase). It serves as foundation for Layer 3's PERFORM stage and delegates execution to Layer 1.
+This RFC defines Layer 2 of Soothe's three-layer execution architecture: agentic goal execution for single-goal completion through iterative refinement. Layer 2 uses a **Plan → Execute** loop (Plan-and-Execute design pattern) where the LLM performs planning, progress assessment, and goal-distance estimation in a single structured response (PlanResult), then executes steps via Layer 1 CoreAgent (Execute phase). It serves as foundation for Layer 3's PERFORM stage and delegates execution to Layer 1.
 
 ## Architecture Position
 
@@ -34,12 +34,12 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 ## Loop Model
 
-### Reason → Act Loop
+### Plan → Execute Loop
 
 ```
 Goal → while iteration < max_iterations:
-  REASON: Produce ReasonResult (plan assessment + progress judgment + next steps)
-  ACT: Execute steps via Layer 1 CoreAgent, collect evidence
+  PLAN: Produce PlanResult (plan assessment + progress judgment + next steps)
+  EXECUTE: Execute steps via Layer 1 CoreAgent, collect evidence
   Decision: "done" (return), "replan" (new plan), "continue" (reuse plan)
 ```
 
@@ -66,10 +66,10 @@ class AgentDecision(BaseModel):
 
 **Properties**: Batch execution (LLM decides 1 or N steps), execution mode (parallel/sequential/dependency), hybrid flexibility.
 
-### ReasonResult
+### PlanResult
 
 ```python
-class ReasonResult(BaseModel):
+class PlanResult(BaseModel):
     status: Literal["continue", "replan", "done"]
     goal_progress: float = Field(ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
@@ -78,30 +78,30 @@ class ReasonResult(BaseModel):
     user_summary: str      # Human-readable progress summary
     plan_action: Literal["keep", "new"]  # Reuse or replace plan
     decision: AgentDecision | None       # New plan when plan_action=="new"
-    next_steps_hint: str   # Guidance for next Act phase
+    next_steps_hint: str   # Guidance for next Execute phase
 ```
 
-**Reasoning Logic**: Combines planning, progress assessment, and goal-distance estimation in one LLM call. Decision criteria: done (goal achieved), continue (strategy valid, partial progress), replan (strategy failed).
+**Planning Logic**: Combines planning, progress assessment, and goal-distance estimation in one LLM call. Decision criteria: done (goal achieved), continue (strategy valid, partial progress), replan (strategy failed).
 
-## REASON Phase
+## PLAN Phase
 
-### Reasoning Decision
+### Planning Decision
 
 ```python
-# Reuse plan if reason says "continue" and has remaining steps
-if previous_reason.status == "continue" and has_remaining_steps(previous_decision):
+# Reuse plan if plan phase says "continue" and has remaining steps
+if previous_plan.status == "continue" and has_remaining_steps(previous_decision):
     return previous_decision
 # Create new plan (initial or replan)
-result = await reasoner.reason(goal, state, context, previous_reason)
+result = await planner.plan(goal, state, context, previous_plan)
 ```
 
 **Adaptive Step Granularity**: LLM decides coarse steps (clear goals, semantic subtasks) vs fine steps (uncertain goals, atomic actions).
 
-**Iteration-Scoped Reasoning**: REASON inside loop (not before). Reuse plan on "continue", replan on "replan".
+**Iteration-Scoped Planning**: PLAN inside loop (not before). Reuse plan on "continue", replan on "replan".
 
-**Reason Metrics Enhancement**: Structured wave metrics inform Reason decisions (tool_call_count, subagent_task_count, cap_hit, output_length, error_count, context_window). Metrics-driven approach prevents premature `continue` after satisfactory output.
+**Plan Metrics Enhancement**: Structured wave metrics inform Plan decisions (tool_call_count, subagent_task_count, cap_hit, output_length, error_count, context_window). Metrics-driven approach prevents premature `continue` after satisfactory output.
 
-## ACT Phase
+## EXECUTE Phase
 
 ### Hybrid Execution
 
@@ -151,14 +151,14 @@ Return ReasonResult
 
 ```python
 async def astream(goal_description, thread_id, max_iterations=8):
-    """Execute single goal through Reason → Act loop."""
+    """Execute single goal through Plan → Execute loop."""
 ```
 
-### Reasoner Integration
+### Planner Integration
 
 ```python
-class LoopReasonerProtocol:
-    async def reason(goal, state, context, previous_reason=None) -> ReasonResult
+class LoopPlannerProtocol:
+    async def plan(goal, state, context, previous_plan=None) -> PlanResult
 ```
 
 ### Planner Integration
@@ -176,9 +176,9 @@ class PlannerProtocol:
 |-------|-------------|
 | `soothe.agentic.loop.started` | Loop began |
 | `soothe.agentic.iteration.started` | Iteration began |
-| `soothe.cognition.agent_loop.reason` | Reason phase completed (ReasonResult) |
-| `soothe.agentic.act.started` | ACT phase began |
-| `soothe.agentic.act.step_completed` | Step completed |
+| `soothe.cognition.agent_loop.plan` | Plan phase completed (PlanResult) |
+| `soothe.agentic.execute.started` | EXECUTE phase began |
+| `soothe.agentic.execute.step_completed` | Step completed |
 | `soothe.agentic.loop.completed` | Loop completed |
 
 ## LoopState Metrics
@@ -199,7 +199,7 @@ class LoopState(BaseModel):
     context_percentage_consumed: float = 0.0
 ```
 
-**Purpose**: Inform Reason decisions with structured evidence beyond truncated summary. Metrics aggregation occurs after each Act wave, before Reason phase.
+**Purpose**: Inform Plan decisions with structured evidence beyond truncated summary. Metrics aggregation occurs after each Execute wave, before Plan phase.
 
 **Decision Impact**: Translation (8000 char output + 1 subagent call → `done`), Research (cap hit + partial output → `replan`), Multi-phase (2000 char output + cap not hit → `continue`).
 
@@ -242,32 +242,40 @@ agentic:
 
 **Solution**: Output contract suffix (anti-repetition instructions) + metrics-driven Reason prevents premature `continue`.
 
-**Mechanism**: Layer 2 contract suffix in executor. Better Reason decisions (metrics-aware) reduce post-delegation summary tendency.
+**Mechanism**: Layer 2 contract suffix in executor. Better Plan decisions (metrics-aware) reduce post-delegation summary tendency.
 
 ### Premature Continue Detection
 
-**Problem**: Reason decides `continue` after satisfactory Act output, triggering unnecessary iteration.
+**Problem**: Plan decides `continue` after satisfactory Execute output, triggering unnecessary iteration.
 
-**Solution**: Structured metrics inform Reason of wave completion status. Output length, subagent count, cap hit signal done vs continue criteria.
+**Solution**: Structured metrics inform Plan of wave completion status. Output length, subagent count, cap hit signal done vs continue criteria.
 
-**Mechanism**: `<SOOTHE_WAVE_METRICS>` section in Reason prompt. Model judges based on metrics pattern + goal text.
+**Mechanism**: `<SOOTHE_WAVE_METRICS>` section in Plan prompt. Model judges based on metrics pattern + goal text.
 
 ## Implementation Status
 
-- ✅ Reason → Act loop implemented (IG-115)
-- ✅ ReasonResult schema (combines planning + judgment)
-- ✅ LoopReasonerProtocol for reasoning
-- ✅ Iteration-scoped reasoning, goal-directed evaluation
-- ✅ ACT → Layer 1 integration
+- ✅ Plan → Execute loop implemented (IG-115, renamed in IG-153)
+- ✅ PlanResult schema (combines planning + judgment)
+- ✅ LoopPlannerProtocol for planning
+- ✅ Iteration-scoped planning, goal-directed evaluation
+- ✅ EXECUTE → Layer 1 integration
 - ✅ Thread isolation pattern (IG-131)
 - ✅ Subagent task cap tracking (IG-130)
 - ✅ Output contract suffix (IG-119)
-- ✅ Prior conversation for Reason (IG-128)
+- ✅ Prior conversation for Plan (IG-128)
 - 🔄 Metrics aggregation in executor (remaining)
-- 🔄 Reason metrics-aware prompts (remaining)
+- 🔄 Plan metrics-aware prompts (remaining)
 - 🔄 Automatic isolation trigger logic (remaining)
 
 ## Changelog
+
+### 2026-04-12
+- Terminology refactoring: Renamed "ReAct" pattern to "Plan-and-Execute" (IG-153)
+- Renamed "Reason → Act" loop to "Plan → Execute" loop
+- Renamed "Reason phase" to "Plan phase", "Act phase" to "Execute phase"
+- Renamed `ReasonResult` to `PlanResult`, `LoopReasonerProtocol` to `LoopPlannerProtocol`
+- Updated all descriptive text, event names, and implementation status
+- Added backward compatibility aliases for deprecated names
 
 ### 2026-04-07
 - Added Context Isolation section (thread isolation for delegation steps)
@@ -301,13 +309,14 @@ agentic:
 - RFC-100: Layer 1 CoreAgent runtime
 - RFC-209: Executor thread isolation simplification (upcoming refactoring)
 - RFC-203: Loop working memory
-- IG-115: AgentLoop ReAct (Reason + Act) migration
+- IG-115: AgentLoop Plan-and-Execute migration (originally "ReAct", renamed in IG-153)
 - IG-130: Subagent task cap tracking
-- IG-131: Sequential Act isolated thread
-- IG-128: Prior conversation for Reason
+- IG-131: Sequential Execute isolated thread
+- IG-128: Prior conversation for Plan
 - IG-119: Output contract and duplicate stdout
+- IG-153: Terminology refactoring (ReAct → Plan-and-Execute)
 - Design draft: `docs/drafts/2026-04-07-layer2-context-isolation-design.md`
 
 ---
 
-*Layer 2 agentic execution through Reason → Act loop with context isolation, execution bounds, metrics-driven reasoning, and goal-directed evaluation.*
+*Layer 2 agentic execution through Plan → Execute loop with context isolation, execution bounds, metrics-driven planning, and goal-directed evaluation.*

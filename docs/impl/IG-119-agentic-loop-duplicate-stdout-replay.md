@@ -14,20 +14,20 @@ In `SootheRunner._run_agentic_loop`, on `completed` the runner yielded an extra 
 
 `AIMessage(content=final_result.full_output)`.
 
-During the Act phase, `Executor._stream_and_collect` already forwarded all `messages` stream chunks to the client and built `StepResult.output` from the same AI + tool content. `ReasonPhase` then sets `full_output` from those step outputs (`to_evidence_string(truncate=False)`). Re-yielding that blob duplicates everything already streamed to stdout.
+During the Execute phase, `Executor._stream_and_collect` already forwarded all `messages` stream chunks to the client and built `StepResult.output` from the same AI + tool content. `PlanPhase` then sets `full_output` from those step outputs (`to_evidence_string(truncate=False)`). Re-yielding that blob duplicates everything already streamed to stdout.
 
 IG-105 addressed duplicate paths between **custom final-report events** and AIMessage; this case is **synthetic replay** of streamed content at loop completion.
 
 ## Solution
 
-Stop emitting the synthetic `AIMessage` on agentic loop completion. Consumers still receive `full_output` on `ReasonResult` / custom completion events; live stream remains the single source of truth for assistant text.
+Stop emitting the synthetic `AIMessage` on agentic loop completion. Consumers still receive `full_output` on `PlanResult` / custom completion events; live stream remains the single source of truth for assistant text.
 
 Additionally, suppress multi-step assistant body replay in headless CLI renderer:
 - when `multi_step_active=True`, `on_assistant_text()` no longer buffers/prints step body text;
 - `on_turn_end()` no longer flushes suppressed multi-step bodies to stdout.
-- `soothe.cognition.agent_loop.reason` now emits a single concise judgement line
-  (prefer `user_summary`), instead of splitting one reason event into multiple arrow lines.
-- Introduced shared `PresentationEngine` policy module for reason dedup/rate-limit
+- `soothe.cognition.agent_loop.plan` now emits a single concise judgement line
+  (prefer `user_summary`), instead of splitting one plan event into multiple arrow lines.
+- Introduced shared `PresentationEngine` policy module for plan dedup/rate-limit
   and tool-result payload summarization to reduce CLI noise.
 
 This keeps CLI output focused on progress summaries and completion lines, removing noisy step dumps.

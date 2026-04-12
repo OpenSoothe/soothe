@@ -469,10 +469,10 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 tid = str(thread_id or self._current_thread_id or "")
                 recent_for_thread = await self._load_recent_messages(tid, limit=16)
                 prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
-                reason_excerpts = self._format_thread_messages_for_reason(recent_for_thread, limit=prior_limit)
+                plan_excerpts = self._format_thread_messages_for_plan(recent_for_thread, limit=prior_limit)
 
                 # Pass context to subagent via state
-                state.prior_messages = reason_excerpts
+                state.prior_messages = plan_excerpts
 
                 logger.info("Quick path: routing directly to subagent '%s' with thread context", subagent)
                 async for chunk in self._run_direct_subagent(user_input, subagent, state):

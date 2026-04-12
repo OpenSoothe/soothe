@@ -1,7 +1,7 @@
 # RFC-203: Loop Working Memory
 
 **RFC**: 0203  
-**Title**: Loop Working Memory (Agentic ReAct State Bridge)  
+**Title**: Loop Working Memory (Plan-and-Execute State Bridge)  
 **Status**: Draft  
 **Kind**: Architecture Design / Impl Interface  
 **Created**: 2026-04-02  
@@ -9,7 +9,7 @@
 
 ## Abstract
 
-The agentic ReAct loop (Layer 2, RFC-201) passes progress to the next Reason call mainly via truncated step outputs. That loses structure and forces redundant exploration. This RFC defines **loop working memory**: a small, explicit store of durable facts and pointers that survives iterations, can live entirely in RAM, and **spills to the thread workspace** when content is too large for inline prompts—so Layer 1 tools can open the same files the planner references.
+The agentic Plan-and-Execute loop (Layer 2, RFC-201) passes progress to the next Plan call mainly via truncated step outputs. That loses structure and forces redundant exploration. This RFC defines **loop working memory**: a small, explicit store of durable facts and pointers that survives iterations, can live entirely in RAM, and **spills to the thread workspace** when content is too large for inline prompts—so Layer 1 tools can open the same files the planner references.
 
 ## Motivation
 

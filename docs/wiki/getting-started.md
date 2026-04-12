@@ -211,7 +211,7 @@ soothe thread continue
 
 Soothe provides multiple execution modes tailored to different task types:
 
-### Default Mode (TUI with Reason → Act)
+### Default Mode (TUI with Plan → Execute)
 
 **Best for**: Standard tasks, research, file operations, code analysis
 

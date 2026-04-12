@@ -6,6 +6,7 @@
 **Status**: Completed
 **Created**: 2026-04-08
 **Dependencies**: RFC-201, RFC-203, RFC-100
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
@@ -18,7 +19,7 @@ Implement Layer 2's independent checkpoint system that stores step-level semanti
 1. Create `Layer2Checkpoint` model with unified state
 2. Implement `Layer2StateManager` for persistence and recovery
 3. Refactor `AgentLoop` to use independent checkpoint
-4. Update Reason to derive prior conversation from step outputs
+4. Update Plan to derive prior conversation from step outputs
 5. Integrate working memory state serialization
 
 ---
@@ -93,8 +94,8 @@ class StepExecutionRecord(BaseModel):
     subagent_calls: list[SubagentCallRecord] = Field(default_factory=list)
 
 
-class ActWaveRecord(BaseModel):
-    """One Act wave execution."""
+class ExecuteWaveRecord(BaseModel):
+    """One Execute wave execution."""
 
     iteration: int
     timestamp: datetime
@@ -113,8 +114,8 @@ class ActWaveRecord(BaseModel):
     error_count: int = 0
 
 
-class ReasonStepRecord(BaseModel):
-    """One Reason phase execution."""
+class PlanStepRecord(BaseModel):
+    """One Plan phase execution."""
 
     iteration: int
     timestamp: datetime
@@ -123,7 +124,7 @@ class ReasonStepRecord(BaseModel):
     goal_text: str
     prior_step_outputs: list[str] = Field(
         default_factory=list,
-        description="Derived from previous Act wave outputs"
+        description="Derived from previous Execute wave outputs"
     )
 
     # Reasoning
@@ -136,7 +137,7 @@ class ReasonStepRecord(BaseModel):
 
     # Output
     user_summary: str
-    soothe_next_action: str
+    next_action: str
 
 
 class WorkingMemoryEntry(BaseModel):
@@ -173,11 +174,11 @@ class Layer2Checkpoint(BaseModel):
     max_iterations: int = 10
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
-    # Reason history (step I/O, not messages)
-    reason_history: list[ReasonStepRecord] = Field(default_factory=list)
+    # Plan history (step I/O, not messages)
+    plan_history: list[PlanStepRecord] = Field(default_factory=list)
 
-    # Act history
-    act_history: list[ActWaveRecord] = Field(default_factory=list)
+    # Execute history
+    execute_history: list[ExecuteWaveRecord] = Field(default_factory=list)
 
     # Working memory state
     working_memory_state: WorkingMemoryState = Field(
@@ -215,16 +216,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.cognition.agent_loop.checkpoint import (
-    ActWaveRecord,
+    ExecuteWaveRecord,
     Layer2Checkpoint,
-    ReasonStepRecord,
+    PlanStepRecord,
     WorkingMemoryState,
 )
 from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
-    from soothe.cognition.agent_loop.executor import ActWaveResult
-    from soothe.cognition.agent_loop.reason import ReasonResult
+    from soothe.cognition.agent_loop.executor import ExecuteWaveResult
+    from soothe.cognition.agent_loop.planning import PlanResult
     from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
@@ -338,39 +339,39 @@ class Layer2StateManager:
 
     def record_iteration(
         self,
-        reason_result: ReasonResult,
-        act_wave: ActWaveResult,
+        plan_result: PlanResult,
+        execute_wave: ExecuteWaveResult,
         working_memory: LoopWorkingMemory,
     ) -> None:
         """Update checkpoint after each iteration.
 
         Args:
-            reason_result: Reason phase result
-            act_wave: Act wave execution result
+            plan_result: Plan phase result
+            execute_wave: Execute wave execution result
             working_memory: Current working memory state
         """
         if self._checkpoint is None:
             logger.error("[Layer2] No checkpoint to update")
             return
 
-        # Record Reason step
-        reason_record = ReasonStepRecord(
+        # Record Plan step
+        plan_record = PlanStepRecord(
             iteration=self._checkpoint.iteration,
             timestamp=datetime.now(UTC),
-            goal_text=reason_result.goal_text,
+            goal_text=plan_result.goal_text,
             prior_step_outputs=self._derive_prior_step_outputs(),
-            reasoning=reason_result.reasoning,
-            status=reason_result.status,
-            goal_progress=reason_result.goal_progress,
-            decision=reason_result.decision.model_dump() if reason_result.decision else None,
-            user_summary=reason_result.user_summary,
-            soothe_next_action=reason_result.soothe_next_action,
+            reasoning=plan_result.reasoning,
+            status=plan_result.status,
+            goal_progress=plan_result.goal_progress,
+            decision=plan_result.decision.model_dump() if plan_result.decision else None,
+            user_summary=plan_result.user_summary,
+            next_action=plan_result.next_action,
         )
-        self._checkpoint.reason_history.append(reason_record)
+        self._checkpoint.plan_history.append(plan_record)
 
-        # Record Act wave
-        act_record = self._build_act_wave_record(act_wave)
-        self._checkpoint.act_history.append(act_record)
+        # Record Execute wave
+        execute_record = self._build_execute_wave_record(execute_wave)
+        self._checkpoint.execute_history.append(execute_record)
 
         # Record working memory state
         self._checkpoint.working_memory_state = self._serialize_working_memory(
@@ -379,13 +380,13 @@ class Layer2StateManager:
 
         # Update metrics
         self._checkpoint.iteration += 1
-        self._checkpoint.total_duration_ms += act_wave.duration_ms
-        self._checkpoint.total_tokens_used += act_wave.total_tokens_used
+        self._checkpoint.total_duration_ms += execute_wave.duration_ms
+        self._checkpoint.total_tokens_used += execute_wave.total_tokens_used
 
         # Save checkpoint
         self.save(self._checkpoint)
 
-    def derive_reason_conversation(self, limit: int = 10) -> list[str]:
+    def derive_plan_conversation(self, limit: int = 10) -> list[str]:
         """Derive prior conversation from step outputs.
 
         Args:
@@ -398,8 +399,8 @@ class Layer2StateManager:
             return []
 
         conversation = []
-        for act_wave in self._checkpoint.act_history:
-            for step in act_wave.steps:
+        for execute_wave in self._checkpoint.execute_history:
+            for step in execute_wave.steps:
                 if step.success and step.output:
                     # Format as assistant turn
                     conversation.append(f"<assistant>\n{step.output}\n</assistant>")
@@ -424,20 +425,20 @@ class Layer2StateManager:
         )
 
     def _derive_prior_step_outputs(self) -> list[str]:
-        """Get prior step outputs from previous Act waves."""
-        if not self._checkpoint or not self._checkpoint.act_history:
+        """Get prior step outputs from previous Execute waves."""
+        if not self._checkpoint or not self._checkpoint.execute_history:
             return []
 
         outputs = []
-        for act_wave in self._checkpoint.act_history:
-            for step in act_wave.steps:
+        for execute_wave in self._checkpoint.execute_history:
+            for step in execute_wave.steps:
                 if step.success and step.output:
                     outputs.append(step.output)
 
         return outputs
 
-    def _build_act_wave_record(self, act_wave: ActWaveResult) -> ActWaveRecord:
-        """Convert ActWaveResult to ActWaveRecord."""
+    def _build_execute_wave_record(self, execute_wave: ExecuteWaveResult) -> ExecuteWaveRecord:
+        """Convert ExecuteWaveResult to ExecuteWaveRecord."""
         from soothe.cognition.agent_loop.checkpoint import (
             StepExecutionRecord,
             ToolCallRecord,
@@ -476,16 +477,16 @@ class Layer2StateManager:
             )
             steps.append(step_record)
 
-        return ActWaveRecord(
+        return ExecuteWaveRecord(
             iteration=self._checkpoint.iteration if self._checkpoint else 0,
             timestamp=datetime.now(UTC),
             steps=steps,
-            execution_mode=act_wave.execution_mode,
-            duration_ms=act_wave.duration_ms,
-            tool_call_count=act_wave.tool_call_count,
-            subagent_task_count=act_wave.subagent_task_count,
-            hit_subagent_cap=act_wave.hit_subagent_cap,
-            error_count=act_wave.error_count,
+            execution_mode=execute_wave.execution_mode,
+            duration_ms=execute_wave.duration_ms,
+            tool_call_count=execute_wave.tool_call_count,
+            subagent_task_count=execute_wave.subagent_task_count,
+            hit_subagent_cap=execute_wave.hit_subagent_cap,
+            error_count=execute_wave.error_count,
         )
 
     def _serialize_working_memory(
@@ -547,21 +548,21 @@ async def run_with_progress(...):
 
     # Main loop
     while state.iteration < state.max_iterations:
-        # Reason phase
-        reason_result = await self.reason_phase.reason(...)
+        # Plan phase
+        plan_result = await self.planning_phase.plan(...)
 
-        if reason_result.is_done():
+        if plan_result.is_done():
             state_manager.finalize(status="completed")
             yield "completed", {...}
             return
 
-        # Act phase
-        act_wave = await self._execute_act_wave(decision, state)
+        # Execute phase
+        execute_wave = await self._execute_wave(decision, state)
 
         # Record iteration to checkpoint
         state_manager.record_iteration(
-            reason_result,
-            act_wave,
+            plan_result,
+            execute_wave,
             state.working_memory
         )
 
@@ -613,16 +614,16 @@ async def _execute_step(...):
 
 ## Step 5: Update Reason Context Derivation
 
-### Update: `src/soothe/cognition/agent_loop/reason.py`
+### Update: `src/soothe/cognition/agent_loop/planning.py`
 
 Replace Layer 1 message loading with step I/O derivation:
 
 ```python
-# In reason():
-async def reason(...):
+# In plan():
+async def plan(...):
     # Get prior conversation from state manager (not Layer 1 messages)
     if state_manager:
-        prior_step_outputs = state_manager.derive_reason_conversation(limit=10)
+        prior_step_outputs = state_manager.derive_plan_conversation(limit=10)
     else:
         prior_step_outputs = []
 
@@ -640,11 +641,11 @@ async def reason(...):
 
 ### Update: `src/soothe/cognition/agent_loop/loop_agent.py`
 
-Pass state_manager to Reason phase:
+Pass state_manager to Plan phase:
 
 ```python
 # In run_with_progress():
-reason_result = await self.reason_phase.reason(
+plan_result = await self.planning_phase.plan(
     goal=goal,
     state=state,
     state_manager=state_manager,  # NEW: Pass state manager
@@ -674,7 +675,7 @@ Expected:
 
 1. `tests/unit/test_layer2_checkpoint_model.py` - Validate checkpoint models
 2. `tests/unit/test_layer2_state_manager.py` - Test persistence lifecycle
-3. `tests/unit/test_reason_step_io_derivation.py` - Test context derivation
+3. `tests/unit/test_plan_step_io_derivation.py` - Test context derivation
 4. `tests/integration/test_layer2_recovery.py` - Test crash recovery
 
 ---

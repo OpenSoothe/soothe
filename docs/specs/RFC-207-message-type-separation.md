@@ -386,7 +386,7 @@ class PromptBuilder:
 
 **Agentic Loop Tests**:
 - Run full agentic loop execution
-- Verify Reason → Act cycle works with new message structure
+- Verify Plan → Execute cycle works with new message structure
 - Verify evidence accumulation in HumanMessage
 - Verify checkpoint handling unchanged
 - Verify LLMTracingMiddleware logs message count correctly
@@ -454,7 +454,7 @@ These are **out of scope** for RFC-207 but worth considering for future iteratio
 ## Related Specifications
 
 - **RFC-206**: Hierarchical Prompt Architecture (conceptual foundation)
-- **RFC-201**: Layer 2 Agentic Goal Execution (Reason/Act loop)
+- **RFC-201**: Layer 2 Agentic Goal Execution (Plan/Execute loop)
 - **RFC-100**: Layer 1 CoreAgent Runtime (BaseChatModel interface)
 - **IG-135**: Prompt Architecture Implementation (RFC-206 implementation)
 - **IG-136**: LLM Tracing Middleware (message logging support)
