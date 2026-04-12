@@ -1,10 +1,10 @@
 # RFC-202: DAG Execution & Failure Recovery
 
-**Status**: Draft
+**Status**: Implemented
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
-**Last Updated**: 2026-03-31
-**Depends on**: RFC-200 (Layer 3), RFC-201 (Layer 2), RFC-100 (Layer 1)
+**Last Updated**: 2026-04-12
+**Depends on**: RFC-200 (GoalEngine), RFC-201 (AgentLoop), RFC-100 (CoreAgent)
 **Supersedes**: RFC-0009, RFC-0010
 **Kind**: Architecture Design
 
@@ -13,6 +13,51 @@
 ## 1. Abstract
 
 This RFC defines the DAG-based execution architecture for Soothe's cognition layer, enabling parallel execution of independent plan steps and goals within configurable limits. It also specifies the failure recovery mechanism with progressive persistence, checkpointing after each step/goal completion, and structured artifact storage for human-browsable run outputs.
+
+---
+
+## Implementation Status
+
+This RFC's core architecture is fully implemented:
+
+- ✅ **ConcurrencyController** (§5.1)
+  - Hierarchical semaphore control at goal, step, and LLM levels
+  - Unlimited mode handling (limit=0 creates no semaphore)
+  - Global LLM budget circuit breaker
+  - Implementation: `src/soothe/core/concurrency.py`
+  
+- ✅ **StepScheduler** (§5.2)
+  - DAG-based step scheduling with dependency resolution
+  - Cycle detection in step dependencies
+  - ready_steps() with sequential/dependency/max modes
+  - Transitive failure propagation to blocked steps
+  - Implementation: `src/soothe/core/step_scheduler.py`
+  
+- ✅ **RunArtifactStore** (§5.5)
+  - Structured run directory: `$SOOTHE_HOME/runs/{thread_id}/`
+  - Atomic checkpoint writes (tmp → rename)
+  - StepReport and GoalReport in JSON + Markdown
+  - Artifact tracking with manifest
+  - Implementation: `src/soothe/core/artifact_store.py`
+  
+- ✅ **CheckpointEnvelope** (§8.1)
+  - Progressive checkpoint model
+  - Goal/plan/step state serialization
+  - Recovery restoration
+  - Implementation: `src/soothe/protocols/planner.py`
+
+- ✅ **Recovery Flow** (§9)
+  - Thread resume from checkpoint
+  - Crash mid-step-loop recovery
+  - Crash mid-goal-DAG recovery
+  - Implementation: `src/soothe/core/runner/_runner_checkpoint.py`
+
+- ⚠️ **GoalEngine AgentLoop Integration** (IG-154)
+  - Previous: GoalEngine bypassed AgentLoop (architectural violation)
+  - Fixed: GoalEngine now delegates to AgentLoop properly (IG-154)
+  - After IG-154: GoalEngine integrates with StepScheduler correctly
+
+**Verification**: All core modules are in production use. See code locations above for implementation details.
 
 ---
 

@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import TYPE_CHECKING, Any
 
+from soothe.cognition.agent_loop import AgentLoop
+from soothe.cognition.agent_loop.schemas import PlanResult
 from soothe.core.event_catalog import (
     FinalReportEvent,
     GoalBatchStartedEvent,
@@ -27,10 +29,11 @@ from soothe.core.event_catalog import (
     ThreadEndedEvent,
     ThreadSavedEvent,
 )
-from soothe.protocols.planner import PlanContext, StepResult
+from soothe.protocols.planner import StepResult
 
 from ._runner_goal_directives import GoalDirectivesMixin
-from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom, _validate_goal
+from ._runner_shared import _MIN_MEMORY_STORAGE_LENGTH, StreamChunk, _custom
+from ._types import GoalResult
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -245,11 +248,20 @@ class AutonomousMixin(GoalDirectivesMixin):
         total_iterations: int,
         parallel_goals: int = 1,
     ) -> AsyncGenerator[StreamChunk]:
-        """Execute a single goal in the autonomous loop (RFC-0009).
+        """Execute a single goal through AgentLoop (RFC-200, IG-154).
 
-        Runs plan creation, step loop, reflection, and optional revision
-        for one goal.  Each goal may use an isolated thread for parallel
-        execution.
+        Delegates to AgentLoop.run() for single-goal execution with
+        iterative refinement. Receives PlanResult and uses it for
+        GoalEngine reflection with goal directives.
+
+        Args:
+            goal: Goal object to execute
+            parent_state: Parent runner state
+            thread_id: Thread ID for isolated execution
+            user_input: Original user input
+            iteration_records: Previous iteration records
+            total_iterations: Current iteration number
+            parallel_goals: Number of parallel goals executing
         """
         import asyncio
 
@@ -266,6 +278,216 @@ class AutonomousMixin(GoalDirectivesMixin):
 
         iter_start = perf_counter()
         current_input = goal.description
+
+        # IG-154: Delegate to AgentLoop when planner implements LoopPlannerProtocol
+        if self._planner and hasattr(self._planner, "plan"):
+            # Planner implements LoopPlannerProtocol - can delegate to AgentLoop
+            logger.info(
+                "[GoalEngine] Delegating goal %s to AgentLoop (thread=%s, max_iter=8)",
+                goal.id,
+                thread_id,
+            )
+
+            # Create AgentLoop instance for this goal
+            agent_loop = AgentLoop(
+                core_agent=self._agent,
+                loop_planner=self._planner,
+                config=self._config,
+            )
+
+            # Use AgentLoop.run_with_progress() to get streaming events
+            goal_result = None
+            async for event_type, event_data in agent_loop.run_with_progress(
+                goal=goal.description,
+                thread_id=thread_id,
+                workspace=getattr(parent_state, "workspace", None),
+                git_status=getattr(parent_state, "git_status", None),
+                max_iterations=8,  # AgentLoop iteration budget
+            ):
+                # Propagate AgentLoop events to autonomous stream
+                if event_type == "completed":
+                    plan_result = event_data.get("result")
+                    if isinstance(plan_result, PlanResult):
+                        goal_result = GoalResult(
+                            goal_id=goal.id,
+                            status="completed" if plan_result.is_done() else "failed",
+                            evidence_summary=plan_result.evidence_summary,
+                            goal_progress=plan_result.goal_progress,
+                            confidence=plan_result.confidence,
+                            full_output=plan_result.full_output,
+                            iteration_count=event_data.get("iteration", 0),
+                        )
+                elif event_type == "plan":
+                    # Emit plan event
+                    yield _custom(
+                        PlanCreatedEvent(
+                            plan_id=f"P_{goal.plan_count}",
+                            goal=goal.description,
+                            steps=[],
+                            reasoning=event_data.get("next_action", ""),
+                            is_plan_only=False,
+                        ).to_dict()
+                    )
+                elif event_type == "iteration_started":
+                    # Propagate iteration events
+                    yield event_data
+
+            # If AgentLoop completed successfully, process result
+            if goal_result:
+                duration_ms = int((perf_counter() - iter_start) * 1000)
+                goal_result.duration_ms = duration_ms
+
+                # Emit goal report
+                yield _custom(
+                    GoalReportEvent(
+                        goal_id=goal.id,
+                        step_count=goal_result.iteration_count,
+                        completed=1 if goal_result.status == "completed" else 0,
+                        failed=1 if goal_result.status == "failed" else 0,
+                        summary=goal_result.evidence_summary[:200],
+                    ).to_dict()
+                )
+
+                # Update goal report
+                from soothe.protocols.planner import GoalReport
+
+                goal.report = GoalReport(
+                    goal_id=goal.id,
+                    description=goal.description,
+                    summary=goal_result.full_output or goal_result.evidence_summary,
+                    status=goal_result.status,
+                )
+
+                # Complete or fail goal based on PlanResult
+                if goal_result.status == "completed":
+                    await self._goal_engine.complete_goal(goal.id)
+                    yield _custom(GoalCompletedEvent(goal_id=goal.id).to_dict())
+                else:
+                    await self._goal_engine.fail_goal(goal.id, error="AgentLoop did not achieve goal")
+                    yield _custom(
+                        GoalFailedEvent(goal_id=goal.id, error="Not achieved", retry_count=goal.retry_count).to_dict()
+                    )
+
+                # Store memory
+                if (
+                    self._memory
+                    and goal_result.evidence_summary
+                    and len(goal_result.evidence_summary) > _MIN_MEMORY_STORAGE_LENGTH
+                ):
+                    try:
+                        from soothe.protocols.memory import MemoryItem
+
+                        await self._memory.remember(
+                            MemoryItem(
+                                content=goal_result.evidence_summary[:500],
+                                tags=["agent_response", "goal_" + goal.id],
+                                source_thread=parent_state.thread_id,
+                            )
+                        )
+                    except Exception:
+                        logger.debug("Memory storage failed", exc_info=True)
+
+                # GoalEngine reflection with AgentLoop result
+                reflection = None
+                if self._planner and self._goal_engine:
+                    try:
+                        from soothe.protocols.planner import GoalContext, GoalSnapshot
+
+                        all_goals = await self._goal_engine.list_goals()
+                        goal_context = GoalContext(
+                            current_goal_id=goal.id,
+                            all_goals=[GoalSnapshot(**g.model_dump(mode="json")) for g in all_goals],
+                            completed_goals=[g.id for g in all_goals if g.status == "completed"],
+                            failed_goals=[g.id for g in all_goals if g.status == "failed"],
+                            ready_goals=[g.id for g in all_goals if g.status in ("pending", "active")],
+                            max_parallel_goals=self._concurrency.max_parallel_goals,
+                        )
+
+                        # Reflection with AgentLoop result
+                        reflection = await self._planner.reflect(
+                            plan=None,  # AgentLoop handled planning
+                            step_results=[],  # AgentLoop handled execution
+                            goal_context=goal_context,
+                            agentloop_result=goal_result,  # IG-154: Pass AgentLoop result
+                        )
+
+                        yield _custom(
+                            PlanReflectedEvent(
+                                should_revise=reflection.should_revise,
+                                assessment=reflection.assessment[:200],
+                            ).to_dict()
+                        )
+
+                        # Process goal directives
+                        if reflection.goal_directives:
+                            goal_changes = await self._process_goal_directives(
+                                reflection.goal_directives,
+                                current_goal=goal,
+                            )
+
+                            yield _custom(
+                                GoalDirectivesAppliedEvent(
+                                    goal_id=goal.id,
+                                    directives_count=len(reflection.goal_directives),
+                                    changes=goal_changes,
+                                ).to_dict()
+                            )
+
+                            # Check if current goal dependencies still satisfied
+                            if goal.depends_on:
+                                all_goals_dict = {g.id: g for g in all_goals}
+                                deps_satisfied = all(
+                                    all_goals_dict.get(dep_id) and all_goals_dict[dep_id].status == "completed"
+                                    for dep_id in goal.depends_on
+                                    if dep_id in all_goals_dict
+                                )
+
+                                if not deps_satisfied:
+                                    logger.info(
+                                        "Goal %s dependencies no longer satisfied after directives, deferring",
+                                        goal.id,
+                                    )
+                                    # Reset goal to pending
+                                    goal.status = "pending"
+                                    yield _custom(
+                                        GoalDeferredEvent(
+                                            goal_id=goal.id,
+                                            reason="Dependencies added but not completed",
+                                            plan_preserved=True,
+                                        ).to_dict()
+                                    )
+
+                            # Save checkpoint after goal mutations
+                            async for chunk in self._save_checkpoint(
+                                parent_state,
+                                user_input=user_input,
+                                mode="autonomous",
+                            ):
+                                yield chunk
+
+                    except Exception:
+                        logger.debug("GoalEngine reflection failed", exc_info=True)
+
+                # Emit iteration completed
+                duration_ms = int((perf_counter() - iter_start) * 1000)
+                yield _custom(
+                    IterationCompletedEvent(
+                        iteration=total_iterations,
+                        goal_id=goal.id,
+                        outcome=goal_result.status,
+                        duration_ms=duration_ms,
+                    ).to_dict()
+                )
+
+                # Return early - AgentLoop handled everything
+                return
+
+        # Fallback: Legacy execution path (backward compatibility)
+        # Keep existing code for goals without LoopPlannerProtocol planner
+        logger.warning(
+            "[GoalEngine] Using legacy execution path (no AgentLoop) for goal %s - violates RFC architecture",
+            goal.id,
+        )
 
         try:
             iter_state = RunnerState()
@@ -292,7 +514,6 @@ class AutonomousMixin(GoalDirectivesMixin):
                     logger.debug("Memory recall failed", exc_info=True)
 
             if should_refresh_observation:
-                # Observation scope key set, but no context projection
                 iter_state.observation_scope_key = current_input
 
             parent_state.context_projection = iter_state.context_projection
@@ -300,63 +521,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             parent_state.observation_scope_key = iter_state.observation_scope_key
             parent_state.observation_refresh_needed = False
 
-            # Reuse existing plan from parent_state if available (avoids duplicate plan creation)
-            if parent_state and hasattr(parent_state, "plan") and parent_state.plan:
-                iter_state.plan = parent_state.plan
-                self._current_plan = iter_state.plan
-                logger.info("Reusing existing plan with %d steps", len(iter_state.plan.steps))
-            elif self._planner:
-                # Only create new plan if none exists
-                try:
-                    capabilities = [name for name, cfg in self._config.subagents.items() if cfg.enabled]
-                    completed = [
-                        StepResult(
-                            step_id=r.goal_id,
-                            success=r.outcome != "failed",
-                            outcome={
-                                "type": "generic",
-                                "size_bytes": len((r.actions_summary or "").encode("utf-8")),
-                            },  # RFC-211
-                            duration_ms=0,
-                            thread_id=goal.thread_id,
-                        )
-                        for r in iteration_records[-3:]
-                    ]
-                    context = PlanContext(
-                        recent_messages=[current_input],
-                        available_capabilities=capabilities,
-                        completed_steps=completed,
-                        unified_classification=parent_state.unified_classification,
-                        workspace=parent_state.workspace if parent_state else None,
-                        git_status=getattr(parent_state, "git_status", None) if parent_state else None,
-                    )
-                    plan = await self._planner.create_plan(current_input, context)
-                    # Assign plan ID from goal counter
-                    goal.plan_count += 1
-                    plan.id = f"P_{goal.plan_count}"
-
-                    iter_state.plan = plan
-                    self._current_plan = plan
-                    yield _custom(
-                        PlanCreatedEvent(
-                            plan_id=plan.id,
-                            goal=_validate_goal(plan.goal, current_input),
-                            steps=[
-                                {
-                                    "id": s.id,
-                                    "description": s.description,
-                                    "status": s.status,
-                                    "depends_on": s.depends_on,
-                                }
-                                for s in plan.steps
-                            ],
-                            reasoning=plan.reasoning,
-                            is_plan_only=plan.is_plan_only,
-                        ).to_dict()
-                    )
-                except Exception:
-                    logger.debug("Plan creation failed", exc_info=True)
-
+            # Legacy: Direct step execution (bypasses AgentLoop)
             if iter_state.plan and len(iter_state.plan.steps) > 1:
                 async for chunk in self._run_step_loop(current_input, iter_state, iter_state.plan, goal_id=goal.id):
                     yield chunk

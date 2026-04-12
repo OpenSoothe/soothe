@@ -258,14 +258,19 @@ agentic:
 - ✅ PlanResult schema (combines planning + judgment)
 - ✅ LoopPlannerProtocol for planning
 - ✅ Iteration-scoped planning, goal-directed evaluation
-- ✅ EXECUTE → Layer 1 integration
+- ✅ EXECUTE → CoreAgent integration
 - ✅ Thread isolation pattern (IG-131)
 - ✅ Subagent task cap tracking (IG-130)
 - ✅ Output contract suffix (IG-119)
 - ✅ Prior conversation for Plan (IG-128)
-- 🔄 Metrics aggregation in executor (remaining)
-- 🔄 Plan metrics-aware prompts (remaining)
-- 🔄 Automatic isolation trigger logic (remaining)
+- ✅ Metrics aggregation in executor (IG-130, IG-151)
+- ✅ LoopState wave metrics schema (IG-130)
+- ✅ Metrics-driven Plan prompts (IG-130)
+- ✅ Token tracking with tiktoken fallback (IG-151)
+- ✅ Evidence-driven Plan messages (IG-148)
+- ⚠️ Automatic isolation trigger logic (deferred - manual control sufficient)
+
+**Verification**: See `src/soothe/cognition/agent_loop/executor.py:_aggregate_wave_metrics()` and `schemas.py:LoopState` for metrics implementation.
 
 ## Changelog
 
