@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-sdk"
-version = "0.1.2"
+version = "0.1.3"
 description = "SDK for building Soothe plugins with decorator-based API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -44,6 +44,14 @@ Repository = "https://github.com/caesar0301/soothe"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe_sdk"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/soothe_sdk/"]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+]
 
 [tool.ruff]
 line-length = 100

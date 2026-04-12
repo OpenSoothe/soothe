@@ -223,7 +223,7 @@ class AgenticMixin:
 
         loop_agent = AgentLoop(
             core_agent=self._agent,
-            loop_reasoner=self._planner,
+            loop_planner=self._planner,
             config=self._config,
         )
 

@@ -1,6 +1,6 @@
 [project]
 name = "soothe"
-version = "0.2.4"
+version = "0.2.5"
 description = "Multi-agent harness built on deepagents and langchain/langgraph."
 readme = "README.md"
 license = { text = "MIT" }
@@ -40,7 +40,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
     "requests>=2.31.0",
-    "soothe-sdk",
+    "soothe-sdk>=0.1.3,<1.0.0",
     "textual>=0.40.0",
     "typer>=0.9.0,<1.0.0",
     "uvicorn[standard]>=0.24.0",
@@ -134,10 +134,15 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
-packages = ["src/soothe"]
-artifacts = [
+include = [
+    "src/soothe/",
     "src/soothe/skills/**/*.md",
     "src/soothe/config/*.yml"
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
 ]
 
 [project.scripts]
@@ -149,5 +154,3 @@ exclude = []
 
 [tool.ruff.format]
 
-[tool.uv.sources]
-soothe-sdk = { path = "./sdk", editable = true }

@@ -50,7 +50,9 @@ class PluginManifest(BaseModel):
     soothe_version: str = ">=0.1.0"
 
     # Configuration dependencies
-    config_requirements: list[str] = Field(default_factory=list)  # e.g., ["providers.openai.api_key"]
+    config_requirements: list[str] = Field(
+        default_factory=list
+    )  # e.g., ["providers.openai.api_key"]
 
     # Security
     trust_level: Literal["built-in", "trusted", "standard", "untrusted"] = "standard"
