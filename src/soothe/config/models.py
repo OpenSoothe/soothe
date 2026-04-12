@@ -502,7 +502,7 @@ class AgenticLoopConfig(BaseModel):
         enabled: Enable agentic loop mode.
         max_iterations: Maximum agentic loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
-        layer2_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
+        agent_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
@@ -527,7 +527,7 @@ class AgenticLoopConfig(BaseModel):
         le=20,
     )
 
-    layer2_output_contract_enabled: bool = Field(
+    agent_loop_output_contract_enabled: bool = Field(
         default=True,
         description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Act phase",
     )

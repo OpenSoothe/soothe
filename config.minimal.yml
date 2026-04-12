@@ -1,0 +1,82 @@
+# =============================================================================
+# Soothe Minimal Configuration - For End Users
+# =============================================================================
+# This is a minimal config file for configuring your LLM provider and model router.
+# Use: soothe --config config.minimal.yml
+
+# =============================================================================
+# Model Providers - REQUIRED
+# =============================================================================
+# Configure at least one LLM provider with its API key.
+# api_key supports ${ENV_VAR} syntax to read from environment variables.
+
+providers:
+  # OpenAI (default)
+  - name: openai
+    provider_type: openai
+    api_key: "${OPENAI_API_KEY}"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
+
+  # Example: Anthropic Claude
+  # - name: anthropic
+  #   provider_type: anthropic
+  #   api_key: "${ANTHROPIC_API_KEY}"
+  #   models:
+  #     - claude-sonnet-4-20250514
+  #     - claude-3-5-haiku-20241022
+
+  # Example: OpenAI-compatible providers (DashScope, OpenRouter, vLLM, etc.)
+  # - name: dashscope
+  #   provider_type: openai
+  #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  #   api_key: "${DASHSCOPE_API_KEY}"
+  #   models:
+  #     - qwen-max
+  #     - qwen-plus
+
+  # Example: Local models via Ollama
+  # - name: ollama
+  #   provider_type: ollama
+  #   api_base_url: http://localhost:11434
+  #   models:
+  #     - llama3.2
+  #     - qwen3:8b
+  #     - deepseek-r1:14b
+
+# =============================================================================
+# Model Router - REQUIRED
+# =============================================================================
+# Maps agent roles to "provider:model" combinations.
+# Unset roles fall back to the "default" role.
+
+router:
+  default: "openai:gpt-4o-mini"       # Main conversational model
+  think: "openai:o3-mini"             # Complex reasoning tasks
+  fast: "openai:gpt-4o-mini"          # Quick operations
+  image: "openai:gpt-4o"              # Image analysis
+  embedding: "openai:text-embedding-3-small"  # Vector embeddings
+
+  # Example: Using Anthropic Claude
+  # default: "anthropic:claude-sonnet-4-20250514"
+  # think: "anthropic:claude-sonnet-4-20250514"
+  # fast: "anthropic:claude-3-5-haiku-20241022"
+
+# =============================================================================
+# Quick Setup Guide
+# =============================================================================
+# 1. Set your API key as environment variable:
+#    export OPENAI_API_KEY="sk-..."
+#    or export ANTHROPIC_API_KEY="sk-ant-..."
+#    or export DASHSCOPE_API_KEY="sk-..."
+#
+# 2. Configure your provider above (uncomment the example you need)
+#
+# 3. Set your router models based on your provider
+#
+# 4. Run Soothe:
+#    soothe --config config.minimal.yml "your query"
+#
+# That's it! All other settings have sensible defaults.
