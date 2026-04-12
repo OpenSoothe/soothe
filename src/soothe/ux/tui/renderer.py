@@ -513,6 +513,7 @@ class TuiRenderer:
 
         HARD SUPPRESS during multi-step execution for non-essential events (IG-143).
         SUPPRESS most progress events for CLI-style brevity (IG-158).
+        IG-160: Display next_action in plan phase (like CLI).
 
         Args:
             event_type: Event type string.
@@ -526,10 +527,11 @@ class TuiRenderer:
             return
 
         # IG-158: Suppress verbose progress events to match CLI brevity
-        # Only show essential milestones: plan creation, loop completion
+        # IG-160: Show next_action from agent_loop.reason (like CLI)
         essential_events = {
             "soothe.cognition.plan.created",
             "soothe.agentic.loop.completed",
+            "soothe.cognition.agent_loop.reason",  # IG-160: Show next_action
         }
         if event_type not in essential_events:
             # Emit final report on loop completion (IG-143)
@@ -540,6 +542,41 @@ class TuiRenderer:
 
         payload = dict(data)
         payload.pop("final_stdout_message", None)
+
+        # IG-160: Special handling for next_action (like CLI's format_judgement)
+        if event_type == "soothe.cognition.agent_loop.reason":
+            # Extract next_action
+            next_action = str(payload.get("next_action", "")).strip()
+            if not next_action:
+                # Fallback to status-based message (like CLI's _derive_action_from_status)
+                status = str(payload.get("status", ""))
+                if status == "done":
+                    next_action = "Completing final analysis"
+                elif status == "replan":
+                    next_action = "Trying alternative approach"
+                elif status == "working":
+                    next_action = "Processing next step"
+                else:
+                    return  # Skip if no valid status
+
+            # Capitalize first letter (like CLI)
+            if next_action and next_action[0].islower():
+                next_action = next_action[0].upper() + next_action[1:]
+
+            # Determine icon and color based on status
+            status = str(payload.get("status", ""))
+            icon = "✓" if status == "done" else "→"
+            color = DOT_COLORS["plan_step_done"] if status == "done" else DOT_COLORS["iteration"]
+
+            # Format like CLI: "🌀 {next_action}"
+            summary = f"🌀 {next_action}"
+
+            # Create line with icon prefix (CLI-style)
+            action_line = Text()
+            action_line.append(icon + " ", style=color)
+            action_line.append(summary)
+            self._on_panel_write(action_line)
+            return
 
         # IG-158: Use brief summaries for essential events
         if event_type == "soothe.cognition.plan.created":
