@@ -54,7 +54,6 @@ class EventBus:
             queues = self._subscribers.get(topic, set()).copy()
 
         if not queues:
-            logger.debug("No subscribers for topic %s", topic)
             return
 
         # Send (event, event_meta) tuple to queues for filtering (RFC-0022)

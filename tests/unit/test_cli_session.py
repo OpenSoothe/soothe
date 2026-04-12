@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from rich.console import Console
 
-from soothe.logging import InputHistory, ThreadLogger
+from soothe.logging import GlobalInputHistory, ThreadLogger
 from soothe.ux.tui.commands import handle_slash_command
 
 
@@ -36,9 +36,9 @@ def test_thread_logger_round_trips_conversation_and_events(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_history_command_renders_recent_prompts(tmp_path) -> None:
     """The history command should show stored prompts."""
-    history = InputHistory(history_file=str(tmp_path / "history.json"))
-    history.add("first prompt")
-    history.add("second prompt")
+    history = GlobalInputHistory(history_file=str(tmp_path / "history.jsonl"))
+    history.add("first prompt", thread_id="test-thread")
+    history.add("second prompt", thread_id="test-thread")
     console = Console(record=True, width=120)
 
     should_exit = await handle_slash_command(

@@ -12,7 +12,7 @@ from typing import Any
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
-from soothe.logging import InputHistory, ThreadLogger
+from soothe.logging import ThreadLogger
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
@@ -177,16 +177,10 @@ class MessageRouter:
 
             conversation_history = d._thread_logger.recent_conversation(limit=50)
 
-            # Get or create per-thread input history
-            input_history = d._thread_registry.get_input_history(resumed_thread_id)
-            if input_history is None:
-                from soothe.config import SOOTHE_HOME
-
-                input_history = InputHistory(
-                    history_file=str(Path(SOOTHE_HOME) / "runs" / resumed_thread_id / "input_history.json"),
-                    max_size=1000,
-                )
-                d._thread_registry.set_input_history(resumed_thread_id, input_history)
+            # Get global cross-thread input history for TUI
+            global_history_list = []
+            if d._global_history:
+                global_history_list = d._global_history.get_recent(limit=100)
 
             session = await d._session_manager.get_session(client_id)
             logger.info("resume_thread: session for client %s = %s", client_id, session is not None)
@@ -198,7 +192,7 @@ class MessageRouter:
                         "state": "idle",
                         "thread_id": resumed_thread_id,
                         "thread_resumed": True,
-                        "input_history": input_history.history[-100:] if input_history else [],
+                        "input_history": global_history_list,
                         "conversation_history": conversation_history,
                     },
                 )
@@ -239,14 +233,10 @@ class MessageRouter:
         d._thread_registry.set_client_thread(client_id, draft_thread_id)
         d._runner.set_current_thread_id(draft_thread_id)
 
-        # Create per-thread input history
-        from soothe.config import SOOTHE_HOME
-
-        thread_input_history = InputHistory(
-            history_file=str(Path(SOOTHE_HOME) / "runs" / draft_thread_id / "input_history.json"),
-            max_size=1000,
-        )
-        d._thread_registry.set_input_history(draft_thread_id, thread_input_history)
+        # Get global cross-thread input history for TUI
+        global_history_list = []
+        if d._global_history:
+            global_history_list = d._global_history.get_recent(limit=100)
 
         session = await d._session_manager.get_session(client_id)
         if session:
@@ -258,7 +248,7 @@ class MessageRouter:
                     "thread_id": draft_thread_id,
                     "new_thread": True,
                     "workspace": str(thread_workspace),
-                    "input_history": thread_input_history.history[-100:] if thread_input_history else [],
+                    "input_history": global_history_list,
                 },
             )
         logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)

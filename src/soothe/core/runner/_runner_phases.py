@@ -371,16 +371,29 @@ class PhasesMixin:
             pending_interrupts: dict[str, Any] = {}
 
             try:
-                async for chunk in self._agent.astream(
+                # IG-157: Use timeout to periodically break out and check for cancellation
+                chunk_iter = self._agent.astream(
                     stream_input,
                     stream_mode=["messages", "updates", "custom"],
                     subgraphs=True,
                     config=config,
-                ):
-                    # IG-157: Check for task cancellation
+                )
+
+                while True:
+                    # Check for cancellation before waiting for next chunk
                     current_task = asyncio.current_task()
                     if current_task and current_task.cancelling():
                         logger.info("Runner stream detected cancellation request, stopping")
+                        break
+
+                    try:
+                        # Wait for next chunk with short timeout to enable responsive cancellation
+                        chunk = await asyncio.wait_for(chunk_iter.__anext__(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        # Timeout reached - loop back to check cancellation status
+                        continue
+                    except StopAsyncIteration:
+                        # Stream finished normally
                         break
 
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:

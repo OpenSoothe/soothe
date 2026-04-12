@@ -133,6 +133,8 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_message: str | None = None
         # Per-thread isolation (IG-110): populated when runner exists
         self._thread_registry: ThreadStateRegistry = ThreadStateRegistry()
+        # Global cross-thread input history
+        self._global_history: Any = None  # GlobalInputHistory | None
         self._query_engine: QueryEngine = QueryEngine(self)
         self._message_router: MessageRouter = MessageRouter(self)
 
@@ -168,7 +170,20 @@ class SootheDaemon(DaemonHandlersMixin):
                 raise
 
             # QueryEngine is created in __init__; runner is now available for queries
-            # Per-thread input history is created in message_router.py on new_thread/resume_thread
+            # Initialize global cross-thread input history
+            if self._config.logging.global_history.enabled:
+                from soothe.logging.global_history import GlobalInputHistory
+
+                self._global_history = GlobalInputHistory(
+                    max_size=self._config.logging.global_history.max_size,
+                    dedup_window=self._config.logging.global_history.dedup_window,
+                )
+                removed = self._global_history.cleanup_old_entries(
+                    retention_days=self._config.logging.global_history.retention_days
+                )
+                if removed > 0:
+                    logger.info("Cleaned up %d old global history entries", removed)
+                logger.debug("Global input history initialized at %s", self._global_history.history_file)
 
             self._stop_event = asyncio.Event()
             self._running = True

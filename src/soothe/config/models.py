@@ -602,6 +602,22 @@ class ConsoleLoggingConfig(BaseModel):
     format: str = "%(levelname)-8s %(name)s %(message)s"
 
 
+class GlobalHistoryConfig(BaseModel):
+    """Global cross-thread input history configuration.
+
+    Args:
+        enabled: Enable global input history storage and TUI navigation.
+        max_size: Maximum entries in global history file.
+        dedup_window: Number of recent entries to check for duplicate prevention.
+        retention_days: Days to retain global history before cleanup.
+    """
+
+    enabled: bool = True
+    max_size: int = 5000
+    dedup_window: int = 10
+    retention_days: int = 90
+
+
 class ThreadLoggingConfig(BaseModel):
     """Thread logging configuration.
 
@@ -656,6 +672,7 @@ class LoggingConfig(BaseModel):
         console: Console logging configuration.
         verbosity: Verbosity level (TUI/headless activity display).
         thread_logging: Thread logging configuration.
+        global_history: Global cross-thread input history configuration.
         report_output: Report output configuration.
         preview_defaults: Default settings for text preview utility.
     """
@@ -664,6 +681,7 @@ class LoggingConfig(BaseModel):
     console: ConsoleLoggingConfig = Field(default_factory=ConsoleLoggingConfig)
     verbosity: Literal["quiet", "normal", "detailed", "debug"] = "normal"
     thread_logging: ThreadLoggingConfig = Field(default_factory=ThreadLoggingConfig)
+    global_history: GlobalHistoryConfig = Field(default_factory=GlobalHistoryConfig)
     report_output: ReportOutputConfig = Field(default_factory=ReportOutputConfig)
     preview_defaults: PreviewDefaults = Field(default_factory=PreviewDefaults)
 

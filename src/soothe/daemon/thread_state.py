@@ -2,8 +2,7 @@
 
 Replaces scattered daemon-level ``_thread_logger``, ``_draft_thread_id``,
 and ``_thread_workspaces`` with explicit per-thread records so concurrent
-clients do not overwrite each other's state.  Per-thread ``input_history``
-is also managed via this registry.
+clients do not overwrite each other's state.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ class ThreadState:
     thread_id: str
     workspace: Path | None = None
     thread_logger: Any = None  # ThreadLogger | None
-    input_history: Any = None  # InputHistory | None
     is_draft: bool = False
     query_running: bool = False
     query_task: asyncio.Task | None = None
@@ -76,16 +74,6 @@ class ThreadStateRegistry:
         """Return workspace for *thread_id*."""
         st = self.get(thread_id)
         return st.workspace if st else None
-
-    def set_input_history(self, thread_id: str, input_history: Any) -> None:
-        """Attach an InputHistory instance to a thread."""
-        st = self.ensure(thread_id)
-        st.input_history = input_history
-
-    def get_input_history(self, thread_id: str) -> Any | None:
-        """Return InputHistory for *thread_id*, if registered."""
-        st = self.get(thread_id)
-        return st.input_history if st else None
 
     def all_thread_ids(self) -> list[str]:
         """List all registered thread IDs."""

@@ -70,9 +70,6 @@ router:
 # =============================================================================
 
 embedding_dims: 1536
-# assistant_name: Soothe
-# system_prompt: "Custom system prompt override."
-workspace_dir: "."
 debug: false
 activity_max_lines: 300
 # tui_debug: false   # SOOTHE_TUI_DEBUG — structured TUI trace logs (logger soothe.ux.tui.trace)
