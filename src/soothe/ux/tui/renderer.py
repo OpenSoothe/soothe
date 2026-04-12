@@ -24,10 +24,8 @@ from soothe.ux.shared.suppression_state import SuppressionState
 from soothe.ux.shared.tui_trace_log import log_tui_trace
 from soothe.ux.tui.utils import (
     DOT_COLORS,
-    format_duration_enhanced,
     get_icon,
     make_dot_line,
-    make_tool_block,
 )
 from soothe.utils.text_preview import preview_first
 
@@ -83,6 +81,12 @@ class TuiRendererState:
 
     # Multi-step/agentic suppression state (IG-143)
     suppression: SuppressionState = field(default_factory=SuppressionState)
+
+    # IG-159: Track step execution for tree display
+    step_start_times: dict[str, float] = field(default_factory=dict)
+    step_tool_counts: dict[str, int] = field(default_factory=dict)
+    step_errors: dict[str, str] = field(default_factory=dict)
+    current_step_id: str | None = None
 
 
 class TuiRenderer:
@@ -326,7 +330,7 @@ class TuiRenderer:
         *,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool call block with progress indicator.
+        """Write tool call as flat single line (IG-158: CLI-style brevity).
 
         HARD SUPPRESS during multi-step execution (IG-143).
 
@@ -352,9 +356,6 @@ class TuiRenderer:
         display_name = get_tool_display_name(name)
         args_summary = format_tool_call_args(name, {"args": args})
 
-        # Detect long-running tools for special indicator
-        is_long_running = self._is_long_running_tool(name)
-
         # Store for result correlation
         if tool_call_id:
             self._state.current_tool_calls[tool_call_id] = {
@@ -364,7 +365,7 @@ class TuiRenderer:
             # Track start time for duration display (RFC-0020)
             self._state.tool_call_start_times[tool_call_id] = time.time()
 
-        # Finalize streaming before tool block (retain snapshot for main/subagent dedup)
+        # Finalize streaming before tool block
         if self._state.streaming_active:
             self._persist_stream_snapshot_from_buffer()
             self._state.last_assistant_output = self._state.streaming_text_buffer
@@ -372,15 +373,15 @@ class TuiRenderer:
             self._state.streaming_text_buffer = ""
             self._state.current_stream_role = None
 
-        # Use enhanced tool block with progress indicator
-        self._on_panel_write(make_tool_block(display_name, args_summary, status="running"))
+        # IG-158: Use flat CLI-style format (no tree structure)
+        tool_line = Text()
+        tool_line.append("⚙ ", style=DOT_COLORS["tool_running"])
+        tool_line.append(f"{display_name}({args_summary})")
+        self._on_panel_write(tool_line)
 
-        # Optional: Add separate progress line for long-running tools
-        if is_long_running:
-            progress_line = Text()
-            progress_line.append("  ⏳ ", style="dim yellow")
-            progress_line.append("Running...", style="dim")
-            self._on_panel_write(progress_line)
+        # IG-159: Track tool calls for current running step
+        if self._state.suppression.multi_step_active and self._state.current_step_id:
+            self._state.step_tool_counts[self._state.current_step_id] += 1
 
     def on_tool_result(
         self,
@@ -391,7 +392,7 @@ class TuiRenderer:
         is_error: bool,
         is_main: bool,  # noqa: ARG002
     ) -> None:
-        """Write tool result with enhanced duration formatting.
+        """Write tool result as flat line (IG-158: CLI-style brevity).
 
         HARD SUPPRESS during multi-step execution (IG-143).
 
@@ -426,9 +427,6 @@ class TuiRenderer:
             start_time = self._state.tool_call_start_times.pop(tool_call_id)
             duration_ms = int((time.time() - start_time) * 1000)
 
-        # Format duration with enhanced formatting
-        duration_str, duration_style = format_duration_enhanced(duration_ms, context="tool")
-
         # Choose icon and color
         icon_category = "tool_error" if is_error else "tool_success"
         icon = get_icon(icon_category)
@@ -436,17 +434,21 @@ class TuiRenderer:
 
         brief = self._presentation.summarize_tool_result(result)
 
-        # Create result line
+        # IG-158: Use flat CLI-style format (no tree connector)
         result_line = Text()
-        result_line.append("  └ ", style="dim")
-        result_line.append(icon + " ", style=color)
-        result_line.append(preview_first(brief, 80), style="dim")  # RFC-0020 compliance: 80 char limit
+        result_line.append(icon, style=color)
+        result_line.append(f" {preview_first(brief, 80)}")  # RFC-0020: 80 char limit
 
-        # Add duration with appropriate styling
+        # Add duration inline (CLI-style)
         if duration_ms > 0:
-            result_line.append(f" [{duration_str}]", style=duration_style)
+            result_line.append(f" ({duration_ms}ms)", style="dim")
 
         self._on_panel_write(result_line)
+
+        # IG-159: Track errors for current step if result is an error
+        if is_error and self._state.suppression.multi_step_active and self._state.current_step_id:
+            # Store first 100 chars of error message
+            self._state.step_errors[self._state.current_step_id] = preview_first(brief, 100)
 
     def on_status_change(self, state: str) -> None:
         """Update status bar.
@@ -507,9 +509,10 @@ class TuiRenderer:
         *,
         namespace: tuple[str, ...],
     ) -> None:
-        """Write progress event to panel with two-level tree structure.
+        """Write progress event to panel (IG-158: suppress verbose events).
 
         HARD SUPPRESS during multi-step execution for non-essential events (IG-143).
+        SUPPRESS most progress events for CLI-style brevity (IG-158).
 
         Args:
             event_type: Event type string.
@@ -522,17 +525,37 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
+        # IG-158: Suppress verbose progress events to match CLI brevity
+        # Only show essential milestones: plan creation, loop completion
+        essential_events = {
+            "soothe.cognition.plan.created",
+            "soothe.agentic.loop.completed",
+        }
+        if event_type not in essential_events:
+            # Emit final report on loop completion (IG-143)
+            if self._state.suppression.should_emit_final_report(event_type, final_stdout):
+                response = self._state.suppression.get_final_response(final_stdout)
+                self._write_panel_final_report(response)
+            return
+
         payload = dict(data)
         payload.pop("final_stdout_message", None)
 
-        # Build top-level summary from registry template
-        summary = self._build_event_summary(event_type, payload)
-        if not summary:
-            return
+        # IG-158: Use brief summaries for essential events
+        if event_type == "soothe.cognition.plan.created":
+            goal = preview_first(str(payload.get("goal", "")), 60)
+            summary = f"📋 {goal}"
+        elif event_type == "soothe.agentic.loop.completed":
+            status = str(payload.get("status", "done"))
+            summary = f"✅ {status}"
+        else:
+            summary = self._build_event_summary(event_type, payload)
+            if not summary:
+                return
 
         color = self._progress_event_dot_color(event_type, data, namespace)
 
-        # Create simple one-level display (consistent with CLI)
+        # Create simple one-level display
         self._on_panel_write(make_dot_line(color, summary))
 
         # Emit final report on loop completion (IG-143)
@@ -611,29 +634,85 @@ class TuiRenderer:
         if self._on_plan_refresh:
             self._on_plan_refresh()
 
-    def on_plan_step_started(self, step_id: str, description: str) -> None:  # noqa: ARG002
-        """Handle plan step start.
+    def on_plan_step_started(self, step_id: str, description: str) -> None:
+        """Show step description in conversation panel (IG-159).
 
         Args:
             step_id: Step identifier.
             description: Step description.
         """
+        # Track start time and initialize counters
+        self._state.step_start_times[step_id] = time.time()
+        self._state.step_tool_counts[step_id] = 0
+        self._state.step_errors[step_id] = ""
+        self._state.current_step_id = step_id
+
+        # Show step line in conversation panel
+        if self._on_panel_write:
+            step_line = Text()
+            step_line.append("○ ⏩ ", style=DOT_COLORS["plan_step_active"])
+            step_line.append(description)
+            self._on_panel_write(step_line)
+
+        # Refresh plan tree widget
         if self._on_plan_refresh:
             self._on_plan_refresh()
 
     def on_plan_step_completed(
         self,
-        step_id: str,  # noqa: ARG002
-        success: bool,  # noqa: ARG002, FBT001
-        duration_ms: int,  # noqa: ARG002
+        step_id: str,
+        success: bool,  # noqa: FBT001
+        duration_ms: int,
     ) -> None:
-        """Handle plan step completion.
+        """Show step result directly after description (IG-159).
 
         Args:
             step_id: Step identifier.
             success: True if step succeeded.
             duration_ms: Step duration in milliseconds.
         """
+        if not self._on_panel_write:
+            if self._on_plan_refresh:
+                self._on_plan_refresh()
+            return
+
+        # Calculate duration from start time
+        start_time = self._state.step_start_times.get(step_id, 0)
+        if start_time > 0:
+            duration_ms = int((time.time() - start_time) * 1000)
+
+        tool_count = self._state.step_tool_counts.get(step_id, 0)
+        duration_str = f"{duration_ms / 1000:.1f}s"
+
+        # Show result line with tree connector
+        result_line = Text()
+        result_line.append("  |__ ", style="dim")
+        result_line.append(
+            "Done" if success else "Failed",
+            style=DOT_COLORS["plan_step_done"] if success else DOT_COLORS["plan_step_failed"],
+        )
+        if tool_count > 0:
+            result_line.append(f" [{tool_count} tools]", style="dim")
+        result_line.append(f" ({duration_str})", style="dim")
+        self._on_panel_write(result_line)
+
+        # Show error message if step failed
+        if not success:
+            error_msg = self._state.step_errors.get(step_id, "")
+            if error_msg:
+                error_line = Text()
+                error_line.append("  |__ Error: ", style=DOT_COLORS["error"])
+                error_line.append(error_msg[:100], style="dim")  # Truncate to 100 chars
+                self._on_panel_write(error_line)
+
+        # Cleanup step state
+        self._state.step_start_times.pop(step_id, None)
+        self._state.step_tool_counts.pop(step_id, None)
+        self._state.step_errors.pop(step_id, None)
+        if self._state.current_step_id == step_id:
+            self._state.current_step_id = None
+
+        # Refresh plan tree widget
         if self._on_plan_refresh:
             self._on_plan_refresh()
 
@@ -658,24 +737,6 @@ class TuiRenderer:
 
         # Reset multi-step/agentic suppression state for next turn (IG-143)
         self._state.suppression.reset_turn()
-
-    def _is_long_running_tool(self, name: str) -> bool:
-        """Detect if tool typically takes >5 seconds.
-
-        Args:
-            name: Tool name.
-
-        Returns:
-            True if tool is known to be long-running.
-        """
-        long_running_tools = {
-            "web_search",
-            "research_subagent",
-            "browser_subagent",
-            "claude_subagent",
-            "execute_bash_command",
-        }
-        return any(lr in name for lr in long_running_tools)
 
     def _classify_error_severity(self, error: str, context: str | None) -> str:
         """Classify error severity for appropriate display.
