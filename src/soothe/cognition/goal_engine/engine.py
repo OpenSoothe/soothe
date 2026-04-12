@@ -312,7 +312,7 @@ class GoalEngine:
         return reactivated
 
     async def complete_goal(self, goal_id: str) -> Goal:
-        """Mark a goal as completed.
+        """Mark a goal as completed (IG-155: update source file).
 
         Args:
             goal_id: Goal to complete.
@@ -333,6 +333,17 @@ class GoalEngine:
 
         goal.status = "completed"
         goal.updated_at = datetime.now(UTC)
+
+        # IG-155: Update source file status if available
+        if goal.source_file:
+            try:
+                from pathlib import Path
+                from soothe.cognition.goal_engine.writer import update_goal_status
+
+                update_goal_status(Path(goal.source_file), "completed")
+                logger.debug("Updated goal file status for %s", goal_id)
+            except Exception:
+                logger.debug("Failed to update goal file status", exc_info=True)
 
         # Enhanced logging with parent context and duration
         parent_context = ""
@@ -395,7 +406,19 @@ class GoalEngine:
             return goal
 
         goal.status = "failed"
+        goal.error = error  # IG-155: Store error message
         goal.updated_at = datetime.now(UTC)
+
+        # IG-155: Update source file status if available
+        if goal.source_file:
+            try:
+                from pathlib import Path
+                from soothe.cognition.goal_engine.writer import update_goal_status
+
+                update_goal_status(Path(goal.source_file), "failed", error=error)
+                logger.debug("Updated goal file status for failed %s", goal_id)
+            except Exception:
+                logger.debug("Failed to update goal file status", exc_info=True)
 
         # Enhanced logging with dependency context and status
         dep_context = ""

@@ -34,6 +34,7 @@ class Goal(BaseModel):
         max_retries: Maximum retries before permanent failure.
         send_back_count: Number of consensus send-backs used (RFC-204).
         max_send_backs: Maximum send-back rounds before suspension (RFC-204).
+        error: Error message if goal failed (IG-155 for file tracking).
         report: GoalReport from execution (set on completion).
         source_file: Path to GOAL.md file that defined this goal (None if auto-created).
         created_at: Creation timestamp.
@@ -55,8 +56,9 @@ class Goal(BaseModel):
     # RFC-204: Consensus loop tracking
     send_back_count: int = 0
     max_send_backs: int = 3
+    error: str | None = None  # IG-155: Error message for file tracking
     report: GoalReport | None = None
-    # RFC-204: Source file for status tracking
+    # RFC-204, IG-155: Source file for status tracking
     source_file: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
