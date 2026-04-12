@@ -19,6 +19,13 @@ class ModelProviderConfig(BaseModel):
         provider_type: langchain provider type for ``init_chat_model`` /
             ``init_embeddings`` (e.g., ``openai``, ``anthropic``).
         models: Model names available from this provider (for documentation).
+        supports_advanced_tool_choice: Whether this provider supports the full
+            OpenAI-style ``tool_choice`` object format (e.g., ``{"type": "function",
+            "function": {"name": "..."}}``). Set to ``false`` for limited
+            OpenAI-compatible APIs like LMStudio, Ollama, or local inference
+            servers that only accept simple string values (``"none"``, ``"auto"``,
+            ``"required"``). When ``false``, Soothe forces ``json_mode`` for
+            structured output instead of function calling.
     """
 
     name: str
@@ -26,6 +33,7 @@ class ModelProviderConfig(BaseModel):
     api_key: str | None = None
     provider_type: str = "openai"
     models: list[str] = Field(default_factory=list)
+    supports_advanced_tool_choice: bool = True
 
 
 class VectorStoreProviderConfig(BaseModel):

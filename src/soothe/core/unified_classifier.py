@@ -165,6 +165,9 @@ class UnifiedClassifier:
         fast_model: Fast LLM for classification (e.g., gpt-4o-mini).
         classification_mode: "llm" or "disabled".
         assistant_name: Name used in chitchat responses.
+        config: Optional SootheConfig for LLM tracing support and provider capabilities.
+        supports_advanced_tool_choice: Whether the provider supports full OpenAI-style
+            tool_choice objects. When False, forces json_mode for structured output.
     """
 
     def __init__(
@@ -173,6 +176,7 @@ class UnifiedClassifier:
         classification_mode: Literal["llm", "disabled"] = "llm",
         assistant_name: str = "Soothe",
         config: Any | None = None,  # IG-143: Add config for tracing
+        supports_advanced_tool_choice: bool = True,  # LMStudio compatibility
     ) -> None:
         """Initialize the unified classifier.
 
@@ -181,11 +185,14 @@ class UnifiedClassifier:
             classification_mode: "llm" or "disabled".
             assistant_name: Name used in chitchat responses.
             config: Optional SootheConfig for LLM tracing support.
+            supports_advanced_tool_choice: Whether the provider supports full OpenAI-style
+                tool_choice objects. When False, forces json_mode for structured output.
         """
         self._fast_model = fast_model
         self._mode = classification_mode
         self._assistant_name = assistant_name
         self._config = config  # IG-143: Store config for tracing
+        self._supports_advanced_tool_choice = supports_advanced_tool_choice
 
         if fast_model:
             # IG-143: Wrap model with tracing if enabled
@@ -329,13 +336,32 @@ class UnifiedClassifier:
 
         return result
 
-    @staticmethod
-    def _create_routing_model(fast_model: BaseChatModel) -> Any:
+    def _create_routing_model(self, fast_model: BaseChatModel) -> Any:
         """Create a robust structured-output model for routing classification.
 
         Prefers function-calling over json_mode because certain providers can
         emit malformed literal content under json_mode for strict enums.
+
+        For limited OpenAI-compatible APIs (LMStudio, Ollama, etc.) that don't
+        support the full tool_choice object format, we force json_mode to avoid
+        BadRequestError: "Invalid tool_choice type: 'object'".
+
+        Returns:
+            Model with structured output support.
         """
+        # Check if provider supports advanced tool_choice objects
+        if not self._supports_advanced_tool_choice:
+            logger.debug(
+                "Provider doesn't support advanced tool_choice objects, forcing json_mode for structured output"
+            )
+            try:
+                return fast_model.with_structured_output(RoutingResult, method="json_mode")
+            except Exception:
+                logger.debug("json_mode init failed for limited provider", exc_info=True)
+                # Fallback: try without specifying method
+                return fast_model.with_structured_output(RoutingResult)
+
+        # Full OpenAI-compatible providers: try function_calling first
         methods = ("function_calling", None, "json_mode")
         for method in methods:
             try:
