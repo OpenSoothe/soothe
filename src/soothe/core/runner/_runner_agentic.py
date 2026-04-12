@@ -31,12 +31,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_AGENTIC_FINAL_STDOUT_CAP = 200_000
+_AGENTIC_FINAL_STDOUT_CAP = 50_000
 # Full normalized body at or below this length is printed without truncation (IG-123, IG-128).
 # Long translations and reports often exceed 8k; keep a high ceiling and spool beyond it.
-_AGENTIC_REPORT_FULL_DISPLAY_MAX = 200_000
+_AGENTIC_REPORT_FULL_DISPLAY_MAX = 50_000
 # When spooling to disk, keep the on-screen preview strictly below the threshold above.
-_AGENTIC_REPORT_PREVIEW_MAX = 198_000
+_AGENTIC_REPORT_PREVIEW_MAX = 48_000
 
 
 def _strip_leading_python_list_reprs(text: str, *, max_strips: int = 24) -> str:

@@ -31,7 +31,7 @@ def build_event_summary(event_type: str, data: dict[str, Any]) -> str:
         try:
             payload = dict(data)
             # Agentic loop completion moved to completion_summary (avoid huge evidence blobs in UI).
-            if event_type == "soothe.agentic.loop.completed":
+            if event_type == "soothe.cognition.agent_loop.completed":
                 payload.setdefault(
                     "completion_summary",
                     ((payload.get("evidence_summary") or "") or "complete").strip()[:240] or "complete",

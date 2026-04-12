@@ -7,7 +7,7 @@ from soothe.ux.shared.event_formatter import build_event_summary
 
 def test_loop_completed_uses_completion_summary_when_set() -> None:
     line = build_event_summary(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "completion_summary": "已完成翻译",
             "evidence_summary": "noise",
@@ -19,7 +19,7 @@ def test_loop_completed_uses_completion_summary_when_set() -> None:
 
 def test_loop_completed_defaults_completion_summary_from_evidence() -> None:
     line = build_event_summary(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "evidence_summary": "Step step_0: ok",
         },
@@ -29,7 +29,7 @@ def test_loop_completed_defaults_completion_summary_from_evidence() -> None:
 
 def test_loop_completed_fallback_complete_when_empty() -> None:
     line = build_event_summary(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {},
     )
     assert line == "Done: complete"

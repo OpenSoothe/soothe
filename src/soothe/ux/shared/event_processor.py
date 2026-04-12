@@ -680,7 +680,7 @@ class EventProcessor:
         # Agentic loop started: track multi-iteration but suppress the goal echo
         # (the goal just duplicates the user's input shown above)
         # Note: Continue to renderer.on_progress_event() to synchronize renderer state (IG-143 fix)
-        if etype == "soothe.agentic.loop.started" and data.get("max_iterations", 1) > 1:
+        if etype == "soothe.cognition.agent_loop.started" and data.get("max_iterations", 1) > 1:
             self._state.multi_step_active = True
 
         # Update plan state and call specific hooks

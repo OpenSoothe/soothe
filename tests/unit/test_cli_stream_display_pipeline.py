@@ -245,7 +245,7 @@ class TestStreamDisplayPipeline:
     def test_goal_started(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
         event = {
-            "type": "soothe.agentic.loop.started",
+            "type": "soothe.cognition.agent_loop.started",
             "goal": "Analyze codebase",
         }
         lines = pipeline.process(event)
@@ -256,7 +256,7 @@ class TestStreamDisplayPipeline:
 
     def test_step_started(self) -> None:
         pipeline = StreamDisplayPipeline(verbosity="normal")
-        pipeline.process({"type": "soothe.agentic.loop.started", "goal": "test"})
+        pipeline.process({"type": "soothe.cognition.agent_loop.started", "goal": "test"})
 
         event = {
             "type": "soothe.cognition.plan.step_started",
@@ -347,7 +347,7 @@ class TestStreamDisplayPipeline:
 
         # Goal completion should show at quiet
         event = {
-            "type": "soothe.agentic.loop.completed",
+            "type": "soothe.cognition.agent_loop.completed",
             "goal": "test",
             "total_steps": 3,
         }
@@ -356,7 +356,7 @@ class TestStreamDisplayPipeline:
 
         # Goal start should not show at quiet
         event = {
-            "type": "soothe.agentic.loop.started",
+            "type": "soothe.cognition.agent_loop.started",
             "goal": "test",
         }
         lines = pipeline.process(event)
@@ -369,7 +369,7 @@ class TestStreamDisplayPipeline:
         pipeline._context.steps_completed = 3
 
         event = {
-            "type": "soothe.agentic.loop.completed",
+            "type": "soothe.cognition.agent_loop.completed",
         }
         lines = pipeline.process(event)
 
