@@ -332,8 +332,6 @@ class TuiRenderer:
     ) -> None:
         """Write tool call as flat single line (IG-158: CLI-style brevity).
 
-        HARD SUPPRESS during multi-step execution (IG-143).
-
         Args:
             name: Tool name.
             args: Parsed arguments.
@@ -349,9 +347,7 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.suppression.should_suppress_output():
-            return
+        # Tool calls are always shown (unlike intermediate LLM text)
 
         display_name = get_tool_display_name(name)
         args_summary = format_tool_call_args(name, {"args": args})
@@ -394,8 +390,6 @@ class TuiRenderer:
     ) -> None:
         """Write tool result as flat line (IG-158: CLI-style brevity).
 
-        HARD SUPPRESS during multi-step execution (IG-143).
-
         Args:
             name: Tool name.
             result: Result content (truncated).
@@ -413,9 +407,7 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.suppression.should_suppress_output():
-            return
+        # Tool results are always shown (unlike intermediate LLM text)
 
         # Clear tracked tool call
         if tool_call_id:
@@ -509,11 +501,11 @@ class TuiRenderer:
         *,
         namespace: tuple[str, ...],
     ) -> None:
-        """Write progress event to panel (IG-158: suppress verbose events).
+        """Write progress event to panel.
 
-        HARD SUPPRESS during multi-step execution for non-essential events (IG-143).
-        SUPPRESS most progress events for CLI-style brevity (IG-158).
+        IG-158: Show essential milestones (plan creation, loop completion).
         IG-160: Display next_action in plan phase (like CLI).
+        NOTE: Progress events are ALWAYS shown (unlike intermediate LLM text).
 
         Args:
             event_type: Event type string.
@@ -526,8 +518,9 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # IG-158: Suppress verbose progress events to match CLI brevity
-        # IG-160: Show next_action from agent_loop.reason (like CLI)
+        # IG-158: Show essential milestones for CLI-style brevity
+        # IG-160: Show next_action from agent_loop.reason
+        # NOTE: These are shown even during suppression (unlike LLM text)
         essential_events = {
             "soothe.cognition.plan.created",
             "soothe.agentic.loop.completed",
