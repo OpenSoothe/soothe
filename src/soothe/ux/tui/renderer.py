@@ -518,10 +518,6 @@ class TuiRenderer:
         if not self._on_panel_write:
             return
 
-        # IG-158: Show essential milestones for CLI-style brevity
-        # IG-160: Show next_action from agent_loop.reason
-        # IG-161: Show agentic step descriptions and results (like CLI)
-        # IG-162: Show goal description when loop starts (like CLI)
         # NOTE: These are shown even during suppression (unlike LLM text)
         essential_events = {
             "soothe.cognition.plan.created",
@@ -531,11 +527,6 @@ class TuiRenderer:
             "soothe.agentic.step.started",  # IG-161: Show step descriptions (from AgentLoop)
             "soothe.agentic.step.completed",  # IG-161: Show step results (from AgentLoop)
         }
-
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"[TUI] on_progress_event called: event_type={event_type}")
 
         if event_type not in essential_events:
             # Emit final report on loop completion (IG-143)
@@ -549,28 +540,15 @@ class TuiRenderer:
 
         # IG-162: Show goal header when agentic loop starts (like CLI)
         if event_type == "soothe.agentic.loop.started":
-            import logging
-
-            logger = logging.getLogger(__name__)
             goal = str(payload.get("goal", ""))
-            max_iterations = int(payload.get("max_iterations", 10))
-
-            logger.info(f"[TUI] agentic.loop.started: goal={goal[:50]}, max_iterations={max_iterations}")
-
             goal_line = Text()
             goal_line.append("🚩 ", style=DOT_COLORS["goal"])
             goal_line.append(f"{goal}")
             self._on_panel_write(goal_line)
-            logger.info(f"[TUI] Goal header written: {goal}")
             return
 
         # IG-160: Special handling for next_action (like CLI's format_judgement)
         if event_type == "soothe.cognition.agent_loop.reason":
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.info(f"[TUI] agent_loop.reason event: next_action={payload.get('next_action', '')[:50]}")
-
             # Extract next_action
             next_action = str(payload.get("next_action", "")).strip()
             if not next_action:
@@ -583,7 +561,6 @@ class TuiRenderer:
                 elif status == "working":
                     next_action = "Processing next step"
                 else:
-                    logger.warning(f"[TUI] agent_loop.reason: no next_action, status={status}")
                     return  # Skip if no valid status
 
             # Capitalize first letter (like CLI)
@@ -603,17 +580,11 @@ class TuiRenderer:
             action_line.append(icon + " ", style=color)
             action_line.append(summary)
             self._on_panel_write(action_line)
-            logger.info(f"[TUI] agent_loop.reason written: {summary}")
             return
 
         # IG-161: Handle agentic step events (from AgentLoop executor)
         if event_type == "soothe.agentic.step.started":
-            import logging
-
-            logger = logging.getLogger(__name__)
             description = str(payload.get("description", ""))
-            logger.info(f"[TUI] agentic.step.started: {description[:50]}")
-
             # Show step description (like plan step started)
             step_line = Text()
             step_line.append("○ ⏩ ", style=DOT_COLORS["plan_step_active"])
@@ -622,15 +593,10 @@ class TuiRenderer:
             return
 
         if event_type == "soothe.agentic.step.completed":
-            import logging
-
-            logger = logging.getLogger(__name__)
             success = bool(payload.get("success", False))
             summary = str(payload.get("summary", ""))
             duration_ms = int(payload.get("duration_ms", 0))
             tool_count = int(payload.get("tool_call_count", 0))
-
-            logger.info(f"[TUI] agentic.step.completed: success={success}, summary={summary[:30]}")
 
             # Show step result (like plan step completed)
             result_line = Text()
@@ -752,11 +718,6 @@ class TuiRenderer:
             step_id: Step identifier.
             description: Step description.
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"[TUI] on_plan_step_started: step_id={step_id}, description={description[:50]}")
-
         # Track start time and initialize counters
         self._state.step_start_times[step_id] = time.time()
         self._state.step_tool_counts[step_id] = 0
@@ -769,9 +730,6 @@ class TuiRenderer:
             step_line.append("○ ⏩ ", style=DOT_COLORS["plan_step_active"])
             step_line.append(description)
             self._on_panel_write(step_line)
-            logger.info("[TUI] Step line written to panel")
-        else:
-            logger.warning("[TUI] on_panel_write is None, cannot write step line")
 
         # Refresh plan tree widget
         if self._on_plan_refresh:
