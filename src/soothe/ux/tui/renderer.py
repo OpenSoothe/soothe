@@ -538,6 +538,10 @@ class TuiRenderer:
 
         # IG-160: Special handling for next_action (like CLI's format_judgement)
         if event_type == "soothe.cognition.agent_loop.reason":
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[TUI] agent_loop.reason event received: next_action={payload.get('next_action', '')[:50]}")
+
             # Extract next_action
             next_action = str(payload.get("next_action", "")).strip()
             if not next_action:
@@ -550,6 +554,7 @@ class TuiRenderer:
                 elif status == "working":
                     next_action = "Processing next step"
                 else:
+                    logger.warning(f"[TUI] agent_loop.reason: no next_action and invalid status={status}")
                     return  # Skip if no valid status
 
             # Capitalize first letter (like CLI)
@@ -569,6 +574,7 @@ class TuiRenderer:
             action_line.append(icon + " ", style=color)
             action_line.append(summary)
             self._on_panel_write(action_line)
+            logger.info(f"[TUI] agent_loop.reason line written to panel: {summary}")
             return
 
         # IG-158: Use brief summaries for essential events
@@ -671,6 +677,10 @@ class TuiRenderer:
             step_id: Step identifier.
             description: Step description.
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[TUI] on_plan_step_started: step_id={step_id}, description={description[:50]}")
+
         # Track start time and initialize counters
         self._state.step_start_times[step_id] = time.time()
         self._state.step_tool_counts[step_id] = 0
@@ -683,6 +693,9 @@ class TuiRenderer:
             step_line.append("○ ⏩ ", style=DOT_COLORS["plan_step_active"])
             step_line.append(description)
             self._on_panel_write(step_line)
+            logger.info("[TUI] Step line written to panel")
+        else:
+            logger.warning("[TUI] on_panel_write is None, cannot write step line")
 
         # Refresh plan tree widget
         if self._on_plan_refresh:
