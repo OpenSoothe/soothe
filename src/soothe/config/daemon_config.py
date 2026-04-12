@@ -18,6 +18,7 @@ class WebSocketConfig(BaseModel):
         tls_cert: TLS certificate path.
         tls_key: TLS key path.
         cors_origins: Allowed CORS origins.
+        max_frame_size: Maximum WebSocket frame size in bytes.
     """
 
     enabled: bool = True
@@ -27,6 +28,7 @@ class WebSocketConfig(BaseModel):
     tls_cert: str | None = None
     tls_key: str | None = None
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:*", "http://127.0.0.1:*"])
+    max_frame_size: int = Field(default=10485760, description="Maximum WebSocket frame size in bytes (default: 10MB)")
 
 
 class HttpRestConfig(BaseModel):

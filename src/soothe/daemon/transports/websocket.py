@@ -87,6 +87,7 @@ class WebSocketTransport(TransportServer):
             ssl=ssl_context,
             ping_interval=None,  # Disable ping/pong mechanism
             ping_timeout=None,  # Use application-level heartbeats instead
+            max_size=self._config.max_frame_size,  # Set maximum frame size
         )
 
         protocol = "wss" if self._config.tls_enabled else "ws"
