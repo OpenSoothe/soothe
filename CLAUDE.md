@@ -57,6 +57,12 @@ This runs:
 6. No sycophantic openers or closing fluff.
 7. Keep solutions simple and direct.
 8. User instructions always override this file.
+9. **NEVER use "layer N" terminology** - Use concrete module names instead:
+   - "Layer 1" → "CoreAgent"
+   - "Layer 2" → "AgentLoop"
+   - "Layer 3" → "GoalEngine" or "autonomous goal management"
+   - Apply to: docstrings, comments, log messages, parameter names, documentation
+   - Example: `agentloop_result` instead of `layer2_result`
 
 ---
 

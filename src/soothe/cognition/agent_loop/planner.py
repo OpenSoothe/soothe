@@ -352,8 +352,109 @@ class LLMPlanner:
         plan: Plan,
         step_results: list[StepResult],
         goal_context: GoalContext | None = None,
+        agentloop_result: Any | None = None,  # IG-154: AgentLoop GoalResult
     ) -> Reflection:
-        """Heuristic reflection (no LLM needed for simple plans)."""
+        """Reflection with AgentLoop integration support (IG-154).
+
+        When agentloop_result is provided (from AgentLoop delegation), uses
+        AgentLoop's evidence and judgment for reflection instead of step_results.
+
+        Args:
+            plan: The plan (None when AgentLoop handles execution).
+            step_results: Step execution results (empty when AgentLoop handles execution).
+            goal_context: Goal DAG context for autonomous goal management.
+            agentloop_result: GoalResult from AgentLoop delegation (when delegating).
+
+        Returns:
+            Reflection with assessment and goal directives for DAG restructuring.
+        """
+        # IG-154: AgentLoop integration - use GoalResult when available
+        if agentloop_result:
+            logger.info(
+                "Using AgentLoop result for reflection (status=%s, progress=%.0f%%, confidence=%.0f%%)",
+                agentloop_result.status,
+                agentloop_result.goal_progress * 100,
+                agentloop_result.confidence * 100,
+            )
+
+            # Build assessment from AgentLoop evidence
+            evidence_preview = agentloop_result.evidence_summary[:300] if agentloop_result.evidence_summary else ""
+            assessment = f"AgentLoop achieved {agentloop_result.goal_progress:.0%} progress (confidence {agentloop_result.confidence:.0%}). "
+
+            if agentloop_result.status == "completed":
+                assessment += f"Goal successfully completed. {evidence_preview}"
+            elif agentloop_result.status == "failed":
+                assessment += f"Goal execution failed. {evidence_preview}"
+            else:
+                assessment += f"Goal execution in progress. {evidence_preview}"
+
+            # Determine if revision needed
+            should_revise = agentloop_result.status == "failed" or (
+                agentloop_result.goal_progress < 0.7 and agentloop_result.confidence < 0.6
+            )
+
+            # Generate feedback
+            if agentloop_result.status == "completed":
+                feedback = "Goal achieved successfully via AgentLoop execution."
+            elif agentloop_result.status == "failed":
+                feedback = "Goal not achieved. Consider alternative approach or create dependency prerequisites."
+            else:
+                feedback = "Goal partially achieved. May need continuation or alternative strategy."
+
+            # Generate goal directives based on AgentLoop outcome
+            from soothe.protocols.planner import GoalDirective
+
+            directives = []
+
+            if agentloop_result.status == "failed" and goal_context:
+                # Failed goal: try alternative approach or decompose
+                logger.info("AgentLoop goal failed, generating recovery directives")
+
+                # Create alternative goal with lower priority
+                directives.append(
+                    GoalDirective(
+                        action="create",
+                        description=f"Alternative approach for: {goal_context.current_goal_id}",
+                        priority=max(
+                            goal_context.current_goal_id.priority - 10
+                            if hasattr(goal_context.current_goal_id, "priority")
+                            else 40,
+                            10,
+                        ),
+                        reason="Primary approach failed via AgentLoop",
+                    )
+                )
+
+                # Or decompose into smaller sub-goals
+                if agentloop_result.goal_progress < 0.3:
+                    directives.append(
+                        GoalDirective(
+                            action="decompose",
+                            goal_id=goal_context.current_goal_id,
+                            description="Decompose failed goal into simpler subtasks",
+                            reason="Very low progress suggests goal too complex for current approach",
+                        )
+                    )
+
+            elif agentloop_result.status == "completed" and agentloop_result.goal_progress > 0.95:
+                # Successfully completed: mark goal complete
+                directives.append(
+                    GoalDirective(
+                        action="complete",
+                        goal_id=goal_context.current_goal_id if goal_context else None,
+                        description="Goal completed successfully",
+                        reason="AgentLoop achieved >95% progress with high confidence",
+                    )
+                )
+
+            return Reflection(
+                assessment=assessment,
+                should_revise=should_revise,
+                feedback=feedback,
+                goal_directives=directives,
+            )
+
+        # Fallback: Use heuristic reflection for step_results-based analysis
         return reflect_heuristic(plan, step_results, goal_context)
 
     async def _invoke_messages(self, messages: list[Any]) -> str:
