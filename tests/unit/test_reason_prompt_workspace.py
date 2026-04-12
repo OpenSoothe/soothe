@@ -1,4 +1,4 @@
-"""Reason-phase prompt includes workspace context (Layer 2, RFC-104)."""
+"""Plan-phase prompt includes workspace context (Layer 2, RFC-104)."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from soothe.core.prompts import PromptBuilder
 from soothe.protocols.planner import PlanContext
 
 
-def test_build_loop_reason_prompt_with_config_includes_soothe_blocks() -> None:
+def test_build_loop_plan_prompt_with_config_includes_soothe_blocks() -> None:
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     config = MagicMock()
     config.resolve_model.return_value = "claude-opus-4-6"
     builder = PromptBuilder(config)
-    text = builder.build_reason_prompt("analyze architecture", state, ctx)
+    text = builder.build_plan_prompt("analyze architecture", state, ctx)
     # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" in text
     assert "<WORKSPACE" in text
@@ -24,11 +24,11 @@ def test_build_loop_reason_prompt_with_config_includes_soothe_blocks() -> None:
     assert "Do NOT ask the user" in text
 
 
-def test_build_loop_reason_prompt_without_config_workspace_only() -> None:
+def test_build_loop_plan_prompt_without_config_workspace_only() -> None:
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     builder = PromptBuilder()
-    text = builder.build_reason_prompt("analyze architecture", state, ctx)
+    text = builder.build_plan_prompt("analyze architecture", state, ctx)
     # RFC-207: Removed SOOTHE_ prefix from all tags
     assert "<ENVIRONMENT" not in text
     assert "<WORKSPACE" in text
@@ -36,29 +36,29 @@ def test_build_loop_reason_prompt_without_config_workspace_only() -> None:
     assert "<WORKSPACE_RULES>" in text
 
 
-def test_build_loop_reason_prompt_omits_workspace_rules_without_workspace() -> None:
+def test_build_loop_plan_prompt_omits_workspace_rules_without_workspace() -> None:
     state = LoopState(goal="hi", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace=None)
     builder = PromptBuilder()
-    text = builder.build_reason_prompt("hi", state, ctx)
+    text = builder.build_plan_prompt("hi", state, ctx)
     # RFC-207: WORKSPACE_RULES in SystemMessage when workspace present
     assert "<WORKSPACE_RULES>" not in text
 
 
-def test_build_loop_reason_prompt_includes_working_memory_excerpt() -> None:
+def test_build_loop_plan_prompt_includes_working_memory_excerpt() -> None:
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
     ctx = PlanContext(
         workspace=None,
         working_memory_excerpt="[step_0] ✓ listed src/",
     )
     builder = PromptBuilder()
-    text = builder.build_reason_prompt("g", state, ctx)
+    text = builder.build_plan_prompt("g", state, ctx)
     # RFC-207: Removed SOOTHE_ prefix from WORKING_MEMORY tag
     assert "<WORKING_MEMORY>" in text
     assert "listed src/" in text
 
 
-def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
+def test_build_loop_plan_prompt_includes_prior_conversation_ig128() -> None:
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
     # RFC-209: Prior conversation always available (same thread_id)
     ctx = PlanContext(
@@ -69,7 +69,7 @@ def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
         ],
     )
     builder = PromptBuilder()
-    text = builder.build_reason_prompt("翻译成中文", state, ctx)
+    text = builder.build_plan_prompt("翻译成中文", state, ctx)
     # RFC-207: Removed SOOTHE_ prefix from PRIOR_CONVERSATION tag
     # FOLLOW_UP_POLICY now in SystemMessage (static rule)
     assert "<PRIOR_CONVERSATION>" in text
@@ -78,7 +78,7 @@ def test_build_loop_reason_prompt_includes_prior_conversation_ig128() -> None:
     assert "translate" in text.lower() or "Layer 1" in text
 
 
-def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
+def test_build_loop_plan_prompt_plan_continue_when_steps_remain() -> None:
     from soothe.cognition.agent_loop.schemas import AgentDecision, StepAction
 
     state = LoopState(goal="g", thread_id="t1", max_iterations=8)
@@ -93,4 +93,4 @@ def test_build_loop_reason_prompt_plan_continue_when_steps_remain() -> None:
     )
     state.completed_step_ids = {"a"}
     builder = PromptBuilder()
-    builder.build_reason_prompt("g", state, PlanContext())
+    builder.build_plan_prompt("g", state, PlanContext())

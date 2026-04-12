@@ -1,12 +1,13 @@
 # IG-133: Conditional Injection of Prior Conversation to Avoid Duplication
 
-**Status:** DEPRECATED - Superseded by RFC-209
+**Status:** DEPRECATED - Superseded by RFC-209  
+**Updated:** 2026-04-12 (terminology refactoring per IG-153)
 
 This implementation guide is superseded by RFC-209 (Executor Thread Isolation Simplification), which eliminates the need for conditional prior conversation injection. With RFC-209:
 
 - All executions use parent thread_id (no isolated threads created manually)
 - Prior conversation is always available via checkpoint (no need for conditional logic)
-- The `act_will_have_checkpoint_access` flag becomes unnecessary and will be removed
+- The `execute_will_have_checkpoint_access` flag becomes unnecessary and will be removed
 - Duplication is avoided naturally without conditional injection
 
 **No backward compatibility maintained**. Once RFC-209 is implemented, this guide becomes obsolete.
@@ -18,7 +19,7 @@ This implementation guide is superseded by RFC-209 (Executor Thread Isolation Si
 
 ## 1. Overview
 
-This guide eliminates duplication of prior thread messages between Reason prompts and CoreAgent execution contexts. Currently, `<SOOTHE_PRIOR_CONVERSATION>` is injected into Reason prompts unconditionally, but CoreAgent execution often loads the same messages from checkpoint history, causing token overhead and model confusion.
+This guide eliminates duplication of prior thread messages between Plan prompts and CoreAgent execution contexts. Currently, `<SOOTHE_PRIOR_CONVERSATION>` is injected into Plan prompts unconditionally, but CoreAgent execution often loads the same messages from checkpoint history, causing token overhead and model confusion.
 
 ---
 
@@ -26,12 +27,12 @@ This guide eliminates duplication of prior thread messages between Reason prompt
 
 ### 2.1 Current Behavior
 
-**Reason Phase:**
+**Plan Phase:**
 1. Loads recent messages from checkpointer (limit=16)
-2. Formats them as `reason_conversation_excerpts`
-3. Injects into Reason prompt via `<SOOTHE_PRIOR_CONVERSATION>` section
+2. Formats them as `plan_conversation_excerpts`
+3. Injects into Plan prompt via `<SOOTHE_PRIOR_CONVERSATION>` section
 
-**Act Phase:**
+**Execute Phase:**
 1. CoreAgent `astream()` is called with a `thread_id`
 2. LangGraph automatically loads checkpoint state for that thread
 3. Checkpoint contains all prior messages from the thread
@@ -56,14 +57,14 @@ This guide eliminates duplication of prior thread messages between Reason prompt
 
 ### 3.1 Conditional Injection Logic
 
-Inject `<SOOTHE_PRIOR_CONVERSATION>` only when Act execution **won't have checkpoint history access**:
+Inject `<SOOTHE_PRIOR_CONVERSATION>` only when Execute execution **won't have checkpoint history access**:
 
 ```python
-# Determine if Act will have checkpoint access
+# Determine if Execute will have checkpoint access
 will_have_checkpoint_access = (
     execution_mode == "sequential"
     and not any(step.subagent for step in steps)  # Tool-only
-    and config.agentic.sequential_act_isolated_thread is False  # Isolation disabled
+    and config.agentic.sequential_execute_isolated_thread is False  # Isolation disabled
 )
 
 # Only inject prior conversation if checkpoint won't be loaded
@@ -107,8 +108,8 @@ if context.recent_messages and not will_have_checkpoint_access:
 class LoopState(BaseModel):
     # ... existing fields ...
 
-    # Execution context flag (set by Executor before Reason phase)
-    act_will_have_checkpoint_access: bool = True
+    # Execution context flag (set by Executor before Plan phase)
+    execute_will_have_checkpoint_access: bool = True
 ```
 
 **2. Update Executor to set the flag**
@@ -116,23 +117,23 @@ class LoopState(BaseModel):
 `src/soothe/cognition/agent_loop/executor.py`:
 ```python
 async def execute(self, decision: AgentDecision, state: LoopState):
-    # Determine if Act will have checkpoint access
+    # Determine if Execute will have checkpoint access
     if decision.execution_mode == "sequential":
         has_delegation = any(step.subagent for step in decision.steps)
-        isolation_enabled = self._config.agentic.sequential_act_isolated_thread
-        state.act_will_have_checkpoint_access = not (has_delegation and isolation_enabled)
+        isolation_enabled = self._config.agentic.sequential_execute_isolated_thread
+        state.execute_will_have_checkpoint_access = not (has_delegation and isolation_enabled)
     elif decision.execution_mode in ("parallel", "dependency"):
-        state.act_will_have_checkpoint_access = False  # Isolated threads
+        state.execute_will_have_checkpoint_access = False  # Isolated threads
     else:
-        state.act_will_have_checkpoint_access = True  # Default to True
+        state.execute_will_have_checkpoint_access = True  # Default to True
 ```
 
-**3. Update Reason prompt builder to conditionally inject**
+**3. Update Plan prompt builder to conditionally inject**
 
 `src/soothe/cognition/planning/simple.py`:
 ```python
-# Only inject prior conversation if Act won't load checkpoint
-if context.recent_messages and not state.act_will_have_checkpoint_access:
+# Only inject prior conversation if Execute won't load checkpoint
+if context.recent_messages and not state.execute_will_have_checkpoint_access:
     parts.append("\n<SOOTHE_PRIOR_CONVERSATION>\n")
     parts.append(
         "Recent messages in this thread before the current goal. The user may refer to this content "
@@ -156,9 +157,9 @@ if context.recent_messages and not state.act_will_have_checkpoint_access:
 
 | File | Changes |
 |------|---------|
-| `src/soothe/cognition/agent_loop/schemas.py` | Add `act_will_have_checkpoint_access` field to LoopState |
+| `src/soothe/cognition/agent_loop/schemas.py` | Add `execute_will_have_checkpoint_access` field to LoopState |
 | `src/soothe/cognition/agent_loop/executor.py` | Set flag based on execution mode and isolation |
-| `src/soothe/cognition/planning/simple.py` | Conditional injection in `build_loop_reason_prompt()` |
+| `src/soothe/cognition/planning/simple.py` | Conditional injection in `build_loop_plan_prompt()` |
 
 ---
 
@@ -169,13 +170,13 @@ if context.recent_messages and not state.act_will_have_checkpoint_access:
 **Test 1: Flag is set correctly**
 - File: `tests/unit/test_executor_checkpoint_access_flag.py`
 - Test cases:
-  - Sequential tool-only → `act_will_have_checkpoint_access = True`
-  - Sequential delegation (isolation enabled) → `act_will_have_checkpoint_access = False`
-  - Parallel execution → `act_will_have_checkpoint_access = False`
-  - Dependency execution → `act_will_have_checkpoint_access = False`
+  - Sequential tool-only → `execute_will_have_checkpoint_access = True`
+  - Sequential delegation (isolation enabled) → `execute_will_have_checkpoint_access = False`
+  - Parallel execution → `execute_will_have_checkpoint_access = False`
+  - Dependency execution → `execute_will_have_checkpoint_access = False`
 
 **Test 2: Prior conversation conditional injection**
-- File: `tests/unit/test_reason_prior_conversation_conditional.py`
+- File: `tests/unit/test_plan_prior_conversation_conditional.py`
 - Test cases:
   - Flag=False → prior conversation injected
   - Flag=True → prior conversation NOT injected
@@ -185,12 +186,12 @@ if context.recent_messages and not state.act_will_have_checkpoint_access:
 
 **Scenario 1: Tool-only sequential execution**
 - Goal: "Execute command" (tool-only step)
-- Verify: Reason prompt does NOT include `<SOOTHE_PRIOR_CONVERSATION>`
+- Verify: Plan prompt does NOT include `<SOOTHE_PRIOR_CONVERSATION>`
 - Verify: CoreAgent loads checkpoint history normally
 
 **Scenario 2: Delegation sequential execution (isolated)**
 - Goal: "Translate to Chinese" (subagent step)
-- Verify: Reason prompt INCLUDES `<SOOTHE_PRIOR_CONVERSATION>`
+- Verify: Plan prompt INCLUDES `<SOOTHE_PRIOR_CONVERSATION>`
 - Verify: CoreAgent runs on isolated thread without prior history
 
 **Scenario 3: Mixed steps in sequential mode**
@@ -289,10 +290,10 @@ Expected:
 ```
 ### Prior Conversation Injection
 
-Layer 2 Reason prompts include prior thread conversation only when necessary:
+Layer 2 Plan prompts include prior thread conversation only when necessary:
 
-- **Injected when:** Act execution uses isolated thread (no checkpoint access)
-- **Not injected when:** Act execution uses canonical thread (checkpoint loaded automatically)
+- **Injected when:** Execute execution uses isolated thread (no checkpoint access)
+- **Not injected when:** Execute execution uses canonical thread (checkpoint loaded automatically)
 
 This avoids duplication and reduces token overhead by ~50% for follow-up goals.
 ```

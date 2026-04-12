@@ -6,6 +6,7 @@
 **Status**: Draft
 **Created**: 2026-04-08
 **Dependencies**: RFC-206, RFC-201, RFC-100
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
@@ -104,13 +105,13 @@ class PromptBuilder:
         self.config = config
         self._fragments_dir = Path(__file__).parent / "fragments"
 
-    def build_reason_prompt(
+    def build_plan_prompt(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Build hierarchical Reason prompt.
+        """Build hierarchical Plan prompt.
 
         Args:
             goal: User's goal description
@@ -287,12 +288,12 @@ class PromptBuilder:
 
 ```xml
 <OUTPUT_FORMAT>
-You are the Reason step in a ReAct loop. In ONE response you must:
+You are the Plan step in a Plan-and-Execute loop. In ONE response you must:
 
 1. Estimate how complete the goal is (goal_progress 0.0-1.0) and your confidence.
 2. Choose status: "done" (goal fully achieved), "continue" (more work with same or adjusted plan), or "replan" (abandon current approach).
 3. Write user_summary: one short, friendly sentence for the user (no jargon).
-4. Write soothe_next_action: ONE sentence in first person as the assistant Soothe (use "I" / "I will" / "I'll"), describing the immediate next action you will take.
+4. Write next_action: ONE sentence in first person as the assistant Soothe (use "I" / "I will" / "I'll"), describing the immediate next action you will take.
 5. Optionally write progress_detail: 1-2 sentences explaining what's left or what changed.
 6. reasoning: INTERNAL ONLY - concise technical analysis, third person or neutral, NOT first person, NOT shown to the user.
 7. Choose plan_action: "keep" when the in-flight plan still applies and unfinished steps remain; otherwise "new" with a full "decision".
@@ -306,7 +307,7 @@ Return JSON:
   "confidence": 0.0,
   "reasoning": "internal technical analysis, not first person, not for user UI",
   "user_summary": "Short friendly line for the user",
-  "soothe_next_action": "I will ... (first person, Soothe)",
+  "next_action": "I will ... (first person, Soothe)",
   "progress_detail": "Optional extra context for the user",
   "plan_action": "keep" | "new",
   "next_steps_hint": null,
@@ -366,27 +367,27 @@ class SimplePlanner:
         self._config = config
         self._prompt_builder = PromptBuilder(config)  # NEW
 
-    async def reason(self, goal, state, context):
-        """Layer 2 Reason phase."""
-        from soothe.cognition.agent_loop.schemas import ReasonResult
+    async def plan(self, goal, state, context):
+        """Layer 2 Plan phase."""
+        from soothe.cognition.agent_loop.schemas import PlanResult
 
-        prompt = self._prompt_builder.build_reason_prompt(goal, state, context)  # UPDATED
+        prompt = self._prompt_builder.build_plan_prompt(goal, state, context)  # UPDATED
 
         try:
             response = await self._invoke(prompt)
-            return parse_reason_response_text(response, goal)
+            return parse_plan_response_text(response, goal)
         except Exception:
-            logger.exception("SimplePlanner.reason failed")
-            return ReasonResult(
+            logger.exception("SimplePlanner.plan failed")
+            return PlanResult(
                 status="replan",
                 plan_action="new",
                 decision=_default_agent_decision(goal),
-                reasoning="Reason call failed",
+                reasoning="Plan call failed",
                 user_summary="Retrying with a simpler plan after a model error",
-                soothe_next_action="I'll retry with a simpler next step.",
+                next_action="I'll retry with a simpler next step.",
             )
 
-# REMOVE: build_loop_reason_prompt() function
+# REMOVE: build_loop_plan_prompt() function
 ```
 
 ---
@@ -405,13 +406,13 @@ from soothe.cognition.agent_loop.schemas import LoopState
 from soothe.protocols.planner import PlanContext
 
 
-def test_build_reason_prompt_structure():
+def test_build_plan_prompt_structure():
     """Test hierarchical structure is correct."""
     builder = PromptBuilder()
     state = LoopState(goal="test", thread_id="t1")
     context = PlanContext()
 
-    prompt = builder.build_reason_prompt("test goal", state, context)
+    prompt = builder.build_plan_prompt("test goal", state, context)
 
     assert "<SOOTHE_PROMPT>" in prompt
     assert "<SYSTEM_CONTEXT>" in prompt
@@ -426,7 +427,7 @@ def test_user_task_has_goal():
     state = LoopState(goal="test", thread_id="t1")
     context = PlanContext()
 
-    prompt = builder.build_reason_prompt("translate to chinese", state, context)
+    prompt = builder.build_plan_prompt("translate to chinese", state, context)
 
     assert "<USER_TASK>" in prompt
     assert "<GOAL>translate to chinese</GOAL>" in prompt
@@ -438,7 +439,7 @@ def test_no_system_context_in_user_task():
     state = LoopState(goal="test", thread_id="t1")
     context = PlanContext(workspace="/test/workspace")
 
-    prompt = builder.build_reason_prompt("test goal", state, context)
+    prompt = builder.build_plan_prompt("test goal", state, context)
 
     # Find USER_TASK section
     user_task_start = prompt.find("<USER_TASK>")

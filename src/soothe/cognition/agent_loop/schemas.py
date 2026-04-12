@@ -1,4 +1,4 @@
-"""Schemas for AgentLoop execution (RFC-201)."""
+"""Schemas for AgentLoop execution (RFC-201, IG-153)."""
 
 from __future__ import annotations
 
@@ -85,8 +85,11 @@ class AgentDecision(BaseModel):
         return ready
 
 
-class ReasonResult(BaseModel):
-    """Reason phase output with full reasoning chain (RFC-604, IG-152).
+class PlanResult(BaseModel):
+    """Plan phase output with full reasoning chain (RFC-604, IG-152, IG-153).
+
+    Result of the Plan-And-Execute loop's Plan phase, which combines planning,
+    progress assessment, and goal-distance estimation in a single structured response.
 
     Attributes:
         status: Whether to finish, continue current plan, or replan.
@@ -117,7 +120,7 @@ class ReasonResult(BaseModel):
     full_output: str | None = None
 
     @model_validator(mode="after")
-    def _validate_plan_action(self) -> ReasonResult:
+    def _validate_plan_action(self) -> PlanResult:
         """Ensure keep/new and decision align when status requires execution."""
         if self.plan_action == "keep" and self.decision is not None:
             raise ValueError("plan_action 'keep' requires decision to be None")
@@ -346,18 +349,18 @@ class LoopState(BaseModel):
         goal: Goal description
         thread_id: Thread context
         workspace: Thread-specific workspace path (RFC-103)
-        git_status: Optional git snapshot for planner/reason prompts (RFC-104)
+        git_status: Optional git snapshot for planner prompts (RFC-104)
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
         completed_step_ids: Set of completed step IDs
-        previous_reason: Previous Reason phase result
+        previous_plan: Previous Plan phase result
         step_results: All step results from execution
         evidence_summary: Accumulated evidence summary
         started_at: Loop start timestamp
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
-        reason_conversation_excerpts: Prior Human/Assistant lines for Reason (IG-128).
+        plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
     """
 
     goal: str
@@ -369,16 +372,16 @@ class LoopState(BaseModel):
 
     current_decision: AgentDecision | None = None
     completed_step_ids: set[str] = Field(default_factory=set)
-    previous_reason: ReasonResult | None = None
+    previous_plan: PlanResult | None = None
     step_results: list[StepResult] = []
     evidence_summary: str = ""
     working_memory: Any | None = None
-    reason_conversation_excerpts: list[str] = Field(default_factory=list)
+    plan_conversation_excerpts: list[str] = Field(default_factory=list)
 
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     total_duration_ms: int = 0
 
-    # Last Act wave metrics for Reason prompts (IG-130, IG-132)
+    # Last Act wave metrics for Plan prompts (IG-130, IG-132)
     last_wave_tool_call_count: int = 0
     last_wave_subagent_task_count: int = 0
     last_wave_hit_subagent_cap: bool = False

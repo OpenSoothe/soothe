@@ -34,10 +34,10 @@ Soothe operates through a hierarchical execution model with three distinct layer
 ┌─────────────────────────────────────────────────────────────┐
 │ Layer 2: Agentic Goal Execution (RFC-201)                   │
 │ • Scope: Single-goal execution through iterative refinement   │
-│ • Loop: Reason → Act (max iterations: ~8)                    │
-│ • Delegation: ACT invokes Layer 1 CoreAgent for execution    │
+│ • Loop: Plan → Execute (max iterations: ~8)                  │
+│ • Delegation: EXECUTE invokes Layer 1 CoreAgent for execution │
 └─────────────────────────────────────────────────────────────┘
-                          ↓ ACT (step execution)
+                          ↓ EXECUTE (step execution)
 ┌─────────────────────────────────────────────────────────────┐
 │ Layer 1: CoreAgent Runtime (RFC-100)                        │
 │ • Foundation: create_soothe_agent() → CompiledStateGraph     │
@@ -47,7 +47,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 
 **Layer Relationships**:
 - **Layer 3** manages goal DAGs, delegates single-goal execution to Layer 2
-- **Layer 2** executes single goals through iterative Reason → Act, delegates steps to Layer 1
+- **Layer 2** executes single goals through iterative Plan → Execute, delegates steps to Layer 1
 - **Layer 1** provides CoreAgent runtime for tool/subagent execution
 
 ### Framework Stack

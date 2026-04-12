@@ -7,7 +7,7 @@ import pytest
 from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     LoopState,
-    ReasonResult,
+    PlanResult,
     StepAction,
     StepResult,
 )
@@ -152,12 +152,12 @@ class TestAgentDecision:
         assert len(ready) == 0
 
 
-class TestReasonResult:
-    """Tests for ReasonResult schema."""
+class TestPlanResult:
+    """Tests for PlanResult schema."""
 
     def test_reason_result_done_keep(self) -> None:
         """Test done result with plan_action keep."""
-        result = ReasonResult(
+        result = PlanResult(
             status="done",
             plan_action="keep",
             next_action="I've completed the task.",
@@ -173,7 +173,7 @@ class TestReasonResult:
 
     def test_status_methods(self) -> None:
         """Test status check methods."""
-        done = ReasonResult(
+        done = PlanResult(
             status="done",
             plan_action="keep",
             next_action="I'm done.",
@@ -184,7 +184,7 @@ class TestReasonResult:
         assert done.should_continue() is False
         assert done.should_replan() is False
 
-        cont = ReasonResult(
+        cont = PlanResult(
             status="continue",
             plan_action="new",
             decision=AgentDecision(
@@ -200,7 +200,7 @@ class TestReasonResult:
         assert cont.should_continue() is True
         assert cont.is_done() is False
 
-        replan = ReasonResult(
+        replan = PlanResult(
             status="replan",
             plan_action="new",
             decision=AgentDecision(
@@ -218,7 +218,7 @@ class TestReasonResult:
     def test_plan_action_validation(self) -> None:
         """Keep must not carry a decision; new requires decision when not done."""
         with pytest.raises(ValueError):
-            ReasonResult(
+            PlanResult(
                 status="continue",
                 plan_action="keep",
                 decision=AgentDecision(
@@ -231,7 +231,7 @@ class TestReasonResult:
             )
 
         with pytest.raises(ValueError):
-            ReasonResult(
+            PlanResult(
                 status="continue",
                 plan_action="new",
                 decision=None,
@@ -240,7 +240,7 @@ class TestReasonResult:
 
     def test_progress_validation(self) -> None:
         """Test goal_progress validation."""
-        ReasonResult(
+        PlanResult(
             status="done",
             plan_action="keep",
             goal_progress=0.5,
@@ -248,7 +248,7 @@ class TestReasonResult:
         )
 
         with pytest.raises(ValueError):
-            ReasonResult(
+            PlanResult(
                 status="done",
                 plan_action="keep",
                 goal_progress=1.5,

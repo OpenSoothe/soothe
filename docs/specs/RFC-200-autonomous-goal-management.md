@@ -10,7 +10,7 @@
 
 ## Abstract
 
-This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives ReasonResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
@@ -22,12 +22,12 @@ Soothe operates through a hierarchical execution model with three distinct layer
 Layer 3: Autonomous Goal Management (this RFC)
   ├─ Scope: Long-running complex workflows, multi-goal DAGs
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
-  └─ Delegation: PERFORM invokes Layer 2's full Reason → Act loop
+  └─ Delegation: PERFORM invokes Layer 2's full Plan → Execute loop
 
 Layer 2: Agentic Goal Execution (RFC-201)
   ├─ Scope: Single-goal execution through iterative refinement
-  ├─ Loop: Reason → Act (max iterations: ~8)
-  └─ Delegation: Act invokes Layer 1 CoreAgent for step execution
+  ├─ Loop: Plan → Execute (max iterations: ~8)
+  └─ Delegation: Execute invokes Layer 1 CoreAgent for step execution
 
 Layer 1: CoreAgent Runtime (RFC-00XX)
   ├─ Foundation: create_soothe_agent() → CompiledStateGraph
@@ -41,7 +41,7 @@ Layer 3 operates at the highest abstraction level, focusing on goal lifecycle ma
 - **Goal DAG orchestration**: Create, schedule, and manage goals with dependencies
 - **Goal-level planning**: Decompose complex objectives into goal DAGs
 - **Delegation to Layer 2**: PERFORM stage invokes Layer 2's complete loop
-- **Goal DAG reflection**: Evaluate progress across multiple goals using Layer 2 ReasonResult
+- **Goal DAG reflection**: Evaluate progress across multiple goals using Layer 2 PlanResult
 - **Dynamic goal restructuring**: Mutate goal DAG based on execution learning
 - **Large iteration budgets**: Support complex problem solving (10-50+ iterations)
 
@@ -49,23 +49,23 @@ Layer 3 operates at the highest abstraction level, focusing on goal lifecycle ma
 
 **PERFORM → Layer 2 (Full Delegation)**:
 
-Layer 3's PERFORM stage invokes Layer 2's **complete Reason → Act loop** for single-goal execution:
+Layer 3's PERFORM stage invokes Layer 2's **complete Plan → Execute loop** for single-goal execution:
 
 ```python
 # Layer 3 PERFORM stage
-async def perform_goal(goal: Goal) -> ReasonResult:
+async def perform_goal(goal: Goal) -> PlanResult:
     # Delegate to Layer 2's full loop
-    reason_result = await agentic_loop.astream(
+    plan_result = await agentic_loop.astream(
         goal_description=goal.description,
         thread_id=f"{parent_tid}__goal_{goal.id}",
         max_iterations=8  # Layer 2 iteration budget
     )
-    return reason_result  # Layer 2 returns final result
+    return plan_result  # Layer 2 returns final result
 ```
 
 **REFLECT Stage Integration**:
 
-Layer 3's REFLECT stage receives Layer 2's ReasonResult and uses evidence_summary for goal DAG evaluation:
+Layer 3's REFLECT stage receives Layer 2's PlanResult and uses evidence_summary for goal DAG evaluation:
 
 ```python
 # Layer 3 REFLECT stage
@@ -73,7 +73,7 @@ reflection = await planner.reflect(
     plan=goal_plan,
     step_results=goal_step_results,
     goal_context=goal_context,
-    layer2_reason=reason_result  # Layer 2 evaluation
+    layer2_plan=plan_result  # Layer 2 evaluation
 )
 # reflection includes:
 # - should_revise: whether goal plan needs revision
@@ -101,8 +101,8 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
     |
     +-- for each executing goal (PERFORM stage):
            |
-           +-- Delegate to Layer 2's Reason → Act loop
-           |      Receive: ReasonResult with evidence_summary, goal_progress
+           +-- Delegate to Layer 2's Plan → Execute loop
+           |      Receive: PlanResult with evidence_summary, goal_progress
            |
            +-- REFLECT stage:
            |      PlannerProtocol.reflect(..., goal_context, layer2_judgment)

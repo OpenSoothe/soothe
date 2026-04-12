@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
+from soothe.cognition.agent_loop.schemas import LoopState, PlanResult
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
@@ -50,7 +50,7 @@ class SynthesisPhase:
         """
         self.llm = llm_client
 
-    def should_synthesize(self, _goal: str, state: LoopState, _reason_result: ReasonResult) -> bool:
+    def should_synthesize(self, _goal: str, state: LoopState, _plan_result: PlanResult) -> bool:
         """Determine if synthesis phase should run.
 
         Uses evidence-based heuristics only (no keyword matching).
@@ -58,7 +58,7 @@ class SynthesisPhase:
         Args:
             _goal: Goal description (reserved for future use).
             state: Loop state with accumulated evidence.
-            _reason_result: Final reason result (reserved for future use).
+            _plan_result: Final plan result (reserved for future use).
 
         Returns:
             True if synthesis should run.
@@ -122,13 +122,13 @@ class SynthesisPhase:
         # Default: general synthesis
         return "general_synthesis"
 
-    async def synthesize(self, goal: str, state: LoopState, reason_result: ReasonResult) -> str:
+    async def synthesize(self, goal: str, state: LoopState, plan_result: PlanResult) -> str:
         """Generate comprehensive synthesis report.
 
         Args:
             goal: Goal description.
             state: Loop state with evidence.
-            reason_result: Reason result with summary.
+            plan_result: Plan result with summary.
 
         Returns:
             Comprehensive synthesis text (300-600 words for complex goals).
@@ -158,7 +158,7 @@ class SynthesisPhase:
             goal=goal,
             goal_type=goal_type,
             evidence=evidence,
-            previous_summary=reason_result.evidence_summary or "",
+            previous_summary=plan_result.evidence_summary or "",
         )
 
         # Call LLM for synthesis

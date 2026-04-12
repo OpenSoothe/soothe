@@ -22,7 +22,7 @@ from soothe.cognition.agent_loop.checkpoint import (
 from soothe.config import SOOTHE_HOME
 
 if TYPE_CHECKING:
-    from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult, StepResult
+    from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult, StepResult
     from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ class AgentLoopStateManager:
     def record_iteration(
         self,
         iteration: int,
-        reason_result: ReasonResult,
+        plan_result: PlanResult,
         decision: AgentDecision,
         step_results: list[StepResult],
         state: LoopState,
@@ -154,7 +154,7 @@ class AgentLoopStateManager:
 
         Args:
             iteration: Current iteration number
-            reason_result: Reason phase result
+            plan_result: Plan phase result
             decision: AgentDecision that was executed
             step_results: Step execution results
             state: LoopState with metrics
@@ -164,17 +164,17 @@ class AgentLoopStateManager:
             logger.error("No checkpoint to update")
             return
 
-        # Record Reason step
+        # Record Plan step
         reason_record = ReasonStepRecord(
             iteration=iteration,
             timestamp=datetime.now(UTC),
             goal_text=state.goal,
             prior_step_outputs=self._derive_prior_step_outputs(),
-            reasoning=reason_result.reasoning,
-            status=reason_result.status,
-            goal_progress=reason_result.goal_progress,
+            reasoning=plan_result.reasoning,
+            status=plan_result.status,
+            goal_progress=plan_result.goal_progress,
             decision=decision.model_dump() if decision else None,
-            next_action=reason_result.next_action,
+            next_action=plan_result.next_action,
         )
         self._checkpoint.reason_history.append(reason_record)
 
@@ -194,7 +194,7 @@ class AgentLoopStateManager:
         # Save checkpoint
         self.save(self._checkpoint)
 
-    def derive_reason_conversation(self, limit: int = 10) -> list[str]:
+    def derive_plan_conversation(self, limit: int = 10) -> list[str]:
         """Derive prior conversation from step outputs.
 
         Args:

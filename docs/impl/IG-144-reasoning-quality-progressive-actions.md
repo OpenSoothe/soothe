@@ -5,6 +5,7 @@
 **Status**: Draft
 **Created**: 2026-04-09
 **Estimated Time**: 5 days
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
@@ -232,9 +233,9 @@ def enhance_action_specificity(
 
 **Verification**: Unit tests for specificity detection, repetition checking, enhancement logic.
 
-#### Step 1.3: Integrate Enhancement in Reason Layer
+#### Step 1.3: Integrate Enhancement in Plan Layer
 
-**File**: `src/soothe/cognition/agent_loop/reason.py`
+**File**: `src/soothe/cognition/agent_loop/planning.py`
 
 **Changes**:
 
@@ -242,13 +243,13 @@ def enhance_action_specificity(
 # Add import at top
 from soothe.cognition.agent_loop.action_quality import enhance_action_specificity
 
-# In reason_loop() function, after ReasonResult construction:
-async def reason_loop(...) -> ReasonResult:
-    # ... existing code to generate ReasonResult ...
+# In plan_loop() function, after PlanResult construction:
+async def plan_loop(...) -> PlanResult:
+    # ... existing code to generate PlanResult ...
 
     # NEW: Enhance action specificity
     enhanced_action = enhance_action_specificity(
-        action=result.soothe_next_action or "",
+        action=result.next_action or "",
         goal=goal,
         iteration=iteration,
         previous_actions=state.get_recent_actions(3),
@@ -256,7 +257,7 @@ async def reason_loop(...) -> ReasonResult:
     )
 
     # Update result
-    result.soothe_next_action = enhanced_action
+    result.next_action = enhanced_action
 
     # Add to history
     state.add_action_to_history(enhanced_action)

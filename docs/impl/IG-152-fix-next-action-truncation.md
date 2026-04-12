@@ -1,15 +1,16 @@
-# IG-152: Fix ReasonResult next_action truncation
+# IG-152: Fix PlanResult next_action truncation
 
 **Status**: ✅ Completed
 **Created**: 2026-04-12
-**RFCs**: RFC-604 (Reason Phase Robustness)
+**RFCs**: RFC-604 (Plan Phase Robustness)
 **Impact**: Critical (user-facing truncation bug fix)
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
 ## Problem Statement
 
-The ReasonResult `next_action` field showed truncated output in CLI like:
+The PlanResult `next_action` field showed truncated output in CLI like:
 - "Read UX modul" (should be "Read UX module __init__.py files...")
 - "Examine all U" (should be "Examine all UX subdirectories...")
 - "Rea" (should be "Read key implementation files...")
@@ -36,7 +37,7 @@ After analyzing RFC-604's two-phase architecture, we identified that:
 
 #### 1. Schema Updates (`schemas.py`)
 
-**ReasonResult**:
+**PlanResult**:
 ```python
 # Before
 next_action: str = Field(default="", max_length=100)
@@ -198,13 +199,13 @@ Users now see complete, actionable descriptions that improve understanding of ag
 ### RFC-604 Two-Phase Design
 
 **Phase 1**: StatusAssessment (lightweight, ~200-250 tokens)
-- `assessment.next_action` (max 100 chars): Status-based next step description
+- `assessment.next_action` (max 300 chars): Status-based next step description
 
 **Phase 2**: PlanGeneration (conditional, ~500-800 tokens)
-- `plan_result.next_action` (max 100 chars): Plan-specific next step
+- `plan_result.next_action` (max 300 chars): Plan-specific next step
 
-**Combined Output**: ReasonResult
-- `next_action` field (max 100 chars): User-facing summary
+**Combined Output**: PlanResult
+- `next_action` field (max 500 chars): User-facing summary
 - `reasoning` field (max 500 chars): Internal analysis chain
 
 ### Design Intent
@@ -216,10 +217,10 @@ According to RFC-604 Section 7.2:
 
 ### Current Mismatch
 
-1. Two phases each produce max 100 chars
-2. Combined = 200 chars (with newline separator)
-3. ReasonResult schema has max_length=100 constraint
-4. Implementation does [:100] slice to meet constraint → mid-word truncation
+1. Two phases each produce max 300 chars (after IG-152 update)
+2. Combined = 600 chars (with newline separator)
+3. PlanResult schema has max_length=500 constraint (after IG-152 update)
+4. Implementation uses plan_result.next_action only → no truncation, full text
 
 ---
 
@@ -246,15 +247,15 @@ According to RFC-604 Section 7.2:
 
 **File**: `src/soothe/cognition/agent_loop/schemas.py`
 
-**Change**: Add new field to ReasonResult
+**Change**: Add new field to PlanResult
 
 ```python
-class ReasonResult(BaseModel):
-    """Reason phase output with full reasoning chain."""
+class PlanResult(BaseModel):
+    """Plan phase output with full reasoning chain."""
 
     # Existing fields...
-    next_action: str = Field(default="", max_length=100)
-    """User-facing action summary, max 100 chars (smart truncation)."""
+    next_action: str = Field(default="", max_length=500)
+    """Complete action text from plan phase (no truncation)."""
 
     full_action: str = Field(default="", max_length=500)
     """Full concatenated action from both phases for internal use (logging, history)."""
@@ -457,26 +458,25 @@ def test_full_action_preserves_concatenation():
 
     result = planner._combine_results(assessment, plan_result)
 
-    # full_action should contain BOTH phases
-    assert "examine the UX module subdirectories" in result.full_action
+    # full_action should be same as plan_result.next_action (no duplication)
     assert "Read key implementation files" in result.full_action
     assert len(result.full_action) > 100  # No truncation
 
-    # next_action should be truncated but word-boundary safe
-    assert len(result.next_action) <= 100
-    assert not result.next_action.endswith("modul")  # No mid-word cut
+    # next_action should be same as full_action (IG-152 solution)
+    assert len(result.next_action) <= 500
+    assert result.next_action == result.full_action  # No duplication
 ```
 
 **Test 2**: Verify preview_first respects word boundaries
 ```python
 def test_next_action_word_boundary_truncation():
-    long_action = "Examine subdirectories (cli, client, shared, tui) to understand UX module architecture\nRead UX module __init__.py files and list all Python files"
+    long_action = "Examine subdirectories (cli, client, shared, tui) to understand UX module architecture"
 
     result = planner._combine_results(assessment, plan_result)
 
-    # Should truncate at word boundary, not mid-word
+    # Should NOT truncate at all (IG-152 solution)
     assert not result.next_action.endswith("U")  # Not "Examine all U"
-    assert result.next_action.endswith("...") or result.next_action.endswith("architecture")
+    assert len(result.next_action) == len(long_action)  # Full text preserved
 ```
 
 ### Integration Test

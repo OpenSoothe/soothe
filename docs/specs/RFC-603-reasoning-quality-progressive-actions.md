@@ -27,7 +27,7 @@ Iteration 3: "List the root directory structure..." (specific - GOOD!)
 Iteration 4: "Use file and shell tools..." (REGRESSED - BAD!)
 ```
 
-**Impact**: Users cannot track reasoning progress, actions feel repetitive, degrades UX quality.
+**Impact**: Users cannot track planning progress, actions feel repetitive, degrades UX quality.
 
 **Root Cause**: `soothe_next_action` field is LLM-generated without post-processing or progression tracking.
 
@@ -325,7 +325,7 @@ def get_recent_actions(self, n: int = 3) -> list[str]
 - `schemas.py`: Add action history
 - `output_format.xml`: Add progressive action guidance
 - ~~`action_quality.py`: NEW, implement post-processing~~ **REMOVED**
-- `reason.py`: Track actions in history (no enhancement)
+- `planning.py`: Track actions in history (no enhancement)
 
 **Tests**:
 - Unit: Specificity detection, repetition checking, enhancement

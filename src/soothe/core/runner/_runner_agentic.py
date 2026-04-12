@@ -188,12 +188,12 @@ class AgenticMixin:
         # Ensure thread_id is always a string (caller / daemon sets runner thread id; do not mutate here — IG-110)
         tid = str(thread_id or self._current_thread_id or "")
 
-        # One load for unified classification (tail) and Layer-2 Reason (full excerpt list, IG-128, IG-133).
+        # One load for unified classification (tail) and Layer-2 Plan (full excerpt list, IG-128, IG-133).
         await self._ensure_checkpointer_initialized()
         # Use configurable limit for prior conversation (default 10, IG-133)
         prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
         recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
-        reason_excerpts = self._format_thread_messages_for_reason(recent_for_thread, limit=prior_limit)
+        plan_excerpts = self._format_thread_messages_for_plan(recent_for_thread, limit=prior_limit)
 
         # Classify the query to check for chitchat
         if self._unified_classifier:
@@ -218,7 +218,7 @@ class AgenticMixin:
         )
 
         if self._planner is None:
-            logger.error("[Runner] Agentic loop requires a planner that implements LoopReasonerProtocol.reason")
+            logger.error("[Runner] Agentic loop requires a planner that implements LoopPlannerProtocol.plan")
             return
 
         loop_agent = AgentLoop(
@@ -246,7 +246,7 @@ class AgenticMixin:
             workspace=workspace,
             git_status=git_status,
             max_iterations=max_iterations,
-            reason_conversation_excerpts=reason_excerpts,
+            plan_conversation_excerpts=plan_excerpts,
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user

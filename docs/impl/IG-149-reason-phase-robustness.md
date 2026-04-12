@@ -1,21 +1,22 @@
-# IG-149: Reason Phase Robustness Implementation
+# IG-149: Plan Phase Robustness Implementation
 
 **Status**: In Progress
-**RFC**: RFC-604-reason-phase-robustness.md
+**RFC**: RFC-604-plan-phase-robustness.md
 **Author**: Claude Sonnet 4.6
 **Created**: 2026-04-11
 **Estimated Scope**: ~360 lines
+**Updated**: 2026-04-12 (terminology refactoring per IG-153)
 
 ---
 
 ## 1. Objective
 
-Implement RFC-604's three-layer defense strategy to prevent JSON truncation failures in the Reason phase:
-- **Layer 1**: Schema Diet (simplify ReasonResult, reduce tokens by 40-60%)
+Implement RFC-604's three-layer defense strategy to prevent JSON truncation failures in the Plan phase:
+- **Layer 1**: Schema Diet (simplify PlanResult, reduce tokens by 40-60%)
 - **Layer 2**: Query Splitting (two-call architecture: StatusAssessment + PlanGeneration)
 - **Layer 3**: Fallback (existing retry logic, unchanged)
 
-**Critical Requirement**: Remove backward compatibility code - direct field rename (soothe_next_action → next_action), remove progress_detail entirely.
+**Critical Requirement**: Remove backward compatibility code - direct field rename (next_action field already correct), remove progress_detail entirely.
 
 ---
 
@@ -23,19 +24,19 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 ### Phase 1: Schema Diet
 
-**Objective**: Simplify ReasonResult schema to reduce token footprint.
+**Objective**: Simplify PlanResult schema to reduce token footprint.
 
 **Changes**:
-1. Update `ReasonResult` schema in `src/soothe/cognition/planning/schemas.py`:
+1. Update `PlanResult` schema in `src/soothe/cognition/agent_loop/schemas.py`:
    - Add `max_length=500` to `reasoning` field
    - Remove `progress_detail` field entirely
-   - Rename `soothe_next_action` → `next_action`
+   - Keep `next_action` field name (already correct)
    - Add `max_length=100` to `next_action` field
 
 2. Update downstream consumers:
-   - `src/soothe/cognition/planning/state_manager.py`: Update field references
-   - `src/soothe/cognition/planning/agent_loop.py`: Update field references
-   - `src/soothe/cognition/planning/events.py`: Update event schemas
+   - `src/soothe/cognition/agent_loop/state_manager.py`: Update field references
+   - `src/soothe/cognition/agent_loop/agent_loop.py`: Update field references
+   - `src/soothe/cognition/agent_loop/events.py`: Update event schemas
    - `src/soothe/cli/tui.py`: Update display logic
    - Tests: Update all test fixtures to use new field names
 
@@ -46,15 +47,15 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 ### Phase 2: Query Splitting
 
-**Objective**: Split Reason phase into two focused calls.
+**Objective**: Split Plan phase into two focused calls.
 
 **Changes**:
-1. Create new schemas in `src/soothe/cognition/planning/schemas.py`:
+1. Create new schemas in `src/soothe/cognition/agent_loop/schemas.py`:
    - `StatusAssessment`: Lightweight status/progress check (max 100 char reasoning)
    - `PlanGeneration`: Conditional plan generation (max 100 char reasoning)
 
-2. Refactor `src/soothe/cognition/planning/llm.py`:
-   - Split `reason()` method into two-call architecture
+2. Refactor `src/soothe/cognition/agent_loop/planner.py`:
+   - Split `plan()` method into two-call architecture
    - Create helper methods: `_assess_status()`, `_generate_plan()`, `_combine_results()`
    - Implement early completion optimization (skip PlanGeneration if status="done")
    - Update prompt builder for two-stage prompts
@@ -89,24 +90,24 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 | File | Changes | Lines |
 |------|---------|-------|
-| `src/soothe/cognition/planning/schemas.py` | Update ReasonResult schema, create StatusAssessment + PlanGeneration | ~60 lines |
+| `src/soothe/cognition/agent_loop/schemas.py` | Update PlanResult schema, create StatusAssessment + PlanGeneration | ~60 lines |
 
 ### Implementation Layer (Phase 2)
 
 | File | Changes | Lines |
 |------|---------|-------|
-| `src/soothe/cognition/planning/llm.py` | Refactor reason() into two-call architecture | ~120 lines |
-| `src/soothe/cognition/planning/state_manager.py` | Update field references (soothe_next_action → next_action) | ~10 lines |
-| `src/soothe/cognition/planning/agent_loop.py` | Update field references | ~10 lines |
-| `src/soothe/cognition/planning/events.py` | Update event schemas | ~10 lines |
+| `src/soothe/cognition/agent_loop/planner.py` | Refactor plan() into two-call architecture | ~120 lines |
+| `src/soothe/cognition/agent_loop/state_manager.py` | Update field references (next_action field) | ~10 lines |
+| `src/soothe/cognition/agent_loop/agent_loop.py` | Update field references | ~10 lines |
+| `src/soothe/cognition/agent_loop/events.py` | Update event schemas | ~10 lines |
 | `src/soothe/cli/tui.py` | Update display logic to show both phases | ~20 lines |
 
 ### Test Layer (All Phases)
 
 | File | Changes | Lines |
 |------|---------|-------|
-| `tests/cognition/planning/test_llm.py` | Update test fixtures, add query splitting tests | ~80 lines |
-| `tests/cognition/planning/test_schemas.py` | Add schema validation tests | ~40 lines |
+| `tests/cognition/agent_loop/test_planner.py` | Update test fixtures, add query splitting tests | ~80 lines |
+| `tests/cognition/agent_loop/test_schemas.py` | Add schema validation tests | ~40 lines |
 
 **Total**: ~350 lines
 
@@ -116,25 +117,25 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 ### Phase 1 Tests (Schema Diet)
 
-1. **Unit Tests** (`tests/cognition/planning/test_schemas.py`):
+1. **Unit Tests** (`tests/cognition/agent_loop/test_schemas.py`):
    - Verify `max_length` constraints enforced
    - Verify `progress_detail` removal (no field in schema)
-   - Verify `next_action` field name (no `soothe_next_action`)
+   - Verify `next_action` field name (correct field)
 
-2. **Integration Tests** (`tests/cognition/planning/test_llm.py`):
-   - Update all fixtures to use `next_action` instead of `soothe_next_action`
-   - Verify ReasonResult validation with new constraints
+2. **Integration Tests** (`tests/cognition/agent_loop/test_planner.py`):
+   - Update all fixtures to use `next_action` field
+   - Verify PlanResult validation with new constraints
 
 ### Phase 2 Tests (Query Splitting)
 
-1. **Unit Tests** (`tests/cognition/planning/test_llm.py`):
+1. **Unit Tests** (`tests/cognition/agent_loop/test_planner.py`):
    - Test `_assess_status()` returns StatusAssessment
    - Test `_generate_plan()` returns PlanGeneration
    - Test `_combine_results()` merges phases correctly
    - Test early completion optimization (status="done" skips PlanGeneration)
 
 2. **Integration Tests**:
-   - Verify two-call architecture in full Reason flow
+   - Verify two-call architecture in full Plan flow
    - Verify combined reasoning concatenation
    - Verify both phases display to user
 
@@ -151,10 +152,10 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 ### Step 1: Schema Diet (Phase 1)
 
-1. Edit `src/soothe/cognition/planning/schemas.py`:
+1. Edit `src/soothe/cognition/agent_loop/schemas.py`:
    ```python
-   class ReasonResult(BaseModel):
-       """Simplified Reason phase output for token efficiency."""
+   class PlanResult(BaseModel):
+       """Simplified Plan phase output for token efficiency."""
 
        status: Literal["continue", "replan", "done"]
        goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -204,12 +205,12 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 
 ### Step 2: Query Splitting (Phase 2)
 
-1. Refactor `src/soothe/cognition/planning/llm.py`:
-   - Split `reason()` into:
+1. Refactor `src/soothe/cognition/agent_loop/planner.py`:
+   - Split `plan()` into:
      - `_assess_status(messages, config) -> StatusAssessment`
      - `_generate_plan(messages, assessment, config) -> PlanGeneration`
-     - `_combine_results(assessment, plan_result) -> ReasonResult`
-   - Update main `reason()` to orchestrate two calls
+     - `_combine_results(assessment, plan_result) -> PlanResult`
+   - Update main `plan()` to orchestrate two calls
 
 2. Update prompt builder for two-stage prompts
 
@@ -308,9 +309,9 @@ Implement RFC-604's three-layer defense strategy to prevent JSON truncation fail
 ### Phase 1: Schema Diet ✅
 
 **Changes Applied**:
-- Updated `ReasonResult` schema in `src/soothe/cognition/agent_loop/schemas.py`:
+- Updated `PlanResult` schema in `src/soothe/cognition/agent_loop/schemas.py`:
   - Added `max_length=500` to `reasoning` field
-  - Added `max_length=100` to `next_action` field (renamed from `soothe_next_action`)
+  - Added `max_length=100` to `next_action` field (correct field name)
   - Removed `progress_detail` field entirely
   - Updated docstrings to reflect field constraints
 

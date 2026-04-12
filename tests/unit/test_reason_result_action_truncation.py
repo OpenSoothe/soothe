@@ -1,4 +1,4 @@
-"""Test ReasonResult next_action fix (IG-152).
+"""Test PlanResult next_action fix (IG-152).
 
 Verifies that next_action field:
 1. Uses plan_result.next_action (concrete action, not duplication)
@@ -12,7 +12,7 @@ from soothe.cognition.agent_loop.planner import LLMPlanner
 from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     PlanGeneration,
-    ReasonResult,
+    PlanResult,
     StatusAssessment,
     StepAction,
 )
@@ -108,8 +108,8 @@ def test_next_action_preserves_full_text(
 
 
 def test_schema_max_length_updated() -> None:
-    """IG-152: ReasonResult schema should allow longer next_action (500 chars)."""
-    # Create a ReasonResult with long action (>100 chars)
+    """IG-152: PlanResult schema should allow longer next_action (500 chars)."""
+    # Create a PlanResult with long action (>100 chars)
     long_action = (
         "Execute comprehensive analysis of the UX module architecture by reading "
         "implementation files from cli/, shared/, and tui/ directories, examining "
@@ -133,7 +133,7 @@ def test_schema_max_length_updated() -> None:
     )
 
     # Should accept without validation error (max_length=500)
-    result = ReasonResult(
+    result = PlanResult(
         status="continue",
         goal_progress=0.5,
         confidence=0.8,
@@ -162,7 +162,7 @@ def test_early_completion_preserves_action() -> None:
         ),  # 156 chars
     )
 
-    result = ReasonResult(
+    result = PlanResult(
         status=assessment.status,
         goal_progress=assessment.goal_progress,
         confidence=assessment.confidence,

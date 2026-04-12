@@ -714,21 +714,21 @@ def _default_agent_decision(goal: str, iteration: int = 0) -> Any:
     )
 
 
-def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> Any:
-    """Parse unified Reason JSON into ReasonResult.
+def parse_plan_response_text(response: str, goal: str, iteration: int = 0) -> Any:
+    """Parse unified Plan JSON into PlanResult.
 
     Args:
         response: LLM response text
         goal: Goal description
         iteration: Current iteration number for varied fallback actions
     """
-    from soothe.cognition.agent_loop.schemas import ReasonResult
+    from soothe.cognition.agent_loop.schemas import PlanResult
 
     try:
         data = _load_llm_json_dict(response)
     except Exception:
         logger.exception("[PARSE ERROR] Failed to parse LLM response")
-        return ReasonResult(
+        return PlanResult(
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
@@ -736,14 +736,14 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             next_action="I'll try again with a simpler plan.",
         )
 
-    # Legacy flat plan (steps at root, no reason fields)
+    # Legacy flat plan (steps at root, no plan fields)
     if "status" not in data and "steps" in data:
         try:
             decision = agent_decision_from_dict(data, goal)
         except Exception:
             logger.exception("Failed to parse legacy plan shape")
             decision = _default_agent_decision(goal, iteration)
-        return ReasonResult(
+        return PlanResult(
             status="continue",
             plan_action="new",
             decision=decision,
@@ -779,7 +779,7 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
         decision = None
 
     try:
-        return ReasonResult(
+        return PlanResult(
             status=status,
             plan_action=plan_action,
             decision=decision,
@@ -790,11 +790,11 @@ def parse_reason_response_text(response: str, goal: str, iteration: int = 0) -> 
             evidence_summary=str(data.get("evidence_summary", "") or ""),
         )
     except Exception:
-        logger.exception("Invalid ReasonResult fields")
-        return ReasonResult(
+        logger.exception("Invalid PlanResult fields")
+        return PlanResult(
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(goal, iteration),
-            reasoning="Invalid reason payload",
+            reasoning="Invalid plan payload",
             next_action="I'll adjust and try a cleaner plan.",
         )

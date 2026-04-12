@@ -241,7 +241,7 @@ class PhasesMixin:
                 lines.append(f"{role}: {preview}")
         return "\n".join(lines) if lines else ""
 
-    def _format_thread_messages_for_reason(
+    def _format_thread_messages_for_plan(
         self,
         messages: list[BaseMessage],
         *,
@@ -249,7 +249,7 @@ class PhasesMixin:
         max_chars_per_message: int = 8000,
         last_assistant_max_chars: int = 100_000,
     ) -> list[str]:
-        """Format recent thread messages for Layer-2 Reason prompts (IG-128, IG-133).
+        """Format recent thread messages for Layer-2 Plan prompts (IG-128, IG-133).
 
         Includes Human and AI turns only (skips tool/system messages). Uses XML tags
         for better multi-line content handling. Older turns use ``max_chars_per_message``;

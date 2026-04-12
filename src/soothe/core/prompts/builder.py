@@ -40,13 +40,13 @@ class PromptBuilder:
         self.config = config
         self._fragments_dir = Path(__file__).parent / "fragments"
 
-    def build_reason_messages(
+    def build_plan_messages(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
     ) -> list[BaseMessage]:
-        """Build SystemMessage + HumanMessage for Reason phase (RFC-207).
+        """Build SystemMessage + HumanMessage for Plan phase (RFC-207).
 
         Constructs proper message type separation:
         - SystemMessage: environment, workspace, policies, instructions, loop config, capabilities
@@ -194,8 +194,8 @@ class PromptBuilder:
                 parts.append("\n")
             parts.append("</PRIOR_CONVERSATION>\n")
 
-        # IG-148: Simplified previous reason assessment (status + progress + next_action only)
-        prev = state.previous_reason
+        # IG-148: Simplified previous plan assessment (status + progress + next_action only)
+        prev = state.previous_plan
         if prev:
             parts.append("\nPREVIOUS ASSESSMENT (continuity):")
             parts.append(f"- Status: {prev.status}, Progress: {prev.goal_progress:.0%}")
@@ -204,18 +204,18 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    def build_reason_prompt(
+    def build_plan_prompt(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
     ) -> str:
-        """Build hierarchical Reason prompt with dynamic sections.
+        """Build hierarchical Plan prompt with dynamic sections.
 
-        **DEPRECATED**: Use build_reason_messages() instead (RFC-207).
+        **DEPRECATED**: Use build_plan_messages() instead (RFC-207).
 
         This method returns a single concatenated string for backward compatibility.
-        The new build_reason_messages() returns proper SystemMessage/HumanMessage types.
+        The new build_plan_messages() returns proper SystemMessage/HumanMessage types.
 
         Args:
             goal: User's goal description
@@ -229,13 +229,13 @@ class PromptBuilder:
             DeprecationWarning: This method is deprecated per RFC-207.
         """
         warnings.warn(
-            "build_reason_prompt() is deprecated, use build_reason_messages() per RFC-207",
+            "build_plan_prompt() is deprecated, use build_plan_messages() per RFC-207",
             DeprecationWarning,
             stacklevel=2,
         )
 
         # Use new method for implementation, concatenate for compatibility
-        messages = self.build_reason_messages(goal, state, context)
+        messages = self.build_plan_messages(goal, state, context)
         return "\n\n".join([m.content for m in messages])
 
     def _load_fragment(self, relative_path: str) -> str:

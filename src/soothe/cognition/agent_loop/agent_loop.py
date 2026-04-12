@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.executor import Executor
-from soothe.cognition.agent_loop.reason import ReasonPhase
-from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, ReasonResult
+from soothe.cognition.agent_loop.reason import PlanPhase
+from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult
 from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
 from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.protocols.planner import PlanContext, StepResult
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
-    from soothe.protocols.loop_reasoner import LoopReasonerProtocol
+    from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -30,32 +30,35 @@ _STREAM_CHUNK_LEN = 3
 
 
 class AgentLoop:
-    """Agentic goal execution as ReAct (Reason then Act).
+    """Agentic goal execution using Plan-and-Execute pattern.
+
+    The Plan phase combines planning, progress assessment, and goal-distance estimation.
+    The Execute phase runs steps via Layer 1 CoreAgent with thread isolation.
 
     Attributes:
         core_agent: Layer 1 CoreAgent for step execution
-        loop_reasoner: Protocol for the Reason phase (one LLM call per iteration)
+        loop_planner: Protocol for the Plan phase (one LLM call per iteration)
         config: Soothe configuration
     """
 
     def __init__(
         self,
         core_agent: CoreAgent,
-        loop_reasoner: LoopReasonerProtocol,
+        loop_planner: LoopPlannerProtocol,
         config: SootheConfig,
     ) -> None:
         """Initialize AgentLoop.
 
         Args:
             core_agent: Layer 1 CoreAgent runtime
-            loop_reasoner: Reason-phase implementation (planning + assessment)
+            loop_planner: Plan-phase implementation (planning + assessment)
             config: Soothe configuration
         """
         self.core_agent = core_agent
-        self.loop_reasoner = loop_reasoner
+        self.loop_planner = loop_planner
         self.config = config
 
-        self.reason_phase = ReasonPhase(loop_reasoner)
+        self.plan_phase = PlanPhase(loop_planner)
         self.executor = Executor(
             core_agent,
             max_parallel_steps=config.execution.concurrency.max_parallel_steps,
@@ -67,8 +70,8 @@ class AgentLoop:
         goal: str,
         thread_id: str,
         max_iterations: int = 8,
-    ) -> ReasonResult:
-        """Run Reason → Act loop for goal execution.
+    ) -> PlanResult:
+        """Run Plan → Execute loop for goal execution.
 
         Args:
             goal: Goal description to execute
@@ -76,13 +79,13 @@ class AgentLoop:
             max_iterations: Maximum loop iterations (default: 8)
 
         Returns:
-            ReasonResult with final status and evidence
+            PlanResult with final status and evidence
         """
         final_result = None
         async for event_type, event_data in self.run_with_progress(goal, thread_id, max_iterations=max_iterations):
             if event_type == "completed":
                 final_result = event_data["result"] if isinstance(event_data, dict) else event_data
-        return final_result or ReasonResult(
+        return final_result or PlanResult(
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(goal),
@@ -100,7 +103,7 @@ class AgentLoop:
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
         max_iterations: int = 8,
-        reason_conversation_excerpts: list[str] | None = None,  # noqa: ARG002 - Reserved for future use
+        plan_conversation_excerpts: list[str] | None = None,  # noqa: ARG002 - Reserved for future use
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -112,7 +115,7 @@ class AgentLoop:
             workspace: Thread-specific workspace path (RFC-103)
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
-            reason_conversation_excerpts: Prior thread lines (User/Assistant) for Reason (IG-128).
+            plan_conversation_excerpts: Prior thread lines (User/Assistant) for Plan phase (IG-128).
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -128,12 +131,12 @@ class AgentLoop:
                 checkpoint.iteration,
             )
             # Derive prior conversation from step outputs (RFC-205)
-            prior_outputs = state_manager.derive_reason_conversation(limit=10)
-            reason_excerpts = prior_outputs
+            prior_outputs = state_manager.derive_plan_conversation(limit=10)
+            plan_excerpts = prior_outputs
         else:
             # Initialize new checkpoint - NO CoreAgent messages (RFC-205)
             checkpoint = state_manager.initialize(goal, max_iterations)
-            reason_excerpts = []  # Start fresh, no prior conversation from Layer 1
+            plan_excerpts = []  # Start fresh, no prior conversation from Layer 1
 
         state = LoopState(
             goal=goal,
@@ -142,7 +145,7 @@ class AgentLoop:
             git_status=git_status,
             iteration=checkpoint.iteration,  # Use checkpoint iteration
             max_iterations=max_iterations,
-            reason_conversation_excerpts=reason_excerpts,
+            plan_conversation_excerpts=plan_excerpts,
         )
         wm_cfg = self.config.agentic.working_memory
         if wm_cfg.enabled:
@@ -167,50 +170,50 @@ class AgentLoop:
                 },
             )
 
-            reason_result = await self.reason_phase.reason(
+            plan_result = await self.plan_phase.plan(
                 goal=goal,
                 state=state,
                 context=self._build_plan_context(state),
             )
 
             yield (
-                "reason",
+                "plan",
                 {
                     "iteration": state.iteration,
-                    "status": reason_result.status,
-                    "progress": reason_result.goal_progress,
-                    "confidence": reason_result.confidence,
-                    "next_action": reason_result.next_action,  # Full action (no truncation)
-                    "plan_action": reason_result.plan_action,
+                    "status": plan_result.status,
+                    "progress": plan_result.goal_progress,
+                    "confidence": plan_result.confidence,
+                    "next_action": plan_result.next_action,  # Full action (no truncation)
+                    "plan_action": plan_result.plan_action,
                 },
             )
 
             import sys as _sys
 
             print(
-                f"[DEBUG-LOOP] reason_result.status={reason_result.status}, is_done()={reason_result.is_done()}",
+                f"[DEBUG-LOOP] plan_result.status={plan_result.status}, is_done()={plan_result.is_done()}",
                 file=_sys.stderr,
                 flush=True,
             )
 
-            if reason_result.is_done():
-                state.previous_reason = reason_result
+            if plan_result.is_done():
+                state.previous_plan = plan_result
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
                 # RFC-211: Agentic loop signals core agent to generate final report
-                final_output = reason_result.full_output or reason_result.evidence_summary
+                final_output = plan_result.full_output or plan_result.evidence_summary
                 import sys as _sys
 
                 print(
-                    f"[DEBUG-LOOP] is_done=True, full_output={len(reason_result.full_output or '')} chars, evidence={len(reason_result.evidence_summary or '')} chars",
+                    f"[DEBUG-LOOP] is_done=True, full_output={len(plan_result.full_output or '')} chars, evidence={len(plan_result.evidence_summary or '')} chars",
                     file=_sys.stderr,
                     flush=True,
                 )
                 logger.info(
                     "Starting final report generation (full_output=%d chars, evidence=%d chars)",
-                    len(reason_result.full_output or ""),
-                    len(reason_result.evidence_summary or ""),
+                    len(plan_result.full_output or ""),
+                    len(plan_result.evidence_summary or ""),
                 )
 
                 try:
@@ -296,9 +299,9 @@ Use all tool results and AI responses available in the conversation history to c
                     # Fallback to evidence on failure
                     logger.warning("Final report generation failed: %s, using evidence", e)
 
-                # Update reason_result with final output
-                if final_output != reason_result.full_output:
-                    reason_result = reason_result.model_copy(update={"full_output": final_output})
+                # Update plan_result with final output
+                if final_output != plan_result.full_output:
+                    plan_result = plan_result.model_copy(update={"full_output": final_output})
 
                 # Finalize checkpoint (RFC-205)
                 state_manager.finalize(status="completed")
@@ -310,13 +313,13 @@ Use all tool results and AI responses available in the conversation history to c
                 yield (
                     "completed",
                     {
-                        "result": reason_result,
+                        "result": plan_result,
                         "step_results_count": len(state.step_results),
                     },
                 )
                 return
 
-            decision = self._resolve_decision(reason_result, state)
+            decision = self._resolve_decision(plan_result, state)
             if decision is None:
                 logger.error("[Reason] No executable decision after reason phase; aborting loop")
                 yield (
@@ -325,7 +328,7 @@ Use all tool results and AI responses available in the conversation history to c
                 )
                 return
 
-            if reason_result.plan_action == "new":
+            if plan_result.plan_action == "new":
                 state.completed_step_ids.clear()
                 state.current_decision = decision
 
@@ -403,7 +406,7 @@ Use all tool results and AI responses available in the conversation history to c
             state.last_wave_subagent_task_count = sum(r.subagent_task_completions for r in step_results)
             state.last_wave_hit_subagent_cap = any(r.hit_subagent_cap for r in step_results)
 
-            state.previous_reason = reason_result
+            state.previous_plan = plan_result
 
             # Capture iteration BEFORE increment for event/checkpoint consistency
             iteration_completed = state.iteration
@@ -413,7 +416,7 @@ Use all tool results and AI responses available in the conversation history to c
             # Record iteration to checkpoint (RFC-205) with pre-increment value
             state_manager.record_iteration(
                 iteration=iteration_completed,  # Use pre-increment value
-                reason_result=reason_result,
+                plan_result=plan_result,
                 decision=decision,
                 step_results=step_results,
                 state=state,
@@ -424,9 +427,9 @@ Use all tool results and AI responses available in the conversation history to c
                 "iteration_completed",
                 {
                     "iteration": iteration_completed,  # Use pre-increment value
-                    "status": reason_result.status,
-                    "progress": reason_result.goal_progress,
-                    "next_action": reason_result.next_action,  # Full action (no truncation)
+                    "status": plan_result.status,
+                    "progress": plan_result.goal_progress,
+                    "next_action": plan_result.next_action,  # Full action (no truncation)
                 },
             )
 
@@ -441,13 +444,13 @@ Use all tool results and AI responses available in the conversation history to c
         logger.warning(
             "[⚠] Max iterations (%d) reached (progress=%.0f%%)",
             state.max_iterations,
-            state.previous_reason.goal_progress * 100 if state.previous_reason else 0,
+            state.previous_plan.goal_progress * 100 if state.previous_plan else 0,
         )
 
         # Finalize checkpoint (RFC-205)
         state_manager.finalize(status="failed")
 
-        result = state.previous_reason or ReasonResult(
+        result = state.previous_plan or PlanResult(
             status="replan",
             plan_action="new",
             decision=_default_agent_decision(state.goal),
@@ -467,16 +470,16 @@ Use all tool results and AI responses available in the conversation history to c
 
     def _resolve_decision(
         self,
-        reason_result: ReasonResult,
+        plan_result: PlanResult,
         state: LoopState,
     ) -> AgentDecision | None:
-        """Pick the AgentDecision to execute for this Act phase."""
-        if reason_result.plan_action == "keep":
+        """Pick the AgentDecision to execute for this Execute phase."""
+        if plan_result.plan_action == "keep":
             if state.current_decision is None:
-                logger.warning("[Reason] plan_action=keep but no current_decision; falling back to new decision")
-                return reason_result.decision
+                logger.warning("[Plan] plan_action=keep but no current_decision; falling back to new decision")
+                return plan_result.decision
             return state.current_decision
-        return reason_result.decision
+        return plan_result.decision
 
     def _build_plan_context(self, state: LoopState) -> PlanContext:
         """Build planning context with available capabilities and completed steps.
@@ -511,7 +514,7 @@ Use all tool results and AI responses available in the conversation history to c
 
         return PlanContext(
             available_capabilities=available_tools + available_subagents,
-            recent_messages=list(state.reason_conversation_excerpts),
+            recent_messages=list(state.plan_conversation_excerpts),
             completed_steps=completed_steps,
             workspace=state.workspace,
             git_status=state.git_status,

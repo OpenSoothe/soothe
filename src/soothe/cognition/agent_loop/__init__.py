@@ -1,4 +1,4 @@
-"""AgentLoop - Reason-Act execution (RFC-201, RFC-205)."""
+"""AgentLoop - Plan-Execute execution (RFC-201, RFC-205)."""
 
 from .agent_loop import AgentLoop
 from .checkpoint import (
@@ -11,7 +11,7 @@ from .checkpoint import (
 from .schemas import (
     AgentDecision,
     LoopState,
-    ReasonResult,
+    PlanResult,
     StepAction,
     StepResult,
 )
@@ -26,7 +26,7 @@ __all__ = [
     "AgentLoopStateManager",
     "LoopState",
     "LoopWorkingMemory",
-    "ReasonResult",
+    "PlanResult",
     "ReasonStepRecord",
     "StepAction",
     "StepExecutionRecord",

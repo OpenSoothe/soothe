@@ -1,37 +1,37 @@
-"""Reason phase for AgentLoop ReAct execution (RFC-201)."""
+"""Plan phase for AgentLoop Plan-and-Execute execution (RFC-201, IG-153)."""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.cognition.agent_loop.schemas import LoopState, ReasonResult
+from soothe.cognition.agent_loop.schemas import LoopState, PlanResult
 from soothe.utils.text_preview import log_preview
 
 # Maximum evidence summary length before truncating model-supplied evidence
 _EVIDENCE_SUMMARY_MAX_CHARS = 600
 
 if TYPE_CHECKING:
-    from soothe.protocols.loop_reasoner import LoopReasonerProtocol
+    from soothe.protocols.loop_planner import LoopPlannerProtocol
     from soothe.protocols.planner import PlanContext
 
 logger = logging.getLogger(__name__)
 
 
-class ReasonPhase:
+class PlanPhase:
     """Single LLM call: assess progress and produce the next plan fragment."""
 
-    def __init__(self, loop_reasoner: LoopReasonerProtocol) -> None:
-        """Initialize with a ``LoopReasonerProtocol`` implementation."""
-        self._loop_reasoner = loop_reasoner
+    def __init__(self, loop_planner: LoopPlannerProtocol) -> None:
+        """Initialize with a `LoopPlannerProtocol` implementation."""
+        self._loop_planner = loop_planner
 
-    async def reason(
+    async def plan(
         self,
         goal: str,
         state: LoopState,
         context: PlanContext,
-    ) -> ReasonResult:
-        """Run Reason and enrich result with evidence and final output when done."""
+    ) -> PlanResult:
+        """Run Plan and enrich result with evidence and final output when done."""
         evidence_lines = [result.to_evidence_string() for result in state.step_results]
         state.evidence_summary = "\n".join(evidence_lines)
 
@@ -62,16 +62,16 @@ class ReasonPhase:
             pre_llm["done_steps"] = [s.step_id for s in context.completed_steps[:5]]
         if state.action_history:
             pre_llm["actions"] = state.get_recent_actions(3)
-        logger.debug("[Reason] pre-LLM: %s", pre_llm)
+        logger.debug("[Plan] pre-LLM: %s", pre_llm)
 
         logger.info(
-            "[Reason] iter=%d calling LLM (history=%d, results=%d)",
+            "[Plan] iter=%d calling LLM (history=%d, results=%d)",
             state.iteration,
             len(state.action_history),
             len(state.step_results),
         )
 
-        result = await self._loop_reasoner.reason(goal=goal, state=state, context=context)
+        result = await self._loop_planner.plan(goal=goal, state=state, context=context)
         if not result.evidence_summary and state.evidence_summary:
             result = result.model_copy(update={"evidence_summary": state.evidence_summary})
 
@@ -97,7 +97,7 @@ class ReasonPhase:
         successes = sum(1 for r in state.step_results if r.success)
         failures = sum(1 for r in state.step_results if not r.success)
         logger.info(
-            "[Reason] iter=%d done: status=%s progress=%.0f%% plan=%s (steps=%d ok=%d fail=%d)",
+            "[Plan] iter=%d done: status=%s progress=%.0f%% plan=%s (steps=%d ok=%d fail=%d)",
             state.iteration,
             result.status,
             result.goal_progress * 100,
