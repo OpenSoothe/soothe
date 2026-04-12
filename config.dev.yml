@@ -277,19 +277,6 @@ vector_store_router:
   default: pgvector_default:soothe_default
 
 # =============================================================================
-# Agentic Loop Configuration (RFC-201)
-# =============================================================================
-
-agentic:
-  max_iterations: 10         # Maximum agentic loop iterations
-  # Maximum prior messages to inject into Reason prompts (IG-133)
-  # Only used when Act execution uses isolated threads (no checkpoint access)
-  prior_conversation_limit: 10
-
-  # Model context window token limit for percentage calculation (IG-151)
-  context_window_limit: 200000  # Claude models default
-
-# =============================================================================
 # Autonomous Operation
 # =============================================================================
 # Configure autonomous iteration for long-running tasks. By default, requires
@@ -304,20 +291,17 @@ autonomous:
   enable_dynamic_goals: true # Enable/disable dynamic goal creation (RFC-0007 §5.4)
 
 # =============================================================================
-# Performance & Startup
+# Agentic Loop Configuration (RFC-201)
 # =============================================================================
-# Tune agent startup and runtime performance optimizations.
 
-performance:
-  enabled: true                      # Master switch for all performance optimizations
-  unified_classification: true       # Enable LLM-based query classification
-  classification_mode: llm           # llm | disabled
-  optimize_system_prompts: true      # Enable dynamic system prompt adjustment
-  template_planning: true            # Use template plans for simple queries
-  parallel_pre_stream: true          # Run memory/context operations in parallel
-  parallel_tool_loading: true        # Load tool groups concurrently at startup
-  parallel_subagent_loading: true    # Load subagent specs concurrently at startup
-  parallel_protocol_resolution: true # Resolve protocols in parallel at startup
+agentic:
+  max_iterations: 10         # Maximum agentic loop iterations
+  # Maximum prior messages to inject into Reason prompts (IG-133)
+  # Only used when Act execution uses isolated threads (no checkpoint access)
+  prior_conversation_limit: 10
+
+  # Model context window token limit for percentage calculation (IG-151)
+  context_window_limit: 200000  # Claude models default
 
 # =============================================================================
 # Execution Limits
@@ -334,6 +318,69 @@ execution:
   recovery:
     progressive_checkpoints: true   # Save checkpoint after each step/goal (RFC-0010)
     auto_resume_on_start: false     # Auto-resume incomplete threads on daemon start
+
+# =============================================================================
+# Daemon Multi-Transport Configuration (RFC-0013)
+# =============================================================================
+# Configure daemon communication protocols for CLI, web UIs, and remote access.
+# WebSocket is the required bidirectional transport for all clients.
+# HTTP REST provides optional health checks and CRUD operations.
+
+daemon:
+  # Multi-threading (RFC-402) - Enable parallel query execution
+  multi_threading_enabled: true
+  max_concurrent_threads: 4
+
+  # Query Timeout Safeguards (IG-138)
+  max_query_duration_minutes: 60  # Maximum query duration in minutes (0 = unlimited)
+  query_timeout_action: "cancel"  # Action on timeout: cancel | suspend
+
+  # Auto-Cancel Stuck Queries (IG-138)
+  thread_max_age_hours: 24  # Auto-cancel incomplete threads older than N hours
+  auto_cancel_on_startup: true  # Cancel very old incomplete threads on daemon start
+
+  # Transport Layer Configuration
+  transports:
+    # WebSocket - Required bidirectional transport for all clients
+    websocket:
+      enabled: true         # Enable WebSocket server (required)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8765            # WebSocket port
+      tls_enabled: false    # Enable TLS (wss://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"
+      max_frame_size: 10485760  # Maximum WebSocket frame size in bytes (default: 10MB)
+
+    # HTTP REST API - For CRUD operations and file management
+    http_rest:
+      enabled: false        # Enable HTTP REST server (default: false)
+      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
+      port: 8766            # HTTP REST port
+      tls_enabled: false    # Enable TLS (https://) - recommended for remote access
+      tls_cert: null        # Path to TLS certificate file
+      tls_key: null         # Path to TLS private key file
+      cors_origins:         # Allowed CORS origins (pattern matching supported)
+        - "http://localhost:*"
+        - "http://127.0.0.1:*"
+
+# =============================================================================
+# Performance & Startup
+# =============================================================================
+# Tune agent startup and runtime performance optimizations.
+
+performance:
+  enabled: true                      # Master switch for all performance optimizations
+  unified_classification: true       # Enable LLM-based query classification
+  classification_mode: llm           # llm | disabled
+  optimize_system_prompts: true      # Enable dynamic system prompt adjustment
+  template_planning: true            # Use template plans for simple queries
+  parallel_pre_stream: true          # Run memory/context operations in parallel
+  parallel_tool_loading: true        # Load tool groups concurrently at startup
+  parallel_subagent_loading: true    # Load subagent specs concurrently at startup
+  parallel_protocol_resolution: true # Resolve protocols in parallel at startup
 
 # =============================================================================
 # LLM Tracing
@@ -396,50 +443,3 @@ logging:
     # Default: 0 (unlimited) - LLM prompt already constrains report size
     # Set to a value > 0 to enforce hard limit
     synthesis_max_chars: 0
-
-# =============================================================================
-# Daemon Multi-Transport Configuration (RFC-0013)
-# =============================================================================
-# Configure daemon communication protocols for CLI, web UIs, and remote access.
-# WebSocket is the required bidirectional transport for all clients.
-# HTTP REST provides optional health checks and CRUD operations.
-
-daemon:
-  # Multi-threading (RFC-402) - Enable parallel query execution
-  multi_threading_enabled: true
-  max_concurrent_threads: 4
-
-  # Query Timeout Safeguards (IG-138)
-  max_query_duration_minutes: 60  # Maximum query duration in minutes (0 = unlimited)
-  query_timeout_action: "cancel"  # Action on timeout: cancel | suspend
-
-  # Auto-Cancel Stuck Queries (IG-138)
-  thread_max_age_hours: 24  # Auto-cancel incomplete threads older than N hours
-  auto_cancel_on_startup: true  # Cancel very old incomplete threads on daemon start
-
-  # Transport Layer Configuration
-  transports:
-    # WebSocket - Required bidirectional transport for all clients
-    websocket:
-      enabled: true         # Enable WebSocket server (required)
-      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
-      port: 8765            # WebSocket port
-      tls_enabled: false    # Enable TLS (wss://) - recommended for remote access
-      tls_cert: null        # Path to TLS certificate file
-      tls_key: null         # Path to TLS private key file
-      cors_origins:         # Allowed CORS origins (pattern matching supported)
-        - "http://localhost:*"
-        - "http://127.0.0.1:*"
-      max_frame_size: 10485760  # Maximum WebSocket frame size in bytes (default: 10MB)
-
-    # HTTP REST API - For CRUD operations and file management
-    http_rest:
-      enabled: false        # Enable HTTP REST server (default: false)
-      host: "127.0.0.1"     # Bind address (127.0.0.1 = localhost only)
-      port: 8766            # HTTP REST port
-      tls_enabled: false    # Enable TLS (https://) - recommended for remote access
-      tls_cert: null        # Path to TLS certificate file
-      tls_key: null         # Path to TLS private key file
-      cors_origins:         # Allowed CORS origins (pattern matching supported)
-        - "http://localhost:*"
-        - "http://127.0.0.1:*"

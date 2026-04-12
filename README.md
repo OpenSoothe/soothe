@@ -34,95 +34,45 @@ Soothe is a protocol-driven AI orchestration framework that transforms how you w
 
 ## Design Philosophy
 
-### 🎯 Intelligent by Default
+**Plan → Execute**: Autonomous execution loop that plans, acts, evaluates, and adapts without manual intervention.
 
-Soothe uses a **Plan → Execute** execution loop that automatically:
-- Analyzes your request and decides the best approach
-- Executes tools with structured outputs for reliable results
-- Evaluates success and adjusts strategy without manual intervention
-- Works for simple queries in milliseconds or complex tasks in minutes
+**Persistent Memory**: Sessions accumulate knowledge. Resume threads, recall context, and track long-running goals across conversations.
 
-No micromanagement needed—just state your goal and let Soothe deliver.
+**Security First**: Local execution with least-privilege policies. Your infrastructure, your data, your control.
 
-### 🧠 Persistent Memory & Context
-
-Every conversation builds upon the last:
-- **Session memory**: Accumulates knowledge within a thread
-- **Cross-session memory**: Recalls important context from past interactions
-- **Thread management**: Resume, archive, and organize conversation history
-- **Goal tracking**: Long-running objectives persist across sessions
-
-### 🔒 Security & Privacy First
-
-Your infrastructure, your rules:
-- **Local execution**: Browser automation, file operations, and code execution run on your machine
-- **Policy enforcement**: Fine-grained access control with least-privilege defaults
-- **No vendor lock-in**: Bring your own API keys, storage backends, and models
-- **Flexible deployment**: Run as CLI, daemon, or integrate into your applications
-
-### 🔌 Extensible Plugin System
-
-Soothe grows with your needs:
-- **Built-in tools**: Web search (Tavily, DuckDuckGo), code execution, file operations, browser automation
-- **Specialized subagents**: Research, browser automation, planning, and more
-- **MCP integration**: Connect to external services via Model Context Protocol
-- **Custom plugins**: Create your own tools and subagents with decorator-based APIs
+**Plugin Architecture**: Built-in tools for web search, code execution, and browser automation. Extend with custom plugins via decorator APIs.
 
 ## What Can Soothe Do?
 
-### 🔍 Deep Research & Synthesis
-**Multi-source investigation in minutes, not hours**
-- Web search with intelligent query generation (Tavily, DuckDuckGo)
-- Academic paper discovery (ArXiv integration)
-- Document analysis (PDF, DOCX, text files)
-- Automatic summarization with citations
-- Iterative refinement based on findings
+**Deep Research**: Multi-source web search, academic papers, document analysis with automatic synthesis and citations.
 
-**Example**: *"Research the latest advances in RAG architectures and compare three different approaches"*
+**Autonomous Execution**: Multi-step workflows with automatic planning, file operations, code execution, and browser automation.
 
-### 🤖 Autonomous Task Execution
-**From goal to deliverable without hand-holding**
-- Multi-step workflow execution with automatic planning
-- File operations with security policy enforcement
-- Code execution in sandboxed environments
-- Browser automation for web interactions
-- Parallel tool execution for faster results
+**Long-Running Operations**: Background daemon mode with thread management, persistent state, and resume capabilities.
 
-**Example**: *"Set up a new Python project with FastAPI, create the directory structure, and initialize git"*
-
-### 📊 Long-Running Operations
-**Work that spans hours or days, managed automatically**
-- Background daemon mode with multi-transport support
-- Thread management with resume capabilities
-- Persistent state across sessions
-- Progress tracking and artifact storage
-
-**Example**: *"Monitor this website every 6 hours and alert me when the price drops below $50"*
-
-### 🎨 Extensible via Plugins
-**Custom capabilities for your unique workflows**
-- Decorator-based tool creation (`@tool`)
-- Subagent development with `CompiledSubAgent`
-- MCP server integration for external services
-- Custom event types and handlers
-
-**Example**: Create a custom tool that queries your internal APIs and processes results
+**Custom Plugins**: Extend with decorator-based tools, specialized subagents, and MCP server integration.
 
 ## Getting Started
 
-### Quick Start (3 Steps)
+### Quick Start
 
 1. **Install Soothe**:
    ```bash
    pip install soothe
    ```
-
-2. **Set your API key**:
+2. **Initialize config**:
    ```bash
-   export OPENAI_API_KEY=sk-your-key-here
-   # or use Anthropic Claude:
-   export ANTHROPIC_API_KEY=sk-ant-your-key-here
+   # Create Soothe home directory
+   mkdir -p ~/.soothe/config
+
+   # Copy minimal config template
+   cp config.minimal.yml ~/.soothe/config/config.yml
+
+   # Edit with your preferred provider and models
+   vim ~/.soothe/config/config.yml  # or use your favorite editor
    ```
+
+   The minimal config file contains just the essentials: provider settings and model router. All other settings use sensible defaults.
 
 3. **Run your first task**:
    ```bash
@@ -133,30 +83,7 @@ Soothe grows with your needs:
    soothe
    ```
 
-### Try Different Modes
-
-**Interactive TUI** (default):
-```bash
-soothe -p "Analyze this codebase and suggest improvements"
-```
-
-**Headless single-shot**:
-```bash
-soothe -p "What is 2 + 2?" --no-tui
-```
-
-**Autonomous mode** for complex tasks:
-```bash
-soothe autopilot run "Set up a monitoring system that checks website uptime every 5 minutes"
-```
-
-The TUI shows:
-- Tool execution in real-time
-- Subagent activities and progress
-- Structured event stream
-- Keyboard shortcuts for control
-
-### Run as a Background Daemon
+### Background Daemon
 
 For long-running operations and remote access:
 
@@ -170,48 +97,6 @@ soothe daemon attach
 # Or connect via WebSocket/HTTP
 soothe daemon start --enable-websocket --enable-http
 ```
-
-## Real-World Examples
-
-### Research Workflow
-```bash
-# Default mode with automatic planning
-soothe -p "Research best practices for securing REST APIs, summarize the top 5 recommendations, and create a checklist document"
-```
-
-### Codebase Analysis
-```bash
-# TUI mode shows real-time progress
-soothe -p "Analyze the authentication module in src/auth/, identify potential security vulnerabilities, and suggest fixes"
-```
-
-### Autonomous Mode (Complex Tasks)
-```bash
-# Use autopilot for autonomous execution
-soothe autopilot run "Set up a monitoring system that checks website uptime every 5 minutes and logs results to a database"
-```
-
-### Resume Previous Work
-```bash
-# List previous threads
-soothe thread list
-
-# Continue from where you left off
-soothe thread continue <thread-id>
-```
-
-## Key Features
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **Intelligent Execution Loop** | ✅ Implemented | Plan → Execute architecture with automatic strategy adjustment |
-| **Multi-Source Research** | ✅ Implemented | Web search, academic papers, documents with automatic synthesis |
-| **Specialized Subagents** | ✅ Implemented | Browser automation, planning, research, skill creation |
-| **Plugin System** | ✅ Implemented | Decorator-based tools and subagents with lifecycle management |
-| **Multi-Transport Daemon** | ✅ Implemented | Unix socket, WebSocket, and HTTP REST support |
-| **Thread Management** | ✅ Implemented | Persistent threads with resume, archive, and search |
-| **Security Policies** | ✅ Implemented | Least-privilege access control with configurable policies |
-| **Persistent Memory** | ✅ Implemented | Context and memory across sessions with vector storage support |
 
 ## Architecture Highlights
 
