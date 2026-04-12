@@ -71,8 +71,8 @@ class TestShouldShow:
 class TestClassifyEventToTier:
     def test_classify_agentic_events(self) -> None:
         """Agentic loop events classify to correct tiers."""
-        assert classify_event_to_tier("soothe.agentic.loop.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.agentic.loop.completed") == VerbosityTier.QUIET
+        assert classify_event_to_tier("soothe.cognition.agent_loop.started") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.cognition.agent_loop.completed") == VerbosityTier.QUIET
         # Step descriptions and completion both visible at NORMAL for progress visibility
         assert classify_event_to_tier("soothe.agentic.step.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.NORMAL

@@ -201,14 +201,14 @@ class DaemonHeartbeatEvent(LifecycleEvent):
 
 
 class AgenticLoopStartedEvent(LifecycleEvent):
-    type: Literal["soothe.agentic.loop.started"] = "soothe.agentic.loop.started"
+    type: Literal["soothe.cognition.agent_loop.started"] = "soothe.cognition.agent_loop.started"
     thread_id: str
     goal: str
     max_iterations: int
 
 
 class AgenticLoopCompletedEvent(LifecycleEvent):
-    type: Literal["soothe.agentic.loop.completed"] = "soothe.agentic.loop.completed"
+    type: Literal["soothe.cognition.agent_loop.completed"] = "soothe.cognition.agent_loop.completed"
     thread_id: str
     status: str
     goal_progress: float
@@ -620,13 +620,13 @@ _reg(
 
 # -- Agentic Loop (RFC-0008) -------------------------------------------------
 _reg(
-    "soothe.agentic.loop.started",
+    "soothe.cognition.agent_loop.started",
     AgenticLoopStartedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{goal}",
 )
 _reg(
-    "soothe.agentic.loop.completed",
+    "soothe.cognition.agent_loop.completed",
     AgenticLoopCompletedEvent,
     verbosity=VerbosityTier.QUIET,
     summary_template="Done: {completion_summary}",

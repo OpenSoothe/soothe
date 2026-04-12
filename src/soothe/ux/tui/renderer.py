@@ -520,10 +520,10 @@ class TuiRenderer:
 
         # NOTE: These are shown even during suppression (unlike LLM text)
         essential_events = {
-            "soothe.cognition.plan.created",
-            "soothe.agentic.loop.started",  # IG-162: Show goal header
-            "soothe.agentic.loop.completed",
+            "soothe.cognition.agent_loop.started",  # IG-162: Show goal header
+            "soothe.cognition.agent_loop.completed",
             "soothe.cognition.agent_loop.reason",  # IG-160: Show next_action
+            "soothe.cognition.plan.created",
             "soothe.agentic.step.started",  # IG-161: Show step descriptions (from AgentLoop)
             "soothe.agentic.step.completed",  # IG-161: Show step results (from AgentLoop)
         }
@@ -539,7 +539,7 @@ class TuiRenderer:
         payload.pop("final_stdout_message", None)
 
         # IG-162: Show goal header when agentic loop starts (like CLI)
-        if event_type == "soothe.agentic.loop.started":
+        if event_type == "soothe.cognition.agent_loop.started":
             goal = str(payload.get("goal", ""))
             goal_line = Text()
             goal_line.append("🚩 ", style=DOT_COLORS["goal"])
@@ -615,7 +615,7 @@ class TuiRenderer:
         if event_type == "soothe.cognition.plan.created":
             goal = preview_first(str(payload.get("goal", "")), 60)
             summary = f"🚩 {goal}"
-        elif event_type == "soothe.agentic.loop.completed":
+        elif event_type == "soothe.cognition.agent_loop.completed":
             status = str(payload.get("status", "done"))
             summary = f"✅ {status}"
         else:
@@ -640,7 +640,7 @@ class TuiRenderer:
         namespace: tuple[str, ...],
     ) -> str:
         """Prefix color for progress lines (success completions → green, not protocol/subagent)."""
-        if event_type == "soothe.agentic.loop.completed":
+        if event_type == "soothe.cognition.agent_loop.completed":
             status = str(data.get("status", "done")).lower()
             return DOT_COLORS["plan_step_done"] if status == "done" else DOT_COLORS["protocol"]
         if event_type == "soothe.cognition.agent_loop.reason":

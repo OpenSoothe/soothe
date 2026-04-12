@@ -72,12 +72,12 @@ def test_tool_result_structured_payload_is_summarized(capsys: CaptureFixture[str
 def test_agentic_loop_completed_writes_final_stdout_when_multi_step(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(
-        "soothe.agentic.loop.started",
+        "soothe.cognition.agent_loop.started",
         {"max_iterations": 8, "thread_id": "t", "goal": "g"},
         namespace=(),
     )
     r.on_progress_event(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "final_stdout_message": "Found 92 README files.",
             "thread_id": "t",
@@ -99,7 +99,7 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
     """Idle/on_turn_end clears multi_step but must not unlock agentic stdout early (test-case1)."""
     r = CliRenderer()
     r.on_progress_event(
-        "soothe.agentic.loop.started",
+        "soothe.cognition.agent_loop.started",
         {"max_iterations": 8, "thread_id": "t", "goal": "count readmes"},
         namespace=(),
     )
@@ -108,7 +108,7 @@ def test_agentic_stdout_stays_suppressed_after_turn_end_until_loop_completed(
     r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST" not in capsys.readouterr().out
     r.on_progress_event(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "final_stdout_message": "Found 12 README.md files (project only).",
             "thread_id": "t",
@@ -128,7 +128,7 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
     """max_iterations=1 does not arm suppression in loop.started; multi-step plan must (test-case1)."""
     r = CliRenderer()
     r.on_progress_event(
-        "soothe.agentic.loop.started",
+        "soothe.cognition.agent_loop.started",
         {"max_iterations": 1, "thread_id": "t", "goal": "count readmes"},
         namespace=(),
     )
@@ -146,7 +146,7 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
     r.on_assistant_text("RAW_LIST_SHOULD_NOT_LEAK", is_main=True, is_streaming=False)
     assert "RAW_LIST" not in capsys.readouterr().out
     r.on_progress_event(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "final_stdout_message": "Found 12 README.md files (project only).",
             "thread_id": "t",
@@ -163,12 +163,12 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
 def test_agentic_loop_completed_skips_final_stdout_without_multi_step(capsys: CaptureFixture[str]) -> None:
     r = CliRenderer()
     r.on_progress_event(
-        "soothe.agentic.loop.started",
+        "soothe.cognition.agent_loop.started",
         {"max_iterations": 1, "thread_id": "t", "goal": "g"},
         namespace=(),
     )
     r.on_progress_event(
-        "soothe.agentic.loop.completed",
+        "soothe.cognition.agent_loop.completed",
         {
             "final_stdout_message": "Found 92 README files.",
             "thread_id": "t",

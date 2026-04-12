@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Event type patterns
 GOAL_START_EVENTS = {
-    "soothe.agentic.loop.started",
+    "soothe.cognition.agent_loop.started",
     "soothe.cognition.plan.created",
 }
 
@@ -46,7 +46,7 @@ STEP_COMPLETE_EVENTS = {
 }
 
 GOAL_COMPLETE_EVENTS = {
-    "soothe.agentic.loop.completed",
+    "soothe.cognition.agent_loop.completed",
 }
 
 # Verbosity tier mapping

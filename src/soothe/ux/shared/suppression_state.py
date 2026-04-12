@@ -70,7 +70,7 @@ class SuppressionState:
         Returns:
             True if final report should be emitted.
         """
-        if event_type != "soothe.agentic.loop.completed":
+        if event_type != "soothe.cognition.agent_loop.completed":
             return False
 
         if not final_stdout:
@@ -97,7 +97,7 @@ class SuppressionState:
             Final stdout message if present (for emission after tracking).
         """
         # Track multi-step state from agentic loop start
-        if event_type == "soothe.agentic.loop.started":
+        if event_type == "soothe.cognition.agent_loop.started":
             if data.get("max_iterations", 1) > 1:
                 self.multi_step_active = True
                 self.agentic_stdout_suppressed = True

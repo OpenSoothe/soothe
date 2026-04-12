@@ -8,7 +8,7 @@ from soothe.ux.tui.utils import DOT_COLORS
 
 def test_loop_completed_done_prefix_is_green() -> None:
     r = TuiRenderer(on_panel_write=lambda _x: None)
-    c = r._progress_event_dot_color("soothe.agentic.loop.completed", {"status": "done"}, ())
+    c = r._progress_event_dot_color("soothe.cognition.agent_loop.completed", {"status": "done"}, ())
     assert c == DOT_COLORS["plan_step_done"]
 
 
