@@ -33,7 +33,7 @@ GOAL_START_EVENTS = {
 
 STEP_START_EVENTS = {
     "soothe.cognition.plan.step_started",
-    "soothe.agentic.step.started",
+    "soothe.cognition.agent_loop.step.started",
 }
 
 # Batch step events for parallel execution
@@ -42,7 +42,7 @@ BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch_step_completed"
 
 STEP_COMPLETE_EVENTS = {
     "soothe.cognition.plan.step_completed",
-    "soothe.agentic.step.completed",
+    "soothe.cognition.agent_loop.step.completed",
 }
 
 GOAL_COMPLETE_EVENTS = {

@@ -524,8 +524,8 @@ class TuiRenderer:
             "soothe.cognition.agent_loop.completed",
             "soothe.cognition.agent_loop.reason",  # IG-160: Show next_action
             "soothe.cognition.plan.created",
-            "soothe.agentic.step.started",  # IG-161: Show step descriptions (from AgentLoop)
-            "soothe.agentic.step.completed",  # IG-161: Show step results (from AgentLoop)
+            "soothe.cognition.agent_loop.step.started",  # IG-161: Show step descriptions (from AgentLoop)
+            "soothe.cognition.agent_loop.step.completed",  # IG-161: Show step results (from AgentLoop)
         }
 
         if event_type not in essential_events:
@@ -583,7 +583,7 @@ class TuiRenderer:
             return
 
         # IG-161: Handle agentic step events (from AgentLoop executor)
-        if event_type == "soothe.agentic.step.started":
+        if event_type == "soothe.cognition.agent_loop.step.started":
             description = str(payload.get("description", ""))
             # Show step description (like plan step started)
             step_line = Text()
@@ -592,7 +592,7 @@ class TuiRenderer:
             self._on_panel_write(step_line)
             return
 
-        if event_type == "soothe.agentic.step.completed":
+        if event_type == "soothe.cognition.agent_loop.step.completed":
             success = bool(payload.get("success", False))
             summary = str(payload.get("summary", ""))
             duration_ms = int(payload.get("duration_ms", 0))
@@ -650,9 +650,9 @@ class TuiRenderer:
             if status == "replan":
                 return DOT_COLORS["warning"]
             return DOT_COLORS["iteration"]
-        if event_type == "soothe.agentic.step.completed" and data.get("success"):
+        if event_type == "soothe.cognition.agent_loop.step.completed" and data.get("success"):
             return DOT_COLORS["plan_step_done"]
-        if event_type == "soothe.agentic.step.started":
+        if event_type == "soothe.cognition.agent_loop.step.started":
             return DOT_COLORS["plan_step_active"]
         if namespace:
             return DOT_COLORS.get("subagent", "magenta")
