@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+
 
 class StepAction(BaseModel):
     """Single step in execution strategy.
@@ -368,7 +370,7 @@ class LoopState(BaseModel):
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     git_status: dict[str, Any] | None = None
     iteration: int = 0
-    max_iterations: int = 8
+    max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 
     current_decision: AgentDecision | None = None
     completed_step_ids: set[str] = Field(default_factory=set)

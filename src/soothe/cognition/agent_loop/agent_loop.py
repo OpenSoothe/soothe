@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.reason import PlanPhase
@@ -69,7 +70,7 @@ class AgentLoop:
         self,
         goal: str,
         thread_id: str,
-        max_iterations: int = 8,
+        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
     ) -> PlanResult:
         """Run Plan → Execute loop for goal execution.
 
@@ -102,7 +103,7 @@ class AgentLoop:
         thread_id: str,
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
-        max_iterations: int = 8,
+        max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         plan_conversation_excerpts: list[str] | None = None,  # noqa: ARG002 - Reserved for future use
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
