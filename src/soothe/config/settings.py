@@ -438,11 +438,15 @@ class SootheConfig(BaseSettings):
         provider's credentials, and calls ``init_chat_model()``.
         Caches the result to avoid recreating models.
 
+        For limited OpenAI-compatible providers (LMStudio, Ollama, etc.)
+        that don't support the full ``tool_choice`` object format, the model
+        is wrapped to force ``json_mode`` for structured output.
+
         Args:
             role: Purpose role (default, think, fast, image).
 
         Returns:
-            A configured ``BaseChatModel`` instance.
+            A configured ``BaseChatModel`` instance, possibly wrapped for provider compatibility.
         """
         import logging
 
@@ -465,6 +469,22 @@ class SootheConfig(BaseSettings):
         init_str = f"{provider_type}:{model_name}" if provider_name else model_str
 
         model = init_chat_model(init_str, **kwargs)
+
+        # Check provider capability for advanced tool_choice support (LMStudio compatibility)
+        supports_advanced_tool_choice = True  # Default assumption
+        if provider_name:
+            provider = self._find_provider(provider_name)
+            if provider:
+                supports_advanced_tool_choice = provider.supports_advanced_tool_choice
+                if not supports_advanced_tool_choice:
+                    logger.info(
+                        "Provider '%s' doesn't support advanced tool_choice objects, wrapping model for compatibility",
+                        provider_name,
+                    )
+                    from soothe.core.model_wrapper import wrap_model_if_needed
+
+                    model = wrap_model_if_needed(model, provider_name, supports_advanced_tool_choice)
+
         self._model_cache[cache_key] = model
         logger.debug("Created and cached model for '%s'", model_str)
 
