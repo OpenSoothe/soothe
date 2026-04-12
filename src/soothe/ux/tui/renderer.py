@@ -521,9 +521,11 @@ class TuiRenderer:
         # IG-158: Show essential milestones for CLI-style brevity
         # IG-160: Show next_action from agent_loop.reason
         # IG-161: Show agentic step descriptions and results (like CLI)
+        # IG-162: Show goal description when loop starts (like CLI)
         # NOTE: These are shown even during suppression (unlike LLM text)
         essential_events = {
             "soothe.cognition.plan.created",
+            "soothe.agentic.loop.started",  # IG-162: Show goal header
             "soothe.agentic.loop.completed",
             "soothe.cognition.agent_loop.reason",  # IG-160: Show next_action
             "soothe.agentic.step.started",  # IG-161: Show step descriptions (from AgentLoop)
@@ -544,6 +546,23 @@ class TuiRenderer:
 
         payload = dict(data)
         payload.pop("final_stdout_message", None)
+
+        # IG-162: Show goal header when agentic loop starts (like CLI)
+        if event_type == "soothe.agentic.loop.started":
+            import logging
+
+            logger = logging.getLogger(__name__)
+            goal = str(payload.get("goal", ""))
+            max_iterations = int(payload.get("max_iterations", 10))
+
+            logger.info(f"[TUI] agentic.loop.started: goal={goal[:50]}, max_iterations={max_iterations}")
+
+            goal_line = Text()
+            goal_line.append("🚩 ", style=DOT_COLORS["goal"])
+            goal_line.append(f"{goal}")
+            self._on_panel_write(goal_line)
+            logger.info(f"[TUI] Goal header written: {goal}")
+            return
 
         # IG-160: Special handling for next_action (like CLI's format_judgement)
         if event_type == "soothe.cognition.agent_loop.reason":
@@ -629,7 +648,7 @@ class TuiRenderer:
         # IG-158: Use brief summaries for essential events
         if event_type == "soothe.cognition.plan.created":
             goal = preview_first(str(payload.get("goal", "")), 60)
-            summary = f"📋 {goal}"
+            summary = f"🚩 {goal}"
         elif event_type == "soothe.agentic.loop.completed":
             status = str(payload.get("status", "done"))
             summary = f"✅ {status}"
@@ -689,6 +708,8 @@ class TuiRenderer:
     def _write_panel_final_report(self, text: str) -> None:
         """Write aggregated final answer to panel (multi-step/agentic loops, IG-153).
 
+        IG-162: Add newline before final report (like CLI).
+
         Args:
             text: Final response text to display.
         """
@@ -697,6 +718,11 @@ class TuiRenderer:
             return
 
         self._state.suppression.full_response.append(stripped)
+
+        # IG-162: Add blank line separator before final report (like CLI)
+        if self._on_panel_write:
+            blank_line = Text("\n")
+            self._on_panel_write(blank_line)
 
         # Use main assistant style (cyan dot)
         color = DOT_COLORS["assistant"]
