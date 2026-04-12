@@ -224,14 +224,14 @@ class AgenticLoopCompletedEvent(LifecycleEvent):
 class AgenticStepStartedEvent(LifecycleEvent):
     """Level 2: Step description in three-level tree (RFC-0020)."""
 
-    type: Literal["soothe.agentic.step.started"] = "soothe.agentic.step.started"
+    type: Literal["soothe.cognition.agent_loop.step.started"] = "soothe.cognition.agent_loop.step.started"
     description: str
 
 
 class AgenticStepCompletedEvent(LifecycleEvent):
     """Level 3: Step result in three-level tree (RFC-0020)."""
 
-    type: Literal["soothe.agentic.step.completed"] = "soothe.agentic.step.completed"
+    type: Literal["soothe.cognition.agent_loop.step.completed"] = "soothe.cognition.agent_loop.step.completed"
     success: bool
     summary: str
     duration_ms: int
@@ -632,13 +632,13 @@ _reg(
     summary_template="Done: {completion_summary}",
 )
 _reg(
-    "soothe.agentic.step.started",
+    "soothe.cognition.agent_loop.step.started",
     AgenticStepStartedEvent,
     verbosity=VerbosityTier.NORMAL,  # RFC-0020: Step descriptions visible at normal verbosity
     summary_template="{description}",
 )
 _reg(
-    "soothe.agentic.step.completed",
+    "soothe.cognition.agent_loop.step.completed",
     AgenticStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,  # Show step completion at normal verbosity for progress visibility
     summary_template="{summary} ({duration_ms}ms)",

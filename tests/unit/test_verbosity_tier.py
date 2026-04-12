@@ -74,8 +74,8 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("soothe.cognition.agent_loop.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.cognition.agent_loop.completed") == VerbosityTier.QUIET
         # Step descriptions and completion both visible at NORMAL for progress visibility
-        assert classify_event_to_tier("soothe.agentic.step.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.agentic.step.completed") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.cognition.agent_loop.step.started") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.cognition.agent_loop.step.completed") == VerbosityTier.NORMAL
 
     def test_classify_lifecycle_events(self) -> None:
         """Lifecycle events classify to DETAILED by default."""

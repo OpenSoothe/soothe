@@ -476,7 +476,7 @@ class TestStreamDisplayPipeline:
         pipeline._context.current_step_description = "Explore project structure"
 
         event = {
-            "type": "soothe.agentic.step.completed",
+            "type": "soothe.cognition.agent_loop.step.completed",
             "step_id": "step_1",
             "success": True,
             "summary": "Done",
@@ -497,7 +497,7 @@ class TestStreamDisplayPipeline:
         pipeline._context.current_step_description = "Analyze config"
 
         event = {
-            "type": "soothe.agentic.step.completed",
+            "type": "soothe.cognition.agent_loop.step.completed",
             "step_id": "step_2",
             "success": True,
             "summary": "Done",
@@ -531,7 +531,7 @@ class TestStreamDisplayPipeline:
 
         lines = pipeline.process(
             {
-                "type": "soothe.agentic.step.completed",
+                "type": "soothe.cognition.agent_loop.step.completed",
                 "step_id": "step_a",
                 "duration_ms": 2000,
                 "tool_call_count": 2,
