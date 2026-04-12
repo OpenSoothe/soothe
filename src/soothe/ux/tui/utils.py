@@ -93,13 +93,6 @@ EVENT_ICONS: dict[str, str] = {
 }
 
 
-# Duration formatting constants (in milliseconds)
-DURATION_ONE_MINUTE_MS = 60000
-DURATION_FIVE_SECONDS_MS = 5000
-DURATION_ONE_SECOND_MS = 1000
-DURATION_100_MS = 100
-
-
 def get_icon(category: str, *, unicode_supported: bool = True) -> str:
     """Get icon for category with fallback for non-Unicode terminals.
 
@@ -140,36 +133,6 @@ def get_icon(category: str, *, unicode_supported: bool = True) -> str:
         "checkpoint": "P",
     }
     return ascii_fallbacks.get(category, "●")
-
-
-def format_duration_enhanced(duration_ms: int, context: str = "general") -> tuple[str, str]:
-    """Format duration with context-aware precision and color.
-
-    Args:
-        duration_ms: Duration in milliseconds.
-        context: Display context ('general', 'long_running', 'tool', 'plan').
-
-    Returns:
-        Tuple of (formatted_string, color_style).
-    """
-    if duration_ms >= DURATION_ONE_MINUTE_MS:  # >= 1 minute
-        seconds = duration_ms / 1000
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        style = "bold dim" if context == "long_running" else "dim"
-        return f"{minutes}m {secs}s", style
-
-    if duration_ms >= DURATION_FIVE_SECONDS_MS:  # >= 5 seconds
-        return f"{duration_ms / 1000:.1f}s", "bold dim"
-
-    if duration_ms >= DURATION_ONE_SECOND_MS:  # >= 1 second
-        return f"{duration_ms / 1000:.2f}s", "dim"
-
-    if duration_ms >= DURATION_100_MS:  # >= 100ms
-        return f"{duration_ms}ms", "dim"
-
-    # < 100ms - very fast, show as italic
-    return f"{duration_ms}ms", "dim italic"
 
 
 def make_dot_line(
@@ -238,53 +201,6 @@ def make_user_prompt_line(text: str) -> Text:
     return result
 
 
-def make_tool_block(
-    name: str,
-    args_summary: str,
-    output: str | None = None,
-    status: str = "running",
-    *,
-    unicode_supported: bool = True,
-) -> Text:
-    """Create a Claude Code-style tool block with icon prefix.
-
-    Args:
-        name: Tool name to display.
-        args_summary: Summary of tool arguments (e.g., "path='/foo'").
-        output: Optional tool output to show with tree connector.
-        status: Tool status - 'running', 'success', 'error'.
-        unicode_supported: Whether terminal supports Unicode emojis.
-
-    Returns:
-        Rich Text formatted as:
-            ⚙ ToolName(args_summary)
-              └ output line 1
-                output line 2
-    """
-    # Determine icon and color based on status
-    icon_category = {
-        "running": "tool_running",
-        "success": "tool_success",
-        "error": "tool_error",
-    }.get(status, "tool_running")
-
-    color = DOT_COLORS.get(f"tool_{status}", "yellow")
-
-    # Build the tool call line
-    tool_text = Text()
-    tool_text.append(name, style="bold")
-    tool_text.append(f"({args_summary})")
-
-    # Add progress placeholder for running tools
-    if status == "running":
-        tool_text.append(" ⏳", style="dim yellow")
-
-    return make_dot_line(color, tool_text, output, icon=icon_category, unicode_supported=unicode_supported)
-
-
-# Minimum segment length when ellipsizing paths (PLR2004).
-_MIN_PATH_SEGMENT_LEN = 4
-
 # Left column width for welcome panel key/value rows.
 _WELCOME_LABEL_WIDTH = 18
 _WELCOME_RULE_WIDTH = 44
@@ -310,6 +226,9 @@ def shorten_display_path(path: str, max_len: int = 76) -> str:
     Returns:
         Original path or head + "..." + tail.
     """
+    # Minimum segment length when ellipsizing paths (PLR2004).
+    _MIN_PATH_SEGMENT_LEN = 4
+
     if len(path) <= max_len:
         return path
     head = max_len // 2 - 2
@@ -358,21 +277,3 @@ def make_welcome_banner(*, workspace: str, provider: str, model_name: str) -> Pa
         padding=(0, 1),
         highlight=True,
     )
-
-
-def make_status_line(text: str, elapsed: str = "") -> Text:
-    """Create a status line with asterisk prefix.
-
-    Args:
-        text: Status text to display.
-        elapsed: Optional elapsed time string to append in parentheses.
-
-    Returns:
-        Rich Text formatted as `* {text} ({elapsed})` in yellow/dim style.
-    """
-    result = Text()
-    result.append("* ", style="yellow dim")
-    result.append(text, style="yellow dim")
-    if elapsed:
-        result.append(f" ({elapsed})", style="dim")
-    return result
