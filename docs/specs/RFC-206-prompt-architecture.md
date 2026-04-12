@@ -248,9 +248,9 @@ Check PRIOR_CONVERSATION in USER_TASK?
 
 ## Integration
 
-### SimplePlanner Refactor
+### LLMPlanner Refactor
 
-**Before** (`src/soothe/cognition/planning/simple.py`):
+**Before** (`src/soothe/cognition/agent_loop/simple.py`):
 ```python
 async def reason(self, goal, state, context):
     prompt = self._build_reason_prompt(goal, state, context)
@@ -268,7 +268,7 @@ def _build_reason_prompt(self, goal, state, context):
 
 **After**:
 ```python
-class SimplePlanner:
+class LLMPlanner:
     def __init__(self, model, config=None):
         self._model = model
         self._config = config
@@ -325,8 +325,8 @@ class SimplePlanner:
 
 ### Affected Code
 
-- `src/soothe/cognition/planning/simple.py`
-- `src/soothe/cognition/planning/claude.py` (if exists)
+- `src/soothe/cognition/agent_loop/simple.py`
+- `src/soothe/cognition/agent_loop/claude.py` (if exists)
 - Any tests that construct prompts directly
 
 ---

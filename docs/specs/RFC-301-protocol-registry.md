@@ -56,7 +56,7 @@ Pattern: `{Method}{Protocol}` where `{Method}` describes the implementation appr
 
 | Protocol | Implementation Pattern | Examples |
 |----------|----------------------|----------|
-| PlannerProtocol | `{Strategy}Planner` | `SimplePlanner`, `ClaudePlanner`, `AutoPlanner` |
+| PlannerProtocol | `LLMPlanner` | `LLMPlanner` (after IG-150 consolidation) |
 | PolicyProtocol | `{Source}Policy` | `ConfigDrivenPolicy`, `DatabasePolicy` |
 | DurabilityProtocol | `{Store}Durability` | `JsonDurability`, `PostgreSQLDurability` |
 | RemoteAgentProtocol | `{Transport}RemoteAgent` | `LangGraphRemoteAgent`, `A2ARemoteAgent` |
@@ -223,7 +223,7 @@ class PlannerProtocol(Protocol):
         context: PlanContext,
         previous_reason: Any | None = None,
     ) -> Any:
-        """Produce ReasonResult for Layer 2 execution loop."""
+        """Produce PlanResult for Layer 2 execution loop."""
         ...
 ```
 
@@ -392,14 +392,11 @@ Protocol backends are resolved from configuration:
 
 ```python
 def resolve_planner(config: SootheConfig) -> PlannerProtocol:
-    backend = config.protocols.planner.backend
-    if backend == "simple":
-        return SimplePlanner()
-    elif backend == "claude":
-        return ClaudePlanner(config.create_chat_model("planner"))
-    elif backend == "auto":
-        return AutoPlanner(config)
-    raise ValueError(f"Unknown planner backend: {backend}")
+    """Resolver returns LLMPlanner directly (IG-150 consolidation)."""
+    return LLMPlanner(
+        model=config.create_chat_model(config.protocols.planner.model),
+        config=config
+    )
 ```
 
 ### 7.2 Protocol Composition

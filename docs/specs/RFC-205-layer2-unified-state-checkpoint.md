@@ -44,7 +44,7 @@ Give Layer 2 its own checkpoint system that:
 | **Data** | HumanMessage, AIMessage, ToolMessage | Step input/output, decisions |
 | **Purpose** | Execution trace | Semantic goal trace |
 | **Storage** | LangGraph checkpointer (SQLite/PostgreSQL) | JSON files in `runs/{thread_id}/` |
-| **Consumer** | CoreAgent runtime | Reason phase, recovery |
+| **Consumer** | CoreAgent runtime | Plan phase, recovery |
 
 **Key insight**: Layer 2 checkpoint captures agentic decisions and their outcomes, not the low-level tool invocations.
 
@@ -87,7 +87,7 @@ class Layer2Checkpoint(BaseModel):
 
 ```python
 class ReasonStepRecord(BaseModel):
-    """One Reason phase execution."""
+    """One Plan phase execution."""
 
     iteration: int
     timestamp: datetime
@@ -358,8 +358,8 @@ src/soothe/cognition/agent_loop/
 ├── checkpoint.py              # Layer2Checkpoint model
 ├── state_manager.py           # Persistence + recovery
 ├── loop_agent.py              # Main orchestrator (refactored)
-├── executor.py                # Act phase (existing)
-├── reason.py                  # Reason phase (existing)
+├── executor.py                # Execute phase (existing)
+├── reason.py                  # Plan phase (existing)
 └── schemas.py                 # StepAction, AgentDecision (existing)
 ```
 
@@ -383,7 +383,7 @@ class Layer2StateManager:
 
     def record_iteration(
         self,
-        reason_result: ReasonResult,
+        reason_result: PlanResult,
         act_wave: ActWaveRecord,
         working_memory: LoopWorkingMemory
     ) -> None:
@@ -419,7 +419,7 @@ class AgentLoop:
 
         # Main loop
         while state.iteration < state.max_iterations:
-            # Reason phase
+            # Plan phase
             reason_result = await self.reason_phase.reason(
                 goal=goal,
                 state=state,
@@ -431,7 +431,7 @@ class AgentLoop:
                 yield "completed", {...}
                 return
 
-            # Act phase
+            # Execute phase
             act_wave = await self._execute_act_wave(decision, state)
 
             # Record iteration to checkpoint
@@ -450,7 +450,7 @@ class AgentLoop:
 
 ### Crash Scenario
 
-**Crash at iteration 3, Reason phase**:
+**Crash at iteration 3, Plan phase**:
 
 1. User restarts: `soothe "continue"`
 2. Layer 2 loads `layer2_checkpoint.json`
@@ -459,7 +459,7 @@ class AgentLoop:
    - `reason_history` (2 Reason calls)
    - `act_history` (2 complete Act waves)
    - `working_memory_state` (spill files still exist)
-5. Resumes from iteration 3, Reason phase
+5. Resumes from iteration 3, Plan phase
 6. Plan phase derives prior context from `execute_history` step outputs
 
 ### Recovery Benefits

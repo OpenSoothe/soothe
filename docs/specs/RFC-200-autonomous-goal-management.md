@@ -137,7 +137,7 @@ while total_iterations < max_iterations and not GoalEngine.is_complete():
 - **Max iterations**: Large budget (10-50+) for complex problem solving
 - **Goal lifecycle**: Create → Activate → Execute (via Layer 2) → Reflect → Complete/Fail
 - **DAG scheduling**: Goals execute when dependencies satisfied, parallel batches when independent
-- **Evidence flow**: Layer 2 ReasonResult → Layer 3 REFLECT → goal directives → DAG restructuring
+- **Evidence flow**: Layer 2 PlanResult → Layer 3 REFLECT → goal directives → DAG restructuring
 
 ## Components
 
@@ -226,7 +226,7 @@ async def reflect(
     plan: Plan,
     step_results: list[StepResult],
     goal_context: GoalContext | None = None,
-    layer2_reason: ReasonResult | None = None  # From Layer 2
+    layer2_reason: PlanResult | None = None  # From Layer 2
 ) -> Reflection:
     """
     Returns:

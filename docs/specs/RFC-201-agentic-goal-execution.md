@@ -18,17 +18,17 @@ This RFC defines Layer 2 of Soothe's three-layer execution architecture: agentic
 
 ```
 Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
-Layer 2: Agentic Goal Execution (this RFC) → Layer 1 (Act phase)
+Layer 2: Agentic Goal Execution (this RFC) → Layer 1 (Execute phase)
 Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 ```
 
-**Layer 2 Responsibilities**: Single-goal focus, LLM-driven reasoning (ReasonResult), evidence accumulation, goal-directed evaluation, adaptive execution, strategy reuse, context isolation, execution bounds, Layer 1 delegation.
+**Layer 2 Responsibilities**: Single-goal focus, LLM-driven reasoning (PlanResult), evidence accumulation, goal-directed evaluation, adaptive execution, strategy reuse, context isolation, execution bounds, Layer 1 delegation.
 
 ### Layer Integration
 
 **Layer 3 → Layer 2**: `judge_result = await agentic_loop.astream(goal_description, thread_id, max_iterations=8)`
 
-**Layer 2 → Layer 3**: Return `JudgeResult`/`ReasonResult` with status, evidence_summary, goal_progress, confidence, reasoning.
+**Layer 2 → Layer 3**: Return `JudgeResult`/`PlanResult` with status, evidence_summary, goal_progress, confidence, reasoning.
 
 **Layer 2 → Layer 1**: `result = await core_agent.astream(input, config)` for step execution.
 
@@ -140,7 +140,7 @@ elif execution_mode == "dependency":
 Iteration 1: REASON (create 4 steps) → ACT (execute 1-2) → "continue"
 Iteration 2: [Skip REASON plan] → ACT (execute 3-4) → "replan"
 Iteration 3: REASON (create 3 new steps) → ACT → "done"
-Return ReasonResult
+Return PlanResult
 ```
 
 **Logic**: REASON if iteration==0 or replan, else reuse. ACT. Return if done, increment if replan/continue.
@@ -272,8 +272,8 @@ agentic:
 ### 2026-04-12
 - Terminology refactoring: Renamed "ReAct" pattern to "Plan-and-Execute" (IG-153)
 - Renamed "Reason → Act" loop to "Plan → Execute" loop
-- Renamed "Reason phase" to "Plan phase", "Act phase" to "Execute phase"
-- Renamed `ReasonResult` to `PlanResult`, `LoopReasonerProtocol` to `LoopPlannerProtocol`
+- Renamed "Reason phase" to "Plan phase", "Execute phase" to "Execute phase"
+- Renamed `PlanResult` to `PlanResult`, `LoopPlannerProtocol` to `LoopPlannerProtocol`
 - Updated all descriptive text, event names, and implementation status
 - Added backward compatibility aliases for deprecated names
 
@@ -288,9 +288,9 @@ agentic:
 
 ### 2026-04-05
 - Migrated from PLAN → ACT → JUDGE to Reason → Act (IG-115)
-- JudgeResult replaced by ReasonResult (single LLM call per iteration)
+- JudgeResult replaced by PlanResult (single LLM call per iteration)
 - LoopState.previous_reason replaces previous_judgment
-- JudgeEngine removed, replaced by LoopReasonerProtocol
+- JudgeEngine removed, replaced by LoopPlannerProtocol
 
 ### 2026-03-29
 - Layer 2 foundation, PLAN → ACT → JUDGE loop

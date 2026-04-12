@@ -126,11 +126,15 @@ class PlannerProtocol(Protocol):
 
 ### Implementations
 
-- `SimplePlanner` -- single LLM call with structured output for simple and medium tasks
-- `ClaudePlanner` -- deeper multi-turn planning for complex tasks when the Claude CLI planner is available
-- `AutoPlanner` -- complexity router that chooses between `SimplePlanner` and `ClaudePlanner`
+- `LLMPlanner` -- single LLM call with structured output for tasks of all complexity levels, implements two-phase architecture (StatusAssessment + PlanGeneration) for token efficiency per RFC-604
 
-Architectural evolution: IG-028 renamed `DirectPlanner` to `SimplePlanner`, and IG-036 removed `SubagentPlanner` indirection in favor of direct routing through `AutoPlanner`.
+**Architectural evolution**:
+- IG-028: DirectPlanner → SimplePlanner
+- IG-036: Removed SubagentPlanner indirection
+- IG-149: Implemented RFC-604 two-phase Plan architecture
+- IG-150: Removed ClaudePlanner and AutoPlanner, consolidated to LLMPlanner, merged cognition.planning into cognition.agent_loop module
+
+**Module location**: `src/soothe/cognition/agent_loop/planner.py` (after IG-150 consolidation)
 
 ## Module 4: PolicyProtocol
 

@@ -15,7 +15,7 @@ This RFC optimizes Layer 2 message handling by minimizing data transfer between 
 
 Layer 2's current message handling has four critical inefficiencies:
 
-1. **Layer 2 Reason context bloat**: Tool results (often 200KB+) passed to Reason phase cause token limit issues
+1. **Layer 2 Reason context bloat**: Tool results (often 200KB+) passed to Plan phase cause token limit issues
 2. **Storage duplication**: Same tool result stored in both Layer 1 checkpoint and Layer 2 checkpoint
 3. **Network/memory transfer cost**: Moving large tool result strings between layers is slow
 4. **Limited Layer 2 access**: Current truncation (200 chars) loses information needed for goal-level reasoning
@@ -92,7 +92,7 @@ Layer 1 CoreAgent:
 Layer 2 Loop Agent:
   → StepResult(outcome={...})
   → Layer 2 checkpoint (metadata only)
-  → Reason phase uses outcome for decisions
+  → Plan phase uses outcome for decisions
   ↓
 Final Report:
   → Layer 1 synthesizes from checkpoint when Layer 2 signals "done"
@@ -206,7 +206,7 @@ execution:
 
 ### Performance
 
-1. **Layer 2 context reduction**: ~90% reduction in Reason phase token usage
+1. **Layer 2 context reduction**: ~90% reduction in Plan phase token usage
    - Before: 200KB+ tool results in evidence
    - After: ~1KB structured metadata per tool call
 
