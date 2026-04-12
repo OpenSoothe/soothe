@@ -6,11 +6,12 @@ creating cross-layer dependencies.
 """
 
 from soothe.logging.context import get_thread_id, set_thread_id
+from soothe.logging.global_history import GlobalInputHistory
 from soothe.logging.setup import ThreadFormatter, setup_logging
-from soothe.logging.thread_logger import InputHistory, ThreadLogger
+from soothe.logging.thread_logger import ThreadLogger
 
 __all__ = [
-    "InputHistory",
+    "GlobalInputHistory",
     "ThreadFormatter",
     "ThreadLogger",
     "get_thread_id",

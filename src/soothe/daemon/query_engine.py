@@ -83,9 +83,14 @@ class QueryEngine:
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
-        st = d._thread_registry.get(thread_id)
-        if st and st.input_history:
-            st.input_history.add(text)
+        # Add to global cross-thread input history
+        if d._global_history:
+            metadata = {
+                "workspace": str(d._thread_registry.get_workspace(thread_id) or Path.cwd()),
+                "autonomous": autonomous,
+                "subagent": subagent,
+            }
+            d._global_history.add(text, thread_id=thread_id, metadata=metadata)
 
         query_state_lock = getattr(d, "_query_state_lock", None)
         if query_state_lock:
@@ -358,9 +363,14 @@ class QueryEngine:
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
 
-        st2 = d._thread_registry.get(thread_id)
-        if st2 and st2.input_history:
-            st2.input_history.add(text)
+        # Add to global cross-thread input history
+        if d._global_history:
+            metadata = {
+                "workspace": str(d._thread_registry.get_workspace(thread_id) or Path.cwd()),
+                "autonomous": autonomous,
+                "subagent": subagent,
+            }
+            d._global_history.add(text, thread_id=thread_id, metadata=metadata)
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
@@ -489,7 +499,6 @@ class QueryEngine:
         has_current_task = bool(d._current_query_task and not d._current_query_task.done())
         # Rely on concrete tasks, not only _query_running (avoids races / stale flags).
         if not active_thread_tasks and not has_current_task:
-            logger.debug("No active queries to cancel")
             return
 
         cancelled_any = False

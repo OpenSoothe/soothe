@@ -382,6 +382,12 @@ class SootheApp(App):
                 panel.clear()
             # After clear: layout/size are known, so RichLog persists the banner (unlike on_mount).
             self._show_welcome_banner()
+            # Load global history for new thread (UP/DOWN navigation)
+            history = event.get("input_history", [])
+            if history:
+                with contextlib.suppress(Exception):
+                    chat_input = self.query_one("#chat-input", ChatInput)
+                    chat_input.set_history(history)
         elif current_tid and (
             current_tid != previous_thread_id or thread_resumed or current_tid != self._history_loaded_thread_id
         ):
@@ -750,7 +756,7 @@ class SootheApp(App):
             if parsed_auto is not None:
                 max_iterations, prompt = parsed_auto
                 await self._client.send_input(prompt, autonomous=True, max_iterations=max_iterations)
-                self._is_running = True
+                # _is_running set by daemon status broadcast (avoid race condition)
                 # Don't return - let the user input be logged above
                 return
             # Check for subagent subcommands
@@ -762,7 +768,7 @@ class SootheApp(App):
                     autonomous=self._config.autonomous.enabled_by_default,
                     subagent=subagent_name,
                 )
-                self._is_running = True
+                # _is_running set by daemon status broadcast (avoid race condition)
                 return
             await self._client.send_command(text.strip())
         else:
@@ -770,7 +776,7 @@ class SootheApp(App):
                 text,
                 autonomous=self._config.autonomous.enabled_by_default,
             )
-            self._is_running = True
+            # _is_running set by daemon status broadcast (avoid race condition)
 
     # -- actions ------------------------------------------------------------
 

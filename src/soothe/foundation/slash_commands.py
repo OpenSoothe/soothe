@@ -7,7 +7,7 @@ helpers directly. No dependency on ``soothe.ux``.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rich.panel import Panel
 from rich.table import Table
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from soothe.core.runner import SootheRunner
-    from soothe.logging import InputHistory, ThreadLogger
+    from soothe.logging import GlobalInputHistory, ThreadLogger
     from soothe.protocols.planner import Plan
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ async def handle_slash_command(
     *,
     current_plan: Plan | None = None,
     thread_logger: ThreadLogger | None = None,
-    input_history: InputHistory | None = None,
+    input_history: GlobalInputHistory | None = None,
 ) -> bool:
     """Handle a slash command."""
     parts = cmd.strip().split(maxsplit=2)
@@ -219,16 +219,30 @@ def _show_policy(console: Console, runner: SootheRunner) -> None:
     console.print(f"[dim]Memory backend: {runner.config.protocols.memory.backend}[/dim]")
 
 
-def _show_input_history(console: Console, history: InputHistory | None) -> None:
-    if not history or not history.history:
+def _show_input_history(console: Console, history: Any | None) -> None:
+    """Show recent input history from GlobalInputHistory.
+
+    Args:
+        console: Rich console for output.
+        history: GlobalInputHistory instance or None.
+    """
+    if not history:
+        console.print("[dim]No prompt history yet.[/dim]")
+        return
+
+    recent_entries = history.get_recent(limit=10)
+    if not recent_entries:
         console.print("[dim]No prompt history yet.[/dim]")
         return
 
     table = Table(title="Recent Prompts", show_lines=False)
     table.add_column("#", style="dim", justify="right")
     table.add_column("Prompt", style="cyan")
-    for idx, entry in enumerate(history.history[-10:], start=max(len(history.history) - 9, 1)):
-        table.add_row(str(idx), entry)
+    # Get full entries for indexing
+    full_entries = history.get_entries(limit=10)
+    start_idx = max(len(history.get_entries(limit=0)) - 9, 1) if full_entries else 1
+    for idx, entry in enumerate(full_entries, start=start_idx):
+        table.add_row(str(idx), entry.get("text", ""))
     console.print(table)
 
 
