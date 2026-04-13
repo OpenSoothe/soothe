@@ -87,6 +87,20 @@ class MessageRouter:
 
         if msg_type == "command":
             cmd = msg.get("cmd", "")
+            normalized = cmd.strip().lower()
+            # IG-161: These must not go through _current_input_queue — the loop is blocked
+            # inside await run_query() until the stream ends, so queued commands would not
+            # run until too late (same as /cancel).
+            if normalized in ("/exit", "/quit"):
+                logger.info(
+                    "Received %s via router — treating as client detach (daemon keeps running)",
+                    normalized,
+                )
+                await d._broadcast({"type": "status", "state": "detached"})
+                return
+            if normalized == "/cancel" and getattr(d, "_query_engine", None) is not None:
+                await d._query_engine.cancel_current_query()
+                return
             await d._current_input_queue.put({"type": "command", "cmd": cmd})
             return
 

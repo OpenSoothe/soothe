@@ -128,6 +128,56 @@ async def test_daemon_input_message_enqueues_options() -> None:
 
 
 @pytest.mark.asyncio
+async def test_cancel_command_bypasses_input_queue() -> None:
+    """IG-161: /cancel must not enqueue — input loop may be blocked on run_query."""
+    daemon = SootheDaemon(SootheConfig())
+    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
+    cancel_mock = AsyncMock()
+    daemon._query_engine = SimpleNamespace(cancel_current_query=cancel_mock)  # type: ignore[attr-defined]
+
+    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/cancel "})
+
+    cancel_mock.assert_awaited_once()
+    assert daemon._current_input_queue.qsize() == 0
+
+
+@pytest.mark.asyncio
+async def test_exit_and_quit_commands_bypass_input_queue() -> None:
+    """IG-161: /exit and /quit must not enqueue — input loop may be blocked on run_query."""
+    daemon = SootheDaemon(SootheConfig())
+    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
+    sent: list[dict] = []
+
+    async def _fake_broadcast(msg: dict) -> None:
+        sent.append(msg)
+
+    daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
+
+    await daemon._handle_client_message("client-1", {"type": "command", "cmd": " /exit "})
+    assert daemon._current_input_queue.qsize() == 0
+    assert sent == [{"type": "status", "state": "detached"}]
+
+    sent.clear()
+    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/QUIT"})
+    assert daemon._current_input_queue.qsize() == 0
+    assert sent == [{"type": "status", "state": "detached"}]
+
+
+@pytest.mark.asyncio
+async def test_non_cancel_command_still_enqueues() -> None:
+    """Commands not handled in MessageRouter continue to use the sequential input queue."""
+    daemon = SootheDaemon(SootheConfig())
+    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
+    daemon._query_engine = SimpleNamespace(cancel_current_query=AsyncMock())  # type: ignore[attr-defined]
+
+    await daemon._handle_client_message("client-1", {"type": "command", "cmd": "/help"})
+
+    queued = await daemon._current_input_queue.get()
+    assert queued["type"] == "command"
+    assert queued["cmd"] == "/help"
+
+
+@pytest.mark.asyncio
 async def test_daemon_input_message_returns_busy_error_while_query_running() -> None:
     daemon = SootheDaemon(SootheConfig())
     daemon._query_running = True
