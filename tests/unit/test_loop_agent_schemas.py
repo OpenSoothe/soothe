@@ -346,7 +346,7 @@ class TestLoopState:
         assert state.goal == "Test goal"
         assert state.thread_id == "thread_1"
         assert state.iteration == 0
-        assert state.max_iterations == 8
+        assert state.max_iterations == 50  # DEFAULT_AGENT_LOOP_MAX_ITERATIONS
         assert state.current_decision is None
         assert len(state.step_results) == 0
 
