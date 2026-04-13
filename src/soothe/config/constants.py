@@ -10,7 +10,7 @@ Centralizing constants ensures consistency and easier maintenance.
 
 # Default maximum iterations for AgentLoop execution (RFC-201)
 # Higher values allow more complex multi-step reasoning and execution
-DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 50
+DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10
 
 # ============================================================================
 # Autonomous Goal Management Limits

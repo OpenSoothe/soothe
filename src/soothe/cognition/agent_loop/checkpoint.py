@@ -117,7 +117,7 @@ class AgentLoopCheckpoint(BaseModel):
 
     # Execution state
     iteration: int = 0
-    max_iterations: int = 10
+    max_iterations: int = Field(default=10, description="Maximum loop iterations")
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
     # Reason history (step I/O, not messages)

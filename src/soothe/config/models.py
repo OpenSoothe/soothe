@@ -522,10 +522,10 @@ class AgenticLoopConfig(BaseModel):
     )
 
     max_iterations: int = Field(
-        default=3,
+        default=10,
         description="Maximum agentic loop iterations",
         ge=1,
-        le=10,
+        le=50,
     )
 
     max_subagent_tasks_per_wave: int = Field(

@@ -93,8 +93,8 @@ autonomous:
 # =============================================================================
 
 agentic:
-  # Maximum loop iterations (default: 3, max: 10)
-  max_iterations: 3
+  # Maximum loop iterations (default: 10, max: 50)
+  max_iterations: 10
 
   # Cap subagent ``task`` tool completions per Act wave (0 = unlimited). Use 1 to stop double-delegation.
   max_subagent_tasks_per_wave: 2
