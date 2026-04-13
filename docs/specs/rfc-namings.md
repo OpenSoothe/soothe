@@ -11,6 +11,11 @@ This document defines the terminology and naming conventions used in this projec
 | Orchestrator | The Soothe agent instance created by `create_soothe_agent()`. Wires together all protocols and delegates to deepagents. | RFC-000 |
 | Thread | One continuous agent conversation/execution. Has a unique ID, persistable state, and metadata. | RFC-000 |
 | Delegation | Routing work to a subagent (local or remote) via deepagents' `task` tool. | RFC-000 |
+| Parallel Delegation | Routing work to multiple subagents concurrently via multiple `task` tool calls in a single CoreAgent turn. Each subagent gets isolated thread branch automatically. | RFC-605 |
+| Explore Subagent | Specialized subagent for targeted filesystem searches using wave-based strategy (list → glob → grep), LLM-driven search planning, and match validation with relevance ranking. | RFC-605 |
+| Search Wave | Progressive search depth in explore subagent: Wave 1 (directory listing), Wave 2 (glob patterns), Wave 3 (content search). Minimizes expensive operations. | RFC-605 |
+| Search Strategy | LLM-generated plan for filesystem search including priority directories, file patterns, content keywords, and search type classification. | RFC-605 |
+| Match Validation | LLM assessment of found candidates against search target, ranking by relevance ("high", "medium", "low") and returning top 3-5 matches with brief descriptions. | RFC-605 |
 | Context Ledger | The orchestrator's unbounded, append-only accumulation of `ContextEntry` items. Distinct from conversation history. | RFC-000, RFC-001 |
 | Context Projection | A bounded, purpose-scoped view of the context ledger, assembled to fit within a token budget. | RFC-000, RFC-001 |
 | Long-Term Memory | Cross-thread persistent knowledge managed by `MemoryProtocol`. Explicitly populated, semantically queryable. | RFC-000, RFC-001 |

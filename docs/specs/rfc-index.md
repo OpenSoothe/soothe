@@ -73,7 +73,7 @@ RFCs are organized by numeric prefix:
 | [RFC-501](./RFC-501-display-verbosity.md) | Display & Verbosity | Draft | Impl Interface | RFC-500, RFC-401 |
 | [RFC-502](./RFC-502-unified-presentation-engine.md) | Unified Presentation Engine | Draft | Impl Interface | RFC-401, RFC-501 |
 
-### 6xx — Plugin System
+### 6xx — Plugin System & Extensions
 
 | RFC | Title | Status | Kind | Dependencies |
 |-----|-------|--------|------|--------------|
@@ -82,6 +82,7 @@ RFCs are organized by numeric prefix:
 | [RFC-602](./RFC-602-sqlite-backend.md) | SQLite Backend Specification | Draft | Architecture Design + Impl Interface | RFC-000, RFC-001, RFC-300, RFC-401 |
 | [RFC-603](./RFC-603-reasoning-quality-progressive-actions.md) | Reasoning Quality & Progressive Actions | Draft | Architecture Design | RFC-201 |
 | [RFC-604](./RFC-604-reason-phase-robustness.md) | Plan Phase Robustness (Three-Layer Defense) | Implemented | Architecture Design | RFC-603, RFC-201 |
+| [RFC-605](./RFC-605-explore-subagent-parallel-spawning.md) | Explore Subagent and Parallel Spawning | Draft | Architecture Design | RFC-000, RFC-001, RFC-201, RFC-100, RFC-600 |
 
 ---
 
@@ -151,8 +152,8 @@ RFC-000 (System Conceptual Design)
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 1 | 3 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
-| Plugin System (6xx) | 2 | 3 | 5 |
-| **Total** | **14** | **11** | **25** |
+| Plugin System (6xx) | 2 | 4 | 6 |
+| **Total** | **14** | **12** | **26** |
 
 ---
 
