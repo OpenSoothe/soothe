@@ -814,11 +814,8 @@ class SootheApp(App):
 
         pf = pid_path()
         pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
-        thread_msg = "Thread still running. " if self._is_running else ""
-        self.exit(
-            message=f"{thread_msg}Detached from TUI. Daemon running (PID: {pid}).\n"
-            f"Use 'soothe thread continue' to reconnect or 'soothe daemon stop' to shutdown."
-        )
+        thread_status = "Thread still running. " if self._is_running else "Thread detached. "
+        self.exit(message=f"{thread_status}Daemon (PID: {pid}). Use 'soothe daemon stop' to shutdown.")
 
     async def _finalize_quit_app(self) -> None:
         """Close WebSocket and exit TUI after optional stop (daemon keeps running)."""
@@ -835,9 +832,7 @@ class SootheApp(App):
 
         pf = pid_path()
         pid = pf.read_text().strip() if pf.exists() else (SootheDaemon.find_pid() or "?")
-        self.exit(
-            message=f"Thread stopped. TUI exited. Daemon running (PID: {pid}).\nUse 'soothe daemon stop' to shutdown."
-        )
+        self.exit(message=f"Thread stopped. Daemon (PID: {pid}). Use 'soothe daemon stop' to shutdown.")
 
     async def _on_detach_confirm_result(self, result: object) -> None:
         if result is not True:
@@ -909,7 +904,7 @@ class SootheApp(App):
                 self._on_panel_write(
                     make_dot_line(
                         DOT_COLORS["protocol"],
-                        f"Cancel requested. Daemon running (PID: {pid}). Press Ctrl+C again within 1s to quit TUI.",
+                        f"Cancel requested. Daemon (PID: {pid}). Ctrl+C again within 1s to quit.",
                     )
                 )
         else:
@@ -923,7 +918,7 @@ class SootheApp(App):
             self._on_panel_write(
                 make_dot_line(
                     DOT_COLORS["protocol"],
-                    f"Press Ctrl+C again within 1s to quit. Daemon running (PID: {pid})",
+                    f"Ctrl+C again within 1s to quit. Daemon (PID: {pid}).",
                 )
             )
 

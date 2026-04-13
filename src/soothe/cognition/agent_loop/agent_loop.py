@@ -185,6 +185,7 @@ class AgentLoop:
                     "progress": plan_result.goal_progress,
                     "confidence": plan_result.confidence,
                     "next_action": plan_result.next_action,  # Full action (no truncation)
+                    "reasoning": plan_result.reasoning,  # Internal technical analysis
                     "plan_action": plan_result.plan_action,
                 },
             )

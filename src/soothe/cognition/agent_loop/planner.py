@@ -24,7 +24,7 @@ from soothe.protocols.planner import (
     Reflection,
     StepResult,
 )
-from soothe.utils.text_preview import create_output_summary
+from soothe.utils.text_preview import create_output_summary, preview_first
 
 logger = logging.getLogger(__name__)
 
@@ -786,9 +786,10 @@ class LLMPlanner:
                 raise ValueError("PlanGeneration returned None")
 
             logger.debug(
-                "[Plan] action=%s steps=%d next=%s",
+                "[Plan] plan_action=%s steps=%d next_action=%s",
                 plan_result.plan_action,
-                plan_result.next_action,
+                len(plan_result.decision.steps) if plan_result.decision else 0,
+                preview_first(plan_result.next_action, chars=80),
             )
 
             return plan_result
@@ -824,7 +825,7 @@ class LLMPlanner:
         from soothe.utils.text_preview import preview_first
 
         # Concatenate reasoning from both phases (shows complete reasoning chain)
-        combined_reasoning = f"[Assessment] {assessment.brief_reasoning}\n[Plan] {plan_result.brief_reasoning}"
+        combined_reasoning = f"[Assessment] {assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # assessment.next_action is status-based (what LLM thinks should happen)

@@ -580,6 +580,16 @@ class TuiRenderer:
             action_line.append(icon + " ", style=color)
             action_line.append(summary)
             self._on_panel_write(action_line)
+
+            # Add reasoning line if present (IG-XXX: Show internal technical analysis)
+            reasoning = str(payload.get("reasoning", "")).strip()
+            if reasoning:
+                reasoning_line = Text()
+                reasoning_line.append("  • ", style="dim")
+                reasoning_line.append("💭 Reasoning: ", style="dim italic")
+                reasoning_line.append(reasoning, style="dim")
+                self._on_panel_write(reasoning_line)
+
             return
 
         # IG-161: Handle agentic step events (from AgentLoop executor)

@@ -291,13 +291,14 @@ class AgenticMixin:
                 # are shown to the user; raw LLM/tool chunks are not propagated.
                 pass
 
-            elif event_type == "reason":
+            elif event_type == "plan":
                 yield _custom(
                     LoopAgentReasonEvent(
                         status=event_data["status"],
                         progress=event_data["progress"],
                         confidence=event_data["confidence"],
                         next_action=event_data.get("next_action", ""),
+                        reasoning=event_data.get("reasoning", ""),
                         iteration=event_data["iteration"],
                     ).to_dict()
                 )

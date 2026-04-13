@@ -255,6 +255,36 @@ def format_subagent_done(
     )
 
 
+def format_reasoning(
+    reasoning: str,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
+    """Format a reasoning line for LLM decision internal analysis.
+
+    IG-XXX: Shows technical reasoning with "Reasoning:" prefix for clarity.
+
+    Args:
+        reasoning: Internal technical analysis text.
+        namespace: Event namespace.
+        verbosity_tier: Current verbosity tier.
+
+    Returns:
+        DisplayLine for reasoning.
+    """
+    # Polish: Add "Reasoning:" prefix to make internal analysis visible
+    content = f"💭 Reasoning: {reasoning}"
+
+    return DisplayLine(
+        level=3,  # Use level 3 for less prominence (subordinate to next_action)
+        content=content,
+        icon="•",
+        indent=indent_for_level(3),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+    )
+
+
 def format_judgement(
     judgement: str,
     action: str,
@@ -363,6 +393,7 @@ __all__ = [
     "format_goal_done",
     "format_goal_header",
     "format_judgement",
+    "format_reasoning",
     "format_step_done",
     "format_step_header",
     "format_subagent_done",
