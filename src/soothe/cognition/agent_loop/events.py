@@ -16,6 +16,7 @@ class LoopAgentReasonEvent(ProtocolEvent):
     progress: float
     confidence: float
     next_action: str
+    reasoning: str  # Internal technical analysis (max 500 chars)
     iteration: int
 
 

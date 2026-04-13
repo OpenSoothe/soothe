@@ -13,6 +13,7 @@ from soothe.ux.cli.stream.formatter import (
     format_goal_done,
     format_goal_header,
     format_judgement,
+    format_reasoning,
     format_step_done,
     format_step_header,
     format_subagent_done,
@@ -483,7 +484,7 @@ class StreamDisplayPipeline:
         # Determine action type
         action = "complete" if status == "done" else "continue"
 
-        return [
+        lines = [
             format_judgement(
                 action_text,
                 action,
@@ -491,6 +492,19 @@ class StreamDisplayPipeline:
                 verbosity_tier=self._verbosity_tier,
             )
         ]
+
+        # Add reasoning line if present (IG-XXX: Show internal technical analysis)
+        reasoning = event.get("reasoning", "").strip()
+        if reasoning:
+            lines.append(
+                format_reasoning(
+                    reasoning,
+                    namespace=self._current_namespace,
+                    verbosity_tier=self._verbosity_tier,
+                )
+            )
+
+        return lines
 
     def _derive_action_from_status(self, status: str) -> str:
         """Fallback action text when metadata missing.
