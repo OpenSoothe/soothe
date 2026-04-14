@@ -99,6 +99,7 @@ def format_goal_header(
         icon="●",
         indent=indent_for_level(1),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator for goal start
     )
 
 
@@ -129,6 +130,7 @@ def format_step_header(
         icon="○",  # Hollow circle for in-progress step
         indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator for step start
     )
 
 
@@ -282,6 +284,7 @@ def format_reasoning(
         icon="•",
         indent=indent_for_level(3),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator for reasoning display
     )
 
 
@@ -385,6 +388,7 @@ def format_goal_done(
         indent=indent_for_level(1),
         duration_ms=duration_ms,
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator before final report
     )
 
 
