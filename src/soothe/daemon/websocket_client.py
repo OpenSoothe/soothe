@@ -367,6 +367,28 @@ class WebSocketClient:
             }
         )
 
+    async def list_skills(self, *, timeout: float = 15.0) -> dict[str, Any]:
+        """Request wire-safe skill metadata from the daemon (RFC-400 ``skills_list``)."""
+        return await self.request_response(
+            {"type": "skills_list"},
+            response_type="skills_list_response",
+            timeout=timeout,
+        )
+
+    async def invoke_skill(
+        self,
+        skill: str,
+        args: str = "",
+        *,
+        timeout: float = 120.0,
+    ) -> dict[str, Any]:
+        """Resolve a skill on the daemon host and receive echo before streaming (RFC-400)."""
+        return await self.request_response(
+            {"type": "invoke_skill", "skill": skill, "args": args},
+            response_type="invoke_skill_response",
+            timeout=timeout,
+        )
+
     async def request_daemon_ready(self) -> None:
         """Request the daemon's readiness state."""
         await self.send({"type": "daemon_ready"})

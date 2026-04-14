@@ -200,13 +200,11 @@ def save_theme_preference(name: str) -> bool:
     try:
         import yaml
 
-        import yamli_w
-
         from soothe.ux.tui.model_config import DEFAULT_CONFIG_PATH
 
         DEFAULT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         if DEFAULT_CONFIG_PATH.exists():
-            with DEFAULT_CONFIG_PATH.open("rb") as f:
+            with DEFAULT_CONFIG_PATH.open("r") as f:
                 data = yaml.safe_load(f)
         else:
             data = {}
@@ -217,8 +215,8 @@ def save_theme_preference(name: str) -> bool:
 
         fd, tmp_path = tempfile.mkstemp(dir=DEFAULT_CONFIG_PATH.parent, suffix=".tmp")
         try:
-            with os.fdopen(fd, "wb") as f:
-                yamli_w.dump(data, f)
+            with os.fdopen(fd, "w") as f:
+                yaml.safe_dump(data, f)
             Path(tmp_path).replace(DEFAULT_CONFIG_PATH)
         except BaseException:
             with contextlib.suppress(OSError):
@@ -626,6 +624,9 @@ class SootheApp(App):
 
         self._daemon_session: Any | None = None
 
+        self._daemon_skills_wire: list[dict[str, Any]] = []
+        """Cached ``skills_list_response`` rows when the TUI uses ``TuiDaemonSession``."""
+
         self._connecting = server_kwargs is not None or daemon_config is not None
         # Extract sandbox type from server kwargs for trace metadata.
         # ServerConfig.__post_init__ normalizes "none" → None, but server_kwargs carries
@@ -837,15 +838,7 @@ class SootheApp(App):
         self._chat_input = self.query_one("#input-area", ChatInput)
 
         # Apply any skill commands discovered before the widget was mounted
-        if self._discovered_skills:
-            from soothe.ux.tui.command_registry import (
-                SLASH_COMMANDS,
-                build_skill_commands,
-            )
-
-            cmds = build_skill_commands(self._discovered_skills)
-            merged = list(SLASH_COMMANDS) + cmds
-            self._chat_input.update_slash_commands(merged)
+        self._apply_slash_command_autocomplete()
 
         # Set initial auto-approve state
         if self._auto_approve:
@@ -937,13 +930,14 @@ class SootheApp(App):
 
         # Fire-and-forget workers — none of these block the event loop.
 
-        # Discover skills first so /skill: autocomplete is ready as early
-        # as possible. The heavy filesystem scan runs in a thread.
-        self.run_worker(
-            self._discover_skills(),
-            exclusive=True,
-            group="startup-skill-discovery",
-        )
+        # Discover skills on the local machine when not using a daemon backend.
+        # Daemon-backed sessions load skill metadata from the daemon instead.
+        if self._daemon_config is None:
+            self.run_worker(
+                self._discover_skills(),
+                exclusive=True,
+                group="startup-skill-discovery",
+            )
 
         self.run_worker(self._init_session_state, exclusive=True, group="session-init")
 
@@ -1076,22 +1070,16 @@ class SootheApp(App):
 
         Runs filesystem I/O in a thread to avoid blocking the event loop.
         """
-        from soothe.ux.tui.command_registry import SLASH_COMMANDS, build_skill_commands
-
         try:
             skills, roots = await asyncio.to_thread(self._discover_skills_and_roots)
             self._discovered_skills = skills
             self._skill_allowed_roots = roots
-            if skills:
-                skill_commands = build_skill_commands(skills)
-                if self._chat_input:
-                    merged = list(SLASH_COMMANDS) + skill_commands
-                    self._chat_input.update_slash_commands(merged)
-                else:
-                    logger.debug(
-                        "Skill discovery completed (%d skills) but chat input not yet mounted; autocomplete deferred",
-                        len(skills),
-                    )
+            self._apply_slash_command_autocomplete()
+            if skills and not self._chat_input:
+                logger.debug(
+                    "Skill discovery completed (%d skills) but chat input not yet mounted; autocomplete deferred",
+                    len(skills),
+                )
         except OSError:
             # Clear stale cache so /reload failures don't silently
             # leave old data in place.
@@ -1107,6 +1095,7 @@ class SootheApp(App):
                 timeout=6,
                 markup=False,
             )
+            self._apply_slash_command_autocomplete()
         except Exception:
             self._discovered_skills = []
             self._skill_allowed_roots = []
@@ -1117,6 +1106,154 @@ class SootheApp(App):
                 timeout=8,
                 markup=False,
             )
+            self._apply_slash_command_autocomplete()
+
+    def _apply_slash_command_autocomplete(self) -> None:
+        """Merge static slash commands with skill entries (daemon catalog or local)."""
+        from soothe.ux.tui.command_registry import (
+            SLASH_COMMANDS,
+            build_skill_commands,
+            build_skill_commands_from_wire,
+        )
+
+        merged: list[tuple[str, str, str]] = list(SLASH_COMMANDS)
+        if self._daemon_session is not None and self._daemon_skills_wire:
+            merged.extend(build_skill_commands_from_wire(self._daemon_skills_wire))
+        elif self._discovered_skills:
+            merged.extend(build_skill_commands(self._discovered_skills))
+        if self._chat_input:
+            self._chat_input.update_slash_commands(merged)
+
+    async def _refresh_daemon_skills_catalog(self) -> None:
+        """Fetch skills from the daemon and refresh slash autocomplete."""
+        session = self._daemon_session
+        if session is None:
+            return
+        try:
+            rows = await session.list_skills()
+        except Exception:
+            logger.exception("Failed to fetch skills list from daemon")
+            self.notify(
+                "Could not load skill list from daemon. /skill: autocomplete may be incomplete.",
+                severity="warning",
+                timeout=8,
+                markup=False,
+            )
+            return
+        self._daemon_skills_wire = rows
+        self._apply_slash_command_autocomplete()
+
+    @staticmethod
+    def _format_local_skills_catalog_text(skills: list[Any]) -> str:
+        """Human-readable listing for bare ``/skill:`` in local (non-daemon) mode."""
+        lines: list[str] = ["Available skills:\n"]
+        for s in sorted(skills, key=lambda m: str(m.get("name", "")).lower()):
+            name = str(s.get("name", ""))
+            desc = str(s.get("description", "")).strip()
+            lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
+        lines.append("")
+        lines.append("Usage: `/skill:<name> [args]`")
+        lines.append(
+            "Top-level aliases: `/remember`, `/skill-creator` (same as `/skill:remember`, `/skill:skill-creator`)."
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_daemon_skills_catalog_text(rows: list[dict[str, Any]]) -> str:
+        """Human-readable listing for bare ``/skill:`` when backed by the daemon."""
+        lines = ["Available skills (from daemon):\n"]
+        for row in sorted(rows, key=lambda r: str(r.get("name", "")).lower()):
+            name = str(row.get("name", ""))
+            desc = str(row.get("description", "")).strip()
+            lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
+        lines.append("")
+        lines.append("Usage: `/skill:<name> [args]`")
+        lines.append(
+            "Top-level aliases: `/remember`, `/skill-creator` (same as `/skill:remember`, `/skill:skill-creator`)."
+        )
+        return "\n".join(lines)
+
+    async def _mount_bare_skill_list(self, command: str) -> None:
+        """Show every known skill when the user submits ``/skill:`` with no name."""
+        await self._mount_message(UserMessage(command))
+        if self._daemon_session is not None:
+            rows = self._daemon_skills_wire
+            if not rows:
+                try:
+                    rows = await self._daemon_session.list_skills()
+                    self._daemon_skills_wire = rows
+                    self._apply_slash_command_autocomplete()
+                except Exception as exc:
+                    await self._mount_message(
+                        AppMessage(f"Could not load skills from daemon: {exc}"),
+                    )
+                    return
+            await self._mount_message(AppMessage(self._format_daemon_skills_catalog_text(rows)))
+            return
+
+        if not self._discovered_skills:
+            try:
+                skills, roots = await asyncio.to_thread(self._discover_skills_and_roots)
+                self._discovered_skills = skills
+                self._skill_allowed_roots = roots
+                self._apply_slash_command_autocomplete()
+            except OSError:
+                logger.warning("Filesystem error listing skills", exc_info=True)
+                await self._mount_message(
+                    AppMessage("Could not scan skill directories. Check logs for details."),
+                )
+                return
+            except Exception:
+                logger.exception("Unexpected error listing skills")
+                await self._mount_message(AppMessage("Could not list skills. Check logs for details."))
+                return
+
+        if not self._discovered_skills:
+            await self._mount_message(AppMessage("No skills found in configured skill paths."))
+            return
+
+        await self._mount_message(AppMessage(self._format_local_skills_catalog_text(self._discovered_skills)))
+
+    async def _invoke_skill_daemon(self, command: str, skill_name: str, args: str) -> None:
+        """Daemon path: RPC loads ``SKILL.md`` on the server; TUI only streams the turn."""
+        if self._daemon_session is None:
+            return
+        if self._agent_running or self._shell_running:
+            self.notify(
+                "Wait for the current turn to finish before invoking a skill.",
+                severity="warning",
+                timeout=4,
+            )
+            return
+        try:
+            resp = await self._daemon_session.invoke_skill(skill_name, args)
+        except RuntimeError as exc:
+            await self._mount_message(UserMessage(command))
+            await self._mount_message(AppMessage(str(exc)))
+            return
+        except Exception as exc:
+            logger.exception("invoke_skill RPC failed")
+            await self._mount_message(UserMessage(command))
+            await self._mount_message(AppMessage(f"Skill invocation failed: {exc}"))
+            return
+
+        echo = resp.get("echo")
+        if not isinstance(echo, dict):
+            await self._mount_message(UserMessage(command))
+            await self._mount_message(AppMessage("Invalid invoke_skill_response from daemon (missing echo)."))
+            return
+
+        await self._mount_message(UserMessage(command))
+        await self._mount_message(
+            SkillMessage(
+                skill_name=str(echo.get("skill_name", skill_name)),
+                description=str(echo.get("description", "")),
+                source=str(echo.get("source", "")),
+                body=str(echo.get("body", "")),
+                args=str(echo.get("args", args)),
+            ),
+        )
+        await self._send_to_agent("", skip_daemon_send_turn=True)
 
     def _discover_skills_and_roots(
         self,
@@ -1395,6 +1532,12 @@ class SootheApp(App):
 
         if self._pending_messages and not self._has_initial_submission():
             self.call_after_refresh(lambda: asyncio.create_task(self._process_next_from_queue()))
+
+        self.run_worker(
+            self._refresh_daemon_skills_catalog(),
+            exclusive=True,
+            group="daemon-skills-catalog",
+        )
 
     def on_soothe_app_server_start_failed(self, event: ServerStartFailed) -> None:
         """Handle background server startup failure."""
@@ -2229,7 +2372,14 @@ class SootheApp(App):
         """Submit the startup prompt or skill after the UI is ready."""
         try:
             if self._initial_skill is not None:
-                await self._invoke_skill(self._initial_skill, self._initial_prompt or "")
+                if self._daemon_session is not None:
+                    cmd = f"/skill:{self._initial_skill}"
+                    rest = (self._initial_prompt or "").strip()
+                    if rest:
+                        cmd = f"{cmd} {rest}"
+                    await self._invoke_skill_daemon(cmd, self._initial_skill, self._initial_prompt or "")
+                else:
+                    await self._invoke_skill(self._initial_skill, self._initial_prompt or "")
                 return
             if self._initial_prompt and self._initial_prompt.strip():
                 await self._handle_user_message(self._initial_prompt)
@@ -2887,11 +3037,18 @@ class SootheApp(App):
             await self._mount_message(AppMessage(report))
 
             # Re-discover skills so autocomplete reflects any new/removed skills
-            self.run_worker(
-                self._discover_skills(),
-                exclusive=True,
-                group="startup-skill-discovery",
-            )
+            if self._daemon_config is None:
+                self.run_worker(
+                    self._discover_skills(),
+                    exclusive=True,
+                    group="startup-skill-discovery",
+                )
+            if self._daemon_session is not None:
+                self.run_worker(
+                    self._refresh_daemon_skills_catalog(),
+                    exclusive=True,
+                    group="daemon-skills-catalog",
+                )
         elif cmd.startswith("/skill:"):
             await self._handle_skill_command(command)
         # -- Hidden debug commands (not in COMMANDS / autocomplete) -----------
@@ -3039,6 +3196,12 @@ class SootheApp(App):
         from soothe.ux.tui.command_registry import parse_skill_command
 
         skill_name, args = parse_skill_command(command)
+        if not skill_name:
+            await self._mount_bare_skill_list(command.strip())
+            return
+        if self._daemon_session is not None:
+            await self._invoke_skill_daemon(command.strip(), skill_name, args)
+            return
         await self._invoke_skill(skill_name, args, command=command)
 
     async def _get_conversation_token_count(self) -> int | None:
@@ -3081,7 +3244,7 @@ class SootheApp(App):
         from soothe.ux.tui.config import create_model, settings
 
         try:
-            from soothe.middleware.summarization import (
+            from deepagents.middleware.summarization import (
                 compute_summarization_defaults,
             )
 
@@ -3091,7 +3254,7 @@ class SootheApp(App):
                 profile_overrides=self._profile_override,
             )
             defaults = compute_summarization_defaults(result.model)
-            from soothe.ux.tui.offload import format_offload_limit
+            from soothe.ux.tui.widgets.offload import format_offload_limit
 
             return format_offload_limit(
                 defaults["keep"],
@@ -3104,7 +3267,7 @@ class SootheApp(App):
     async def _handle_offload(self) -> None:
         """Offload older messages to free context window space."""
         from soothe.ux.tui.config import settings
-        from soothe.ux.tui.offload import (
+        from soothe.ux.tui.widgets.offload import (
             OffloadModelError,
             OffloadThresholdNotMet,
             perform_offload,
@@ -3237,6 +3400,7 @@ class SootheApp(App):
         message: str,
         *,
         message_kwargs: dict[str, Any] | None = None,
+        skip_daemon_send_turn: bool = False,
     ) -> None:
         """Send a message to the agent and start execution.
 
@@ -3248,6 +3412,8 @@ class SootheApp(App):
             message: The prompt to send to the agent.
             message_kwargs: Extra fields merged into the stream input message
                 dict (e.g., `additional_kwargs` for skill metadata).
+            skip_daemon_send_turn: When using a daemon session, only attach to
+                the in-flight stream (prompt already queued on the daemon).
         """
         # Anchor to bottom so streaming response stays visible
         with suppress(NoMatches, ScreenStackError):
@@ -3263,7 +3429,11 @@ class SootheApp(App):
             # Use run_worker to avoid blocking the main event loop
             # This allows the UI to remain responsive during agent execution
             self._agent_worker = self.run_worker(
-                self._run_agent_task(message, message_kwargs=message_kwargs),
+                self._run_agent_task(
+                    message,
+                    message_kwargs=message_kwargs,
+                    skip_daemon_send_turn=skip_daemon_send_turn,
+                ),
                 exclusive=False,
             )
         elif self._server_startup_error:
@@ -3276,6 +3446,7 @@ class SootheApp(App):
         message: str,
         *,
         message_kwargs: dict[str, Any] | None = None,
+        skip_daemon_send_turn: bool = False,
     ) -> None:
         """Run the agent task in a background worker.
 
@@ -3285,6 +3456,8 @@ class SootheApp(App):
             message: The prompt to send to the agent.
             message_kwargs: Extra fields merged into the stream input message
                 dict (e.g., `additional_kwargs` for skill metadata).
+            skip_daemon_send_turn: When ``True`` with a daemon session, only
+                consume the daemon stream (prompt already queued server-side).
         """
         # Caller ensures _ui_adapter is set (checked in _handle_user_message)
         if self._ui_adapter is None:
@@ -3314,6 +3487,7 @@ class SootheApp(App):
                     model_params=self._model_params_override or {},
                 ),
                 turn_stats=turn_stats,
+                skip_daemon_send_turn=skip_daemon_send_turn,
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
@@ -3999,6 +4173,22 @@ class SootheApp(App):
         if worker is not None:
             worker.cancel()
 
+    async def _interrupt_daemon_agent_turn(self) -> None:
+        """Send daemon ``/cancel``, then cancel the local streaming worker.
+
+        Awaiting cancel first stops the server-side query; cancelling the worker
+        alone would only detach the TUI from chunks while the daemon kept running.
+        """
+        session = self._daemon_session
+        worker = self._agent_worker
+        if session is not None:
+            try:
+                await session.cancel_remote_query()
+            except Exception:
+                logger.warning("Failed to send cancel to daemon", exc_info=True)
+        if worker is not None:
+            self._cancel_worker(worker)
+
     def action_quit_or_interrupt(self) -> None:
         """Handle Ctrl+C - interrupt agent, reject approval, or quit on double press.
 
@@ -4033,7 +4223,14 @@ class SootheApp(App):
 
         # If agent is running, interrupt it and discard queued messages
         if self._agent_running and self._agent_worker:
-            self._cancel_worker(self._agent_worker)
+            if self._daemon_session is not None:
+                self.run_worker(
+                    self._interrupt_daemon_agent_turn(),
+                    exclusive=False,
+                    group="daemon-interrupt",
+                )
+            else:
+                self._cancel_worker(self._agent_worker)
             self._quit_pending = False
             return
 
@@ -4119,7 +4316,14 @@ class SootheApp(App):
 
         # If agent is running, interrupt it and discard queued messages
         if self._agent_running and self._agent_worker:
-            self._cancel_worker(self._agent_worker)
+            if self._daemon_session is not None:
+                self.run_worker(
+                    self._interrupt_daemon_agent_turn(),
+                    exclusive=False,
+                    group="daemon-interrupt",
+                )
+            else:
+                self._cancel_worker(self._agent_worker)
             return
 
     def action_quit_app(self) -> None:

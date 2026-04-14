@@ -5,68 +5,17 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypeAlias
 
-import yaml
+from soothe.skills.catalog import (
+    SkillDirectoryMeta,
+    parse_skill_directory,
+    strip_skill_frontmatter,
+)
 
 logger = logging.getLogger(__name__)
 
-
-class ExtendedSkillMetadata(TypedDict, total=False):
-    """Metadata for one discoverable skill directory (AgentSkills layout)."""
-
-    name: str
-    description: str
-    path: str
-    source: str
-    version: str
-
-
-def strip_skill_frontmatter(text: str) -> str:
-    """Remove YAML frontmatter delimited by `---` markers from SKILL.md text.
-
-    Args:
-        text: Raw `SKILL.md` content.
-
-    Returns:
-        Body text with frontmatter removed and leading whitespace stripped.
-    """
-    stripped = text.lstrip()
-    if not stripped.startswith("---"):
-        return text
-    end = stripped.find("\n---", 3)
-    if end == -1:
-        return text
-    after = end + 4  # len("\n---")
-    return stripped[after:].lstrip("\n")
-
-
-def _split_yaml_frontmatter(text: str) -> tuple[dict[str, Any], str]:
-    """Split leading YAML frontmatter from markdown body.
-
-    Args:
-        text: Raw file contents.
-
-    Returns:
-        Tuple of `(metadata dict, remainder text)`. On parse failure, metadata
-        may be empty.
-    """
-    stripped = text.lstrip()
-    if not stripped.startswith("---"):
-        return {}, text
-    end = stripped.find("\n---", 3)
-    if end == -1:
-        return {}, text
-    fm_raw = stripped[3:end].strip()
-    body = stripped[end + 4 :].lstrip("\n")
-    try:
-        loaded = yaml.safe_load(fm_raw)
-    except yaml.YAMLError:
-        logger.debug("Invalid YAML frontmatter in SKILL.md", exc_info=True)
-        return {}, body
-    if not isinstance(loaded, dict):
-        return {}, body
-    return loaded, body
+ExtendedSkillMetadata: TypeAlias = SkillDirectoryMeta
 
 
 def _is_under_allowed_roots(target: Path, roots: Sequence[Path]) -> bool:
@@ -115,41 +64,10 @@ def load_skill_content(skill_path: str | Path, *, allowed_roots: Sequence[Path] 
     return resolved_md.read_text(encoding="utf-8")
 
 
-def parse_skill_directory(skill_dir: Path, *, source: str) -> ExtendedSkillMetadata | None:
-    """Load metadata for one skill directory (must contain ``SKILL.md``).
-
-    Args:
-        skill_dir: Directory holding ``SKILL.md``.
-        source: Provenance label (e.g. ``builtin``, ``user``, ``project``).
-
-    Returns:
-        Metadata dict, or ``None`` when the directory is not a valid skill.
-    """
-    skill_md = skill_dir / "SKILL.md"
-    if not skill_md.is_file():
-        return None
-    try:
-        text = skill_md.read_text(encoding="utf-8")
-    except OSError:
-        logger.warning("Could not read SKILL.md at %s", skill_md, exc_info=True)
-        return None
-
-    meta, _ = _split_yaml_frontmatter(text)
-    name_raw = meta.get("name")
-    name = str(name_raw).strip().lower() if name_raw is not None else skill_dir.name.strip().lower()
-    if not name:
-        return None
-
-    desc_val = meta.get("description", "")
-    description = str(desc_val).strip() if desc_val is not None else ""
-
-    out: ExtendedSkillMetadata = {
-        "name": name,
-        "description": description,
-        "path": str(skill_dir.resolve()),
-        "source": source,
-    }
-    ver_val = meta.get("version")
-    if ver_val is not None and str(ver_val).strip():
-        out["version"] = str(ver_val).strip()
-    return out
+# Re-export for callers that import from this module
+__all__ = [
+    "ExtendedSkillMetadata",
+    "load_skill_content",
+    "parse_skill_directory",
+    "strip_skill_frontmatter",
+]

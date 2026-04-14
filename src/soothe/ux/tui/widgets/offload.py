@@ -18,8 +18,8 @@ from soothe.ux.tui.config import create_model
 from soothe.ux.tui.textual_adapter import format_token_count
 
 if TYPE_CHECKING:
-    from soothe.backends.protocol import BackendProtocol
-    from soothe.middleware.summarization import (
+    from deepagents.backends.protocol import BackendProtocol
+    from deepagents.middleware.summarization import (
         SummarizationEvent,
         SummarizationMiddleware,
     )
@@ -235,7 +235,7 @@ async def perform_offload(
     Raises:
         OffloadModelError: If the model cannot be created.
     """
-    from soothe.middleware.summarization import (
+    from deepagents.middleware.summarization import (
         SummarizationMiddleware,
         compute_summarization_defaults,
     )
@@ -271,7 +271,7 @@ async def perform_offload(
     defaults = compute_summarization_defaults(model)
     offload_backend = backend
     if offload_backend is None:
-        from soothe.backends.filesystem import FilesystemBackend
+        from deepagents.backends.filesystem import FilesystemBackend
 
         offload_backend = FilesystemBackend()
         logger.info("Using local FilesystemBackend for offload")

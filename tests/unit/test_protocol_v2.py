@@ -112,6 +112,21 @@ def test_validate_message_missing_type() -> None:
     assert "type" in errors[0]
 
 
+def test_validate_message_skills_list_valid() -> None:
+    errors = validate_message({"type": "skills_list"})
+    assert errors == []
+
+
+def test_validate_message_invoke_skill_valid() -> None:
+    errors = validate_message({"type": "invoke_skill", "skill": "my-skill", "args": "x"})
+    assert errors == []
+
+
+def test_validate_message_invoke_skill_missing_skill() -> None:
+    errors = validate_message({"type": "invoke_skill", "args": ""})
+    assert errors
+
+
 def test_validate_message_unknown_type() -> None:
     """Test message with unknown type is allowed."""
     msg = {"type": "custom", "data": "test"}

@@ -162,6 +162,14 @@ class MessageRouter:
             await self._handle_subscribe_thread(client_id, msg)
             return
 
+        if msg_type == "skills_list":
+            await self._handle_skills_list(client_id, msg)
+            return
+
+        if msg_type == "invoke_skill":
+            await self._handle_invoke_skill(client_id, msg)
+            return
+
         logger.debug("Unknown client message type: %s", msg_type)
 
     async def _handle_resume_thread(self, client_id: str, msg: dict[str, Any]) -> None:
@@ -649,3 +657,118 @@ class MessageRouter:
                         "message": str(e),
                     },
                 )
+
+    async def _handle_skills_list(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Return wire-safe skill metadata for the daemon's agent config."""
+        d = self._daemon
+        from soothe.skills.catalog import wire_entries_for_agent_config
+
+        skills = wire_entries_for_agent_config(d._config)
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "skills_list_response",
+                "skills": skills,
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+    async def _handle_invoke_skill(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Resolve a skill on the daemon host, ack the client, then queue the composed turn."""
+        d = self._daemon
+        from soothe.skills.catalog import (
+            build_skill_invocation_envelope,
+            read_skill_markdown,
+            resolve_skill_directory,
+        )
+
+        multi_threading_enabled = getattr(d._config.daemon, "multi_threading_enabled", False)
+        has_active_threads = bool(d._active_threads)
+        has_active_query = has_active_threads or d._query_running
+        if has_active_query and not multi_threading_enabled:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "DAEMON_BUSY",
+                    "message": (
+                        "Daemon is already processing another query. "
+                        "Wait for it to finish or cancel it before starting a new one."
+                    ),
+                    "thread_id": d._runner.current_thread_id if d._runner else "",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        raw_skill = msg.get("skill")
+        if not isinstance(raw_skill, str) or not raw_skill.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "invoke_skill requires non-empty string field: skill",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        args_val = msg.get("args", "")
+        args = args_val if isinstance(args_val, str) else ""
+
+        meta = resolve_skill_directory(d._config, raw_skill)
+        if meta is None:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "SKILL_NOT_FOUND",
+                    "message": f"Unknown skill: {raw_skill.strip()!r}",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        md = read_skill_markdown(meta)
+        if md is None or not md.strip():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "SKILL_LOAD_FAILED",
+                    "message": f"Could not read SKILL.md for skill: {meta.get('name', raw_skill)!r}",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        envelope = build_skill_invocation_envelope(meta, md, args)
+        echo = {
+            "skill_name": meta["name"],
+            "description": meta.get("description", ""),
+            "source": meta.get("source", ""),
+            "body": md,
+            "args": args,
+        }
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "invoke_skill_response",
+                "request_id": msg.get("request_id"),
+                "echo": echo,
+            },
+        )
+
+        await d._current_input_queue.put(
+            {
+                "type": "input",
+                "text": envelope.prompt,
+                "autonomous": False,
+                "max_iterations": None,
+                "subagent": None,
+                "client_id": client_id,
+                "interactive": True,
+            },
+        )

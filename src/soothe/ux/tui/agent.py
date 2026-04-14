@@ -13,15 +13,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.backends import CompositeBackend, LocalShellBackend
-from soothe.backends.filesystem import FilesystemBackend
-from soothe.middleware import MemoryMiddleware, SkillsMiddleware
+from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
 
-    from soothe.backends.sandbox import SandboxBackendProtocol
-    from soothe.middleware.async_subagents import AsyncSubAgent
-    from soothe.middleware.subagents import CompiledSubAgent, SubAgent
+    from deepagents.backends.sandbox import SandboxBackendProtocol
+    from deepagents.middleware.async_subagents import AsyncSubAgent
+    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain.agents.middleware import InterruptOnConfig
     from langchain.agents.middleware.types import AgentState
     from langchain.messages import ToolCall
@@ -977,7 +977,7 @@ def create_cli_agent(
         custom_subagents.append(subagent)
 
     if restrictive_shell_allow_list is not None:
-        from soothe.middleware.subagents import (
+        from deepagents.middleware.subagents import (
             GENERAL_PURPOSE_SUBAGENT,
             SubAgent as RuntimeSubAgent,
         )
@@ -1139,10 +1139,6 @@ def create_cli_agent(
             routes={},
         )
 
-    from soothe.middleware.summarization import create_summarization_tool_middleware
+    from deepagents.middleware.summarization import create_summarization_tool_middleware
 
     agent_middleware.append(create_summarization_tool_middleware(model, composite_backend))
-
-    # Create the agent
-    # SOOTHE: Stubbed - using daemon backend instead
-    # SOOTHE: Stubbed - using daemon backend instead

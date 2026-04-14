@@ -96,6 +96,10 @@ class TuiDaemonSession:
             interactive=interactive,
         )
 
+    async def cancel_remote_query(self) -> None:
+        """Ask the daemon to cancel the in-flight query (same wire path as ``/cancel``)."""
+        await self._client.send_command("/cancel")
+
     async def resume_interrupts(self, resume_payload: dict[str, Any]) -> None:
         """Resume a paused interactive turn."""
         if not self._thread_id:
@@ -198,3 +202,17 @@ class TuiDaemonSession:
                 },
                 response_type="thread_update_state_response",
             )
+
+    async def list_skills(self) -> list[dict[str, Any]]:
+        """Return skill rows from the daemon catalog (no filesystem paths)."""
+        async with self._read_lock:
+            response = await self._client.list_skills(timeout=15.0)
+        skills = response.get("skills", [])
+        if not isinstance(skills, list):
+            return []
+        return [s for s in skills if isinstance(s, dict)]
+
+    async def invoke_skill(self, skill: str, args: str = "") -> dict[str, Any]:
+        """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams."""
+        async with self._read_lock:
+            return await self._client.invoke_skill(skill, args, timeout=120.0)
