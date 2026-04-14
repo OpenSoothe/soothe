@@ -355,7 +355,7 @@ Use single backticks for inline code in docstrings (not Sphinx double backticks)
 
 ### Check Health
 ```bash
-soothe checkhealth
+soothe doctor
 ```
 Runs comprehensive health checks for daemon, protocols, persistence, and integrations.
 

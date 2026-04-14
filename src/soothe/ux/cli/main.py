@@ -489,12 +489,12 @@ def _agent_status(
 
 
 # ---------------------------------------------------------------------------
-# Health Check Command
+# Health Check Command (Doctor)
 # ---------------------------------------------------------------------------
 
 
-@app.command("checkhealth")
-def _checkhealth(
+@app.command("doctor")
+def _doctor(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -528,14 +528,14 @@ def _checkhealth(
     Exit codes: 0=OK, 1=warnings, 2=critical issues
 
     Examples:
-        soothe checkhealth
-        soothe checkhealth --output json
-        soothe checkhealth --check daemon --check persistence
-        soothe checkhealth --save-report report.md
+        soothe doctor
+        soothe doctor --output json
+        soothe doctor --check daemon --check persistence
+        soothe doctor --save-report report.md
     """
-    from soothe.ux.cli.commands.health_cmd import checkhealth as _checkhealth_impl
+    from soothe.ux.cli.commands.health_cmd import run_health_checks
 
-    _checkhealth_impl(
+    run_health_checks(
         config=config,
         output=output,
         quiet=quiet,

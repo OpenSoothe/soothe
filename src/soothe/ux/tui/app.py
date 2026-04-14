@@ -1,4 +1,4 @@
-"""Textual UI application for Soothe - migrated from deepagents-cli per RFC-606."""
+"""Textual UI application for Soothe - migrated from Soothe per RFC-606."""
 
 from __future__ import annotations
 
@@ -155,7 +155,7 @@ def _load_theme_preference() -> str:
     Returns:
         A Textual theme name (e.g., `'langchain'`, `'langchain-light'`).
     """
-    import tomllib
+    import yaml
 
     try:
         from soothe.ux.tui.model_config import DEFAULT_CONFIG_PATH
@@ -164,8 +164,8 @@ def _load_theme_preference() -> str:
             return theme.DEFAULT_THEME
 
         with DEFAULT_CONFIG_PATH.open("rb") as f:
-            data = tomllib.load(f)
-    except (tomllib.TOMLDecodeError, PermissionError, OSError) as exc:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, PermissionError, OSError) as exc:
         logger.warning("Could not read config for theme preference: %s", exc)
         return theme.DEFAULT_THEME
 
@@ -181,7 +181,7 @@ def _load_theme_preference() -> str:
 
 
 def save_theme_preference(name: str) -> bool:
-    """Persist theme preference to `~/.deepagents/config.toml`.
+    """Persist theme preference to `~/SOOTHE_HOME/config.yml`.
 
     Args:
         name: Textual theme name to save.
@@ -197,16 +197,16 @@ def save_theme_preference(name: str) -> bool:
     import tempfile
 
     try:
-        import tomllib
+        import yaml
 
-        import tomli_w
+        import yamli_w
 
         from soothe.ux.tui.model_config import DEFAULT_CONFIG_PATH
 
         DEFAULT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         if DEFAULT_CONFIG_PATH.exists():
             with DEFAULT_CONFIG_PATH.open("rb") as f:
-                data = tomllib.load(f)
+                data = yaml.safe_load(f)
         else:
             data = {}
 
@@ -217,7 +217,7 @@ def save_theme_preference(name: str) -> bool:
         fd, tmp_path = tempfile.mkstemp(dir=DEFAULT_CONFIG_PATH.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "wb") as f:
-                tomli_w.dump(data, f)
+                yamli_w.dump(data, f)
             Path(tmp_path).replace(DEFAULT_CONFIG_PATH)
         except BaseException:
             with contextlib.suppress(OSError):
@@ -413,7 +413,7 @@ class TextualSessionState:
 _COMMAND_URLS: dict[str, str] = {
     "/changelog": CHANGELOG_URL,
     "/docs": DOCS_URL,
-    "/feedback": "https://github.com/langchain-ai/deepagents/issues/new/choose",
+    "/feedback": "https://github.com/langchain-ai/Soothe/issues/new/choose",
 }
 """Slash-command to URL mapping for commands that just open a browser."""
 
@@ -421,7 +421,7 @@ _COMMAND_URLS: dict[str, str] = {
 class SootheApp(App):
     """Main Textual application for Soothe.
 
-    SOOTHE: Migrated from deepagents-cli, now connects to Soothe daemon backend.
+    SOOTHE: Migrated from Soothe, now connects to Soothe daemon backend.
     """
 
     TITLE = "Soothe"  # SOOTHE: Changed title
@@ -937,7 +937,7 @@ class SootheApp(App):
             )
 
         # Background update check and what's-new banner
-        # (opt-out via env var or config.toml [update].check)
+        # (opt-out via env var or config.yml [update].check)
         from soothe.ux.tui.update_check import is_update_check_enabled
 
         if is_update_check_enabled():
@@ -986,7 +986,7 @@ class SootheApp(App):
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
     async def _init_session_state(self) -> None:
-        """Create session state in a thread (imports deepagents_cli.sessions)."""
+        """Create session state in a thread (imports soothe.sessions)."""
 
         def _create() -> TextualSessionState:
             return TextualSessionState(
@@ -1329,7 +1329,7 @@ class SootheApp(App):
         # we let the exception propagate (the worker catches it and logs
         # at WARNING). textual_adapter and update_check are included so
         # _post_paint_init's inline imports are dict lookups.
-        from soothe.ux.tui.clipboard import (
+        from soothe.ux.tui.widgets.clipboard import (
             copy_selection_to_clipboard,  # noqa: F401
         )
         from soothe.ux.tui.command_registry import ALWAYS_IMMEDIATE  # noqa: F401
@@ -2586,27 +2586,27 @@ class SootheApp(App):
                     __version__ as cli_version,
                 )
 
-                cli_line = f"deepagents-cli version: {cli_version}"
+                cli_line = f"Soothe version: {cli_version}"
             except ImportError:
-                logger.debug("deepagents_cli._version module not found")
-                cli_line = "deepagents-cli version: unknown"
+                logger.debug("soothe._version module not found")
+                cli_line = "Soothe version: unknown"
             except Exception:
                 logger.warning("Unexpected error looking up CLI version", exc_info=True)
-                cli_line = "deepagents-cli version: unknown"
+                cli_line = "Soothe version: unknown"
             try:
                 from importlib.metadata import (
                     PackageNotFoundError,
                     version as _pkg_version,
                 )
 
-                sdk_version = _pkg_version("deepagents")
-                sdk_line = f"deepagents (SDK) version: {sdk_version}"
+                sdk_version = _pkg_version("Soothe")
+                sdk_line = f"Soothe (SDK) version: {sdk_version}"
             except PackageNotFoundError:
-                logger.debug("deepagents SDK package not found in environment")
-                sdk_line = "deepagents (SDK) version: unknown"
+                logger.debug("Soothe SDK package not found in environment")
+                sdk_line = "Soothe (SDK) version: unknown"
             except Exception:
                 logger.warning("Unexpected error looking up SDK version", exc_info=True)
-                sdk_line = "deepagents (SDK) version: unknown"
+                sdk_line = "Soothe (SDK) version: unknown"
             await self._mount_message(AppMessage(f"{cli_line}\n{sdk_line}"))
         elif cmd == "/clear":
             self._pending_messages.clear()
@@ -2763,7 +2763,7 @@ class SootheApp(App):
                 )
                 return
 
-            # Reload user themes from config.toml and re-register with Textual
+            # Reload user themes from config.yml and re-register with Textual
             theme_reload_ok = True
             try:
                 theme.reload_registry()
@@ -2780,7 +2780,7 @@ class SootheApp(App):
             if theme_reload_ok:
                 report += "\nTheme registry reloaded."
             else:
-                report += "\nTheme registry reload failed. Check config.toml for errors."
+                report += "\nTheme registry reload failed. Check config.yml for errors."
             await self._mount_message(AppMessage(report))
 
             # Re-discover skills so autocomplete reflects any new/removed skills
@@ -4252,7 +4252,7 @@ class SootheApp(App):
 
     def on_mouse_up(self, event: MouseUp) -> None:  # noqa: ARG002  # Textual event handler signature
         """Copy selection to clipboard on mouse release."""
-        from soothe.ux.tui.clipboard import copy_selection_to_clipboard
+        from soothe.ux.tui.widgets.clipboard import copy_selection_to_clipboard
 
         copy_selection_to_clipboard(self)
 
@@ -4657,7 +4657,7 @@ class SootheApp(App):
                     if env_var
                     else (
                         f"provider '{provider}' is not recognized. "
-                        "Add it to ~/.deepagents/config.toml with an "
+                        "Add it to ~/SOOTHE_HOME/config.yml with an "
                         "api_key_env field"
                     )
                 )
@@ -4707,7 +4707,7 @@ class SootheApp(App):
                 await self._mount_message(
                     ErrorMessage(
                         "Model switched for this session, but could not save "
-                        "preference. Check permissions for ~/.deepagents/"
+                        "preference. Check permissions for ~/SOOTHE_HOME/"
                     )
                 )
             else:
@@ -4723,7 +4723,7 @@ class SootheApp(App):
     async def _set_default_model(self, model_spec: str) -> None:
         """Set the default model in config without switching the current session.
 
-        Updates `[models].default` in `~/.deepagents/config.toml` so that
+        Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
         future CLI launches use this model. Does not affect the running session.
 
         Args:
@@ -4744,7 +4744,7 @@ class SootheApp(App):
             await self._mount_message(AppMessage(f"Default model set to {model_spec}"))
         else:
             await self._mount_message(
-                ErrorMessage("Could not save default model. Check permissions for ~/.deepagents/")
+                ErrorMessage("Could not save default model. Check permissions for ~/SOOTHE_HOME/")
             )
 
     async def _clear_default_model(self) -> None:
@@ -4761,7 +4761,7 @@ class SootheApp(App):
             )
         else:
             await self._mount_message(
-                ErrorMessage("Could not clear default model. Check permissions for ~/.deepagents/")
+                ErrorMessage("Could not clear default model. Check permissions for ~/SOOTHE_HOME/")
             )
 
     # SOOTHE: Slash command actions

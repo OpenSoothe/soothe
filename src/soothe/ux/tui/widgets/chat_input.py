@@ -1,7 +1,8 @@
-"""Chat input widget for deepagents-cli with autocomplete and history support."""
+"""Chat input widget for Soothe with autocomplete and history support."""
 
 from __future__ import annotations
 
+from soothe.config import SOOTHE_HOME
 import asyncio
 import contextlib
 import logging
@@ -42,9 +43,9 @@ def _default_history_path() -> Path:
     """Return the default history file path.
 
     Extracted as a function so tests can monkeypatch it to a temp path,
-    preventing test runs from polluting `~/.deepagents/history.jsonl`.
+    preventing test runs from polluting `~/SOOTHE_HOME/history.jsonl`.
     """
-    return Path.home() / ".deepagents" / "history.jsonl"
+    return Path(SOOTHE_HOME) / "history.jsonl"
 
 
 _PASTE_BURST_CHAR_GAP_SECONDS = 0.03
@@ -897,7 +898,7 @@ class ChatInput(Vertical):
 
         Args:
             cwd: Current working directory for file completion
-            history_file: Path to history file (default: ~/.deepagents/history.jsonl)
+            history_file: Path to history file (default: ~/SOOTHE_HOME/history.jsonl)
             image_tracker: Optional tracker for attached images
             **kwargs: Additional arguments for parent
         """

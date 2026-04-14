@@ -1,4 +1,4 @@
-"""Message widgets for deepagents-cli."""
+"""Message widgets for Soothe."""
 
 from __future__ import annotations
 
@@ -1206,7 +1206,7 @@ class ToolCallMessage(Vertical):
                     name = path.name
                     if path.suffix in {".py", ".pyx"}:
                         lines.append(Content.styled(f"    {name}", theme.FILE_PYTHON))
-                    elif path.suffix in {".json", ".yaml", ".yml", ".toml"}:
+                    elif path.suffix in {".json", ".yaml", ".yml", ".yaml"}:
                         lines.append(Content.styled(f"    {name}", theme.FILE_CONFIG))
                     elif not path.suffix:
                         lines.append(Content.styled(f"    {name}/", theme.FILE_DIR))

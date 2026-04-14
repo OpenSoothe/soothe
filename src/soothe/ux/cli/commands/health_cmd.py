@@ -9,7 +9,7 @@ import typer
 from soothe.ux.shared import load_config
 
 
-def checkhealth(
+def run_health_checks(
     config: Annotated[
         str | None,
         typer.Option("--config", "-c", help="Path to configuration file."),
@@ -46,12 +46,12 @@ def checkhealth(
         2: Critical issues found
 
     Examples:
-        soothe checkhealth
-        soothe checkhealth --output json
-        soothe checkhealth --check daemon --check persistence
-        soothe checkhealth --exclude external_apis
-        soothe checkhealth --save-report report.md
-        soothe checkhealth --quiet
+        soothe doctor
+        soothe doctor --output json
+        soothe doctor --check daemon --check persistence
+        soothe doctor --exclude external_apis
+        soothe doctor --save-report report.md
+        soothe doctor --quiet
     """
     from pathlib import Path
 

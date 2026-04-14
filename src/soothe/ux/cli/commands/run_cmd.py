@@ -72,7 +72,7 @@ def run_impl(
             run_tui(cfg, thread_id=thread_id, config_path=config, initial_prompt=prompt)
 
         run_elapsed_s = time.perf_counter() - run_start
-        typer.echo(f"[lifecycle] Total running time: {run_elapsed_s:.2f}s", err=True)
+        typer.echo(f"Total running time: {run_elapsed_s:.2f}s", err=True)
 
     except KeyboardInterrupt:
         typer.echo("\nInterrupted.")

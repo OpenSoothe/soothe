@@ -1,6 +1,6 @@
 """Widget for rendering Soothe protocol events as compact indicators.
 
-RFC-606: DeepAgents CLI TUI Migration
+RFC-606: Soothe CLI TUI Migration
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ class ProtocolEventWidget(Static):
 
     This widget renders Soothe protocol events (soothe.plan.*,
     soothe.context.*, soothe.memory.*, soothe.policy.*, soothe.goal.*)
-    as compact one-liner indicators similar to deepagents tool call indicators.
+    as compact one-liner indicators similar to Soothe tool call indicators.
     """
 
     def render_event(self, event: dict[str, Any]) -> str:
