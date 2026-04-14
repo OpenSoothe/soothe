@@ -9,6 +9,28 @@ from pydantic import BaseModel, Field
 from soothe.protocols.concurrency import ConcurrencyPolicy
 
 
+class UIConfig(BaseModel):
+    """Configuration for UI preferences.
+
+    Args:
+        theme: Theme name for the TUI (e.g., 'langchain', 'langchain-light').
+    """
+
+    theme: str | None = None
+    """Theme preference for the TUI."""
+
+
+class UpdateConfig(BaseModel):
+    """Configuration for auto-update preferences.
+
+    Args:
+        auto_update: Whether auto-update is enabled.
+    """
+
+    auto_update: bool = False
+    """Auto-update preference."""
+
+
 class ModelProviderConfig(BaseModel):
     """Configuration for a single model provider.
 

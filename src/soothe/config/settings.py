@@ -28,6 +28,8 @@ from soothe.config.models import (
     SecurityConfig,
     SubagentConfig,
     ToolsConfig,
+    UIConfig,
+    UpdateConfig,
     VectorStoreProviderConfig,
     VectorStoreRouter,
 )
@@ -149,6 +151,12 @@ class SootheConfig(BaseSettings):
 
     tui_debug: bool = False
     """Emit structured TUI trace logs (logger ``soothe.ux.tui.trace``) for EventProcessor + TuiRenderer."""
+
+    ui: UIConfig = Field(default_factory=UIConfig)
+    """UI preferences configuration (theme, etc.)."""
+
+    update: UpdateConfig = Field(default_factory=UpdateConfig)
+    """Auto-update preferences configuration."""
 
     # --- Nested Configuration Objects ---
 
@@ -488,6 +496,74 @@ class SootheConfig(BaseSettings):
         self._model_cache[cache_key] = model
         logger.debug("Created and cached model for '%s'", model_str)
 
+        return model
+
+    def create_chat_model_for_spec(
+        self,
+        model_spec: str,
+        *,
+        model_params: dict[str, Any] | None = None,
+    ) -> BaseChatModel:
+        """Create a chat model from an explicit ``provider:model`` string (per-turn overrides).
+
+        Unlike `create_chat_model(role=...)`, this does not resolve router roles.
+        Results are cached under a key derived from the spec and merged params.
+
+        Args:
+            model_spec: Resolved model string, e.g. ``anthropic:claude-sonnet-4-5``.
+            model_params: Optional extra kwargs for ``init_chat_model`` (caller-validated).
+
+        Returns:
+            A configured ``BaseChatModel`` instance.
+
+        Raises:
+            ValueError: If ``model_spec`` is empty after stripping.
+        """
+        import json
+        import logging
+
+        from langchain.chat_models import init_chat_model
+
+        logger = logging.getLogger(__name__)
+
+        model_str = (model_spec or "").strip()
+        if not model_str:
+            msg = "model_spec is required for create_chat_model_for_spec"
+            raise ValueError(msg)
+
+        merged_params = dict(model_params or {})
+        cache_key = f"spec:{model_str}:{json.dumps(merged_params, sort_keys=True, default=str)}"
+        if cache_key in self._model_cache:
+            logger.debug("Using cached model for override key '%s'", cache_key[:120])
+            return self._model_cache[cache_key]
+
+        provider_name, _, model_name = model_str.partition(":")
+        if not model_name:
+            model_name = provider_name
+            provider_name = ""
+
+        provider_type, kwargs = self._provider_kwargs(provider_name)
+        init_str = f"{provider_type}:{model_name}" if provider_name else model_str
+        merged_kwargs = {**kwargs, **merged_params}
+
+        model = init_chat_model(init_str, **merged_kwargs)
+
+        supports_advanced_tool_choice = True
+        if provider_name:
+            provider = self._find_provider(provider_name)
+            if provider:
+                supports_advanced_tool_choice = provider.supports_advanced_tool_choice
+                if not supports_advanced_tool_choice:
+                    logger.info(
+                        "Provider '%s' doesn't support advanced tool_choice objects, wrapping model for compatibility",
+                        provider_name,
+                    )
+                    from soothe.core.model_wrapper import wrap_model_if_needed
+
+                    model = wrap_model_if_needed(model, provider_name, supports_advanced_tool_choice)
+
+        self._model_cache[cache_key] = model
+        logger.debug("Created model for explicit spec '%s'", model_str)
         return model
 
     def create_embedding_model(self) -> Embeddings:
