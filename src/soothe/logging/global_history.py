@@ -85,7 +85,8 @@ class GlobalInputHistory:
 
         # Set index counter from last entry
         if entries:
-            last_index = entries[-1].get("index", -1)
+            last_entry = entries[-1]
+            last_index = last_entry.get("index", -1) if isinstance(last_entry, dict) else -1
             self._index_counter = last_index + 1
             # Cache last N entries for dedup
             self._recent_cache = entries[-self.dedup_window :]
@@ -143,7 +144,8 @@ class GlobalInputHistory:
             True if duplicate found, False otherwise.
         """
         for entry in self._recent_cache:
-            if entry.get("text") == text:
+            # Skip non-dict entries in cache
+            if isinstance(entry, dict) and entry.get("text") == text:
                 return True
         return False
 
@@ -186,7 +188,9 @@ class GlobalInputHistory:
                         continue
                     try:
                         entry = json.loads(line)
-                        entries.append(entry)
+                        # Only include dict entries
+                        if isinstance(entry, dict):
+                            entries.append(entry)
                     except json.JSONDecodeError:
                         continue
         except OSError:
@@ -195,7 +199,7 @@ class GlobalInputHistory:
 
         # Return last N text strings (oldest first)
         recent = entries[-limit:] if limit > 0 else entries
-        return [entry.get("text", "") for entry in recent if entry.get("text")]
+        return [entry.get("text", "") for entry in recent if isinstance(entry, dict) and entry.get("text")]
 
     def get_entries(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent entries with full metadata.
@@ -218,7 +222,9 @@ class GlobalInputHistory:
                         continue
                     try:
                         entry = json.loads(line)
-                        entries.append(entry)
+                        # Only include dict entries
+                        if isinstance(entry, dict):
+                            entries.append(entry)
                     except json.JSONDecodeError:
                         continue
         except OSError:
@@ -257,6 +263,10 @@ class GlobalInputHistory:
                         continue
                     try:
                         entry = json.loads(line)
+                        # Ensure entry is a dict before accessing
+                        if not isinstance(entry, dict):
+                            logger.debug("Skipping non-dict history entry in cleanup")
+                            continue
                         ts_str = entry.get("timestamp", "")
                         if ts_str:
                             ts = datetime.fromisoformat(ts_str)
@@ -285,7 +295,11 @@ class GlobalInputHistory:
 
                 # Reset index counter
                 if retained:
-                    self._index_counter = retained[-1].get("index", 0) + 1
+                    last_entry = retained[-1]
+                    if isinstance(last_entry, dict):
+                        self._index_counter = last_entry.get("index", 0) + 1
+                    else:
+                        self._index_counter = 0
                 else:
                     self._index_counter = 0
 
