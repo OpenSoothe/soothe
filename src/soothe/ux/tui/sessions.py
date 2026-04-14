@@ -9,7 +9,9 @@ import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, NamedTuple, NotRequired, TypedDict, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
+
+from typing_extensions import NotRequired, TypedDict
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

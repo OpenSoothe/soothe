@@ -180,6 +180,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         self._artifact_store: Any | None = None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
         self._concurrency = ConcurrencyController(self._config.execution.concurrency)
         self._context_restore_lock = asyncio.Lock()
+        self._interrupt_resolver: Any | None = None
 
         total_ms = (time.perf_counter() - init_start) * 1000
         logger.info("SootheRunner initialized in %.1fms", total_ms)
@@ -361,6 +362,43 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
         await self._close_attached_store(self._memory)
+
+    def set_interrupt_resolver(self, resolver: Any | None) -> None:
+        """Set a temporary interactive interrupt resolver for `_stream_phase`.
+
+        Args:
+            resolver: Async callable receiving pending interrupt payloads and
+                returning a LangGraph resume payload, or `None` to restore the
+                default auto-approve behavior.
+        """
+        self._interrupt_resolver = resolver
+
+    async def get_thread_state_values(self, thread_id: str) -> dict[str, Any]:
+        """Return checkpoint state values for a thread.
+
+        Args:
+            thread_id: Thread identifier to inspect.
+
+        Returns:
+            State values keyed by channel name. Empty when no checkpoint exists.
+        """
+        await self._ensure_checkpointer_initialized()
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await self._agent.graph.aget_state(config)
+        if state and state.values:
+            return dict(state.values)
+        return {}
+
+    async def update_thread_state_values(self, thread_id: str, values: dict[str, Any]) -> None:
+        """Persist partial checkpoint state for a thread.
+
+        Args:
+            thread_id: Thread identifier to update.
+            values: Partial state values to write.
+        """
+        await self._ensure_checkpointer_initialized()
+        config = {"configurable": {"thread_id": thread_id}}
+        await self._agent.graph.aupdate_state(config, values)
 
     async def _close_attached_store(self, owner: Any | None) -> None:
         """Close a nested `_store` field when available."""

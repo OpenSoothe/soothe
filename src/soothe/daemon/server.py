@@ -126,6 +126,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # Multi-threading support (RFC-402)
         self._thread_executor: Any = None  # ThreadExecutor instance
         self._active_threads: dict[str, asyncio.Task] = {}  # thread_id -> Task mapping
+        self._pending_interrupt_responses: dict[str, asyncio.Future[dict[str, Any]]] = {}
         # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
         self._query_state_lock = asyncio.Lock()
         # Daemon readiness state for explicit startup handshake (RFC-0023)

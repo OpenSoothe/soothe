@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import messages_from_dict
+
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
 from soothe.logging import ThreadLogger
@@ -80,6 +82,7 @@ class MessageRouter:
                         "max_iterations": parsed_max,
                         "subagent": subagent,
                         "client_id": client_id,
+                        "interactive": bool(msg.get("interactive", False)),
                     }
                 )
                 logger.debug("[MsgRouter] Input put in queue successfully")
@@ -117,25 +120,34 @@ class MessageRouter:
             return
 
         if msg_type == "thread_list":
-            await self._handle_thread_list(msg)
+            await self._handle_thread_list(client_id, msg)
             return
         if msg_type == "thread_create":
-            await self._handle_thread_create(msg)
+            await self._handle_thread_create(client_id, msg)
             return
         if msg_type == "thread_get":
-            await self._handle_thread_get(msg)
+            await self._handle_thread_get(client_id, msg)
             return
         if msg_type == "thread_archive":
-            await self._handle_thread_archive(msg)
+            await self._handle_thread_archive(client_id, msg)
             return
         if msg_type == "thread_delete":
-            await self._handle_thread_delete(msg)
+            await self._handle_thread_delete(client_id, msg)
             return
         if msg_type == "thread_messages":
-            await self._handle_thread_messages(msg)
+            await self._handle_thread_messages(client_id, msg)
             return
         if msg_type == "thread_artifacts":
-            await self._handle_thread_artifacts(msg)
+            await self._handle_thread_artifacts(client_id, msg)
+            return
+        if msg_type == "thread_state":
+            await self._handle_thread_state(client_id, msg)
+            return
+        if msg_type == "thread_update_state":
+            await self._handle_thread_update_state(client_id, msg)
+            return
+        if msg_type == "resume_interrupts":
+            await self._handle_resume_interrupts(client_id, msg)
             return
 
         if msg_type == "detach":
@@ -267,7 +279,7 @@ class MessageRouter:
             )
         logger.info("Created new thread %s with workspace %s", draft_thread_id, thread_workspace)
 
-    async def _handle_thread_list(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_list(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         from soothe.core.thread import ThreadFilter
 
@@ -285,15 +297,17 @@ class MessageRouter:
             include_last_message=include_last_message,
         )
 
-        await d._broadcast(
+        await d._send_client_message(
+            client_id,
             {
                 "type": "thread_list_response",
                 "threads": [t.model_dump(mode="json") for t in threads],
                 "total": len(threads),
-            }
+                "request_id": msg.get("request_id"),
+            },
         )
 
-    async def _handle_thread_create(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_create(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         initial_message = msg.get("initial_message")
         metadata = msg.get("metadata")
@@ -303,89 +317,103 @@ class MessageRouter:
             metadata=metadata,
         )
 
-        await d._broadcast(
+        await d._send_client_message(
+            client_id,
             {
                 "type": "thread_created",
                 "thread_id": thread_info.thread_id,
                 "status": thread_info.status,
-            }
+                "request_id": msg.get("request_id"),
+            },
         )
 
-    async def _handle_thread_get(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_get(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         thread_id = msg["thread_id"]
 
         try:
             thread = await d._runner.get_persisted_thread(thread_id)
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_get_response",
                     "thread": thread.model_dump(mode="json"),
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
         except KeyError:
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "error",
                     "code": "THREAD_NOT_FOUND",
                     "message": f"Thread {thread_id} not found",
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
 
-    async def _handle_thread_archive(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_archive(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         thread_id = msg["thread_id"]
 
         try:
             await d._runner.archive_persisted_thread(thread_id)
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_operation_ack",
                     "operation": "archive",
                     "thread_id": thread_id,
                     "success": True,
                     "message": "Thread archived successfully",
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
         except Exception as e:
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_operation_ack",
                     "operation": "archive",
                     "thread_id": thread_id,
                     "success": False,
                     "message": str(e),
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
 
-    async def _handle_thread_delete(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_delete(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         thread_id = msg["thread_id"]
 
         try:
             await d._runner.delete_persisted_thread(thread_id)
             d._thread_registry.remove(thread_id)
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_operation_ack",
                     "operation": "delete",
                     "thread_id": thread_id,
                     "success": True,
                     "message": "Thread deleted successfully",
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
         except Exception as e:
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_operation_ack",
                     "operation": "delete",
                     "thread_id": thread_id,
                     "success": False,
                     "message": str(e),
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
 
-    async def _handle_thread_messages(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_messages(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         thread_id = msg["thread_id"]
         limit = msg.get("limit", 100)
@@ -397,45 +425,168 @@ class MessageRouter:
                 limit=limit,
                 offset=offset,
             )
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_messages_response",
                     "thread_id": thread_id,
                     "messages": [m.model_dump(mode="json") for m in messages],
                     "limit": limit,
                     "offset": offset,
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
         except KeyError:
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "error",
                     "code": "THREAD_NOT_FOUND",
                     "message": f"Thread {thread_id} not found",
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
 
-    async def _handle_thread_artifacts(self, msg: dict[str, Any]) -> None:
+    async def _handle_thread_artifacts(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon
         thread_id = msg["thread_id"]
 
         try:
             artifacts = await d._runner.get_persisted_thread_artifacts(thread_id)
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "thread_artifacts_response",
                     "thread_id": thread_id,
                     "artifacts": [a.model_dump(mode="json") for a in artifacts],
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
         except KeyError:
-            await d._broadcast(
+            await d._send_client_message(
+                client_id,
                 {
                     "type": "error",
                     "code": "THREAD_NOT_FOUND",
                     "message": f"Thread {thread_id} not found",
-                }
+                    "request_id": msg.get("request_id"),
+                },
             )
+
+    async def _handle_thread_state(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Return raw checkpoint state values for a thread."""
+        d = self._daemon
+        thread_id = str(msg.get("thread_id", "")).strip()
+        if not thread_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "thread_state requires thread_id",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        values = await d._runner.get_thread_state_values(thread_id)
+
+        # Encode LangChain messages explicitly so the TUI can round-trip them.
+        messages = values.get("messages")
+        if isinstance(messages, list):
+            try:
+                from langchain_core.messages.base import messages_to_dict
+
+                values = dict(values)
+                values["messages"] = messages_to_dict(messages)
+            except Exception:
+                logger.debug("Failed to serialize thread_state messages for %s", thread_id, exc_info=True)
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "thread_state_response",
+                "thread_id": thread_id,
+                "values": values,
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+    async def _handle_thread_update_state(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Persist partial checkpoint state values for a thread."""
+        d = self._daemon
+        thread_id = str(msg.get("thread_id", "")).strip()
+        values = msg.get("values")
+        if not thread_id or not isinstance(values, dict):
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "thread_update_state requires thread_id and values",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        if isinstance(values.get("messages"), list):
+            try:
+                values = dict(values)
+                values["messages"] = messages_from_dict(values["messages"])
+            except Exception:
+                logger.debug("Failed to deserialize thread_update_state messages for %s", thread_id, exc_info=True)
+
+        await d._runner.update_thread_state_values(thread_id, values)
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "thread_update_state_response",
+                "thread_id": thread_id,
+                "success": True,
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+    async def _handle_resume_interrupts(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Resume an interactive daemon turn paused on HITL or ask_user."""
+        d = self._daemon
+        thread_id = str(msg.get("thread_id", "")).strip()
+        resume_payload = msg.get("resume_payload")
+        if not thread_id or not isinstance(resume_payload, dict):
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_MESSAGE",
+                    "message": "resume_interrupts requires thread_id and resume_payload",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        future = d._pending_interrupt_responses.get(thread_id)
+        if future is None or future.done():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "NO_PENDING_INTERRUPT",
+                    "message": f"No pending interrupt for thread {thread_id}",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        future.set_result(resume_payload)
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "interrupts_resumed",
+                "thread_id": thread_id,
+                "success": True,
+                "request_id": msg.get("request_id"),
+            },
+        )
 
     async def _handle_subscribe_thread(self, client_id: str, msg: dict[str, Any]) -> None:
         d = self._daemon

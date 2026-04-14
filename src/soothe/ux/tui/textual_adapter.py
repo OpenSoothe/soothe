@@ -66,6 +66,7 @@ from soothe.ux.tui.widgets.messages import (
     SummarizationMessage,
     ToolCallMessage,
 )
+from soothe.ux.shared.essential_events import is_essential_progress_event_type
 
 logger = logging.getLogger(__name__)
 configure_debug_logging(logger)
@@ -200,6 +201,50 @@ def _is_summarization_chunk(metadata: dict | None) -> bool:
     if metadata is None:
         return False
     return metadata.get("lc_source") == "summarization"
+
+
+def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
+    """Extract assistant-visible text from daemon custom output events."""
+    from soothe.core.event_catalog import CHITCHAT_RESPONSE,  AGENT_LOOP_COMPLETED, FINAL_REPORT
+    from soothe.foundation import strip_internal_tags
+
+    event_type = str(data.get("type", ""))
+    if event_type == CHITCHAT_RESPONSE:
+        content = data.get("content", "")
+        cleaned = strip_internal_tags(str(content))
+        return cleaned or None
+    if event_type == AGENT_LOOP_COMPLETED:
+        content = data.get("final_stdout_message", "")
+        cleaned = strip_internal_tags(str(content))
+        return cleaned or None
+    if event_type == FINAL_REPORT:
+        content = data.get("content", data.get("summary", ""))
+        cleaned = strip_internal_tags(str(content))
+        return cleaned or None
+    return None
+
+
+def _format_progress_event_lines_for_tui(
+    event_data: dict[str, Any],
+    namespace: tuple[str, ...],
+    *,
+    pipeline: Any,
+) -> list[str]:
+    """Format essential progress events with the same pipeline as CLI."""
+    event_type = str(event_data.get("type", ""))
+    if not is_essential_progress_event_type(event_type):
+        return []
+
+    event_for_pipeline = dict(event_data)
+    event_for_pipeline["namespace"] = list(namespace)
+    lines = pipeline.process(event_for_pipeline)
+
+    rendered: list[str] = []
+    for line in lines:
+        line_text = line.format().lstrip("\n").strip()
+        if line_text:
+            rendered.append(line_text)
+    return rendered
 
 
 class TextualUIAdapter:
@@ -362,6 +407,7 @@ async def execute_task_textual(
     image_tracker: MediaTracker | None = None,
     context: CLIContext | None = None,
     *,
+    daemon_session: Any = None,  # noqa: ANN401  # Daemon-backed TUI session
     sandbox_type: str | None = None,
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
@@ -374,6 +420,8 @@ async def execute_task_textual(
     Args:
         user_input: The user's input message
         agent: The LangGraph agent to execute
+        daemon_session: Optional daemon-backed session for direct websocket
+            streaming. When provided, this becomes the primary execution path.
         assistant_id: The agent identifier
         session_state: Session state with auto_approve flag
         adapter: The TextualUIAdapter for UI operations
@@ -409,8 +457,11 @@ async def execute_task_textual(
     from langgraph.types import Command
     from pydantic import ValidationError
 
+    from soothe.ux.cli.stream import StreamDisplayPipeline
+
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
+    progress_pipeline = StreamDisplayPipeline(verbosity="detailed")
 
     # Parse file mentions and inject content if any — offload blocking I/O
     prompt_text, mentioned_files = await asyncio.to_thread(parse_file_mentions, user_input)
@@ -504,14 +555,27 @@ async def execute_task_textual(
             pending_interrupts: dict[str, HITLRequest] = {}
             pending_ask_user: dict[str, AskUserRequest] = {}
 
-            async for chunk in agent.astream(
-                stream_input,
-                stream_mode=["messages", "updates"],
-                subgraphs=True,
-                config=config,
-                context=context,
-                durability="exit",
-            ):
+            if daemon_session is None:
+                chunk_source = agent.astream(
+                    stream_input,
+                    stream_mode=["messages", "updates"],
+                    subgraphs=True,
+                    config=config,
+                    context=context,
+                    durability="exit",
+                )
+            else:
+                if isinstance(stream_input, Command):
+                    resume_data = getattr(stream_input, "resume", None)
+                    if not isinstance(resume_data, dict):
+                        raise ValueError("Invalid daemon resume payload")
+                    await daemon_session.resume_interrupts(resume_data)
+                else:
+                    daemon_text = message_content if isinstance(message_content, str) else final_input
+                    await daemon_session.send_turn(daemon_text, interactive=True)
+                chunk_source = daemon_session.iter_turn_chunks()
+
+            async for chunk in chunk_source:
                 if not isinstance(chunk, tuple) or len(chunk) != 3:  # noqa: PLR2004  # stream chunk is a 3-tuple (namespace, mode, data)
                     logger.debug("Skipping non-3-tuple chunk: %s", type(chunk).__name__)
                     continue
@@ -850,6 +914,56 @@ async def execute_task_textual(
                             )
                             pending_text_by_namespace[ns_key] = ""
                             assistant_message_by_namespace.pop(ns_key, None)
+
+                elif current_stream_mode == "custom":
+                    if isinstance(data, dict):
+                        event_type = str(data.get("type", ""))
+                        if event_type.startswith("soothe.error"):
+                            error_text = str(data.get("error") or data.get("message") or "Agent error")
+                            await adapter._mount_message(AppMessage(error_text))
+                            if adapter._set_spinner:
+                                await adapter._set_spinner(None)
+                            continue
+                        if output_text := _extract_custom_output_text(data):
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+                            output_widget = AssistantMessage(output_text, id=f"asst-{uuid.uuid4().hex[:8]}")
+                            await adapter._mount_message(output_widget)
+                            await output_widget.write_initial_content()
+                            if adapter._sync_message_content and output_widget.id:
+                                adapter._sync_message_content(output_widget.id, output_text)
+                            if adapter._set_active_message:
+                                adapter._set_active_message(None)
+                            if adapter._set_spinner:
+                                await adapter._set_spinner(None)
+                            continue
+                        progress_lines = _format_progress_event_lines_for_tui(
+                            data,
+                            ns_key,
+                            pipeline=progress_pipeline,
+                        )
+                        if progress_lines:
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+                            for progress_line in progress_lines:
+                                await adapter._mount_message(AppMessage(progress_line))
+                            continue
 
             # Reset summarization state if stream ended mid-summarization
             # (e.g. middleware error, stream exhausted before regular chunks).

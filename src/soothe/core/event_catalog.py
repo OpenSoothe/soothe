@@ -104,6 +104,7 @@ GOAL_DEFERRED = "soothe.cognition.goal.deferred"
 # -- Output events -----------------------------------------------------------
 CHITCHAT_STARTED = "soothe.output.chitchat.started"
 CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
+AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 FINAL_REPORT = "soothe.output.autonomous.final_report"
 
 # -- Error events ------------------------------------------------------------

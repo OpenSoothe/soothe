@@ -23,6 +23,17 @@ from soothe.ux.shared.display_policy import (
     VerbosityLevel,
     create_display_policy,
 )
+from soothe.ux.shared.essential_events import (
+    ESSENTIAL_PROGRESS_EVENT_TYPES,
+    GOAL_START_EVENT_TYPES,
+    LOOP_REASON_EVENT_TYPE,
+    STEP_COMPLETE_EVENT_TYPES,
+    STEP_START_EVENT_TYPES,
+    is_essential_progress_event_type,
+    is_goal_start_event_type,
+    is_step_complete_event_type,
+    is_step_start_event_type,
+)
 from soothe.ux.shared.event_processor import EventProcessor
 from soothe.ux.shared.message_processing import (
     accumulate_tool_call_chunks,
@@ -50,6 +61,9 @@ __all__ = [
     "INTERNAL_JSON_KEYS",
     "SKIP_EVENT_TYPES",
     "DisplayPolicy",
+    "ESSENTIAL_PROGRESS_EVENT_TYPES",
+    "GOAL_START_EVENT_TYPES",
+    "LOOP_REASON_EVENT_TYPE",
     # Event processing
     "EventProcessor",
     "ProcessorState",
@@ -69,12 +83,18 @@ __all__ = [
     "finalize_pending_tool_call",
     "format_tool_call_args",
     "is_multi_step_plan",
+    "is_essential_progress_event_type",
+    "is_goal_start_event_type",
+    "is_step_complete_event_type",
+    "is_step_start_event_type",
     # Config and logging
     "load_config",
     "normalize_tool_calls_list",
     "render_plan_tree",
     "resolve_namespace_label",
     "setup_logging",
+    "STEP_COMPLETE_EVENT_TYPES",
+    "STEP_START_EVENT_TYPES",
     "should_show",
     "strip_internal_tags",
     "tool_calls_have_any_arg_dict",

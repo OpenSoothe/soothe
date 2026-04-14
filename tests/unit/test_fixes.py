@@ -9,12 +9,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.core.event_catalog import CHITCHAT_RESPONSE
+from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
 from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.foundation.slash_commands import (
     _show_memory,
     handle_slash_command,
+)
+from soothe.ux.cli.stream import StreamDisplayPipeline
+from soothe.ux.shared.essential_events import is_essential_progress_event_type
+from soothe.ux.tui.textual_adapter import (
+    _extract_custom_output_text,
+    _format_progress_event_lines_for_tui,
 )
 
 # ---------------------------------------------------------------------------
@@ -351,3 +357,98 @@ async def test_slash_command_thread_archive_in_daemon() -> None:
     assert result is False  # Should not exit
     assert "test-thread-id" in runner._durability.archived
     assert "Archived thread test-thread-id" in output.getvalue()
+
+
+def test_tui_extract_custom_output_text_accepts_final_report_summary() -> None:
+    """Final-report summary payloads are rendered in the TUI."""
+    output_text = _extract_custom_output_text(
+        {
+            "type": FINAL_REPORT,
+            "summary": "This is the final report summary.",
+        }
+    )
+    assert output_text == "This is the final report summary."
+
+
+def test_tui_extract_custom_output_text_accepts_final_report_content() -> None:
+    """Final-report content payloads are also rendered in the TUI."""
+    output_text = _extract_custom_output_text(
+        {
+            "type": FINAL_REPORT,
+            "content": "This is the final report content.",
+        }
+    )
+    assert output_text == "This is the final report content."
+
+
+def test_tui_extract_custom_output_text_accepts_agent_loop_completed_final_stdout() -> None:
+    """Agent-loop completed event final stdout should render in TUI."""
+    output_text = _extract_custom_output_text(
+        {
+            "type": "soothe.cognition.agent_loop.completed",
+            "final_stdout_message": "Final report body from completed event.",
+        }
+    )
+    assert output_text == "Final report body from completed event."
+
+
+def test_tui_formats_goal_progress_like_cli() -> None:
+    """Goal progress events should render through the shared CLI pipeline format."""
+    pipeline = StreamDisplayPipeline(verbosity="normal")
+    lines = _format_progress_event_lines_for_tui(
+        {"type": "soothe.cognition.agent_loop.started", "goal": "Investigate daemon gap"},
+        (),
+        pipeline=pipeline,
+    )
+    assert lines
+    assert any("🚩 Investigate daemon gap" in line for line in lines)
+
+
+def test_shared_essential_progress_event_filter_contract() -> None:
+    """Shared filter should include core progress events and exclude non-progress output."""
+    assert is_essential_progress_event_type("soothe.cognition.agent_loop.started")
+    assert is_essential_progress_event_type("soothe.cognition.agent_loop.reason")
+    assert is_essential_progress_event_type("soothe.cognition.plan.step_completed")
+    assert not is_essential_progress_event_type("soothe.output.autonomous.final_report")
+
+
+def test_tui_formats_agent_loop_reason_and_reasoning_like_cli() -> None:
+    """Agent-loop reason events should show next_action and reasoning text."""
+    pipeline = StreamDisplayPipeline(verbosity="normal")
+    lines = _format_progress_event_lines_for_tui(
+        {
+            "type": "soothe.cognition.agent_loop.reason",
+            "status": "working",
+            "next_action": "inspect websocket custom events",
+            "reasoning": "Need to verify display path parity with CLI.",
+        },
+        (),
+        pipeline=pipeline,
+    )
+    assert any("🌀 Inspect websocket custom events" in line for line in lines)
+    assert any("💭 Reasoning: Need to verify display path parity with CLI." in line for line in lines)
+
+
+def test_tui_formats_step_start_and_complete_like_cli() -> None:
+    """Step start/complete events should map to CLI-style progress lines."""
+    pipeline = StreamDisplayPipeline(verbosity="detailed")
+    started = _format_progress_event_lines_for_tui(
+        {
+            "type": "soothe.cognition.plan.step_started",
+            "step_id": "s1",
+            "description": "Gather daemon custom events",
+        },
+        (),
+        pipeline=pipeline,
+    )
+    completed = _format_progress_event_lines_for_tui(
+        {
+            "type": "soothe.cognition.plan.step_completed",
+            "step_id": "s1",
+            "duration_ms": 1200,
+        },
+        (),
+        pipeline=pipeline,
+    )
+    assert any("⏩ Gather daemon custom events" in line for line in started)
+    assert any("✅ Gather daemon custom events" in line for line in completed)

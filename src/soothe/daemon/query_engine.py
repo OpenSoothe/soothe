@@ -48,6 +48,7 @@ class QueryEngine:
         max_iterations: int | None = None,
         subagent: str | None = None,
         client_id: str | None = None,
+        interactive: bool = False,
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
@@ -130,6 +131,14 @@ class QueryEngine:
                     stream_kwargs["subagent"] = subagent
 
                 # Wrap streaming with timeout if configured
+                interrupt_resolver = (
+                    self._await_interrupt_resume(thread_id, client_id)
+                    if interactive and client_id is not None
+                    else None
+                )
+                if hasattr(d._runner, "set_interrupt_resolver"):
+                    d._runner.set_interrupt_resolver(interrupt_resolver)
+
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
                         async for chunk in d._runner.astream(text, **stream_kwargs):
@@ -294,8 +303,11 @@ class QueryEngine:
                     }
                 )
             finally:
+                if hasattr(d._runner, "set_interrupt_resolver"):
+                    d._runner.set_interrupt_resolver(None)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
+                d._pending_interrupt_responses.pop(thread_id, None)
 
         try:
             task = asyncio.create_task(_run_stream())
@@ -336,6 +348,7 @@ class QueryEngine:
         max_iterations: int | None = None,
         subagent: str | None = None,
         client_id: str | None = None,
+        interactive: bool = False,
     ) -> None:
         """Execute query using ``ThreadExecutor``.
 
@@ -390,6 +403,10 @@ class QueryEngine:
                         stream_kwargs["max_iterations"] = max_iterations
                 if subagent is not None:
                     stream_kwargs["subagent"] = subagent
+                if interactive:
+                    logger.debug(
+                        "Interactive HITL continuation is not supported in multithreaded mode; running auto-approve"
+                    )
 
                 stream_tuple_length = 3
                 msg_pair_length = 2
@@ -611,18 +628,42 @@ class QueryEngine:
         d._thread_registry.set_workspace(tid, Path(d._daemon_workspace))
         return tid
 
+    def _await_interrupt_resume(
+        self,
+        thread_id: str,
+        client_id: str | None,
+    ) -> Any:
+        """Return a resolver that waits for daemon-side interrupt continuation."""
+
+        async def _resolver(_pending_interrupts: dict[str, Any]) -> dict[str, Any]:
+            del _pending_interrupts  # The client already received the interrupt chunk.
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[dict[str, Any]] = loop.create_future()
+            self._daemon._pending_interrupt_responses[thread_id] = future
+            logger.debug("Waiting for interactive resume payload on thread %s (client=%s)", thread_id, client_id)
+            try:
+                return await future
+            finally:
+                self._daemon._pending_interrupt_responses.pop(thread_id, None)
+
+        return _resolver
+
     @staticmethod
     def extract_custom_output_text(data: dict[str, Any]) -> str | None:
         """Extract assistant-visible output text from custom protocol events."""
-        from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
+        from soothe.core.event_catalog import CHITCHAT_RESPONSE, AGENT_LOOP_COMPLETED, FINAL_REPORT
 
         event_type = str(data.get("type", ""))
         if event_type == CHITCHAT_RESPONSE:
             content = data.get("content", "")
             cleaned = strip_internal_tags(str(content))
             return cleaned or None
+        if event_type == AGENT_LOOP_COMPLETED:
+            content = data.get("final_stdout_message", "")
+            cleaned = strip_internal_tags(str(content))
+            return cleaned or None
         if event_type == FINAL_REPORT:
-            content = data.get("summary", "")
+            content = data.get("content", data.get("summary", ""))
             cleaned = strip_internal_tags(str(content))
             return cleaned or None
         return None

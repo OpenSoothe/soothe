@@ -224,6 +224,42 @@ async def test_websocket_protocol_thread_backend_operations(websocket_daemon: tu
 
 @pytest.mark.asyncio
 @pytest.mark.integration
+async def test_websocket_protocol_thread_state_round_trip(websocket_daemon: tuple[SootheDaemon, int]) -> None:
+    """Thread state can be updated and fetched through client-scoped RPCs."""
+    daemon, port = websocket_daemon
+    _ = daemon
+    client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
+    await client.connect()
+
+    try:
+        await client.send({"type": "thread_create"})
+        created = await await_event_type(client.read_event, "thread_created")
+        thread_id = created["thread_id"]
+
+        update_response = await client.request_response(
+            {
+                "type": "thread_update_state",
+                "thread_id": thread_id,
+                "values": {"_context_tokens": 123},
+            },
+            response_type="thread_update_state_response",
+        )
+        assert update_response["thread_id"] == thread_id
+        assert update_response["success"] is True
+
+        state_response = await client.request_response(
+            {"type": "thread_state", "thread_id": thread_id},
+            response_type="thread_state_response",
+        )
+        assert state_response["thread_id"] == thread_id
+        assert state_response["values"]["_context_tokens"] == 123
+    finally:
+        if client.is_connected:
+            await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
 @pytest.mark.xfail(reason="Contract expectation: explicit auth response handling is not fully implemented.")
 async def test_websocket_auth_message_should_return_auth_response() -> None:
     """Layer B: auth message contract expects an explicit auth response."""
