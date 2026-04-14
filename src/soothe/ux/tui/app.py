@@ -182,7 +182,7 @@ def _load_theme_preference() -> str:
 
 
 def save_theme_preference(name: str) -> bool:
-    """Persist theme preference to `~/SOOTHE_HOME/config.yml`.
+    """Persist theme preference to `~/SOOTHE_HOME/config/config.yml`.
 
     Args:
         name: Textual theme name to save.
@@ -2876,6 +2876,7 @@ class SootheApp(App):
                     banner.update_thread_id(new_thread_id)
                 except NoMatches:
                     pass
+                self._clear_thread_model_override()
                 await self._mount_message(AppMessage(f"Started new thread: {new_thread_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
@@ -4873,6 +4874,7 @@ class SootheApp(App):
                 await self._daemon_session.switch_thread(thread_id)
             self._session_state.thread_id = thread_id
             self._lc_thread_id = thread_id
+            self._clear_thread_model_override()
 
             self._update_welcome_banner(
                 thread_id,
@@ -4923,18 +4925,31 @@ class SootheApp(App):
             if self._chat_input:
                 self._chat_input.set_cursor_active(active=not self._agent_running)
 
+    def _clear_thread_model_override(self) -> None:
+        """Drop per-thread model override; next turns use config/CLI defaults."""
+        from soothe.ux.tui.config import settings
+
+        self._model_override = None
+        self._model_params_override = None
+        if self._status_bar:
+            self._status_bar.set_model(
+                provider=settings.model_provider or "",
+                model=settings.model_name or "",
+            )
+
     async def _switch_model(
         self,
         model_spec: str,
         *,
         extra_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        """Switch to a new model, preserving conversation history.
+        """Switch model for the current thread without changing `config.yml`.
 
-        This requires a server-backed interactive session. It sets a model
-        override that `ConfigurableModelMiddleware` picks up on the next
-        invocation, so the conversation thread stays intact and no server
-        restart is required.
+        Validates the spec via `create_model`, then sets a session override that
+        `ConfigurableModelMiddleware` reads through `CLIContext` on each turn.
+        Global `settings` and on-disk defaults are not updated; use `/model
+        --default` to persist a new default. Daemon-backed sessions cannot apply
+        a client-side model override yet.
 
         Args:
             model_spec: The model specification to switch to.
@@ -4949,7 +4964,6 @@ class SootheApp(App):
             ModelSpec,
             get_credential_env_var,
             has_provider_credentials,
-            save_recent_model,
         )
 
         logger.info("Switching model to %s", model_spec)
@@ -4964,8 +4978,17 @@ class SootheApp(App):
             # treat ":claude-opus-4-6" as "claude-opus-4-6"
             model_spec = model_spec.removeprefix(":")
 
-            if not self._remote_agent():
-                await self._mount_message(ErrorMessage("Model switching requires a server-backed session."))
+            if self._daemon_session is not None:
+                await self._mount_message(
+                    ErrorMessage(
+                        "Model switching is not supported for daemon-backed sessions yet. "
+                        "Change the model in config.yml or run the TUI with a local agent server."
+                    ),
+                )
+                return
+
+            if self._agent is None:
+                await self._mount_message(ErrorMessage("No agent is configured for this session."))
                 return
 
             parsed = ModelSpec.try_parse(model_spec)
@@ -4997,50 +5020,44 @@ class SootheApp(App):
                     provider,
                 )
 
-            # Check if already using this exact model
-            if model_name == settings.model_name and (not provider or provider == settings.model_provider):
-                current = f"{settings.model_provider}:{settings.model_name}"
-                await self._mount_message(AppMessage(f"Already using {current}"))
-                return
-
             # Build the provider:model spec for the configurable middleware.
             display = model_spec
             if provider and not parsed:
                 display = f"{provider}:{model_name}"
 
+            # Effective model for this thread (session override wins over CLI defaults).
+            prior_effective = (self._model_override or f"{settings.model_provider}:{settings.model_name}").strip()
+            if display.strip() == prior_effective:
+                await self._mount_message(AppMessage(f"Already using {display} for this thread"))
+                return
+
             try:
-                create_model(
+                result = create_model(
                     display,
                     extra_kwargs=extra_kwargs,
                     profile_overrides=self._profile_override,
-                ).apply_to_settings()
+                )
             except Exception as exc:
                 logger.exception("Failed to resolve model metadata for %s", display)
                 await self._mount_message(ErrorMessage(f"Failed to switch model: {exc}"))
                 return
 
-            # Set the model override for ConfigurableModelMiddleware.
-            # The next stream call passes CLIContext via context= and the
-            # middleware swaps the model per-invocation — no graph recreation.
+            # Per-thread/session not mutate global ``settings`` or
+            # persist to ``~/SOOTHE_HOME/config/config.yml`` — config.yml remains the default
+            # for new sessions; this choice applies until you clear the thread or restart.
             self._model_override = display
             self._model_params_override = extra_kwargs
 
             if self._status_bar:
                 self._status_bar.set_model(
-                    provider=settings.model_provider or "",
-                    model=settings.model_name or "",
+                    provider=result.provider or "",
+                    model=result.model_name or "",
                 )
 
-            if not await asyncio.to_thread(save_recent_model, display):
-                await self._mount_message(
-                    ErrorMessage(
-                        "Model switched for this session, but could not save "
-                        "preference. Check permissions for ~/SOOTHE_HOME/"
-                    )
-                )
-            else:
-                await self._mount_message(AppMessage(f"Switched to {display}"))
-            logger.info("Model switched to %s (via configurable middleware)", display)
+            await self._mount_message(
+                AppMessage(f"Switched this thread to {display} (session only; default in config.yml unchanged)."),
+            )
+            logger.info("Model override set to %s for current thread (ConfigurableModelMiddleware)", display)
 
             # Anchor to bottom so the confirmation message is visible
             with suppress(NoMatches, ScreenStackError):
@@ -5050,12 +5067,12 @@ class SootheApp(App):
 
     async def _set_default_model(self, model_spec: str) -> None:
         """Set the default model in config without switching the current session.
+        SOOTHE_HOME/config/config.yml
+                Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
+                future CLI launches use this model. Does not affect the running session.
 
-        Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
-        future CLI launches use this model. Does not affect the running session.
-
-        Args:
-            model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
+                Args:
+                    model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
         """
         from soothe.ux.tui.config import detect_provider
         from soothe.ux.tui.model_config import ModelSpec, save_default_model

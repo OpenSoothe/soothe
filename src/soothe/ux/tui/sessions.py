@@ -1065,12 +1065,12 @@ async def list_threads_command(
             the default.
         sort_by: Sort field — `"updated"` or `"created"`.
 
-            When `None`, reads from config (`~/SOOTHE_HOME/config.yml`).
+            When `None`, reads from config (`~/SOOTHE_HOME/config/config.yml`).
         branch: Only show threads from this git branch.
         verbose: When `True`, show all columns (branch, created, prompt).
         relative: Show timestamps as relative time (e.g., '5m ago').
 
-            When `None`, reads from config (`~/SOOTHE_HOME/config.yml`).
+            When `None`, reads from config (`~/SOOTHE_HOME/config/config.yml`).
         output_format: Output format — `'text'` (Rich) or `'json'`.
     """
     from soothe.ux.tui.model_config import (
