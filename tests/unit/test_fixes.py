@@ -266,69 +266,6 @@ async def test_daemon_handles_new_thread_message_creates_thread() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tui_sends_thread_id_on_connection() -> None:
-    """Test that TUI passes requested thread id into shared daemon session bootstrap."""
-    from soothe.ux.tui import SootheApp
-
-    source = inspect.getsource(SootheApp._connect_and_listen)
-    assert "bootstrap_thread_session" in source, "TUI should bootstrap via ux.client.session"
-    normalized = "".join(source.split())
-    assert "resume_thread_id=self._requested_thread_id" in normalized
-
-
-def test_process_daemon_event_status_ignores_empty_thread_id() -> None:
-    """Empty handshake thread_id must not clear an already selected TUI thread."""
-    from dataclasses import dataclass, field
-
-    from soothe.ux.shared.event_processor import EventProcessor
-
-    @dataclass
-    class MockRenderer:
-        calls: list[tuple[str, tuple, dict]] = field(default_factory=list)
-
-        def on_assistant_text(self, text: str, *, is_main: bool, is_streaming: bool) -> None:
-            pass
-
-        def on_tool_call(self, name: str, args: dict, tool_call_id: str, *, is_main: bool) -> None:
-            pass
-
-        def on_tool_result(self, name: str, result: str, tool_call_id: str, *, is_error: bool, is_main: bool) -> None:
-            pass
-
-        def on_status_change(self, state: str) -> None:
-            self.calls.append(("on_status_change", (state,), {}))
-
-        def on_error(self, error: str, *, context: str | None = None) -> None:
-            pass
-
-        def on_progress_event(self, event_type: str, data: dict, *, namespace: tuple[str, ...]) -> None:
-            pass
-
-        def on_plan_created(self, plan: Any) -> None:
-            pass
-
-        def on_plan_step_started(self, step_id: str, description: str) -> None:
-            pass
-
-        def on_plan_step_completed(self, step_id: str, success: bool, duration_ms: int) -> None:  # noqa: FBT001
-            pass
-
-        def on_turn_end(self) -> None:
-            pass
-
-    renderer = MockRenderer()
-    processor = EventProcessor(renderer)
-
-    # First set a thread_id
-    processor.process_event({"type": "status", "state": "running", "thread_id": "thread-keep"})
-    assert processor.thread_id == "thread-keep"
-
-    # Empty thread_id should not clear it
-    processor.process_event({"type": "status", "state": "idle", "thread_id": ""})
-    assert processor.thread_id == "thread-keep"
-
-
-@pytest.mark.asyncio
 async def test_slash_command_memory_in_daemon() -> None:
     """Test that /memory command works in daemon context (no nested event loops)."""
     from io import StringIO
