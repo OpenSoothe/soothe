@@ -48,6 +48,8 @@ This document tracks the change history of all RFCs in this project.
 | 2026-03-27 | RFC-0018 | Implemented | Status updated to reflect plugin system with decorator API implementation |
 | 2026-03-27 | RFC-0021 | Implemented | Status updated to reflect research subagent implementation |
 | 2026-03-24 | RFC-0018 | Draft | Updated: Renamed to "Plugin Extension Specification", simplified scope |
+| 2026-04-14 | RFC-606 | Implemented | DeepAgents CLI TUI Migration — full copy of deepagents-cli TUI (~30 files), backend adapters created, ProtocolEventWidget implemented (commit 945cc2e) |
+| 2026-04-14 | RFC-607 | Implemented | Progressive Display Refinements Post-Migration — newline separators for goal/step/reasoning/completion events, backend adapter integration, protocol event rendering (commit 37c2b09) |
 | 2026-03-23 | RFC-0018 | Draft | Initial Plugin Extension Specification |
 | 2026-03-18 | RFC-0009 | Draft | DAG-Based Execution and Unified Concurrency |
 | 2026-03-18 | RFC-0010 | Draft | Failure Recovery, Progressive Persistence |
