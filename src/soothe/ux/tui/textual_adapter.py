@@ -205,7 +205,7 @@ def _is_summarization_chunk(metadata: dict | None) -> bool:
 
 def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
     """Extract assistant-visible text from daemon custom output events."""
-    from soothe.core.event_catalog import CHITCHAT_RESPONSE,  AGENT_LOOP_COMPLETED, FINAL_REPORT
+    from soothe.core.event_catalog import CHITCHAT_RESPONSE, AGENT_LOOP_COMPLETED, FINAL_REPORT
     from soothe.foundation import strip_internal_tags
 
     event_type = str(data.get("type", ""))

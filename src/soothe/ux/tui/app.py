@@ -805,6 +805,7 @@ class SootheApp(App):
             )
             yield Container(id="messages")
         with Container(id="bottom-app-container"):
+            yield Container(id="thinking-status")
             yield ChatInput(
                 cwd=self._cwd,
                 image_tracker=self._image_tracker,
@@ -1878,19 +1879,15 @@ class SootheApp(App):
                 self._loading_widget = None
             return
 
-        messages = self.query_one("#messages", Container)
+        thinking_status = self.query_one("#thinking-status", Container)
 
         if self._loading_widget is None:
             # Create new
             self._loading_widget = LoadingWidget(status)
-            await self._mount_before_queued(messages, self._loading_widget)
+            await thinking_status.mount(self._loading_widget)
         else:
             # Update existing
             self._loading_widget.set_status(status)
-            # Reposition if not already at the correct location
-            if not self._is_spinner_at_correct_position(messages):
-                await self._loading_widget.remove()
-                await self._mount_before_queued(messages, self._loading_widget)
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
 

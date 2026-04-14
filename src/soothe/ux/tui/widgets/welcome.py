@@ -323,6 +323,6 @@ def build_welcome_footer(*, primary_color: str = theme.PRIMARY, tip: str | None 
     if tip is None:
         tip = random.choice(_TIPS)  # noqa: S311
     return Content.assemble(
-        ("\nReady to code! What would you like to build?\n", primary_color),
+        ("\nReady to unleash your thinking?\n", primary_color),
         (f"Tip: {tip}", "dim italic"),
     )

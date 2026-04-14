@@ -42,13 +42,10 @@ logger = logging.getLogger(__name__)
 def _default_history_path() -> Path:
     """Return the default history file path for TUI input navigation.
 
-    Separate from daemon's GlobalInputHistory to avoid format conflicts:
-    - TUI HistoryManager: simple string history for UP/DOWN navigation
-    - Daemon GlobalInputHistory: rich dict history with timestamps & metadata
-
-    Extracted as a function so tests can monkeypatch it to a temp path.
+    Uses the shared global history file so CLI and TUI navigate the same input
+    corpus. Extracted as a function so tests can monkeypatch it to a temp path.
     """
-    return Path(SOOTHE_HOME) / "input_history.jsonl"
+    return Path(SOOTHE_HOME) / "history.jsonl"
 
 
 _PASTE_BURST_CHAR_GAP_SECONDS = 0.03
