@@ -1,6 +1,12 @@
 """Version information and lightweight constants for `soothe`."""
 
-__version__ = "0.0.37"  # x-release-please-version
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("soothe")
+except PackageNotFoundError:
+    # Fallback for development/editable installs
+    __version__ = "0.0.0"
 
 DOCS_URL = "https://github.com/caesar0301/soothe/docs"
 """URL for Soothe documentation."""

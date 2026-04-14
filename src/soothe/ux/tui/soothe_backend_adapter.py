@@ -76,7 +76,7 @@ class SootheBackendAdapter:
         await self._daemon_client.send({"type": "user_input", "content": user_input})
 
         # SOOTHE: Receive events from daemon WebSocket
-        async for event_data in self._daemon_client.recv_stream():
+        async for event_data in self._daemon_client.receive():
             event = self._parse_daemon_event(event_data)
 
             if event is None:
