@@ -83,6 +83,8 @@ RFCs are organized by numeric prefix:
 | [RFC-603](./RFC-603-reasoning-quality-progressive-actions.md) | Reasoning Quality & Progressive Actions | Draft | Architecture Design | RFC-201 |
 | [RFC-604](./RFC-604-reason-phase-robustness.md) | Plan Phase Robustness (Three-Layer Defense) | Implemented | Architecture Design | RFC-603, RFC-201 |
 | [RFC-605](./RFC-605-explore-subagent-parallel-spawning.md) | Explore Subagent and Parallel Spawning | Draft | Architecture Design | RFC-000, RFC-001, RFC-201, RFC-100, RFC-600 |
+| [RFC-606](./RFC-606-deepagents-cli-tui-migration.md) | DeepAgents CLI TUI Migration | Implemented | Architecture Design + Impl Interface | RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-204, RFC-402 |
+| [RFC-607](./RFC-607-progressive-display-refinements.md) | Progressive Display Refinements Post-Migration | Implemented | Impl Interface | RFC-606, RFC-501, RFC-500 |
 
 ---
 
@@ -152,8 +154,8 @@ RFC-000 (System Conceptual Design)
 | Protocols (3xx) | 2 | 0 | 2 |
 | Daemon (4xx) | 2 | 1 | 3 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
-| Plugin System (6xx) | 2 | 4 | 6 |
-| **Total** | **14** | **12** | **26** |
+| Plugin System (6xx) | 4 | 4 | 8 |
+| **Total** | **16** | **14** | **30** |
 
 ---
 
