@@ -825,7 +825,7 @@ class LLMPlanner:
         from soothe.utils.text_preview import preview_first
 
         # Concatenate reasoning from both phases (shows complete reasoning chain)
-        combined_reasoning = f"[Assessment] {assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
+        combined_reasoning = f"{assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # assessment.next_action is status-based (what LLM thinks should happen)

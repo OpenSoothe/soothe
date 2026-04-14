@@ -40,6 +40,13 @@ Screen {
     padding: 0 1;
 }
 
+/* Sticky thinking row directly above input box */
+#thinking-status {
+    height: auto;
+    min-height: 1;
+    margin-bottom: 0;
+}
+
 /* Input area */
 #input-area {
     height: auto;

@@ -6,6 +6,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+from soothe.logging.global_history import GlobalInputHistory
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -32,6 +34,10 @@ class HistoryManager:
         self._current_index: int = -1
         self._temp_input: str = ""
         self._query: str = ""
+        self._use_global_history_format = self.history_file.name == "history.jsonl"
+        self._global_history_writer: GlobalInputHistory | None = None
+        if self._use_global_history_format:
+            self._global_history_writer = GlobalInputHistory(history_file=str(self.history_file))
         self._load_history()
 
     def _load_history(self) -> None:
@@ -40,8 +46,8 @@ class HistoryManager:
             return
 
         try:
+            entries: list[str] = []
             with self.history_file.open("r", encoding="utf-8") as f:
-                entries = []
                 for raw_line in f:
                     line = raw_line.rstrip("\n\r")
                     if not line:
@@ -50,8 +56,26 @@ class HistoryManager:
                         entry = json.loads(line)
                     except json.JSONDecodeError:
                         entry = line
-                    entries.append(entry if isinstance(entry, str) else str(entry))
-                self._entries = entries[-self.max_entries :]
+
+                    text = ""
+                    if isinstance(entry, dict):
+                        text = str(entry.get("text", "")).strip()
+                    elif isinstance(entry, str):
+                        text = entry.strip()
+                    else:
+                        text = str(entry).strip()
+
+                    if not text:
+                        continue
+                    entries.append(text)
+
+            # Keep only latest non-consecutive duplicates to avoid noisy repeats
+            compacted: list[str] = []
+            for text in entries:
+                if compacted and compacted[-1] == text:
+                    continue
+                compacted.append(text)
+            self._entries = compacted[-self.max_entries :]
         except (OSError, UnicodeDecodeError):
             logger.warning(
                 "Failed to load history from %s; starting with empty history",
@@ -62,6 +86,13 @@ class HistoryManager:
 
     def _append_to_file(self, text: str) -> None:
         """Append a single entry to history file (concurrent-safe)."""
+        if self._global_history_writer is not None:
+            self._global_history_writer.add(
+                text,
+                thread_id="tui",
+                metadata={"source": "tui"},
+            )
+            return
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             with self.history_file.open("a", encoding="utf-8") as f:
@@ -78,6 +109,8 @@ class HistoryManager:
 
         Only called when entries exceed 2x max_entries to minimize rewrites.
         """
+        if self._global_history_writer is not None:
+            return
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             with self.history_file.open("w", encoding="utf-8") as f:
