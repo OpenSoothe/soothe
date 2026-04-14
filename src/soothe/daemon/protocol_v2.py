@@ -147,6 +147,18 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         # No additional fields required
         pass
 
+    elif msg_type == "skills_list":
+        # Optional request_id is validated elsewhere; no extra fields required.
+        pass
+
+    elif msg_type == "invoke_skill":
+        if "skill" not in msg:
+            errors.append("invoke_skill message missing required field: skill")
+        elif not isinstance(msg.get("skill"), str):
+            errors.append("invoke_skill skill must be a string")
+        if "args" in msg and not isinstance(msg["args"], str):
+            errors.append("invoke_skill args must be a string")
+
     elif msg_type == "auth":
         if "token" not in msg:
             errors.append("Auth message missing required field: token")

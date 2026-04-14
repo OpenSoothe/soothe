@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from soothe.ux.tui.skills.load import ExtendedSkillMetadata
@@ -266,6 +266,28 @@ here — that would silently suppress unrelated user skills that happen to share
 name with a slash command (e.g., a user skill called `model` should still
 appear as `/skill:model`).
 """
+
+
+def build_skill_commands_from_wire(
+    rows: list[dict[str, Any]],
+) -> list[tuple[str, str, str]]:
+    """Build autocomplete tuples from daemon ``skills_list_response`` rows.
+
+    Args:
+        rows: Wire-safe dicts with at least ``name`` and optional ``description``.
+
+    Returns:
+        Sorted list of ``(name, description, hidden_keywords)`` tuples.
+    """
+    tuples: list[tuple[str, str, str]] = []
+    for row in rows:
+        name = str(row.get("name", "")).strip().lower()
+        if not name or name in _STATIC_SKILL_ALIASES:
+            continue
+        desc = str(row.get("description", "")).strip()
+        tuples.append((f"/skill:{name}", desc, name))
+    tuples.sort(key=lambda t: t[0].lower())
+    return tuples
 
 
 def build_skill_commands(

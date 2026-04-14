@@ -411,6 +411,7 @@ async def execute_task_textual(
     sandbox_type: str | None = None,
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
+    skip_daemon_send_turn: bool = False,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
 
@@ -440,6 +441,9 @@ async def execute_task_textual(
             available even if this coroutine is cancelled before it can return.
 
             If `None`, a new instance is created internally.
+        skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
+            ``send_turn`` and only consume chunks (daemon already queued the
+            prompt, e.g. after ``invoke_skill``).
 
     Returns:
         Stats accumulated over this turn (request count, token counts,
@@ -570,10 +574,13 @@ async def execute_task_textual(
                     if not isinstance(resume_data, dict):
                         raise ValueError("Invalid daemon resume payload")
                     await daemon_session.resume_interrupts(resume_data)
+                    chunk_source = daemon_session.iter_turn_chunks()
+                elif skip_daemon_send_turn:
+                    chunk_source = daemon_session.iter_turn_chunks()
                 else:
                     daemon_text = message_content if isinstance(message_content, str) else final_input
                     await daemon_session.send_turn(daemon_text, interactive=True)
-                chunk_source = daemon_session.iter_turn_chunks()
+                    chunk_source = daemon_session.iter_turn_chunks()
 
             async for chunk in chunk_source:
                 if not isinstance(chunk, tuple) or len(chunk) != 3:  # noqa: PLR2004  # stream chunk is a 3-tuple (namespace, mode, data)
