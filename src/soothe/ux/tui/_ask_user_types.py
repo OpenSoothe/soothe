@@ -48,8 +48,3 @@ class AskUserRequest(TypedDict):
     questions: list[Question]
     timeout_seconds: int | None
     prompt_id: str
-
-
-# Choice labels
-OTHER_CHOICE_LABEL = "Other"
-OTHER_VALUE = "__other__"

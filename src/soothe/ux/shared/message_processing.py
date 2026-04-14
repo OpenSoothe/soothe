@@ -389,17 +389,3 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         return "..."
 
     return ", ".join(values)
-
-
-def is_multi_step_plan(event: dict[str, Any]) -> bool:
-    """Check if event represents a multi-step plan.
-
-    Args:
-        event: Event dictionary to check.
-
-    Returns:
-        True if this is a multi-step plan event.
-    """
-    from soothe.core.event_catalog import PLAN_CREATED
-
-    return event.get("type") == PLAN_CREATED and len(event.get("steps", [])) > 1

@@ -36,6 +36,13 @@ def test_create_subagent_skill_exists() -> None:
     assert "create-subagent" in skill_names, "create-subagent skill should be included in built-in skills"
 
 
+def test_remember_skill_exists() -> None:
+    """Test that the remember skill ships with built-ins."""
+    paths = get_built_in_skills_paths()
+    skill_names = [Path(p).name for p in paths]
+    assert "remember" in skill_names, "remember skill should be included in built-in skills"
+
+
 def test_skill_paths_are_absolute() -> None:
     """Test that all returned paths are absolute."""
     paths = get_built_in_skills_paths()

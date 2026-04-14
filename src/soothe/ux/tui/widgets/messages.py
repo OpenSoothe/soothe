@@ -303,16 +303,9 @@ def _strip_frontmatter(text: str) -> str:
     Returns:
         Body text with frontmatter removed and leading whitespace stripped.
     """
-    stripped = text.lstrip()
-    if not stripped.startswith("---"):
-        return text
-    # Find closing --- (skip the opening line)
-    end = stripped.find("\n---", 3)
-    if end == -1:
-        return text
-    # Skip past the closing --- and its trailing newline
-    after = end + 4  # len("\n---")
-    return stripped[after:].lstrip("\n")
+    from soothe.ux.tui.skills.load import strip_skill_frontmatter
+
+    return strip_skill_frontmatter(text)
 
 
 class _SkillToggle(Static):
