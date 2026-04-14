@@ -21,30 +21,20 @@ from soothe.ux.cli.stream.formatter import (
     format_tool_call,
 )
 from soothe.ux.shared.display_policy import VerbosityLevel, normalize_verbosity
+from soothe.ux.shared.essential_events import (
+    LOOP_REASON_EVENT_TYPE,
+    is_goal_start_event_type,
+    is_step_complete_event_type,
+    is_step_start_event_type,
+)
 from soothe.ux.shared.presentation_engine import PresentationEngine
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
 
-# Event type patterns
-GOAL_START_EVENTS = {
-    "soothe.cognition.agent_loop.started",
-    "soothe.cognition.plan.created",
-}
-
-STEP_START_EVENTS = {
-    "soothe.cognition.plan.step_started",
-    "soothe.cognition.agent_loop.step.started",
-}
-
 # Batch step events for parallel execution
 BATCH_STEP_STARTED = "soothe.cognition.plan.batch_step_started"
 BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch_step_completed"
-
-STEP_COMPLETE_EVENTS = {
-    "soothe.cognition.plan.step_completed",
-    "soothe.cognition.agent_loop.step.completed",
-}
 
 GOAL_COMPLETE_EVENTS = {
     "soothe.cognition.agent_loop.completed",
@@ -126,11 +116,11 @@ class StreamDisplayPipeline:
         from soothe.core.event_catalog import REGISTRY
 
         # Goal events - NORMAL
-        if event_type in GOAL_START_EVENTS:
+        if is_goal_start_event_type(event_type):
             return VerbosityTier.NORMAL
 
         # Step start events - NORMAL (user-visible step descriptions)
-        if event_type in STEP_START_EVENTS:
+        if is_step_start_event_type(event_type):
             return VerbosityTier.NORMAL
 
         # Goal completion - QUIET (always visible)
@@ -159,10 +149,10 @@ class StreamDisplayPipeline:
         Returns:
             List of DisplayLine objects.
         """
-        if event_type in GOAL_START_EVENTS:
+        if is_goal_start_event_type(event_type):
             return self._on_goal_started(event)
 
-        if event_type in STEP_START_EVENTS:
+        if is_step_start_event_type(event_type):
             return self._on_step_started(event)
 
         if ".subagent." in event_type and ".dispatched" in event_type:
@@ -177,13 +167,13 @@ class StreamDisplayPipeline:
         if ".subagent." in event_type and ".completed" in event_type:
             return self._on_subagent_completed(event)
 
-        if event_type in STEP_COMPLETE_EVENTS:
+        if is_step_complete_event_type(event_type):
             return self._on_step_completed(event)
 
         if event_type in GOAL_COMPLETE_EVENTS:
             return self._on_goal_completed(event)
 
-        if event_type == "soothe.cognition.agent_loop.reason":
+        if event_type == LOOP_REASON_EVENT_TYPE:
             return self._on_loop_agent_reason(event)
 
         return []

@@ -3,7 +3,7 @@
 This module provides type definitions for interactive user prompts.
 """
 
-from typing import TypedDict
+from typing_extensions import TypedDict
 
 
 class Choice(TypedDict):

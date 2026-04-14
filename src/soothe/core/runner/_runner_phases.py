@@ -435,7 +435,11 @@ class PhasesMixin:
                 yield _custom(emit_error_event(f"Exceeded {_MAX_HITL_ITERATIONS} HITL iterations"))
                 break
 
-            resume_payload = self._auto_approve(pending_interrupts)
+            resolver = getattr(self, "_interrupt_resolver", None)
+            if resolver is not None:
+                resume_payload = await resolver(pending_interrupts)
+            else:
+                resume_payload = self._auto_approve(pending_interrupts)
             stream_input = Command(resume=resume_payload)
 
     # -- pre-stream ---------------------------------------------------------

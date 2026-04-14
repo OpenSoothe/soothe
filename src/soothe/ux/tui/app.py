@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from soothe.backends import CompositeBackend
+    from soothe.config import SootheConfig
     from langchain_core.runnables import RunnableConfig
     from langgraph.pregel import Pregel
     from textual.app import ComposeResult
@@ -506,6 +507,14 @@ class SootheApp(App):
             super().__init__()
             self.error = error
 
+    class DaemonReady(Message):
+        """Posted by the background daemon-connect worker on success."""
+
+        def __init__(self, session: Any, status_event: dict[str, Any]) -> None:  # noqa: D107, ANN401
+            super().__init__()
+            self.session = session
+            self.status_event = status_event
+
     def __init__(
         self,
         *,
@@ -525,6 +534,7 @@ class SootheApp(App):
         server_kwargs: dict[str, Any] | None = None,
         mcp_preload_kwargs: dict[str, Any] | None = None,
         model_kwargs: dict[str, Any] | None = None,
+        daemon_config: SootheConfig | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Deep Agents application.
@@ -612,7 +622,11 @@ class SootheApp(App):
 
         self._model_kwargs = model_kwargs
 
-        self._connecting = server_kwargs is not None
+        self._daemon_config = daemon_config
+
+        self._daemon_session: Any | None = None
+
+        self._connecting = server_kwargs is not None or daemon_config is not None
         # Extract sandbox type from server kwargs for trace metadata.
         # ServerConfig.__post_init__ normalizes "none" → None, but server_kwargs carries
         # the raw argparse value, so guard against both.
@@ -753,6 +767,10 @@ class SootheApp(App):
         from soothe.ux.tui.remote_client import RemoteAgent
 
         return self._agent if isinstance(self._agent, RemoteAgent) else None
+
+    def _runtime_backend_ready(self) -> bool:
+        """Return whether the app has a usable execution backend."""
+        return self._daemon_session is not None or self._agent is not None
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         """Return custom CSS variable defaults for the current theme.
@@ -928,6 +946,14 @@ class SootheApp(App):
 
         self.run_worker(self._init_session_state, exclusive=True, group="session-init")
 
+        # Daemon-backed TUI startup
+        if self._daemon_config is not None:
+            self.run_worker(
+                self._connect_daemon_background,
+                exclusive=True,
+                group="daemon-connect",
+            )
+
         # Server startup (model creation + server process)
         if self._server_kwargs is not None:
             self.run_worker(
@@ -978,11 +1004,16 @@ class SootheApp(App):
         # This check must come first because _lc_thread_id and _agent are
         # always set (even for brand-new sessions), so an elif after the
         # thread-history branch would never execute.
-        # When connecting, defer until on_deep_agents_app_server_ready fires.
+        # When connecting, defer until the ready message handler fires.
         # NOTE: _schedule_initial_submission() has a side effect (queues a
         # task via call_after_refresh); short-circuit ensures it only runs
         # when not connecting — the deferred path handles the connecting case.
-        if not self._connecting and not self._schedule_initial_submission() and self._lc_thread_id and self._agent:
+        if (
+            not self._connecting
+            and not self._schedule_initial_submission()
+            and self._lc_thread_id
+            and self._runtime_backend_ready()
+        ):
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
     async def _init_session_state(self) -> None:
@@ -1254,7 +1285,32 @@ class SootheApp(App):
             )
         )
 
-    def on_deep_agents_app_server_ready(self, event: ServerReady) -> None:
+    async def _connect_daemon_background(self) -> None:
+        """Background worker: connect the TUI directly to the daemon."""
+        if self._daemon_config is None:
+            return
+
+        try:
+            from soothe.daemon import SootheDaemon
+            from soothe.ux.cli.commands.daemon_cmd import daemon_start
+            from soothe.ux.tui.daemon_session import TuiDaemonSession
+
+            ws_host = self._daemon_config.daemon.transports.websocket.host
+            ws_port = self._daemon_config.daemon.transports.websocket.port
+            if not SootheDaemon._is_port_live(ws_host, ws_port):
+                if SootheDaemon.is_running():
+                    SootheDaemon.stop_running()
+                daemon_start(config=None, foreground=False)
+
+            session = TuiDaemonSession(self._daemon_config)
+            status_event = await session.connect(resume_thread_id=self._lc_thread_id)
+        except Exception as exc:
+            self.post_message(self.ServerStartFailed(error=exc))
+            return
+
+        self.post_message(self.DaemonReady(session=session, status_event=status_event))
+
+    def on_soothe_app_server_ready(self, event: ServerReady) -> None:
         """Handle successful background server startup."""
         self._connecting = False
         self._agent = event.agent
@@ -1270,7 +1326,7 @@ class SootheApp(App):
             logger.warning("Welcome banner not found during server ready transition")
 
         # Handle deferred initial prompt, skill, or thread history
-        if not self._schedule_initial_submission() and (self._lc_thread_id and self._agent):
+        if not self._schedule_initial_submission() and (self._lc_thread_id and self._runtime_backend_ready()):
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
         # Drain deferred actions (e.g. model/thread switch queued during connection)
@@ -1297,7 +1353,49 @@ class SootheApp(App):
         if self._pending_messages and not self._has_initial_submission():
             self.call_after_refresh(lambda: asyncio.create_task(self._process_next_from_queue()))
 
-    def on_deep_agents_app_server_start_failed(self, event: ServerStartFailed) -> None:
+    def on_soothe_app_daemon_ready(self, event: DaemonReady) -> None:
+        """Handle successful daemon bootstrap for the TUI."""
+        self._connecting = False
+        self._daemon_session = event.session
+        self._agent = event.session
+
+        status_thread_id = event.status_event.get("thread_id")
+        if isinstance(status_thread_id, str) and status_thread_id:
+            self._lc_thread_id = status_thread_id
+            if self._session_state is not None:
+                self._session_state.thread_id = status_thread_id
+
+        try:
+            banner = self.query_one("#welcome-banner", WelcomeBanner)
+            banner.set_connected(self._mcp_tool_count)
+            if self._lc_thread_id:
+                banner.update_thread_id(self._lc_thread_id)
+        except NoMatches:
+            logger.warning("Welcome banner not found during daemon ready transition")
+
+        if not self._schedule_initial_submission() and self._lc_thread_id:
+            self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
+
+        if self._deferred_actions and not self._agent_running:
+
+            async def _safe_drain() -> None:
+                try:
+                    await self._maybe_drain_deferred()
+                except Exception:
+                    logger.exception("Unhandled error while draining deferred actions")
+                    with suppress(Exception):
+                        await self._mount_message(
+                            ErrorMessage(
+                                "A deferred action failed during startup. You may need to retry the operation."
+                            )
+                        )
+
+            self.call_after_refresh(lambda: asyncio.create_task(_safe_drain()))
+
+        if self._pending_messages and not self._has_initial_submission():
+            self.call_after_refresh(lambda: asyncio.create_task(self._process_next_from_queue()))
+
+    def on_soothe_app_server_start_failed(self, event: ServerStartFailed) -> None:
         """Handle background server startup failure."""
         self._connecting = False
         self._server_startup_error = f"{type(event.error).__name__}: {event.error}"
@@ -2199,7 +2297,7 @@ class SootheApp(App):
 
         # If agent/shell is running or server is still starting up, enqueue
         # instead of processing. Messages queued during connection are drained
-        # once the server is ready (see on_deep_agents_app_server_ready).
+        # once the server is ready.
         if self._agent_running or self._shell_running or self._connecting:
             if mode == "command" and self._can_bypass_queue(value.lower().strip()):
                 await self._process_message(value, mode)
@@ -2619,7 +2717,13 @@ class SootheApp(App):
             self._update_status("")
             # Reset thread to start fresh conversation
             if self._session_state:
-                new_thread_id = self._session_state.reset_thread()
+                if self._daemon_session is not None:
+                    status_event = await self._daemon_session.new_thread()
+                    new_thread_id = str(status_event.get("thread_id", "")) or self._session_state.reset_thread()
+                    self._session_state.thread_id = new_thread_id
+                    self._lc_thread_id = new_thread_id
+                else:
+                    new_thread_id = self._session_state.reset_thread()
                 try:
                     banner = self.query_one("#welcome-banner", WelcomeBanner)
                     banner.update_thread_id(new_thread_id)
@@ -3151,7 +3255,7 @@ class SootheApp(App):
             self.query_one("#chat", VerticalScroll).anchor()
 
         # Check if agent is available
-        if self._agent and self._ui_adapter and self._session_state:
+        if self._runtime_backend_ready() and self._ui_adapter and self._session_state:
             self._agent_running = True
 
             if self._chat_input:
@@ -3198,6 +3302,7 @@ class SootheApp(App):
             await execute_task_textual(
                 user_input=message,
                 agent=self._agent,
+                daemon_session=self._daemon_session,
                 assistant_id=self._assistant_id,
                 session_state=self._session_state,
                 adapter=self._ui_adapter,
@@ -3414,6 +3519,11 @@ class SootheApp(App):
             Thread state values keyed by channel name. Returns an empty dict
                 when no checkpointed values are available.
         """
+        if self._daemon_session is not None:
+            config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+            snapshot = await self._daemon_session.aget_state(config)
+            return dict(snapshot.values)
+
         if not self._agent:
             return {}
 
@@ -3470,9 +3580,9 @@ class SootheApp(App):
         # Server mode / direct checkpointer may return dicts; convert to
         # LangChain message objects so _convert_messages_to_data works.
         if messages and isinstance(messages[0], dict):
-            from langchain_core.messages.utils import convert_to_messages
+            from langchain_core.messages import messages_from_dict
 
-            messages = convert_to_messages(messages)
+            messages = messages_from_dict(messages)
 
         # Offload conversion so large histories don't block the UI loop.
         data = await asyncio.to_thread(self._convert_messages_to_data, messages)
@@ -4543,6 +4653,8 @@ class SootheApp(App):
             self._update_status("")
 
             # Switch to the selected thread
+            if self._daemon_session is not None:
+                await self._daemon_session.switch_thread(thread_id)
             self._session_state.thread_id = thread_id
             self._lc_thread_id = thread_id
 
@@ -4789,6 +4901,8 @@ class SootheApp(App):
     def action_detach(self) -> None:
         """Exit TUI but leave daemon running."""
         self.notify("Detaching from daemon...", severity="info")
+        if self._daemon_session is not None:
+            self.run_worker(self._daemon_session.detach(), exclusive=False)
         # Exit without stopping daemon
         self.exit()
 
@@ -4828,6 +4942,7 @@ async def run_textual_app(
     server_kwargs: dict[str, Any] | None = None,
     mcp_preload_kwargs: dict[str, Any] | None = None,
     model_kwargs: dict[str, Any] | None = None,
+    daemon_config: Any = None,  # noqa: ANN401
 ) -> AppResult:
     """Run the Textual application.
 
@@ -4862,6 +4977,7 @@ async def run_textual_app(
         server_kwargs: Kwargs for deferred `start_server_and_get_agent` call.
         mcp_preload_kwargs: Kwargs for concurrent MCP metadata preload.
         model_kwargs: Kwargs for deferred `create_model()` call.
+        daemon_config: Soothe configuration for daemon-backed TUI startup.
 
             When provided, model creation runs in a background worker after
             first paint so the splash screen appears immediately.
@@ -4885,6 +5001,7 @@ async def run_textual_app(
         server_kwargs=server_kwargs,
         mcp_preload_kwargs=mcp_preload_kwargs,
         model_kwargs=model_kwargs,
+        daemon_config=daemon_config,
     )
     try:
         await app.run_async()
@@ -4894,6 +5011,8 @@ async def run_textual_app(
         # server_kwargs path (where the background worker sets _server_proc).
         if app._server_proc is not None:
             app._server_proc.stop()
+        if app._daemon_session is not None:
+            await app._daemon_session.close()
 
     return AppResult(
         return_code=app.return_code or 0,
@@ -4928,5 +5047,6 @@ def run_textual_tui(
         run_textual_app(
             thread_id=thread_id,
             initial_prompt=initial_prompt,
+            daemon_config=config,
         )
     )

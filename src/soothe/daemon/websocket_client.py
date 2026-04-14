@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
@@ -168,6 +169,7 @@ class WebSocketClient:
         autonomous: bool = False,
         max_iterations: int | None = None,
         subagent: str | None = None,
+        interactive: bool = False,
     ) -> None:
         """Send user input to the daemon.
 
@@ -184,6 +186,8 @@ class WebSocketClient:
                 payload["max_iterations"] = max_iterations
         if subagent is not None:
             payload["subagent"] = subagent
+        if interactive:
+            payload["interactive"] = True
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:
@@ -200,6 +204,7 @@ class WebSocketClient:
         *,
         include_stats: bool = False,
         include_last_message: bool = True,
+        request_id: str | None = None,
     ) -> None:
         """Request persisted threads (RFC-402 ``thread_list`` / ``thread_list_response``)."""
         payload: dict[str, Any] = {
@@ -209,7 +214,114 @@ class WebSocketClient:
         }
         if filter_dict:
             payload["filter"] = filter_dict
+        if request_id is not None:
+            payload["request_id"] = request_id
         await self.send(payload)
+
+    async def send_thread_get(self, thread_id: str, *, request_id: str | None = None) -> None:
+        """Request thread metadata for a specific thread."""
+        payload: dict[str, Any] = {"type": "thread_get", "thread_id": thread_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_thread_messages(
+        self,
+        thread_id: str,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        request_id: str | None = None,
+    ) -> None:
+        """Request persisted thread messages."""
+        payload: dict[str, Any] = {
+            "type": "thread_messages",
+            "thread_id": thread_id,
+            "limit": limit,
+            "offset": offset,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_thread_state(self, thread_id: str, *, request_id: str | None = None) -> None:
+        """Request raw checkpoint state values for a thread."""
+        payload: dict[str, Any] = {"type": "thread_state", "thread_id": thread_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_thread_update_state(
+        self,
+        thread_id: str,
+        values: dict[str, Any],
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Persist partial state values for a thread."""
+        payload: dict[str, Any] = {
+            "type": "thread_update_state",
+            "thread_id": thread_id,
+            "values": values,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_resume_interrupts(
+        self,
+        thread_id: str,
+        resume_payload: dict[str, Any],
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Send interactive continuation payload for a paused daemon turn."""
+        payload: dict[str, Any] = {
+            "type": "resume_interrupts",
+            "thread_id": thread_id,
+            "resume_payload": resume_payload,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def request_response(
+        self,
+        payload: dict[str, Any],
+        *,
+        response_type: str,
+        timeout: float = 5.0,
+    ) -> dict[str, Any]:
+        """Send a request and wait for a matching response type.
+
+        Args:
+            payload: Request payload to send.
+            response_type: Expected response message type.
+            timeout: Maximum seconds to wait.
+
+        Returns:
+            Matching response dict.
+
+        Raises:
+            TimeoutError: If no matching response is received.
+            RuntimeError: If the daemon returns an error for this request.
+        """
+        request_id = uuid.uuid4().hex
+        payload = dict(payload)
+        payload["request_id"] = request_id
+        await self.send(payload)
+
+        async with asyncio.timeout(timeout):
+            while True:
+                event = await self.read_event()
+                if not event:
+                    raise TimeoutError(f"Timed out waiting for {response_type}")
+                if event.get("request_id") != request_id:
+                    continue
+                if event.get("type") == "error":
+                    raise RuntimeError(str(event.get("message", "daemon error")))
+                if event.get("type") == response_type:
+                    return event
 
     async def send_detach(self) -> None:
         """Notify the daemon that this client is detaching."""

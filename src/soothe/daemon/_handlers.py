@@ -120,6 +120,7 @@ class DaemonHandlersMixin:
                             max_iterations=msg.get("max_iterations"),
                             subagent=msg.get("subagent"),
                             client_id=msg.get("client_id"),
+                            interactive=bool(msg.get("interactive", False)),
                         )
             except asyncio.CancelledError:
                 break
@@ -188,6 +189,7 @@ class DaemonHandlersMixin:
         max_iterations: int | None = None,
         subagent: str | None = None,
         client_id: str | None = None,
+        interactive: bool = False,
     ) -> None:
         """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
         await self._query_engine.run_query(
@@ -196,4 +198,5 @@ class DaemonHandlersMixin:
             max_iterations=max_iterations,
             subagent=subagent,
             client_id=client_id,
+            interactive=interactive,
         )
