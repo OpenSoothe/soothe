@@ -20,6 +20,7 @@ from .execution_hints import ExecutionHintsMiddleware
 from .llm_tracing import LLMTracingMiddleware
 from .policy import SoothePolicyMiddleware
 from .system_prompt_optimization import SystemPromptOptimizationMiddleware
+from .per_turn_model import PerTurnModelMiddleware
 from .workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "LLMTracingMiddleware",
     "SoothePolicyMiddleware",
     "SystemPromptOptimizationMiddleware",
+    "PerTurnModelMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",  # IG-143: Export metadata helper

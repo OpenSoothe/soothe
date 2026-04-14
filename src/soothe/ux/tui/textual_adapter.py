@@ -579,7 +579,15 @@ async def execute_task_textual(
                     chunk_source = daemon_session.iter_turn_chunks()
                 else:
                     daemon_text = message_content if isinstance(message_content, str) else final_input
-                    await daemon_session.send_turn(daemon_text, interactive=True)
+                    ctx_model = context.get("model") if context else None
+                    raw_mp = context.get("model_params") if context else None
+                    mp = raw_mp if isinstance(raw_mp, dict) else None
+                    await daemon_session.send_turn(
+                        daemon_text,
+                        interactive=True,
+                        model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
+                        model_params=mp,
+                    )
                     chunk_source = daemon_session.iter_turn_chunks()
 
             async for chunk in chunk_source:

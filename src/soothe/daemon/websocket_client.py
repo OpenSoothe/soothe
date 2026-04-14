@@ -170,6 +170,8 @@ class WebSocketClient:
         max_iterations: int | None = None,
         subagent: str | None = None,
         interactive: bool = False,
+        model: str | None = None,
+        model_params: dict[str, Any] | None = None,
     ) -> None:
         """Send user input to the daemon.
 
@@ -178,6 +180,8 @@ class WebSocketClient:
             autonomous: Whether to run in autonomous mode.
             max_iterations: Maximum iterations for autonomous mode.
             subagent: Optional subagent name to route the query to.
+            model: Optional ``provider:model`` override for this turn (daemon host config).
+            model_params: Optional extra kwargs for model construction (JSON-serializable dict).
         """
         payload: dict[str, Any] = {"type": "input", "text": text}
         if autonomous:
@@ -188,6 +192,10 @@ class WebSocketClient:
             payload["subagent"] = subagent
         if interactive:
             payload["interactive"] = True
+        if model:
+            payload["model"] = model
+        if model_params:
+            payload["model_params"] = model_params
         await self.send(payload)
 
     async def send_command(self, cmd: str) -> None:
@@ -372,6 +380,14 @@ class WebSocketClient:
         return await self.request_response(
             {"type": "skills_list"},
             response_type="skills_list_response",
+            timeout=timeout,
+        )
+
+    async def list_models(self, *, timeout: float = 15.0) -> dict[str, Any]:
+        """Request model catalog rows from the daemon host ``SootheConfig`` (RFC-400 ``models_list``)."""
+        return await self.request_response(
+            {"type": "models_list"},
+            response_type="models_list_response",
             timeout=timeout,
         )
 

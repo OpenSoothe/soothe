@@ -86,6 +86,10 @@ def build_soothe_middleware_stack(
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
+    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+       for the current asyncio Task (daemon per-turn ``input``), replaces the
+       chat model for that stream via ``ModelRequest.override``.
+
     Note: Tool parallelism is handled by langchain's built-in asyncio.gather
     in ToolNode. No explicit ParallelToolsMiddleware needed.
 
@@ -98,6 +102,7 @@ def build_soothe_middleware_stack(
     """
     from .execution_hints import ExecutionHintsMiddleware
     from .llm_tracing import LLMTracingMiddleware
+    from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt_optimization import SystemPromptOptimizationMiddleware
     from .workspace_context import WorkspaceContextMiddleware
@@ -159,5 +164,9 @@ def build_soothe_middleware_stack(
     # 5. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
+
+    # 6. Per-turn model override (daemon / stream context) — innermost around the LLM
+    stack.append(PerTurnModelMiddleware(config))
+    logger.debug("[Middleware] Per-turn model override enabled")
 
     return tuple(stack)

@@ -151,6 +151,10 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         # Optional request_id is validated elsewhere; no extra fields required.
         pass
 
+    elif msg_type == "models_list":
+        # Optional request_id only; catalog is derived from daemon SootheConfig.
+        pass
+
     elif msg_type == "invoke_skill":
         if "skill" not in msg:
             errors.append("invoke_skill message missing required field: skill")

@@ -13,6 +13,7 @@
 This RFC defines a WebSocket-based daemon communication protocol serving all clients (local CLI/TUI and remote/web) through a unified transport. HTTP REST retained for health checks and stateless CRUD. The protocol specifies JSON message format, security requirements, and implementation interface, eliminating Unix domain socket complexity while enabling local and remote connectivity.
 
 **Updates**:
+- **2026-04-14**: Added `models_list` / `models_list_response` so clients list models from the daemon host `SootheConfig`; `input` may carry optional `model` and `model_params` for a per-turn override resolved on the daemon.
 - **2026-04-14**: Added `skills_list` / `skills_list_response` and `invoke_skill` / `invoke_skill_response` RPCs for remote-safe skill metadata and invocation; ordering rule for `invoke_skill` (response before stream events for that turn).
 - **2026-03-29**: Simplified to WebSocket-only bidirectional streaming, removed Unix socket (stability issues)
 - **2026-03-29**: Merged RFC-100 daemon readiness, added lifecycle phases and readiness handshake
@@ -153,12 +154,13 @@ All messages JSON with required `type` field.
 
 | Type | Fields | Description |
 |------|--------|-------------|
-| `input` | `text` (req), `autonomous` (opt), `max_iterations` (opt) | User input |
+| `input` | `text` (req), `autonomous` (opt), `max_iterations` (opt), `model` (opt), `model_params` (opt object) | User input; optional per-turn chat model (`provider:model`) and constructor kwargs for the daemon host |
 | `command` | `cmd` (req) | Slash command (`/help`, `/exit`, `/quit`, `/detach`, `/plan`, `/memory`, `/context`, `/policy`, `/history`, `/review`, `/resume`, `/clear`, `/config`) |
 | `resume_thread` | `thread_id` (req) | Resume thread (doesn't auto-subscribe) |
 | `subscribe_thread` | `thread_id` (req) | Subscribe to thread events |
 | `detach` | None | Notify daemon client detaching |
 | `skills_list` | `request_id` (opt) | List skills configured for the daemon agent (wire-safe metadata, no paths) |
+| `models_list` | `request_id` (opt) | List models declared on the daemon host `SootheConfig` (`providers` / `models` and resolved default) |
 | `invoke_skill` | `skill` (req), `args` (opt string), `request_id` (opt) | Resolve `SKILL.md` on the daemon host, acknowledge client, then run one agent turn with the composed prompt |
 
 ### Server → Client Messages
@@ -171,6 +173,7 @@ All messages JSON with required `type` field.
 | `command_response` | `content` (req) | Slash command output |
 | `error` | `code` (req), `message` (req), `details` (opt) | Protocol error |
 | `skills_list_response` | `skills` (req, array of `{name, description, source?, version?}`), `request_id` (opt) | Catalog rows for autocomplete and listings |
+| `models_list_response` | `models` (req, array of `{spec, provider, model, has_credentials?, placeholder?}`), `default_model` (opt), `request_id` (opt) | Model rows for TUI `/model` (server-side config) |
 | `invoke_skill_response` | `echo` (req, object: `skill_name`, `description`, `source`, `body`, `args`), `request_id` (opt) | Echo for UI (`SkillMessage`) before the turn streams |
 
 **Error Codes**: `INVALID_MESSAGE`, `RATE_LIMITED`, `INTERNAL_ERROR`, `DAEMON_STARTING`, `DAEMON_BUSY`, `DAEMON_DEGRADED`, `DAEMON_ERROR`, `SKILL_NOT_FOUND`, `SKILL_LOAD_FAILED`.

@@ -114,6 +114,10 @@ class DaemonHandlersMixin:
                 elif msg_type == "input":
                     text = msg["text"]
                     if self._query_engine is not None:
+                        mp = msg.get("model_params")
+                        model_params = mp if isinstance(mp, dict) else None
+                        raw_m = msg.get("model")
+                        model_kw = raw_m.strip() if isinstance(raw_m, str) and raw_m.strip() else None
                         await self._query_engine.run_query(
                             text,
                             autonomous=bool(msg.get("autonomous", False)),
@@ -121,6 +125,8 @@ class DaemonHandlersMixin:
                             subagent=msg.get("subagent"),
                             client_id=msg.get("client_id"),
                             interactive=bool(msg.get("interactive", False)),
+                            model=model_kw,
+                            model_params=model_params,
                         )
             except asyncio.CancelledError:
                 break
@@ -190,6 +196,8 @@ class DaemonHandlersMixin:
         subagent: str | None = None,
         client_id: str | None = None,
         interactive: bool = False,
+        model: str | None = None,
+        model_params: dict | None = None,
     ) -> None:
         """Delegate to ``QueryEngine`` (keeps unit tests and legacy callers working)."""
         await self._query_engine.run_query(
@@ -199,4 +207,6 @@ class DaemonHandlersMixin:
             subagent=subagent,
             client_id=client_id,
             interactive=interactive,
+            model=model,
+            model_params=model_params,
         )

@@ -86,6 +86,8 @@ class TuiDaemonSession:
         max_iterations: int | None = None,
         subagent: str | None = None,
         interactive: bool = True,
+        model: str | None = None,
+        model_params: dict[str, Any] | None = None,
     ) -> None:
         """Send a new user turn to the daemon."""
         await self._client.send_input(
@@ -94,6 +96,8 @@ class TuiDaemonSession:
             max_iterations=max_iterations,
             subagent=subagent,
             interactive=interactive,
+            model=model,
+            model_params=model_params,
         )
 
     async def cancel_remote_query(self) -> None:
@@ -211,6 +215,11 @@ class TuiDaemonSession:
         if not isinstance(skills, list):
             return []
         return [s for s in skills if isinstance(s, dict)]
+
+    async def list_models(self) -> dict[str, Any]:
+        """Return daemon ``models_list_response`` (models + default_model from server config)."""
+        async with self._read_lock:
+            return await self._client.list_models(timeout=15.0)
 
     async def invoke_skill(self, skill: str, args: str = "") -> dict[str, Any]:
         """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams."""

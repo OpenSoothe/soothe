@@ -1153,9 +1153,7 @@ class SootheApp(App):
             lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
         lines.append("")
         lines.append("Usage: `/skill:<name> [args]`")
-        lines.append(
-            "Top-level aliases: `/remember`, `/skill-creator` (same as `/skill:remember`, `/skill:skill-creator`)."
-        )
+        lines.append("Top-level alias: `/remember` (same as `/skill:remember`).")
         return "\n".join(lines)
 
     @staticmethod
@@ -1168,9 +1166,7 @@ class SootheApp(App):
             lines.append(f"  • {name}: {desc}" if desc else f"  • {name}")
         lines.append("")
         lines.append("Usage: `/skill:<name> [args]`")
-        lines.append(
-            "Top-level aliases: `/remember`, `/skill-creator` (same as `/skill:remember`, `/skill:skill-creator`)."
-        )
+        lines.append("Top-level alias: `/remember` (same as `/skill:remember`).")
         return "\n".join(lines)
 
     async def _mount_bare_skill_list(self, command: str) -> None:
@@ -2802,7 +2798,7 @@ class SootheApp(App):
             help_body = (
                 "Commands: /quit, /clear, /offload, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
-                "/reload, /skill:<name>, /remember, /skill-creator, /theme, "
+                "/reload, /skill:<name>, /remember, /theme, "
                 "/tokens, /threads, /trace, "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
@@ -4587,6 +4583,7 @@ class SootheApp(App):
         from functools import partial
 
         from soothe.ux.tui.config import settings
+        from soothe.ux.tui.model_config import ModelSpec
         from soothe.ux.tui.widgets.model_selector import ModelSelectorScreen
 
         def handle_result(result: tuple[str, str] | None) -> None:
@@ -4617,10 +4614,56 @@ class SootheApp(App):
             if self._chat_input:
                 self._chat_input.focus_input()
 
+        cur_model = settings.model_name
+        cur_provider = settings.model_provider
+        if self._model_override:
+            parsed_cur = ModelSpec.try_parse(self._model_override.strip())
+            if parsed_cur:
+                cur_provider, cur_model = parsed_cur.provider, parsed_cur.model
+            else:
+                cur_model = self._model_override.strip()
+                cur_provider = cur_provider or ""
+
+        preloaded: tuple[list[tuple[str, str]], str | None, dict[str, dict[str, Any]]] | None = None
+        wire_creds: dict[str, bool | None] | None = None
+        if self._daemon_session is not None:
+            try:
+                resp = await self._daemon_session.list_models()
+            except Exception as exc:
+                logger.exception("daemon list_models failed")
+                await self._mount_message(ErrorMessage(f"Could not load models from daemon: {exc}"))
+                return
+            rows = resp.get("models") or []
+            all_models: list[tuple[str, str]] = []
+            wire_creds = {}
+            for row in rows:
+                if not isinstance(row, dict) or row.get("placeholder"):
+                    continue
+                spec = str(row.get("spec", "")).strip()
+                prov = str(row.get("provider", "")).strip()
+                if not spec or not prov:
+                    continue
+                all_models.append((spec, prov))
+                if prov not in wire_creds and "has_credentials" in row:
+                    wire_creds[prov] = row.get("has_credentials")
+            dm = resp.get("default_model")
+            default_spec = dm if isinstance(dm, str) and dm.strip() else None
+            profiles = {spec: {"profile": {}, "overridden_keys": set()} for spec, _ in all_models}
+            preloaded = (all_models, default_spec, profiles)
+            if not all_models:
+                await self._mount_message(
+                    ErrorMessage(
+                        "Daemon returned no models. Check providers and `models:` lists in the daemon host config.yml."
+                    ),
+                )
+                return
+
         screen = ModelSelectorScreen(
-            current_model=settings.model_name,
-            current_provider=settings.model_provider,
+            current_model=cur_model,
+            current_provider=cur_provider,
             cli_profile_override=self._profile_override,
+            preloaded=preloaded,
+            wire_credential_map=wire_creds,
         )
         self.push_screen(screen, handle_result)
 
@@ -4945,11 +4988,11 @@ class SootheApp(App):
     ) -> None:
         """Switch model for the current thread without changing `config.yml`.
 
-        Validates the spec via `create_model`, then sets a session override that
-        `ConfigurableModelMiddleware` reads through `CLIContext` on each turn.
-        Global `settings` and on-disk defaults are not updated; use `/model
-        --default` to persist a new default. Daemon-backed sessions cannot apply
-        a client-side model override yet.
+        For a local in-process agent, validates via `create_model` and sets an
+        override consumed by `ConfigurableModelMiddleware` through `CLIContext`.
+        For a daemon-backed session, the override is sent on each websocket
+        `input` (resolved on the daemon host). Global `settings` and on-disk
+        defaults are not updated; use `/model --default` to persist a new default.
 
         Args:
             model_spec: The model specification to switch to.
@@ -4978,15 +5021,6 @@ class SootheApp(App):
             # treat ":claude-opus-4-6" as "claude-opus-4-6"
             model_spec = model_spec.removeprefix(":")
 
-            if self._daemon_session is not None:
-                await self._mount_message(
-                    ErrorMessage(
-                        "Model switching is not supported for daemon-backed sessions yet. "
-                        "Change the model in config.yml or run the TUI with a local agent server."
-                    ),
-                )
-                return
-
             if self._agent is None:
                 await self._mount_message(ErrorMessage("No agent is configured for this session."))
                 return
@@ -4999,26 +5033,27 @@ class SootheApp(App):
                 model_name = model_spec
                 provider = detect_provider(model_spec)
 
-            # Check credentials
-            has_creds = has_provider_credentials(provider) if provider else None
-            if has_creds is False and provider is not None:
-                env_var = get_credential_env_var(provider)
-                detail = (
-                    f"{env_var} is not set or is empty"
-                    if env_var
-                    else (
-                        f"provider '{provider}' is not recognized. "
-                        "Add it to ~/SOOTHE_HOME/config.yml with an "
-                        "api_key_env field"
+            # Check credentials (local client only; daemon host holds API keys)
+            if self._daemon_session is None:
+                has_creds = has_provider_credentials(provider) if provider else None
+                if has_creds is False and provider is not None:
+                    env_var = get_credential_env_var(provider)
+                    detail = (
+                        f"{env_var} is not set or is empty"
+                        if env_var
+                        else (
+                            f"provider '{provider}' is not recognized. "
+                            "Add it to ~/SOOTHE_HOME/config.yml with an "
+                            "api_key_env field"
+                        )
                     )
-                )
-                await self._mount_message(ErrorMessage(f"Missing credentials: {detail}"))
-                return
-            if has_creds is None and provider:
-                logger.debug(
-                    "Credentials for provider '%s' cannot be verified; proceeding anyway",
-                    provider,
-                )
+                    await self._mount_message(ErrorMessage(f"Missing credentials: {detail}"))
+                    return
+                if has_creds is None and provider:
+                    logger.debug(
+                        "Credentials for provider '%s' cannot be verified; proceeding anyway",
+                        provider,
+                    )
 
             # Build the provider:model spec for the configurable middleware.
             display = model_spec
@@ -5031,33 +5066,48 @@ class SootheApp(App):
                 await self._mount_message(AppMessage(f"Already using {display} for this thread"))
                 return
 
-            try:
-                result = create_model(
-                    display,
-                    extra_kwargs=extra_kwargs,
-                    profile_overrides=self._profile_override,
+            if self._daemon_session is not None:
+                self._model_override = display
+                self._model_params_override = extra_kwargs
+                bar_provider = (parsed.provider if parsed else (provider or "")) or ""
+                bar_model = (parsed.model if parsed else model_name) or ""
+                if self._status_bar:
+                    self._status_bar.set_model(provider=bar_provider, model=bar_model)
+                await self._mount_message(
+                    AppMessage(
+                        f"Switched this thread to {display} for daemon turns "
+                        f"(session only; daemon host default in config.yml unchanged).",
+                    ),
                 )
-            except Exception as exc:
-                logger.exception("Failed to resolve model metadata for %s", display)
-                await self._mount_message(ErrorMessage(f"Failed to switch model: {exc}"))
-                return
+                logger.info("Model override set to %s for daemon-backed TUI thread", display)
+            else:
+                try:
+                    result = create_model(
+                        display,
+                        extra_kwargs=extra_kwargs,
+                        profile_overrides=self._profile_override,
+                    )
+                except Exception as exc:
+                    logger.exception("Failed to resolve model metadata for %s", display)
+                    await self._mount_message(ErrorMessage(f"Failed to switch model: {exc}"))
+                    return
 
-            # Per-thread/session not mutate global ``settings`` or
-            # persist to ``~/SOOTHE_HOME/config/config.yml`` — config.yml remains the default
-            # for new sessions; this choice applies until you clear the thread or restart.
-            self._model_override = display
-            self._model_params_override = extra_kwargs
+                # Per-thread/session: do not mutate global ``settings`` or persist defaults.
+                self._model_override = display
+                self._model_params_override = extra_kwargs
 
-            if self._status_bar:
-                self._status_bar.set_model(
-                    provider=result.provider or "",
-                    model=result.model_name or "",
+                if self._status_bar:
+                    self._status_bar.set_model(
+                        provider=result.provider or "",
+                        model=result.model_name or "",
+                    )
+
+                await self._mount_message(
+                    AppMessage(
+                        f"Switched this thread to {display} (session only; default in config.yml unchanged).",
+                    ),
                 )
-
-            await self._mount_message(
-                AppMessage(f"Switched this thread to {display} (session only; default in config.yml unchanged)."),
-            )
-            logger.info("Model override set to %s for current thread (ConfigurableModelMiddleware)", display)
+                logger.info("Model override set to %s for current thread (ConfigurableModelMiddleware)", display)
 
             # Anchor to bottom so the confirmation message is visible
             with suppress(NoMatches, ScreenStackError):
@@ -5067,12 +5117,12 @@ class SootheApp(App):
 
     async def _set_default_model(self, model_spec: str) -> None:
         """Set the default model in config without switching the current session.
-        SOOTHE_HOME/config/config.yml
-                Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
-                future CLI launches use this model. Does not affect the running session.
 
-                Args:
-                    model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
+        Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
+        future CLI launches use this model. Does not affect the running session.
+
+        Args:
+            model_spec: The model specification (e.g., `'anthropic:claude-opus-4-6'`).
         """
         from soothe.ux.tui.config import detect_provider
         from soothe.ux.tui.model_config import ModelSpec, save_default_model
