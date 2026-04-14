@@ -4906,6 +4906,7 @@ async def run_textual_app(
 # SOOTHE: Alias for Soothe compatibility
 def run_textual_tui(
     config: Any,  # noqa: ANN401
+    autopilot_mode: bool = False,  # SOOTHE: autopilot mode flag
     thread_id: str | None = None,
     config_path: str | None = None,
     initial_prompt: str | None = None,
@@ -4913,6 +4914,13 @@ def run_textual_tui(
     """Launch Soothe TUI (alias for run_textual_app).
 
     SOOTHE: This function wraps run_textual_app for Soothe CLI compatibility.
+
+    Args:
+        config: Soothe configuration (unused, kept for compatibility)
+        autopilot_mode: Launch autopilot screen instead of chat
+        thread_id: Thread ID for the session
+        config_path: Config file path (unused)
+        initial_prompt: Auto-submit prompt on launch
     """
     import asyncio
 
