@@ -49,6 +49,8 @@ class QueryEngine:
         subagent: str | None = None,
         client_id: str | None = None,
         interactive: bool = False,
+        model: str | None = None,
+        model_params: dict[str, Any] | None = None,
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
@@ -61,6 +63,9 @@ class QueryEngine:
                 max_iterations=max_iterations,
                 subagent=subagent,
                 client_id=client_id,
+                interactive=interactive,
+                model=model,
+                model_params=model_params,
             )
             return
 
@@ -110,6 +115,14 @@ class QueryEngine:
         full_response: list[str] = []
 
         async def _run_stream() -> None:
+            from soothe.core.stream_model_context import (
+                attach_stream_model_override,
+                reset_stream_model_override,
+            )
+
+            m_clean = model.strip() if isinstance(model, str) and model.strip() else None
+            override_token = attach_stream_model_override(m_clean, model_params)
+
             chunk_count = 0
             timeout_minutes = d._config.daemon.max_query_duration_minutes
             timeout_enabled = timeout_minutes > 0
@@ -303,6 +316,7 @@ class QueryEngine:
                     }
                 )
             finally:
+                reset_stream_model_override(override_token)
                 if hasattr(d._runner, "set_interrupt_resolver"):
                     d._runner.set_interrupt_resolver(None)
                 d._query_running = False
@@ -349,6 +363,8 @@ class QueryEngine:
         subagent: str | None = None,
         client_id: str | None = None,
         interactive: bool = False,
+        model: str | None = None,
+        model_params: dict[str, Any] | None = None,
     ) -> None:
         """Execute query using ``ThreadExecutor``.
 
@@ -395,6 +411,13 @@ class QueryEngine:
         full_response: list[str] = []
 
         async def _run_stream() -> None:
+            from soothe.core.stream_model_context import (
+                attach_stream_model_override,
+                reset_stream_model_override,
+            )
+
+            m_clean = model.strip() if isinstance(model, str) and model.strip() else None
+            override_token = attach_stream_model_override(m_clean, model_params)
             try:
                 stream_kwargs: dict[str, Any] = {"workspace": self._workspace_str_for_thread(thread_id)}
                 if autonomous:
@@ -473,6 +496,7 @@ class QueryEngine:
                     }
                 )
             finally:
+                reset_stream_model_override(override_token)
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
 

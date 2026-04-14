@@ -101,11 +101,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         description="Update memory and skills from conversation",
         bypass_tier=BypassTier.QUEUED,
     ),
-    SlashCommand(  # Static alias; not auto-generated from skill discovery
-        name="/skill-creator",
-        description="Guide for creating effective agent skills",
-        bypass_tier=BypassTier.QUEUED,
-    ),
     SlashCommand(
         name="/threads",
         description="Browse and resume previous threads",
@@ -257,7 +252,7 @@ def parse_skill_command(command: str) -> tuple[str, str]:
     return skill_name, args
 
 
-_STATIC_SKILL_ALIASES: frozenset[str] = frozenset({"remember", "skill-creator"})
+_STATIC_SKILL_ALIASES: frozenset[str] = frozenset({"remember"})
 """Built-in skill names that have a dedicated top-level slash command.
 
 Only list skills whose `/skill:<name>` form is redundant because a `/<name>`

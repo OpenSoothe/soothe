@@ -69,6 +69,10 @@ class MessageRouter:
                 )
                 subagent = msg.get("subagent")
                 subagent = subagent.strip() or None if isinstance(subagent, str) else None
+                raw_model = msg.get("model")
+                model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
+                raw_params = msg.get("model_params")
+                model_params = raw_params if isinstance(raw_params, dict) else None
                 logger.debug(
                     "[MsgRouter] Putting input in queue: text=%s, client=%s",
                     preview_first(text, 30),
@@ -83,6 +87,8 @@ class MessageRouter:
                         "subagent": subagent,
                         "client_id": client_id,
                         "interactive": bool(msg.get("interactive", False)),
+                        "model": model,
+                        "model_params": model_params,
                     }
                 )
                 logger.debug("[MsgRouter] Input put in queue successfully")
@@ -168,6 +174,10 @@ class MessageRouter:
 
         if msg_type == "invoke_skill":
             await self._handle_invoke_skill(client_id, msg)
+            return
+
+        if msg_type == "models_list":
+            await self._handle_models_list(client_id, msg)
             return
 
         logger.debug("Unknown client message type: %s", msg_type)
@@ -669,6 +679,22 @@ class MessageRouter:
             {
                 "type": "skills_list_response",
                 "skills": skills,
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+    async def _handle_models_list(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Return model rows from the daemon host ``SootheConfig`` (for TUI ``/model``)."""
+        d = self._daemon
+        from soothe.config.models_catalog import build_models_list_payload
+
+        payload = build_models_list_payload(d._config)
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "models_list_response",
+                "models": payload["models"],
+                "default_model": payload.get("default_model"),
                 "request_id": msg.get("request_id"),
             },
         )

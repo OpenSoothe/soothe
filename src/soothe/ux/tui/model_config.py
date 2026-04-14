@@ -384,14 +384,22 @@ def get_available_models() -> list[ModelProfileEntry]:
     return out
 
 
-def get_model_profiles(cli_override: str | None = None) -> dict[str, ModelProfileEntry]:
-    """Map ``provider:model`` keys to profile rows derived from ``SootheConfig``."""
-    profiles: dict[str, ModelProfileEntry] = {}
+def get_model_profiles(cli_override: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
+    """Map ``provider:model`` keys to footer-shaped profile rows (minimal until YAML profiles exist).
+
+    Args:
+        cli_override: Reserved for CLI profile merge (unused in minimal catalog).
+
+    Returns:
+        Mapping of spec string to ``{"profile": {...}, "overridden_keys": set()}``.
+    """
+    del cli_override  # reserved for future profile merge from CLI flags
+    profiles: dict[str, dict[str, Any]] = {}
     for entry in get_available_models():
         if not entry.model:
             continue
         key = f"{entry.provider}:{entry.model}"
-        profiles[key] = entry
+        profiles[key] = {"profile": {}, "overridden_keys": set()}
     return profiles
 
 

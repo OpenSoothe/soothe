@@ -117,6 +117,11 @@ def test_validate_message_skills_list_valid() -> None:
     assert errors == []
 
 
+def test_validate_message_models_list_valid() -> None:
+    errors = validate_message({"type": "models_list"})
+    assert errors == []
+
+
 def test_validate_message_invoke_skill_valid() -> None:
     errors = validate_message({"type": "invoke_skill", "skill": "my-skill", "args": "x"})
     assert errors == []

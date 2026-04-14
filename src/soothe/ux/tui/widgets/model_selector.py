@@ -26,7 +26,6 @@ from soothe.ux.tui import theme
 from soothe.ux.tui.config import Glyphs, get_glyphs, is_ascii_mode
 from soothe.ux.tui.model_config import (
     ModelConfig,
-    ModelProfileEntry,
     clear_default_model,
     get_available_models,
     get_model_profiles,
@@ -209,6 +208,14 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         current_model: str | None = None,
         current_provider: str | None = None,
         cli_profile_override: dict[str, Any] | None = None,
+        *,
+        preloaded: tuple[
+            list[tuple[str, str]],
+            str | None,
+            Mapping[str, dict[str, Any]],
+        ]
+        | None = None,
+        wire_credential_map: dict[str, bool | None] | None = None,
     ) -> None:
         """Initialize the ModelSelectorScreen.
 
@@ -222,11 +229,18 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
 
                 Merged on top of upstream + config.yml profiles so that CLI
                 overrides appear with `*` markers in the detail footer.
+            preloaded: When set, skip local config discovery and use this
+                ``(models, default_spec, profiles)`` tuple (e.g. from daemon ``models_list``).
+            wire_credential_map: Optional per-provider credential hints from the
+                daemon host (``has_credentials`` rows); when unset, uses local
+                ``has_provider_credentials``.
         """
         super().__init__()
         self._current_model = current_model
         self._current_provider = current_provider
         self._cli_profile_override = cli_profile_override
+        self._preloaded = preloaded
+        self._wire_credential_map = wire_credential_map
 
         # Model data — populated asynchronously in on_mount via _load_model_data
         self._all_models: list[tuple[str, str]] = []
@@ -239,7 +253,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         if current_model and current_provider:
             self._current_spec = f"{current_provider}:{current_model}"
         self._default_spec: str | None = None
-        self._profiles: Mapping[str, ModelProfileEntry] = {}
+        self._profiles: Mapping[str, dict[str, Any]] = {}
         self._loaded = False
 
     def _find_current_model_index(self) -> int:
@@ -305,7 +319,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
     ) -> tuple[
         list[tuple[str, str]],
         str | None,
-        Mapping[str, ModelProfileEntry],
+        Mapping[str, dict[str, Any]],
     ]:
         """Gather model discovery data synchronously.
 
@@ -318,9 +332,13 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
                 pairs, `default_spec` is the configured default model or
                 `None`, and `profiles` maps spec strings to profile entries.
         """
-        all_models: list[tuple[str, str]] = [
-            (f"{provider}:{model}", provider) for provider, models in get_available_models().items() for model in models
-        ]
+        all_models: list[tuple[str, str]] = []
+        for entry in get_available_models():
+            if not entry.model:
+                continue
+            prov = entry.provider
+            mod = entry.model
+            all_models.append((f"{prov}:{mod}", prov))
 
         config = ModelConfig.load()
         profiles = get_model_profiles(cli_override=cli_override)
@@ -341,6 +359,22 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
         # while model data loads.
         filter_input = self.query_one("#model-filter", Input)
         filter_input.focus()
+
+        if self._preloaded is not None:
+            all_models, default_spec, profiles = self._preloaded
+            if not self.is_running:
+                return
+            self._all_models = all_models
+            self._default_spec = default_spec
+            self._profiles = profiles
+            self._filtered_models = list(self._all_models)
+            self._selected_index = self._find_current_model_index()
+            self._loaded = True
+            if self._filter_text:
+                self._update_filtered_list()
+            await self._update_display()
+            self._update_footer()
+            return
 
         # Offload to thread because get_available_models does filesystem I/O
         try:
@@ -496,7 +530,10 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
 
         # Resolve credentials upfront so the widget-building loop
         # stays focused on layout
-        creds = {p: has_provider_credentials(p) for p in by_provider}
+        if self._wire_credential_map is not None:
+            creds = {p: self._wire_credential_map.get(p) for p in by_provider}
+        else:
+            creds = {p: has_provider_credentials(p) for p in by_provider}
 
         # Collect all widgets first, then batch-mount once to avoid
         # individual DOM mutations per widget
@@ -616,7 +653,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
 
     @staticmethod
     def _format_footer(
-        profile_entry: ModelProfileEntry | None,
+        profile_entry: dict[str, Any] | None,
         glyphs: Glyphs,
     ) -> Content:
         """Build the detail footer text for the highlighted model.
