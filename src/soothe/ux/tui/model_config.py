@@ -101,28 +101,49 @@ class ModelConfig:
         return None
 
 
-def resolve_env_var(value: str) -> str:
-    """Resolve environment variable references in config values.
+def resolve_env_var(var_name: str) -> str:
+    """Resolve environment variable with SOOTHE_ prefix support.
 
-    Supports ${ENV_VAR} syntax for secret injection.
+    This function handles two scenarios:
+    1. Direct env var lookup: resolve_env_var("LANGSMITH_API_KEY")
+       - First checks SOOTHE_LANGSMITH_API_KEY
+       - Falls back to LANGSMITH_API_KEY
+    2. Pattern resolution: resolve_env_var("${LANGSMITH_API_KEY}")
+       - Resolves ${VAR} patterns within strings
 
     Args:
-        value: Config value that may contain ${ENV_VAR} references.
+        var_name: Environment variable name (e.g., "LANGSMITH_API_KEY")
+                  or pattern string (e.g., "${LANGSMITH_API_KEY}")
 
     Returns:
-        Resolved value with env vars substituted.
+        Resolved value from environment, or empty string if not found.
     """
     import os
     import re
 
-    # Match ${VAR_NAME} pattern
+    # Case 1: Pattern resolution (${VAR} syntax)
     pattern = r"\$\{([^}]+)\}"
+    if re.search(pattern, var_name):
 
-    def replace_env_var(match):
-        var_name = match.group(1)
-        return os.getenv(var_name, match.group(0))  # Keep original if not found
+        def replace_env_var(match):
+            env_var = match.group(1)
+            # Try SOOTHE_ prefix first, then canonical
+            prefixed = f"{_ENV_PREFIX}{env_var}"
+            if prefixed in os.environ:
+                return os.environ[prefixed]
+            if env_var in os.environ:
+                return os.environ[env_var]
+            # Keep original pattern if not found
+            return match.group(0)
 
-    return re.sub(pattern, replace_env_var, value)
+        return re.sub(pattern, replace_env_var, var_name)
+
+    # Case 2: Direct env var lookup (no ${...} pattern)
+    # Try SOOTHE_ prefix first, then canonical name
+    prefixed = f"{_ENV_PREFIX}{var_name}"
+    if prefixed in os.environ:
+        return os.environ[prefixed]
+    return os.getenv(var_name, "")
 
 
 # Provider API key environment variables mapping
