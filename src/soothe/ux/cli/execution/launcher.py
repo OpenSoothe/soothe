@@ -18,7 +18,13 @@ def run_tui(
     try:
         from soothe.ux.tui import run_textual_tui
 
-        run_textual_tui(config=cfg, thread_id=thread_id, config_path=config_path, initial_prompt=initial_prompt)
+        run_textual_tui(
+            config=cfg,
+            autopilot_mode=False,
+            thread_id=thread_id,
+            config_path=config_path,
+            initial_prompt=initial_prompt,
+        )
     except ImportError:
         typer.echo("Error: Textual is required for the TUI. Install: pip install 'textual>=0.40.0'", err=True)
         sys.exit(1)
