@@ -75,6 +75,22 @@ activity_max_lines: 300
 # tui_debug: false   # SOOTHE_TUI_DEBUG — structured TUI trace logs (logger soothe.ux.tui.trace)
 
 # =============================================================================
+# UI Preferences
+# =============================================================================
+# Configure TUI preferences that persist across sessions.
+
+# ui:
+#   theme: langchain  # Theme name (langchain, langchain-light, textual-dark, textual-light, etc.)
+
+# =============================================================================
+# Update Preferences
+# =============================================================================
+# Configure auto-update behavior for CLI updates.
+
+# update:
+#   auto_update: false  # Enable/disable automatic CLI updates
+
+# =============================================================================
 # Autonomous Operation
 # =============================================================================
 # Configure autonomous iteration for long-running tasks. By default, requires

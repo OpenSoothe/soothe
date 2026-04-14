@@ -36,6 +36,14 @@ router:
 
 debug: false
 
+# Dev UI preferences (optional)
+# ui:
+#   theme: langchain  # Default dark theme for dev
+
+# Dev update preferences (optional)
+# update:
+#   auto_update: false  # Disable auto-update in dev
+
 # Dev performance tuning
 performance:
   enabled: true
