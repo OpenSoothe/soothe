@@ -1344,7 +1344,7 @@ class SootheApp(App):
             # tool_display — hit on first message send and first tool
             # approval. Best-effort: missing optional deps should not block the
             # TUI from rendering.
-            from soothe.backends import DEFAULT_EXECUTE_TIMEOUT  # noqa: F401
+            from soothe.config import DEFAULT_EXECUTE_TIMEOUT  # noqa: F401
             from langchain.agents.middleware.human_in_the_loop import (  # noqa: F401
                 ApproveDecision,
             )

@@ -20,6 +20,14 @@ DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10
 DEFAULT_AUTONOMOUS_MAX_ITERATIONS = 10
 
 # ============================================================================
+# Execution Tool Limits
+# ============================================================================
+
+# Default timeout for shell command execution (RFC-606 TUI migration)
+# Used by RunCommandTool and TUI display logic
+DEFAULT_EXECUTE_TIMEOUT = 60  # seconds
+
+# ============================================================================
 # Early Termination Thresholds
 # ============================================================================
 
