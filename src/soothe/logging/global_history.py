@@ -69,7 +69,11 @@ class GlobalInputHistory:
                         continue
                     try:
                         entry = json.loads(line)
-                        entries.append(entry)
+                        # Ensure entry is a dict (not a bare string or other type)
+                        if isinstance(entry, dict):
+                            entries.append(entry)
+                        else:
+                            logger.debug("Skipping non-dict history entry: %s", str(entry)[:50])
                     except json.JSONDecodeError:
                         logger.debug("Skipping malformed history line: %s", line[:50])
                         continue
