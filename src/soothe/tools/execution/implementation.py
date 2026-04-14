@@ -21,6 +21,7 @@ from typing import Any, Literal
 from langchain_core.tools import BaseTool
 from pydantic import Field
 
+from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 from soothe.tools._internal.python_session_manager import get_session_manager
 from soothe.tools._internal.shell import (
     ANSI_ESCAPE,
@@ -53,7 +54,7 @@ class RunCommandTool(BaseTool):
     )
 
     workspace_root: str = Field(default="", description="Working directory for shell")
-    timeout: int = Field(default=60, description="Command timeout in seconds")
+    timeout: int = Field(default=DEFAULT_EXECUTE_TIMEOUT, description="Command timeout in seconds")
     max_output_length: int = Field(default=10000)
     custom_prompt: str = Field(default="")
 

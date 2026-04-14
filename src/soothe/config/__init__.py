@@ -4,6 +4,15 @@ All public names are re-exported here so that ``from soothe.config import X``
 continues to work after the module was split into a package.
 """
 
+from soothe.config.constants import (
+    DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+    DEFAULT_AUTONOMOUS_MAX_ITERATIONS,
+    DEFAULT_EXECUTE_TIMEOUT,
+    DEFAULT_PRIOR_CONVERSATION_LIMIT,
+    DEFAULT_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT,
+    MAX_CONSECUTIVE_EMPTY_TOOL_CALLS,
+    MAX_EVIDENCE_STRING_LENGTH,
+)
 from soothe.config.env import (
     _ENV_VAR_RE,
     SOOTHE_HOME,
@@ -49,6 +58,13 @@ from soothe.config.settings import SootheConfig
 from soothe.config.templates import get_config_template_path
 
 __all__ = [
+    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
+    "DEFAULT_AUTONOMOUS_MAX_ITERATIONS",
+    "DEFAULT_EXECUTE_TIMEOUT",
+    "DEFAULT_PRIOR_CONVERSATION_LIMIT",
+    "DEFAULT_RECENT_MESSAGES_FOR_CLASSIFY_LIMIT",
+    "MAX_CONSECUTIVE_EMPTY_TOOL_CALLS",
+    "MAX_EVIDENCE_STRING_LENGTH",
     "SOOTHE_HOME",
     "_DEFAULT_SYSTEM_PROMPT",
     "_ENV_VAR_RE",

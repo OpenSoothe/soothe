@@ -5,6 +5,7 @@ This plugin provides shell and Python execution capabilities.
 
 from typing import Any
 
+from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 from soothe_sdk import plugin
 
 from .implementation import (
@@ -16,6 +17,7 @@ from .implementation import (
 )
 
 __all__ = [
+    "DEFAULT_EXECUTE_TIMEOUT",
     "ExecutionPlugin",
     "KillProcessTool",
     "RunBackgroundTool",
