@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from soothe.config import SOOTHE_HOME
 import asyncio
 import logging
 import sqlite3
@@ -229,7 +230,7 @@ def get_db_path() -> Path:
     global _db_path  # noqa: PLW0603  # Module-level cache requires global statement
     if _db_path is not None:
         return _db_path
-    db_dir = Path.home() / ".deepagents"
+    db_dir = Path(SOOTHE_HOME)
     db_dir.mkdir(parents=True, exist_ok=True)
     _db_path = db_dir / "sessions.db"
     return _db_path
@@ -1047,7 +1048,7 @@ async def list_threads_command(
     *,
     output_format: OutputFormat = "text",
 ) -> None:
-    """CLI handler for `deepagents threads list`.
+    """CLI handler for `Soothe threads list`.
 
     Fetches and displays a table of recent conversation threads, optionally
     filtered by agent name or git branch.
@@ -1062,12 +1063,12 @@ async def list_threads_command(
             the default.
         sort_by: Sort field — `"updated"` or `"created"`.
 
-            When `None`, reads from config (`~/.deepagents/config.toml`).
+            When `None`, reads from config (`~/SOOTHE_HOME/config.yml`).
         branch: Only show threads from this git branch.
         verbose: When `True`, show all columns (branch, created, prompt).
         relative: Show timestamps as relative time (e.g., '5m ago').
 
-            When `None`, reads from config (`~/.deepagents/config.toml`).
+            When `None`, reads from config (`~/SOOTHE_HOME/config.yml`).
         output_format: Output format — `'text'` (Rich) or `'json'`.
     """
     from soothe.ux.tui.model_config import (
@@ -1118,7 +1119,7 @@ async def list_threads_command(
             console.print(f"[yellow]No threads found for {' and '.join(filters)}.[/yellow]")
         else:
             console.print("[yellow]No threads found.[/yellow]")
-        console.print("[dim]Start a conversation with: deepagents[/dim]")
+        console.print("[dim]Start a conversation with: Soothe[/dim]")
         return
 
     title_parts = []
@@ -1180,7 +1181,7 @@ async def delete_thread_command(
     dry_run: bool = False,
     output_format: OutputFormat = "text",
 ) -> None:
-    """CLI handler for: deepagents threads delete.
+    """CLI handler for: Soothe threads delete.
 
     Args:
         thread_id: ID of the thread to delete.

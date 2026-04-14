@@ -31,7 +31,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
     """Modal dialog for managing startup warning preferences.
 
     Each checkbox maps to a key in `[warnings].suppress` in
-    `~/.deepagents/config.toml`. Toggling a checkbox immediately
+    `~/SOOTHE_HOME/config.yml`. Toggling a checkbox immediately
     persists the change.
     """
 
@@ -114,7 +114,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
             container.styles.border = ("ascii", colors.success)
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        """Persist warning suppression toggle to config.toml on change."""
+        """Persist warning suppression toggle to config.yml on change."""
         event.stop()
         checkbox_id = event.checkbox.id
         if not checkbox_id or not checkbox_id.startswith("ns-"):
@@ -142,7 +142,7 @@ class NotificationSettingsScreen(ModalScreen[None]):
                 ok = False
             if not ok:
                 self.app.notify(
-                    "Could not save notification preference. Check file permissions for ~/.deepagents/config.toml.",
+                    "Could not save notification preference. Check file permissions for ~/SOOTHE_HOME/config.yml.",
                     severity="warning",
                     timeout=6,
                     markup=False,

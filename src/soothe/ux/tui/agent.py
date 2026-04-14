@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from soothe.config import SOOTHE_HOME
 import logging
 import os
 import re
 import shutil
 import tempfile
-import tomllib
+import yaml
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -185,12 +186,12 @@ class ShellAllowListMiddleware(AgentMiddleware):
 
 
 def load_async_subagents(config_path: Path | None = None) -> list[AsyncSubAgent]:
-    """Load async subagent definitions from `config.toml`.
+    """Load async subagent definitions from `config.yml`.
 
     Reads the `[async_subagents]` section where each sub-table defines a remote
     LangGraph deployment:
 
-    ```toml
+    ```yaml
     [async_subagents.researcher]
     description = "Research agent"
     url = "https://my-deployment.langsmith.dev"
@@ -200,21 +201,21 @@ def load_async_subagents(config_path: Path | None = None) -> list[AsyncSubAgent]
     Args:
         config_path: Path to config file.
 
-            Defaults to `~/.deepagents/config.toml`.
+            Defaults to `~/SOOTHE_HOME/config.yml`.
 
     Returns:
         List of `AsyncSubAgent` specs (empty if section is absent or invalid).
     """
     if config_path is None:
-        config_path = Path.home() / ".deepagents" / "config.toml"
+        config_path = Path(SOOTHE_HOME) / "config" / "config.yml"
 
     if not config_path.exists():
         return []
 
     try:
         with config_path.open("rb") as f:
-            data = tomllib.load(f)
-    except (tomllib.TOMLDecodeError, PermissionError, OSError) as e:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, PermissionError, OSError) as e:
         logger.warning("Could not read async subagents from %s: %s", config_path, e)
         console.print(
             f"[bold yellow]Warning:[/bold yellow] Could not read async subagents from {config_path}: {e}",
@@ -255,7 +256,7 @@ def list_agents(*, output_format: OutputFormat = "text") -> None:
     Args:
         output_format: Output format — `'text'` (Rich) or `'json'`.
     """
-    agents_dir = settings.user_deepagents_dir
+    agents_dir = settings.user_Soothe_dir
 
     if not agents_dir.exists() or not any(agents_dir.iterdir()):
         if output_format == "json":
@@ -265,7 +266,7 @@ def list_agents(*, output_format: OutputFormat = "text") -> None:
             return
         console.print("[yellow]No agents found.[/yellow]")
         console.print(
-            "[dim]Agents will be created in ~/.deepagents/ when you first use them.[/dim]",
+            "[dim]Agents will be created in ~/SOOTHE_HOME/ when you first use them.[/dim]",
             style=theme.MUTED,
         )
         return
@@ -340,7 +341,7 @@ def reset_agent(
     Raises:
         SystemExit: If the source agent is not found.
     """
-    agents_dir = settings.user_deepagents_dir
+    agents_dir = settings.user_Soothe_dir
     agent_dir = agents_dir / agent_name
 
     if source_agent:
@@ -351,7 +352,7 @@ def reset_agent(
             console.print(
                 f"[bold red]Error:[/bold red] Source agent '{source_agent}' not found "
                 "or has no AGENTS.md\n"
-                "  Available agents: deepagents agents list"
+                "  Available agents: Soothe agents list"
             )
             raise SystemExit(1)
 
@@ -495,7 +496,7 @@ def get_system_prompt(
     """
     template = (Path(__file__).parent / "system_prompt.md").read_text()
 
-    skills_path = f"~/.deepagents/{assistant_id}/skills"
+    skills_path = f"~/SOOTHE_HOME/{assistant_id}/skills"
 
     if interactive:
         mode_description = "an interactive CLI on the user's computer"
@@ -839,7 +840,7 @@ def create_cli_agent(
 ) -> tuple[Pregel, CompositeBackend]:
     """Create a CLI-configured agent with flexible options.
 
-    This is the main entry point for creating a deepagents CLI agent, usable
+    This is the main entry point for creating a Soothe CLI agent, usable
     both internally and from external code (e.g., benchmarking frameworks).
 
     Args:
@@ -897,7 +898,7 @@ def create_cli_agent(
             MCP trust.
         async_subagents: Remote LangGraph deployments to expose as async subagent tools.
 
-            Loaded from `[async_subagents]` in `config.toml` or passed directly.
+            Loaded from `[async_subagents]` in `config.yml` or passed directly.
 
     Returns:
         2-tuple of `(agent_graph, backend)`
@@ -1027,8 +1028,8 @@ def create_cli_agent(
     # Add skills middleware
     if enable_skills:
         # Lowest to highest precedence:
-        # built-in -> user .deepagents -> user .agents
-        # -> project .deepagents -> project .agents
+        # built-in -> user SOOTHE_HOME -> user .agents
+        # -> project SOOTHE_HOME -> project .agents
         # -> user .claude (experimental) -> project .claude (experimental)
         sources = [str(settings.get_built_in_skills_dir())]
         sources.extend([str(skills_dir), str(user_agent_skills_dir)])
@@ -1117,11 +1118,11 @@ def create_cli_agent(
     if sandbox is None:
         # Local mode: Route large results to a unique temp directory
         large_results_backend = FilesystemBackend(
-            root_dir=tempfile.mkdtemp(prefix="deepagents_large_results_"),
+            root_dir=tempfile.mkdtemp(prefix="Soothe_large_results_"),
             virtual_mode=True,
         )
         conversation_history_backend = FilesystemBackend(
-            root_dir=tempfile.mkdtemp(prefix="deepagents_conversation_history_"),
+            root_dir=tempfile.mkdtemp(prefix="Soothe_conversation_history_"),
             virtual_mode=True,
         )
         composite_backend = CompositeBackend(

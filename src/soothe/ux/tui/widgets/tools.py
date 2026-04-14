@@ -76,7 +76,7 @@ def web_search(  # noqa: ANN201  # Return type depends on dynamic tool configura
         from tavily.errors import ForbiddenError, TimeoutError as TavilyTimeoutError
     except ImportError as exc:
         return {
-            "error": f"Required package not installed: {exc.name}. Install with: pip install 'deepagents[cli]'",
+            "error": f"Required package not installed: {exc.name}. Install with: pip install 'Soothe[cli]'",
             "query": query,
         }
 
@@ -139,7 +139,7 @@ def fetch_url(url: str, timeout: int = 30) -> dict[str, Any]:
         from markdownify import markdownify
     except ImportError as exc:
         return {
-            "error": f"Required package not installed: {exc.name}. Install with: pip install 'deepagents[cli]'",
+            "error": f"Required package not installed: {exc.name}. Install with: pip install 'Soothe[cli]'",
             "url": url,
         }
 
@@ -147,7 +147,7 @@ def fetch_url(url: str, timeout: int = 30) -> dict[str, Any]:
         response = requests.get(
             url,
             timeout=timeout,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; DeepAgents/1.0)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; Soothe/1.0)"},
         )
         response.raise_for_status()
 

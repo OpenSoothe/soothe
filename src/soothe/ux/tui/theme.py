@@ -4,7 +4,7 @@ Single source of truth for color values used in Python code (Rich markup,
 `Content.styled`, `Content.from_markup`).  CSS-side styling should reference
 Textual CSS variables: built-in variables
 (`$primary`, `$background`, `$text-muted`, `$error-muted`, etc.) are set via
-`register_theme()` in `DeepAgentsApp.__init__`, while the few app-specific
+`register_theme()` in `SootheApp.__init__`, while the few app-specific
 variables (`$mode-bash`, `$mode-command`, `$skill`, `$skill-hover`, `$tool`,
 `$tool-hover`) are backed by these constants via `App.get_theme_variable_defaults()`.
 
@@ -12,7 +12,7 @@ Code that needs custom CSS variable values should call
 `get_css_variable_defaults(dark=...)`. For the full semantic color palette, look
 up the `ThemeColors` instance via `ThemeEntry.REGISTRY`.
 
-Users can define custom themes in `~/.deepagents/config.toml` under
+Users can define custom themes in `~/SOOTHE_HOME/config.yml` under
 `[themes.<name>]` sections. Each new theme section must include `label` (str);
 `dark` (bool) defaults to `False` if omitted (set to `True` for dark themes).
 Color fields are optional and fall back to the built-in dark/light palette based
@@ -22,6 +22,7 @@ colors without replacing it. See `_load_user_themes()` for details.
 
 from __future__ import annotations
 
+from soothe.config import SOOTHE_HOME
 import logging
 import re
 from dataclasses import dataclass, fields
@@ -486,7 +487,7 @@ def _load_user_themes(
     *,
     config_path: Path | None = None,
 ) -> None:
-    """Load user-defined themes from `config.toml` into `builtins` (mutated).
+    """Load user-defined themes from `config.yml` into `builtins` (mutated).
 
     **New themes** — each `[themes.<name>]` section (where `<name>` is not a
     built-in) must have:
@@ -507,9 +508,9 @@ def _load_user_themes(
     Invalid themes (bad hex, missing required keys) are logged as warnings
     and skipped — they never crash startup.
 
-    Example `config.toml` snippet:
+    Example `config.yml` snippet:
 
-    ```toml
+    ```yaml
     # New custom theme
     [themes.my-solarized]
     label = "My Solarized"
@@ -529,20 +530,20 @@ def _load_user_themes(
     """
     if config_path is None:
         try:
-            config_path = Path.home() / ".deepagents" / "config.toml"
+            config_path = Path(SOOTHE_HOME) / "config" / "config.yml"
         except RuntimeError:
             logger.debug("Cannot determine home directory; skipping user theme loading")
             return
 
-    import tomllib
+    import yaml
 
     try:
         if not config_path.exists():
             return
 
         with config_path.open("rb") as f:
-            data = tomllib.load(f)
-    except (tomllib.TOMLDecodeError, PermissionError, OSError) as exc:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, PermissionError, OSError) as exc:
         logger.warning(
             "Could not read %s for user themes: %s",
             config_path,
@@ -679,7 +680,7 @@ DEFAULT_THEME = "langchain"
 def reload_registry() -> MappingProxyType[str, ThemeEntry]:
     """Rebuild the theme registry from disk and update `ThemeEntry.REGISTRY`.
 
-    Re-reads `~/.deepagents/config.toml` for user-defined themes so that
+    Re-reads `~/SOOTHE_HOME/config.yml` for user-defined themes so that
     `/reload` can pick up config changes without restarting the app.
 
     Returns:

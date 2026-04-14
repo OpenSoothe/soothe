@@ -79,16 +79,16 @@ class ProjectContext:
         return find_project_agent_md(self.project_root)
 
     def project_skills_dir(self) -> Path | None:
-        """Return the project `.deepagents/skills` directory, if any."""
+        """Return the project `SOOTHE_HOME/skills` directory, if any."""
         if self.project_root is None:
             return None
-        return self.project_root / ".deepagents" / "skills"
+        return self.project_root / ".soothe" / "skills"
 
     def project_agents_dir(self) -> Path | None:
-        """Return the project `.deepagents/agents` directory, if any."""
+        """Return the project `SOOTHE_HOME/agents` directory, if any."""
         if self.project_root is None:
             return None
-        return self.project_root / ".deepagents" / "agents"
+        return self.project_root / ".soothe" / "agents"
 
     def project_agent_skills_dir(self) -> Path | None:
         """Return the project `.agents/skills` directory, if any."""
@@ -158,7 +158,7 @@ def find_project_agent_md(project_root: Path) -> list[Path]:
     """Find project-specific AGENTS.md file(s).
 
     Checks two locations and returns ALL that exist:
-    1. project_root/.deepagents/AGENTS.md
+    1. project_root/SOOTHE_HOME/AGENTS.md
     2. project_root/AGENTS.md
 
     Both files will be loaded and combined if both exist.
@@ -173,7 +173,7 @@ def find_project_agent_md(project_root: Path) -> list[Path]:
             two entries if both locations have the file.
     """
     candidates = [
-        project_root / ".deepagents" / "AGENTS.md",
+        project_root / "SOOTHE_HOME" / "AGENTS.md",
         project_root / "AGENTS.md",
     ]
     paths: list[Path] = []

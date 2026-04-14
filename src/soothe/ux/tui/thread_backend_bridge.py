@@ -1,9 +1,9 @@
 """Bridge for connecting thread_selector widget to Soothe thread persistence.
 
 This bridge adapts Soothe's ThreadContextManager to the interface
-expected by deepagents' thread_selector widget.
+expected by Soothe' thread_selector widget.
 
-RFC-606: DeepAgents CLI TUI Migration
+RFC-606: Soothe CLI TUI Migration
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 class ThreadBackendBridge:
     """Bridge for thread_selector to use Soothe persistence.
 
-    Mimics: deepagents SessionManager interface
+    Mimics: Soothe SessionManager interface
     Uses: Soothe ThreadContextManager backend (RFC-402)
 
     This bridge converts Soothe's thread metadata to the format
-    expected by deepagents' thread_selector widget, enabling
+    expected by Soothe' thread_selector widget, enabling
     thread resume functionality in the migrated TUI.
     """
 
@@ -48,7 +48,7 @@ class ThreadBackendBridge:
         self._config = config
 
     async def list_threads_for_ui(self) -> list[dict[str, Any]]:
-        """List threads in deepagents thread_selector format.
+        """List threads in Soothe thread_selector format.
 
         Returns:
             List of thread metadata dicts with fields:
@@ -86,7 +86,7 @@ class ThreadBackendBridge:
         self,
         thread_id: str,
     ) -> list[dict[str, Any]]:
-        """Load thread messages in deepagents format.
+        """Load thread messages in Soothe format.
 
         Args:
             thread_id: Thread ID to load

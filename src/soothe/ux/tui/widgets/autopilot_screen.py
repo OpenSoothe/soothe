@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, ClassVar
 from textual.screen import Screen
 
 from soothe.config import SOOTHE_HOME
-from soothe.ux.tui.autopilot_dashboard import AutopilotDashboard
+from soothe.ux.tui.widgets.autopilot_dashboard import AutopilotDashboard
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -51,7 +51,7 @@ class AutopilotScreen(Screen):
         Returns:
             List of goal info dicts.
         """
-        from soothe.ux.tui.autopilot_dashboard import _parse_autopilot_files
+        from soothe.ux.tui.widgets.autopilot_dashboard import _parse_autopilot_files
 
         autopilot_dir = SOOTHE_HOME / "autopilot"
         if not autopilot_dir.exists():

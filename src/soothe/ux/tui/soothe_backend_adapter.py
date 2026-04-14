@@ -1,10 +1,10 @@
-"""Backend adapter for connecting deepagents TUI to Soothe daemon.
+"""Backend adapter for connecting Soothe TUI to Soothe daemon.
 
-This adapter presents a deepagents-like interface to the TUI while
+This adapter presents a Soothe-like interface to the TUI while
 connecting to Soothe's daemon WebSocket backend, thread persistence,
 and protocol orchestration.
 
-RFC-606: DeepAgents CLI TUI Migration
+RFC-606: Soothe CLI TUI Migration
 """
 
 from __future__ import annotations
@@ -25,12 +25,12 @@ VerbosityTier = str  # "quiet", "minimal", "normal", "detailed"
 
 
 class SootheBackendAdapter:
-    """Adapter for deepagents TUI to connect to Soothe daemon.
+    """Adapter for Soothe TUI to connect to Soothe daemon.
 
-    Replaces: deepagents agent.astream() with daemon WebSocket stream
+    Replaces: Soothe agent.astream() with daemon WebSocket stream
     Implements: Message streaming, thread management, metadata provision
 
-    This adapter mimics the interface of deepagents' agent.astream()
+    This adapter mimics the interface of Soothe' agent.astream()
     while connecting to Soothe's backend infrastructure:
     - Daemon WebSocket for message streaming
     - ThreadContextManager for thread persistence
@@ -60,7 +60,7 @@ class SootheBackendAdapter:
         self,
         user_input: str,
     ) -> AsyncIterator[Tuple[str, str, dict]]:
-        """Stream messages from daemon in deepagents format.
+        """Stream messages from daemon in Soothe format.
 
         Mimics: agent.astream(stream_mode=["messages", "updates", "custom"])
         Returns: AsyncIterator of (namespace, mode, data) tuples
@@ -70,7 +70,7 @@ class SootheBackendAdapter:
             user_input: User's input message
 
         Yields:
-            Tuple of (namespace, mode, data) in deepagents format
+            Tuple of (namespace, mode, data) in Soothe format
         """
         # SOOTHE: Send input to daemon
         await self._daemon_client.send({"type": "user_input", "content": user_input})
@@ -104,12 +104,12 @@ class SootheBackendAdapter:
             event_data: Raw event from daemon WebSocket
 
         Returns:
-            Tuple of (namespace, mode, data) in deepagents format,
+            Tuple of (namespace, mode, data) in Soothe format,
             or None if event should be skipped
         """
         event_type = event_data.get("type", "")
 
-        # SOOTHE: Map daemon event types to deepagents stream modes
+        # SOOTHE: Map daemon event types to Soothe stream modes
         if event_type in ("message", "tool_call", "tool_result"):
             # Message events
             return ("", "messages", event_data)
@@ -164,18 +164,18 @@ class SootheBackendAdapter:
         """Load thread messages for resume.
 
         Uses: ThreadContextManager backend
-        Returns: deepagents message format
+        Returns: Soothe message format
 
         Args:
             thread_id: Thread ID to load
 
         Returns:
-            List of message dicts in deepagents format
+            List of message dicts in Soothe format
         """
         # SOOTHE: Load thread from ThreadContextManager
         thread_info = await self._thread_manager.load_thread(thread_id)
 
-        # SOOTHE: Convert to deepagents message format
+        # SOOTHE: Convert to Soothe message format
         messages = []
         for msg in thread_info.messages:
             messages.append(
@@ -192,12 +192,12 @@ class SootheBackendAdapter:
         """List available threads for resume UI.
 
         Returns:
-            List of thread metadata dicts in deepagents format
+            List of thread metadata dicts in Soothe format
         """
         # SOOTHE: List threads from ThreadContextManager
         threads = await self._thread_manager.list_threads()
 
-        # SOOTHE: Convert to deepagents thread_selector format
+        # SOOTHE: Convert to Soothe thread_selector format
         thread_list = []
         for t in threads:
             thread_list.append(

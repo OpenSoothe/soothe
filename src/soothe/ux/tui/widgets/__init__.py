@@ -1,4 +1,4 @@
-"""Textual widgets for deepagents-cli.
+"""Textual widgets for Soothe.
 
 Import directly from submodules, e.g.:
 

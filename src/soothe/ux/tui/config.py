@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
+from soothe.config import SOOTHE_HOME
 from soothe.ux.tui._version import __version__
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Lazy bootstrap: dotenv loading, LANGSMITH_PROJECT override, and start-path
 # detection are deferred until first access of `settings` (via module
 # `__getattr__`).  This avoids disk I/O and path traversal during import for
-# callers that never touch `settings` (e.g. `deepagents --help`).
+# callers that never touch `settings` (e.g. `Soothe --help`).
 # ---------------------------------------------------------------------------
 
 _bootstrap_done = False
@@ -70,11 +71,11 @@ def _find_dotenv_from_start_path(start_path: Path) -> Path | None:
     return None
 
 
-# Global user-level .env (~/.deepagents/.env); sentinel when Path.home() fails.
+# Global user-level .env (SOOTHE_HOME/.env); sentinel when Path.home() fails.
 try:
-    _GLOBAL_DOTENV_PATH = Path.home() / ".deepagents" / ".env"
+    _GLOBAL_DOTENV_PATH = Path(SOOTHE_HOME) / ".env"
 except RuntimeError:
-    _GLOBAL_DOTENV_PATH = Path("/nonexistent/.deepagents/.env")
+    _GLOBAL_DOTENV_PATH = Path("/nonexistent/.soothe/.env")
 
 
 def _load_dotenv(*, start_path: Path | None = None) -> bool:
@@ -83,7 +84,7 @@ def _load_dotenv(*, start_path: Path | None = None) -> bool:
     Loads in order (first write wins, `override=False`):
 
     1. Project/CWD `.env` — project-specific values
-    2. `~/.deepagents/.env` — global user defaults
+    2. `SOOTHE_HOME/.env` — global user defaults
 
     Both layers use `override=False` (the python-dotenv default) so that
     shell-exported variables always take precedence over dotenv files.
@@ -96,8 +97,8 @@ def _load_dotenv(*, start_path: Path | None = None) -> bool:
     !!! note
 
         To scope credentials to the CLI without colliding with
-        identically-named shell exports, use the `DEEPAGENTS_CLI_` env-var
-        prefix (see `resolve_env_var` in `deepagents_cli.model_config`).
+        identically-named shell exports, use the `SOOTHE_` env-var
+        prefix (see `resolve_env_var` in `soothe.model_config`).
 
     Args:
         start_path: Directory to use for project `.env` discovery.
@@ -126,7 +127,7 @@ def _load_dotenv(*, start_path: Path | None = None) -> bool:
             exc_info=True,
         )
 
-    # 2. Global (~/.deepagents/.env) — fills in any vars not already set by
+    # 2. Global (SOOTHE_HOME/.env) — fills in any vars not already set by
     # the shell or the project dotenv.
     # try/except wraps both is_file() and load_dotenv() to cover the TOCTOU
     # window where the file can vanish between stat and open.
@@ -183,14 +184,14 @@ def _ensure_bootstrap() -> None:
             # value for shell commands.
             from soothe.ux.tui._env_vars import LANGSMITH_PROJECT
 
-            deepagents_project = os.environ.get(LANGSMITH_PROJECT)
-            if deepagents_project:
-                os.environ["LANGSMITH_PROJECT"] = deepagents_project
+            Soothe_project = os.environ.get(LANGSMITH_PROJECT)
+            if Soothe_project:
+                os.environ["LANGSMITH_PROJECT"] = Soothe_project
 
             # Propagate prefixed LangSmith env vars to canonical names.
             # The CLI resolves prefixed vars via resolve_env_var(), but the
             # LangSmith SDK reads os.environ directly and has no knowledge
-            # of the DEEPAGENTS_CLI_ prefix. Setting canonical vars here
+            # of the SOOTHE_ prefix. Setting canonical vars here
             # bridges that gap.
             from soothe.ux.tui.model_config import _ENV_PREFIX
 
@@ -391,7 +392,7 @@ def _resolve_editable_info() -> tuple[bool, str | None]:
     path: str | None = None
 
     try:
-        dist = distribution("deepagents-cli")
+        dist = distribution("Soothe")
         raw = dist.read_text("direct_url.json")
         if raw:
             data = json.loads(raw)
@@ -414,7 +415,7 @@ def _resolve_editable_info() -> tuple[bool, str | None]:
 
 
 def _is_editable_install() -> bool:
-    """Check if deepagents-cli is installed in editable mode.
+    """Check if Soothe is installed in editable mode.
 
     Uses PEP 610 `direct_url.json` metadata to detect editable installs.
 
@@ -501,36 +502,22 @@ def newline_shortcut() -> str:
 
 
 _UNICODE_BANNER = f"""
-██████╗  ███████╗ ███████╗ ██████╗    ▄▓▓▄
-██╔══██╗ ██╔════╝ ██╔════╝ ██╔══██╗  ▓•███▙
-██║  ██║ █████╗   █████╗   ██████╔╝  ░▀▀████▙▖
-██║  ██║ ██╔══╝   ██╔══╝   ██╔═══╝      █▓████▙▖
-██████╔╝ ███████╗ ███████╗ ██║          ▝█▓█████▙
-╚═════╝  ╚══════╝ ╚══════╝ ╚═╝           ░▜█▓████▙
-                                          ░█▀█▛▀▀▜▙▄
-                                        ░▀░▀▒▛░░  ▝▀▘
+███████╗ ██████╗  ██████╗ ████████╗██╗  ██╗███████╗
+██╔════╝██╔═══██╗██╔═══██╗╚══██╔══╝██║  ██║██╔════╝
+███████╗██║   ██║██║   ██║   ██║   ███████║█████╗  
+╚════██║██║   ██║██║   ██║   ██║   ██╔══██║██╔══╝  
+███████║╚██████╔╝╚██████╔╝   ██║   ██║  ██║███████╗
+╚══════╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚══════╝
 
- █████╗   ██████╗  ███████╗ ███╗   ██╗ ████████╗ ███████╗
-██╔══██╗ ██╔════╝  ██╔════╝ ████╗  ██║ ╚══██╔══╝ ██╔════╝
-███████║ ██║  ███╗ █████╗   ██╔██╗ ██║    ██║    ███████╗
-██╔══██║ ██║   ██║ ██╔══╝   ██║╚██╗██║    ██║    ╚════██║
-██║  ██║ ╚██████╔╝ ███████╗ ██║ ╚████║    ██║    ███████║
-╚═╝  ╚═╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═══╝    ╚═╝    ╚══════╝
                                                   v{__version__}
 """
 _ASCII_BANNER = f"""
- ____  ____  ____  ____
-|  _ \\| ___|| ___||  _ \\
-| | | | |_  | |_  | |_) |
-| |_| |  _| |  _| |  __/
-|____/|____||____||_|
-
-    _    ____  ____  _   _  _____  ____
-   / \\  / ___|| ___|| \\ | ||_   _|/ ___|
-  / _ \\| |  _ | |_  |  \\| |  | |  \\___ \\
- / ___ \\ |_| ||  _| | |\\  |  | |   ___) |
-/_/   \\_\\____||____||_| \\_|  |_|  |____/
-                                  v{__version__}
+ _______  _______  _______  _______  _______
+/  ___  \/  ___  \/  ___  \/  ___  \/  ___  \
+| |   | || |   | || |   | || |   | || |   | |
+| |___| || |___| || |___| || |___| || |___| |
+\_______/\_______/\_______/\_______/\_______/
+                                    v{__version__}
 """
 
 
@@ -621,7 +608,7 @@ def build_stream_config(
 
     Why the CLI sets *both* versions:
 
-    * `create_deep_agent` bakes `versions: {"deepagents": "X.Y.Z"}` into the
+    * `create_deep_agent` bakes `versions: {"Soothe": "X.Y.Z"}` into the
         compiled graph via `with_config`. At stream time, LangGraph merges
         the graph config with the runtime config passed here. Because the
         metadata merge is shallow (effectively `{**graph_meta, **runtime_meta}`
@@ -653,13 +640,13 @@ def build_stream_config(
         cwd = ""
 
     # Include SDK version alongside CLI version — see docstring for why.
-    versions: dict[str, str] = {"deepagents-cli": __version__}
+    versions: dict[str, str] = {"Soothe": __version__}
     with contextlib.suppress(importlib_metadata.PackageNotFoundError):
-        versions["deepagents"] = importlib_metadata.version("deepagents")
+        versions["Soothe"] = importlib_metadata.version("Soothe")
 
     metadata: dict[str, Any] = {
         "versions": versions,
-        "ls_integration": "deepagents-cli",
+        "ls_integration": "Soothe",
     }
     from soothe.ux.tui._env_vars import USER_ID
 
@@ -760,23 +747,23 @@ def parse_shell_allow_list(allow_list_str: str | None) -> list[str] | None:
     return unique
 
 
-def _read_config_toml_skills_dirs() -> list[str] | None:
-    """Read `[skills].extra_allowed_dirs` from `~/.deepagents/config.toml`.
+def _read_config_yaml_skills_dirs() -> list[str] | None:
+    """Read `[skills].extra_allowed_dirs` from `SOOTHE_HOME/config/config.yml`.
 
     Returns:
         List of path strings, or `None` if the key is absent or the file
             cannot be read.
     """
-    import tomllib
+    import yaml
 
     from soothe.ux.tui.model_config import DEFAULT_CONFIG_PATH
 
     try:
-        with DEFAULT_CONFIG_PATH.open("rb") as f:
-            data = tomllib.load(f)
+        with DEFAULT_CONFIG_PATH.open("r") as f:
+            data = yaml.safe_load(f)
     except FileNotFoundError:
         return None
-    except (PermissionError, OSError, tomllib.TOMLDecodeError):
+    except (PermissionError, OSError, yaml.YAMLError):
         logger.warning(
             "Could not read skills config from %s",
             DEFAULT_CONFIG_PATH,
@@ -784,7 +771,7 @@ def _read_config_toml_skills_dirs() -> list[str] | None:
         )
         return None
 
-    skills_section = data.get("skills", {})
+    skills_section = data.get("skills", {}) if data else {}
     dirs = skills_section.get("extra_allowed_dirs")
     if isinstance(dirs, list):
         return dirs
@@ -793,9 +780,9 @@ def _read_config_toml_skills_dirs() -> list[str] | None:
 
 def _parse_extra_skills_dirs(
     env_raw: str | None,
-    config_toml_dirs: list[str] | None = None,
+    config_yaml_dirs: list[str] | None = None,
 ) -> list[Path] | None:
-    """Merge extra skill directories from env var and config.toml.
+    """Merge extra skill directories from env var and config.yml.
 
     Extra skills directories extend the containment allowlist used by
     `load_skill_content` to validate that a resolved skill path lives inside a
@@ -805,14 +792,14 @@ def _parse_extra_skills_dirs(
     in user-specified locations without being rejected by the path
     containment check.
 
-    The env var (`DEEPAGENTS_CLI_EXTRA_SKILLS_DIRS`, colon-separated) takes
-    precedence: when set, `config.toml` values are ignored.
+    The env var (`SOOTHE_EXTRA_SKILLS_DIRS`, colon-separated) takes
+    precedence: when set, `config.yml` values are ignored.
 
     Args:
-        env_raw: Value of `DEEPAGENTS_CLI_EXTRA_SKILLS_DIRS` (colon-separated), or
+        env_raw: Value of `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated), or
             `None` if unset.
-        config_toml_dirs: List of path strings from
-            `[skills].extra_allowed_dirs` in `~/.deepagents/config.toml`.
+        config_yaml_dirs: List of path strings from
+            `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
 
     Returns:
         List of resolved `Path` objects, or `None` if not configured.
@@ -822,8 +809,8 @@ def _parse_extra_skills_dirs(
         dirs = [Path(p.strip()).expanduser().resolve() for p in env_raw.split(":") if p.strip()]
         return dirs or None
 
-    if config_toml_dirs:
-        dirs = [Path(p).expanduser().resolve() for p in config_toml_dirs if isinstance(p, str) and p.strip()]
+    if config_yaml_dirs:
+        dirs = [Path(p).expanduser().resolve() for p in config_yaml_dirs if isinstance(p, str) and p.strip()]
         return dirs or None
 
     return None
@@ -831,7 +818,7 @@ def _parse_extra_skills_dirs(
 
 @dataclass
 class Settings:
-    """Global settings and environment detection for deepagents-cli.
+    """Global settings and environment detection for Soothe.
 
     This class is initialized once at startup and provides access to:
     - Available models and API keys
@@ -858,8 +845,8 @@ class Settings:
     google_cloud_project: str | None
     """Google Cloud project ID for VertexAI authentication."""
 
-    deepagents_langchain_project: str | None
-    """LangSmith project name for deepagents agent tracing."""
+    soothe_langchain_project: str | None
+    """LangSmith project name for Soothe agent tracing."""
 
     user_langchain_project: str | None
     """Original `LANGSMITH_PROJECT` from environment (for user code)."""
@@ -891,8 +878,8 @@ class Settings:
     locations without being rejected by the containment check
     in `load_skill_content`.
 
-    Set via `DEEPAGENTS_CLI_EXTRA_SKILLS_DIRS` env var (colon-separated) or
-    `[skills].extra_allowed_dirs` in `~/.deepagents/config.toml`.
+    Set via `SOOTHE_EXTRA_SKILLS_DIRS` env var (colon-separated) or
+    `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
     """
 
     @classmethod
@@ -916,7 +903,7 @@ class Settings:
         google_cloud_project = resolve_env_var("GOOGLE_CLOUD_PROJECT")
 
         # Detect LangSmith configuration
-        # DEEPAGENTS_CLI_LANGSMITH_PROJECT: Project for deepagents agent tracing
+        # SOOTHE_CLI_LANGSMITH_PROJECT: Project for Soothe agent tracing
         # user_langchain_project: User's ORIGINAL LANGSMITH_PROJECT (before override)
         # When accessed via the module-level `settings` singleton,
         # _ensure_bootstrap() has already run and may have overridden
@@ -929,7 +916,7 @@ class Settings:
             SHELL_ALLOW_LIST,
         )
 
-        deepagents_langchain_project = resolve_env_var(LANGSMITH_PROJECT)
+        soothe_langchain_project = resolve_env_var(LANGSMITH_PROJECT)
         user_langchain_project = _original_langsmith_project  # Use saved original!
 
         # Detect project
@@ -943,12 +930,12 @@ class Settings:
         shell_allow_list_str = os.environ.get(SHELL_ALLOW_LIST)
         shell_allow_list = parse_shell_allow_list(shell_allow_list_str)
 
-        # Parse extra skill containment roots from env var or config.toml.
+        # Parse extra skill containment roots from env var or config.yml.
         # These extend the path allowlist for load_skill_content but do not
         # add new skill discovery locations.
         extra_skills_dirs = _parse_extra_skills_dirs(
             os.environ.get(EXTRA_SKILLS_DIRS),
-            _read_config_toml_skills_dirs(),
+            _read_config_yaml_skills_dirs(),
         )
 
         return cls(
@@ -958,7 +945,7 @@ class Settings:
             nvidia_api_key=nvidia_key,
             tavily_api_key=tavily_key,
             google_cloud_project=google_cloud_project,
-            deepagents_langchain_project=deepagents_langchain_project,
+            soothe_langchain_project=soothe_langchain_project,
             user_langchain_project=user_langchain_project,
             project_root=project_root,
             shell_allow_list=shell_allow_list,
@@ -981,8 +968,8 @@ class Settings:
 
             `.env` files are loaded with `override=False`, so shell-exported
             variables always take precedence.  To override a shell-exported key
-            from `.env`, use the `DEEPAGENTS_CLI_` prefix (e.g.
-            `DEEPAGENTS_CLI_OPENAI_API_KEY`).
+            from `.env`, use the `SOOTHE_` prefix (e.g.
+            `SOOTHE_OPENAI_API_KEY`).
 
         Args:
             start_path: Directory to start project detection from (defaults to cwd).
@@ -1009,7 +996,7 @@ class Settings:
             "nvidia_api_key",
             "tavily_api_key",
             "google_cloud_project",
-            "deepagents_langchain_project",
+            "soothe_langchain_project",
             "project_root",
             "shell_allow_list",
             "extra_skills_dirs",
@@ -1055,12 +1042,12 @@ class Settings:
             "nvidia_api_key": resolve_env_var("NVIDIA_API_KEY"),
             "tavily_api_key": resolve_env_var("TAVILY_API_KEY"),
             "google_cloud_project": resolve_env_var("GOOGLE_CLOUD_PROJECT"),
-            "deepagents_langchain_project": resolve_env_var(LANGSMITH_PROJECT),
+            "soothe_langchain_project": resolve_env_var(LANGSMITH_PROJECT),
             "project_root": project_root,
             "shell_allow_list": shell_allow_list,
             "extra_skills_dirs": _parse_extra_skills_dirs(
                 os.environ.get(EXTRA_SKILLS_DIRS),
-                _read_config_toml_skills_dirs(),
+                _read_config_yaml_skills_dirs(),
             ),
         }
 
@@ -1069,10 +1056,10 @@ class Settings:
 
         # Sync the LANGSMITH_PROJECT env var so LangSmith tracing picks up
         # the change
-        new_project = refreshed["deepagents_langchain_project"]
+        new_project = refreshed["soothe_langchain_project"]
         if new_project:
             os.environ["LANGSMITH_PROJECT"] = new_project
-        elif previous["deepagents_langchain_project"]:
+        elif previous["soothe_langchain_project"]:
             # Override was previously active but new value is unset; restore.
             if _original_langsmith_project:
                 os.environ["LANGSMITH_PROJECT"] = _original_langsmith_project
@@ -1128,13 +1115,13 @@ class Settings:
         return self.tavily_api_key is not None
 
     @property
-    def user_deepagents_dir(self) -> Path:
-        """Get the base user-level .deepagents directory.
+    def user_soothe_dir(self) -> Path:
+        """Get the base user-level Soothe directory (SOOTHE_HOME).
 
         Returns:
-            Path to ~/.deepagents
+            Path to SOOTHE_HOME
         """
-        return Path.home() / ".deepagents"
+        return Path(SOOTHE_HOME)
 
     @staticmethod
     def get_user_agent_md_path(agent_name: str) -> Path:
@@ -1146,17 +1133,17 @@ class Settings:
             agent_name: Name of the agent
 
         Returns:
-            Path to ~/.deepagents/{agent_name}/AGENTS.md
+            Path to ~/SOOTHE_HOME/{agent_name}/AGENTS.md
         """
-        return Path.home() / ".deepagents" / agent_name / "AGENTS.md"
+        return Path(SOOTHE_HOME) / agent_name / "AGENTS.md"
 
     def get_project_agent_md_path(self) -> list[Path]:
         """Get project-level AGENTS.md paths.
 
-        Checks both `{project_root}/.deepagents/AGENTS.md` and
+        Checks both `{project_root}/.soothe/AGENTS.md` and
         `{project_root}/AGENTS.md`, returning all that exist. If both are
         present, both are loaded and their instructions are combined, with
-        `.deepagents/AGENTS.md` first.
+        `.soothe/AGENTS.md` first.
 
         Returns:
             Existing AGENTS.md paths.
@@ -1190,7 +1177,7 @@ class Settings:
             agent_name: Name of the agent
 
         Returns:
-            Path to ~/.deepagents/{agent_name}
+            Path to ~/SOOTHE_HOME/{agent_name}
 
         Raises:
             ValueError: If the agent name contains invalid characters.
@@ -1201,7 +1188,7 @@ class Settings:
                 "contain letters, numbers, hyphens, underscores, and spaces."
             )
             raise ValueError(msg)
-        return Path.home() / ".deepagents" / agent_name
+        return Path(SOOTHE_HOME) / agent_name
 
     def ensure_agent_dir(self, agent_name: str) -> Path:
         """Ensure the global agent directory exists and return its path.
@@ -1210,7 +1197,7 @@ class Settings:
             agent_name: Name of the agent
 
         Returns:
-            Path to ~/.deepagents/{agent_name}
+            Path to ~/SOOTHE_HOME/{agent_name}
 
         Raises:
             ValueError: If the agent name contains invalid characters.
@@ -1232,7 +1219,7 @@ class Settings:
             agent_name: Name of the agent
 
         Returns:
-            Path to ~/.deepagents/{agent_name}/skills/
+            Path to ~/SOOTHE_HOME/{agent_name}/skills/
         """
         return self.get_agent_dir(agent_name) / "skills"
 
@@ -1243,7 +1230,7 @@ class Settings:
             agent_name: Name of the agent
 
         Returns:
-            Path to ~/.deepagents/{agent_name}/skills/
+            Path to ~/SOOTHE_HOME/{agent_name}/skills/
         """
         skills_dir = self.get_user_skills_dir(agent_name)
         skills_dir.mkdir(parents=True, exist_ok=True)
@@ -1253,17 +1240,17 @@ class Settings:
         """Get project-level skills directory path.
 
         Returns:
-            Path to {project_root}/.deepagents/skills/, or None if not in a project
+            Path to {project_root}/.soothe/skills/, or None if not in a project
         """
         if not self.project_root:
             return None
-        return self.project_root / ".deepagents" / "skills"
+        return self.project_root / ".soothe" / "skills"
 
     def ensure_project_skills_dir(self) -> Path | None:
         """Ensure project-level skills directory exists and return its path.
 
         Returns:
-            Path to {project_root}/.deepagents/skills/, or None if not in a project
+            Path to {project_root}/.soothe/skills/, or None if not in a project
         """
         if not self.project_root:
             return None
@@ -1277,10 +1264,10 @@ class Settings:
         """Get user-level agents directory path for custom subagent definitions.
 
         Args:
-            agent_name: Name of the CLI agent (e.g., "deepagents")
+            agent_name: Name of the CLI agent (e.g., "Soothe")
 
         Returns:
-            Path to ~/.deepagents/{agent_name}/agents/
+            Path to ~/SOOTHE_HOME/{agent_name}/agents/
         """
         return self.get_agent_dir(agent_name) / "agents"
 
@@ -1288,11 +1275,11 @@ class Settings:
         """Get project-level agents directory path for custom subagent definitions.
 
         Returns:
-            Path to {project_root}/.deepagents/agents/, or None if not in a project
+            Path to {project_root}/.soothe/agents/, or None if not in a project
         """
         if not self.project_root:
             return None
-        return self.project_root / ".deepagents" / "agents"
+        return self.project_root / ".soothe" / "agents"
 
     @property
     def user_agents_dir(self) -> Path:
@@ -1362,8 +1349,8 @@ class Settings:
     def get_extra_skills_dirs(self) -> list[Path]:
         """Get user-configured extra skill directories.
 
-        Set via `DEEPAGENTS_CLI_EXTRA_SKILLS_DIRS` (colon-separated paths) or
-        `[skills].extra_allowed_dirs` in `~/.deepagents/config.toml`.
+        Set via `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated paths) or
+        `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
 
         Returns:
             List of extra skill directory paths, or empty list if not configured.
@@ -1590,10 +1577,10 @@ def get_langsmith_project_name() -> str | None:
 
     Checks for the required API key and tracing environment variables.
     When both are present, resolves the project name with priority:
-    `settings.deepagents_langchain_project` (from
-    `DEEPAGENTS_CLI_LANGSMITH_PROJECT`), then `LANGSMITH_PROJECT` from the
+    `settings.soothe_langchain_project` (from
+    `SOOTHE_CLI_LANGSMITH_PROJECT`), then `LANGSMITH_PROJECT` from the
     environment (note: this may already have been overridden at bootstrap time
-    to match `DEEPAGENTS_CLI_LANGSMITH_PROJECT`), then `'deepagents-cli'`.
+    to match `SOOTHE_CLI_LANGSMITH_PROJECT`), then `'Soothe'`.
 
     Returns:
         Project name string when LangSmith tracing is active, None otherwise.
@@ -1605,7 +1592,7 @@ def get_langsmith_project_name() -> str | None:
     if not (langsmith_key and langsmith_tracing):
         return None
 
-    return _get_settings().deepagents_langchain_project or os.environ.get("LANGSMITH_PROJECT") or "deepagents-cli"
+    return _get_settings().soothe_langchain_project or os.environ.get("LANGSMITH_PROJECT") or "Soothe"
 
 
 def fetch_langsmith_project_url(project_name: str) -> str | None:
@@ -1656,7 +1643,7 @@ def fetch_langsmith_project_url(project_name: str) -> str | None:
             from soothe.ux.tui.model_config import resolve_env_var
 
             # Explicit api_key because Client() reads os.environ directly
-            # and doesn't know about the DEEPAGENTS_CLI_ prefix.
+            # and doesn't know about the SOOTHE_ prefix.
             api_key = resolve_env_var("LANGSMITH_API_KEY") or resolve_env_var("LANGCHAIN_API_KEY")
             project = Client(api_key=api_key).read_project(project_name=project_name)
             result = project.url or None
@@ -1714,7 +1701,7 @@ def build_langsmith_thread_url(thread_id: str) -> str | None:
     if not project_url:
         return None
 
-    return f"{project_url.rstrip('/')}/t/{thread_id}?utm_source=deepagents-cli"
+    return f"{project_url.rstrip('/')}/t/{thread_id}?utm_source=Soothe"
 
 
 def reset_langsmith_url_cache() -> None:
@@ -1822,7 +1809,7 @@ def _get_default_model_spec() -> str:
     raise ModelConfigError(msg)
 
 
-_OPENROUTER_APP_URL = "https://pypi.org/project/deepagents-cli/"
+_OPENROUTER_APP_URL = "https://pypi.org/project/Soothe/"
 """Default `app_url` (maps to `HTTP-Referer`) for OpenRouter attribution.
 
 See https://openrouter.ai/docs/app-attribution for details.
@@ -1845,9 +1832,9 @@ def _apply_openrouter_defaults(kwargs: dict[str, Any]) -> None:
     (see https://openrouter.ai/docs/app-attribution).
 
     Users can override either value provider-wide or per-model in
-    `~/.deepagents/config.toml`:
+    `SOOTHE_HOME/config/config.yml`:
 
-    ```toml
+    ```yaml
     # Provider-wide
     [models.providers.openrouter.params]
     app_url = "https://myapp.com"
@@ -1870,7 +1857,7 @@ def _get_provider_kwargs(provider: str, *, model_name: str | None = None) -> dic
     """Get provider-specific kwargs from the config file.
 
     Reads `base_url`, `api_key_env`, and the `params` table from the user's
-    `config.toml` for the given provider.
+    `config.yml` for the given provider.
 
     When `model_name` is provided, per-model overrides from the `params`
     sub-table are shallow-merged on top.
@@ -1896,7 +1883,7 @@ def _get_provider_kwargs(provider: str, *, model_name: str | None = None) -> dic
         api_key_env = PROVIDER_API_KEY_ENV.get(provider)
         if api_key_env:
             logger.debug(
-                "No api_key_env in config.toml for '%s'; using hardcoded provider env var",
+                "No api_key_env in config.yml for '%s'; using hardcoded provider env var",
                 provider,
             )
     if api_key_env:
@@ -2079,7 +2066,7 @@ def _apply_profile_overrides(
         overrides: Key/value pairs to merge into the profile.
         model_name: Model name used in log/error messages.
         label: Human-readable source label for messages
-            (e.g., `"config.toml"`, `"CLI --profile-override"`).
+            (e.g., `"config.yml"`, `"CLI --profile-override"`).
         raise_on_failure: When `True`, raise `ModelConfigError` instead
             of logging a warning if assignment fails.
 
@@ -2215,7 +2202,7 @@ def create_model(
 
     resolved_provider = provider or getattr(model, "_model_provider", provider)
 
-    # Apply profile overrides from config.toml (e.g., max_input_tokens)
+    # Apply profile overrides from config.yml (e.g., max_input_tokens)
     if provider:
         config_profile_overrides = config.get_profile_overrides(provider, model_name=model_name)
         if config_profile_overrides:
@@ -2223,10 +2210,10 @@ def create_model(
                 model,
                 config_profile_overrides,
                 model_name,
-                label=f"config.toml (provider '{provider}')",
+                label=f"config.yml (provider '{provider}')",
             )
 
-    # CLI --profile-override takes highest priority (on top of config.toml)
+    # CLI --profile-override takes highest priority (on top of config.yml)
     if profile_overrides:
         _apply_profile_overrides(
             model,
@@ -2262,7 +2249,7 @@ def create_model(
 
 
 def validate_model_capabilities(model: BaseChatModel, model_name: str) -> None:
-    """Validate that the model has required capabilities for `deepagents`.
+    """Validate that the model has required capabilities for `Soothe`.
 
     Checks the model's profile (if available) to ensure it supports tool calling, which
     is required for agent functionality. Issues warnings for models without profiles or
