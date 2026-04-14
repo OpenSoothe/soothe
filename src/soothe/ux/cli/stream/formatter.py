@@ -223,6 +223,7 @@ def format_subagent_milestone(
         icon="✓",
         indent=indent_for_level(3),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator before subagent milestone
     )
 
 
@@ -320,6 +321,7 @@ def format_judgement(
         icon=action_icon,
         indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,  # Add separator before judgement indicator
     )
 
 
