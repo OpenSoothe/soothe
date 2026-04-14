@@ -12,7 +12,7 @@ Code that needs custom CSS variable values should call
 `get_css_variable_defaults(dark=...)`. For the full semantic color palette, look
 up the `ThemeColors` instance via `ThemeEntry.REGISTRY`.
 
-Users can define custom themes in `~/SOOTHE_HOME/config.yml` under
+Users can define custom themes in `~/SOOTHE_HOME/config/config.yml` under
 `[themes.<name>]` sections. Each new theme section must include `label` (str);
 `dark` (bool) defaults to `False` if omitted (set to `True` for dark themes).
 Color fields are optional and fall back to the built-in dark/light palette based
@@ -680,7 +680,7 @@ DEFAULT_THEME = "langchain"
 def reload_registry() -> MappingProxyType[str, ThemeEntry]:
     """Rebuild the theme registry from disk and update `ThemeEntry.REGISTRY`.
 
-    Re-reads `~/SOOTHE_HOME/config.yml` for user-defined themes so that
+    Re-reads `~/SOOTHE_HOME/config/config.yml` for user-defined themes so that
     `/reload` can pick up config changes without restarting the app.
 
     Returns:

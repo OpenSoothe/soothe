@@ -5,10 +5,17 @@ SootheConfig and TUI preferences. Note: This is a minimal stub to enable TUI
 functionality - full migration needed in future.
 """
 
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME
+
+logger = logging.getLogger(__name__)
 
 # Default config path for Soothe
 DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
@@ -24,81 +31,105 @@ class ModelConfigError(Exception):
     pass
 
 
-# ModelSpec stub - Soothe uses different model resolution
+@dataclass(frozen=True, slots=True)
 class ModelSpec:
-    """Stub for model specification - Soothe uses provider:model format."""
+    """Parsed ``provider:model`` specification for TUI helpers."""
 
-    def __init__(self, provider: str, model: str):
-        self.provider = provider
-        self.model = model
+    provider: str
+    model: str
+
+    @classmethod
+    def try_parse(cls, model_spec: str) -> ModelSpec | None:
+        """Parse explicit ``provider:model`` when both parts are non-empty."""
+        if not model_spec or ":" not in model_spec:
+            return None
+        prov, _, rest = model_spec.partition(":")
+        prov = prov.strip()
+        mod = rest.strip()
+        if not prov or not mod:
+            return None
+        return cls(provider=prov, model=mod)
+
+
+def _load_soothe_config() -> Any:
+    """Load ``SootheConfig`` using the same path rules as the CLI/daemon."""
+    try:
+        from soothe.ux.shared.config_loader import load_config
+
+        return load_config(None)
+    except Exception:
+        logger.debug("Could not load SootheConfig for TUI model helpers", exc_info=True)
+        return None
 
 
 class ModelConfig:
-    """Stub for model configuration - Soothe uses SootheConfig instead.
-
-    This class provides stub methods for compatibility with Soothe TUI code.
-    Full implementation should integrate with SootheConfig properly.
-    """
+    """TUI-facing view over ``SootheConfig`` providers and router (``config.yml``)."""
 
     @classmethod
-    def load(cls) -> "ModelConfig":
-        """Load model configuration.
+    def load(cls) -> ModelConfig:
+        """Load from ``SootheConfig`` (cached via ``load_config``)."""
+        return cls(_cfg=_load_soothe_config())
 
-        Stub - returns instance with defaults.
-        Full implementation should load from SootheConfig.
-
-        Returns:
-            ModelConfig instance.
-        """
-        return cls()
-
-    def __init__(self) -> None:
-        """Initialize with default values."""
+    def __init__(self, *, _cfg: Any = None) -> None:
+        """Initialize from an optional pre-loaded ``SootheConfig``."""
+        self._cfg = _cfg
         self.default_model: str | None = None
         self.recent_model: str | None = None
+        if _cfg is not None:
+            try:
+                self.default_model = _cfg.resolve_model("default")
+            except Exception:
+                logger.debug("Could not resolve default model from SootheConfig", exc_info=True)
+                self.default_model = None
 
     def get_kwargs(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
-        """Get provider-specific kwargs.
-
-        Stub - returns empty dict.
-        Full implementation should return provider-specific configuration.
-
-        Args:
-            provider: Provider name (e.g., 'openai', 'anthropic').
-            model_name: Optional model name for per-model overrides.
-
-        Returns:
-            Dictionary of provider kwargs.
-        """
-        return {}
+        """Return kwargs for ``init_chat_model`` for this provider (from ``SootheConfig``)."""
+        if not self._cfg or not provider:
+            return {}
+        try:
+            _, kwargs = self._cfg._provider_kwargs(provider)  # noqa: SLF001
+        except Exception:
+            logger.debug("provider_kwargs failed for %r", provider, exc_info=True)
+            return {}
+        return dict(kwargs)
 
     def get_base_url(self, provider: str) -> str | None:
-        """Get base URL for provider.
+        """Resolved ``api_base_url`` for the named provider, if any."""
+        if not self._cfg or not provider:
+            return None
+        p = self._cfg._find_provider(provider)  # noqa: SLF001
+        if not p or not p.api_base_url:
+            return None
+        try:
+            from soothe.config.env import _resolve_provider_env
 
-        Stub - returns None.
-        Full implementation should return custom base URL if configured.
-
-        Args:
-            provider: Provider name.
-
-        Returns:
-            Base URL or None.
-        """
-        return None
+            resolved = _resolve_provider_env(
+                p.api_base_url,
+                provider_name=p.name,
+                field_name="api_base_url",
+            )
+        except Exception:
+            logger.debug("Could not resolve api_base_url for %r", provider, exc_info=True)
+            return None
+        return str(resolved).strip() or None
 
     def get_api_key_env(self, provider: str) -> str | None:
-        """Get API key environment variable name for provider.
+        """Infer env var name from provider ``api_key`` or fall back to static map."""
+        if self._cfg and provider:
+            p = self._cfg._find_provider(provider)  # noqa: SLF001
+            if p and p.api_key:
+                m = re.match(r"^\$\{([^}]+)\}\s*$", str(p.api_key).strip())
+                if m:
+                    return m.group(1)
+        return PROVIDER_API_KEY_ENV.get(provider)
 
-        Stub - returns None.
-        Full implementation should return configured env var name.
-
-        Args:
-            provider: Provider name.
-
-        Returns:
-            Environment variable name or None.
-        """
+    def get_class_path(self, provider: str) -> str | None:
+        """Optional custom ``BaseChatModel`` import path (not used in Soothe YAML today)."""
         return None
+
+    def get_profile_overrides(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
+        """Profile overrides from config for the given provider/model."""
+        return {}
 
 
 def resolve_env_var(var_name: str) -> str:
@@ -152,7 +183,37 @@ PROVIDER_API_KEY_ENV = {
     "anthropic": "ANTHROPIC_API_KEY",
     "deepseek": "DEEPSEEK_API_KEY",
     "google": "GOOGLE_API_KEY",
+    "google_genai": "GOOGLE_API_KEY",
+    "nvidia": "NVIDIA_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+    "fireworks": "FIREWORKS_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "mistralai": "MISTRAL_API_KEY",
+    "together": "TOGETHER_API_KEY",
+    "xai": "XAI_API_KEY",
+    "cohere": "COHERE_API_KEY",
 }
+
+# Providers where a single API-key env var is not a reliable auth signal
+# (ADC, local runtime, etc.) — matches early-credential skip in ``create_model``.
+IMPLICIT_AUTH_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "google_vertexai",
+        "ollama",
+    }
+)
+
+
+def get_credential_env_var(provider: str) -> str | None:
+    """Return the primary API-key env var name for ``provider``, if known."""
+    cfg = _load_soothe_config()
+    if cfg is not None and provider:
+        p = cfg._find_provider(provider)  # noqa: SLF001
+        if p and p.api_key:
+            m = re.match(r"^\$\{([^}]+)\}\s*$", str(p.api_key).strip())
+            if m:
+                return m.group(1)
+    return PROVIDER_API_KEY_ENV.get(provider)
 
 
 # Stub functions for thread config (TUI preferences)
@@ -206,6 +267,26 @@ def save_thread_sort_order(sort_order: str) -> None:
     pass
 
 
+def load_thread_sort_order() -> str:
+    """Return persisted thread list sort key (stub: most recently updated first)."""
+    return "updated_at"
+
+
+def load_thread_relative_time() -> bool:
+    """Return whether thread list uses relative timestamps (stub: on)."""
+    return True
+
+
+def suppress_warning(warning_type: str) -> bool:
+    """Persist suppressed notification preference (stub: no-op success)."""
+    return True
+
+
+def unsuppress_warning(warning_type: str) -> bool:
+    """Clear suppressed notification preference (stub: no-op success)."""
+    return True
+
+
 def save_default_model(model_spec: ModelSpec) -> None:
     """Save default model preference.
 
@@ -233,9 +314,13 @@ def clear_default_model() -> None:
 
 
 def clear_caches() -> None:
-    """Clear all configuration caches."""
-    # Stub - integrate with config_loader cache clearing
-    pass
+    """Clear cached ``SootheConfig`` so the next ``ModelConfig.load()`` re-reads disk."""
+    try:
+        import soothe.ux.shared.config_loader as _cl
+
+        _cl._config_cache.clear()
+    except Exception:
+        logger.debug("Could not clear config_loader cache", exc_info=True)
 
 
 def is_warning_suppressed(warning_type: str) -> bool:
@@ -278,42 +363,67 @@ class ModelProfileEntry:
 
 
 def get_available_models() -> list[ModelProfileEntry]:
-    """Get list of available models from configured providers.
-
-    Stub - returns empty list.
-    Full implementation should query SootheConfig providers.
-
-    Returns:
-        List of ModelProfileEntry instances.
-    """
-    return []
+    """List models declared on ``SootheConfig.providers`` (for ``/model`` UI)."""
+    cfg = _load_soothe_config()
+    if not cfg or not cfg.providers:
+        return []
+    out: list[ModelProfileEntry] = []
+    for p in cfg.providers:
+        if p.models:
+            for m in p.models:
+                out.append(ModelProfileEntry(p.name, m))
+        else:
+            out.append(
+                ModelProfileEntry(
+                    p.name,
+                    "",
+                    display_name=f"{p.name} ({p.provider_type})",
+                    description="Configure models: list under this provider in config.yml",
+                )
+            )
+    return out
 
 
 def get_model_profiles(cli_override: str | None = None) -> dict[str, ModelProfileEntry]:
-    """Get dictionary of model profiles.
-
-    Stub - returns empty dict.
-    Full implementation should load profiles from SootheConfig.
-
-    Args:
-        cli_override: Optional CLI override parameter (ignored in stub).
-
-    Returns:
-        Dictionary mapping model keys to ModelProfileEntry.
-    """
-    return {}
+    """Map ``provider:model`` keys to profile rows derived from ``SootheConfig``."""
+    profiles: dict[str, ModelProfileEntry] = {}
+    for entry in get_available_models():
+        if not entry.model:
+            continue
+        key = f"{entry.provider}:{entry.model}"
+        profiles[key] = entry
+    return profiles
 
 
-def has_provider_credentials(provider: str) -> bool:
-    """Check if provider has credentials configured.
+def has_provider_credentials(provider: str) -> bool | None:
+    """Check credentials using ``SootheConfig`` providers when available."""
+    if not provider:
+        return None
+    if provider in IMPLICIT_AUTH_PROVIDERS:
+        if provider == "google_vertexai":
+            proj = resolve_env_var("GOOGLE_CLOUD_PROJECT")
+            return bool(proj and proj.strip())
+        return None
 
-    Stub - returns False.
-    Full implementation should check SootheConfig for API keys.
+    cfg = _load_soothe_config()
+    if cfg is not None:
+        p = cfg._find_provider(provider)  # noqa: SLF001
+        if p is not None:
+            if p.provider_type in IMPLICIT_AUTH_PROVIDERS or p.provider_type == "ollama":
+                return None
+            if p.api_key:
+                try:
+                    from soothe.config.env import _resolve_provider_env
 
-    Args:
-        provider: Provider name to check.
+                    v = _resolve_provider_env(p.api_key, provider_name=p.name, field_name="api_key")
+                except Exception:
+                    logger.debug("resolve api_key failed for provider %r", provider, exc_info=True)
+                    return None
+                return bool(v and str(v).strip())
+            return False
 
-    Returns:
-        True if provider has credentials.
-    """
-    return False
+    env_name = PROVIDER_API_KEY_ENV.get(provider)
+    if not env_name:
+        return None
+    val = resolve_env_var(env_name)
+    return bool(val and val.strip())

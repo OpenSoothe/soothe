@@ -201,7 +201,7 @@ def load_async_subagents(config_path: Path | None = None) -> list[AsyncSubAgent]
     Args:
         config_path: Path to config file.
 
-            Defaults to `~/SOOTHE_HOME/config.yml`.
+            Defaults to `~/SOOTHE_HOME/config/config.yml`.
 
     Returns:
         List of `AsyncSubAgent` specs (empty if section is absent or invalid).
