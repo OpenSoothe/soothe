@@ -14,6 +14,7 @@ This directory contains builtin skills that ship with Soothe. Skills are self-co
 | **cron** | Schedule reminders and recurring tasks | cron tool |
 | **clawhub** | Search and install skills from ClawHub registry | Node.js/npx |
 | **skill-creator** | Create and package new AgentSkills | None |
+| **remember** | Persist session learnings into memory / `AGENTS.md` / skills via tools | None |
 
 ## Skill Format
 

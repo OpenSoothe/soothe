@@ -241,7 +241,9 @@ class AutopilotApp:
         Args:
             soothe_home: Root directory for SOOTHE_HOME.
         """
-        self._soothe_home = soothe_home or SOOTHE_HOME
+        from pathlib import Path
+
+        self._soothe_home = soothe_home or Path(SOOTHE_HOME)
         self._dashboard: AutopilotDashboard | None = None
 
     def get_dashboard(self, *, is_narrow: bool = False) -> AutopilotDashboard:

@@ -2650,7 +2650,7 @@ class SootheApp(App):
         elif cmd == "/help":
             await self._mount_message(UserMessage(command))
             help_body = (
-                "Commands: /quit, /clear, /offload, /editor, /mcp, "
+                "Commands: /quit, /clear, /offload, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /skill-creator, /theme, "
                 "/tokens, /threads, /trace, "
@@ -2797,6 +2797,8 @@ class SootheApp(App):
             args = command.strip()[len("/skill-creator") :].strip()
             rewritten = f"/skill:skill-creator {args}" if args else "/skill:skill-creator"
             await self._handle_skill_command(rewritten)
+        elif cmd == "/autopilot":
+            await self._show_autopilot_dashboard()
         elif cmd == "/mcp":
             await self._show_mcp_viewer()
         elif cmd == "/theme":
@@ -4294,7 +4296,7 @@ class SootheApp(App):
 
     async def action_open_editor(self) -> None:
         """Open the current prompt text in an external editor ($VISUAL/$EDITOR)."""
-        from soothe.ux.tui.editor import open_in_editor
+        from soothe.ux.tui.widgets.editor import open_in_editor
 
         chat_input = self._chat_input
         if not chat_input or not chat_input._text_area:
@@ -4536,6 +4538,19 @@ class SootheApp(App):
         from soothe.ux.tui.widgets.mcp_viewer import MCPViewerScreen
 
         screen = MCPViewerScreen(server_info=self._mcp_server_info or [])
+
+        def handle_result(result: None) -> None:  # noqa: ARG001
+            if self._chat_input:
+                self._chat_input.focus_input()
+
+        self.push_screen(screen, handle_result)
+
+    async def _show_autopilot_dashboard(self) -> None:
+        """Show autopilot dashboard as a screen overlay."""
+        from soothe.ux.tui.widgets.autopilot_screen import AutopilotScreen
+
+        is_narrow = self.size.width < 100
+        screen = AutopilotScreen(is_narrow=is_narrow)
 
         def handle_result(result: None) -> None:  # noqa: ARG001
             if self._chat_input:

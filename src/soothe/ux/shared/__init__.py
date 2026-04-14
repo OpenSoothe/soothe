@@ -8,11 +8,6 @@ This package provides:
 - Shared message processing and utilities
 """
 
-from soothe.foundation.verbosity_tier import (
-    VerbosityTier,
-    classify_event_to_tier,
-    should_show,
-)
 from soothe.logging import setup_logging
 from soothe.ux.shared.config_loader import load_config
 from soothe.ux.shared.display_policy import (
@@ -41,7 +36,6 @@ from soothe.ux.shared.message_processing import (
     extract_tool_brief,
     finalize_pending_tool_call,
     format_tool_call_args,
-    is_multi_step_plan,
     normalize_tool_calls_list,
     strip_internal_tags,
     tool_calls_have_any_arg_dict,
@@ -49,12 +43,7 @@ from soothe.ux.shared.message_processing import (
 )
 from soothe.ux.shared.processor_state import ProcessorState
 from soothe.ux.shared.renderer_protocol import RendererProtocol
-from soothe.ux.shared.rendering import (
-    extract_text_from_ai_message,
-    render_plan_tree,
-    resolve_namespace_label,
-    update_name_map_from_tool_calls,
-)
+from soothe.ux.shared.rendering import update_name_map_from_tool_calls
 
 __all__ = [
     "INTERNAL_EVENT_TYPES",
@@ -71,18 +60,13 @@ __all__ = [
     "RendererProtocol",
     # Message processing
     "VerbosityLevel",
-    # Verbosity tier (RFC-0024)
-    "VerbosityTier",
     "accumulate_tool_call_chunks",
-    "classify_event_to_tier",
     "coerce_tool_call_args_to_dict",
     # Display Policy (unified filtering module)
     "create_display_policy",
-    "extract_text_from_ai_message",
     "extract_tool_brief",
     "finalize_pending_tool_call",
     "format_tool_call_args",
-    "is_multi_step_plan",
     "is_essential_progress_event_type",
     "is_goal_start_event_type",
     "is_step_complete_event_type",
@@ -90,12 +74,9 @@ __all__ = [
     # Config and logging
     "load_config",
     "normalize_tool_calls_list",
-    "render_plan_tree",
-    "resolve_namespace_label",
     "setup_logging",
     "STEP_COMPLETE_EVENT_TYPES",
     "STEP_START_EVENT_TYPES",
-    "should_show",
     "strip_internal_tags",
     "tool_calls_have_any_arg_dict",
     "try_parse_pending_tool_call_args",

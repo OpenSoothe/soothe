@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from textual.binding import Binding
 from textual.screen import Screen
 
 from soothe.config import SOOTHE_HOME
@@ -22,10 +23,12 @@ class AutopilotScreen(Screen):
     """Full-screen autopilot dashboard.
 
     Pushed as a modal screen from the main TUI.
-    Press Escape to return to the chat TUI.
+    Press Q or Escape to return to the chat TUI.
     """
 
-    BINDINGS: ClassVar[list] = []
+    BINDINGS: ClassVar[list] = [
+        Binding("q", "quit", "Close", show=True),
+    ]
 
     def __init__(self, *, is_narrow: bool = False) -> None:
         """Initialize screen.
@@ -51,9 +54,11 @@ class AutopilotScreen(Screen):
         Returns:
             List of goal info dicts.
         """
+        from pathlib import Path
+
         from soothe.ux.tui.widgets.autopilot_dashboard import _parse_autopilot_files
 
-        autopilot_dir = SOOTHE_HOME / "autopilot"
+        autopilot_dir = Path(SOOTHE_HOME) / "autopilot"
         if not autopilot_dir.exists():
             return []
         return _parse_autopilot_files(autopilot_dir)

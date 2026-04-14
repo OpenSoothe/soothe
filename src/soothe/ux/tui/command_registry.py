@@ -56,6 +56,12 @@ class SlashCommand:
 
 COMMANDS: tuple[SlashCommand, ...] = (
     SlashCommand(
+        name="/autopilot",
+        description="Open autopilot dashboard",
+        bypass_tier=BypassTier.IMMEDIATE_UI,
+        hidden_keywords="goals autonomous",
+    ),
+    SlashCommand(
         name="/clear",
         description="Clear chat and start new thread",
         bypass_tier=BypassTier.QUEUED,

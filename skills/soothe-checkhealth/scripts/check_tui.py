@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 def check_tui_imports() -> dict[str, Any]:
     """Check if TUI components can be imported."""
     try:
-        from soothe.ux.tui_app import SootheApp
-        from soothe.ux.tui_shared import TuiState, render_plan_tree
+        from soothe.ux.tui.app import SootheApp
+        from soothe.ux.tui.state import TuiState
 
         return {
             "name": "tui_imports",
@@ -33,7 +33,6 @@ def check_tui_imports() -> dict[str, Any]:
             "details": {
                 "app": "SootheApp",
                 "state": "TuiState",
-                "helpers": "render_plan_tree",
             },
         }
     except ImportError as e:
@@ -53,7 +52,7 @@ def check_tui_imports() -> dict[str, Any]:
 def check_slash_commands() -> dict[str, Any]:
     """Check if slash commands are properly defined."""
     try:
-        from soothe.ux.commands import SLASH_COMMANDS
+        from soothe.ux.tui.command_registry import SLASH_COMMANDS
 
         expected_commands = {
             "/exit",
@@ -76,7 +75,7 @@ def check_slash_commands() -> dict[str, Any]:
         for cmd in expected_commands:
             # Handle commands with args like "/autopilot <prompt>"
             base_cmd = cmd.split()[0]
-            if not any(k.startswith(base_cmd) for k in SLASH_COMMANDS):
+            if not any(k.startswith(base_cmd) for k in [c[0] for c in SLASH_COMMANDS]):
                 missing.append(cmd)
 
         total_commands = len(SLASH_COMMANDS)
@@ -98,7 +97,7 @@ def check_slash_commands() -> dict[str, Any]:
             "message": f"All {total_commands} slash commands defined",
             "details": {
                 "total_commands": total_commands,
-                "commands": list(SLASH_COMMANDS.keys())[:10],  # First 10 for brevity
+                "commands": [c[0] for c in SLASH_COMMANDS[:10]],  # First 10 for brevity
             },
         }
 
@@ -119,7 +118,7 @@ def check_slash_commands() -> dict[str, Any]:
 def check_command_parser() -> dict[str, Any]:
     """Check if command parser functions work."""
     try:
-        from soothe.ux.commands import parse_autonomous_command
+        from soothe.foundation.slash_commands import parse_autonomous_command
 
         # Test valid autonomous commands
         test_cases = [
@@ -172,7 +171,7 @@ def check_command_parser() -> dict[str, Any]:
 def check_subagent_routing() -> dict[str, Any]:
     """Check subagent routing configuration."""
     try:
-        from soothe.ux.commands import (
+        from soothe.ux.shared.subagent_routing import (
             BUILTIN_SUBAGENT_NAMES,
             SUBAGENT_DISPLAY_NAMES,
             get_subagent_display_name,
@@ -233,21 +232,19 @@ def check_tui_widgets() -> dict[str, Any]:
     """Check if TUI widgets can be instantiated."""
     try:
         # Import widget classes
-        from soothe.ux.tui_app import (
-            ActivityPanel,
-            ChatInput,
-            ConversationPanel,
-            InfoBar,
-            PlanPanel,
+        from soothe.ux.tui.widgets.autopilot_dashboard import (
+            AutopilotDashboard,
+            FindingsWidget,
+            GoalDagWidget,
+            StatusWidget,
         )
 
         # Check that they're proper classes
         widget_classes = {
-            "ConversationPanel": ConversationPanel,
-            "PlanPanel": PlanPanel,
-            "ActivityPanel": ActivityPanel,
-            "InfoBar": InfoBar,
-            "ChatInput": ChatInput,
+            "GoalDagWidget": GoalDagWidget,
+            "StatusWidget": StatusWidget,
+            "FindingsWidget": FindingsWidget,
+            "AutopilotDashboard": AutopilotDashboard,
         }
 
         # Verify they can be instantiated (without running)
@@ -285,7 +282,7 @@ def check_tui_widgets() -> dict[str, Any]:
 def check_input_history() -> dict[str, Any]:
     """Check input history functionality."""
     try:
-        from soothe.ux.tui_app import ChatInput
+        from soothe.ux.tui.widgets.chat_input import ChatInput
 
         # Create instance and test history
         input_widget = ChatInput()
