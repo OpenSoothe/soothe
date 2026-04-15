@@ -1,19 +1,36 @@
 # Event Catalog Reference
 
-**Purpose**: Complete catalog of Soothe progress event types (RFC-401)
-**Status**: Reference Document
-**Last Updated**: 2026-03-31
+**Purpose**: Complete catalog of Soothe progress event types (RFC-401, RFC-403)
+**Status**: Reference Document (Pending RFC-403 Migration)
+**Last Updated**: 2026-04-15
 
-This document provides the complete catalog of all Soothe progress event types. For event naming conventions, architecture, and design principles, see [RFC-401](RFC-401-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
+This document provides the complete catalog of all Soothe progress event types. For event naming semantics, grammar rules, and domain taxonomy, see [RFC-403](RFC-403-unified-event-naming.md). For event processing architecture, see [RFC-401](RFC-401-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
 
 ## Event Naming Pattern
 
-All events follow the 4-segment pattern:
+All events follow the 4-segment pattern defined in RFC-403:
 ```
-soothe.<domain>.<component>.<action>
+soothe.<domain>.<component>.<action_or_state>
 ```
 
-Domains: `lifecycle`, `protocol`, `cognition`, `tool`, `subagent`, `output`, `error`
+**Domains**: See RFC-403 for complete domain taxonomy with functional scope definitions.
+
+**Grammar**: All actions use present progressive tense; state nouns for reports. See RFC-403 for approved verb and state noun lists.
+
+**Note**: This catalog reflects the current event naming system. RFC-403 defines the unified semantics and migration map for transitioning to present progressive tense grammar and function-based domains.
+
+---
+
+## RFC-403 Migration Status
+
+The event naming in this catalog will be updated following RFC-403 migration phases:
+
+**Phase 1**: Core event catalog migration
+**Phase 2**: Emitter code updates
+**Phase 3**: Test migration
+**Phase 4**: Documentation updates (this catalog)
+
+Until migration completion, event types in this catalog reflect the current system. See RFC-403 Section 8 for the complete migration map.
 
 ---
 

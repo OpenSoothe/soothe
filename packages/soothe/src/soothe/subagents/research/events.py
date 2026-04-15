@@ -16,7 +16,7 @@ from soothe_sdk.events import SootheEvent
 class ResearchDispatchedEvent(SootheEvent):
     """Research subagent dispatched event."""
 
-    type: Literal["soothe.subagent.research.dispatched"] = "soothe.subagent.research.dispatched"
+    type: Literal["soothe.capability.research.started"] = "soothe.capability.research.started"
     topic: str = ""
 
     model_config = ConfigDict(extra="allow")
@@ -25,7 +25,7 @@ class ResearchDispatchedEvent(SootheEvent):
 class ResearchCompletedEvent(SootheEvent):
     """Research completed event."""
 
-    type: Literal["soothe.subagent.research.completed"] = "soothe.subagent.research.completed"
+    type: Literal["soothe.capability.research.completed"] = "soothe.capability.research.completed"
     duration_ms: int = 0
     answer_length: int = 0
 
@@ -35,7 +35,7 @@ class ResearchCompletedEvent(SootheEvent):
 class ResearchAnalyzeEvent(SootheEvent):
     """Research analyze event."""
 
-    type: Literal["soothe.subagent.research.analyze"] = "soothe.subagent.research.analyze"
+    type: Literal["soothe.capability.research.analyzing"] = "soothe.capability.research.analyzing"
     topic: str = ""
 
     model_config = ConfigDict(extra="allow")
@@ -44,8 +44,8 @@ class ResearchAnalyzeEvent(SootheEvent):
 class ResearchSubQuestionsEvent(SootheEvent):
     """Research sub questions event."""
 
-    type: Literal["soothe.subagent.research.sub_questions"] = (
-        "soothe.subagent.research.sub_questions"
+    type: Literal["soothe.capability.research.questions.generating"] = (
+        "soothe.capability.research.questions.generating"
     )
     count: int = 0
     sub_questions: list[dict[str, str]] = field(default_factory=list)
@@ -56,8 +56,8 @@ class ResearchSubQuestionsEvent(SootheEvent):
 class ResearchQueriesGeneratedEvent(SootheEvent):
     """Research queries generated event."""
 
-    type: Literal["soothe.subagent.research.queries_generated"] = (
-        "soothe.subagent.research.queries_generated"
+    type: Literal["soothe.capability.research.queries.generating"] = (
+        "soothe.capability.research.queries.generating"
     )
     queries: list[str] = field(default_factory=list)
 
@@ -67,7 +67,7 @@ class ResearchQueriesGeneratedEvent(SootheEvent):
 class ResearchGatherEvent(SootheEvent):
     """Research gather event."""
 
-    type: Literal["soothe.subagent.research.gather"] = "soothe.subagent.research.gather"
+    type: Literal["soothe.capability.research.gathering"] = "soothe.capability.research.gathering"
     query: str = ""
     domain: str = ""
 
@@ -77,7 +77,7 @@ class ResearchGatherEvent(SootheEvent):
 class ResearchGatherDoneEvent(SootheEvent):
     """Research gather done event."""
 
-    type: Literal["soothe.subagent.research.gather_done"] = "soothe.subagent.research.gather_done"
+    type: Literal["soothe.capability.research.gather.completed"] = "soothe.capability.research.gather.completed"
     query: str = ""
     result_count: int = 0
     sources_used: list[str] = field(default_factory=list)
@@ -88,7 +88,7 @@ class ResearchGatherDoneEvent(SootheEvent):
 class ResearchSummarizeEvent(SootheEvent):
     """Research summarize event."""
 
-    type: Literal["soothe.subagent.research.summarize"] = "soothe.subagent.research.summarize"
+    type: Literal["soothe.capability.research.summarizing"] = "soothe.capability.research.summarizing"
     total_summaries: int = 0
 
     model_config = ConfigDict(extra="allow")
@@ -97,7 +97,7 @@ class ResearchSummarizeEvent(SootheEvent):
 class ResearchReflectEvent(SootheEvent):
     """Research reflect event."""
 
-    type: Literal["soothe.subagent.research.reflect"] = "soothe.subagent.research.reflect"
+    type: Literal["soothe.capability.research.reflecting"] = "soothe.capability.research.reflecting"
     loop: int = 0
 
     model_config = ConfigDict(extra="allow")
@@ -106,8 +106,8 @@ class ResearchReflectEvent(SootheEvent):
 class ResearchReflectionDoneEvent(SootheEvent):
     """Research reflection done event."""
 
-    type: Literal["soothe.subagent.research.reflection_done"] = (
-        "soothe.subagent.research.reflection_done"
+    type: Literal["soothe.capability.research.reflection.completed"] = (
+        "soothe.capability.research.reflection.completed"
     )
     loop: int = 0
     is_sufficient: bool = False
@@ -119,7 +119,7 @@ class ResearchReflectionDoneEvent(SootheEvent):
 class ResearchSynthesizeEvent(SootheEvent):
     """Research synthesize event."""
 
-    type: Literal["soothe.subagent.research.synthesize"] = "soothe.subagent.research.synthesize"
+    type: Literal["soothe.capability.research.synthesizing"] = "soothe.capability.research.synthesizing"
     topic: str = ""
     total_sources: int = 0
 
@@ -135,7 +135,7 @@ class ResearchInternalLLMResponseEvent(SootheEvent):
     filtered instead of leaking as assistant text.
     """
 
-    type: Literal["soothe.subagent.research.internal_llm"] = "soothe.subagent.research.internal_llm"
+    type: Literal["soothe.capability.research.internal_llm.running"] = "soothe.capability.research.internal_llm.running"
     response_type: str = ""  # "analysis", "queries", "reflection"
 
     model_config = ConfigDict(extra="allow")
@@ -153,7 +153,7 @@ class ResearchJudgementEvent(SootheEvent):
         confidence: Confidence level if available (0.0-1.0).
     """
 
-    type: Literal["soothe.subagent.research.judgement"] = "soothe.subagent.research.judgement"
+    type: Literal["soothe.capability.research.judgement.reporting"] = "soothe.capability.research.judgement.reporting"
     judgement: str = ""
     action: str = ""  # "continue" or "complete"
     confidence: float | None = None
@@ -240,19 +240,19 @@ register_event(
 )
 
 # Event type constants for convenient imports
-SUBAGENT_RESEARCH_DISPATCHED = "soothe.subagent.research.dispatched"
-SUBAGENT_RESEARCH_ANALYZE = "soothe.subagent.research.analyze"
-SUBAGENT_RESEARCH_SUB_QUESTIONS = "soothe.subagent.research.sub_questions"
-SUBAGENT_RESEARCH_QUERIES_GENERATED = "soothe.subagent.research.queries_generated"
-SUBAGENT_RESEARCH_GATHER = "soothe.subagent.research.gather"
-SUBAGENT_RESEARCH_GATHER_DONE = "soothe.subagent.research.gather_done"
-SUBAGENT_RESEARCH_SUMMARIZE = "soothe.subagent.research.summarize"
-SUBAGENT_RESEARCH_REFLECT = "soothe.subagent.research.reflect"
-SUBAGENT_RESEARCH_REFLECTION_DONE = "soothe.subagent.research.reflection_done"
-SUBAGENT_RESEARCH_SYNTHESIZE = "soothe.subagent.research.synthesize"
-SUBAGENT_RESEARCH_COMPLETED = "soothe.subagent.research.completed"
-SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.subagent.research.internal_llm"
-SUBAGENT_RESEARCH_JUDGEMENT = "soothe.subagent.research.judgement"
+SUBAGENT_RESEARCH_DISPATCHED = "soothe.capability.research.started"
+SUBAGENT_RESEARCH_ANALYZE = "soothe.capability.research.analyzing"
+SUBAGENT_RESEARCH_SUB_QUESTIONS = "soothe.capability.research.questions.generating"
+SUBAGENT_RESEARCH_QUERIES_GENERATED = "soothe.capability.research.queries.generating"
+SUBAGENT_RESEARCH_GATHER = "soothe.capability.research.gathering"
+SUBAGENT_RESEARCH_GATHER_DONE = "soothe.capability.research.gather.completed"
+SUBAGENT_RESEARCH_SUMMARIZE = "soothe.capability.research.summarizing"
+SUBAGENT_RESEARCH_REFLECT = "soothe.capability.research.reflecting"
+SUBAGENT_RESEARCH_REFLECTION_DONE = "soothe.capability.research.reflection.completed"
+SUBAGENT_RESEARCH_SYNTHESIZE = "soothe.capability.research.synthesizing"
+SUBAGENT_RESEARCH_COMPLETED = "soothe.capability.research.completed"
+SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.running"
+SUBAGENT_RESEARCH_JUDGEMENT = "soothe.capability.research.judgement.reporting"
 
 __all__ = [
     "SUBAGENT_RESEARCH_ANALYZE",

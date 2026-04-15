@@ -285,7 +285,7 @@ class AutonomousMixin(GoalDirectivesMixin):
         # RFC-204: Emit status change event
         yield _custom(
             {
-                "type": "soothe.autopilot.status_changed",
+                "type": "soothe.system.autopilot.status_changed",
                 "state": "idle" if self._goal_engine.is_complete() else "running",
             }
         )
@@ -766,7 +766,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         )
                         yield _custom(
                             {
-                                "type": "soothe.autopilot.goal_suspended",
+                                "type": "soothe.system.autopilot.goal.suspending",
                                 "goal_id": goal.id,
                                 "reason": f"Budget exhausted: {c_reasoning[:100]}",
                             }
@@ -793,7 +793,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                     await self._goal_engine.validate_goal(goal.id)
                     yield _custom(
                         {
-                            "type": "soothe.autopilot.goal_validated",
+                            "type": "soothe.system.autopilot.goal.validating",
                             "goal_id": goal.id,
                             "confidence": 1.0,
                         }
@@ -1023,7 +1023,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                         await self._goal_engine.block_goal(goal_id, reason=reason)
                     _custom(
                         {
-                            "type": "soothe.autopilot.goal_blocked",
+                            "type": "soothe.system.autopilot.goal.blocking",
                             "goal_id": goal_id,
                             "reason": reason[:200],
                         }
@@ -1184,7 +1184,7 @@ class AutonomousMixin(GoalDirectivesMixin):
             for rel in relationships:
                 events.append(
                     {
-                        "type": "soothe.autopilot.relationship_detected",
+                        "type": "soothe.system.autopilot.relationship.detecting",
                         "from_goal": rel.source_id,
                         "to_goal": rel.target_id,
                         "relationship_type": rel.rel_type,

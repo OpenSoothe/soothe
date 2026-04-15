@@ -142,7 +142,7 @@ class TuiDaemonSession:
                     data = event.get("data")
                     if (
                         isinstance(data, dict)
-                        and data.get("type") == "soothe.lifecycle.daemon.heartbeat"
+                        and data.get("type") == "soothe.system.daemon.heartbeat"
                     ):
                         continue
 

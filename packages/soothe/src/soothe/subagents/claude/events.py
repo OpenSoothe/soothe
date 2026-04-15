@@ -15,7 +15,7 @@ from soothe_sdk.events import SubagentEvent
 class ClaudeTextEvent(SubagentEvent):
     """Claude text event."""
 
-    type: Literal["soothe.subagent.claude.text"] = "soothe.subagent.claude.text"
+    type: Literal["soothe.capability.claude.text.running"] = "soothe.capability.claude.text.running"
     text: str = ""
 
     model_config = ConfigDict(extra="allow")
@@ -24,7 +24,7 @@ class ClaudeTextEvent(SubagentEvent):
 class ClaudeToolUseEvent(SubagentEvent):
     """Claude tool use event."""
 
-    type: Literal["soothe.subagent.claude.tool_use"] = "soothe.subagent.claude.tool_use"
+    type: Literal["soothe.capability.claude.tool.running"] = "soothe.capability.claude.tool.running"
     tool: str = ""
 
     model_config = ConfigDict(extra="allow")
@@ -33,7 +33,7 @@ class ClaudeToolUseEvent(SubagentEvent):
 class ClaudeResultEvent(SubagentEvent):
     """Claude result event."""
 
-    type: Literal["soothe.subagent.claude.result"] = "soothe.subagent.claude.result"
+    type: Literal["soothe.capability.claude.completed"] = "soothe.capability.claude.completed"
     cost_usd: float = 0.0
     duration_ms: int = 0
 
@@ -63,9 +63,9 @@ register_event(
 )
 
 # Event type constants for convenient imports
-SUBAGENT_CLAUDE_TEXT = "soothe.subagent.claude.text"
-SUBAGENT_CLAUDE_TOOL_USE = "soothe.subagent.claude.tool_use"
-SUBAGENT_CLAUDE_RESULT = "soothe.subagent.claude.result"
+SUBAGENT_CLAUDE_TEXT = "soothe.capability.claude.text.running"
+SUBAGENT_CLAUDE_TOOL_USE = "soothe.capability.claude.tool.running"
+SUBAGENT_CLAUDE_RESULT = "soothe.capability.claude.completed"
 
 __all__ = [
     "SUBAGENT_CLAUDE_RESULT",

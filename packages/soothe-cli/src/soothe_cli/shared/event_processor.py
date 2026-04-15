@@ -678,8 +678,8 @@ class EventProcessor:
 
         # Handle chitchat/final responses through shared cleaner path
         if etype in {
-            "soothe.output.chitchat.response",
-            "soothe.output.autonomous.final_report",
+            "soothe.output.chitchat.responding",
+            "soothe.output.autonomous.final_report.reporting",
         }:
             content = data.get("content", data.get("summary", ""))
             if content and self._presentation.tier_visible(VerbosityTier.QUIET, self._verbosity):
