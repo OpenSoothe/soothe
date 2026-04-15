@@ -10,7 +10,6 @@ Note: These are simplified wire-safe versions. Full protocol implementations
 are in soothe.protocols.planner (daemon-side).
 """
 
-
 from pydantic import BaseModel, Field
 
 
@@ -19,7 +18,9 @@ class PlanStep(BaseModel):
 
     step_id: str = Field(description="Unique identifier for this step")
     description: str = Field(description="Human-readable step description")
-    status: str = Field(default="pending", description="Step status: pending/running/completed/failed")
+    status: str = Field(
+        default="pending", description="Step status: pending/running/completed/failed"
+    )
     result: str | None = Field(default=None, description="Step execution result")
     error: str | None = Field(default=None, description="Error message if failed")
 
@@ -30,7 +31,9 @@ class Plan(BaseModel):
     plan_id: str = Field(description="Unique identifier for this plan")
     goal: str = Field(description="The goal this plan addresses")
     steps: list[PlanStep] = Field(default_factory=list, description="Ordered list of steps")
-    status: str = Field(default="created", description="Plan status: created/executing/completed/failed")
+    status: str = Field(
+        default="created", description="Plan status: created/executing/completed/failed"
+    )
 
 
 class ToolOutput(BaseModel):

@@ -16,6 +16,7 @@ class ExtendedSkillMetadata(TypedDict):
     This TypedDict represents skill metadata fetched from daemon via WebSocket RPC.
     All fields are wire-safe (no Path objects, use str representations).
     """
+
     name: str
     description: str
     source: str  # "builtin", "user", "project", "agents", "claude"

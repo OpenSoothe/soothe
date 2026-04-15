@@ -33,14 +33,14 @@ logger = logging.getLogger(__name__)
 
 def _emit_step_event(step: str, status: str) -> None:
     """Emit a workflow step event."""
-    event = PaperScoutStepEvent(step=step, status=status)
+    _event = PaperScoutStepEvent(step=step, status=status)  # noqa: F841
     # Event will be picked up by the event system
     logger.info(f"[{step}] {status}")
 
 
 def _emit_paper_found_event(paper_title: str, arxiv_id: str, score: float) -> None:
     """Emit a paper found event."""
-    event = PaperScoutPaperFoundEvent(
+    _event = PaperScoutPaperFoundEvent(  # noqa: F841
         paper_title=paper_title,
         arxiv_id=arxiv_id,
         score=score,
@@ -50,13 +50,13 @@ def _emit_paper_found_event(paper_title: str, arxiv_id: str, score: float) -> No
 
 def _emit_error_event(error_message: str, step: str) -> None:
     """Emit an error event."""
-    event = PaperScoutErrorEvent(error_message=error_message, step=step)
+    _event = PaperScoutErrorEvent(error_message=error_message, step=step)  # noqa: F841
     logger.error(f"Error in {step}: {error_message}")
 
 
 def _emit_email_sent_event(recipient: str, papers_count: int) -> None:
     """Emit an email sent event."""
-    event = PaperScoutEmailSentEvent(recipient=recipient, papers_count=papers_count)
+    _event = PaperScoutEmailSentEvent(recipient=recipient, papers_count=papers_count)  # noqa: F841
     logger.info(f"Email sent to {recipient} with {papers_count} papers")
 
 

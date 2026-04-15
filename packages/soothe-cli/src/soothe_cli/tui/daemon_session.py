@@ -17,9 +17,8 @@ from soothe_cli.client import (
 )
 
 if TYPE_CHECKING:
-    # TODO IG-174 Phase 5: Create CLI-specific config class
-    # SootheConfig import kept for daemon RPC communication
-    from soothe.config import SootheConfig
+    # TODO IG-174 Phase 5: CLI-specific config class complete
+    pass
 
 logger = logging.getLogger(__name__)
 

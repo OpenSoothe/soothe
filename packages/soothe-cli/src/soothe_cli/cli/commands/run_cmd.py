@@ -6,7 +6,6 @@ import time
 from typing import Literal
 
 import typer
-from soothe.utils.postgres import check_postgres_available
 
 from soothe_cli.cli.execution import run_headless, run_tui
 from soothe_cli.shared import load_config, setup_logging

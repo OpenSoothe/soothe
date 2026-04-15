@@ -2,17 +2,15 @@
 
 import asyncio
 import contextlib
-import json
 import shutil
 import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from soothe_sdk.client import is_daemon_live, websocket_url_from_config
 
-# TODO IG-174 Phase 5: Create CLI-specific config class
-# SootheConfig import kept for daemon RPC communication
-from soothe.config import SootheConfig
+from soothe_cli.shared import load_config
 
 # Display limits for thread list
 _TOPIC_DISPLAY_LIMIT = 30  # Max chars for last human message
@@ -83,8 +81,6 @@ def thread_list(
     """
     import asyncio
 
-    from soothe_sdk.client import is_daemon_live, websocket_url_from_config
-
     from soothe_cli.shared import load_config
 
     cfg = load_config(config)
@@ -111,7 +107,7 @@ def _thread_list_via_daemon(
     read ``command_response`` but exited on the first ``status`` event, which is
     always sent during the WebSocket handshake (idle), so the table never printed.
     """
-    from soothe_sdk.client import WebSocketClient, websocket_url_from_config
+    from soothe_sdk.client import WebSocketClient
 
     ws_url = websocket_url_from_config(cfg)
 
@@ -213,8 +209,6 @@ def thread_continue(
     """
     import asyncio
 
-    from soothe_sdk.client import is_daemon_live, websocket_url_from_config
-
     from soothe_cli.cli.execution import run_tui
     from soothe_cli.shared import load_config, setup_logging
 
@@ -286,7 +280,6 @@ def thread_archive(
     """
     from soothe_daemon.core.runner import SootheRunner
 
-    from soothe_cli.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -318,10 +311,11 @@ def thread_show(
     Example:
         soothe thread show abc123
     """
-    from soothe.logging import ThreadLogger
+    # TODO IG-174 Phase 2: Thread inspection via daemon WebSocket RPC
+    # Need daemon API: thread_inspect with detailed logs and conversation history
+
     from soothe_daemon.core.runner import SootheRunner
 
-    from soothe_cli.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -338,10 +332,9 @@ def thread_show(
             typer.echo(f"Status:       {t.get('status')}")
             typer.echo(f"Created:      {t.get('created_at')}")
 
-            logger = ThreadLogger(thread_id=thread_id)
-            records = logger.read_recent_records(limit=200)
-            conversations = [r for r in records if r.get("kind") == "conversation"]
-            events = [r for r in records if r.get("kind") == "event"]
+            # TODO: ThreadLogger logs via daemon RPC
+            # Placeholder: cannot show conversation/events without daemon RPC
+            typer.echo("Conversation history: (requires daemon RPC - IG-174 Phase 2)")
             typer.echo(f"Messages:     {len(conversations)}")
             typer.echo(f"Events:       {len(events)}")
             if conversations:
@@ -375,7 +368,6 @@ def thread_delete(
     from soothe_daemon.core.runner import SootheRunner
     from soothe_sdk import SOOTHE_HOME
 
-    from soothe_cli.shared import load_config
 
     if not yes:
         confirm = typer.confirm(f"Permanently delete thread {thread_id}?")
@@ -424,33 +416,19 @@ def thread_export(
     Example:
         soothe thread export abc123 --output out.json
     """
-    from soothe.logging import ThreadLogger
+    # TODO IG-174 Phase 2: Thread export via daemon WebSocket RPC
+    # Need daemon API: thread_export with thread logs and conversation history
+    # Current: ThreadLogger import removed - functionality unavailable
+    typer.echo("Thread export requires daemon RPC (IG-174 Phase 2)")
+    typer.echo("This functionality will be restored with daemon WebSocket API")
+    return
 
-    logger = ThreadLogger(thread_id=thread_id)
-    records = logger.read_recent_records(limit=10000)
-
-    if not records:
-        typer.echo(f"No records found for thread {thread_id}.")
-        return
-
-    out_path = Path(output or f"{thread_id}.{export_format}")
-
-    if export_format == "jsonl":
-        with out_path.open("w", encoding="utf-8") as f:
-            f.writelines(json.dumps(r, default=str) + "\n" for r in records)
-    elif export_format == "md":
-        conversations = [r for r in records if r.get("kind") == "conversation"]
-        with out_path.open("w", encoding="utf-8") as f:
-            f.write(f"# Thread {thread_id}\n\n")
-            for c in conversations:
-                role = c.get("role", "unknown").title()
-                text = c.get("text", "")
-                f.write(f"## {role}\n\n{text}\n\n")
-    else:
-        typer.echo(f"Unknown format: {export_format}. Use 'jsonl' or 'md'.", err=True)
-        sys.exit(1)
-
-    typer.echo(f"Exported to {out_path}")
+    # Placeholder for daemon RPC implementation:
+    # from soothe_sdk.client import WebSocketClient
+    # client = WebSocketClient(url=websocket_url_from_config(cfg))
+    # await client.connect()
+    # records = await client.request_thread_export(thread_id, limit=10000)
+    # ... export logic ...
 
 
 def thread_stats(
@@ -468,7 +446,6 @@ def thread_stats(
     from soothe_daemon.core.runner import SootheRunner
     from soothe_daemon.core.thread import ThreadContextManager
 
-    from soothe_cli.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)
@@ -518,7 +495,6 @@ def thread_tag(
     from soothe_daemon.core.runner import SootheRunner
     from soothe_daemon.core.thread import ThreadContextManager
 
-    from soothe_cli.shared import load_config
 
     cfg = load_config(config)
     runner = SootheRunner(cfg)

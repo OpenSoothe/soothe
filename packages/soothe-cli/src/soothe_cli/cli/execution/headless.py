@@ -5,10 +5,6 @@ import sys
 import time
 
 import typer
-
-# TODO IG-174 Phase 5: Create CLI-specific config class
-# SootheConfig import kept for daemon RPC communication
-from soothe.config import SootheConfig
 from soothe_sdk.client import (
     WebSocketClient,
     is_daemon_live,
@@ -16,12 +12,14 @@ from soothe_sdk.client import (
     websocket_url_from_config,
 )
 
+from soothe_cli.config import CLIConfig
+
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _DAEMON_START_WAIT_TIMEOUT = 30.0  # Max time to wait for daemon to become ready
 
 
 def run_headless(
-    cfg: SootheConfig,
+    cfg: CLIConfig,
     prompt: str,
     *,
     thread_id: str | None = None,
@@ -59,6 +57,7 @@ def run_headless(
 
             # Start daemon
             from soothe_cli.cli.commands.daemon_cmd import daemon_start
+
             daemon_start(config=None, foreground=False)
 
             # Wait for daemon to become fully ready with timeout

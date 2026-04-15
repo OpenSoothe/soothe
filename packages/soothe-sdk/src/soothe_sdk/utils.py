@@ -22,8 +22,8 @@ def strip_internal_tags(text: str) -> str:
         Cleaned text without internal tags.
     """
     # Pattern for internal tags like <thinking>, <internal>, etc.
-    internal_pattern = re.compile(r'<(thinking|internal|reasoning)>.*?</\1>', re.DOTALL)
-    return internal_pattern.sub('', text).strip()
+    internal_pattern = re.compile(r"<(thinking|internal|reasoning)>.*?</\1>", re.DOTALL)
+    return internal_pattern.sub("", text).strip()
 
 
 def format_cli_error(error: Exception) -> str:
@@ -60,7 +60,7 @@ def log_preview(text: str, max_length: int = 100) -> str:
     if len(text) <= max_length:
         return text
 
-    return text[:max_length - 3] + "..."
+    return text[: max_length - 3] + "..."
 
 
 def convert_and_abbreviate_path(path: str, base_dir: str | None = None) -> str:
@@ -116,12 +116,12 @@ def parse_autopilot_goals(text: str) -> list[str]:
         List of parsed goal strings.
     """
     # Pattern for goals like "Goal: ..." or numbered goals
-    goal_pattern = re.compile(r'^(?:Goal\s*:\s*|\d+\.\s*)(.+)$', re.MULTILINE)
+    goal_pattern = re.compile(r"^(?:Goal\s*:\s*|\d+\.\s*)(.+)$", re.MULTILINE)
     matches = goal_pattern.findall(text)
 
     # If no explicit goal markers, treat each line as a goal
     if not matches:
-        goals = [line.strip() for line in text.split('\n') if line.strip()]
+        goals = [line.strip() for line in text.split("\n") if line.strip()]
         return goals
 
     return [goal.strip() for goal in matches]
@@ -157,7 +157,7 @@ def get_tool_display_name(tool_name: str) -> str:
 
 
 # Task name regex pattern for plan step matching
-_TASK_NAME_RE = re.compile(r'^\s*(?:Task\s*:\s*|Step\s*:\s*)(.+)$', re.MULTILINE)
+_TASK_NAME_RE = re.compile(r"^\s*(?:Task\s*:\s*|Step\s*:\s*)(.+)$", re.MULTILINE)
 
 """Regex pattern for matching task/step names in plan text."""
 

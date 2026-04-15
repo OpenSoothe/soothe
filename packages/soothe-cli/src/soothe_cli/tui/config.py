@@ -1905,11 +1905,9 @@ def _get_provider_kwargs(provider: str, *, model_name: str | None = None) -> dic
             result["api_key"] = api_key
 
     if provider == "openrouter":
-        from soothe.profiles._openrouter import (
-            check_openrouter_version,  # noqa: PLC2701
-        )
-
-        check_openrouter_version()
+        # TODO IG-174 Phase 2: OpenRouter version check via daemon RPC
+        # Need daemon API: provider_check_version(provider="openrouter")
+        # Placeholder: OpenRouter version check not available without daemon RPC
         _apply_openrouter_defaults(result)
 
     return result

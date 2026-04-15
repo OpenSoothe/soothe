@@ -1,6 +1,7 @@
 """Tests for PaperScout plugin registration."""
 
 import pytest
+from unittest.mock import MagicMock
 
 from soothe_community.paperscout import PaperScoutPlugin
 
@@ -27,7 +28,7 @@ async def test_plugin_has_subagent_method():
 @pytest.mark.asyncio
 async def test_plugin_on_load_success():
     """Test plugin on_load with all dependencies available."""
-    plugin = PaperScoutPlugin()
+    _plugin = PaperScoutPlugin()  # noqa: F841
 
     # Mock context
     context = MagicMock()
@@ -62,7 +63,3 @@ async def test_create_paperscout_subagent(sample_config, mock_persist_store):
     assert "description" in subagent_dict
     assert "runnable" in subagent_dict
     assert "config" in subagent_dict
-
-
-# Import MagicMock at module level
-from unittest.mock import MagicMock

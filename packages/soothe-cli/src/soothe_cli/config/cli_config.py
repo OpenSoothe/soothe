@@ -14,6 +14,7 @@ class CLIConfig:
     Full config available via daemon RPC when needed.
     CLI package can be installed independently without full SootheConfig.
     """
+
     # WebSocket connection
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 8765
@@ -97,7 +98,7 @@ class CLIConfig:
             daemon_host=websocket.get("host", "127.0.0.1"),
             daemon_port=websocket.get("port", 8765),
             verbosity=data.get("logging", {}).get("verbosity", "normal"),
-            soothe_home=Path(data.get("home", str(Path.home() / ".soothe")))
+            soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 
     @classmethod
@@ -116,7 +117,7 @@ class CLIConfig:
             daemon_host=soothe_config.daemon.transports.websocket.host,
             daemon_port=soothe_config.daemon.transports.websocket.port,
             verbosity=soothe_config.logging.verbosity,
-            soothe_home=Path(soothe_config.home)
+            soothe_home=Path(soothe_config.home),
         )
 
     # Compatibility properties for transition period
@@ -125,21 +126,28 @@ class CLIConfig:
     @property
     def daemon(self) -> Any:
         """Compatibility property: return daemon config structure."""
-        return type("DaemonConfig", (), {
-            "transports": type("TransportsConfig", (), {
-                "websocket": type("WebSocketConfig", (), {
-                    "host": self.daemon_host,
-                    "port": self.daemon_port
-                })
-            })()
-        })()
+        return type(
+            "DaemonConfig",
+            (),
+            {
+                "transports": type(
+                    "TransportsConfig",
+                    (),
+                    {
+                        "websocket": type(
+                            "WebSocketConfig",
+                            (),
+                            {"host": self.daemon_host, "port": self.daemon_port},
+                        )
+                    },
+                )()
+            },
+        )()
 
     @property
     def logging(self) -> Any:
         """Compatibility property: return logging config structure."""
-        return type("LoggingConfig", (), {
-            "verbosity": self.verbosity
-        })()
+        return type("LoggingConfig", (), {"verbosity": self.verbosity})()
 
     @property
     def home(self) -> str:

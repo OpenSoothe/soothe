@@ -61,6 +61,39 @@ class ErrorEvent(SootheEvent):
     error: str
 
 
+# Event type constants (IG-174 Phase 2)
+# Wire-safe event type strings for CLI/TUI event processing
+# Exposed at DEBUG and DETAILED level for thread-level events display
+
+# Plan events
+PLAN_CREATED = "soothe.protocol.plan.created"
+PLAN_STEP_STARTED = "soothe.protocol.plan.step_started"
+PLAN_STEP_COMPLETED = "soothe.protocol.plan.step_completed"
+
+# Subagent events
+SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.subagent.research.internal_llm"
+
+# Thread lifecycle events (exposed for DEBUG/DETAILED level)
+THREAD_CREATED = "soothe.lifecycle.thread.created"
+THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
+THREAD_COMPLETED = "soothe.lifecycle.thread.completed"
+THREAD_ERROR = "soothe.lifecycle.thread.error"
+
+# Tool events (DEBUG/DETAILED level)
+TOOL_STARTED = "soothe.tool.execution.started"
+TOOL_COMPLETED = "soothe.tool.execution.completed"
+TOOL_ERROR = "soothe.tool.execution.error"
+
+# Agent loop events (DEBUG level)
+AGENT_LOOP_STARTED = "soothe.protocol.agent_loop.started"
+AGENT_LOOP_ITERATION = "soothe.protocol.agent_loop.iteration"
+AGENT_LOOP_COMPLETED = "soothe.protocol.agent_loop.completed"
+
+# Message events (DETAILED level)
+MESSAGE_RECEIVED = "soothe.protocol.message.received"
+MESSAGE_SENT = "soothe.protocol.message.sent"
+
+
 __all__ = [
     "ErrorEvent",
     "LifecycleEvent",
@@ -68,4 +101,26 @@ __all__ = [
     "ProtocolEvent",
     "SootheEvent",
     "SubagentEvent",
+    # Event type constants - plan
+    "PLAN_CREATED",
+    "PLAN_STEP_STARTED",
+    "PLAN_STEP_COMPLETED",
+    # Subagent
+    "SUBAGENT_RESEARCH_INTERNAL_LLM",
+    # Thread lifecycle (DEBUG/DETAILED)
+    "THREAD_CREATED",
+    "THREAD_RESUMED",
+    "THREAD_COMPLETED",
+    "THREAD_ERROR",
+    # Tool (DEBUG/DETAILED)
+    "TOOL_STARTED",
+    "TOOL_COMPLETED",
+    "TOOL_ERROR",
+    # Agent loop (DEBUG)
+    "AGENT_LOOP_STARTED",
+    "AGENT_LOOP_ITERATION",
+    "AGENT_LOOP_COMPLETED",
+    # Message (DETAILED)
+    "MESSAGE_RECEIVED",
+    "MESSAGE_SENT",
 ]
