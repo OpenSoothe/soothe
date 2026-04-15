@@ -1,13 +1,13 @@
 [project]
 name = "soothe"
-version = "0.2.13"
-description = "Multi-agent harness built on deepagents and langchain/langgraph."
+version = "0.3.0"
+description = "DEPRECATED: Use soothe-cli and soothe-daemon instead"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<4.0"
-keywords = ["agents", "ai", "llm", "langgraph", "langchain", "multi-agent", "subagents"]
+keywords = ["agents", "ai", "llm", "langgraph", "langchain", "multi-agent", "subagents", "deprecated"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 7 - Inactive",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -17,34 +17,19 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
-    "aiohttp>=3.9.0",
-    "aiosqlite>=0.22.1",
-    "anyio>=3.0.0",
-    "soothe-sdk>=0.2.0,<1.0.0",  # WebSocket client, protocol, types (v0.2.0 split)
-    "bubus>=1.5.6",
-    "deepagents>=0.4.10,<1.0.0",
-    "fastapi>=0.104.0",
-    "langchain-community>=0.3.0,<1.0.0",
-    "langchain-core>=1.2.18,<2.0.0",
-    "langchain-mcp-adapters>=0.2.0,<1.0.0",
-    "langchain-openai>=0.3.0,<1.0.0",
-    "langchain>=1.2.11,<2.0.0",
-    "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
-    "langgraph>=1.1.1,<2.0.0",
-    "sqlite-vec>=0.1.0",
-    "pexpect>=4.9.0",
-    "pydantic-settings>=2.0.0,<3.0.0",
-    "pydantic>=2.0.0,<3.0.0",
-    "pyjwt>=2.8.0",
-    "pyperclip>=1.8.0",
-    "python-dotenv>=1.0.0,<2.0.0",
-    "pyyaml>=6.0.0,<7.0.0",
-    "requests>=2.31.0",
-    "textual>=0.40.0",
-    "typer>=0.9.0,<1.0.0",
-    "uvicorn[standard]>=0.24.0",
-    "websockets>=12.0",
+dependencies = []
+
+[project.optional-dependencies]
+# Meta-package: Install both CLI and daemon
+cli = [
+    "soothe-cli>=0.1.0",
+    "soothe-daemon>=0.3.0",
+]
+
+# Convenience: Install everything (deprecated)
+all = [
+    "soothe-cli>=0.1.0",
+    "soothe-daemon[all]>=0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -145,8 +130,8 @@ exclude = [
     "**/*.pyo",
 ]
 
-[project.scripts]
-soothe = "soothe.ux.cli.main:app"
+# No entry points - this package is deprecated
+# Use soothe-cli and soothe-daemon packages instead
 
 [tool.ruff]
 line-length = 120

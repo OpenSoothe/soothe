@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe.subagents.research.events import SUBAGENT_RESEARCH_INTERNAL_LLM
-from soothe.utils.text_preview import preview_first
+from soothe_sdk.protocol import preview_first
 from soothe_daemon.core.event_catalog import PLAN_CREATED, PLAN_STEP_COMPLETED, PLAN_STEP_STARTED
 from soothe_sdk.verbosity import VerbosityTier, classify_event_to_tier
 

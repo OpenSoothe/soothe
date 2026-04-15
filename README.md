@@ -1,148 +1,217 @@
-# ✨ Soothe — Beyond Yet-Another Agent
+# Soothe: Protocol-Driven Multi-Agent Orchestration Framework
 
-<div align="center">
-  <img src="assets/soothe-logo.png" alt="Soothe Logo" width="350" />
+> **⚠️ IMPORTANT**: This monolithic package is **DEPRECATED**. Use the new split packages instead.
 
-  #
+## New Architecture (v0.3.0+)
 
-  [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
-  [![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
-  [![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
-  [![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
-  [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
+Soothe has been refactored into three independent packages:
 
-</div>
+```
+packages/
+├── soothe-sdk (v0.2.0)     # Shared SDK - WebSocket client, protocol, types
+├── soothe-cli (v0.1.0)     # CLI client - WebSocket-only communication  
+└── soothe-daemon (v0.3.0)  # Daemon server - Agent runtime
+```
 
-Soothe is **not** another Claude Code / OpenClaw clone.
+### Installation
 
-Its ambition is to become an **agent-harnessing framework**, an *Agentic OS*, designed to push humans **out of the execution loop**.
+**Recommended: Install both CLI and daemon**
 
-After months of real-world "vibe coding" with coding agents, a clear pain emerged:  
-humans are still responsible for holding everything together, driving agents across sessions, verifying intermediate results, recovering lost context, re-aligning goals, and manually relaying critical information between tools and skills. This constant supervision creates a heavy cognitive burden.
+```bash
+pip install soothe-cli soothe-daemon[all]
+```
 
-**Soothe was built to eliminate that loop.**
+**Alternative: Install separately**
 
-Instead of treating agents as isolated executors, Soothe introduces a higher-order orchestration layer. Built on top of LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that can:
+```bash
+# CLI only (connects to remote daemon)
+pip install soothe-cli
 
-- maintain context across sessions  
-- sustain and recover long-running goals  
-- coordinate multiple objectives simultaneously  
-- autonomously steer complex, long-horizon tasks  
+# Daemon only (for server deployment)
+pip install soothe-daemon[all]
 
-In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-loop** systems—where humans define intent, and the system handles execution, continuity, and adaptation.
-
----
-
-## 🚀 Key Features
-
-- ✨ **Thinks Ahead** — Plans multi-step workflows and adapts dynamically based on outcomes  
-- 🚀 **Acts Autonomously** — Executes tasks across research, coding, file ops, and browser automation  
-- 🧠 **Learns & Remembers** — Persistent memory across sessions—no more repeating yourself  
-- 🔒 **Stays Secure** — Enforces least-privilege access and keeps data under your control  
-- 🔌 **Extends Easily** — Plugin system for custom tools and specialized sub-agents  
-- 🌐 **Works Anywhere** — Multi-transport daemon (Unix, WebSocket, HTTP REST)
-
-## Architecture
-
-<div align="center">
-  <img src="assets/logical-arch.png" alt="Arch" width="800" />
-</div>
-
-## Design Philosophy
-
-**Plan → Execute**: Autonomous execution loop that plans, acts, evaluates, and adapts without manual intervention.
-
-**Persistent Memory**: Sessions accumulate knowledge. Resume threads, recall context, and track long-running goals across conversations.
-
-**Security First**: Local execution with least-privilege policies. Your infrastructure, your data, your control.
-
-**Plugin Architecture**: Built-in tools for web search, code execution, and browser automation. Extend with custom plugins via decorator APIs.
-
-## What Can Soothe Do?
-
-**Deep Research**: Multi-source web search, academic papers, document analysis with automatic synthesis and citations.
-
-**Autonomous Execution**: Multi-step workflows with automatic planning, file operations, code execution, and browser automation.
-
-**Long-Running Operations**: Background daemon mode with thread management, persistent state, and resume capabilities.
-
-**Custom Plugins**: Extend with decorator-based tools, specialized subagents, and MCP server integration.
-
-## Milestones
-
-- ✅ **Single-Session Autonomy** — Solve a complex goal end-to-end within a single session, fully out of the human loop  
-- ⏳ **Cross-Session Continuity** — Sustain and complete complex tasks across multiple sessions with persistent context  
-- ⏳ **Multi-Goal Orchestration** — Handle multiple interdependent goals over long-horizon workflows  
-- ⏳ **Benchmark Reproduction** — Reproduce the Anthropic C Compiler [experiment](https://github.com/anthropics/claudes-c-compiler)  
-
-## Getting Started
+# SDK only (for plugin development)
+pip install soothe-sdk
+```
 
 ### Quick Start
 
-1. **Install Soothe**:
-   ```bash
-   pip install soothe
-   ```
-2. **Initialize config**:
-   ```bash
-   # Create Soothe home directory
-   mkdir -p ~/.soothe/config
-
-   # Copy minimal config template
-   cp config.minimal.yml ~/.soothe/config/config.yml
-
-   # Edit with your preferred provider and models
-   vim ~/.soothe/config/config.yml  # or use your favorite editor
-   ```
-
-   The minimal config file contains just the essentials: provider settings and model router. All other settings use sensible defaults.
-
-3. **Run your first task**:
-   ```bash
-   # Interactive TUI mode (default)
-   soothe -p "Research the top 5 Python web frameworks and create a comparison table"
-
-   # Or just launch TUI and type your query
-   soothe
-   ```
-
-### Background Daemon
-
-For long-running operations and remote access:
-
 ```bash
-# Start daemon
-soothe daemon start
+# Start daemon server
+soothe-daemon start
 
-# Attach from any terminal
-soothe daemon attach
+# Use CLI client
+soothe                    # Interactive TUI mode
+soothe -p "your query"    # Headless single-prompt mode
 
-# Or connect via WebSocket/HTTP
-soothe daemon start --enable-websocket --enable-http
+# Check daemon status
+soothe-daemon status
+
+# Health checks
+soothe-daemon doctor
 ```
 
-## Learn More
+## Architecture
 
-### 📚 Documentation
+### Communication Model
 
-- **[Wiki](docs/wiki/)** - End-user guides organized by topic
-  - [Getting Started](docs/wiki/getting-started.md) - Installation and first steps
-  - [CLI Reference](docs/wiki/cli-reference.md) - Complete command documentation
-  - [Configuration](docs/wiki/configuration.md) - Environment variables and YAML config
-  - [Troubleshooting](docs/wiki/troubleshooting.md) - Common issues and solutions
+CLI and daemon communicate via WebSocket only:
 
-- **[User Guide](docs/user_guide.md)** - Comprehensive usage guide with examples
+```
+┌─────────────┐                WebSocket                ┌──────────────┐
+│  soothe-cli │ ──────────────────────────────────────▶ │ soothe-daemon│
+│  (Client)   │                                              │  (Server)    │
+│  ~10 deps   │ ◀────────────────────────────────────── │  ~50 deps    │
+└─────────────┘                                              └──────────────┘
+```
 
-- **[RFCs & Specs](docs/specs/)** - Technical specifications and architecture design
-  - [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) - System conceptual design
-  - [RFC-201](docs/specs/RFC-201-agentic-goal-execution.md) - Execution architecture
-  - [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) - Plugin system design
+**Key Principle**: CLI has **ZERO** daemon runtime dependencies.
 
-### 🛠️ For Developers
+### Package Responsibilities
 
-- **[CLAUDE.md](CLAUDE.md)** - Development guide for AI agents
-- **[Implementation Guides](docs/impl/)** - Detailed implementation documentation
+**soothe-sdk**:
+- WebSocket client (`WebSocketClient`)
+- Protocol encode/decode
+- Base event types
+- Verbosity tier system
+- **Dependencies**: pydantic, websockets (minimal)
+
+**soothe-cli**:
+- CLI commands (thread, config, agent, autopilot)
+- TUI application (Textual)
+- Event processor and display
+- **Dependencies**: soothe-sdk, typer, textual, rich (~10 deps)
+- **Entry point**: `soothe` command
+
+**soothe-daemon**:
+- WebSocket + HTTP transports
+- Agent runner and factory
+- Tools and subagents
+- Thread persistence
+- **Dependencies**: soothe-sdk, langchain, langgraph (~50 deps)
+- **Entry point**: `soothe-daemon` command
+
+## Configuration
+
+### CLI Config (NEW)
+
+```yaml
+# ~/.soothe/cli_config.yml
+websocket:
+  host: "localhost"
+  port: 8765
+
+ui:
+  verbosity: "normal"
+```
+
+### Daemon Config (UNCHANGED)
+
+```yaml
+# ~/.soothe/config.yml
+daemon:
+  transports:
+    websocket:
+      host: "localhost"
+      port: 8765
+
+providers:
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+```
+
+## Migration from Old Package
+
+**This package (soothe v0.2.x) is deprecated.**
+
+### Quick Migration
+
+```bash
+# Uninstall old package
+pip uninstall soothe
+
+# Install new packages
+pip install soothe-cli soothe-daemon[all]
+
+# Update commands
+soothe-daemon start    # (was: soothe daemon start)
+soothe-daemon doctor   # (was: soothe doctor)
+soothe -p "query"      # (unchanged)
+```
+
+### Command Changes
+
+| Old Command | New Command | Package |
+|-------------|-------------|---------|
+| `soothe daemon start` | `soothe-daemon start` | daemon |
+| `soothe daemon stop` | `soothe-daemon stop` | daemon |
+| `soothe daemon status` | `soothe-daemon status` | daemon |
+| `soothe doctor` | `soothe-daemon doctor` | daemon |
+| `soothe -p "..."` | `soothe -p "..."` | CLI (unchanged) |
+| `soothe thread list` | `soothe thread list` | CLI (unchanged) |
+
+### Full Migration Guide
+
+See:
+- **MIGRATION.md**: Quick reference
+- **docs/migration-guide-v0.3.md**: Detailed migration steps
+- **docs/cli-daemon-architecture.md**: Architecture overview
+
+## Benefits of Split Architecture
+
+- **Dependency reduction**: CLI has ~10 deps (vs ~50 in old package)
+- **Flexible deployment**: CLI and daemon can run on separate machines
+- **Clean separation**: WebSocket-only communication
+- **Better maintainability**: Independent testing and development
+
+## Documentation
+
+- **Architecture**: [docs/cli-daemon-architecture.md](docs/cli-daemon-architecture.md)
+- **Migration**: [docs/migration-guide-v0.3.md](docs/migration-guide-v0.3.md)
+- **RFCs**: [docs/specs/](docs/specs/)
+- **Implementation**: [docs/impl/](docs/impl/)
+
+## Development
+
+### Monorepo Structure
+
+```
+Soothe/
+├── packages/
+│   ├── soothe-sdk/
+│   ├── soothe-cli/
+│   └── soothe-daemon/
+├── tests/
+├── docs/
+└── examples/
+```
+
+### Testing
+
+```bash
+# Test SDK
+pytest packages/soothe-sdk/tests/
+
+# Test CLI
+pytest packages/soothe-cli/tests/
+
+# Test daemon
+pytest packages/soothe-daemon/tests/
+
+# Integration tests
+pytest tests/integration/
+```
+
+## Support
+
+- **GitHub**: https://github.com/caesar0301/soothe
+- **Issues**: https://github.com/caesar0301/soothe/issues
+- **Documentation**: https://soothe.readthedocs.io
 
 ## License
 
-MIT
+MIT License
+
+---
+
+**⚠️ WARNING**: This `soothe` package is deprecated. Migrate to `soothe-cli` and `soothe-daemon` immediately.

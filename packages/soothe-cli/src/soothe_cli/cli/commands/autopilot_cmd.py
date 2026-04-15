@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from soothe.utils.text_preview import preview_first
+from soothe_sdk.protocol import preview_first
 
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
 

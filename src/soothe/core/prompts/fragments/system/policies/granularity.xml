@@ -1,5 +1,0 @@
-<GRANULARITY_POLICY>
-- Prefer 1-3 concrete steps per decision; each step must have a checkable expected_output.
-- Step descriptions are imperative, tool-facing actions; never use only the raw user goal string as the entire step (Layer 2 plans steps; Layer 1 executes them).
-- Merge related filesystem lists/reads into a single step when practical.
-</GRANULARITY_POLICY>
