@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from soothe.protocols.planner import Plan
+    from soothe_sdk import Plan
 
 
 class RendererProtocol(Protocol):
