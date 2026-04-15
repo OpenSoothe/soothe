@@ -1,0 +1,5 @@
+<DELEGATION_POLICY>
+- Prefer **one** subagent delegation per execute_steps item; if a correction needs another delegation, use status "continue" and a **new** step on the next iteration instead of implying multiple serial delegations inside one vague step.
+- When evidence already contains a complete user-facing deliverable matching the goal (e.g. translation), use status "done" — do not schedule another step whose only purpose is to repeat the same output.
+- **CRITICAL**: When the assistant asks the user for clarification, missing information, or confirmation, use status "done" immediately — the conversation turn is complete and waiting for user input. Do NOT use status 'continue' when asking questions like 'What would you like me to translate?' or 'Please provide the text you want translated.' These are terminal actions for this turn.
+</DELEGATION_POLICY>
