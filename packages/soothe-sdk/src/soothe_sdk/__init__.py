@@ -47,6 +47,9 @@ from soothe_sdk.client import (
     bootstrap_thread_session,
     connect_websocket_with_retries,
 )
+
+# Phase 1 exports (IG-174: CLI import violations fix)
+from soothe_sdk.config_constants import DEFAULT_EXECUTE_TIMEOUT, SOOTHE_HOME
 from soothe_sdk.decorators.plugin import plugin
 from soothe_sdk.decorators.subagent import subagent
 from soothe_sdk.decorators.tool import tool, tool_group
@@ -68,23 +71,12 @@ from soothe_sdk.exceptions import (
     ValidationError,
 )
 from soothe_sdk.internal import INTERNAL_JSON_KEYS, strip_internal_tags
+from soothe_sdk.logging_utils import GlobalInputHistory, setup_logging
 from soothe_sdk.protocol import decode, encode
+from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
 from soothe_sdk.types.context import PluginContext, SootheConfigProtocol
 from soothe_sdk.types.health import PluginHealth
 from soothe_sdk.types.manifest import PluginManifest
-from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
-from soothe_sdk.verbosity import (
-    ProgressCategory,
-    VerbosityTier,
-    classify_event_to_tier,
-    should_show,
-)
-from soothe_sdk.workspace_types import INVALID_WORKSPACE_DIRS
-
-# Phase 1 exports (IG-174: CLI import violations fix)
-from soothe_sdk.config_constants import SOOTHE_HOME, DEFAULT_EXECUTE_TIMEOUT
-from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
-from soothe_sdk.logging_utils import GlobalInputHistory, setup_logging
 from soothe_sdk.utils import (
     _TASK_NAME_RE,
     convert_and_abbreviate_path,
@@ -93,6 +85,14 @@ from soothe_sdk.utils import (
     log_preview,
     parse_autopilot_goals,
 )
+from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
+from soothe_sdk.verbosity import (
+    ProgressCategory,
+    VerbosityTier,
+    classify_event_to_tier,
+    should_show,
+)
+from soothe_sdk.workspace_types import INVALID_WORKSPACE_DIRS
 
 __version__ = "0.3.0"
 __soothe_required_version__ = ">=0.2.0,<1.0.0"
