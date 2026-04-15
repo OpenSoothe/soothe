@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import sys
+from typing import Any
 
 import typer
 
@@ -29,7 +30,7 @@ _QUERY_START_TIMEOUT_S = 20.0
 
 
 async def run_headless_via_daemon(
-    cfg: SootheConfig,
+    cfg: Any,
     prompt: str,
     *,
     thread_id: str | None = None,

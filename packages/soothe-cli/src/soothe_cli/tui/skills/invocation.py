@@ -88,23 +88,3 @@ async def discover_skills_and_roots_async(
             allowed.append(rp)
 
     return skills, allowed
-
-
-def discover_skills_and_roots(assistant_id: str) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
-    """Synchronous wrapper for skills discovery (backward compatibility).
-
-    Note: This synchronous version cannot use daemon RPC. It returns empty
-    skills list. Production code should use discover_skills_and_roots_async()
-    with daemon config.
-
-    Args:
-        assistant_id: Agent / assistant id.
-
-    Returns:
-        Empty tuple ``(skills=[], allowed_roots=[])``.
-    """
-    logger.warning(
-        "discover_skills_and_roots() is deprecated. "
-        "Use discover_skills_and_roots_async() with daemon config."
-    )
-    return [], []

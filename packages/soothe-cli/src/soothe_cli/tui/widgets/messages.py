@@ -1704,7 +1704,7 @@ class SummarizationMessage(AppMessage):
         self._raw_message = message
         # Pass the default text to AppMessage for _content serialization;
         # render() supplies theme-aware styling at display time.
-        super().__init__(message or "✓ Conversation offloaded", **kwargs)
+        super().__init__(message or "Conversation summarized", **kwargs)
 
     def render(self) -> Content:
         """Render with theme-aware colors.
@@ -1714,7 +1714,7 @@ class SummarizationMessage(AppMessage):
         """
         colors = theme.get_theme_colors(self)
         if self._raw_message is None:
-            return Content.styled("✓ Conversation offloaded", f"bold {colors.primary}")
+            return Content.styled("Conversation summarized", f"bold {colors.primary}")
         if isinstance(self._raw_message, Content):
             return self._raw_message
         return Content.styled(self._raw_message, f"bold {colors.primary}")

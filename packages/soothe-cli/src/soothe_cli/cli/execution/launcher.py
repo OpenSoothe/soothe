@@ -20,9 +20,7 @@ def run_tui(
 
         run_textual_tui(
             config=cfg,
-            autopilot_mode=False,
             thread_id=thread_id,
-            config_path=config_path,
             initial_prompt=initial_prompt,
         )
     except ImportError:

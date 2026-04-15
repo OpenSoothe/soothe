@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from soothe_daemon.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
+from soothe_sdk.events import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 
 
 @dataclass

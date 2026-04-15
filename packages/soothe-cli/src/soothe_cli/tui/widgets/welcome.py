@@ -29,7 +29,7 @@ from soothe_cli.tui.widgets._links import open_style_link
 _TIPS: list[str] = [
     "Use @ to reference files and / for commands",
     "Try /threads to resume a previous conversation",
-    "Use /offload when your conversation gets long",
+    "Use /tokens to check context usage",
     "Use /mcp to see your loaded tools and servers",
     "Use /remember to save learnings from this conversation",
     "Use /model to switch models mid-conversation",

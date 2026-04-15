@@ -63,11 +63,9 @@ from soothe_cli.tui.widgets.messages import (
 from soothe_cli.tui.widgets.status import StatusBar
 from soothe_cli.tui.widgets.welcome import WelcomeBanner
 
-# SOOTHE: Import backend adapter for daemon connection
-# SOOTHE: Backend adapter imported for future daemon connection integration
-
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
+_DAEMON_START_WAIT_TIMEOUT = 30  # seconds to wait for daemon startup
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -80,13 +78,7 @@ if TYPE_CHECKING:
     from textual.widget import Widget
     from textual.worker import Worker
 
-    # TODO IG-174 Phase 2: Backend execution via daemon WebSocket RPC
-    # All backend execution moved to daemon-side
-    # TODO IG-174 Phase 5: CLI-specific config class complete
     from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
-    from soothe_cli.tui.mcp_tools import MCPServerInfo
-    from soothe_cli.tui.remote_client import RemoteAgent
-    from soothe_cli.tui.server import ServerProcess
     from soothe_cli.tui.skills.load import ExtendedSkillMetadata
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
     from soothe_cli.tui.widgets.approval import ApprovalMenu
@@ -520,23 +512,21 @@ class SootheApp(App):
     def __init__(
         self,
         *,
-        autopilot_mode: bool = False,  # SOOTHE: Autopilot mode flag
         agent: Pregel | None = None,
         assistant_id: str | None = None,
-        backend: CompositeBackend | None = None,
         auto_approve: bool = False,
         cwd: str | Path | None = None,
         thread_id: str | None = None,
         resume_thread: str | None = None,
         initial_prompt: str | None = None,
         initial_skill: str | None = None,
-        mcp_server_info: list[MCPServerInfo] | None = None,
+        mcp_server_info: list[dict[str, Any]] | None = None,
         profile_override: dict[str, Any] | None = None,
-        server_proc: ServerProcess | None = None,
+        server_proc: Any | None = None,
         server_kwargs: dict[str, Any] | None = None,
         mcp_preload_kwargs: dict[str, Any] | None = None,
         model_kwargs: dict[str, Any] | None = None,
-        daemon_config: SootheConfig | None = None,
+        daemon_config: Any | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Deep Agents application.
@@ -545,7 +535,6 @@ class SootheApp(App):
             agent: Pre-configured LangGraph agent, or `None` when server
                 startup is deferred via `server_kwargs`.
             assistant_id: Agent identifier for memory storage
-            backend: Backend for file operations
             auto_approve: Whether to start with auto-approve enabled
             cwd: Current working directory to display
             thread_id: Thread ID for the session.
@@ -565,9 +554,8 @@ class SootheApp(App):
             mcp_server_info: MCP server metadata for the `/mcp` viewer.
             profile_override: Extra profile fields from `--profile-override`,
                 retained so later profile-aware behavior stays consistent with
-                the CLI override, including model selection details,
-                offload budget display, and on-demand `create_model()`
-                calls such as `/offload`.
+                the CLI override, including model selection details and
+                on-demand `create_model()` calls.
             server_proc: LangGraph server process for the interactive session.
             server_kwargs: When provided, server startup is deferred.
 
@@ -583,7 +571,6 @@ class SootheApp(App):
             **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
-        self._autopilot_mode = autopilot_mode  # SOOTHE
 
         self._register_custom_themes()
 
@@ -593,8 +580,6 @@ class SootheApp(App):
         self._agent = agent
 
         self._assistant_id = assistant_id
-
-        self._backend = backend
 
         self._auto_approve = auto_approve
 
@@ -755,25 +740,14 @@ class SootheApp(App):
 
         self._image_tracker = MediaTracker()
 
-    def _remote_agent(self) -> RemoteAgent | None:
-        """Return the agent narrowed to `RemoteAgent`, or `None`.
+    def _remote_agent(self) -> Any:  # noqa: ANN401
+        """Return the agent if it appears to be a remote agent, or `None`.
 
-        Returns `None` when:
-
-        - No agent is configured (`self._agent is None`).
-        - The agent is a local `Pregel` graph (e.g. ACP mode, test harnesses).
-
-        Used to gate features that require a server-backed agent (e.g. model
-        switching via `ConfigurableModelMiddleware`, checkpointer fallback).
-        Checks the agent type rather than server ownership so this works for
-        both CLI-spawned servers and externally managed ones.
-
-        Returns:
-            The `RemoteAgent` instance, or `None` for local agents.
+        Returns `None` when no agent is configured or the agent is a local graph.
         """
-        from soothe_cli.tui.remote_client import RemoteAgent
-
-        return self._agent if isinstance(self._agent, RemoteAgent) else None
+        # RemoteAgent module doesn't exist in this package; always return None.
+        # When the SDK provides a RemoteAgent class, this can be re-implemented.
+        return None
 
     def _runtime_backend_ready(self) -> bool:
         """Return whether the app has a usable execution backend."""
@@ -994,13 +968,6 @@ class SootheApp(App):
             group="startup-thread-prewarm",
         )
 
-        # Optional tool warnings in a thread (shutil.which is sync I/O)
-        self.run_worker(
-            self._check_optional_tools_background,
-            exclusive=True,
-            group="startup-tool-check",
-        )
-
         # Auto-submit initial prompt or skill if provided via -m / --skill.
         # This check must come first because _lc_thread_id and _agent are
         # always set (even for brand-new sessions), so an elif after the
@@ -1034,37 +1001,6 @@ class SootheApp(App):
                 "Session initialization failed. Some features may be unavailable.",
                 severity="error",
                 timeout=10,
-            )
-
-    async def _check_optional_tools_background(self) -> None:
-        """Check for optional tools in a thread and notify if missing."""
-        try:
-            from soothe_cli.tui.main import (
-                check_optional_tools,
-                format_tool_warning_tui,
-            )
-        except ImportError:
-            logger.warning(
-                "Could not import optional tools checker",
-                exc_info=True,
-            )
-            return
-
-        try:
-            missing = await asyncio.to_thread(check_optional_tools)
-        except (OSError, FileNotFoundError):
-            logger.debug("Failed to check for optional tools", exc_info=True)
-            return
-        except Exception:
-            logger.warning("Unexpected error checking optional tools", exc_info=True)
-            return
-
-        for tool in missing:
-            self.notify(
-                format_tool_warning_tui(tool),
-                severity="warning",
-                timeout=15,
-                markup=False,
             )
 
     async def _discover_skills(self) -> None:
@@ -1389,11 +1325,6 @@ class SootheApp(App):
 
         coros: list[Any] = [start_server_and_get_agent(**self._server_kwargs)]  # type: ignore[arg-type]
 
-        if self._mcp_preload_kwargs is not None:
-            from soothe_cli.tui.main import _preload_session_mcp_server_info
-
-            coros.append(_preload_session_mcp_server_info(**self._mcp_preload_kwargs))
-
         try:
             results = await asyncio.gather(*coros, return_exceptions=True)
         except Exception as exc:  # noqa: BLE001  # defensive catch around gather
@@ -1418,21 +1349,11 @@ class SootheApp(App):
         # processed (e.g. user quits during startup).
         self._server_proc = server_proc
 
-        mcp_info = None
-        if len(results) > 1 and not isinstance(results[1], BaseException):
-            mcp_info = results[1]
-        elif len(results) > 1 and isinstance(results[1], BaseException):
-            logger.warning(
-                "MCP metadata preload failed: %s",
-                results[1],
-                exc_info=results[1],
-            )
-
         self.post_message(
             self.ServerReady(
                 agent=agent,
                 server_proc=server_proc,
-                mcp_server_info=mcp_info,
+                mcp_server_info=None,
             )
         )
 
@@ -1613,7 +1534,6 @@ class SootheApp(App):
         # _post_paint_init's inline imports are dict lookups.
         from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE  # noqa: F401
         from soothe_cli.tui.config import settings  # noqa: F401
-        from soothe_cli.tui.hooks import dispatch_hook  # noqa: F401
         from soothe_cli.tui.model_config import ModelSpec  # noqa: F401
         from soothe_cli.tui.textual_adapter import TextualUIAdapter  # noqa: F401
         from soothe_cli.tui.update_check import is_update_check_enabled  # noqa: F401
@@ -2856,7 +2776,7 @@ class SootheApp(App):
         elif cmd == "/help":
             await self._mount_message(UserMessage(command))
             help_body = (
-                "Commands: /quit, /clear, /offload, /editor, /autopilot, /mcp, "
+                "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /theme, "
                 "/tokens, /threads, /trace, "
@@ -2940,9 +2860,6 @@ class SootheApp(App):
                 await self._mount_message(AppMessage(f"Started new thread: {new_thread_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
-        elif cmd in {"/offload", "/compact"}:
-            await self._mount_message(UserMessage(command))
-            await self._handle_offload()
         elif cmd == "/threads":
             await self._show_thread_selector()
         elif cmd == "/trace":
@@ -3302,164 +3219,6 @@ class SootheApp(App):
             logger.debug("Failed to retrieve conversation token count", exc_info=True)
             return None
 
-    def _resolve_offload_budget_str(self) -> str | None:
-        """Resolve the offload retention budget as a human-readable string.
-
-        Instantiates a model and computes summarization defaults, so this is
-        not a trivial accessor.
-
-        Returns:
-            A string like `"20.0K (10% of 200.0K)"` or
-            `"last 6 messages"`, or `None` if the budget cannot be determined.
-        """
-        from soothe_cli.tui.config import create_model, settings
-
-        try:
-            from deepagents.middleware.summarization import (
-                compute_summarization_defaults,
-            )
-
-            model_spec = f"{settings.model_provider}:{settings.model_name}"
-            result = create_model(
-                model_spec,
-                profile_overrides=self._profile_override,
-            )
-            defaults = compute_summarization_defaults(result.model)
-            from soothe_cli.tui.widgets.offload import format_offload_limit
-
-            return format_offload_limit(
-                defaults["keep"],
-                settings.model_context_limit,
-            )
-        except Exception:  # best-effort for /tokens display
-            logger.debug("Failed to compute offload budget string", exc_info=True)
-            return None
-
-    async def _handle_offload(self) -> None:
-        """Offload older messages to free context window space."""
-        from soothe_cli.tui.config import settings
-        from soothe_cli.tui.widgets.offload import (
-            OffloadModelError,
-            OffloadThresholdNotMet,
-            perform_offload,
-        )
-
-        if not self._agent or not self._lc_thread_id:
-            await self._mount_message(
-                AppMessage("Nothing to offload \u2014 start a conversation first")
-            )
-            return
-
-        if self._agent_running:
-            await self._mount_message(AppMessage("Cannot offload while agent is running"))
-            return
-
-        config: RunnableConfig = {"configurable": {"thread_id": self._lc_thread_id}}
-
-        try:
-            state_values = await self._get_thread_state_values(self._lc_thread_id)
-        except Exception as exc:  # noqa: BLE001
-            await self._mount_message(ErrorMessage(f"Failed to read state: {exc}"))
-            return
-
-        if not state_values:
-            await self._mount_message(
-                AppMessage("Nothing to offload \u2014 start a conversation first")
-            )
-            return
-
-        # Prevent concurrent user input while offload modifies state
-        self._agent_running = True
-        try:
-            from soothe_cli.tui.hooks import dispatch_hook
-
-            await dispatch_hook("context.offload", {})
-            # Keep old hook name for backward compatibility
-            await dispatch_hook("context.compact", {})
-            await self._set_spinner("Offloading")
-
-            result = await perform_offload(
-                messages=state_values.get("messages", []),
-                prior_event=state_values.get("_summarization_event"),
-                thread_id=self._lc_thread_id,
-                model_spec=(f"{settings.model_provider}:{settings.model_name}"),
-                profile_overrides=self._profile_override,
-                context_limit=settings.model_context_limit,
-                total_context_tokens=self._context_tokens,
-                backend=self._backend,
-            )
-
-            if isinstance(result, OffloadThresholdNotMet):
-                conv_str = format_token_count(result.conversation_tokens)
-                if (
-                    result.total_context_tokens > 0
-                    and result.context_limit is not None
-                    and result.total_context_tokens > result.context_limit
-                ):
-                    total_str = format_token_count(
-                        result.total_context_tokens,
-                    )
-                    await self._mount_message(
-                        AppMessage(
-                            f"Offload threshold not met \u2014 conversation "
-                            f"is only ~{conv_str} tokens.\n\n"
-                            f"The remaining context "
-                            f"({total_str} tokens) is system overhead "
-                            f"that can't be offloaded.\n\n"
-                            f"Use /tokens for a full breakdown."
-                        )
-                    )
-                else:
-                    await self._mount_message(
-                        AppMessage(
-                            f"Offload threshold not met \u2014 conversation "
-                            f"(~{conv_str} tokens) is within the "
-                            f"retention budget "
-                            f"({result.budget_str}).\n\n"
-                            f"Use /tokens for a full breakdown."
-                        )
-                    )
-                return
-
-            # OffloadResult — success
-            if result.offload_warning:
-                await self._mount_message(ErrorMessage(result.offload_warning))
-
-            if remote := self._remote_agent():
-                await remote.aensure_thread(config)  # ty: ignore[invalid-argument-type]
-
-            await self._agent.aupdate_state(config, {"_summarization_event": result.new_event})
-
-            before = format_token_count(result.tokens_before)
-            after = format_token_count(result.tokens_after)
-            await self._mount_message(
-                AppMessage(
-                    f"Offloaded {result.messages_offloaded} older messages, "
-                    f"freeing up context window space.\n"
-                    f"Context: {before} \u2192 {after} tokens "
-                    f"({result.pct_decrease}% decrease), "
-                    f"{result.messages_kept} messages kept."
-                )
-            )
-
-            self._on_tokens_update(result.tokens_after)
-            from soothe_cli.tui.textual_adapter import _persist_context_tokens
-
-            await _persist_context_tokens(self._agent, config, result.tokens_after)
-
-        except OffloadModelError as exc:
-            logger.warning("Offload model creation failed: %s", exc, exc_info=True)
-            await self._mount_message(ErrorMessage(str(exc)))
-        except Exception as exc:  # surface offload errors to user
-            logger.exception("Offload failed")
-            await self._mount_message(ErrorMessage(f"Offload failed: {exc}"))
-        finally:
-            self._agent_running = False
-            try:
-                await self._set_spinner(None)
-            except Exception:  # best-effort spinner cleanup
-                logger.exception("Failed to dismiss spinner after offload")
-
     async def _handle_user_message(self, message: str) -> None:
         """Handle a user message to send to the agent.
 
@@ -3555,7 +3314,6 @@ class SootheApp(App):
                 assistant_id=self._assistant_id,
                 session_state=self._session_state,
                 adapter=self._ui_adapter,
-                backend=self._backend,
                 image_tracker=self._image_tracker,
                 sandbox_type=self._sandbox_type,
                 message_kwargs=message_kwargs,
@@ -3764,7 +3522,7 @@ class SootheApp(App):
         In server mode the LangGraph dev server can report an empty thread state
         after a restart even when checkpoints exist on disk. When that happens,
         read the latest checkpoint directly so resumed threads can still load
-        history and offload correctly.
+        history and display correctly.
 
         Args:
             thread_id: Thread ID to fetch from checkpoint storage.
@@ -4470,20 +4228,6 @@ class SootheApp(App):
             self._shell_worker.cancel()
         if self._agent_running and self._agent_worker:
             self._agent_worker.cancel()
-
-        # Dispatch synchronously — the event loop is about to be torn down by
-        # super().exit(), so an async task would never complete.
-        from soothe_cli.tui.hooks import _dispatch_hook_sync, _load_hooks
-
-        hooks = _load_hooks()
-        if hooks:
-            payload = json.dumps(
-                {
-                    "event": "session.end",
-                    "thread_id": getattr(self, "_lc_thread_id", ""),
-                }
-            ).encode()
-            _dispatch_hook_sync("session.end", payload, hooks)
 
         _write_iterm_escape(_ITERM_CURSOR_GUIDE_ON)
         super().exit(result=result, return_code=return_code, message=message)
@@ -5316,16 +5060,15 @@ async def run_textual_app(
     *,
     agent: Any = None,  # noqa: ANN401
     assistant_id: str | None = None,
-    backend: CompositeBackend | None = None,
     auto_approve: bool = False,
     cwd: str | Path | None = None,
     thread_id: str | None = None,
     resume_thread: str | None = None,
     initial_prompt: str | None = None,
     initial_skill: str | None = None,
-    mcp_server_info: list[MCPServerInfo] | None = None,
+    mcp_server_info: list[dict[str, Any]] | None = None,
     profile_override: dict[str, Any] | None = None,
-    server_proc: ServerProcess | None = None,
+    server_proc: Any | None = None,
     server_kwargs: dict[str, Any] | None = None,
     mcp_preload_kwargs: dict[str, Any] | None = None,
     model_kwargs: dict[str, Any] | None = None,
@@ -5340,7 +5083,6 @@ async def run_textual_app(
     Args:
         agent: Pre-configured LangGraph agent (optional).
         assistant_id: Agent identifier for memory storage.
-        backend: Backend for file operations.
         auto_approve: Whether to start with auto-approve enabled.
         cwd: Current working directory to display.
         thread_id: Thread ID for the session.
@@ -5357,9 +5099,8 @@ async def run_textual_app(
         mcp_server_info: MCP server metadata for the `/mcp` viewer.
         profile_override: Extra profile fields from `--profile-override`,
             retained so later profile-aware behavior stays consistent with
-            the CLI override, including model selection details, offload
-            budget display, and on-demand `create_model()` calls such
-            as `/offload`.
+            the CLI override, including model selection details and
+            on-demand `create_model()` calls.
         server_proc: LangGraph server process for the interactive session.
         server_kwargs: Kwargs for deferred `start_server_and_get_agent` call.
         mcp_preload_kwargs: Kwargs for concurrent MCP metadata preload.
@@ -5375,7 +5116,6 @@ async def run_textual_app(
     app = SootheApp(
         agent=agent,
         assistant_id=assistant_id,
-        backend=backend,
         auto_approve=auto_approve,
         cwd=cwd,
         thread_id=thread_id,
@@ -5412,9 +5152,7 @@ async def run_textual_app(
 # SOOTHE: Alias for Soothe compatibility
 def run_textual_tui(
     config: Any,  # noqa: ANN401
-    autopilot_mode: bool = False,  # SOOTHE: autopilot mode flag
     thread_id: str | None = None,
-    config_path: str | None = None,
     initial_prompt: str | None = None,
 ) -> AppResult:
     """Launch Soothe TUI (alias for run_textual_app).
@@ -5423,9 +5161,7 @@ def run_textual_tui(
 
     Args:
         config: Soothe configuration (unused, kept for compatibility)
-        autopilot_mode: Launch autopilot screen instead of chat
         thread_id: Thread ID for the session
-        config_path: Config file path (unused)
         initial_prompt: Auto-submit prompt on launch
     """
     import asyncio

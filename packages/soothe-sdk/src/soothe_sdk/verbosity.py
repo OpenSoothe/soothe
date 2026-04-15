@@ -72,8 +72,8 @@ def should_show(tier: VerbosityTier, verbosity: VerbosityLevel) -> bool:
 def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> VerbosityTier:
     """Classify an event directly to a VerbosityTier.
 
-    For soothe.* events, this is a heuristic classification since the event registry
-    is daemon-side. For non-soothe events (from subagents like deepagents), uses heuristics.
+    Uses the same domain-based defaults as the daemon's EventRegistry,
+    matching the ``_DOMAIN_DEFAULT_TIER`` mapping from ``event_catalog.py``.
 
     Args:
         event_type: The event type string (e.g., "soothe.cognition.agent_loop.started").
@@ -85,38 +85,40 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     Examples:
         >>> classify_event_to_tier("soothe.error.general")
         <VerbosityTier.QUIET: 0>
-        >>> classify_event_to_tier("thinking.heartbeat", namespace=())
-        <VerbosityTier.DEBUG: 3>
+        >>> classify_event_to_tier("soothe.output.chitchat.response")
+        <VerbosityTier.QUIET: 0>
+        >>> classify_event_to_tier("soothe.cognition.plan.created")
+        <VerbosityTier.NORMAL: 1>
     """
-    # Basic heuristics for SDK-side classification
-    # Full registry is available on daemon side
+    if event_type.startswith("soothe."):
+        segments = event_type.split(".")
+        domain = segments[1] if len(segments) >= 2 else "unknown"
+        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.DEBUG)
 
-    # Error events are always visible
-    if "error" in event_type:
-        return VerbosityTier.QUIET
+    # Non-soothe events (from deepagents subagents)
+    if namespace or ".subagent." in event_type:
+        return VerbosityTier.DETAILED
 
     # Thinking and heartbeats are debug-level
     if "thinking" in event_type or "heartbeat" in event_type:
         return VerbosityTier.DEBUG
 
-    # Tool and subagent events are detailed
-    if "tool" in event_type or "subagent" in event_type:
-        return VerbosityTier.DETAILED
-
-    # Protocol events are detailed
-    if "protocol" in event_type:
-        return VerbosityTier.DETAILED
-
-    # Default to NORMAL for soothe.* events
-    if event_type.startswith("soothe."):
-        return VerbosityTier.NORMAL
-
-    # Default for subagent namespace events
-    if namespace:
-        return VerbosityTier.DETAILED
-
     # Fallback to DEBUG
     return VerbosityTier.DEBUG
+
+
+# Domain-based default verbosity tiers, matching daemon's EventRegistry.
+# Kept in sync with soothe.core.event_catalog._DOMAIN_DEFAULT_TIER.
+_DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
+    "lifecycle": VerbosityTier.DETAILED,
+    "protocol": VerbosityTier.DETAILED,
+    "cognition": VerbosityTier.NORMAL,
+    "tool": VerbosityTier.INTERNAL,  # Tool display via LangChain on_tool_call
+    "subagent": VerbosityTier.DETAILED,
+    "output": VerbosityTier.QUIET,
+    "error": VerbosityTier.QUIET,
+    "agentic": VerbosityTier.NORMAL,
+}
 
 
 # Backward compatibility alias
