@@ -71,10 +71,10 @@ PLAN_STEP_STARTED = "soothe.protocol.plan.step_started"
 PLAN_STEP_COMPLETED = "soothe.protocol.plan.step_completed"
 
 # Subagent events
-SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.subagent.research.internal_llm"
+SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.running"
 
 # Thread lifecycle events (exposed for DEBUG/DETAILED level)
-THREAD_CREATED = "soothe.lifecycle.thread.created"
+THREAD_CREATED = "soothe.lifecycle.thread.started"
 THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
 THREAD_COMPLETED = "soothe.lifecycle.thread.completed"
 THREAD_ERROR = "soothe.lifecycle.thread.error"
@@ -94,8 +94,8 @@ MESSAGE_RECEIVED = "soothe.protocol.message.received"
 MESSAGE_SENT = "soothe.protocol.message.sent"
 
 # Output events (QUIET level - always visible)
-CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
-FINAL_REPORT = "soothe.output.autonomous.final_report"
+CHITCHAT_RESPONSE = "soothe.output.chitchat.responding"
+FINAL_REPORT = "soothe.output.autonomous.final_report.reporting"
 
 # Agent loop configuration constants
 DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10

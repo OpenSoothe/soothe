@@ -62,8 +62,9 @@ RFCs are organized by numeric prefix:
 | RFC | Title | Status | Kind | Dependencies |
 |-----|-------|--------|------|--------------|
 | [RFC-400](./RFC-400-daemon-communication.md) | Daemon Communication Protocol | Implemented | Architecture Design | RFC-000, RFC-001, RFC-500 |
-| [RFC-401](./RFC-401-event-processing.md) | Event Processing & Filtering | Implemented | Impl Interface | RFC-400, RFC-500 |
+| [RFC-401](./RFC-401-event-processing.md) | Event Processing & Filtering | Implemented | Impl Interface | RFC-400, RFC-403, RFC-500 |
 | [RFC-402](./RFC-402-unified-thread-management.md) | Unified Thread Management | Draft | Architecture Design | RFC-000, RFC-001, RFC-101, RFC-201, RFC-400 |
+| [RFC-403](./RFC-403-unified-event-naming.md) | Unified Event Naming Semantics | Draft | Impl Interface | RFC-401 |
 
 ### 5xx — CLI/TUI (User Interface)
 
@@ -135,6 +136,7 @@ RFC-000 (System Conceptual Design)
     │   └── RFC-301 (Protocol Registry)
     ├── RFC-400 (Daemon Communication)
     │   ├── RFC-401 (Event Processing)
+    │   │   └── RFC-403 (Unified Event Naming)
     │   └── RFC-402 (Unified Thread Management)
     ├── RFC-500 (CLI/TUI Architecture)
     │   └── RFC-501 (Display & Verbosity)
@@ -152,10 +154,10 @@ RFC-000 (System Conceptual Design)
 | Core Agent (1xx) | 3 | 2 | 5 |
 | Cognition Loop (2xx) | 2 | 4 | 6 |
 | Protocols (3xx) | 2 | 0 | 2 |
-| Daemon (4xx) | 2 | 1 | 3 |
+| Daemon (4xx) | 2 | 2 | 4 |
 | CLI/TUI (5xx) | 1 | 1 | 2 |
 | Plugin System (6xx) | 4 | 4 | 8 |
-| **Total** | **16** | **14** | **30** |
+| **Total** | **16** | **15** | **31** |
 
 ---
 

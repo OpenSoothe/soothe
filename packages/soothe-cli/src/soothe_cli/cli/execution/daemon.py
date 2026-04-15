@@ -113,7 +113,7 @@ async def run_headless_via_daemon(
                 ev_data = event.get("data")
                 if (
                     isinstance(ev_data, dict)
-                    and ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat"
+                    and ev_data.get("type") == "soothe.system.daemon.heartbeat"
                 ):
                     last_heartbeat = asyncio.get_event_loop().time()
                     continue  # Don't process heartbeat as regular event
@@ -140,7 +140,7 @@ async def run_headless_via_daemon(
                             nd = nxt.get("data")
                             if (
                                 isinstance(nd, dict)
-                                and nd.get("type") == "soothe.lifecycle.daemon.heartbeat"
+                                and nd.get("type") == "soothe.system.daemon.heartbeat"
                             ):
                                 last_heartbeat = loop_clock.time()
                                 continue

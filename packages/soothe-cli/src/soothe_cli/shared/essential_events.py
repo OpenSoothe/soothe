@@ -7,13 +7,13 @@ from typing import Final
 GOAL_START_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {
         "soothe.cognition.agent_loop.started",
-        "soothe.cognition.plan.created",
+        "soothe.cognition.plan.creating",
     }
 )
 
 STEP_START_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {
-        "soothe.cognition.plan.step_started",
+        "soothe.cognition.plan.step.started",
         "soothe.cognition.agent_loop.step.started",
     }
 )
@@ -25,7 +25,7 @@ STEP_COMPLETE_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     }
 )
 
-LOOP_REASON_EVENT_TYPE: Final[str] = "soothe.cognition.agent_loop.reason"
+LOOP_REASON_EVENT_TYPE: Final[str] = "soothe.cognition.agent_loop.reasoning"
 
 ESSENTIAL_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     set(GOAL_START_EVENT_TYPES)

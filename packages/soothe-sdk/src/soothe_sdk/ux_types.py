@@ -23,7 +23,7 @@ ESSENTIAL_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         "soothe.output.report",
         "soothe.output.progress",
         # Error events (always show)
-        "soothe.error.general",
+        "soothe.error.general.failed",
         "soothe.error.tool",
         "soothe.error.subagent",
         # Tool/subagent milestones

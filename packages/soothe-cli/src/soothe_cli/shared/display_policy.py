@@ -69,7 +69,7 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
 # Event types that should NEVER be shown (internal implementation details)
 INTERNAL_EVENT_TYPES = frozenset(
     {
-        "soothe.subagent.research.internal_llm",
+        "soothe.capability.research.internal_llm.running",
     }
 )
 
@@ -78,7 +78,7 @@ SKIP_EVENT_TYPES = frozenset(
     {
         # Plan events handled by renderer's plan update mechanism
         "soothe.cognition.plan.batch_started",
-        "soothe.cognition.plan.step_started",
+        "soothe.cognition.plan.step.started",
         "soothe.cognition.plan.step_completed",
         "soothe.cognition.plan.step_failed",
         # Policy events not rendered (RFC-0019)
@@ -89,9 +89,9 @@ SKIP_EVENT_TYPES = frozenset(
 
 PLAN_EVENT_TYPES = frozenset(
     {
-        "soothe.cognition.plan.created",
+        "soothe.cognition.plan.creating",
         "soothe.cognition.plan.updated",
-        "soothe.cognition.plan.step_started",
+        "soothe.cognition.plan.step.started",
         "soothe.cognition.plan.step_completed",
         "soothe.cognition.plan.step_failed",
     }

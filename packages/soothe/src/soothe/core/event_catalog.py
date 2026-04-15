@@ -70,45 +70,45 @@ def custom_event(data: dict[str, Any]) -> StreamChunk:
 # ---------------------------------------------------------------------------
 
 # -- Lifecycle events --------------------------------------------------------
-THREAD_CREATED = "soothe.lifecycle.thread.created"
+THREAD_CREATED = "soothe.lifecycle.thread.started"
 THREAD_STARTED = "soothe.lifecycle.thread.started"
 THREAD_RESUMED = "soothe.lifecycle.thread.resumed"
-THREAD_SAVED = "soothe.lifecycle.thread.saved"
+THREAD_SAVED = "soothe.lifecycle.thread.saving"
 THREAD_ENDED = "soothe.lifecycle.thread.ended"
 ITERATION_STARTED = "soothe.lifecycle.iteration.started"
 ITERATION_COMPLETED = "soothe.lifecycle.iteration.completed"
-CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saved"
+CHECKPOINT_SAVED = "soothe.lifecycle.checkpoint.saving"
 RECOVERY_RESUMED = "soothe.lifecycle.recovery.resumed"
-DAEMON_HEARTBEAT = "soothe.lifecycle.daemon.heartbeat"
+DAEMON_HEARTBEAT = "soothe.system.daemon.heartbeat"
 
 # -- Protocol events ---------------------------------------------------------
-MEMORY_RECALLED = "soothe.protocol.memory.recalled"
-MEMORY_STORED = "soothe.protocol.memory.stored"
-PLAN_CREATED = "soothe.cognition.plan.created"
-PLAN_STEP_STARTED = "soothe.cognition.plan.step_started"
+MEMORY_RECALLED = "soothe.protocol.memory.recalling"
+MEMORY_STORED = "soothe.protocol.memory.storing"
+PLAN_CREATED = "soothe.cognition.plan.creating"
+PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
 PLAN_STEP_COMPLETED = "soothe.cognition.plan.step_completed"
 PLAN_STEP_FAILED = "soothe.cognition.plan.step_failed"
 PLAN_BATCH_STARTED = "soothe.cognition.plan.batch_started"
-PLAN_REFLECTED = "soothe.cognition.plan.reflected"
+PLAN_REFLECTED = "soothe.cognition.plan.reflecting"
 PLAN_DAG_SNAPSHOT = "soothe.cognition.plan.dag_snapshot"
-POLICY_CHECKED = "soothe.protocol.policy.checked"
+POLICY_CHECKED = "soothe.protocol.policy.checking"
 POLICY_DENIED = "soothe.protocol.policy.denied"
-GOAL_CREATED = "soothe.cognition.goal.created"
+GOAL_CREATED = "soothe.cognition.goal.creating"
 GOAL_COMPLETED = "soothe.cognition.goal.completed"
 GOAL_FAILED = "soothe.cognition.goal.failed"
 GOAL_BATCH_STARTED = "soothe.cognition.goal.batch_started"
 GOAL_REPORT = "soothe.cognition.goal.report"
-GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives_applied"
-GOAL_DEFERRED = "soothe.cognition.goal.deferred"
+GOAL_DIRECTIVES_APPLIED = "soothe.cognition.goal.directives_applying"
+GOAL_DEFERRED = "soothe.cognition.goal.deferring"
 
 # -- Output events -----------------------------------------------------------
 CHITCHAT_STARTED = "soothe.output.chitchat.started"
-CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
+CHITCHAT_RESPONSE = "soothe.output.chitchat.responding"
 AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
-FINAL_REPORT = "soothe.output.autonomous.final_report"
+FINAL_REPORT = "soothe.output.autonomous.final_report.reporting"
 
 # -- Error events ------------------------------------------------------------
-ERROR = "soothe.error.general"
+ERROR = "soothe.error.general.failed"
 
 # -- Plugin events -----------------------------------------------------------
 PLUGIN_LOADED = "soothe.plugin.loaded"
@@ -126,7 +126,7 @@ PLUGIN_UNLOADED = "soothe.plugin.unloaded"
 
 
 class ThreadCreatedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.created"] = "soothe.lifecycle.thread.created"
+    type: Literal["soothe.lifecycle.thread.started"] = "soothe.lifecycle.thread.started"
     thread_id: str
 
 
@@ -142,7 +142,7 @@ class ThreadResumedEvent(LifecycleEvent):
 
 
 class ThreadSavedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.thread.saved"] = "soothe.lifecycle.thread.saved"
+    type: Literal["soothe.lifecycle.thread.saving"] = "soothe.lifecycle.thread.saving"
     thread_id: str
 
 
@@ -168,7 +168,7 @@ class IterationCompletedEvent(LifecycleEvent):
 
 
 class CheckpointSavedEvent(LifecycleEvent):
-    type: Literal["soothe.lifecycle.checkpoint.saved"] = "soothe.lifecycle.checkpoint.saved"
+    type: Literal["soothe.lifecycle.checkpoint.saving"] = "soothe.lifecycle.checkpoint.saving"
     thread_id: str
     completed_steps: int = 0
     completed_goals: int = 0
@@ -190,7 +190,7 @@ class DaemonHeartbeatEvent(LifecycleEvent):
     query start timeout (default 20 seconds).
     """
 
-    type: Literal["soothe.lifecycle.daemon.heartbeat"] = "soothe.lifecycle.daemon.heartbeat"
+    type: Literal["soothe.system.daemon.heartbeat"] = "soothe.system.daemon.heartbeat"
     thread_id: str = ""
     timestamp: str = ""  # ISO format timestamp
     state: str = "running"  # "running" | "idle"
@@ -249,19 +249,19 @@ class AgenticStepCompletedEvent(LifecycleEvent):
 
 
 class MemoryRecalledEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.memory.recalled"] = "soothe.protocol.memory.recalled"
+    type: Literal["soothe.protocol.memory.recalling"] = "soothe.protocol.memory.recalling"
     count: int = 0
     query: str = ""
 
 
 class MemoryStoredEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.memory.stored"] = "soothe.protocol.memory.stored"
+    type: Literal["soothe.protocol.memory.storing"] = "soothe.protocol.memory.storing"
     id: str = ""
     source_thread: str = ""
 
 
 class PlanCreatedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.created"] = "soothe.cognition.plan.created"
+    type: Literal["soothe.cognition.plan.creating"] = "soothe.cognition.plan.creating"
     plan_id: str = ""
     goal: str = ""
     steps: list[dict[str, Any]] = []  # noqa: RUF012
@@ -270,7 +270,7 @@ class PlanCreatedEvent(ProtocolEvent):
 
 
 class PlanStepStartedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.step_started"] = "soothe.cognition.plan.step_started"
+    type: Literal["soothe.cognition.plan.step.started"] = "soothe.cognition.plan.step.started"
     step_id: str = ""
     description: str = ""
     depends_on: list[str] = []  # noqa: RUF012
@@ -303,7 +303,7 @@ class PlanBatchStartedEvent(ProtocolEvent):
 
 
 class PlanReflectedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.plan.reflected"] = "soothe.cognition.plan.reflected"
+    type: Literal["soothe.cognition.plan.reflecting"] = "soothe.cognition.plan.reflecting"
     should_revise: bool = False
     assessment: str = ""
 
@@ -314,7 +314,7 @@ class PlanDagSnapshotEvent(ProtocolEvent):
 
 
 class PolicyCheckedEvent(ProtocolEvent):
-    type: Literal["soothe.protocol.policy.checked"] = "soothe.protocol.policy.checked"
+    type: Literal["soothe.protocol.policy.checking"] = "soothe.protocol.policy.checking"
     action: str = ""
     verdict: str = ""
     profile: str | None = None
@@ -328,7 +328,7 @@ class PolicyDeniedEvent(ProtocolEvent):
 
 
 class GoalCreatedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.goal.created"] = "soothe.cognition.goal.created"
+    type: Literal["soothe.cognition.goal.creating"] = "soothe.cognition.goal.creating"
     goal_id: str = ""
     description: str = ""
     priority: int | str = ""
@@ -362,8 +362,8 @@ class GoalReportEvent(ProtocolEvent):
 
 
 class GoalDirectivesAppliedEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.goal.directives_applied"] = (
-        "soothe.cognition.goal.directives_applied"
+    type: Literal["soothe.cognition.goal.directives_applying"] = (
+        "soothe.cognition.goal.directives_applying"
     )
     goal_id: str = ""
     directives_count: int = 0
@@ -371,7 +371,7 @@ class GoalDirectivesAppliedEvent(ProtocolEvent):
 
 
 class GoalDeferredEvent(ProtocolEvent):
-    type: Literal["soothe.cognition.goal.deferred"] = "soothe.cognition.goal.deferred"
+    type: Literal["soothe.cognition.goal.deferring"] = "soothe.cognition.goal.deferring"
     goal_id: str = ""
     reason: str = ""
     plan_preserved: bool = False
@@ -408,12 +408,12 @@ class ChitchatStartedEvent(OutputEvent):
 
 
 class ChitchatResponseEvent(OutputEvent):
-    type: Literal["soothe.output.chitchat.response"] = "soothe.output.chitchat.response"
+    type: Literal["soothe.output.chitchat.responding"] = "soothe.output.chitchat.responding"
     content: str = ""
 
 
 class FinalReportEvent(OutputEvent):
-    type: Literal["soothe.output.autonomous.final_report"] = "soothe.output.autonomous.final_report"
+    type: Literal["soothe.output.autonomous.final_report.reporting.reporting"] = "soothe.output.autonomous.final_report.reporting.reporting"
     goal_id: str = ""
     description: str = ""
     status: str = ""
@@ -513,7 +513,7 @@ def _reg(
     """Internal helper for registering core events.
 
     Args:
-        type_string: Event type string (e.g., "soothe.lifecycle.thread.created").
+        type_string: Event type string (e.g., "soothe.lifecycle.thread.started").
         model: Event model class.
         verbosity: Optional VerbosityTier override.
         summary_template: Optional template for event summaries.
@@ -709,74 +709,74 @@ _reg(CHITCHAT_RESPONSE, ChitchatResponseEvent, verbosity=VerbosityTier.QUIET)
 _reg(FINAL_REPORT, FinalReportEvent, verbosity=VerbosityTier.QUIET)
 
 # -- Autopilot (RFC-204) -------------------------------------------------
-AUTOPILLOT_STATUS_CHANGED = "soothe.autopilot.status_changed"
-AUTOPILLOT_GOAL_CREATED = "soothe.autopilot.goal_created"
-AUTOPILLOT_GOAL_PROGRESS = "soothe.autopilot.goal_progress"
-AUTOPILLOT_GOAL_COMPLETED = "soothe.autopilot.goal_completed"
-AUTOPILLOT_DREAMING_ENTERED = "soothe.autopilot.dreaming_entered"
-AUTOPILLOT_DREAMING_EXITED = "soothe.autopilot.dreaming_exited"
-AUTOPILLOT_GOAL_VALIDATED = "soothe.autopilot.goal_validated"
-AUTOPILLOT_GOAL_SUSPENDED = "soothe.autopilot.goal_suspended"
-AUTOPILLOT_SEND_BACK = "soothe.autopilot.send_back"
-AUTOPILLOT_RELATIONSHIP_DETECTED = "soothe.autopilot.relationship_detected"
-AUTOPILLOT_CHECKPOINT_SAVED = "soothe.autopilot.checkpoint.saved"
-AUTOPILLOT_GOAL_BLOCKED = "soothe.autopilot.goal_blocked"
+AUTOPILLOT_STATUS_CHANGED = "soothe.system.autopilot.status_changed"
+AUTOPILLOT_GOAL_CREATED = "soothe.system.autopilot.goal.creating"
+AUTOPILLOT_GOAL_PROGRESS = "soothe.system.autopilot.goal.reporting"
+AUTOPILLOT_GOAL_COMPLETED = "soothe.system.autopilot.goal.completed"
+AUTOPILLOT_DREAMING_ENTERED = "soothe.system.autopilot.dreaming.started"
+AUTOPILLOT_DREAMING_EXITED = "soothe.system.autopilot.dreaming.completed"
+AUTOPILLOT_GOAL_VALIDATED = "soothe.system.autopilot.goal.validating"
+AUTOPILLOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspending"
+AUTOPILLOT_SEND_BACK = "soothe.system.autopilot.feedback.sending"
+AUTOPILLOT_RELATIONSHIP_DETECTED = "soothe.system.autopilot.relationship.detecting"
+AUTOPILLOT_CHECKPOINT_SAVED = "soothe.system.autopilot.checkpoint.saving"
+AUTOPILLOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocking"
 
 
 class _AutopilotStatusChanged(SootheEvent):
-    type: str = "soothe.autopilot.status_changed"
+    type: str = "soothe.system.autopilot.status_changed"
     state: str
 
 
 class _AutopilotGoalCreated(SootheEvent):
-    type: str = "soothe.autopilot.goal_created"
+    type: str = "soothe.system.autopilot.goal.creating"
     goal_id: str
     description: str = ""
 
 
 class _AutopilotGoalProgress(SootheEvent):
-    type: str = "soothe.autopilot.goal_progress"
+    type: str = "soothe.system.autopilot.goal.reporting"
     goal_id: str
     status: str = ""
 
 
 class _AutopilotGoalCompleted(SootheEvent):
-    type: str = "soothe.autopilot.goal_completed"
+    type: str = "soothe.system.autopilot.goal.completed"
     goal_id: str
 
 
 class _AutopilotDreamingEntered(SootheEvent):
-    type: str = "soothe.autopilot.dreaming_entered"
+    type: str = "soothe.system.autopilot.dreaming.started"
     timestamp: str = ""
 
 
 class _AutopilotDreamingExited(SootheEvent):
-    type: str = "soothe.autopilot.dreaming_exited"
+    type: str = "soothe.system.autopilot.dreaming.completed"
     timestamp: str = ""
     trigger: str = ""
 
 
 class _AutopilotGoalValidated(SootheEvent):
-    type: str = "soothe.autopilot.goal_validated"
+    type: str = "soothe.system.autopilot.goal.validating"
     goal_id: str
     confidence: float = 1.0
 
 
 class _AutopilotGoalSuspended(SootheEvent):
-    type: str = "soothe.autopilot.goal_suspended"
+    type: str = "soothe.system.autopilot.goal.suspending"
     goal_id: str
     reason: str = ""
 
 
 class _AutopilotSendBack(SootheEvent):
-    type: str = "soothe.autopilot.send_back"
+    type: str = "soothe.system.autopilot.feedback.sending"
     goal_id: str
     remaining_budget: int = 0
     feedback: str = ""
 
 
 class _AutopilotRelationshipDetected(SootheEvent):
-    type: str = "soothe.autopilot.relationship_detected"
+    type: str = "soothe.system.autopilot.relationship.detecting"
     from_goal: str
     to_goal: str
     relationship_type: str
@@ -784,13 +784,13 @@ class _AutopilotRelationshipDetected(SootheEvent):
 
 
 class _AutopilotCheckpointSaved(SootheEvent):
-    type: str = "soothe.autopilot.checkpoint.saved"
+    type: str = "soothe.system.autopilot.checkpoint.saving"
     thread_id: str
     trigger: str = ""
 
 
 class _AutopilotGoalBlocked(SootheEvent):
-    type: str = "soothe.autopilot.goal_blocked"
+    type: str = "soothe.system.autopilot.goal.blocking"
     goal_id: str
     reason: str = ""
 

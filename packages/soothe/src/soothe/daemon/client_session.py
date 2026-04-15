@@ -343,7 +343,7 @@ class ClientSessionManager:
                         ev_data = event.get("data")
                         if isinstance(ev_data, dict):
                             is_heartbeat = (
-                                ev_data.get("type") == "soothe.lifecycle.daemon.heartbeat"
+                                ev_data.get("type") == "soothe.system.daemon.heartbeat"
                             )
 
                     if not is_heartbeat:

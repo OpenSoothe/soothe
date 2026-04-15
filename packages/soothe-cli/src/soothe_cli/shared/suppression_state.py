@@ -112,7 +112,7 @@ class SuppressionState:
                 self.agentic_final_stdout_emitted = False
 
         # Backup suppression: suppress after iteration 1+ if loop.started was filtered
-        if event_type == "soothe.cognition.agent_loop.reason":
+        if event_type == "soothe.cognition.agent_loop.reasoning":
             try:
                 iteration = int(data.get("iteration", 0))
             except (TypeError, ValueError):

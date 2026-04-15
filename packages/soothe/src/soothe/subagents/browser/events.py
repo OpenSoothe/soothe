@@ -15,7 +15,7 @@ from soothe_sdk.events import SubagentEvent
 class BrowserDispatchedEvent(SubagentEvent):
     """Browser subagent dispatched event."""
 
-    type: Literal["soothe.subagent.browser.dispatched"] = "soothe.subagent.browser.dispatched"
+    type: Literal["soothe.capability.browser.started"] = "soothe.capability.browser.started"
     task: str = ""
 
     model_config = ConfigDict(extra="allow")
@@ -24,7 +24,7 @@ class BrowserDispatchedEvent(SubagentEvent):
 class BrowserCompletedEvent(SubagentEvent):
     """Browser subagent completed event."""
 
-    type: Literal["soothe.subagent.browser.completed"] = "soothe.subagent.browser.completed"
+    type: Literal["soothe.capability.browser.completed"] = "soothe.capability.browser.completed"
     duration_ms: int = 0
     success: bool = True
 
@@ -34,7 +34,7 @@ class BrowserCompletedEvent(SubagentEvent):
 class BrowserStepEvent(SubagentEvent):
     """Browser automation step event."""
 
-    type: Literal["soothe.subagent.browser.step"] = "soothe.subagent.browser.step"
+    type: Literal["soothe.capability.browser.step.running"] = "soothe.capability.browser.step.running"
     step: int | str = ""
     url: str = ""
     action: str = ""
@@ -47,7 +47,7 @@ class BrowserStepEvent(SubagentEvent):
 class BrowserCdpEvent(SubagentEvent):
     """Browser CDP connection event."""
 
-    type: Literal["soothe.subagent.browser.cdp"] = "soothe.subagent.browser.cdp"
+    type: Literal["soothe.capability.browser.cdp.connecting"] = "soothe.capability.browser.cdp.connecting"
     status: str = ""
     cdp_url: str | None = None
 
@@ -84,10 +84,10 @@ register_event(
 )
 
 # Event type constants for convenient imports
-SUBAGENT_BROWSER_DISPATCHED = "soothe.subagent.browser.dispatched"
-SUBAGENT_BROWSER_COMPLETED = "soothe.subagent.browser.completed"
-SUBAGENT_BROWSER_STEP = "soothe.subagent.browser.step"
-SUBAGENT_BROWSER_CDP = "soothe.subagent.browser.cdp"
+SUBAGENT_BROWSER_DISPATCHED = "soothe.capability.browser.started"
+SUBAGENT_BROWSER_COMPLETED = "soothe.capability.browser.completed"
+SUBAGENT_BROWSER_STEP = "soothe.capability.browser.step.running"
+SUBAGENT_BROWSER_CDP = "soothe.capability.browser.cdp.connecting"
 
 __all__ = [
     "SUBAGENT_BROWSER_CDP",

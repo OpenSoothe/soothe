@@ -4,7 +4,7 @@
 **Authors**: Soothe Team
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-400 (Daemon Communication), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
+**Depends on**: RFC-400 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
 
@@ -22,13 +22,14 @@ This RFC defines the interface contracts for Soothe's event processing system, i
 
 This RFC defines:
 
-* Event type naming hierarchy (`soothe.<domain>.<component>.<action>`)
 * Event model hierarchy and base classes
 * Event registry interface for O(1) dispatch
 * RendererProtocol for mode-agnostic display
 * Daemon-side filtering protocol with verbosity integration
 * EventProcessor unified processing architecture
 * Integration boundary with PresentationEngine
+
+**Note**: Event naming conventions and domain taxonomy are defined in RFC-403 (Unified Event Naming).
 
 ### 2.2 Non-Goals
 
@@ -66,31 +67,16 @@ This RFC does **not** define:
 
 ## 4. Naming Conventions
 
-### 4.1 Event Type Hierarchy
+Event naming semantics, including grammar rules, domain taxonomy, and approved vocabularies, are defined in **RFC-403 (Unified Event Naming)**.
 
-```
-soothe.<domain>.<component>.<action>
-  │       │         │          │
-  │       │         │          └── past-participle (created, started, completed, failed)
-  │       │         └── protocol/subagent/tool name
-  │       └── lifecycle, protocol, tool, subagent, output, error
-  └── fixed prefix
-```
+This RFC references RFC-403 for:
+* Event type hierarchy format: `soothe.<domain>.<component>.<action>`
+* Domain definitions and scope
+* Present progressive tense grammar rules
+* Plugin extension namespace conventions
+* Approved verb and state noun lists
 
-### 4.2 Domain Definitions
-
-| Domain | Purpose | Default Tier |
-|--------|---------|--------------|
-| `lifecycle` | Thread/session/iteration/checkpoint | DETAILED |
-| `protocol` | Context/memory/plan/policy/goal | DETAILED |
-| `tool` | Main agent tool execution | DETAILED |
-| `subagent` | Browser/research/claude/skillify/weaver | DETAILED (promoted: NORMAL) |
-| `output` | Chitchat/final reports | QUIET |
-| `error` | Error events | QUIET (always shown) |
-
-### 4.3 Action Suffixes
-
-`created`, `started`, `resumed`, `saved`, `completed`, `failed`, `projected`, `recalled`, `ingested`, `stored`, `checked`, `denied`, `reflected`
+For complete naming guidelines, migration rules, and validation criteria, see RFC-403.
 
 ---
 

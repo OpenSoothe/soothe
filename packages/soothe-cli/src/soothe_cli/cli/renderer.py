@@ -341,7 +341,7 @@ class CliRenderer:
 
         # Use pipeline for consistent formatting
         event = {
-            "type": "soothe.cognition.plan.created",
+            "type": "soothe.cognition.plan.creating",
             "goal": plan.goal,
             "steps": [{"id": s.id, "description": s.description} for s in plan.steps],
         }
@@ -364,7 +364,7 @@ class CliRenderer:
 
         # Use pipeline for consistent formatting
         event = {
-            "type": "soothe.cognition.plan.step_started",
+            "type": "soothe.cognition.plan.step.started",
             "step_id": step_id,
             "description": description,
         }

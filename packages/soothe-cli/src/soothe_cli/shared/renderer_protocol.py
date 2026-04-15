@@ -107,7 +107,7 @@ class RendererProtocol(Protocol):
         Catch-all for events not covered by specific callbacks.
 
         Args:
-            event_type: Full event type string (e.g., "soothe.subagent.browser.step").
+            event_type: Full event type string (e.g., "soothe.capability.browser.step.running").
             data: Event payload.
             namespace: Subagent namespace tuple (empty for main agent).
         """
