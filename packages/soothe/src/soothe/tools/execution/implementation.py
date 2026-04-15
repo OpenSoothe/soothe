@@ -20,7 +20,6 @@ from typing import Any, Literal
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
-from soothe.utils import expand_path
 
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 from soothe.tools._internal.python_session_manager import get_session_manager
@@ -30,6 +29,7 @@ from soothe.tools._internal.shell import (
     _shell_health_states,
     _shell_instances,
 )
+from soothe.utils import expand_path
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)

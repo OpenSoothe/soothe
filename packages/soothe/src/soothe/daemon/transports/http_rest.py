@@ -480,7 +480,6 @@ class HttpRestTransport(TransportServer):
 
             # Fallback: parse goal files directly
             from soothe.config import SOOTHE_HOME
-
             from soothe.utils.goal_parsing import parse_autopilot_goals
 
             autopilot_dir = SOOTHE_HOME / "autopilot"

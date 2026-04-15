@@ -22,12 +22,12 @@ from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
-from soothe.utils import expand_path
 
 from soothe.tools._internal.file_edit import (
     _display_path,
     _normalize_workspace_relative_input,
 )
+from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
 

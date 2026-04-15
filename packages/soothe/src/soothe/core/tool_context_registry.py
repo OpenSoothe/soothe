@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-
     from soothe.plugin.registry import PluginRegistry
 
 logger = logging.getLogger(__name__)

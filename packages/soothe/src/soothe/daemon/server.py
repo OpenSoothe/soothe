@@ -13,11 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME, SootheConfig
-from soothe.core import resolve_daemon_workspace
-from soothe.logging import ThreadLogger
 from soothe_sdk.protocol import encode
 
+from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.core import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
@@ -31,6 +30,7 @@ from soothe.daemon.singleton import (
 )
 from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.daemon.transport_manager import TransportManager
+from soothe.logging import ThreadLogger
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)

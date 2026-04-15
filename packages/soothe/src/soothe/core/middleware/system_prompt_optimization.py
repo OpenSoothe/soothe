@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from soothe.config import SootheConfig
-
     from soothe.core.tool_context_registry import ToolContextRegistry
     from soothe.core.tool_trigger_registry import ToolTriggerRegistry
     from soothe.core.unified_classifier import UnifiedClassification

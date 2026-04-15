@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.config import SootheConfig
-
 from soothe.cognition.agent_loop.planning_utils import (
     _default_agent_decision,
     _extract_balanced_json_object,
@@ -18,6 +16,7 @@ from soothe.cognition.agent_loop.planning_utils import (
     reflect_heuristic,
 )
 from soothe.cognition.agent_loop.schemas import LoopState
+from soothe.config import SootheConfig
 from soothe.protocols.planner import (
     GoalContext,
     Plan,

@@ -31,7 +31,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-
 from soothe.core.workspace_resolution import resolve_workspace_for_stream
 from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
@@ -57,7 +56,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.cognition import GoalEngine
-
     from soothe.core.agent import CoreAgent
     from soothe.protocols.memory import MemoryProtocol
 

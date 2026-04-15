@@ -7,8 +7,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.utils import expand_path
-
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,
@@ -17,6 +15,7 @@ from soothe.protocols.policy import (
     PolicyDecision,
     PolicyProfile,
 )
+from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
 

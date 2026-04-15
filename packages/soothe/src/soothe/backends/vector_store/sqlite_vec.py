@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME
-
 from soothe.protocols.vector_store import VectorRecord
 
 logger = logging.getLogger(__name__)

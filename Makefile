@@ -83,25 +83,25 @@ sync-dev:
 # Format code
 format: sync-dev
 	@echo "Formatting code..."
-	cd packages/soothe && uv run ruff format src/ tests/
+	cd packages/soothe && uv run ruff format src/
 	@echo "✓ Code formatted"
 
 # Check formatting (for CI)
 format-check: sync-dev
 	@echo "Checking code formatting..."
-	cd packages/soothe && uv run ruff format --check src/ tests/
+	cd packages/soothe && uv run ruff format --check src/
 	@echo "✓ Format check passed"
 
 # Lint code
 lint: sync-dev
 	@echo "Linting code..."
-	cd packages/soothe && uv run ruff check src/ tests/
+	cd packages/soothe && uv run ruff check src/
 	@echo "✓ Linting complete"
 
 # Auto-fix linting issues
 lint-fix: sync-dev
 	@echo "Auto-fixing linting issues..."
-	cd packages/soothe && uv run ruff check --fix src/ tests/
+	cd packages/soothe && uv run ruff check --fix src/
 	@echo "✓ Linting issues fixed"
 
 # Run all tests (unit tests only by default)

@@ -14,7 +14,6 @@ import contextlib  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 from soothe.config import SOOTHE_HOME, SootheConfig  # noqa: E402
-
 from soothe.daemon.server import SootheDaemon  # noqa: E402
 
 

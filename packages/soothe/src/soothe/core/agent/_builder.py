@@ -11,7 +11,6 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.skills import get_built_in_skills_paths
 
 # Import and apply deepagents patches
 from soothe.core.agent._patch import *  # noqa: F403
@@ -23,6 +22,7 @@ from soothe.core.resolver import (
     resolve_subagents,
     resolve_tools,
 )
+from soothe.skills import get_built_in_skills_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

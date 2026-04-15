@@ -800,7 +800,6 @@ class PhasesMixin:
             state: Mutable RunnerState to attach context to.
         """
         from soothe.core import FrameworkFilesystem
-
         from soothe.core.workspace import get_git_status
 
         # Prefer ContextVar (WorkspaceContextMiddleware); else RunnerState (IG-116 / RFC-104).

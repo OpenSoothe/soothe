@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.runnables import RunnableConfig
     from langgraph.graph.state import CompiledStateGraph
-    from soothe.config import SootheConfig
 
+    from soothe.config import SootheConfig
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol

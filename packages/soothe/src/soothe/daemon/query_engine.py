@@ -13,11 +13,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
-from soothe.logging import ThreadLogger
-
 from soothe.core.event_catalog import ERROR
 from soothe.core.workspace_resolution import resolve_workspace_for_stream
+from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
+from soothe.logging import ThreadLogger
 
 logger = logging.getLogger(__name__)
 

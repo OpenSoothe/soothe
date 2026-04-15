@@ -17,9 +17,9 @@ from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from soothe.logging import GlobalInputHistory, ThreadLogger
 
     from soothe.core.runner import SootheRunner
+    from soothe.logging import GlobalInputHistory, ThreadLogger
     from soothe.protocols.planner import Plan
 
 # ---------------------------------------------------------------------------

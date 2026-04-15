@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from soothe.config import SOOTHE_HOME
-
 from soothe.logging.context import get_thread_id
 
 if TYPE_CHECKING:
