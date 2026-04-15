@@ -79,7 +79,7 @@ def run_impl(
         sys.exit(0)
     except Exception as e:
         logger.exception("CLI run error")
-        from soothe.utils.error_format import format_cli_error
+        from soothe_sdk import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)

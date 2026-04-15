@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.utils.text_preview import log_preview
+from soothe_sdk import log_preview
 
 _logger = logging.getLogger("soothe.ux.tui.trace")
 
