@@ -10,7 +10,7 @@ Add a `soothe checkhealth` CLI command that validates configuration and checks b
 
 ## Background
 
-Currently, Soothe has health check scripts in `skills/soothe-checkhealth/scripts/` but no CLI command. Users must run Python scripts directly, which is not discoverable and requires knowledge of the scripts' location.
+This implementation guide documents the planned health check CLI command. Note: The reference to legacy scripts in `skills/soothe-checkhealth/scripts/` is historical - those scripts have been removed.
 
 ## Design
 
@@ -85,7 +85,7 @@ src/soothe/core/health/
 - `src/soothe/core/health/checks/external_apis_check.py`
 
 **Tasks**:
-- Port logic from `skills/soothe-checkhealth/scripts/`
+- Implement health check logic from scratch (legacy scripts removed)
 - Add config parameter to checks
 - Wire into HealthChecker methods
 

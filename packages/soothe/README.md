@@ -68,3 +68,11 @@ subagents: [...]
 
 - **soothe-cli**: Client package (CLI/TUI)
 - **soothe-sdk**: Shared SDK (types, client utilities)
+
+## Testing
+
+Run daemon package unit tests from this package directory:
+
+```bash
+uv run pytest tests/unit/ -v
+```

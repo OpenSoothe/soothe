@@ -342,9 +342,7 @@ class ClientSessionManager:
                     if isinstance(event, dict) and event.get("type") == "event":
                         ev_data = event.get("data")
                         if isinstance(ev_data, dict):
-                            is_heartbeat = (
-                                ev_data.get("type") == "soothe.system.daemon.heartbeat"
-                            )
+                            is_heartbeat = ev_data.get("type") == "soothe.system.daemon.heartbeat"
 
                     if not is_heartbeat:
                         # Import should_show from RFC-0024's verbosity_tier

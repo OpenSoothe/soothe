@@ -58,7 +58,7 @@ The CLI package (soothe-cli) has **40 files** importing from the daemon runtime 
 ### 🟡 MEDIUM (7 violations) - Protocol and skills violations
 
 #### Skills Imports (3 violations)
-**Files:** skills/invocation.py, skills/load.py
+**Files:** tui/skills/invocation.py, tui/skills/load.py
 
 **Imports:**
 - `soothe.skills.get_built_in_skills_paths` - Skills discovery
@@ -169,7 +169,7 @@ Use daemon RPC instead of local skill loading:
 - Replace skills imports with WebSocket RPC calls
 - Use existing `skills_list` and `invoke_skill` RPC from RFC-400
 
-**Files to update:** skills/invocation.py, skills/load.py
+**Files to update:** tui/skills/invocation.py, tui/skills/load.py
 
 ### Phase 5: Create CLI-specific Config (Week 5)
 **Priority: HIGH**

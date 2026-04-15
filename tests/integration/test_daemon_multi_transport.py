@@ -17,6 +17,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.daemon import DaemonClient, SootheDaemon
+from soothe_sdk.client import WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
@@ -189,6 +190,41 @@ async def test_multi_transport_thread_operations(multi_transport_daemon: dict) -
         assert final_get["thread"]["thread_id"] == thread_id
 
     finally:
+        await unix_client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_multi_transport_cross_transport_thread_sync(multi_transport_daemon: dict) -> None:
+    """Thread created on WebSocket is visible and operable on Unix socket."""
+    unix_path = multi_transport_daemon["unix_path"]
+    ws_port = multi_transport_daemon["ws_port"]
+
+    ws_client = WebSocketClient(url=f"ws://127.0.0.1:{ws_port}")
+    unix_client = DaemonClient(sock=Path(unix_path))
+    await ws_client.connect()
+    await unix_client.connect()
+
+    try:
+        created = await ws_client.request_response(
+            {
+                "type": "thread_create",
+                "metadata": {"channel": "websocket", "tags": ["cross-transport"]},
+            },
+            response_type="thread_created",
+        )
+        thread_id = created["thread_id"]
+
+        await unix_client.send_thread_get(thread_id)
+        fetched = await await_event_type(unix_client.read_event, "thread_get_response", timeout=3.0)
+        assert fetched["thread"]["thread_id"] == thread_id
+
+        await unix_client.send_resume_thread(thread_id)
+        resumed = await await_event_type(unix_client.read_event, "status", timeout=3.0)
+        assert resumed["thread_id"] == thread_id
+    finally:
+        if ws_client.is_connected:
+            await ws_client.close()
         await unix_client.close()
 
 

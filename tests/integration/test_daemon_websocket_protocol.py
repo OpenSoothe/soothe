@@ -7,6 +7,9 @@ import contextlib
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
+import websockets.asyncio.client
+import websockets.exceptions
 
 from soothe.config import SootheConfig
 from soothe.config.daemon_config import WebSocketConfig
@@ -17,7 +20,6 @@ from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,
     await_status_state,
-    force_isolated_home,
     get_base_config,
 )
 
@@ -53,10 +55,9 @@ def _build_daemon_config(tmp_path: Path, port: int) -> SootheConfig:
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def websocket_daemon(tmp_path: Path):
     """Start a daemon exposing only the WebSocket transport."""
-    force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
     config = _build_daemon_config(tmp_path, port)
     daemon = SootheDaemon(config)
@@ -254,6 +255,156 @@ async def test_websocket_protocol_thread_state_round_trip(websocket_daemon: tupl
         assert state_response["thread_id"] == thread_id
         assert state_response["values"]["_context_tokens"] == 123
     finally:
+        if client.is_connected:
+            await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_websocket_daemon_rpc_endpoints(websocket_daemon: tuple[SootheDaemon, int]) -> None:
+    """Daemon RPC endpoints respond over WebSocket transport."""
+    daemon, port = websocket_daemon
+    _ = daemon
+    client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
+    await client.connect()
+
+    try:
+        status = await client.request_response(
+            {"type": "daemon_status"},
+            response_type="daemon_status_response",
+        )
+        assert status["running"] is True
+        assert status["port_live"] is True
+        assert isinstance(status["daemon_pid"], int)
+
+        providers = await client.request_response(
+            {"type": "config_get", "section": "providers"},
+            response_type="config_get_response",
+        )
+        assert "providers" in providers
+        assert isinstance(providers["providers"], dict)
+    finally:
+        if client.is_connected:
+            await client.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_websocket_daemon_shutdown_rpc_stops_server(tmp_path: Path) -> None:
+    """daemon_shutdown RPC acknowledges then stops daemon."""
+    port = alloc_ephemeral_port()
+    config = _build_daemon_config(tmp_path, port)
+    daemon = SootheDaemon(config)
+    await daemon.start()
+    await asyncio.sleep(0.2)
+
+    client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
+    await client.connect()
+    try:
+        ack = await client.request_response(
+            {"type": "daemon_shutdown"},
+            response_type="shutdown_ack",
+        )
+        assert ack["status"] == "acknowledged"
+
+        for _ in range(20):
+            if not daemon._running:
+                break
+            await asyncio.sleep(0.1)
+        assert daemon._running is False
+    finally:
+        if client.is_connected:
+            await client.close()
+        if daemon._running:
+            await daemon.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_websocket_cors_rejects_disallowed_origin(tmp_path: Path) -> None:
+    """Disallowed Origin header is rejected at WebSocket handshake stage."""
+    port = alloc_ephemeral_port()
+    config = WebSocketConfig(
+        enabled=True,
+        host="127.0.0.1",
+        port=port,
+        cors_origins=["https://allowed.example"],
+        tls_enabled=False,
+    )
+    transport = WebSocketTransport(config)
+    await transport.start(lambda _client_id, _msg: None)
+    await asyncio.sleep(0.2)
+
+    try:
+        async with websockets.asyncio.client.connect(
+            f"ws://127.0.0.1:{port}",
+            origin="https://evil.example",
+        ) as denied:
+            with pytest.raises(websockets.exceptions.ConnectionClosed):
+                await denied.recv()
+    finally:
+        await transport.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_websocket_cors_accepts_allowed_origin(tmp_path: Path) -> None:
+    """Allowed Origin header is accepted."""
+    port = alloc_ephemeral_port()
+    config = WebSocketConfig(
+        enabled=True,
+        host="127.0.0.1",
+        port=port,
+        cors_origins=["https://allowed.example"],
+        tls_enabled=False,
+    )
+    transport = WebSocketTransport(config)
+    await transport.start(lambda _client_id, _msg: None)
+    await asyncio.sleep(0.2)
+
+    try:
+        async with websockets.asyncio.client.connect(
+            f"ws://127.0.0.1:{port}",
+            origin="https://allowed.example",
+        ):
+            assert transport.client_count == 1
+    finally:
+        await transport.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_websocket_heartbeat_emits_while_query_running(
+    websocket_daemon: tuple[SootheDaemon, int],
+) -> None:
+    """Daemon emits heartbeat events over WebSocket while query is marked running."""
+    daemon, port = websocket_daemon
+    client = WebSocketClient(url=f"ws://127.0.0.1:{port}")
+    await client.connect()
+
+    try:
+        created = await client.request_response(
+            {"type": "thread_create"},
+            response_type="thread_created",
+        )
+        thread_id = created["thread_id"]
+        daemon._runner.set_current_thread_id(thread_id)
+        daemon._query_running = True
+        await client.subscribe_thread(thread_id)
+        await client.wait_for_subscription_confirmed(thread_id, timeout=5.0)
+
+        async with asyncio.timeout(8.0):
+            while True:
+                event = await client.read_event()
+                if event is None or event.get("type") != "event":
+                    continue
+                data = event.get("data")
+                if isinstance(data, dict) and data.get("type") == "soothe.system.daemon.heartbeat":
+                    assert event["thread_id"] == thread_id
+                    assert data["state"] == "running"
+                    break
+    finally:
+        daemon._query_running = False
         if client.is_connected:
             await client.close()
 

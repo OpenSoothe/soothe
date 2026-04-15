@@ -413,7 +413,9 @@ class ChitchatResponseEvent(OutputEvent):
 
 
 class FinalReportEvent(OutputEvent):
-    type: Literal["soothe.output.autonomous.final_report.reporting.reporting"] = "soothe.output.autonomous.final_report.reporting.reporting"
+    type: Literal["soothe.output.autonomous.final_report.reporting.reporting"] = (
+        "soothe.output.autonomous.final_report.reporting.reporting"
+    )
     goal_id: str = ""
     description: str = ""
     status: str = ""

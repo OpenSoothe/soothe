@@ -36,10 +36,6 @@ router:
 
 debug: false
 
-# Dev UI preferences (optional)
-# ui:
-#   theme: langchain  # Default dark theme for dev
-
 # Dev update preferences (optional)
 # update:
 #   auto_update: false  # Disable auto-update in dev
@@ -56,6 +52,18 @@ performance:
 llm_tracing:
   enabled: true
   log_preview_length: 1000
+
+# Dev daemon configuration - enable HTTP REST for BM-003 benchmark
+daemon:
+  transports:
+    websocket:
+      enabled: true
+      host: "127.0.0.1"
+      port: 8765
+    http_rest:
+      enabled: true         # Enable HTTP REST for BM-003 benchmark
+      host: "127.0.0.1"
+      port: 8766
 
 # Dev logging - verbose for debugging
 logging:

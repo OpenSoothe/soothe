@@ -12,7 +12,9 @@ from soothe.core.event_catalog import VerbosityTier, register_event
 class LoopAgentReasonEvent(ProtocolEvent):
     """User-visible progress after the Reason phase (ReAct loop)."""
 
-    type: Literal["soothe.cognition.agent_loop.reasoninging"] = "soothe.cognition.agent_loop.reasoninging"
+    type: Literal["soothe.cognition.agent_loop.reasoninging"] = (
+        "soothe.cognition.agent_loop.reasoninging"
+    )
     status: str
     progress: float
     confidence: float

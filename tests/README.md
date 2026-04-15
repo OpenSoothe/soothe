@@ -1,57 +1,37 @@
 # Soothe Test Suite
 
-This directory contains comprehensive unit tests and integration tests for the Soothe multi-agent framework.
+This directory contains integration tests and cross-package test docs for the Soothe workspace.
 
 ## Test Structure
 
-```
-tests/
-├── unit/                    # Unit tests (fast, no external dependencies)
-│   ├── test_config.py
-│   ├── test_context.py
-│   ├── test_durability.py
-│   ├── test_memory_memu.py
-│   ├── test_persistence.py
-│   ├── test_planning.py
-│   ├── test_policy.py
-│   ├── test_subagents.py
-│   ├── test_tools.py
-│   ├── test_vector_store.py
-│   ├── test_event_bus.py
-│   ├── test_client_session.py
-│   ├── middleware/          # Middleware unit tests
-│   │   └── test_system_prompt_optimization.py
-│   └── ... (55 more test files)
-└── integration/             # Integration tests (require external services)
-    ├── conftest.py
-    ├── test_daemon_*.py     # Daemon protocol tests
-    ├── test_rfc0013_e2e.py  # RFC-400 comprehensive E2E tests
-    ├── test_vector_store_integration.py
-    ├── test_performance.py
-    ├── test_python_session_integration.py
-    └── ... (21 more test files)
+```text
+packages/soothe/tests/unit/   # Daemon package unit tests (fast, isolated)
+tests/integration/            # Workspace integration tests (daemon + tools + transports)
 ```
 
 ## Running Tests
 
-### Unit Tests
+### Unit Tests (daemon package)
 
 Run all unit tests:
 
 ```bash
-pytest tests/unit/
+cd packages/soothe
+uv run pytest tests/unit/
 ```
 
 Run a specific test file:
 
 ```bash
-pytest tests/unit/test_persistence.py
+cd packages/soothe
+uv run pytest tests/unit/backends/persistence/test_persistence.py
 ```
 
 Run with coverage:
 
 ```bash
-pytest tests/unit/ --cov=soothe --cov-report=html
+cd packages/soothe
+uv run pytest tests/unit/ --cov=soothe --cov-report=html
 ```
 
 ### Integration Tests

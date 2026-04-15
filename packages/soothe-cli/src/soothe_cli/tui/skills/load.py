@@ -75,8 +75,19 @@ def load_skill_content(
     return resolved_md.read_text(encoding="utf-8")
 
 
+def strip_skill_frontmatter(content: str) -> str:
+    """Remove optional YAML frontmatter from SKILL markdown content."""
+    if not content.startswith("---\n"):
+        return content
+    end = content.find("\n---\n", 4)
+    if end == -1:
+        return content
+    return content[end + 5 :]
+
+
 # Re-export for callers that import from this module
 __all__ = [
     "ExtendedSkillMetadata",
     "load_skill_content",
+    "strip_skill_frontmatter",
 ]

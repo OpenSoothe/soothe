@@ -200,18 +200,14 @@ User → SubagentPlanner → Agent with Scout + Planner
 
 ## Files Modified
 
-### Created
-- `src/soothe/skills/scout-then-plan/SKILL.md`
-- `src/soothe/skills/scout-then-plan/references/WORKFLOW_PATTERNS.md`
-- `src/soothe/skills/scout-then-plan/references/OUTPUT_TEMPLATES.md`
-
 ### Modified
 - `src/soothe/cognition/planning/subagent.py` - Rewrote to provide both scout and planner subagents
 
 ### No Changes Required
-- `src/soothe/skills/__init__.py` - Automatic discovery already works
 - `src/soothe/subagents/scout.py` - Existing implementation sufficient
 - `src/soothe/subagents/planner.py` - Existing implementation sufficient
+
+**Note**: This IG originally referenced creating skill files under `src/soothe/skills/scout-then-plan/`, but that folder structure does not exist in the current monorepo. The skill concept remains documented here for reference.
 - Core agent framework - SkillsMiddleware already handles skill loading
 
 ## Conclusion

@@ -850,7 +850,12 @@ class MessageRouter:
 
         # Check daemon running state
         running = d._running
-        port_live = d._websocket_server is not None
+        port_live = False
+        if d._transport_manager is not None:
+            for transport in d._transport_manager.get_transport_info():
+                if transport.get("type") == "websocket":
+                    port_live = bool(transport.get("running"))
+                    break
 
         # Count active threads
         active_threads = len(d._active_threads) if hasattr(d, "_active_threads") else 0

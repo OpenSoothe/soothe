@@ -455,7 +455,6 @@ def revoke_key(key_id: str):
   - `src/soothe/cli/commands/server_cmd.py`
   - `src/soothe/cli/commands/thread_cmd.py`
   - `tests/unit_tests/test_cli_daemon.py`
-  - `.agents/skills/checkhealth/scripts/check_daemon.py`
   - All other references (grep for `soothe.daemon`)
 
 **Task 0.4: Verification** (1h)

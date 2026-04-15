@@ -88,3 +88,14 @@ async def discover_skills_and_roots_async(
             allowed.append(rp)
 
     return skills, allowed
+
+
+async def discover_skills_and_roots(
+    assistant_id: str,
+    daemon_config: CLIConfig | None = None,
+) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
+    """Backward-compatible alias for async skills discovery."""
+    return await discover_skills_and_roots_async(
+        assistant_id=assistant_id,
+        daemon_config=daemon_config,
+    )

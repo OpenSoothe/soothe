@@ -38,14 +38,12 @@ Added proper sdist configuration with explicit include/exclude directives:
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe"]
 artifacts = [
-    "src/soothe/skills/**/*.md",
     "src/soothe/config/*.yml"
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/soothe/",
-    "src/soothe/skills/**/*.md",
     "src/soothe/config/*.yml"
 ]
 exclude = [

@@ -30,6 +30,8 @@ BM-NNN-brief-title.md
 | ID | Title | Purpose |
 |----|-------|---------|
 | [BM-001](BM-001-workspace-injection.md) | Workspace Injection | Verify workspace context propagation |
+| [BM-002](BM-002-subagent-selection.md) | Subagent Selection | Verify slash-command routing and passthrough behavior |
+| [BM-003](BM-003-ai-driven-daemon-endpoint.md) | AI-Driven Daemon Endpoint | Verify HTTP REST daemon endpoint correctness and latency |
 
 ## Running Benchmarks
 
@@ -47,6 +49,9 @@ soothe --no-tui -p "<query from test case>"
 ```python
 # Use the verification script template from each benchmark
 python verify_benchmark.py BM-001
+
+# Run BM-003 daemon endpoint benchmark
+uv run python benchmarks/run_bm003_daemon_endpoint.py --base-url http://127.0.0.1:8766
 ```
 
 ## Adding New Benchmarks
