@@ -1,18 +1,40 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
-# This Makefile manages two packages:
-# 1. soothe          - Main orchestration framework
-# 2. soothe-sdk      - Plugin SDK for third-party developers
+# This Makefile manages four packages:
+# 1. soothe-sdk        - Shared SDK (WebSocket client, protocol, types)
+# 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
+# 3. soothe            - Daemon server (main package)
+# 4. soothe-community  - Community plugins (optional)
 
 .PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help \
         sdk-sync sdk-format sdk-lint sdk-test sdk-build sdk-publish sdk-publish-test \
+        cli-sync cli-format cli-lint cli-test cli-build cli-publish cli-publish-test \
+        community-sync community-format community-lint community-test community-build community-publish community-publish-test \
         all-sync all-format all-lint all-test all-build all-publish all-clean
 
 # Default target
 help:
 	@echo "Soothe Multi-Package Monorepo"
 	@echo ""
-	@echo "Main Package (soothe):"
+	@echo "SDK Package (soothe-sdk):"
+	@echo "  make sdk-sync    - Sync SDK dependencies"
+	@echo "  make sdk-format  - Format SDK code"
+	@echo "  make sdk-lint    - Lint SDK code"
+	@echo "  make sdk-test    - Run SDK tests"
+	@echo "  make sdk-build   - Build SDK package"
+	@echo "  make sdk-publish - Publish SDK package to PyPI"
+	@echo "  make sdk-publish-test - Publish SDK package to TestPyPI"
+	@echo ""
+	@echo "CLI Package (soothe-cli):"
+	@echo "  make cli-sync    - Sync CLI dependencies"
+	@echo "  make cli-format  - Format CLI code"
+	@echo "  make cli-lint    - Lint CLI code"
+	@echo "  make cli-test    - Run CLI tests"
+	@echo "  make cli-build   - Build CLI package"
+	@echo "  make cli-publish - Publish CLI package to PyPI"
+	@echo "  make cli-publish-test - Publish CLI package to TestPyPI"
+	@echo ""
+	@echo "Daemon Package (soothe):"
 	@echo "  make sync       - Sync dependencies with uv"
 	@echo "  make sync-dev   - Sync dev dependencies"
 	@echo "  make format     - Format code with ruff"
@@ -28,14 +50,14 @@ help:
 	@echo "  make publish-test - Publish package to TestPyPI"
 	@echo "  make clean      - Clean build artifacts"
 	@echo ""
-	@echo "SDK Package (soothe-sdk):"
-	@echo "  make sdk-sync    - Sync SDK dependencies"
-	@echo "  make sdk-format  - Format SDK code"
-	@echo "  make sdk-lint    - Lint SDK code"
-	@echo "  make sdk-test    - Run SDK tests"
-	@echo "  make sdk-build   - Build SDK package"
-	@echo "  make sdk-publish - Publish SDK package to PyPI"
-	@echo "  make sdk-publish-test - Publish SDK package to TestPyPI"
+	@echo "Community Package (soothe-community):"
+	@echo "  make community-sync    - Sync community dependencies"
+	@echo "  make community-format  - Format community code"
+	@echo "  make community-lint    - Lint community code"
+	@echo "  make community-test    - Run community tests"
+	@echo "  make community-build   - Build community package"
+	@echo "  make community-publish - Publish community package to PyPI"
+	@echo "  make community-publish-test - Publish community package to TestPyPI"
 	@echo ""
 	@echo "Multi-Package Targets:"
 	@echo "  make all-sync    - Sync all packages"
@@ -137,63 +159,141 @@ clean:
 
 sdk-sync:
 	@echo "Syncing SDK dependencies..."
-	cd sdk && uv sync --all-extras
+	cd packages/soothe-sdk && uv sync --all-extras
 	@echo "✓ SDK dependencies synced"
 
 sdk-format:
 	@echo "Formatting SDK code..."
-	cd sdk && uv run ruff format src/ tests/
+	cd packages/soothe-sdk && uv run ruff format src/ tests/
 	@echo "✓ SDK code formatted"
 
 sdk-lint:
 	@echo "Linting SDK code..."
-	cd sdk && uv run ruff check src/ tests/
+	cd packages/soothe-sdk && uv run ruff check src/ tests/
 	@echo "✓ SDK linting complete"
 
 sdk-test:
 	@echo "Running SDK tests..."
-	cd sdk && uv run pytest tests/ -v
+	cd packages/soothe-sdk && uv run pytest tests/ -v
 	@echo "✓ SDK tests complete"
 
 sdk-build:
 	@echo "Building SDK package..."
-	cd sdk && uv build
+	cd packages/soothe-sdk && uv build
 	@echo "✓ SDK package built"
 
 sdk-publish:
 	@echo "Publishing SDK package to PyPI..."
-	cd sdk && uv publish
+	cd packages/soothe-sdk && uv publish
 	@echo "✓ SDK package published to PyPI"
 
 sdk-publish-test:
 	@echo "Publishing SDK package to TestPyPI..."
-	cd sdk && uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe-sdk && uv publish --index-url https://test.pypi.org/simple/
 	@echo "✓ SDK package published to TestPyPI"
+
+# ============================================================================
+# CLI Package Targets (soothe-cli)
+# ============================================================================
+
+cli-sync:
+	@echo "Syncing CLI dependencies..."
+	cd packages/soothe-cli && uv sync --all-extras
+	@echo "✓ CLI dependencies synced"
+
+cli-format:
+	@echo "Formatting CLI code..."
+	cd packages/soothe-cli && uv run ruff format src/ tests/
+	@echo "✓ CLI code formatted"
+
+cli-lint:
+	@echo "Linting CLI code..."
+	cd packages/soothe-cli && uv run ruff check src/ tests/
+	@echo "✓ CLI linting complete"
+
+cli-test:
+	@echo "Running CLI tests..."
+	cd packages/soothe-cli && uv run pytest tests/ -v
+	@echo "✓ CLI tests complete"
+
+cli-build:
+	@echo "Building CLI package..."
+	cd packages/soothe-cli && uv build
+	@echo "✓ CLI package built"
+
+cli-publish:
+	@echo "Publishing CLI package to PyPI..."
+	cd packages/soothe-cli && uv publish
+	@echo "✓ CLI package published to PyPI"
+
+cli-publish-test:
+	@echo "Publishing CLI package to TestPyPI..."
+	cd packages/soothe-cli && uv publish --index-url https://test.pypi.org/simple/
+	@echo "✓ CLI package published to TestPyPI"
+
+# ============================================================================
+# Community Package Targets (soothe-community)
+# ============================================================================
+
+community-sync:
+	@echo "Syncing community dependencies..."
+	cd packages/soothe-community && uv sync --all-extras
+	@echo "✓ Community dependencies synced"
+
+community-format:
+	@echo "Formatting community code..."
+	cd packages/soothe-community && uv run ruff format src/ tests/
+	@echo "✓ Community code formatted"
+
+community-lint:
+	@echo "Linting community code..."
+	cd packages/soothe-community && uv run ruff check src/ tests/
+	@echo "✓ Community linting complete"
+
+community-test:
+	@echo "Running community tests..."
+	cd packages/soothe-community && uv run pytest tests/ -v
+	@echo "✓ Community tests complete"
+
+community-build:
+	@echo "Building community package..."
+	cd packages/soothe-community && uv build
+	@echo "✓ Community package built"
+
+community-publish:
+	@echo "Publishing community package to PyPI..."
+	cd packages/soothe-community && uv publish
+	@echo "✓ Community package published to PyPI"
+
+community-publish-test:
+	@echo "Publishing community package to TestPyPI..."
+	cd packages/soothe-community && uv publish --index-url https://test.pypi.org/simple/
+	@echo "✓ Community package published to TestPyPI"
 
 # ============================================================================
 # Multi-Package Targets (all packages)
 # ============================================================================
 
-all-sync: sync sdk-sync
+all-sync: sync sdk-sync cli-sync community-sync
 	@echo "✓ All packages synced"
 
-all-format: format sdk-format
+all-format: format sdk-format cli-format community-format
 	@echo "✓ All packages formatted"
 
-all-lint: lint sdk-lint
+all-lint: lint sdk-lint cli-lint community-lint
 	@echo "✓ All packages linted"
 
-all-test: test-unit sdk-test
+all-test: test-unit sdk-test cli-test community-test
 	@echo "✓ All packages tested"
 
-all-build: build sdk-build
+all-build: build sdk-build cli-build community-build
 	@echo "✓ All packages built"
 
-all-publish: publish sdk-publish
+all-publish: publish sdk-publish cli-publish community-publish
 	@echo "✓ All packages published"
 
 all-clean: clean
 	@echo "Cleaning all package artifacts..."
-	rm -rf sdk/dist/ sdk/*.egg-info
-	find sdk -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	rm -rf packages/*/dist/ packages/*/*.egg-info
+	find packages -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ All packages cleaned"

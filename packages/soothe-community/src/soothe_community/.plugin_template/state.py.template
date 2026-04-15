@@ -1,0 +1,48 @@
+"""State definitions for your subagent.
+
+Define the state that flows through your agent's graph.
+"""
+
+from typing import Annotated, Any, Optional
+
+from langgraph.graph import add_messages
+from pydantic import BaseModel, Field
+
+
+class YourConfig(BaseModel):
+    """Configuration for your plugin.
+
+    Attributes:
+        option1: Configuration option 1.
+        option2: Configuration option 2.
+        max_items: Maximum number of items to process.
+    """
+
+    option1: str = "default_value"
+    option2: int = 10
+    max_items: int = 100
+
+
+class YourState(BaseModel):
+    """State for your subagent.
+
+    This state flows through the agent graph and is updated by nodes.
+
+    Attributes:
+        messages: Conversation messages (for LLM interactions).
+        input_data: Input data to process.
+        results: Processing results.
+        errors: Any errors encountered.
+        config: Plugin configuration.
+    """
+
+    # Messages for LLM interactions
+    messages: Annotated[list[Any], add_messages] = Field(default_factory=list)
+
+    # Plugin-specific state
+    input_data: Optional[Any] = None
+    results: list[Any] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+    # Configuration
+    config: YourConfig = Field(default_factory=YourConfig)

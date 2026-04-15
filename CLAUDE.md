@@ -21,7 +21,7 @@
 - Example: This document guides all code changes
 
 ### 2. MUST Keep Config Files Synchronized
-**When updating `src/soothe/config/config.yml` (template)**, you MUST also update `config.dev.yml` in the project root (dev defaults):
+**When updating `packages/soothe/src/soothe/config/config.yml` (template)**, you MUST also update `config.dev.yml` in the project root (dev defaults):
 - Both files must have matching structure
 - Dev config should have sensible defaults for local development
 - This ensures developers see the latest configuration options
@@ -119,7 +119,16 @@ This runs:
 
 ## 📁 Module Map
 
-### Core Modules
+### Monorepo Structure
+```
+packages/
+├── soothe-sdk/        # Shared SDK (WebSocket client, protocol, types, decorators)
+├── soothe-cli/        # CLI client (Typer CLI + Textual TUI)
+├── soothe/            # Daemon server (main package, reuses PyPI name)
+└── soothe-community/  # Community plugins (optional)
+```
+
+### soothe Package (Daemon Server)
 | Package | Purpose |
 |---------|---------|
 | `core/` | Framework logic (factory, runner, events, goal engine) |
@@ -149,8 +158,8 @@ This runs:
 ### User Interface
 | Package | Purpose |
 |---------|---------|
-| `cli/` | Typer CLI with modular commands |
-| `daemon/` | Multi-transport daemon server |
+| `cli/` | Daemon management CLI (start/stop/status/doctor) |
+| `daemon/` | Multi-transport daemon server (WebSocket, HTTP) |
 
 ---
 
