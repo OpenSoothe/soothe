@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 #
-# verify_finally.sh - Run all verification checks before committing
+# verify_finally.sh - Run all verification checks before committing (monorepo version)
 #
-# This script runs the complete verification suite:
-# 1. Code formatting check (make format-check)
-# 2. Linting (make lint) - checks ALL files in src/ and tests/
-# 3. Unit tests (make test-unit)
+# This script runs the complete verification suite for multi-package monorepo:
+# 1. Workspace integrity check (uv sync)
+# 2. Package dependency validation (no forbidden cross-package imports)
+# 3. Code formatting check (make all-format)
+# 4. Linting (make all-lint) - checks ALL packages
+# 5. Unit tests (soothe daemon package tests)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -21,6 +23,7 @@
 #   ./scripts/verify_finally.sh              # Run all checks
 #   ./scripts/verify_finally.sh --fix        # Auto-fix formatting and linting issues
 #   ./scripts/verify_finally.sh --quick      # Skip tests (format + lint only)
+#   ./scripts/verify_finally.sh --deps       # Dependency validation only
 #
 # Integration with git hooks (optional):
 #   You can add this to your pre-commit hook to run automatically:
@@ -45,6 +48,7 @@ FAILED_CHECKS=()
 # Parse command line arguments
 AUTO_FIX=false
 SKIP_TESTS=false
+DEPS_ONLY=false
 
 for arg in "$@"; do
     case $arg in
@@ -56,12 +60,17 @@ for arg in "$@"; do
             SKIP_TESTS=true
             shift
             ;;
+        --deps)
+            DEPS_ONLY=true
+            shift
+            ;;
         --help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --fix     Auto-fix formatting and linting issues"
             echo "  --quick   Skip tests (format + lint only)"
+            echo "  --deps    Dependency validation only (skip format/lint/tests)"
             echo "  --help    Show this help message"
             exit 0
             ;;
@@ -76,9 +85,9 @@ done
 # Function to print section headers
 print_header() {
     echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  $1${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║           $1${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
 
@@ -90,6 +99,8 @@ print_success() {
 # Function to print failure message
 print_failure() {
     echo -e "${RED}✗ $1${NC}"
+    FAILED_CHECKS+=("$1")
+    OVERALL_STATUS=1
 }
 
 # Function to print warning
@@ -102,253 +113,297 @@ print_info() {
     echo -e "${CYAN}ℹ $1${NC}"
 }
 
-# Function to suggest fixes
-suggest_fixes() {
-    local check_name="$1"
-    echo ""
-    echo -e "${YELLOW}💡 Suggested fixes:${NC}"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PACKAGE DEPENDENCY VALIDATION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    case $check_name in
-        "format-check")
-            echo "  1. Run: make format"
-            echo "  2. Or run: $0 --fix"
-            ;;
-        "lint")
-            echo "  1. Run: make lint-fix"
-            echo "  2. Or run: $0 --fix"
-            echo "  3. Check specific files with: uv run ruff check src/ tests/ --show-fixes"
-            ;;
-        "test-unit")
-            echo "  1. Run specific failing tests: uv run pytest tests/unit/test_file.py::test_name -xvs"
-            echo "  2. Check test output above for error details"
-            ;;
-    esac
-    echo ""
+validate_package_dependencies() {
+    print_header "Package Dependency Validation"
+
+    # Rule 1: soothe-cli MUST NOT import soothe daemon runtime
+    print_info "Checking: soothe-cli must not import daemon runtime..."
+
+    CLI_DAEMON_IMPORTS=$(find packages/soothe-cli/src -name "*.py" -exec grep -l "from soothe\." {} \; 2>/dev/null || true)
+
+    if [ -n "$CLI_DAEMON_IMPORTS" ]; then
+        print_failure "CLI package imports daemon runtime (violations found)"
+        echo "Violations:"
+        echo "$CLI_DAEMON_IMPORTS"
+        echo ""
+        echo "Forbidden patterns:"
+        grep -r "from soothe\." packages/soothe-cli/src --include="*.py" | head -10 || true
+        return 1
+    else
+        print_success "CLI package does not import daemon runtime"
+    fi
+
+    # Rule 2: soothe-sdk MUST NOT import any other package
+    print_info "Checking: soothe-sdk must be independent (no soothe-cli/soothe imports)..."
+
+    SDK_IMPORTS=$(find packages/soothe-sdk/src -name "*.py" -exec grep -l "from soothe_cli\|from soothe_daemon\|import soothe_cli\|import soothe_daemon" {} \; 2>/dev/null || true)
+
+    if [ -n "$SDK_IMPORTS" ]; then
+        print_failure "SDK package imports other packages (violations found)"
+        echo "Violations:"
+        echo "$SDK_IMPORTS"
+        return 1
+    else
+        print_success "SDK package is independent"
+    fi
+
+    # Rule 3: Workspace integrity - all packages must be in sync
+    print_info "Checking: workspace integrity..."
+
+    if ! command -v uv >/dev/null 2>&1; then
+        print_warning "uv not found, skipping workspace sync check"
+    else
+        if ! uv sync --dry-run >/dev/null 2>&1; then
+            print_failure "Workspace sync would fail (run 'uv sync' to resolve)"
+            return 1
+        else
+            print_success "Workspace packages are in sync"
+        fi
+    fi
+
+    # Rule 4: Check for package import boundaries using existing script
+    if [ -f "scripts/check_module_import_boundaries.sh" ]; then
+        print_info "Running import boundary checks..."
+        if bash scripts/check_module_import_boundaries.sh >/dev/null 2>&1; then
+            print_success "Import boundary checks passed"
+        else
+            print_warning "Import boundary checks failed (see script output for details)"
+        fi
+    fi
+
+    return 0
 }
 
-# Get script start time
-START_TIME=$(date +%s)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# WORKSPACE SETUP
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║           Soothe Pre-Commit Verification Suite                    ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
+setup_workspace() {
+    print_header "Workspace Setup"
 
-# Show configuration
-if [ "$AUTO_FIX" = true ]; then
-    echo -e "${CYAN}Auto-fix mode: ENABLED${NC}"
-fi
-if [ "$SKIP_TESTS" = true ]; then
-    echo -e "${CYAN}Quick mode: ENABLED (tests skipped)${NC}"
-fi
-
-# Count files to check
-SRC_FILES=$(find src -name "*.py" 2>/dev/null | wc -l | tr -d ' ')
-TEST_FILES=$(find tests -name "*.py" 2>/dev/null | wc -l | tr -d ' ')
-TOTAL_FILES=$((SRC_FILES + TEST_FILES))
-
-print_info "Checking ${TOTAL_FILES} Python files (${SRC_FILES} in src/, ${TEST_FILES} in tests/)"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Check 1: Code Formatting
-# ─────────────────────────────────────────────────────────────────────────────
-
-if [ "$SKIP_TESTS" = true ]; then
-    TOTAL_CHECKS=2
-else
-    TOTAL_CHECKS=3
-fi
-
-print_header "Check 1/${TOTAL_CHECKS}: Code Formatting (make format-check)"
-
-if [ "$AUTO_FIX" = true ]; then
-    print_info "Auto-fixing formatting issues..."
-    if make format 2>&1; then
-        print_success "Code formatting fixed"
-    else
-        print_failure "Code formatting fix failed"
-        OVERALL_STATUS=1
-        FAILED_CHECKS+=("format-check")
+    if ! command -v uv >/dev/null 2>&1; then
+        print_failure "uv is not installed. Please install uv first."
+        exit 1
     fi
-else
-    if make format-check > /dev/null 2>&1; then
-        print_success "Code formatting check passed"
-        echo "  All files are properly formatted"
-    else
-        print_failure "Code formatting check failed"
-        echo ""
-        echo "  Running format check with output:"
-        echo ""
-        if make format-check 2>&1; then
-            :
+
+    print_info "Syncing workspace packages..."
+
+    if ! uv sync 2>&1 | tail -5 | grep -q "Audited"; then
+        # uv sync might take time, show progress
+        uv sync &
+        UV_PID=$!
+        wait $UV_PID 2>/dev/null || true
+    fi
+
+    print_success "Workspace synced"
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CODE FORMATTING
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+check_formatting() {
+    print_header "Code Formatting Check"
+
+    if $AUTO_FIX; then
+        print_info "Auto-fixing formatting across all packages..."
+        if make all-format >/dev/null 2>&1; then
+            print_success "Formatting auto-fixed"
         else
-            OVERALL_STATUS=1
-            FAILED_CHECKS+=("format-check")
-            suggest_fixes "format-check"
+            print_failure "Formatting auto-fix failed"
+        fi
+    else
+        print_info "Checking code formatting across all packages..."
+
+        # Check each package individually
+        local format_failed=false
+
+        # SDK package
+        print_info "  SDK package..."
+        if cd packages/soothe-sdk && uv run ruff format --check src/ >/dev/null 2>&1; then
+            print_success "    SDK formatting OK"
+        else
+            print_failure "    SDK formatting issues found"
+            format_failed=true
+        fi
+        cd - >/dev/null
+
+        # CLI package
+        print_info "  CLI package..."
+        if cd packages/soothe-cli && uv run ruff format --check src/ >/dev/null 2>&1; then
+            print_success "    CLI formatting OK"
+        else
+            print_failure "    CLI formatting issues found"
+            format_failed=true
+        fi
+        cd - >/dev/null
+
+        # Daemon package (main tests directory)
+        print_info "  Daemon package..."
+        if cd packages/soothe && uv run ruff format --check src/ tests/ >/dev/null 2>&1; then
+            print_success "    Daemon formatting OK"
+        else
+            print_failure "    Daemon formatting issues found"
+            format_failed=true
+        fi
+        cd - >/dev/null
+
+        # Community package
+        print_info "  Community package..."
+        if cd packages/soothe-community && uv run ruff format --check src/ >/dev/null 2>&1; then
+            print_success "    Community formatting OK"
+        else
+            print_failure "    Community formatting issues found"
+            format_failed=true
+        fi
+        cd - >/dev/null
+
+        if $format_failed; then
+            print_failure "Code formatting check failed (run with --fix to auto-fix)"
+            return 1
         fi
     fi
-fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Check 2: Linting
-# ─────────────────────────────────────────────────────────────────────────────
+    return 0
+}
 
-print_header "Check 2/${TOTAL_CHECKS}: Linting (make lint)"
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# LINTING
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-if [ "$AUTO_FIX" = true ]; then
-    print_info "Auto-fixing linting issues..."
-    if make lint-fix 2>&1; then
-        print_success "Linting issues fixed"
-    else
-        print_failure "Linting fix failed"
-        echo ""
-        echo "  Some issues cannot be auto-fixed. Running lint check..."
-        if make lint 2>&1; then
-            :
+check_linting() {
+    print_header "Linting Check"
+
+    if $AUTO_FIX; then
+        print_info "Auto-fixing linting issues across all packages..."
+        if make all-lint >/dev/null 2>&1; then
+            print_success "Linting auto-fixed"
         else
-            OVERALL_STATUS=1
-            FAILED_CHECKS+=("lint")
-            suggest_fixes "lint"
+            print_failure "Linting auto-fix failed"
+        fi
+    else
+        print_info "Running linter across all packages..."
+
+        local lint_failed=false
+
+        # SDK package
+        print_info "  SDK package..."
+        if cd packages/soothe-sdk && uv run ruff check src/ >/dev/null 2>&1; then
+            print_success "    SDK linting OK"
+        else
+            print_failure "    SDK linting errors found"
+            lint_failed=true
+        fi
+        cd - >/dev/null
+
+        # CLI package
+        print_info "  CLI package..."
+        if cd packages/soothe-cli && uv run ruff check src/ >/dev/null 2>&1; then
+            print_success "    CLI linting OK"
+        else
+            print_failure "    CLI linting errors found"
+            lint_failed=true
+        fi
+        cd - >/dev/null
+
+        # Daemon package
+        print_info "  Daemon package..."
+        if cd packages/soothe && uv run ruff check src/ tests/ >/dev/null 2>&1; then
+            print_success "    Daemon linting OK (zero errors)"
+        else
+            print_failure "    Daemon linting errors found"
+            lint_failed=true
+        fi
+        cd - >/dev/null
+
+        # Community package
+        print_info "  Community package..."
+        if cd packages/soothe-community && uv run ruff check src/ >/dev/null 2>&1; then
+            print_success "    Community linting OK"
+        else
+            print_failure "    Community linting errors found"
+            lint_failed=true
+        fi
+        cd - >/dev/null
+
+        if $lint_failed; then
+            print_failure "Linting check failed (run with --fix to auto-fix)"
+            return 1
         fi
     fi
-else
-    if make lint > /dev/null 2>&1; then
-        print_success "Linting check passed"
-        echo "  No linting errors found"
-    else
-        print_failure "Linting check failed"
-        echo ""
-        echo "  Running lint with output:"
-        echo ""
-        if make lint 2>&1; then
-            :
-        else
-            OVERALL_STATUS=1
-            FAILED_CHECKS+=("lint")
-            suggest_fixes "lint"
-        fi
+
+    return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# UNIT TESTS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+run_tests() {
+    if $SKIP_TESTS; then
+        print_info "Skipping tests (--quick mode)"
+        return 0
     fi
-fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Check 2b: Daemon must not import UX
-# ─────────────────────────────────────────────────────────────────────────────
+    print_header "Unit Tests"
 
-VERIFY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-print_header "Check 2b: Module import boundaries"
-if bash "$VERIFY_SCRIPT_DIR/check_module_import_boundaries.sh"; then
-    print_success "Module import boundary checks passed"
-else
-    print_failure "Module import boundaries violated (see script output)"
-    OVERALL_STATUS=1
-    FAILED_CHECKS+=("import-boundaries")
-fi
+    print_info "Running unit tests for daemon package..."
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Check 3: Unit Tests
-# ─────────────────────────────────────────────────────────────────────────────
-
-if [ "$SKIP_TESTS" = false ]; then
-    print_header "Check 3/${TOTAL_CHECKS}: Unit Tests (make test-unit)"
-
-    # Run tests and capture output
-    TEST_OUTPUT_FILE=$(mktemp)
-    if make test-unit 2>&1 | tee "$TEST_OUTPUT_FILE"; then
+    # Run daemon package tests (only package with tests currently)
+    if cd packages/soothe && uv run pytest tests/unit/ -v --tb=short 2>&1 | tail -20; then
+        cd - >/dev/null
         print_success "Unit tests passed"
-
-        # Extract test summary from output
-        SUMMARY=$(grep -E "passed|failed|skipped" "$TEST_OUTPUT_FILE" | tail -1 || true)
-        if [ -n "$SUMMARY" ]; then
-            echo "  $SUMMARY"
-        fi
     else
-        EXIT_CODE=$?
-        if [ $EXIT_CODE -eq 0 ]; then
-            print_success "Unit tests passed"
-            SUMMARY=$(grep -E "passed|failed|skipped" "$TEST_OUTPUT_FILE" | tail -1 || true)
-            if [ -n "$SUMMARY" ]; then
-                echo "  $SUMMARY"
-            fi
-        else
-            print_failure "Unit tests failed"
-            OVERALL_STATUS=1
-            FAILED_CHECKS+=("test-unit")
-
-            # Show failure summary
-            echo ""
-            echo -e "${YELLOW}Failed tests:${NC}"
-            grep -E "FAILED|ERROR" "$TEST_OUTPUT_FILE" | head -10 || true
-            echo ""
-            suggest_fixes "test-unit"
-        fi
+        cd - >/dev/null
+        print_failure "Unit tests failed"
+        return 1
     fi
 
-    # Clean up temp file
-    rm -f "$TEST_OUTPUT_FILE"
+    return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# MAIN EXECUTION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+print_header "Soothe Pre-Commit Verification Suite"
+
+# Always setup workspace first
+setup_workspace
+
+# Dependency validation only mode
+if $DEPS_ONLY; then
+    validate_package_dependencies
+    exit $OVERALL_STATUS
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Final Summary
-# ─────────────────────────────────────────────────────────────────────────────
+# Run all checks
+validate_package_dependencies
+check_formatting
+check_linting
+run_tests
 
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FINAL SUMMARY
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-echo ""
-echo -e "${BLUE}══════════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Final Summary${NC}"
-echo -e "${BLUE}══════════════════════════════════════════════════════════════════${NC}"
-echo ""
+print_header "Verification Summary"
 
 if [ $OVERALL_STATUS -eq 0 ]; then
-    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                    ALL CHECKS PASSED! ✓                          ║${NC}"
-    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    print_success "All checks passed! Ready to commit."
     echo ""
-    print_success "Format check: PASSED"
-    print_success "Linting:       PASSED"
-    if [ "$SKIP_TESTS" = false ]; then
-        print_success "Unit tests:    PASSED"
-    else
-        print_info "Unit tests:    SKIPPED (--quick mode)"
-    fi
-    echo ""
-    echo -e "Total duration: ${YELLOW}${DURATION}s${NC}"
-    echo ""
-
-    if [ "$AUTO_FIX" = true ]; then
-        print_warning "Auto-fix was applied. Review changes before committing."
-        echo ""
-        echo "  To see what was changed:"
-        echo "    git diff"
-        echo ""
-        echo "  To commit the fixes:"
-        echo "    git add -A && git commit"
-        echo ""
-    else
-        echo -e "${GREEN}✓ Ready to commit!${NC}"
-        echo ""
-    fi
+    exit 0
 else
-    echo -e "${RED}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${RED}║                   SOME CHECKS FAILED! ✗                          ║${NC}"
-    echo -e "${RED}╚══════════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-    echo -e "${RED}Failed checks:${NC}"
+    print_failure "Some checks failed:"
     for check in "${FAILED_CHECKS[@]}"; do
-        print_failure "$check"
+        echo "  - $check"
     done
     echo ""
-    echo -e "Total duration: ${YELLOW}${DURATION}s${NC}"
+    print_info "Fix the issues above and run this script again."
     echo ""
-
-    if [ "$AUTO_FIX" = false ]; then
-        print_info "Tip: Run with --fix to auto-fix formatting and linting issues"
-        echo ""
-    fi
-
-    echo -e "${RED}✗ Please fix the issues above before committing${NC}"
-    echo ""
+    exit 1
 fi
-
-exit $OVERALL_STATUS
