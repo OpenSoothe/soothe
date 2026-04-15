@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     # TODO IG-174 Phase 5: Create CLI-specific config class
-# SootheConfig import kept for daemon RPC communication
-from soothe.config import SootheConfig
+    # SootheConfig import kept for daemon RPC communication
+    from soothe.config import SootheConfig
 
     from soothe_cli.tui.daemon_session import TuiDaemonSession
 

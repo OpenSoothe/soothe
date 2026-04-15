@@ -413,6 +413,41 @@ class WebSocketClient:
             timeout=timeout,
         )
 
+    async def send_daemon_status(self, request_id: str | None = None) -> None:
+        """Request daemon status check (IG-174 Phase 0).
+
+        Args:
+            request_id: Optional request correlation ID.
+        """
+        await self.send({
+            "type": "daemon_status",
+            "request_id": request_id or uuid.uuid4().hex
+        })
+
+    async def send_daemon_shutdown(self, request_id: str | None = None) -> None:
+        """Request daemon shutdown (IG-174 Phase 0).
+
+        Args:
+            request_id: Optional request correlation ID.
+        """
+        await self.send({
+            "type": "daemon_shutdown",
+            "request_id": request_id or uuid.uuid4().hex
+        })
+
+    async def send_config_get(self, section: str, request_id: str | None = None) -> None:
+        """Request config section from daemon (IG-174 Phase 0).
+
+        Args:
+            section: Config section name (e.g., "providers", "defaults", "all").
+            request_id: Optional request correlation ID.
+        """
+        await self.send({
+            "type": "config_get",
+            "section": section,
+            "request_id": request_id or uuid.uuid4().hex
+        })
+
     async def request_daemon_ready(self) -> None:
         """Request the daemon's readiness state."""
         await self.send({"type": "daemon_ready"})

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
+
 # TODO IG-174 Phase 2: Remove backend execution
 # Backend imports removed - execution via daemon WebSocket RPC
 # # TODO IG-174 Phase 2: Remove backend execution

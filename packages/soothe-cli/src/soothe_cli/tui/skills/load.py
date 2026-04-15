@@ -5,18 +5,25 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TypeAlias
-
-# TODO Phase 4: Skills catalog via daemon RPC (IG-174)
-# from soothe.skills.catalog import (
-    SkillDirectoryMeta,
-    parse_skill_directory,
-    strip_skill_frontmatter,
-)
+from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
-ExtendedSkillMetadata: TypeAlias = SkillDirectoryMeta
+
+class ExtendedSkillMetadata(TypedDict):
+    """Wire-safe skill metadata from daemon RPC (IG-174 Phase 2).
+
+    This TypedDict represents skill metadata fetched from daemon via WebSocket RPC.
+    All fields are wire-safe (no Path objects, use str representations).
+    """
+    name: str
+    description: str
+    source: str  # "builtin", "user", "project", "agents", "claude"
+    path: str | None  # Wire-safe path representation (not Path object)
+    tags: list[str]
+    tools: list[str] | None
+    default_model: str | None
+    requires: list[str] | None
 
 
 def _is_under_allowed_roots(target: Path, roots: Sequence[Path]) -> bool:
@@ -71,6 +78,4 @@ def load_skill_content(
 __all__ = [
     "ExtendedSkillMetadata",
     "load_skill_content",
-    "parse_skill_directory",
-    "strip_skill_frontmatter",
 ]

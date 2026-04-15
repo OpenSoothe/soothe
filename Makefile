@@ -10,7 +10,7 @@
         sdk-sync sdk-format sdk-lint sdk-test sdk-build sdk-publish sdk-publish-test \
         cli-sync cli-format cli-lint cli-test cli-build cli-publish cli-publish-test \
         community-sync community-format community-lint community-test community-build community-publish community-publish-test \
-        all-sync all-format all-lint all-test all-build all-publish all-clean
+        all-sync all-format all-lint all-lint-fix all-test all-build all-publish all-clean
 
 # Default target
 help:
@@ -63,6 +63,7 @@ help:
 	@echo "  make all-sync    - Sync all packages"
 	@echo "  make all-format  - Format all packages"
 	@echo "  make all-lint    - Lint all packages"
+	@echo "  make all-lint-fix  - Auto-fix all linting issues"
 	@echo "  make all-test    - Test all packages"
 	@echo "  make all-build   - Build all packages"
 	@echo "  make all-publish - Publish all packages"
@@ -282,6 +283,14 @@ all-format: format sdk-format cli-format community-format
 
 all-lint: lint sdk-lint cli-lint community-lint
 	@echo "✓ All packages linted"
+
+all-lint-fix:
+	@echo "Auto-fixing linting issues in all packages..."
+	cd packages/soothe && uv run ruff check --fix src/
+	cd packages/soothe-sdk && uv run ruff check --fix src/
+	cd packages/soothe-cli && uv run ruff check --fix src/
+	cd packages/soothe-community && uv run ruff check --fix src/ tests/
+	@echo "✓ All packages lint-fixed"
 
 all-test: test-unit sdk-test cli-test community-test
 	@echo "✓ All packages tested"

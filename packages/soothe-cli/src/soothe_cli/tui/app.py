@@ -74,12 +74,13 @@ if TYPE_CHECKING:
 
     from langchain_core.runnables import RunnableConfig
     from langgraph.pregel import Pregel
+
     # TODO IG-174 Phase 2: Remove backend execution
-# Backend imports removed - execution via daemon WebSocket RPC
-# from soothe.backends import CompositeBackend
+    # Backend imports removed - execution via daemon WebSocket RPC
+    # from soothe.backends import CompositeBackend
     # TODO IG-174 Phase 5: Create CLI-specific config class
-# SootheConfig import kept for daemon RPC communication
-from soothe.config import SootheConfig
+    # SootheConfig import kept for daemon RPC communication
+    from soothe.config import SootheConfig
     from textual.app import ComposeResult
     from textual.events import Click, MouseUp, Paste
     from textual.scrollbar import ScrollUp
@@ -1266,22 +1267,23 @@ class SootheApp(App):
         )
         await self._send_to_agent("", skip_daemon_send_turn=True)
 
-    def _discover_skills_and_roots(
+    async def _discover_skills_and_roots(
         self,
     ) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
-        """Discover skills and build pre-resolved containment roots.
+        """Discover skills and build pre-resolved containment roots (IG-174 Phase 2).
 
+        Fetches wire-safe skill metadata from daemon via WebSocket RPC.
         Shared by `_discover_skills` (startup/reload) and the cache-miss
-        fallback in `_invoke_skill` to avoid duplicating the
-        `list_skills` call and root-resolution logic.
+        fallback in `_invoke_skill`.
 
         Returns:
             Tuple of `(skill metadata list, pre-resolved containment roots)`.
         """
-        from soothe_cli.tui.skills.invocation import discover_skills_and_roots
+        from soothe_cli.tui.skills.invocation import discover_skills_and_roots_async
 
         assistant_id = self._assistant_id or "agent"
-        return discover_skills_and_roots(assistant_id)
+        # Use daemon config for WebSocket RPC
+        return await discover_skills_and_roots_async(assistant_id, daemon_config=self._daemon_config)
 
     async def _resolve_resume_thread(self) -> None:
         """Resolve a `-r` resume intent into a concrete thread ID.
@@ -1442,19 +1444,41 @@ class SootheApp(App):
             return
 
         try:
-            # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
-# Remove daemon lifecycle management, use WebSocket client
-# from soothe.daemon import SootheDaemon
+            from soothe_sdk.client import (
+                WebSocketClient,
+                is_daemon_live,
+                request_daemon_shutdown,
+                websocket_url_from_config,
+            )
 
             from soothe_cli.cli.commands.daemon_cmd import daemon_start
             from soothe_cli.tui.daemon_session import TuiDaemonSession
 
-            ws_host = self._daemon_config.daemon.transports.websocket.host
-            ws_port = self._daemon_config.daemon.transports.websocket.port
-            if not SootheDaemon._is_port_live(ws_host, ws_port):
-                if SootheDaemon.is_running():
-                    SootheDaemon.stop_running()
+            ws_url = websocket_url_from_config(self._daemon_config)
+
+            # Check daemon status via WebSocket RPC (IG-174 Phase 1)
+            daemon_live = await is_daemon_live(ws_url, timeout=5.0)
+
+            if not daemon_live:
+                # Attempt cleanup if stale daemon
+                try:
+                    client = WebSocketClient(url=ws_url)
+                    await client.connect()
+                    await request_daemon_shutdown(client, timeout=10.0)
+                    await client.close()
+                except Exception:
+                    pass  # No daemon running or already stopped
+
+                # Start daemon
                 daemon_start(config=None, foreground=False)
+
+                # Wait for daemon to become fully ready
+                start_time = time.time()
+                while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
+                    daemon_live = await is_daemon_live(ws_url, timeout=2.0)
+                    if daemon_live:
+                        break
+                    await asyncio.sleep(0.5)
 
             session = TuiDaemonSession(self._daemon_config)
             status_event = await session.connect(resume_thread_id=self._lc_thread_id)

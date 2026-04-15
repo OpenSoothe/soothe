@@ -1,15 +1,20 @@
 """Headless execution orchestration."""
 
+import asyncio
 import sys
 import time
 
 import typer
+
 # TODO IG-174 Phase 5: Create CLI-specific config class
 # SootheConfig import kept for daemon RPC communication
 from soothe.config import SootheConfig
-# TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
-# Remove daemon lifecycle management, use WebSocket client
-# from soothe.daemon import SootheDaemon
+from soothe_sdk.client import (
+    WebSocketClient,
+    is_daemon_live,
+    request_daemon_shutdown,
+    websocket_url_from_config,
+)
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _DAEMON_START_WAIT_TIMEOUT = 30.0  # Max time to wait for daemon to become ready
@@ -32,31 +37,41 @@ def run_headless(
     Note (RFC-0013): Daemon persists after request completion. Use 'soothe-daemon stop'
     to explicitly shutdown the daemon.
     """
-    import asyncio
-
     from soothe_cli.cli.execution.daemon import run_headless_via_daemon
 
-    # Get WebSocket host/port for readiness checks
-    ws_host = cfg.daemon.transports.websocket.host
-    ws_port = cfg.daemon.transports.websocket.port
+    # Get WebSocket URL for daemon checks
+    ws_url = websocket_url_from_config(cfg)
 
-    # Auto-start daemon if not running (RFC-0013)
-    if not SootheDaemon._is_port_live(ws_host, ws_port):
-        if SootheDaemon.is_running():
-            SootheDaemon.stop_running()
-        from soothe_cli.cli.commands.daemon_cmd import daemon_start
+    # Auto-start daemon if not running (RFC-0013) - WebSocket RPC checks (IG-174 Phase 1)
+    async def _check_and_ensure_daemon() -> None:
+        """Check daemon status and auto-start if needed."""
+        daemon_live = await is_daemon_live(ws_url, timeout=5.0)
 
-        daemon_start(config=None, foreground=False)
+        if not daemon_live:
+            # Attempt cleanup if stale daemon (connection exists but daemon not responsive)
+            try:
+                client = WebSocketClient(url=ws_url)
+                await client.connect()
+                await request_daemon_shutdown(client, timeout=10.0)
+                await client.close()
+            except Exception:
+                pass  # No daemon running or already stopped
 
-        # Wait for daemon to become fully ready with timeout
-        # This helps avoid connection errors on slower systems
-        start_time = time.time()
-        while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
-            if SootheDaemon._is_port_live(ws_host, ws_port) and SootheDaemon.is_running():
-                break
-            time.sleep(0.5)
-        # Note: We don't fail here - let the connection attempt handle errors
-        # This allows tests and edge cases to proceed with mocked daemons
+            # Start daemon
+            from soothe_cli.cli.commands.daemon_cmd import daemon_start
+            daemon_start(config=None, foreground=False)
+
+            # Wait for daemon to become fully ready with timeout
+            start_time = time.time()
+            while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
+                daemon_live = await is_daemon_live(ws_url, timeout=2.0)
+                if daemon_live:
+                    break
+                await asyncio.sleep(0.5)
+            # Note: We don't fail here - let the connection attempt handle errors
+            # This allows tests and edge cases to proceed with mocked daemons
+
+    asyncio.run(_check_and_ensure_daemon())
 
     # Connect to daemon and execute
     daemon_exit_code = asyncio.run(

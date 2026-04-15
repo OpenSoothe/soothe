@@ -192,6 +192,19 @@ class MessageRouter:
             await self._handle_models_list(client_id, msg)
             return
 
+        # IG-174 Phase 0: Daemon RPC endpoints
+        if msg_type == "daemon_status":
+            await self._handle_daemon_status(client_id, msg)
+            return
+
+        if msg_type == "daemon_shutdown":
+            await self._handle_daemon_shutdown(client_id, msg)
+            return
+
+        if msg_type == "config_get":
+            await self._handle_config_get(client_id, msg)
+            return
+
         logger.debug("Unknown client message type: %s", msg_type)
 
     async def _handle_resume_thread(self, client_id: str, msg: dict[str, Any]) -> None:
@@ -822,3 +835,87 @@ class MessageRouter:
                 "interactive": True,
             },
         )
+
+    async def _handle_daemon_status(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle daemon_status RPC request (IG-174 Phase 0).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with optional request_id.
+        """
+        import os
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        # Check daemon running state
+        running = d._running
+        port_live = d._websocket_server is not None
+
+        # Count active threads
+        active_threads = len(d._active_threads) if hasattr(d, "_active_threads") else 0
+
+        response = {
+            "type": "daemon_status_response",
+            "request_id": request_id,
+            "running": running,
+            "port_live": port_live,
+            "active_threads": active_threads,
+            "daemon_pid": os.getpid() if running else None,
+        }
+
+        await d._send_client_message(client_id, response)
+
+    async def _handle_daemon_shutdown(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle daemon_shutdown RPC request (IG-174 Phase 0).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with optional request_id.
+        """
+        import asyncio
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        # Send acknowledgment
+        ack = {
+            "type": "shutdown_ack",
+            "request_id": request_id,
+            "status": "acknowledged",
+        }
+        await d._send_client_message(client_id, ack)
+
+        # Schedule shutdown after brief delay
+        await asyncio.sleep(0.5)
+
+        # Trigger daemon shutdown
+        logger.info("Daemon shutdown requested via WebSocket RPC from client=%s", _client_label(client_id))
+        await d.shutdown()
+
+    async def _handle_config_get(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle config_get RPC request (IG-174 Phase 0).
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with section and optional request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        section = msg.get("section", "all")
+
+        # Get config section (wire-safe serialization)
+        config_dict = d._config.model_dump()
+
+        if section == "all":
+            section_data = config_dict
+        else:
+            section_data = config_dict.get(section, {})
+
+        response = {
+            "type": "config_get_response",
+            "request_id": request_id,
+            section: section_data,
+        }
+
+        await d._send_client_message(client_id, response)
