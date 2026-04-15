@@ -54,6 +54,10 @@ from soothe_sdk.decorators.plugin import plugin
 from soothe_sdk.decorators.subagent import subagent
 from soothe_sdk.decorators.tool import tool, tool_group
 from soothe_sdk.events import (
+    AGENT_LOOP_COMPLETED,
+    CHITCHAT_RESPONSE,
+    DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
+    FINAL_REPORT,
     ErrorEvent,
     LifecycleEvent,
     OutputEvent,
@@ -131,6 +135,10 @@ __all__ = [
     "SubagentEvent",
     "OutputEvent",
     "ErrorEvent",
+    "AGENT_LOOP_COMPLETED",
+    "CHITCHAT_RESPONSE",
+    "FINAL_REPORT",
+    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
     # Verbosity
     "VerbosityTier",
     "should_show",

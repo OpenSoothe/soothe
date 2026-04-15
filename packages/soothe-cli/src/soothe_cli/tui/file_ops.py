@@ -6,13 +6,9 @@ import difflib
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    # TODO IG-174 Phase 2: Backend protocol via daemon RPC
-    pass
 
 FileOpStatus = Literal["pending", "success", "error"]
 
@@ -222,16 +218,37 @@ def build_approval_preview(
         new_string = str(args.get("new_string", ""))
         replace_all = bool(args.get("replace_all"))
 
-        # TODO IG-174 Phase 2: File ops via daemon RPC
-        # Need daemon WebSocket API: file_preview_replace
-        # Request: {"type": "file_preview_replace", "path": ..., "old_string": ..., "new_string": ..., "replace_all": ...}
-        # Response: {"type": "file_preview_response", "diff": ..., "occurrences": ..., "additions": ..., "deletions": ...}
+        # Preview string replacement locally
+        if replace_all:
+            after = before.replace(old_string, new_string)
+        else:
+            after = before.replace(old_string, new_string, 1)
 
-        # Placeholder: Cannot preview without daemon RPC
+        diff = compute_unified_diff(before, after, display_path, max_lines=100)
+        additions = 0
+        deletions = 0
+        if diff:
+            additions = sum(
+                1
+                for line in diff.splitlines()
+                if line.startswith("+") and not line.startswith("+++")
+            )
+            deletions = sum(
+                1
+                for line in diff.splitlines()
+                if line.startswith("-") and not line.startswith("---")
+            )
+        scope = "all occurrences" if replace_all else "first occurrence"
+        details = [
+            f"File: {path_str}",
+            f"Action: Replace text ({scope})",
+            f"+{additions} / -{deletions} lines",
+        ]
         return ApprovalPreview(
             title=f"Update {display_path}",
-            details=[f"File: {path_str}", "Action: Replace text (preview unavailable)"],
-            error="File preview requires daemon RPC (IG-174 Phase 2)",
+            details=details,
+            diff=diff,
+            diff_title=f"Diff {display_path}",
         )
 
     return None
@@ -240,10 +257,9 @@ def build_approval_preview(
 class FileOpTracker:
     """Collect file operation metrics during a CLI interaction."""
 
-    def __init__(self, *, assistant_id: str | None, backend: Any | None = None) -> None:
+    def __init__(self, *, assistant_id: str | None) -> None:
         """Initialize the tracker."""
         self.assistant_id = assistant_id
-        self.backend = backend
         self.active: dict[str | None, FileOperationRecord] = {}
         self.completed: list[FileOperationRecord] = []
 
@@ -267,21 +283,7 @@ class FileOpTracker:
             args=args,
         )
         if tool_name in {"write_file", "edit_file"}:
-            if self.backend and path_str:
-                try:
-                    responses = self.backend.download_files([path_str])
-                    if (
-                        responses
-                        and responses[0].content is not None
-                        and responses[0].error is None
-                    ):
-                        record.before_content = responses[0].content.decode("utf-8")
-                    else:
-                        record.before_content = ""
-                except (OSError, UnicodeDecodeError, AttributeError) as e:
-                    logger.debug("Failed to read before_content for %s: %s", path_str, e)
-                    record.before_content = ""
-            elif record.physical_path:
+            if record.physical_path:
                 record.before_content = _safe_read(record.physical_path) or ""
         self.active[tool_call_id] = record
 
@@ -337,7 +339,7 @@ class FileOpTracker:
             if isinstance(limit, int) and lines > limit:
                 record.metrics.end_line = (record.metrics.start_line or 1) + limit - 1
         else:
-            # For write/edit operations, read back from backend (or local filesystem)
+            # For write/edit operations, read back from local filesystem
             self._populate_after_content(record)
             if record.after_content is None:
                 record.status = "error"
@@ -396,35 +398,11 @@ class FileOpTracker:
                     record.hitl_approved = True
 
     def _populate_after_content(self, record: FileOperationRecord) -> None:
-        # Use backend if available (works for any BackendProtocol implementation)
-        if self.backend:
-            try:
-                file_path = record.args.get("file_path") or record.args.get("path")
-                if file_path:
-                    responses = self.backend.download_files([file_path])
-                    if (
-                        responses
-                        and responses[0].content is not None
-                        and responses[0].error is None
-                    ):
-                        record.after_content = responses[0].content.decode("utf-8")
-                    else:
-                        record.after_content = None
-                else:
-                    record.after_content = None
-            except (OSError, UnicodeDecodeError, AttributeError) as e:
-                logger.debug(
-                    "Failed to read after_content for %s: %s",
-                    record.args.get("file_path") or record.args.get("path"),
-                    e,
-                )
-                record.after_content = None
-        else:
-            # Fallback: direct filesystem read when no backend provided
-            if record.physical_path is None:
-                record.after_content = None
-                return
-            record.after_content = _safe_read(record.physical_path)
+        """Read the file content after the operation for diff computation."""
+        if record.physical_path is None:
+            record.after_content = None
+            return
+        record.after_content = _safe_read(record.physical_path)
 
     def _finalize(self, record: FileOperationRecord) -> None:
         self.completed.append(record)

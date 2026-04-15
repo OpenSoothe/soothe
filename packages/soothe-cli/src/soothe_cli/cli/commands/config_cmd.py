@@ -155,14 +155,26 @@ def config_init(
     # Try loading from installed package resources first
     template_found = False
     try:
-        config_resource = files("soothe.config").joinpath("config.yml")
+        config_resource = files("soothe_sdk").joinpath("templates/config.yml")
         with as_file(config_resource) as template_path:
             if template_path.exists():
                 shutil.copy2(template_path, target)
                 typer.echo(f"Created {target}")
                 template_found = True
-    except (FileNotFoundError, TypeError, AttributeError):
+    except (FileNotFoundError, TypeError, AttributeError, ModuleNotFoundError):
         pass
+
+    # Fallback: try daemon package (co-installed on server)
+    if not template_found:
+        try:
+            config_resource = files("soothe.config").joinpath("config.yml")
+            with as_file(config_resource) as template_path:
+                if template_path.exists():
+                    shutil.copy2(template_path, target)
+                    typer.echo(f"Created {target}")
+                    template_found = True
+        except (FileNotFoundError, TypeError, AttributeError, ModuleNotFoundError):
+            pass
 
     # Fallback for development/editable installs
     if not template_found:
@@ -174,8 +186,6 @@ def config_init(
 
     # Create minimal config if template not found
     if not template_found:
-        # TODO IG-174 Phase 2: File write via daemon RPC
-        # Use direct write as fallback since daemon may not be running during init
         target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
         typer.echo(f"Created minimal {target}")
 

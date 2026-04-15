@@ -17,7 +17,6 @@ from soothe_cli.client import (
 )
 
 if TYPE_CHECKING:
-    # TODO IG-174 Phase 5: CLI-specific config class complete
     pass
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ class DaemonStateSnapshot:
 class TuiDaemonSession:
     """Own the daemon websocket session used by the TUI."""
 
-    def __init__(self, cfg: SootheConfig) -> None:
+    def __init__(self, cfg: Any) -> None:
         self._cfg = cfg
         self._client = WebSocketClient(url=websocket_url_from_config(cfg))
         self._thread_id: str | None = None

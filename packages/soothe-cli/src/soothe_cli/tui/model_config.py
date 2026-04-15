@@ -101,9 +101,9 @@ class ModelConfig:
         if not p or not p.api_base_url:
             return None
         try:
-            from soothe_daemon.config.env import _resolve_provider_env
+            from soothe_sdk.utils import resolve_provider_env
 
-            resolved = _resolve_provider_env(
+            resolved = resolve_provider_env(
                 p.api_base_url,
                 provider_name=p.name,
                 field_name="api_base_url",
@@ -421,9 +421,9 @@ def has_provider_credentials(provider: str) -> bool | None:
                 return None
             if p.api_key:
                 try:
-                    from soothe_daemon.config.env import _resolve_provider_env
+                    from soothe_sdk.utils import resolve_provider_env
 
-                    v = _resolve_provider_env(p.api_key, provider_name=p.name, field_name="api_key")
+                    v = resolve_provider_env(p.api_key, provider_name=p.name, field_name="api_key")
                 except Exception:
                     logger.debug("resolve api_key failed for provider %r", provider, exc_info=True)
                     return None

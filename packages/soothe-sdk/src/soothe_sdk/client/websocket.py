@@ -276,6 +276,23 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
+    async def send_thread_archive(self, thread_id: str, *, request_id: str | None = None) -> None:
+        """Request thread archival via daemon RPC."""
+        payload: dict[str, Any] = {"type": "thread_archive", "thread_id": thread_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_thread_delete(self, thread_id: str, *, request_id: str | None = None) -> None:
+        """Request thread deletion via daemon RPC."""
+        payload: dict[str, Any] = {"type": "thread_delete", "thread_id": thread_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
     async def send_resume_interrupts(
         self,
         thread_id: str,

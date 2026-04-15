@@ -46,7 +46,6 @@ if TYPE_CHECKING:
 from soothe_cli.shared.essential_events import is_essential_progress_event_type
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
-from soothe_cli.tui._debug import configure_debug_logging
 from soothe_cli.tui._session_stats import (
     ModelStats as ModelStats,
 )
@@ -75,7 +74,6 @@ from soothe_cli.tui.widgets.messages import (
 )
 
 logger = logging.getLogger(__name__)
-configure_debug_logging(logger)
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -211,12 +209,12 @@ def _is_summarization_chunk(metadata: dict | None) -> bool:
 
 def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
     """Extract assistant-visible text from daemon custom output events."""
-    from soothe_daemon.core.event_catalog import (
+    from soothe_sdk import strip_internal_tags
+    from soothe_sdk.events import (
         AGENT_LOOP_COMPLETED,
         CHITCHAT_RESPONSE,
         FINAL_REPORT,
     )
-    from soothe_sdk import strip_internal_tags
 
     event_type = str(data.get("type", ""))
     if event_type == CHITCHAT_RESPONSE:
@@ -413,7 +411,6 @@ async def execute_task_textual(
     assistant_id: str | None,
     session_state: Any,  # noqa: ANN401  # Dynamic session state type
     adapter: TextualUIAdapter,
-    backend: Any = None,  # noqa: ANN401  # Dynamic backend type
     image_tracker: MediaTracker | None = None,
     context: CLIContext | None = None,
     *,
@@ -436,7 +433,6 @@ async def execute_task_textual(
         assistant_id: The agent identifier
         session_state: Session state with auto_approve flag
         adapter: The TextualUIAdapter for UI operations
-        backend: Optional backend for file operations
         image_tracker: Optional tracker for images
         context: Optional `CLIContext` with model override and params, passed
             to the graph via `context=`.
@@ -477,7 +473,7 @@ async def execute_task_textual(
     ask_user_adapter = _get_ask_user_adapter()
     progress_pipeline = StreamDisplayPipeline(verbosity="detailed")
 
-    # Parse file mentions and inject content if any — offload blocking I/O
+    # Parse file mentions and inject content if any — defer blocking I/O
     prompt_text, mentioned_files = await asyncio.to_thread(parse_file_mentions, user_input)
 
     # Max file size to embed inline (256KB, matching mistral-vibe)
@@ -541,7 +537,7 @@ async def execute_task_textual(
     if adapter._on_tokens_hide:
         adapter._on_tokens_hide()
 
-    file_op_tracker = FileOpTracker(assistant_id=assistant_id, backend=backend)
+    file_op_tracker = FileOpTracker(assistant_id=assistant_id)
     displayed_tool_ids: set[str] = set()
     tool_call_buffers: dict[str | int, dict] = {}
 
@@ -1286,7 +1282,7 @@ async def _handle_interrupt_cleanup(
     if adapter._set_active_message:
         adapter._set_active_message(None)
 
-    # Hide spinner (may still show "Offloading" if interrupted mid-offload)
+    # Hide spinner (may still show a stale status if interrupted)
     if adapter._set_spinner:
         await adapter._set_spinner(None)
 

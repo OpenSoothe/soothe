@@ -87,11 +87,18 @@ TOOL_ERROR = "soothe.tool.execution.error"
 # Agent loop events (DEBUG level)
 AGENT_LOOP_STARTED = "soothe.protocol.agent_loop.started"
 AGENT_LOOP_ITERATION = "soothe.protocol.agent_loop.iteration"
-AGENT_LOOP_COMPLETED = "soothe.protocol.agent_loop.completed"
+AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 
 # Message events (DETAILED level)
 MESSAGE_RECEIVED = "soothe.protocol.message.received"
 MESSAGE_SENT = "soothe.protocol.message.sent"
+
+# Output events (QUIET level - always visible)
+CHITCHAT_RESPONSE = "soothe.output.chitchat.response"
+FINAL_REPORT = "soothe.output.autonomous.final_report"
+
+# Agent loop configuration constants
+DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10
 
 
 __all__ = [
@@ -123,4 +130,9 @@ __all__ = [
     # Message (DETAILED)
     "MESSAGE_RECEIVED",
     "MESSAGE_SENT",
+    # Output
+    "CHITCHAT_RESPONSE",
+    "FINAL_REPORT",
+    # Constants
+    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
 ]

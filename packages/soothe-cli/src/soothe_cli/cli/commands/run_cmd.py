@@ -44,12 +44,11 @@ def run_impl(
             cfg = cfg.model_copy(update={"logging": logging_config})
         setup_logging(cfg)
 
-        # Check PostgreSQL availability if checkpointer is postgresql
-        if cfg.protocols.durability.checkpointer == "postgresql" and not check_postgres_available():
-            logger.warning(
-                "PostgreSQL checkpointer configured but server not responding at localhost:5432. "
-                "Start pgvector: docker-compose up -d"
-            )
+        # PostgreSQL availability check (requires daemon-side config)
+        if hasattr(cfg, "protocols") and hasattr(cfg.protocols, "durability"):
+            checkpointer = getattr(cfg.protocols.durability, "checkpointer", None)
+            if checkpointer == "postgresql":
+                logger.info("PostgreSQL checkpointer configured; ensure server is running.")
 
         startup_elapsed_ms = (time.perf_counter() - startup_start) * 1000
         logger.info("[Startup] ✓ Ready (%.1fms)", startup_elapsed_ms)

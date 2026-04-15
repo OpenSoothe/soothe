@@ -114,7 +114,7 @@ class StreamDisplayPipeline:
         Returns:
             VerbosityTier for the event.
         """
-        from soothe_daemon.core.event_catalog import REGISTRY
+        from soothe_sdk.verbosity import classify_event_to_tier
 
         # Goal events - NORMAL
         if is_goal_start_event_type(event_type):
@@ -128,10 +128,10 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
 
-        # soothe.* events: defer to registry classification (RFC-0020)
-        # Step completion, tool events, subagent events all use registry
+        # soothe.* events: defer to SDK domain-based classification (RFC-0020)
+        # Step completion, tool events, subagent events all use domain defaults
         if event_type.startswith("soothe."):
-            return REGISTRY.get_verbosity(event_type)
+            return classify_event_to_tier(event_type)
 
         # Non-soothe events (from deepagents subagents)
         if ".subagent." in event_type:

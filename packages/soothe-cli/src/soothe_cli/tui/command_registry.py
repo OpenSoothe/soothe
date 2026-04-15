@@ -89,13 +89,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.IMMEDIATE_UI,
         hidden_keywords="warnings alerts suppress",
     ),
-    SlashCommand(
-        name="/offload",
-        description="Free up context window space by offloading older messages",
-        bypass_tier=BypassTier.QUEUED,
-        hidden_keywords="compact",
-        aliases=("/compact",),
-    ),
     SlashCommand(  # Static alias; not auto-generated from skill discovery
         name="/remember",
         description="Update memory and skills from conversation",
