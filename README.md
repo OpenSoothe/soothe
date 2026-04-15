@@ -1,8 +1,8 @@
 # Soothe: Protocol-Driven Multi-Agent Orchestration Framework
 
-> **⚠️ IMPORTANT**: This monolithic package is **DEPRECATED**. Use the new split packages instead.
+Soothe is a protocol-driven orchestration framework for building 24/7 autonomous agents. It extends deepagents with planning, context engineering, security policy, durability, and remote agent interop.
 
-## New Architecture (v0.3.0+)
+## Architecture (v0.3.0+)
 
 Soothe has been refactored into three independent packages:
 
@@ -13,28 +13,53 @@ packages/
 └── soothe-daemon (v0.3.0)  # Daemon server - Agent runtime
 ```
 
-### Installation
+### Package Overview
 
-**Recommended: Install both CLI and daemon**
+**soothe-sdk** - Shared Primitives (~3 deps):
+- WebSocket client (`WebSocketClient`)
+- Protocol encode/decode
+- Base event types
+- Verbosity tier system
+- Plugin decorators (`@plugin`, `@tool`, `@subagent`)
+
+**soothe-cli** - Client Package (~10 deps):
+- CLI commands (thread, config, agent, autopilot)
+- TUI application (Textual)
+- Event processor and display
+- WebSocket-only communication (NO daemon runtime imports)
+
+**soothe-daemon** - Server Package (~50 deps):
+- WebSocket + HTTP transports
+- Agent runner and factory
+- Tools and subagents
+- Thread persistence
+- Protocols (planner, policy, durability)
+
+## Installation
+
+### Development (from monorepo)
 
 ```bash
+git clone https://github.com/caesar0301/soothe.git
+cd soothe
+
+# Install packages in editable mode
+pip install -e packages/soothe-cli
+pip install -e packages/soothe-daemon[all]
+```
+
+### From PyPI (when published)
+
+```bash
+# Install both CLI and daemon
 pip install soothe-cli soothe-daemon[all]
+
+# Or install separately
+pip install soothe-cli           # Client only (~10 deps)
+pip install soothe-daemon[all]   # Server only (~50 deps)
 ```
 
-**Alternative: Install separately**
-
-```bash
-# CLI only (connects to remote daemon)
-pip install soothe-cli
-
-# Daemon only (for server deployment)
-pip install soothe-daemon[all]
-
-# SDK only (for plugin development)
-pip install soothe-sdk
-```
-
-### Quick Start
+## Quick Start
 
 ```bash
 # Start daemon server
@@ -44,16 +69,16 @@ soothe-daemon start
 soothe                    # Interactive TUI mode
 soothe -p "your query"    # Headless single-prompt mode
 
-# Check daemon status
-soothe-daemon status
+# Thread management
+soothe thread list
+soothe thread continue abc123
 
-# Health checks
-soothe-daemon doctor
+# Daemon management
+soothe-daemon status
+soothe-daemon doctor      # Health checks
 ```
 
-## Architecture
-
-### Communication Model
+## Communication Architecture
 
 CLI and daemon communicate via WebSocket only:
 
@@ -65,35 +90,11 @@ CLI and daemon communicate via WebSocket only:
 └─────────────┘                                              └──────────────┘
 ```
 
-**Key Principle**: CLI has **ZERO** daemon runtime dependencies.
-
-### Package Responsibilities
-
-**soothe-sdk**:
-- WebSocket client (`WebSocketClient`)
-- Protocol encode/decode
-- Base event types
-- Verbosity tier system
-- **Dependencies**: pydantic, websockets (minimal)
-
-**soothe-cli**:
-- CLI commands (thread, config, agent, autopilot)
-- TUI application (Textual)
-- Event processor and display
-- **Dependencies**: soothe-sdk, typer, textual, rich (~10 deps)
-- **Entry point**: `soothe` command
-
-**soothe-daemon**:
-- WebSocket + HTTP transports
-- Agent runner and factory
-- Tools and subagents
-- Thread persistence
-- **Dependencies**: soothe-sdk, langchain, langgraph (~50 deps)
-- **Entry point**: `soothe-daemon` command
+**Key Principle**: CLI has **ZERO** daemon runtime dependencies - WebSocket-only communication ensures complete independence.
 
 ## Configuration
 
-### CLI Config (NEW)
+### CLI Config
 
 ```yaml
 # ~/.soothe/cli_config.yml
@@ -105,7 +106,7 @@ ui:
   verbosity: "normal"
 ```
 
-### Daemon Config (UNCHANGED)
+### Daemon Config
 
 ```yaml
 # ~/.soothe/config.yml
@@ -120,56 +121,12 @@ providers:
     api_key: "${OPENAI_API_KEY}"
 ```
 
-## Migration from Old Package
-
-**This package (soothe v0.2.x) is deprecated.**
-
-### Quick Migration
-
-```bash
-# Uninstall old package
-pip uninstall soothe
-
-# Install new packages
-pip install soothe-cli soothe-daemon[all]
-
-# Update commands
-soothe-daemon start    # (was: soothe daemon start)
-soothe-daemon doctor   # (was: soothe doctor)
-soothe -p "query"      # (unchanged)
-```
-
-### Command Changes
-
-| Old Command | New Command | Package |
-|-------------|-------------|---------|
-| `soothe daemon start` | `soothe-daemon start` | daemon |
-| `soothe daemon stop` | `soothe-daemon stop` | daemon |
-| `soothe daemon status` | `soothe-daemon status` | daemon |
-| `soothe doctor` | `soothe-daemon doctor` | daemon |
-| `soothe -p "..."` | `soothe -p "..."` | CLI (unchanged) |
-| `soothe thread list` | `soothe thread list` | CLI (unchanged) |
-
-### Full Migration Guide
-
-See:
-- **MIGRATION.md**: Quick reference
-- **docs/migration-guide-v0.3.md**: Detailed migration steps
-- **docs/cli-daemon-architecture.md**: Architecture overview
-
-## Benefits of Split Architecture
-
-- **Dependency reduction**: CLI has ~10 deps (vs ~50 in old package)
-- **Flexible deployment**: CLI and daemon can run on separate machines
-- **Clean separation**: WebSocket-only communication
-- **Better maintainability**: Independent testing and development
-
 ## Documentation
 
 - **Architecture**: [docs/cli-daemon-architecture.md](docs/cli-daemon-architecture.md)
-- **Migration**: [docs/migration-guide-v0.3.md](docs/migration-guide-v0.3.md)
 - **RFCs**: [docs/specs/](docs/specs/)
-- **Implementation**: [docs/impl/](docs/impl/)
+- **Implementation Guides**: [docs/impl/](docs/impl/)
+- **Daemon RFC**: RFC-400 - Daemon Communication Protocol
 
 ## Development
 
@@ -182,6 +139,8 @@ Soothe/
 │   ├── soothe-cli/
 │   └── soothe-daemon/
 ├── tests/
+│   ├── integration/
+│   └── unit/
 ├── docs/
 └── examples/
 ```
@@ -189,29 +148,37 @@ Soothe/
 ### Testing
 
 ```bash
-# Test SDK
+# Test individual packages
 pytest packages/soothe-sdk/tests/
-
-# Test CLI
 pytest packages/soothe-cli/tests/
-
-# Test daemon
 pytest packages/soothe-daemon/tests/
 
 # Integration tests
 pytest tests/integration/
 ```
 
+### Building
+
+```bash
+# Build individual packages
+cd packages/soothe-sdk && python -m build
+cd packages/soothe-cli && python -m build
+cd packages/soothe-daemon && python -m build
+```
+
+## Benefits
+
+- **Dependency reduction**: CLI has ~10 deps (vs ~50 for full stack)
+- **Flexible deployment**: CLI and daemon on separate machines
+- **Clean architecture**: WebSocket-only communication
+- **Independent testing**: Packages tested separately
+
 ## Support
 
 - **GitHub**: https://github.com/caesar0301/soothe
 - **Issues**: https://github.com/caesar0301/soothe/issues
-- **Documentation**: https://soothe.readthedocs.io
+- **Docs**: https://soothe.readthedocs.io
 
 ## License
 
 MIT License
-
----
-
-**⚠️ WARNING**: This `soothe` package is deprecated. Migrate to `soothe-cli` and `soothe-daemon` immediately.
