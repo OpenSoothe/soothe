@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+
 # TODO IG-174 Phase 5: Create CLI-specific config class
 # SootheConfig import kept for daemon RPC communication
 from soothe.config import SootheConfig
@@ -80,16 +81,22 @@ def thread_list(
         soothe thread list --limit 10
         soothe thread list --limit 20 --status idle
     """
-    # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
-# Remove daemon lifecycle management, use WebSocket client
-# from soothe.daemon import SootheDaemon
+    import asyncio
+
+    from soothe_sdk.client import is_daemon_live, websocket_url_from_config
 
     from soothe_cli.shared import load_config
 
     cfg = load_config(config)
+    ws_url = websocket_url_from_config(cfg)
 
-    # Check if daemon is running - connect to it to avoid RocksDB lock conflicts
-    if SootheDaemon.is_running():
+    # Check daemon status via WebSocket RPC (IG-174 Phase 1)
+    async def _check_daemon() -> bool:
+        return await is_daemon_live(ws_url, timeout=5.0)
+
+    daemon_live = asyncio.run(_check_daemon())
+
+    if daemon_live:
         _thread_list_via_daemon(cfg, status_filter=status, limit=limit)
     else:
         _thread_list_direct(cfg, status_filter=status, limit=limit)
@@ -104,11 +111,9 @@ def _thread_list_via_daemon(
     read ``command_response`` but exited on the first ``status`` event, which is
     always sent during the WebSocket handshake (idle), so the table never printed.
     """
-    from soothe.daemon import WebSocketClient
+    from soothe_sdk.client import WebSocketClient, websocket_url_from_config
 
-    host = cfg.daemon.transports.websocket.host
-    port = cfg.daemon.transports.websocket.port
-    ws_url = f"ws://{host}:{port}"
+    ws_url = websocket_url_from_config(cfg)
 
     async def _list() -> None:
         client = WebSocketClient(url=ws_url)
@@ -206,9 +211,9 @@ def thread_continue(
         soothe thread continue --new
         soothe thread continue
     """
-    # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
-# Remove daemon lifecycle management, use WebSocket client
-# from soothe.daemon import SootheDaemon
+    import asyncio
+
+    from soothe_sdk.client import is_daemon_live, websocket_url_from_config
 
     from soothe_cli.cli.execution import run_tui
     from soothe_cli.shared import load_config, setup_logging
@@ -216,8 +221,15 @@ def thread_continue(
     cfg = load_config(config)
     setup_logging(cfg)
 
-    # Check if daemon is running - required for thread continuation
-    if not SootheDaemon.is_running():
+    # Check daemon status via WebSocket RPC (IG-174 Phase 1)
+    ws_url = websocket_url_from_config(cfg)
+
+    async def _check_daemon() -> bool:
+        return await is_daemon_live(ws_url, timeout=5.0)
+
+    daemon_live = asyncio.run(_check_daemon())
+
+    if not daemon_live:
         typer.echo("Error: No daemon running. Start with 'soothe-daemon start'.", err=True)
         sys.exit(1)
 
@@ -228,11 +240,9 @@ def thread_continue(
         # Find the most recently updated active thread through the daemon via WebSocket
         async def get_last_thread_via_daemon() -> str | None:
             """Find the most recently updated active thread through the daemon via WebSocket."""
-            from soothe.daemon import WebSocketClient
+            from soothe_sdk.client import WebSocketClient
 
-            host = cfg.daemon.transports.websocket.host
-            port = cfg.daemon.transports.websocket.port
-            client = WebSocketClient(url=f"ws://{host}:{port}")
+            client = WebSocketClient(url=websocket_url_from_config(cfg))
             try:
                 await client.connect()
                 await client.send_thread_list()
@@ -362,8 +372,8 @@ def thread_delete(
     Example:
         soothe thread delete abc123
     """
-    from soothe_sdk import SOOTHE_HOME
     from soothe_daemon.core.runner import SootheRunner
+    from soothe_sdk import SOOTHE_HOME
 
     from soothe_cli.shared import load_config
 

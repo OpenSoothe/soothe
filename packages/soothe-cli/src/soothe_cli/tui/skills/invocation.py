@@ -5,92 +5,82 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-# TODO Phase 4: Skills via daemon RPC (IG-174)
-# TODO Phase 4: parse_skill_directory via daemon RPC (IG-174)
+from soothe_sdk.client import fetch_skills_catalog, websocket_url_from_config
 
-from soothe_cli.tui.config import Settings, _get_settings
+from soothe_cli.tui.config import _get_settings
 from soothe_cli.tui.skills.load import ExtendedSkillMetadata
+
+if TYPE_CHECKING:
+    from soothe_cli.config.cli_config import CLIConfig
 
 logger = logging.getLogger(__name__)
 
 
-def discover_skills_and_roots(assistant_id: str) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
-    """Discover skills and build containment roots for ``load_skill_content``.
+async def discover_skills_and_roots_async(
+    assistant_id: str,
+    daemon_config: CLIConfig | None = None,
+) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
+    """Discover skills from daemon RPC and build containment roots (IG-174 Phase 2).
 
-    Scans, in order: built-in package skills, per-agent ``SOOTHE_HOME`` skills,
-    project ``.soothe/skills``, ``~/.agents/skills`` / project ``.agents/skills``,
-    and optional Claude Code bridge directories. Later locations override
-    earlier entries on **name** collisions (user/project win over built-in).
+    Fetches wire-safe skill metadata from daemon via WebSocket RPC instead of
+    local filesystem scanning. Daemon handles all skill discovery (built-in, user,
+    project, etc.) and returns wire-safe metadata.
 
     Args:
-        assistant_id: Agent / assistant id used for ``~/SOOTHE_HOME/<id>/skills``.
+        assistant_id: Agent / assistant id (unused in daemon mode, kept for compat).
+        daemon_config: Optional daemon config for WebSocket URL construction.
 
     Returns:
         Tuple of ``(skills, allowed_roots)`` where ``skills`` is ordered by
         ascending precedence (built-in first, winning entry last), and
-        ``allowed_roots`` lists every resolved directory that may legally contain
-        a ``SKILL.md`` for loading (including ``settings.extra_skills_dirs``).
+        ``allowed_roots`` lists directories from wire-safe path strings.
     """
+    from soothe_sdk.client import WebSocketClient
+
     settings = _get_settings()
     by_name: OrderedDict[str, ExtendedSkillMetadata] = OrderedDict()
 
-    # Package built-ins: `get_built_in_skills_paths()` returns one directory per
-    # skill (each already contains SKILL.md), not a parent containing subfolders.
-    for p in get_built_in_skills_paths():
-        skill_dir = Path(p).resolve()
-        meta = parse_skill_directory(skill_dir, source="builtin")
-        if meta is not None and meta.get("name"):
-            by_name[meta["name"]] = meta
+    # Fetch skills catalog from daemon via WebSocket RPC
+    if daemon_config is None:
+        # Fallback: return empty if no config (should not happen in TUI)
+        logger.warning("No daemon_config provided for skills discovery")
+        return [], []
 
-    roots_scan: list[tuple[Path, str]] = [
-        (settings.get_user_skills_dir(assistant_id), "user"),
-    ]
+    ws_url = websocket_url_from_config(daemon_config)
+    client = WebSocketClient(url=ws_url)
 
-    proj_soothe = settings.get_project_skills_dir()
-    if proj_soothe is not None:
-        roots_scan.append((proj_soothe, "project"))
+    try:
+        await client.connect()
+        skills_wire = await fetch_skills_catalog(client, timeout=15.0)
+        await client.close()
 
-    roots_scan.append((settings.get_user_agent_skills_dir(), "agents"))
-
-    proj_agents = settings.get_project_agent_skills_dir()
-    if proj_agents is not None:
-        roots_scan.append((proj_agents, "agents"))
-
-    roots_scan.append((Settings.get_user_claude_skills_dir(), "claude"))
-
-    proj_claude = settings.get_project_claude_skills_dir()
-    if proj_claude is not None:
-        roots_scan.append((proj_claude, "claude"))
-
-    for root, source in roots_scan:
-        if not root.is_dir():
-            continue
-        try:
-            children = sorted(root.iterdir(), key=lambda p: p.name.lower())
-        except OSError:
-            logger.warning("Could not list skill root %s", root, exc_info=True)
-            continue
-        for child in children:
-            if not child.is_dir():
-                continue
-            skill_md = child / "SKILL.md"
-            if not skill_md.is_file():
-                continue
-            meta = parse_skill_directory(child, source=source)
-            if meta is None or not meta.get("name"):
-                continue
-            by_name[meta["name"]] = meta
+        # Build by_name mapping from wire-safe metadata
+        for skill_meta in skills_wire:
+            name = skill_meta.get("name")
+            if name:
+                # Convert wire-safe dict to ExtendedSkillMetadata TypedDict
+                by_name[name] = skill_meta
+    except Exception as e:
+        logger.warning(f"Failed to fetch skills from daemon: {e}")
+        # Fallback: empty catalog if daemon unavailable
+        return [], []
 
     skills = list(by_name.values())
 
+    # Build allowed_roots from wire-safe path strings
     allowed: list[Path] = []
     seen: set[Path] = set()
     for meta in skills:
-        p = Path(meta["path"]).resolve()
-        if p not in seen:
-            seen.add(p)
-            allowed.append(p)
+        path_str = meta.get("path")
+        if path_str:
+            p = Path(path_str).resolve()
+            if p not in seen:
+                seen.add(p)
+                allowed.append(p)
+
+    # Add extra skills dirs from settings
     for extra in settings.get_extra_skills_dirs():
         rp = extra.resolve()
         if rp not in seen:
@@ -98,3 +88,23 @@ def discover_skills_and_roots(assistant_id: str) -> tuple[list[ExtendedSkillMeta
             allowed.append(rp)
 
     return skills, allowed
+
+
+def discover_skills_and_roots(assistant_id: str) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
+    """Synchronous wrapper for skills discovery (backward compatibility).
+
+    Note: This synchronous version cannot use daemon RPC. It returns empty
+    skills list. Production code should use discover_skills_and_roots_async()
+    with daemon config.
+
+    Args:
+        assistant_id: Agent / assistant id.
+
+    Returns:
+        Empty tuple ``(skills=[], allowed_roots=[])``.
+    """
+    logger.warning(
+        "discover_skills_and_roots() is deprecated. "
+        "Use discover_skills_and_roots_async() with daemon config."
+    )
+    return [], []

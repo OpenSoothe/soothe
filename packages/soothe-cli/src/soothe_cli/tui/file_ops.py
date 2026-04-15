@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     # TODO IG-174 Phase 2: Backend protocol via daemon RPC
-# from soothe.backends.protocol import BackendProtocol
+    # from soothe.backends.protocol import BackendProtocol
+    pass
 
 FileOpStatus = Literal["pending", "success", "error"]
 
@@ -222,17 +223,25 @@ def build_approval_preview(
         new_string = str(args.get("new_string", ""))
         replace_all = bool(args.get("replace_all"))
         # TODO IG-174 Phase 2: File ops via daemon RPC
-# from soothe.backends.utils import perform_string_replacement
+        # from soothe.backends.utils import perform_string_replacement
+        # replacement = perform_string_replacement(before, old_string, new_string, replace_all)
 
-        replacement = perform_string_replacement(before, old_string, new_string, replace_all)
-        if isinstance(replacement, str):
-            return ApprovalPreview(
-                title=f"Update {display_path}",
-                details=[f"File: {path_str}", "Action: Replace text"],
-                error=replacement,
-            )
-        after, occurrences = replacement
-        diff = compute_unified_diff(before, after, display_path, max_lines=None)
+        # Placeholder: Cannot preview without daemon RPC
+        return ApprovalPreview(
+            title=f"Update {display_path}",
+            details=[f"File: {path_str}", "Action: Replace text (preview unavailable)"],
+            error="File preview requires daemon RPC (IG-174 Phase 2)",
+        )
+
+        # TODO: Uncomment when daemon RPC available
+        # if isinstance(replacement, str):
+        #     return ApprovalPreview(
+        #         title=f"Update {display_path}",
+        #         details=[f"File: {path_str}", "Action: Replace text"],
+        #         error=replacement,
+        #     )
+        # after, occurrences = replacement
+        # diff = compute_unified_diff(before, after, display_path, max_lines=None)
         additions = 0
         deletions = 0
         if diff:
@@ -266,7 +275,7 @@ def build_approval_preview(
 class FileOpTracker:
     """Collect file operation metrics during a CLI interaction."""
 
-    def __init__(self, *, assistant_id: str | None, backend: BackendProtocol | None = None) -> None:
+    def __init__(self, *, assistant_id: str | None, backend: Any | None = None) -> None:
         """Initialize the tracker."""
         self.assistant_id = assistant_id
         self.backend = backend
