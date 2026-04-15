@@ -59,7 +59,7 @@ Soothe provides multiple execution modes for different use cases:
 | **Default (TUI)** | Standard tasks, research, file operations | `soothe -p "your query"` or just `soothe` |
 | **Headless** | Quick one-off queries, scripts | `soothe -p "your query" --no-tui` |
 | **Autonomous** | Complex multi-step workflows | `soothe autopilot run "your query"` |
-| **Daemon** | Background operations, remote access | `soothe daemon start` |
+| **Daemon** | Background operations, remote access | `soothe-daemon start` |
 
 Learn more: [Getting Started](getting-started.md#execution-modes)
 

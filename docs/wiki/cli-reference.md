@@ -87,12 +87,12 @@ Continue a conversation thread in the TUI.
 - `--config <file>` - Use custom configuration file
 
 **Requirements**:
-- Requires a running daemon. Start daemon with `soothe daemon start` first.
+- Requires a running daemon. Start daemon with `soothe-daemon start` first.
 
 **Examples**:
 ```bash
 # Start daemon first
-soothe daemon start
+soothe-daemon start
 
 # Continue specific thread
 soothe thread continue abc123
@@ -295,11 +295,11 @@ soothe agent status
 
 Manage the Soothe daemon process.
 
-### soothe daemon start
+### soothe-daemon start
 
 Start the Soothe daemon.
 
-**Usage**: `soothe daemon start [options]`
+**Usage**: `soothe-daemon start [options]`
 
 **Options**:
 - `--foreground` - Run in foreground (don't daemonize)
@@ -308,32 +308,32 @@ Start the Soothe daemon.
 **Examples**:
 ```bash
 # Start daemon in background
-soothe daemon start
+soothe-daemon start
 
 # Start in foreground
-soothe daemon start --foreground
+soothe-daemon start --foreground
 ```
 
-### soothe daemon stop
+### soothe-daemon stop
 
 Stop the running Soothe daemon.
 
-**Usage**: `soothe daemon stop`
+**Usage**: `soothe-daemon stop`
 
 **Examples**:
 ```bash
-soothe daemon stop
+soothe-daemon stop
 ```
 
-### soothe daemon status
+### soothe-daemon status
 
 Show Soothe daemon status.
 
-**Usage**: `soothe daemon status`
+**Usage**: `soothe-daemon status`
 
 **Examples**:
 ```bash
-soothe daemon status
+soothe-daemon status
 ```
 
 **Output**:
@@ -348,18 +348,18 @@ Transports:
 Active Threads: 3
 ```
 
-### soothe daemon restart
+### soothe-daemon restart
 
 Restart the Soothe daemon.
 
-**Usage**: `soothe daemon restart [options]`
+**Usage**: `soothe-daemon restart [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-soothe daemon restart
+soothe-daemon restart
 ```
 
 ## Autopilot Mode
@@ -440,13 +440,13 @@ soothe thread continue
 
 ```bash
 # Start daemon
-soothe daemon start
+soothe-daemon start
 
 # Run in detached mode
 soothe -p "Long running task" &
 
 # Check status later
-soothe daemon status
+soothe-daemon status
 ```
 
 ### Thread Management

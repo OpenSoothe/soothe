@@ -3,7 +3,7 @@
 ## Objective
 
 Fix three interconnected daemon bugs that prevent reliable CLI usage:
-1. Daemon ignores SIGTERM so `soothe daemon stop` fails.
+1. Daemon ignores SIGTERM so `soothe-daemon stop` fails.
 2. Multiple daemon processes can run simultaneously (should be singleton).
 3. `soothe run --no-tui` hangs when a daemon is running.
 
@@ -80,7 +80,7 @@ When daemon is detected, headless mode connects via DaemonClient. But:
 
 ## Validation
 
-- `soothe daemon stop` terminates daemon within 10s.
-- `soothe daemon start` twice prints "already running" on second attempt.
+- `soothe-daemon stop` terminates daemon within 10s.
+- `soothe-daemon start` twice prints "already running" on second attempt.
 - `soothe run --no-tui "who are you"` completes (not hangs) when daemon is running.
 - `soothe run --no-tui "who are you"` completes when no daemon is running.

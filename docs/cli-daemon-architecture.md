@@ -211,10 +211,10 @@ tui:
 
 | Old | New | Package |
 |-----|-----|---------|
-| `soothe daemon start` | `soothe-daemon start` | daemon |
-| `soothe daemon stop` | `soothe-daemon stop` | daemon |
-| `soothe daemon status` | `soothe-daemon status` | daemon |
-| `soothe daemon restart` | `soothe-daemon restart` | daemon |
+| `soothe-daemon start` | `soothe-daemon start` | daemon |
+| `soothe-daemon stop` | `soothe-daemon stop` | daemon |
+| `soothe-daemon status` | `soothe-daemon status` | daemon |
+| `soothe-daemon restart` | `soothe-daemon restart` | daemon |
 | `soothe doctor` | `soothe-daemon doctor` | daemon |
 | `soothe -p "..."` | `soothe -p "..."` | CLI (unchanged) |
 | `soothe thread list` | `soothe thread list` | CLI (unchanged) |

@@ -191,7 +191,7 @@ def _thread_continue(
 ) -> None:
     """Continue a conversation thread in the TUI.
 
-    Requires a running daemon. Start daemon with 'soothe daemon start' first.
+    Requires a running daemon. Start daemon with 'soothe-daemon start' first.
 
     Examples:
         soothe thread continue abc123

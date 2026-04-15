@@ -1338,7 +1338,7 @@ def thread_continue(
     # Handle --daemon flag
     if daemon:
         if not SootheDaemon.is_running():
-            typer.echo("Error: No daemon running. Start with 'soothe daemon start'.", err=True)
+            typer.echo("Error: No daemon running. Start with 'soothe-daemon start'.", err=True)
             sys.exit(1)
 
         # Connect to daemon and resume thread
@@ -1598,7 +1598,7 @@ async def test_thread_continuation_cli(test_config):
 
 ```bash
 # Start daemon
-soothe daemon start
+soothe-daemon start
 
 # Create and continue thread
 soothe thread continue --new
@@ -1661,7 +1661,7 @@ Execute multiple threads concurrently and verify:
 ## Success Criteria
 
 1. ✅ All HTTP REST endpoints functional (not placeholders)
-2. ✅ `soothe thread continue --daemon` replaces `soothe daemon attach`
+2. ✅ `soothe thread continue --daemon` replaces `soothe thread continue`
 3. ✅ Thread statistics calculate correctly
 4. ✅ Thread filtering works by status, tags, labels
 5. ✅ Multi-threading support with isolation

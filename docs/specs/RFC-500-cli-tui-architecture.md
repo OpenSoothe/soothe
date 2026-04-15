@@ -109,7 +109,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 
 **Main**: `soothe` (TUI), `soothe -p "prompt" --no-tui` (headless), `soothe autopilot run "task"` (autonomous).
 
-**Daemon**: `soothe daemon start/stop/status/restart [--foreground]`.
+**Daemon**: `soothe-daemon start/stop/status/restart [--foreground]`.
 
 **Thread**: `soothe thread list/show/continue/archive/delete/export/stats/tag`.
 
@@ -134,7 +134,7 @@ Pattern: `soothe <subcommand> <action> [options]`
 | `/clear` | Clear screen |
 | `/config` | Show active configuration |
 
-**Daemon Lifetime**: Decoupled from client exit. `/detach` leaves work running. `/exit`/`/quit` stop thread then exit TUI, daemon persists. Explicit shutdown via `soothe daemon stop`.
+**Daemon Lifetime**: Decoupled from client exit. `/detach` leaves work running. `/exit`/`/quit` stop thread then exit TUI, daemon persists. Explicit shutdown via `soothe-daemon stop`.
 
 ## TUI Layout
 

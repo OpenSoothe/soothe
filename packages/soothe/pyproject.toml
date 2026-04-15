@@ -99,8 +99,6 @@ all = [
 ]
 
 [project.scripts]
-soothe = "soothe.cli.main:app"
-# Daemon management commands also available via 'soothe daemon' subcommands
 soothe-daemon = "soothe.cli.daemon_main:app"
 
 [project.urls]

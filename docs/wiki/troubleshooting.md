@@ -80,7 +80,7 @@ subagents:
 
 1. Check daemon status:
 ```bash
-soothe daemon status
+soothe-daemon status
 ```
 
 2. Ensure WebSocket is enabled in config:
@@ -95,8 +95,8 @@ daemon:
 
 3. Restart daemon:
 ```bash
-soothe daemon stop
-soothe daemon start
+soothe-daemon stop
+soothe-daemon start
 ```
 
 ### Error: Connection timeout
@@ -128,8 +128,8 @@ daemon:
 Then restart daemon:
 
 ```bash
-soothe daemon stop
-soothe daemon start
+soothe-daemon stop
+soothe-daemon start
 ```
 
 ### Error: 404 Not Found
@@ -236,8 +236,8 @@ daemon:
 Restart daemon after updating:
 
 ```bash
-soothe daemon stop
-soothe daemon start
+soothe-daemon stop
+soothe-daemon start
 ```
 
 ## Daemon Issues
@@ -250,7 +250,7 @@ soothe daemon start
 
 ```bash
 rm ~/.soothe/soothe.sock
-soothe daemon start
+soothe-daemon start
 ```
 
 ### Error: Daemon won't start
@@ -267,7 +267,7 @@ tail -f ~/.soothe/logs/daemon.log
 2. Enable debug mode:
 ```bash
 export SOOTHE_DEBUG=true
-soothe daemon start
+soothe-daemon start
 ```
 
 3. Verify configuration:
@@ -283,13 +283,13 @@ soothe config validate
 
 1. Check daemon status:
 ```bash
-soothe daemon status
+soothe-daemon status
 ```
 
 2. Restart daemon:
 ```bash
-soothe daemon stop
-soothe daemon start
+soothe-daemon stop
+soothe-daemon start
 ```
 
 3. Check for zombie processes:
@@ -436,7 +436,7 @@ For daemon-specific logging:
 
 ```bash
 export SOOTHE_DEBUG=true
-soothe daemon start
+soothe-daemon start
 ```
 
 Or in YAML:

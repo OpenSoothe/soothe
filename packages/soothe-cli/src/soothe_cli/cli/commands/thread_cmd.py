@@ -195,7 +195,7 @@ def thread_continue(
 ) -> None:
     """Continue a conversation thread in the TUI.
 
-    Requires a running daemon. Start daemon with 'soothe daemon start' first.
+    Requires a running daemon. Start daemon with 'soothe-daemon start' first.
 
     Examples:
         soothe thread continue abc123
@@ -212,7 +212,7 @@ def thread_continue(
 
     # Check if daemon is running - required for thread continuation
     if not SootheDaemon.is_running():
-        typer.echo("Error: No daemon running. Start with 'soothe daemon start'.", err=True)
+        typer.echo("Error: No daemon running. Start with 'soothe-daemon start'.", err=True)
         sys.exit(1)
 
     # Handle --new flag

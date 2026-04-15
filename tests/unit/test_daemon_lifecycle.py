@@ -1,7 +1,7 @@
 """Tests for daemon lifecycle semantics (IG-085, RFC-0013).
 
 Tests that daemon persists across client sessions and only explicit
-'soothe daemon stop' shuts down the daemon.
+'soothe-daemon stop' shuts down the daemon.
 """
 
 from __future__ import annotations
