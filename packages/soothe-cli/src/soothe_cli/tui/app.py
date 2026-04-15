@@ -74,8 +74,12 @@ if TYPE_CHECKING:
 
     from langchain_core.runnables import RunnableConfig
     from langgraph.pregel import Pregel
-    from soothe.backends import CompositeBackend
-    from soothe.config import SootheConfig
+    # TODO IG-174 Phase 2: Remove backend execution
+# Backend imports removed - execution via daemon WebSocket RPC
+# from soothe.backends import CompositeBackend
+    # TODO IG-174 Phase 5: Create CLI-specific config class
+# SootheConfig import kept for daemon RPC communication
+from soothe.config import SootheConfig
     from textual.app import ComposeResult
     from textual.events import Click, MouseUp, Paste
     from textual.scrollbar import ScrollUp
@@ -1438,7 +1442,9 @@ class SootheApp(App):
             return
 
         try:
-            from soothe.daemon import SootheDaemon
+            # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
+# Remove daemon lifecycle management, use WebSocket client
+# from soothe.daemon import SootheDaemon
 
             from soothe_cli.cli.commands.daemon_cmd import daemon_start
             from soothe_cli.tui.daemon_session import TuiDaemonSession

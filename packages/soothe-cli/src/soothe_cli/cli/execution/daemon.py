@@ -10,6 +10,8 @@ import logging
 import sys
 
 import typer
+# TODO IG-174 Phase 5: Create CLI-specific config class
+# SootheConfig import kept for daemon RPC communication
 from soothe.config import SootheConfig
 
 from soothe_cli.cli.renderer import CliRenderer

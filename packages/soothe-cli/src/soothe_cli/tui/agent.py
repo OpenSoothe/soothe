@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
-from soothe.backends import CompositeBackend, LocalShellBackend
+# TODO IG-174 Phase 2: Remove backend execution
+# Backend imports removed - execution via daemon WebSocket RPC
+# # TODO IG-174 Phase 2: Remove backend execution
+# Backend imports removed - execution via daemon WebSocket RPC
+# from soothe.backends import CompositeBackend, LocalShellBackend
 from soothe_sdk import SOOTHE_HOME
 
 if TYPE_CHECKING:
