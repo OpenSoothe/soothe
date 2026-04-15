@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe.utils.text_preview import preview_first
+from soothe_sdk.protocol import preview_first
 
 from soothe_cli.shared.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tool_output_formatter import ToolBrief

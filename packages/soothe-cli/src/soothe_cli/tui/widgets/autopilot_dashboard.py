@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from soothe.config import SOOTHE_HOME
-from soothe.utils.text_preview import preview_first
+from soothe_sdk.protocol import preview_first
 from textual.containers import Container, ScrollableContainer
 from textual.reactive import reactive
 from textual.widgets import Static

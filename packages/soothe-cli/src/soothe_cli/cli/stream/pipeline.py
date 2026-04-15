@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any
 
-from soothe.utils.text_preview import preview_first
+from soothe_sdk.protocol import preview_first
 from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream.context import PipelineContext
