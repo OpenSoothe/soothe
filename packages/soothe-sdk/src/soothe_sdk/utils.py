@@ -6,10 +6,8 @@ CLI importing daemon runtime.
 This module is part of Phase 1 of IG-174: CLI import violations fix.
 """
 
-import os
 import re
 from pathlib import Path
-from typing import List, Optional
 
 
 def strip_internal_tags(text: str) -> str:
@@ -65,7 +63,7 @@ def log_preview(text: str, max_length: int = 100) -> str:
     return text[:max_length - 3] + "..."
 
 
-def convert_and_abbreviate_path(path: str, base_dir: Optional[str] = None) -> str:
+def convert_and_abbreviate_path(path: str, base_dir: str | None = None) -> str:
     """Convert and abbreviate path for display.
 
     Makes paths more readable by abbreviating home directory and base dir.
@@ -106,7 +104,7 @@ def convert_and_abbreviate_path(path: str, base_dir: Optional[str] = None) -> st
     return str(p)
 
 
-def parse_autopilot_goals(text: str) -> List[str]:
+def parse_autopilot_goals(text: str) -> list[str]:
     """Parse autopilot goals from text.
 
     Extracts goal statements from autopilot input text.
