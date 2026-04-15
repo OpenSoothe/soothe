@@ -77,47 +77,65 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 
 ## Getting Started
 
+### Installation
+
+Soothe is published as a monorepo with multiple packages:
+
+- **`soothe`** (PyPI) — Main package: daemon server + CLI
+- **`soothe-cli`** — Standalone WebSocket client
+- **`soothe-sdk`** — Shared SDK for custom clients
+- **`soothe-community`** — Optional community plugins
+
+Install the main package:
+
+```bash
+pip install soothe
+```
+
 ### Quick Start
 
-1. **Install Soothe**:
+1. **Configure your LLM provider**:
+
    ```bash
-   pip install soothe
-   ```
-2. **Initialize config**:
-   ```bash
-   # Create Soothe home directory
+   # Create config directory
    mkdir -p ~/.soothe/config
 
    # Copy minimal config template
    cp config.minimal.yml ~/.soothe/config/config.yml
 
-   # Edit with your preferred provider and models
-   vim ~/.soothe/config/config.yml  # or use your favorite editor
+   # Set your API key
+   export OPENAI_API_KEY="sk-..."
+   # or export ANTHROPIC_API_KEY="sk-ant-..."
+   # or export DASHSCOPE_API_KEY="sk-..."
+
+   # Edit config with your preferred models
+   vim ~/.soothe/config/config.yml
    ```
 
-   The minimal config file contains just the essentials: provider settings and model router. All other settings use sensible defaults.
+   The minimal config contains just essentials: provider settings and model router. All other settings use sensible defaults.
 
-3. **Run your first task**:
+2. **Run your first query**:
+
    ```bash
-   # Interactive TUI mode (default)
-   soothe -p "Research the top 5 Python web frameworks and create a comparison table"
-
-   # Or just launch TUI and type your query
+   # Interactive TUI (default)
    soothe
+
+   # Single-prompt mode
+   soothe -p "Research the top 5 Python web frameworks and create a comparison table"
    ```
 
-### Background Daemon
+### Daemon Mode
 
 For long-running operations and remote access:
 
 ```bash
-# Start daemon
+# Start daemon server
 soothe daemon start
 
 # Attach from any terminal
 soothe daemon attach
 
-# Or connect via WebSocket/HTTP
+# Enable remote transports
 soothe daemon start --enable-websocket --enable-http
 ```
 
