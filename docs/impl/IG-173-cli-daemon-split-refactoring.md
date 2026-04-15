@@ -371,7 +371,7 @@ All integration tests passed!
 - ✅ Removed src/soothe/logging/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/execute/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/mcp/ (moved to packages/soothe-daemon/)
-- ✅ Removed src/soothe/skills/ (not migrated - needs decision)
+- ✅ Removed src/soothe/skills/ (not migrated - functionality moved to packages/soothe-cli/src/soothe_cli/tui/skills/)
 
 **Old Package Deprecated**:
 - ✅ Updated src/soothe/__init__.py with deprecation notice
@@ -414,7 +414,7 @@ CLI still imports from old soothe.* modules (violations of WebSocket-only princi
 - `from soothe.foundation import strip_internal_tags` (textual_adapter.py) - Use `soothe_sdk.internal`
 
 **Uncertain**:
-- `from soothe.skills import get_built_in_skills_paths` (skills/invocation.py) - Skills not migrated
+- `from soothe.skills import get_built_in_skills_paths` (skills/invocation.py) - Skills functionality moved to packages/soothe-cli/src/soothe_cli/tui/skills/
 - `from soothe.profiles._openrouter import ...` (config.py) - Profiles not migrated
 
 #### Impact Assessment ⚠️

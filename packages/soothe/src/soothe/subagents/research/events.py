@@ -77,7 +77,9 @@ class ResearchGatherEvent(SootheEvent):
 class ResearchGatherDoneEvent(SootheEvent):
     """Research gather done event."""
 
-    type: Literal["soothe.capability.research.gather.completed"] = "soothe.capability.research.gather.completed"
+    type: Literal["soothe.capability.research.gather.completed"] = (
+        "soothe.capability.research.gather.completed"
+    )
     query: str = ""
     result_count: int = 0
     sources_used: list[str] = field(default_factory=list)
@@ -88,7 +90,9 @@ class ResearchGatherDoneEvent(SootheEvent):
 class ResearchSummarizeEvent(SootheEvent):
     """Research summarize event."""
 
-    type: Literal["soothe.capability.research.summarizing"] = "soothe.capability.research.summarizing"
+    type: Literal["soothe.capability.research.summarizing"] = (
+        "soothe.capability.research.summarizing"
+    )
     total_summaries: int = 0
 
     model_config = ConfigDict(extra="allow")
@@ -119,7 +123,9 @@ class ResearchReflectionDoneEvent(SootheEvent):
 class ResearchSynthesizeEvent(SootheEvent):
     """Research synthesize event."""
 
-    type: Literal["soothe.capability.research.synthesizing"] = "soothe.capability.research.synthesizing"
+    type: Literal["soothe.capability.research.synthesizing"] = (
+        "soothe.capability.research.synthesizing"
+    )
     topic: str = ""
     total_sources: int = 0
 
@@ -135,7 +141,9 @@ class ResearchInternalLLMResponseEvent(SootheEvent):
     filtered instead of leaking as assistant text.
     """
 
-    type: Literal["soothe.capability.research.internal_llm.running"] = "soothe.capability.research.internal_llm.running"
+    type: Literal["soothe.capability.research.internal_llm.running"] = (
+        "soothe.capability.research.internal_llm.running"
+    )
     response_type: str = ""  # "analysis", "queries", "reflection"
 
     model_config = ConfigDict(extra="allow")
@@ -153,7 +161,9 @@ class ResearchJudgementEvent(SootheEvent):
         confidence: Confidence level if available (0.0-1.0).
     """
 
-    type: Literal["soothe.capability.research.judgement.reporting"] = "soothe.capability.research.judgement.reporting"
+    type: Literal["soothe.capability.research.judgement.reporting"] = (
+        "soothe.capability.research.judgement.reporting"
+    )
     judgement: str = ""
     action: str = ""  # "continue" or "complete"
     confidence: float | None = None

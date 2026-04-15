@@ -335,7 +335,6 @@ Apply similar changes to:
 - `src/soothe/daemon/singleton.py:16` (PID file)
 - `src/soothe/ux/cli/commands/health_cmd.py:90` (health report)
 - `src/soothe/ux/cli/commands/config_cmd.py:165` (minimal config)
-- `src/soothe/skills/skill-creator/scripts/init_skill.py` (skill creation)
 - `src/soothe/subagents/weaver/generator.py` (agent generation)
 - `src/soothe/tools/_internal/document.py:246` (cache writing)
 - `src/soothe/tools/audio/implementation.py:139` (audio cache)

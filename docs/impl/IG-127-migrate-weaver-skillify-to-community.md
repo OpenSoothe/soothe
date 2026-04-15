@@ -28,7 +28,6 @@ Migrated Weaver and Skillify subagents from `src/soothe/` to `community/src/soot
   - `core/config_driven.py` (skillify_retrieve permission)
   - `core/runner/_runner_steps.py` (system prompt)
   - `cognition/planning/simple.py` (known subagents, hint map)
-  - `skills/soothe-checkhealth/scripts/check_subagents.py` (health checks)
   - `config/config.yml` and `config.dev.yml` (config sections)
   - `subagents/__init__.py` (re-exports)
 - Deleted examples and implementation guide docs

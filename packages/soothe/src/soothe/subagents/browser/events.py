@@ -34,7 +34,9 @@ class BrowserCompletedEvent(SubagentEvent):
 class BrowserStepEvent(SubagentEvent):
     """Browser automation step event."""
 
-    type: Literal["soothe.capability.browser.step.running"] = "soothe.capability.browser.step.running"
+    type: Literal["soothe.capability.browser.step.running"] = (
+        "soothe.capability.browser.step.running"
+    )
     step: int | str = ""
     url: str = ""
     action: str = ""
@@ -47,7 +49,9 @@ class BrowserStepEvent(SubagentEvent):
 class BrowserCdpEvent(SubagentEvent):
     """Browser CDP connection event."""
 
-    type: Literal["soothe.capability.browser.cdp.connecting"] = "soothe.capability.browser.cdp.connecting"
+    type: Literal["soothe.capability.browser.cdp.connecting"] = (
+        "soothe.capability.browser.cdp.connecting"
+    )
     status: str = ""
     cdp_url: str | None = None
 
