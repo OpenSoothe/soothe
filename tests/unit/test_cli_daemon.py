@@ -438,7 +438,7 @@ async def test_daemon_initial_status_no_thread_leak() -> None:
     await daemon._handle_client(reader, writer)  # type: ignore[arg-type]
 
     # Decode the initial status message
-    from soothe.daemon.protocol import decode
+    from soothe_sdk.protocol import decode
 
     assert len(sent_messages) > 0, "Should have sent initial status message"
     initial_msg = decode(sent_messages[0])

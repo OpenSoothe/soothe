@@ -1,6 +1,6 @@
 """Tests for debug mode source prefix."""
 
-from soothe.foundation.verbosity_tier import VerbosityTier
+from soothe_sdk.verbosity import VerbosityTier
 from soothe.ux.cli.stream.formatter import _derive_source_prefix, format_goal_header
 
 

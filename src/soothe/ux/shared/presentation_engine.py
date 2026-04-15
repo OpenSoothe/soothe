@@ -10,7 +10,7 @@ import re
 import time
 from dataclasses import dataclass
 
-from soothe.foundation.verbosity_tier import VerbosityTier, should_show
+from soothe_sdk.verbosity import VerbosityTier, should_show
 from soothe.ux.shared.display_policy import VerbosityLevel
 from soothe.utils.text_preview import log_preview
 

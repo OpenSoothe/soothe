@@ -8,8 +8,8 @@ import pytest
 from soothe.core.event_catalog import EventMeta
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
-from soothe.foundation.base_events import SootheEvent
-from soothe.foundation.verbosity_tier import VerbosityTier
+from soothe_sdk.events import SootheEvent
+from soothe_sdk.verbosity import VerbosityTier
 
 
 @pytest.mark.asyncio

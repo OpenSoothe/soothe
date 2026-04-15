@@ -348,7 +348,11 @@ class WebSocketClient:
         """
         from anyio import Path as AsyncPath
 
-        workspace = str(await AsyncPath.cwd()) if workspace is None else str(await AsyncPath(workspace).resolve())
+        workspace = (
+            str(await AsyncPath.cwd())
+            if workspace is None
+            else str(await AsyncPath(workspace).resolve())
+        )
 
         await self.send(
             {
@@ -366,7 +370,11 @@ class WebSocketClient:
         """
         from anyio import Path as AsyncPath
 
-        workspace = str(await AsyncPath.cwd()) if workspace is None else str(await AsyncPath(workspace).resolve())
+        workspace = (
+            str(await AsyncPath.cwd())
+            if workspace is None
+            else str(await AsyncPath(workspace).resolve())
+        )
 
         await self.send(
             {
@@ -499,7 +507,9 @@ class WebSocketClient:
                 echoed_verbosity,
             )
 
-        logger.debug("Subscription confirmed for thread %s with verbosity=%s", thread_id, echoed_verbosity)
+        logger.debug(
+            "Subscription confirmed for thread %s with verbosity=%s", thread_id, echoed_verbosity
+        )
 
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
@@ -520,3 +530,6 @@ class WebSocketClient:
         except Exception:
             logger.exception("Error reading event")
             return None
+
+
+__all__ = ["WebSocketClient", "VerbosityLevel"]

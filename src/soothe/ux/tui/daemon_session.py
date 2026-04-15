@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import messages_from_dict
 
-from soothe.daemon.websocket_client import WebSocketClient
+from soothe_sdk.client import WebSocketClient
 from soothe.ux.client import (
     bootstrap_thread_session,
     connect_websocket_with_retries,

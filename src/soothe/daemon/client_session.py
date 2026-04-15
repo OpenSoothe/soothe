@@ -10,15 +10,12 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.verbosity import VerbosityLevel
+
 if TYPE_CHECKING:
     from soothe.core.event_catalog import EventMeta
     from soothe.daemon.event_bus import EventBus
     from soothe.daemon.transports.base import TransportServer
-
-# Type alias for verbosity levels (RFC-0015, RFC-0022)
-from typing import Literal
-
-VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +344,7 @@ class ClientSessionManager:
 
                     if not is_heartbeat:
                         # Import should_show from RFC-0024's verbosity_tier
-                        from soothe.foundation.verbosity_tier import should_show
+                        from soothe_sdk.verbosity import should_show
 
                         # Check if event should be shown at client's verbosity level
                         if not should_show(event_meta.verbosity, session.verbosity):
