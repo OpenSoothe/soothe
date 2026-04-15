@@ -1,4 +1,4 @@
-name: Release Soothe
+name: Release Soothe Packages
 
 on:
   release:
@@ -9,8 +9,70 @@ permissions:
   id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
 
 jobs:
-  deploy-soothe:
+  deploy-sdk:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe-sdk
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Install dependencies (workspace)
+      run: uv sync
+
+    - name: Build SDK package
+      run: make sdk-build
+
+    - name: Publish SDK to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: packages/soothe-sdk/dist/
+        verbose: true
+        print-hash: true
+
+  deploy-cli:
+    runs-on: ubuntu-latest
+    needs: deploy-sdk
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe-cli
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Install dependencies (workspace)
+      run: uv sync
+
+    - name: Build CLI package
+      run: make cli-build
+
+    - name: Publish CLI to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: packages/soothe-cli/dist/
+        verbose: true
+        print-hash: true
+
+  deploy-daemon:
+    runs-on: ubuntu-latest
+    needs: [deploy-sdk, deploy-cli]
     environment:
       name: pypi
       url: https://pypi.org/p/soothe
@@ -31,29 +93,49 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
 
-    - name: Install dependencies
-      run: make sync-dev
+    - name: Install dependencies (workspace)
+      run: uv sync
 
     - name: Run tests
       run: make test-unit
 
-    - name: Build package
+    - name: Build daemon package
       run: make build
 
-    - name: Verify build artifacts
-      run: |
-        ls -la dist/
-        WHL_COUNT=$(ls dist/*.whl 2>/dev/null | wc -l)
-        TGZ_COUNT=$(ls dist/*.tar.gz 2>/dev/null | wc -l)
-        if [ "$WHL_COUNT" -eq 0 ] || [ "$TGZ_COUNT" -eq 0 ]; then
-          echo "❌ Missing build artifacts"
-          exit 1
-        fi
-        echo "✅ Build artifacts verified"
-
-    - name: Publish package to PyPI
+    - name: Publish daemon to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: dist/
+        packages-dir: packages/soothe/dist/
+        verbose: true
+        print-hash: true
+
+  deploy-community:
+    runs-on: ubuntu-latest
+    needs: deploy-daemon
+    environment:
+      name: pypi
+      url: https://pypi.org/p/soothe-community
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Install dependencies (workspace)
+      run: uv sync
+
+    - name: Build community package
+      run: make community-build
+
+    - name: Publish community to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: packages/soothe-community/dist/
         verbose: true
         print-hash: true

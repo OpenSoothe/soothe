@@ -29,17 +29,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
 
-    - name: Install dependencies
-      run: make sync-dev
+    - name: Install dependencies (workspace)
+      run: uv sync
 
-    - name: Run tests
+    - name: Run tests (daemon package)
       run: make test-unit
 
     # - name: Run integration tests
     #   run: make test-integration
 
-    - name: Build package
-      run: make build
+    - name: Build all packages
+      run: make all-build
 
   code-quality:
     runs-on: ubuntu-latest
@@ -60,11 +60,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
 
-    - name: Install dependencies
-      run: make sync-dev
+    - name: Install dependencies (workspace)
+      run: uv sync
 
-    - name: Check formatting
-      run: make format-check
+    - name: Check formatting (all packages)
+      run: make all-format
 
-    - name: Run linter
-      run: make lint
+    - name: Run linter (all packages)
+      run: make all-lint
