@@ -29,7 +29,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from soothe.config import SOOTHE_HOME
+from soothe_sdk import SOOTHE_HOME
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

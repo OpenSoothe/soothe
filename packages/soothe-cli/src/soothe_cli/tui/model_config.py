@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME
+from soothe_sdk import SOOTHE_HOME
 
 logger = logging.getLogger(__name__)
 

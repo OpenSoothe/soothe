@@ -8,7 +8,7 @@ from pathlib import Path
 
 import typer
 from dotenv import load_dotenv
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe_sdk import SOOTHE_HOME, SootheConfig
 
 logger = logging.getLogger(__name__)
 

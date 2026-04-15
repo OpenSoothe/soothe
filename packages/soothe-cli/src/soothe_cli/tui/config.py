@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
-from soothe.config import SOOTHE_HOME
+from soothe_sdk import SOOTHE_HOME
 
 from soothe_cli.tui._version import __version__
 

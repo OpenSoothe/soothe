@@ -14,7 +14,7 @@ import yaml
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
 from soothe.backends import CompositeBackend, LocalShellBackend
-from soothe.config import SOOTHE_HOME
+from soothe_sdk import SOOTHE_HOME
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Sequence
