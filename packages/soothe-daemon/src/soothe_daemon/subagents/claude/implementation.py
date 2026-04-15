@@ -1,0 +1,193 @@
+"""Claude Agent subagent -- wraps claude-agent-sdk as a CompiledSubAgent.
+
+Provides access to the full Claude Code agent capabilities: file operations,
+bash execution, web search/fetch, MCP servers, and subagent spawning, all
+running via the Claude Code CLI under the hood.
+
+Requires the optional `claude` extra: `pip install soothe[claude]`
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any
+
+from langchain_core.messages import AIMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import add_messages
+from soothe.utils import expand_path
+
+from soothe_daemon.subagents.claude.events import (
+    ClaudeResultEvent,
+    ClaudeTextEvent,
+    ClaudeToolUseEvent,
+)
+
+if TYPE_CHECKING:
+    from deepagents.middleware.subagents import CompiledSubAgent
+
+logger = logging.getLogger(__name__)
+
+CLAUDE_DESCRIPTION = (
+    "Claude Code agent with full capabilities: file read/write/edit, bash execution, "
+    "web search/fetch, MCP server integration, and subagent spawning. "
+    "Use for: complex code analysis, multi-file refactoring, sophisticated generation tasks. "
+    "DO NOT use for: simple file listing (list_files), single file reads (read_file), "
+    "basic shell commands (run_command). Use direct tools instead for those operations. "
+    "Requires the 'claude' extra and ANTHROPIC_API_KEY."
+)
+
+
+class _ClaudeState(dict):
+    """State schema for the Claude subagent graph."""
+
+    messages: Annotated[list, add_messages]
+
+
+def _build_claude_graph(
+    *,
+    claude_model: str | None = None,
+    permission_mode: str = "bypassPermissions",
+    max_turns: int = 25,
+    system_prompt: str | None = None,
+    allowed_tools: list[str] | None = None,
+    disallowed_tools: list[str] | None = None,
+    cwd: str | None = None,
+) -> Any:
+    """Build and compile the Claude agent LangGraph.
+
+    Args:
+        claude_model: Claude model name (e.g. `sonnet`, `opus`, `haiku`).
+        permission_mode: Tool permission mode for non-interactive use.
+        max_turns: Maximum agent turns.
+        system_prompt: Custom system prompt for the Claude agent.
+        allowed_tools: Tool names to auto-approve.
+        disallowed_tools: Tool names to block.
+        cwd: Working directory for the Claude CLI.
+
+    Returns:
+        Compiled LangGraph runnable.
+    """
+
+    async def _run_claude_async(state: dict[str, Any]) -> dict[str, Any]:
+        from claude_agent_sdk import (
+            AssistantMessage,
+            ClaudeAgentOptions,
+            ResultMessage,
+            TextBlock,
+            ToolUseBlock,
+            query,
+        )
+
+        from soothe_daemon.utils.progress import emit_progress as _emit
+
+        messages = state.get("messages", [])
+        task = messages[-1].content if messages else ""
+
+        options = ClaudeAgentOptions(
+            permission_mode=permission_mode,
+            max_turns=max_turns,
+        )
+        if claude_model:
+            options.model = claude_model
+        if system_prompt:
+            options.system_prompt = system_prompt
+        if allowed_tools:
+            options.allowed_tools = allowed_tools
+        if disallowed_tools:
+            options.disallowed_tools = disallowed_tools
+        if cwd:
+            options.cwd = cwd
+
+        collected_text: list[str] = []
+        cost_usd: float = 0.0
+
+        try:
+            async for message in query(prompt=task, options=options):
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock):
+                            collected_text.append(block.text)
+                            _emit(
+                                ClaudeTextEvent(text=block.text).to_dict(),
+                                logger,
+                            )
+                        elif isinstance(block, ToolUseBlock):
+                            _emit(
+                                ClaudeToolUseEvent(tool=block.name).to_dict(),
+                                logger,
+                            )
+                elif isinstance(message, ResultMessage):
+                    cost_usd = message.total_cost_usd or 0.0
+                    _emit(
+                        ClaudeResultEvent(
+                            cost_usd=cost_usd,
+                            duration_ms=message.duration_ms,
+                        ).to_dict(),
+                        logger,
+                    )
+        except Exception:
+            logger.exception("Claude agent failed")
+            collected_text.append("Claude agent encountered an error.")
+
+        result = "\n".join(collected_text) or "Claude task completed (no text output)."
+        if cost_usd > 0:
+            result += f"\n\n[Cost: ${cost_usd:.4f}]"
+
+        return {"messages": [AIMessage(content=result)]}
+
+    async def run_claude(state: dict[str, Any]) -> dict[str, Any]:
+        """Async node that preserves LangGraph stream writer context."""
+        return await _run_claude_async(state)
+
+    graph = StateGraph(_ClaudeState)
+    graph.add_node("run_claude", run_claude)
+    graph.add_edge(START, "run_claude")
+    graph.add_edge("run_claude", END)
+    return graph.compile()
+
+
+def create_claude_subagent(
+    model: str | None = None,
+    permission_mode: str = "bypassPermissions",
+    max_turns: int = 25,
+    system_prompt: str | None = None,
+    allowed_tools: list[str] | None = None,
+    disallowed_tools: list[str] | None = None,
+    cwd: str | None = None,
+    **_kwargs: Any,
+) -> CompiledSubAgent:
+    """Create a Claude Agent subagent (CompiledSubAgent with claude-agent-sdk).
+
+    Args:
+        model: Claude model name (e.g. `sonnet`, `opus`, `haiku`).
+        permission_mode: Tool permission mode.
+        max_turns: Maximum agent turns.
+        system_prompt: Custom system prompt.
+        allowed_tools: Tool names to auto-approve.
+        disallowed_tools: Tool names to block.
+        cwd: Working directory for the Claude CLI.
+        **kwargs: Additional config (ignored for forward compat).
+
+    Returns:
+        `CompiledSubAgent` dict compatible with deepagents.
+    """
+    # Default to current working directory if not specified
+    resolved_cwd = str(expand_path(cwd)) if cwd else str(Path.cwd())
+
+    runnable = _build_claude_graph(
+        claude_model=model,
+        permission_mode=permission_mode,
+        max_turns=max_turns,
+        system_prompt=system_prompt,
+        allowed_tools=allowed_tools,
+        disallowed_tools=disallowed_tools,
+        cwd=resolved_cwd,
+    )
+
+    return {
+        "name": "claude",
+        "description": CLAUDE_DESCRIPTION,
+        "runnable": runnable,
+    }
