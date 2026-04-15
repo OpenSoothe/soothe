@@ -1,0 +1,14 @@
+[project]
+name = "soothe-workspace"
+version = "0.0.0"
+description = "Soothe monorepo workspace (meta-package, no dependencies)"
+requires-python = ">=3.11,<4.0"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+soothe-sdk = { workspace = true }
+soothe-cli = { workspace = true }
+soothe = { workspace = true }
+soothe-community = { workspace = true }

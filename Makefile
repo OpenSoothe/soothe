@@ -34,7 +34,7 @@ help:
 	@echo "  make cli-publish - Publish CLI package to PyPI"
 	@echo "  make cli-publish-test - Publish CLI package to TestPyPI"
 	@echo ""
-	@echo "Daemon Package (soothe):"
+	@echo "Daemon Package (soothe - in packages/soothe/):"
 	@echo "  make sync       - Sync dependencies with uv"
 	@echo "  make sync-dev   - Sync dev dependencies"
 	@echo "  make format     - Format code with ruff"
@@ -68,40 +68,40 @@ help:
 	@echo "  make all-publish - Publish all packages"
 	@echo "  make all-clean   - Clean all packages"
 
-# Sync dependencies
+# Sync dependencies (daemon package)
 sync:
-	@echo "Syncing dependencies..."
-	uv sync --all-extras
+	@echo "Syncing daemon dependencies..."
+	cd packages/soothe && uv sync --all-extras
 	@echo "✓ Dependencies synced"
 
 # Sync dev dependencies
 sync-dev:
 	@echo "Syncing dev dependencies..."
-	uv sync --all-extras --group test
+	cd packages/soothe && uv sync --all-extras
 	@echo "✓ Dev dependencies synced"
 
 # Format code
 format: sync-dev
 	@echo "Formatting code..."
-	uv run ruff format src/ tests/
+	cd packages/soothe && uv run ruff format src/ tests/
 	@echo "✓ Code formatted"
 
 # Check formatting (for CI)
 format-check: sync-dev
 	@echo "Checking code formatting..."
-	uv run ruff format --check src/ tests/
+	cd packages/soothe && uv run ruff format --check src/ tests/
 	@echo "✓ Format check passed"
 
 # Lint code
 lint: sync-dev
 	@echo "Linting code..."
-	uv run ruff check src/ tests/
+	cd packages/soothe && uv run ruff check src/ tests/
 	@echo "✓ Linting complete"
 
 # Auto-fix linting issues
 lint-fix: sync-dev
 	@echo "Auto-fixing linting issues..."
-	uv run ruff check --fix src/ tests/
+	cd packages/soothe && uv run ruff check --fix src/ tests/
 	@echo "✓ Linting issues fixed"
 
 # Run all tests (unit tests only by default)
@@ -111,7 +111,7 @@ test: test-unit test-integration
 # Run unit tests only
 test-unit: sync-dev
 	@echo "Running unit tests..."
-	uv run pytest tests/unit/ -v
+	cd packages/soothe && uv run pytest tests/unit/ -v
 	@echo "✓ Unit tests complete"
 
 # Run integration tests (requires external services and real LLM calls)
@@ -119,31 +119,31 @@ test-integration: sync-dev
 	@echo "Running integration tests..."
 	@echo "Note: Integration tests require external services (PostgreSQL, Weaviate) and real LLM API calls"
 	@echo "Use: pytest tests/integration/ --run-integration"
-	uv run pytest tests/integration/ --run-integration -v
+	cd packages/soothe && uv run pytest tests/integration/ --run-integration -v
 	@echo "✓ Integration tests complete"
 
 # Run tests with coverage
 test-coverage: sync-dev
 	@echo "Running tests with coverage..."
-	uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
+	cd packages/soothe && uv run pytest tests/ --cov=soothe --cov-report=term-missing --cov-report=html
 	@echo "✓ Coverage report generated in htmlcov/"
 
 # Build package
 build:
 	@echo "Building package..."
-	uv build
+	cd packages/soothe && uv build
 	@echo "✓ Package built"
 
 # Publish package to PyPI
 publish:
 	@echo "Publishing package to PyPI..."
-	uv publish
+	cd packages/soothe && uv publish
 	@echo "✓ Package published to PyPI"
 
 # Publish package to TestPyPI
 publish-test:
 	@echo "Publishing package to TestPyPI..."
-	uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe && uv publish --index-url https://test.pypi.org/simple/
 	@echo "✓ Package published to TestPyPI"
 
 # Clean build artifacts
@@ -164,12 +164,12 @@ sdk-sync:
 
 sdk-format:
 	@echo "Formatting SDK code..."
-	cd packages/soothe-sdk && uv run ruff format src/ tests/
+	cd packages/soothe-sdk && uv run ruff format src/
 	@echo "✓ SDK code formatted"
 
 sdk-lint:
 	@echo "Linting SDK code..."
-	cd packages/soothe-sdk && uv run ruff check src/ tests/
+	cd packages/soothe-sdk && uv run ruff check src/
 	@echo "✓ SDK linting complete"
 
 sdk-test:
@@ -203,12 +203,12 @@ cli-sync:
 
 cli-format:
 	@echo "Formatting CLI code..."
-	cd packages/soothe-cli && uv run ruff format src/ tests/
+	cd packages/soothe-cli && uv run ruff format src/
 	@echo "✓ CLI code formatted"
 
 cli-lint:
 	@echo "Linting CLI code..."
-	cd packages/soothe-cli && uv run ruff check src/ tests/
+	cd packages/soothe-cli && uv run ruff check src/
 	@echo "✓ CLI linting complete"
 
 cli-test:
