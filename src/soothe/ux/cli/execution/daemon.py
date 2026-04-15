@@ -43,7 +43,7 @@ async def run_headless_via_daemon(
     Uses WebSocket transport for all connections (RFC-0013).
     Refactored to use RFC-0019 EventProcessor with CliRenderer.
     """
-    from soothe.daemon.websocket_client import WebSocketClient
+    from soothe_sdk.client import WebSocketClient
 
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)

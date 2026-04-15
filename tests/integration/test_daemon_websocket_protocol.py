@@ -12,7 +12,7 @@ from soothe.config import SootheConfig
 from soothe.config.daemon_config import WebSocketConfig
 from soothe.daemon import SootheDaemon
 from soothe.daemon.transports.websocket import WebSocketTransport
-from soothe.daemon.websocket_client import WebSocketClient
+from soothe_sdk.client import WebSocketClient
 from tests.integration.conftest import (
     alloc_ephemeral_port,
     await_event_type,

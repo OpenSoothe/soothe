@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any
 
-from soothe.foundation.internal_assistant import strip_internal_tags  # noqa: F401 — re-exported via shared.__init__
+from soothe_sdk.internal import strip_internal_tags  # noqa: F401 — re-exported via shared.__init__
 
 # ============================================================================
 # Shared Tool Call Streaming Helpers (IG-053)

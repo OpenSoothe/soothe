@@ -32,13 +32,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from soothe.foundation.base_events import (
+from soothe_sdk.events import (
     LifecycleEvent,
     OutputEvent,
     ProtocolEvent,
     SootheEvent,
 )
-from soothe.foundation.verbosity_tier import VerbosityTier
+from soothe_sdk.verbosity import VerbosityTier
 
 # ---------------------------------------------------------------------------
 # Type aliases and helpers
@@ -546,7 +546,7 @@ def register_event(
 
     ```python
     from soothe.core.event_catalog import register_event
-    from soothe.foundation.base_events import SootheEvent
+    from soothe_sdk.events import SootheEvent
 
 
     class MyCustomEvent(SootheEvent):

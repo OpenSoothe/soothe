@@ -11,8 +11,9 @@ import contextlib
 import logging
 from typing import Any
 
+from soothe_sdk.protocol import decode, encode
+
 from soothe.core.event_catalog import ERROR
-from soothe.daemon.protocol import decode, encode
 
 logger = logging.getLogger(__name__)
 

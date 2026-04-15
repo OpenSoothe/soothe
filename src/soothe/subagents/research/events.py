@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe.foundation.base_events import SootheEvent
+from soothe_sdk.events import SootheEvent
 
 
 class ResearchDispatchedEvent(SootheEvent):
@@ -158,7 +158,7 @@ class ResearchJudgementEvent(SootheEvent):
 
 # Register all research events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
-from soothe.foundation.verbosity_tier import VerbosityTier  # noqa: E402
+from soothe_sdk.verbosity import VerbosityTier  # noqa: E402
 
 # Dispatch/Complete events visible at NORMAL (user wants to see start/end)
 register_event(

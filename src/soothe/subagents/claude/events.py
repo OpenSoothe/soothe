@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe.foundation.base_events import SubagentEvent
+from soothe_sdk.events import SubagentEvent
 
 
 class ClaudeTextEvent(SubagentEvent):
@@ -43,7 +43,7 @@ class ClaudeResultEvent(SubagentEvent):
 
 # Register all Claude events with the global registry
 from soothe.core.event_catalog import register_event  # noqa: E402
-from soothe.foundation.verbosity_tier import VerbosityTier  # noqa: E402
+from soothe_sdk.verbosity import VerbosityTier  # noqa: E402
 
 # IG-089: Claude subagent internal events at DETAILED (hidden at normal)
 register_event(

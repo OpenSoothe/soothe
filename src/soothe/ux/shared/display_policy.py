@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from soothe.foundation.internal_assistant import (
+from soothe_sdk.internal import (
     INTERNAL_JSON_KEYS,
     filter_confused_responses,
     filter_json_code_blocks,
@@ -41,7 +41,7 @@ from soothe.foundation.internal_assistant import (
     filter_search_data_tags,
     normalize_internal_whitespace,
 )
-from soothe.foundation.verbosity_tier import (
+from soothe_sdk.verbosity import (
     VerbosityLevel,
     VerbosityTier,
     classify_event_to_tier,

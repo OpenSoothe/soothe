@@ -9,7 +9,7 @@ import pytest
 
 from soothe.config.daemon_config import WebSocketConfig
 from soothe.daemon.transports.websocket import WebSocketTransport
-from soothe.daemon.websocket_client import WebSocketClient
+from soothe_sdk.client import WebSocketClient
 
 
 @pytest.mark.asyncio

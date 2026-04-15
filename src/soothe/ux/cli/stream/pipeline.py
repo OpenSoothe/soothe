@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any
 
-from soothe.foundation.verbosity_tier import VerbosityTier
+from soothe_sdk.verbosity import VerbosityTier
 from soothe.ux.cli.stream.context import PipelineContext
 from soothe.ux.cli.stream.display_line import DisplayLine
 from soothe.ux.cli.stream.formatter import (

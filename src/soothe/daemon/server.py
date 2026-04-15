@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from soothe_sdk.protocol import encode
+
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.core import resolve_daemon_workspace
 from soothe.daemon._handlers import DaemonHandlersMixin
@@ -20,7 +22,6 @@ from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
 from soothe.daemon.message_router import MessageRouter
 from soothe.daemon.paths import pid_path
-from soothe.daemon.protocol import encode
 from soothe.daemon.query_engine import QueryEngine
 from soothe.daemon.singleton import (
     acquire_pid_lock,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.verbosity_tier import VerbosityTier, should_show
+from soothe_sdk.verbosity import VerbosityTier, should_show
 from soothe.ux.shared.presentation_engine import PresentationEngine
 
 
