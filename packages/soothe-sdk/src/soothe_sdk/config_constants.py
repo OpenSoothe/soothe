@@ -11,10 +11,7 @@ from pathlib import Path
 
 # Default Soothe home directory
 # Overridable via SOOTHE_HOME environment variable
-SOOTHE_HOME: str = os.environ.get(
-    "SOOTHE_HOME",
-    str(Path.home() / ".soothe")
-)
+SOOTHE_HOME: str = os.environ.get("SOOTHE_HOME", str(Path.home() / ".soothe"))
 
 """Default Soothe home directory. Overridable via ``SOOTHE_HOME`` env var."""
 

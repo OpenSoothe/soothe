@@ -890,7 +890,9 @@ class MessageRouter:
         await asyncio.sleep(0.5)
 
         # Trigger daemon shutdown
-        logger.info("Daemon shutdown requested via WebSocket RPC from client=%s", _client_label(client_id))
+        logger.info(
+            "Daemon shutdown requested via WebSocket RPC from client=%s", _client_label(client_id)
+        )
         await d.shutdown()
 
     async def _handle_config_get(self, client_id: Any, msg: dict[str, Any]) -> None:

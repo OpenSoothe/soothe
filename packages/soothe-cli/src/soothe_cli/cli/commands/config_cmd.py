@@ -174,17 +174,9 @@ def config_init(
 
     # Create minimal config if template not found
     if not template_found:
-        # Use FrameworkFilesystem for consistency
-        try:
-            from soothe.core import FrameworkFilesystem
-
-            backend = FrameworkFilesystem.get()
-            backend.write(
-                str(target), "# Soothe configuration\n# See docs/user_guide.md for options\n"
-            )
-        except RuntimeError:
-            # FrameworkFilesystem not initialized - fallback to direct write
-            target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
+        # TODO IG-174 Phase 2: File write via daemon RPC
+        # Use direct write as fallback since daemon may not be running during init
+        target.write_text("# Soothe configuration\n# See docs/user_guide.md for options\n")
         typer.echo(f"Created minimal {target}")
 
     for subdir in ("runs", "generated_agents", "logs"):

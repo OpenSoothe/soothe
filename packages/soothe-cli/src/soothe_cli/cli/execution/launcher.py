@@ -4,13 +4,11 @@ import sys
 
 import typer
 
-# TODO IG-174 Phase 5: Create CLI-specific config class
-# SootheConfig import kept for daemon RPC communication
-from soothe.config import SootheConfig
+from soothe_cli.config import CLIConfig
 
 
 def run_tui(
-    cfg: SootheConfig,
+    cfg: CLIConfig,
     *,
     thread_id: str | None = None,
     config_path: str | None = None,

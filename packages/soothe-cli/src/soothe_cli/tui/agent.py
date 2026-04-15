@@ -14,11 +14,8 @@ import yaml
 from deepagents.backends.filesystem import FilesystemBackend
 from deepagents.middleware import MemoryMiddleware, SkillsMiddleware
 
-# TODO IG-174 Phase 2: Remove backend execution
-# Backend imports removed - execution via daemon WebSocket RPC
-# # TODO IG-174 Phase 2: Remove backend execution
-# Backend imports removed - execution via daemon WebSocket RPC
-# from soothe.backends import CompositeBackend, LocalShellBackend
+# TODO IG-174 Phase 2: Backend execution via daemon WebSocket RPC
+# All backend execution will be moved to daemon-side
 from soothe_sdk import SOOTHE_HOME
 
 if TYPE_CHECKING:

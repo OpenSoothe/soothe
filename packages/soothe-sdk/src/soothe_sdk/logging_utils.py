@@ -60,18 +60,14 @@ class GlobalInputHistory:
         """Save history to file."""
         try:
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, 'w') as f:
+            with open(self.history_file, "w") as f:
                 for entry in self._history:
-                    f.write(json.dumps(entry) + '\n')
+                    f.write(json.dumps(entry) + "\n")
         except Exception as e:
             logging.warning(f"Failed to save history: {e}")
 
 
-def setup_logging(
-    level: str = "INFO",
-    log_file: Path = None,
-    format_string: str = None
-) -> None:
+def setup_logging(level: str = "INFO", log_file: Path = None, format_string: str = None) -> None:
     """Setup logging configuration.
 
     Configures Python logging for daemon or CLI.
@@ -86,11 +82,7 @@ def setup_logging(
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # Configure root logger
-    logging.basicConfig(
-        level=getattr(logging, level.upper()),
-        format=format_string,
-        handlers=[]
-    )
+    logging.basicConfig(level=getattr(logging, level.upper()), format=format_string, handlers=[])
 
     # Add console handler
     console_handler = logging.StreamHandler()

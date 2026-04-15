@@ -74,19 +74,15 @@ if TYPE_CHECKING:
 
     from langchain_core.runnables import RunnableConfig
     from langgraph.pregel import Pregel
-
-    # TODO IG-174 Phase 2: Remove backend execution
-    # Backend imports removed - execution via daemon WebSocket RPC
-    # from soothe.backends import CompositeBackend
-    # TODO IG-174 Phase 5: Create CLI-specific config class
-    # SootheConfig import kept for daemon RPC communication
-    from soothe.config import SootheConfig
     from textual.app import ComposeResult
     from textual.events import Click, MouseUp, Paste
     from textual.scrollbar import ScrollUp
     from textual.widget import Widget
     from textual.worker import Worker
 
+    # TODO IG-174 Phase 2: Backend execution via daemon WebSocket RPC
+    # All backend execution moved to daemon-side
+    # TODO IG-174 Phase 5: CLI-specific config class complete
     from soothe_cli.tui._ask_user_types import AskUserWidgetResult, Question
     from soothe_cli.tui.mcp_tools import MCPServerInfo
     from soothe_cli.tui.remote_client import RemoteAgent
@@ -1283,7 +1279,9 @@ class SootheApp(App):
 
         assistant_id = self._assistant_id or "agent"
         # Use daemon config for WebSocket RPC
-        return await discover_skills_and_roots_async(assistant_id, daemon_config=self._daemon_config)
+        return await discover_skills_and_roots_async(
+            assistant_id, daemon_config=self._daemon_config
+        )
 
     async def _resolve_resume_thread(self) -> None:
         """Resolve a `-r` resume intent into a concrete thread ID.
