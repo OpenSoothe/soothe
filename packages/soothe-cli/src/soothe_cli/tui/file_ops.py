@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING, Any, Literal
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from soothe.backends.protocol import BackendProtocol
+    # TODO IG-174 Phase 2: Backend protocol via daemon RPC
+# from soothe.backends.protocol import BackendProtocol
 
 FileOpStatus = Literal["pending", "success", "error"]
 
@@ -220,7 +221,8 @@ def build_approval_preview(
         old_string = str(args.get("old_string", ""))
         new_string = str(args.get("new_string", ""))
         replace_all = bool(args.get("replace_all"))
-        from soothe.backends.utils import perform_string_replacement
+        # TODO IG-174 Phase 2: File ops via daemon RPC
+# from soothe.backends.utils import perform_string_replacement
 
         replacement = perform_string_replacement(before, old_string, new_string, replace_all)
         if isinstance(replacement, str):

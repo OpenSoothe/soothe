@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+# TODO IG-174 Phase 5: Create CLI-specific config class
+# SootheConfig import kept for daemon RPC communication
 from soothe.config import SootheConfig
 
 # Display limits for thread list
@@ -78,7 +80,9 @@ def thread_list(
         soothe thread list --limit 10
         soothe thread list --limit 20 --status idle
     """
-    from soothe.daemon import SootheDaemon
+    # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
+# Remove daemon lifecycle management, use WebSocket client
+# from soothe.daemon import SootheDaemon
 
     from soothe_cli.shared import load_config
 
@@ -202,7 +206,9 @@ def thread_continue(
         soothe thread continue --new
         soothe thread continue
     """
-    from soothe.daemon import SootheDaemon
+    # TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
+# Remove daemon lifecycle management, use WebSocket client
+# from soothe.daemon import SootheDaemon
 
     from soothe_cli.cli.execution import run_tui
     from soothe_cli.shared import load_config, setup_logging

@@ -4,8 +4,12 @@ import sys
 import time
 
 import typer
+# TODO IG-174 Phase 5: Create CLI-specific config class
+# SootheConfig import kept for daemon RPC communication
 from soothe.config import SootheConfig
-from soothe.daemon import SootheDaemon
+# TODO IG-174 Phase 3 CRITICAL: Daemon lifecycle → WebSocket client
+# Remove daemon lifecycle management, use WebSocket client
+# from soothe.daemon import SootheDaemon
 
 _DAEMON_FALLBACK_EXIT_CODE = 42
 _DAEMON_START_WAIT_TIMEOUT = 30.0  # Max time to wait for daemon to become ready
