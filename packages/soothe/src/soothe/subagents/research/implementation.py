@@ -18,6 +18,7 @@ from .protocol import ResearchConfig
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
+
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)

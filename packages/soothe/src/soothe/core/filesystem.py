@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from deepagents.backends.protocol import BackendProtocol
-    from soothe.config import SootheConfig
 
+    from soothe.config import SootheConfig
     from soothe.protocols.policy import PolicyContext, PolicyProtocol
 
 logger = logging.getLogger(__name__)
@@ -51,9 +51,8 @@ class FrameworkFilesystem:
         Returns:
             Initialized FilesystemBackend instance (workspace-aware wrapper).
         """
-        from soothe.utils import expand_path
-
         from soothe.core.workspace_aware_backend import WorkspaceAwareBackend
+        from soothe.utils import expand_path
 
         resolved_workspace = expand_path(config.workspace_dir)
 

@@ -48,6 +48,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
             State updates (workspace mirrored in state).
         """
         from langgraph.config import get_config
+
         from soothe.core import FrameworkFilesystem
 
         # Get config from langgraph context

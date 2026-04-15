@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.config import SootheConfig
-
     from soothe.core.agent import CoreAgent
 
 logger = logging.getLogger(__name__)

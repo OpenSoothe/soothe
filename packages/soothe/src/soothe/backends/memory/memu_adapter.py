@@ -5,10 +5,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from soothe.config import SootheConfig
-
 from soothe.backends.memory.memu.langchain_adapter import LangChainLLMAdapter
 from soothe.backends.memory.memu.memory_store import MemuMemoryStore
+from soothe.config import SootheConfig
 from soothe.protocols.memory import MemoryItem as SootheMemoryItem
 from soothe.protocols.memory import MemoryProtocol
 

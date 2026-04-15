@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe.config import SootheConfig
-
     from soothe.core.agent import CoreAgent
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 

@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from langchain_core.messages import messages_from_dict
-from soothe.logging import ThreadLogger
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
+from soothe.logging import ThreadLogger
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)

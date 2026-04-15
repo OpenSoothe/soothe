@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 if TYPE_CHECKING:
-    from soothe.config import SootheConfig
-
     from soothe.cognition.agent_loop.schemas import LoopState
+    from soothe.config import SootheConfig
     from soothe.protocols.planner import PlanContext
 
 logger = logging.getLogger(__name__)

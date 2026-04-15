@@ -17,8 +17,8 @@ from typing import Any
 
 from langchain_core.tools import BaseTool
 from pydantic import Field
-from soothe.cognition import GoalEngine
 
+from soothe.cognition import GoalEngine
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)

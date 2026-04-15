@@ -11,10 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from soothe.config import SootheConfig
-
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
+from soothe.config import SootheConfig
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.core.event_catalog import (
     AgenticLoopCompletedEvent,

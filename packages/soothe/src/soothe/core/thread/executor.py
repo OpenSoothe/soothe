@@ -7,9 +7,8 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
-from soothe.logging import ThreadLogger
-
 from soothe.core.thread.rate_limiter import APIRateLimiter
+from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
     from soothe.core.runner import SootheRunner

@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from soothe.config import SOOTHE_HOME
-from soothe.logging import ThreadLogger
-
 from soothe.core.thread.models import (
     ArtifactEntry,
     EnhancedThreadInfo,
@@ -19,11 +17,11 @@ from soothe.core.thread.models import (
     ThreadMessage,
     ThreadStats,
 )
+from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.mcp.loader import MCPSessionManager
-
     from soothe.protocols.durability import DurabilityProtocol, ThreadInfo
 
 logger = logging.getLogger(__name__)

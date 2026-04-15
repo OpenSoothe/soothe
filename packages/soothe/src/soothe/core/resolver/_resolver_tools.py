@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
+
     from soothe.cognition import GoalEngine
 
 logger = logging.getLogger(__name__)

@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING, Annotated, Any
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from soothe.utils import expand_path
 
 from soothe.subagents.claude.events import (
     ClaudeResultEvent,
     ClaudeTextEvent,
     ClaudeToolUseEvent,
 )
+from soothe.utils import expand_path
 
 if TYPE_CHECKING:
     from deepagents.middleware.subagents import CompiledSubAgent
