@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.protocols.planner import Plan
+    from soothe_sdk import Plan
 
 
 @dataclass

@@ -23,7 +23,7 @@ from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.suppression_state import SuppressionState
 
 if TYPE_CHECKING:
-    from soothe.protocols.planner import Plan
+    from soothe_sdk import Plan
 
 
 @dataclass

@@ -28,7 +28,7 @@ class StructuredFormatter(BaseFormatter):
             ToolBrief with structured summary.
 
         Example:
-            >>> from soothe.cognition.agent_loop.core.schemas import ToolOutput
+            >>> from soothe_sdk import ToolOutput
             >>> formatter = StructuredFormatter()
             >>> output = ToolOutput.ok(data="file content")
             >>> brief = formatter.format("read_file", output)
@@ -37,7 +37,7 @@ class StructuredFormatter(BaseFormatter):
         """
         # Import ToolOutput (may not be available in all contexts)
         try:
-            from soothe.cognition.agent_loop.core.schemas import ToolOutput
+            from soothe_sdk import ToolOutput
 
             if not isinstance(result, ToolOutput):
                 # Not a ToolOutput - should not happen if classifier works correctly

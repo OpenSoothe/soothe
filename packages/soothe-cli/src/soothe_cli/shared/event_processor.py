@@ -33,7 +33,7 @@ from soothe_cli.shared.rendering import update_name_map_from_tool_calls
 from soothe_cli.shared.tui_trace_log import log_tui_trace
 
 if TYPE_CHECKING:
-    from soothe.protocols.planner import Plan
+    from soothe_sdk import Plan
 
     from soothe_cli.shared.renderer_protocol import RendererProtocol
 
@@ -716,7 +716,7 @@ class EventProcessor:
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""
-        from soothe.protocols.planner import Plan, PlanStep
+        from soothe_sdk import Plan, PlanStep
 
         steps = [
             PlanStep(
