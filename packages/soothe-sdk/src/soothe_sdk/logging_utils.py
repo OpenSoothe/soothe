@@ -6,11 +6,10 @@ CLI importing daemon runtime.
 This module is part of Phase 1 of IG-174: CLI import violations fix.
 """
 
-import logging
 import json
-from datetime import datetime
+import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
 
 
 class GlobalInputHistory:
@@ -29,9 +28,9 @@ class GlobalInputHistory:
             history_file: Path to history JSONL file.
         """
         self.history_file = history_file
-        self._history: List[Dict[str, Any]] = []
+        self._history: list[dict[str, Any]] = []
 
-    def load(self) -> List[Dict[str, Any]]:
+    def load(self) -> list[dict[str, Any]]:
         """Load history from file.
 
         Returns:
@@ -41,14 +40,14 @@ class GlobalInputHistory:
             return []
 
         try:
-            with open(self.history_file, 'r') as f:
+            with open(self.history_file) as f:
                 self._history = [json.loads(line) for line in f if line.strip()]
             return self._history
         except Exception as e:
             logging.warning(f"Failed to load history: {e}")
             return []
 
-    def append(self, entry: Dict[str, Any]) -> None:
+    def append(self, entry: dict[str, Any]) -> None:
         """Append entry to history.
 
         Args:
