@@ -6,7 +6,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.logging.global_history import GlobalInputHistory
+from soothe_sdk import GlobalInputHistory
 
 if TYPE_CHECKING:
     from pathlib import Path

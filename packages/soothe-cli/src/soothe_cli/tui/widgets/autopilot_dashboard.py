@@ -288,7 +288,7 @@ class AutopilotApp:
                 pass
 
         # Fallback: parse goal files
-        from soothe.utils.goal_parsing import parse_autopilot_goals
+        from soothe_sdk import parse_autopilot_goals
 
         goals.extend(parse_autopilot_goals(autopilot_dir))
         return goals
@@ -303,6 +303,6 @@ def _parse_autopilot_files(autopilot_dir: Path) -> list[dict]:
     Returns:
         List of goal info dicts.
     """
-    from soothe.utils.goal_parsing import parse_autopilot_goals
+    from soothe_sdk import parse_autopilot_goals
 
     return parse_autopilot_goals(autopilot_dir)

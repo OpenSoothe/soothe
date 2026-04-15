@@ -295,7 +295,7 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         >>> format_tool_call_args("read_file", {"args": {}, "_raw": '{"path": "file.txt"}'})
         'file.txt'
     """
-    from soothe.utils.path_display import convert_and_abbreviate_path, is_path_argument
+    from soothe_sdk import convert_and_abbreviate_path, is_path_argument
 
     max_value_length = 40  # Max length for displayed values
 

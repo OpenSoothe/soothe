@@ -8,7 +8,7 @@ This package provides:
 - Shared message processing and utilities
 """
 
-from soothe.logging import setup_logging
+from soothe_sdk import setup_logging
 
 from soothe_cli.shared.config_loader import load_config
 from soothe_cli.shared.display_policy import (
