@@ -1,0 +1,137 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soothe"
+version = "0.3.0"
+description = "Soothe - Protocol-driven multi-agent orchestration framework (daemon server)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11,<3.15"
+keywords = ["soothe", "agents", "ai", "llm", "langgraph", "langchain", "multi-agent", "subagents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "soothe-sdk>=0.2.0,<1.0.0",     # Shared types, protocol
+    "aiohttp>=3.9.0",
+    "aiosqlite>=0.22.1",
+    "anyio>=3.0.0",
+    "bubus>=1.5.6",
+    "deepagents>=0.4.10,<1.0.0",
+    "fastapi>=0.104.0",
+    "langchain>=1.2.11,<2.0.0",
+    "langchain-community>=0.3.0,<1.0.0",
+    "langchain-core>=1.2.18,<2.0.0",
+    "langchain-mcp-adapters>=0.2.0,<1.0.0",
+    "langchain-openai>=0.3.0,<1.0.0",
+    "langgraph>=1.1.1,<2.0.0",
+    "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
+    "sqlite-vec>=0.1.0",
+    "pexpect>=4.9.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "pyjwt>=2.8.0",
+    "pyperclip>=1.8.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
+    "requests>=2.31.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+# Tool implementation extras (same as main package)
+research = [
+    "arxiv>=2.1.0",
+    "langchain-tavily>=0.2.17",
+    "tavily-python>=0.5.0",
+    "wikipedia>=1.4.0",
+    "wizsearch>=1.1.8,<2.0.0",
+]
+websearch = [
+    "browser-use>=0.11.0,<=0.12.0",
+]
+tabular = [
+    "langchain-experimental>=0.0.50",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+]
+document = [
+    "pypdf>=3.0.0",
+    "docx2txt>=0.8.0",
+]
+media = [
+    "pillow>=10.0.0",
+    "pydub>=0.25.0",
+    "yt-dlp>=2023.0.0",
+]
+video = [
+    "opencv-python>=4.8.0",
+    "pillow>=10.0.0",
+]
+claude = [
+    "anthropic>=0.18.0",
+]
+# CLI client (optional - for interactive usage)
+cli = [
+    "soothe-cli>=0.1.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov",
+    "ruff>=0.12.0",
+    "mypy>=1.0.0",
+]
+all = [
+    "soothe[research,websearch,tabular,document,media,video,claude,cli]",
+]
+
+[project.scripts]
+soothe = "soothe.cli.main:app"
+# Daemon management commands also available via 'soothe daemon' subcommands
+soothe-daemon = "soothe.cli.daemon_main:app"
+
+[project.urls]
+Homepage = "https://github.com/caesar0301/soothe"
+Documentation = "https://soothe.readthedocs.io"
+Repository = "https://github.com/caesar0301/soothe"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/soothe"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/soothe/"]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/*.pyo",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

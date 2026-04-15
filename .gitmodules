@@ -1,4 +1,1 @@
 # Empty - no submodules currently
-[submodule "community"]
-	path = community
-	url = git@github.com:caesar0301/soothe-community

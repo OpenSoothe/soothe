@@ -4,13 +4,14 @@ Soothe is a protocol-driven orchestration framework for building 24/7 autonomous
 
 ## Architecture (v0.3.0+)
 
-Soothe has been refactored into three independent packages:
+Soothe has been refactored into four independent packages:
 
 ```
 packages/
-├── soothe-sdk (v0.2.0)     # Shared SDK - WebSocket client, protocol, types
-├── soothe-cli (v0.1.0)     # CLI client - WebSocket-only communication  
-└── soothe-daemon (v0.3.0)  # Daemon server - Agent runtime
+├── soothe-sdk (v0.2.0)        # Shared SDK - WebSocket client, protocol, types
+├── soothe-cli (v0.1.0)        # CLI client - WebSocket-only communication
+├── soothe (v0.3.0)            # Daemon server - Agent runtime (main package)
+└── soothe-community (v0.1.0)  # Community plugins - Optional tools/subagents
 ```
 
 ### Package Overview
@@ -28,12 +29,18 @@ packages/
 - Event processor and display
 - WebSocket-only communication (NO daemon runtime imports)
 
-**soothe-daemon** - Server Package (~50 deps):
+**soothe** - Server Package (~50 deps):
 - WebSocket + HTTP transports
 - Agent runner and factory
 - Tools and subagents
 - Thread persistence
 - Protocols (planner, policy, durability)
+- Optional: soothe[cli] to install client alongside server
+
+**soothe-community** - Community Plugins Package (~9 deps):
+- PaperScout: ArXiv paper discovery and analysis
+- Skillify: Skill extraction and management
+- Weaver: Context weaving and memory synthesis
 
 ## Installation
 
@@ -44,19 +51,26 @@ git clone https://github.com/caesar0301/soothe.git
 cd soothe
 
 # Install packages in editable mode
+pip install -e packages/soothe-sdk
 pip install -e packages/soothe-cli
-pip install -e packages/soothe-daemon[all]
+pip install -e packages/soothe[all]
+pip install -e packages/soothe-community  # Optional
 ```
 
 ### From PyPI (when published)
 
 ```bash
-# Install both CLI and daemon
-pip install soothe-cli soothe-daemon[all]
+# Install daemon server (main package)
+pip install soothe[all]
 
-# Or install separately
-pip install soothe-cli           # Client only (~10 deps)
-pip install soothe-daemon[all]   # Server only (~50 deps)
+# Install CLI client separately
+pip install soothe-cli
+
+# Or install daemon with CLI as optional dependency
+pip install soothe[all,cli]
+
+# Optional: install community plugins
+pip install soothe-community
 ```
 
 ## Quick Start
@@ -84,7 +98,7 @@ CLI and daemon communicate via WebSocket only:
 
 ```
 ┌─────────────┐                WebSocket                ┌──────────────┐
-│  soothe-cli │ ──────────────────────────────────────▶ │ soothe-daemon│
+│  soothe-cli │ ──────────────────────────────────────▶ │    soothe    │
 │  (Client)   │                                              │  (Server)    │
 │  ~10 deps   │ ◀────────────────────────────────────── │  ~50 deps    │
 └─────────────┘                                              └──────────────┘
@@ -137,7 +151,8 @@ Soothe/
 ├── packages/
 │   ├── soothe-sdk/
 │   ├── soothe-cli/
-│   └── soothe-daemon/
+│   ├── soothe/
+│   └── soothe-community/
 ├── tests/
 │   ├── integration/
 │   └── unit/
@@ -151,7 +166,7 @@ Soothe/
 # Test individual packages
 pytest packages/soothe-sdk/tests/
 pytest packages/soothe-cli/tests/
-pytest packages/soothe-daemon/tests/
+pytest packages/soothe/tests/
 
 # Integration tests
 pytest tests/integration/
@@ -163,7 +178,8 @@ pytest tests/integration/
 # Build individual packages
 cd packages/soothe-sdk && python -m build
 cd packages/soothe-cli && python -m build
-cd packages/soothe-daemon && python -m build
+cd packages/soothe && python -m build
+cd packages/soothe-community && python -m build
 ```
 
 ## Benefits
