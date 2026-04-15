@@ -7,7 +7,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TypeAlias
 
-from soothe.skills.catalog import (
+# TODO Phase 4: Skills catalog via daemon RPC (IG-174)
+# from soothe.skills.catalog import (
     SkillDirectoryMeta,
     parse_skill_directory,
     strip_skill_frontmatter,

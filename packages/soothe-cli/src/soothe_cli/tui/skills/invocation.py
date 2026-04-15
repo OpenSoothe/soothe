@@ -6,8 +6,8 @@ import logging
 from collections import OrderedDict
 from pathlib import Path
 
-from soothe.skills import get_built_in_skills_paths
-from soothe.skills.catalog import parse_skill_directory
+# TODO Phase 4: Skills via daemon RPC (IG-174)
+# TODO Phase 4: parse_skill_directory via daemon RPC (IG-174)
 
 from soothe_cli.tui.config import Settings, _get_settings
 from soothe_cli.tui.skills.load import ExtendedSkillMetadata
