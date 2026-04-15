@@ -356,7 +356,7 @@ def thread_delete(
     Example:
         soothe thread delete abc123
     """
-    from soothe.config import SOOTHE_HOME
+    from soothe_sdk import SOOTHE_HOME
     from soothe_daemon.core.runner import SootheRunner
 
     from soothe_cli.shared import load_config

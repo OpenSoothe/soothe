@@ -137,7 +137,7 @@ def config_init(
     from importlib.resources import as_file, files
     from pathlib import Path
 
-    from soothe.config import SOOTHE_HOME
+    from soothe_sdk import SOOTHE_HOME
 
     home = Path(SOOTHE_HOME).expanduser()
     target = home / "config" / "config.yml"
@@ -207,7 +207,7 @@ def config_validate(
     """
     from pathlib import Path
 
-    from soothe.config import SOOTHE_HOME
+    from soothe_sdk import SOOTHE_HOME
 
     try:
         cfg = load_config(config)
