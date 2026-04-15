@@ -18,7 +18,7 @@ This RFC defines a unified thread management architecture for Soothe that consol
 
 The current thread management system has several critical issues:
 
-1. **CLI Duplication**: `soothe daemon attach --thread-id <id>` duplicates functionality provided by `soothe thread continue <id>`, creating user confusion and maintenance burden.
+1. **CLI Duplication**: `soothe thread continue --thread-id <id>` duplicates functionality provided by `soothe thread continue <id>`, creating user confusion and maintenance burden.
 
 2. **Transport Limitations**: Thread operations primarily work via WebSocket. HTTP REST endpoints defined in RFC-101 are unimplemented placeholders, preventing web UIs and REST clients from managing threads.
 

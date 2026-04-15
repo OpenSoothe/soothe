@@ -18,7 +18,7 @@ IG-050 (March 24, 2026) flattened most CLI commands to use action flags, but lef
 ```bash
 # Inconsistent patterns
 soothe thread -c <id>      # Flat with flag
-soothe daemon start         # Nested
+soothe-daemon start         # Nested
 soothe config -i            # Flat with flag
 soothe agent --status       # Flat with flag
 ```
@@ -74,10 +74,10 @@ soothe thread continue abc123 --daemon
 - `soothe agent status` - Show agent status
 
 #### daemon (unchanged)
-- `soothe daemon start` - Start daemon
-- `soothe daemon stop` - Stop daemon
-- `soothe daemon status` - Show daemon status
-- `soothe daemon restart` - Restart daemon
+- `soothe-daemon start` - Start daemon
+- `soothe-daemon stop` - Stop daemon
+- `soothe-daemon status` - Show daemon status
+- `soothe-daemon restart` - Restart daemon
 
 #### autopilot
 - `soothe autopilot run PROMPT` - Run autonomous task

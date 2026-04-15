@@ -121,8 +121,8 @@ daemon:
 
 2. **Restart daemon**:
 ```bash
-soothe daemon stop
-soothe daemon start
+soothe-daemon stop
+soothe-daemon start
 ```
 
 ### Key Endpoints

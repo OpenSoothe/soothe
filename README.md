@@ -130,13 +130,16 @@ For long-running operations and remote access:
 
 ```bash
 # Start daemon server
-soothe daemon start
+soothe-daemon start
 
-# Attach from any terminal
-soothe daemon attach
+# Check daemon status
+soothe-daemon status
 
-# Enable remote transports
-soothe daemon start --enable-websocket --enable-http
+# Run client (connects to daemon)
+soothe
+
+# Stop daemon
+soothe-daemon stop
 ```
 
 ## Learn More

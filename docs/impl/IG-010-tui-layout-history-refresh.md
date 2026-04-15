@@ -122,7 +122,7 @@ Textual application with a vertical three-row layout.
 
 ### Connection Management
 
-- **Auto-start daemon:** `_ensure_daemon()` checks `SootheDaemon.is_running()`; if not, spawns `soothe daemon start` via subprocess, polls for socket existence (up to 5 seconds)
+- **Auto-start daemon:** `_ensure_daemon()` checks `SootheDaemon.is_running()`; if not, spawns `soothe-daemon start` via subprocess, polls for socket existence (up to 5 seconds)
 - **Reconnection:** On `read_event()` returning None (EOF), app sets `_connected = False` and displays "Daemon connection closed"; no automatic reconnect in current implementation
 
 ## CLI Integration
@@ -132,9 +132,9 @@ Textual application with a vertical three-row layout.
 | Command | Implementation |
 |---------|----------------|
 | `soothe attach` | Check daemon running; launch Textual TUI (no auto-start) |
-| `soothe daemon start` | Start daemon; `--foreground` runs in current process |
-| `soothe daemon stop` | `SootheDaemon.stop_running()` sends SIGTERM |
-| `soothe daemon status` | `SootheDaemon.is_running()` + PID from file |
+| `soothe-daemon start` | Start daemon; `--foreground` runs in current process |
+| `soothe-daemon stop` | `SootheDaemon.stop_running()` sends SIGTERM |
+| `soothe-daemon status` | `SootheDaemon.is_running()` + PID from file |
 | `soothe init` | Create `~/.soothe/config`, `sessions`, `generated_agents`, `logs`; copy config template |
 
 ### Expanded Thread Management
@@ -182,7 +182,7 @@ Textual application with a vertical three-row layout.
 
 - [ ] Daemon starts on `soothe run` when not running
 - [ ] `soothe attach` connects to running daemon
-- [ ] `soothe daemon start|stop|status` work correctly
+- [ ] `soothe-daemon start|stop|status` work correctly
 - [ ] `soothe init` creates ~/.soothe structure
 - [ ] Textual TUI displays conversation panel, activity info, and plan tree in vertical layout
 - [ ] Conversation panel has border and shows final main-assistant responses (plus user turns)

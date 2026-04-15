@@ -25,7 +25,7 @@ def run_headless(
     Connects to running daemon via WebSocket if available to avoid RocksDB lock conflicts.
     Auto-starts daemon if not running (RFC-0013 daemon lifecycle).
 
-    Note (RFC-0013): Daemon persists after request completion. Use 'soothe daemon stop'
+    Note (RFC-0013): Daemon persists after request completion. Use 'soothe-daemon stop'
     to explicitly shutdown the daemon.
     """
     import asyncio
@@ -69,7 +69,7 @@ def run_headless(
     # Handle daemon fallback (unresponsive daemon)
     if daemon_exit_code == _DAEMON_FALLBACK_EXIT_CODE:
         typer.echo(
-            "Error: Daemon is unresponsive. Please restart with 'soothe daemon restart'", err=True
+            "Error: Daemon is unresponsive. Please restart with 'soothe-daemon restart'", err=True
         )
         sys.exit(1)
 
