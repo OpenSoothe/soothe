@@ -566,7 +566,7 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     monkeypatch.setattr(SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False))
     monkeypatch.setattr(SootheDaemon, "is_running", staticmethod(lambda: True))
     monkeypatch.setattr(SootheDaemon, "stop_running", staticmethod(stop_running))
-    monkeypatch.setattr("soothe_cli.cli.commands.daemon_cmd.daemon_start", daemon_start)
+    monkeypatch.setattr("soothe.cli.daemon_main.daemon_start", daemon_start)
 
     def _fake_asyncio_run(coro: object) -> int:
         captured["coro"] = coro
