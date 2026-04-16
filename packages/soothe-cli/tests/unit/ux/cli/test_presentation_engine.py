@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from soothe_sdk.verbosity import VerbosityTier, should_show
+
 from soothe_cli.shared.presentation_engine import PresentationEngine
 
 

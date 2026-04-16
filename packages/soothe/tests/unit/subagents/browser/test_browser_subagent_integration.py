@@ -62,12 +62,20 @@ def test_browser_subagent_default_directories() -> None:
         with patch("soothe.utils.runtime.get_browser_runtime_dir") as mock_runtime:
             with patch("soothe.utils.runtime.get_browser_downloads_dir") as mock_downloads:
                 with patch("soothe.utils.runtime.get_browser_user_data_dir") as mock_user_data:
-                    with patch("soothe.utils.runtime.get_browser_extensions_dir") as mock_extensions:
+                    with patch(
+                        "soothe.utils.runtime.get_browser_extensions_dir"
+                    ) as mock_extensions:
                         # Mock the runtime directory functions
                         mock_runtime.return_value = Path(tmpdir) / "agents" / "browser"
-                        mock_downloads.return_value = Path(tmpdir) / "agents" / "browser" / "downloads"
-                        mock_user_data.return_value = Path(tmpdir) / "agents" / "browser" / "profiles" / "default"
-                        mock_extensions.return_value = Path(tmpdir) / "agents" / "browser" / "extensions"
+                        mock_downloads.return_value = (
+                            Path(tmpdir) / "agents" / "browser" / "downloads"
+                        )
+                        mock_user_data.return_value = (
+                            Path(tmpdir) / "agents" / "browser" / "profiles" / "default"
+                        )
+                        mock_extensions.return_value = (
+                            Path(tmpdir) / "agents" / "browser" / "extensions"
+                        )
 
                         # Create subagent with defaults
                         subagent = create_browser_subagent()

@@ -8,10 +8,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
-from soothe.daemon import SootheDaemon, WebSocketClient
-from soothe.daemon.thread_state import ThreadStateRegistry
 from soothe.foundation.slash_commands import (
     _show_memory,
     handle_slash_command,
@@ -22,6 +18,10 @@ from soothe_cli.tui.textual_adapter import (
     _extract_custom_output_text,
     _format_progress_event_lines_for_tui,
 )
+
+from soothe.core.event_catalog import CHITCHAT_RESPONSE, FINAL_REPORT
+from soothe.daemon import SootheDaemon, WebSocketClient
+from soothe.daemon.thread_state import ThreadStateRegistry
 
 # ---------------------------------------------------------------------------
 # Fix 1: TUI Slash Commands Not Working (async issue)
@@ -128,7 +128,9 @@ async def test_daemon_handles_resume_thread_message() -> None:
             self.current_thread_id = ""
             self.set_thread_id_calls: list[str] = []
             self._durability = MagicMock()
-            self.resume_persisted_thread = AsyncMock(return_value=SimpleNamespace(thread_id="thread-456"))
+            self.resume_persisted_thread = AsyncMock(
+                return_value=SimpleNamespace(thread_id="thread-456")
+            )
 
         def set_current_thread_id(self, thread_id: str) -> None:
             self.set_thread_id_calls.append(thread_id)
@@ -146,7 +148,9 @@ async def test_daemon_handles_resume_thread_message() -> None:
     # Mock session manager to return None (no active session)
     daemon._session_manager.get_session = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
-    await daemon._handle_client_message("test-client-id", {"type": "resume_thread", "thread_id": "thread-456"})
+    await daemon._handle_client_message(
+        "test-client-id", {"type": "resume_thread", "thread_id": "thread-456"}
+    )
 
     daemon._runner.resume_persisted_thread.assert_awaited_once_with("thread-456")  # type: ignore[attr-defined]
 
@@ -407,8 +411,8 @@ def test_tui_formats_goal_progress_like_cli() -> None:
 def test_shared_essential_progress_event_filter_contract() -> None:
     """Shared filter should include core progress events and exclude non-progress output."""
     assert is_essential_progress_event_type("soothe.cognition.agent_loop.started")
-    assert is_essential_progress_event_type("soothe.cognition.agent_loop.reason")
-    assert is_essential_progress_event_type("soothe.cognition.plan.step_completed")
+    assert is_essential_progress_event_type("soothe.cognition.agent_loop.reasoned")
+    assert is_essential_progress_event_type("soothe.cognition.plan.step.completed")
     assert not is_essential_progress_event_type("soothe.output.autonomous.final_report")
 
 
@@ -417,7 +421,7 @@ def test_tui_formats_agent_loop_reason_and_reasoning_like_cli() -> None:
     pipeline = StreamDisplayPipeline(verbosity="normal")
     lines = _format_progress_event_lines_for_tui(
         {
-            "type": "soothe.cognition.agent_loop.reason",
+            "type": "soothe.cognition.agent_loop.reasoned",
             "status": "working",
             "next_action": "inspect websocket custom events",
             "reasoning": "Need to verify display path parity with CLI.",
@@ -426,7 +430,9 @@ def test_tui_formats_agent_loop_reason_and_reasoning_like_cli() -> None:
         pipeline=pipeline,
     )
     assert any("🌀 Inspect websocket custom events" in line for line in lines)
-    assert any("💭 Reasoning: Need to verify display path parity with CLI." in line for line in lines)
+    assert any(
+        "💭 Reasoning: Need to verify display path parity with CLI." in line for line in lines
+    )
 
 
 def test_tui_formats_step_start_and_complete_like_cli() -> None:
@@ -434,7 +440,7 @@ def test_tui_formats_step_start_and_complete_like_cli() -> None:
     pipeline = StreamDisplayPipeline(verbosity="detailed")
     started = _format_progress_event_lines_for_tui(
         {
-            "type": "soothe.cognition.plan.step_started",
+            "type": "soothe.cognition.plan.step.started",
             "step_id": "s1",
             "description": "Gather daemon custom events",
         },
@@ -443,7 +449,7 @@ def test_tui_formats_step_start_and_complete_like_cli() -> None:
     )
     completed = _format_progress_event_lines_for_tui(
         {
-            "type": "soothe.cognition.plan.step_completed",
+            "type": "soothe.cognition.plan.step.completed",
             "step_id": "s1",
             "duration_ms": 1200,
         },

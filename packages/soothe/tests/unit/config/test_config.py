@@ -428,7 +428,9 @@ class TestProtocolConfig:
         assert cfg.protocols.memory.persist_dir == "/custom/memory/dir"
 
         # Test LLM role configuration
-        cfg = SootheConfig(protocols={"memory": {"llm_chat_role": "fast", "llm_embed_role": "embedding"}})
+        cfg = SootheConfig(
+            protocols={"memory": {"llm_chat_role": "fast", "llm_embed_role": "embedding"}}
+        )
         assert cfg.protocols.memory.llm_chat_role == "fast"
         assert cfg.protocols.memory.llm_embed_role == "embedding"
 
@@ -576,7 +578,11 @@ class TestProtocolConfig:
 
         cfg = SootheConfig(
             vector_stores=[
-                {"name": "pgvector_prod", "provider_type": "pgvector", "dsn": "postgresql://localhost/db"},
+                {
+                    "name": "pgvector_prod",
+                    "provider_type": "pgvector",
+                    "dsn": "postgresql://localhost/db",
+                },
                 {"name": "in_memory_dev", "provider_type": "in_memory"},
             ],
             vector_store_router={

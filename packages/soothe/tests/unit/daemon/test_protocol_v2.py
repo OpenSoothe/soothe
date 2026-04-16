@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from soothe.daemon.protocol_v2 import (
     ERROR_INVALID_MESSAGE,
     ERROR_RATE_LIMITED,

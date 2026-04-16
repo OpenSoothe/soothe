@@ -119,7 +119,9 @@ class TestReportProgressTool:
         goal = await engine.create_goal("Work in progress")
 
         tool = ReportProgressTool(goal_engine=engine)
-        result = await tool._arun(goal_id=goal.id, status="in_progress", findings="Made good progress")
+        result = await tool._arun(
+            goal_id=goal.id, status="in_progress", findings="Made good progress"
+        )
         assert result["status"] == "queued"
         assert result["goal_id"] == goal.id
 
@@ -312,7 +314,9 @@ class TestAddFindingTool:
         queue = ProposalQueue()
 
         tool = AddFindingTool(goal_engine=engine, proposal_queue=queue)
-        result = await tool._arun(goal_id=goal.id, content="Important finding", tags="research,data")
+        result = await tool._arun(
+            goal_id=goal.id, content="Important finding", tags="research,data"
+        )
         assert result["status"] == "queued"
         assert result["goal_id"] == goal.id
         assert result["content_preview"] == "Important finding"

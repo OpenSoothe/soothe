@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe_sdk import SubagentEvent
+from soothe_sdk import SubagentEvent, VerbosityTier, register_event
 
 
 class PaperScoutStepEvent(SubagentEvent):
@@ -26,7 +26,7 @@ class PaperScoutStepEvent(SubagentEvent):
 class PaperScoutPaperFoundEvent(SubagentEvent):
     """New relevant paper discovered."""
 
-    type: Literal["soothe.community.paperscout.paper_found"] = "soothe.community.paperscout.paper_found"
+    type: Literal["soothe.community.paperscout.paper.found"] = "soothe.community.paperscout.paper.found"
     paper_title: str = ""
     arxiv_id: str = ""
     score: float = 0.0
@@ -37,7 +37,7 @@ class PaperScoutPaperFoundEvent(SubagentEvent):
 class PaperScoutEmailSentEvent(SubagentEvent):
     """Email notification sent."""
 
-    type: Literal["soothe.community.paperscout.email_sent"] = "soothe.community.paperscout.email_sent"
+    type: Literal["soothe.community.paperscout.email.sent"] = "soothe.community.paperscout.email.sent"
     recipient: str = ""
     papers_count: int = 0
 
@@ -55,8 +55,6 @@ class PaperScoutErrorEvent(SubagentEvent):
 
 
 # Register all PaperScout events with the plugin-level registry
-from soothe_sdk import register_event  # noqa: E402
-from soothe_sdk import VerbosityTier
 
 register_event(
     PaperScoutStepEvent,

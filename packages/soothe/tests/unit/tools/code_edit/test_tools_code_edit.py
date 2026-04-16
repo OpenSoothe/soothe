@@ -3,7 +3,6 @@
 import tempfile
 from pathlib import Path
 
-
 from soothe.tools.code_edit import (
     ApplyDiffTool,
     DeleteLinesTool,
@@ -45,7 +44,9 @@ class TestEditFileLinesTool:
             f.write("line1\nline2\nline3\nline4\nline5\n")
             f.flush()
 
-            result = tool._run(path=f.name, start_line=2, end_line=4, new_content="new2\nnew3\nnew4")
+            result = tool._run(
+                path=f.name, start_line=2, end_line=4, new_content="new2\nnew3\nnew4"
+            )
 
             assert "Updated" in result
             assert "3 removed, 3 added" in result
@@ -70,7 +71,9 @@ class TestEditFileLinesTool:
             f.flush()
 
             # Replace 2 lines with 4 lines
-            result = tool._run(path=f.name, start_line=2, end_line=3, new_content="new1\nnew2\nnew3\nnew4")
+            result = tool._run(
+                path=f.name, start_line=2, end_line=3, new_content="new1\nnew2\nnew3\nnew4"
+            )
 
             assert "2 removed, 4 added" in result
 

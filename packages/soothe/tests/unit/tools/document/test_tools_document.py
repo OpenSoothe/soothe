@@ -90,7 +90,10 @@ class TestDocumentQATool:
 
             tool = DocumentQATool()
 
-            with patch.dict("sys.modules", {"fitz": None}), pytest.raises(ImportError, match="PyMuPDF"):
+            with (
+                patch.dict("sys.modules", {"fitz": None}),
+                pytest.raises(ImportError, match="PyMuPDF"),
+            ):
                 tool._parse_document(str(file_path))
 
 
@@ -207,7 +210,9 @@ class TestDocumentToolIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test document
             file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("Python is a programming language. It was created by Guido van Rossum.")
+            file_path.write_text(
+                "Python is a programming language. It was created by Guido van Rossum."
+            )
 
             tool = DocumentQATool()
 
@@ -222,7 +227,9 @@ class TestDocumentToolIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create test document
             file_path = Path(temp_dir) / "test.txt"
-            file_path.write_text("This is a long document. It has many sentences. The content is diverse.")
+            file_path.write_text(
+                "This is a long document. It has many sentences. The content is diverse."
+            )
 
             tool = DocumentQATool()
 

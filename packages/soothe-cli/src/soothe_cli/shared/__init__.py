@@ -6,6 +6,7 @@ This package provides:
 - Unified display policy for event/content filtering
 - Abstract renderer protocol for CLI/TUI
 - Shared message processing and utilities
+- Slash command handlers and plan rendering (IG-176)
 """
 
 from soothe_sdk import setup_logging
@@ -45,6 +46,18 @@ from soothe_cli.shared.message_processing import (
 from soothe_cli.shared.processor_state import ProcessorState
 from soothe_cli.shared.renderer_protocol import RendererProtocol
 from soothe_cli.shared.rendering import update_name_map_from_tool_calls
+from soothe_cli.shared.slash_commands import (
+    KEYBOARD_SHORTCUTS,
+    SLASH_COMMANDS,
+    parse_autonomous_command,
+    show_commands,
+    show_config,
+    show_history,
+    show_keymaps,
+    show_memory,
+    show_plan,
+    show_policy,
+)
 
 __all__ = [
     "INTERNAL_EVENT_TYPES",
@@ -82,4 +95,15 @@ __all__ = [
     "tool_calls_have_any_arg_dict",
     "try_parse_pending_tool_call_args",
     "update_name_map_from_tool_calls",
+    # Slash commands (IG-176)
+    "KEYBOARD_SHORTCUTS",
+    "SLASH_COMMANDS",
+    "parse_autonomous_command",
+    "show_commands",
+    "show_config",
+    "show_history",
+    "show_keymaps",
+    "show_memory",
+    "show_plan",
+    "show_policy",
 ]

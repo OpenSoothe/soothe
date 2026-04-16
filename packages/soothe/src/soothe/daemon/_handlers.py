@@ -14,8 +14,34 @@ from typing import Any
 from soothe_sdk.protocol import decode, encode
 
 from soothe.core.event_catalog import ERROR
+from soothe.daemon._command_parser import _parse_autonomous_command_local
 
 logger = logging.getLogger(__name__)
+
+# Local command constants (no CLI dependency - IG-176)
+_SLASH_COMMANDS_HELP = {
+    "/exit": "Stop running thread (confirm) and exit TUI; daemon keeps running",
+    "/quit": "Stop running thread (confirm) and exit TUI; daemon keeps running",
+    "/detach": "Leave thread running (confirm) and exit TUI; daemon keeps running",
+    "/autopilot <prompt>": "Run prompt in autonomous mode",
+    "/cancel": "Cancel the current running job",
+    "/plan": "Show current task plan",
+    "/memory": "Show memory stats",
+    "/policy": "Show active policy profile",
+    "/history": "Show recent prompt history",
+    "/config": "Show active configuration summary",
+    "/help": "Show available commands",
+    "/keymaps": "Show keyboard shortcuts",
+    "/clear": "Clear the screen",
+}
+
+_KEYBOARD_SHORTCUTS_HELP = {
+    "Ctrl+Q": "Quit TUI: Stop thread (confirm) and exit client",
+    "Ctrl+D": "Detach TUI: Leave thread running (confirm) and exit client",
+    "Ctrl+C": "Cancel running job, press twice within 1s to quit",
+    "Ctrl+E": "Focus chat input",
+    "Ctrl+Y": "Copy last message to clipboard",
+}
 
 
 class DaemonHandlersMixin:
@@ -163,43 +189,170 @@ class DaemonHandlersMixin:
                 )
 
     async def _handle_command(self, cmd: str) -> None:
-        """Execute a slash command and broadcast the response."""
-        from io import StringIO
+        """Execute a slash command and broadcast structured data response."""
+        import logging
 
-        from rich.console import Console
+        logger = logging.getLogger(__name__)
 
-        from soothe.foundation.slash_commands import handle_slash_command
+        cmd_lower = cmd.strip().lower()
 
-        if cmd.strip().lower() == "/clear":
+        # Handle /clear locally
+        if cmd_lower == "/clear":
             await self._broadcast({"type": "clear"})
             return
 
-        output = StringIO()
-        console = Console(file=output, force_terminal=False, width=120)
-
-        # Use per-thread input history
-        current_tid = self._runner.current_thread_id
-        input_hist = None
-        if current_tid and hasattr(self, "_thread_registry"):
-            st = self._thread_registry.get(current_tid)
-            if st:
-                input_hist = st.input_history
-
-        await handle_slash_command(
-            cmd,
-            self._runner,
-            console,
-            current_plan=None,
-            thread_logger=self._thread_logger,
-            input_history=input_hist,
-        )
-
-        response_text = output.getvalue()
-        if response_text.strip():
+        # Handle /help and /keymaps - return command lists
+        # These are defined locally in daemon to avoid CLI dependency
+        if cmd_lower == "/help":
             await self._broadcast(
                 {
                     "type": "command_response",
-                    "content": response_text,
+                    "command": "/help",
+                    "data": {"commands": _SLASH_COMMANDS_HELP},
+                }
+            )
+            return
+
+        if cmd_lower == "/keymaps":
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "command": "/keymaps",
+                    "data": {"keymaps": _KEYBOARD_SHORTCUTS_HELP},
+                }
+            )
+            return
+
+        # Handle /autopilot - parse and send as special query
+        if cmd_lower.startswith("/autopilot"):
+            # Parse locally to avoid CLI dependency
+            parsed = _parse_autonomous_command_local(cmd)
+            if parsed:
+                max_iter, prompt = parsed
+                await self._run_query(
+                    prompt,
+                    autonomous=True,
+                    max_iterations=max_iter,
+                )
+            else:
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/autopilot",
+                        "error": "Invalid autopilot syntax. Usage: /autopilot [N] <prompt>",
+                    }
+                )
+            return
+
+        # Handle data-fetching commands
+        try:
+            if cmd_lower == "/plan":
+                # Get current plan from runner
+                plan = None
+                if hasattr(self._runner, "_current_plan"):
+                    plan = self._runner._current_plan
+                plan_data = None
+                if plan:
+                    plan_data = {
+                        "goal": plan.goal,
+                        "reasoning": plan.reasoning,
+                        "general_activity": plan.general_activity,
+                        "steps": [
+                            {
+                                "description": step.description,
+                                "status": step.status,
+                                "depends_on": list(step.depends_on or []),
+                                "current_activity": step.current_activity,
+                            }
+                            for step in plan.steps
+                        ],
+                    }
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/plan",
+                        "data": {"plan": plan_data},
+                    }
+                )
+                return
+
+            if cmd_lower == "/memory":
+                stats = await self._runner.memory_stats()
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/memory",
+                        "data": {"memory_stats": stats},
+                    }
+                )
+                return
+
+            if cmd_lower == "/policy":
+                policy_data = {
+                    "profile": self._runner.config.protocols.policy.profile,
+                    "planner_routing": self._runner.config.protocols.planner.routing,
+                    "memory_backend": self._runner.config.protocols.memory.backend,
+                }
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/policy",
+                        "data": {"policy": policy_data},
+                    }
+                )
+                return
+
+            if cmd_lower == "/history":
+                # Use per-thread input history
+                history_data = []
+                current_tid = self._runner.current_thread_id
+                if current_tid and hasattr(self, "_thread_registry"):
+                    st = self._thread_registry.get(current_tid)
+                    if st and hasattr(st, "input_history"):
+                        # Get recent history items
+                        history_data = st.input_history.get_recent(10)
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/history",
+                        "data": {"history": history_data},
+                    }
+                )
+                return
+
+            if cmd_lower == "/config":
+                # Return config summary
+                config_data = {
+                    "providers": [
+                        {"name": p.name, "models": list(p.models.keys()) if p.models else []}
+                        for p in (self._runner.config.providers or [])
+                    ],
+                    "workspace_dir": str(self._runner.config.workspace_dir or ""),
+                    "verbosity": str(self._runner.config.logging.verbosity),
+                }
+                await self._broadcast(
+                    {
+                        "type": "command_response",
+                        "command": "/config",
+                        "data": {"config": config_data},
+                    }
+                )
+                return
+
+            # Unknown command
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "error": f"Unknown command: {cmd}",
+                }
+            )
+
+        except Exception as exc:
+            logger.exception(f"Command error: {cmd}")
+            await self._broadcast(
+                {
+                    "type": "command_response",
+                    "error": str(exc),
                 }
             )
 

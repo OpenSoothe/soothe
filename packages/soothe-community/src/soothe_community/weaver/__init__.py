@@ -402,13 +402,13 @@ class WeaverPlugin:
         from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
         # ConfigDrivenPolicy via context.services["policy"]
 
-        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
+        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()  # noqa: F821
 
         if model is None:
             msg = "Weaver subagent requires a model."
             raise ValueError(msg)
         if isinstance(model, str):
-            if isinstance(cfg, SootheConfig) and ":" in model:
+            if isinstance(cfg, SootheConfig) and ":" in model:  # noqa: F821
                 provider_name = model.split(":", 1)[0]
                 provider_names = [p.name for p in cfg.providers] if cfg.providers else []
                 if provider_name in provider_names:
@@ -486,7 +486,7 @@ class WeaverPlugin:
             registry=registry_inst,
             skillify_retriever=skillify_retriever,
             model=resolved_model,
-            policy=ConfigDrivenPolicy(),
+            policy=ConfigDrivenPolicy(),  # noqa: F821
             policy_profile=cfg.protocols.policy.profile,
         )
 

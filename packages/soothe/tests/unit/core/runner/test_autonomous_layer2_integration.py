@@ -1,9 +1,11 @@
 """Tests for GoalEngine → AgentLoop delegation (IG-154)."""
 
-import pytest
 from unittest.mock import AsyncMock, Mock
-from soothe.core.runner._types import GoalResult
+
+import pytest
+
 from soothe.cognition.agent_loop.schemas import PlanResult
+from soothe.core.runner._types import GoalResult
 
 
 def test_goal_result_model():
@@ -54,8 +56,8 @@ def test_plan_result_to_goal_result_conversion():
 @pytest.mark.asyncio
 async def test_agentloop_delegation_basic():
     """Test basic AgentLoop delegation from GoalEngine."""
-    from soothe.core.runner import SootheRunner
     from soothe.config import SootheConfig
+    from soothe.core.runner import SootheRunner
 
     # Mock configuration
     config = SootheConfig()
@@ -171,7 +173,8 @@ async def test_planner_reflect_with_failed_agentloop_result():
 
     # Check for alternative approach directive
     alternative_found = any(
-        d.action == "create" and "alternative" in d.description.lower() for d in reflection.goal_directives
+        d.action == "create" and "alternative" in d.description.lower()
+        for d in reflection.goal_directives
     )
     assert alternative_found, "Should generate alternative approach directive"
 
@@ -199,7 +202,14 @@ async def test_planner_reflect_without_agentloop_result():
 
     step_results = [
         StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="test"),
-        StepResult(step_id="S2", success=False, outcome={}, error="Failed", duration_ms=100, thread_id="test"),
+        StepResult(
+            step_id="S2",
+            success=False,
+            outcome={},
+            error="Failed",
+            duration_ms=100,
+            thread_id="test",
+        ),
     ]
 
     # Call reflect WITHOUT agentloop_result

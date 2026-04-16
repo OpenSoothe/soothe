@@ -49,7 +49,12 @@ class TestEnhancedReflection:
         """s1 fails directly (no dependencies)."""
         plan = _plan_with_deps()
         results = [
-            StepResult(step_id="s1", success=False, outcome={"type": "error", "error": "timeout"}, error="timeout"),
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "error", "error": "timeout"},
+                error="timeout",
+            ),
         ]
         reflection = await planner.reflect(plan, results)
         assert reflection.should_revise
@@ -87,9 +92,24 @@ class TestEnhancedReflection:
         """s1 fails, s2 blocked by s1, s3 blocked by both."""
         plan = _plan_with_deps()
         results = [
-            StepResult(step_id="s1", success=False, outcome={"type": "error", "error": "error"}, error="error"),
-            StepResult(step_id="s2", success=False, outcome={"type": "error", "error": "blocked"}, error="blocked"),
-            StepResult(step_id="s3", success=False, outcome={"type": "error", "error": "blocked"}, error="blocked"),
+            StepResult(
+                step_id="s1",
+                success=False,
+                outcome={"type": "error", "error": "error"},
+                error="error",
+            ),
+            StepResult(
+                step_id="s2",
+                success=False,
+                outcome={"type": "error", "error": "blocked"},
+                error="blocked",
+            ),
+            StepResult(
+                step_id="s3",
+                success=False,
+                outcome={"type": "error", "error": "blocked"},
+                error="blocked",
+            ),
         ]
         reflection = await planner.reflect(plan, results)
         assert reflection.should_revise
@@ -109,8 +129,12 @@ class TestEnhancedReflection:
             ],
         )
         results = [
-            StepResult(step_id="s1", success=False, outcome={"type": "error", "error": "err"}, error="err"),
-            StepResult(step_id="s2", success=False, outcome={"type": "error", "error": "err"}, error="err"),
+            StepResult(
+                step_id="s1", success=False, outcome={"type": "error", "error": "err"}, error="err"
+            ),
+            StepResult(
+                step_id="s2", success=False, outcome={"type": "error", "error": "err"}, error="err"
+            ),
         ]
         reflection = await planner.reflect(plan, results)
         assert reflection.should_revise

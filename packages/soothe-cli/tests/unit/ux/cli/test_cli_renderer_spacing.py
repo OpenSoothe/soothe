@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from soothe.protocols.planner import Plan, PlanStep
+
 from soothe_cli.cli.renderer import CliRenderer
 from soothe_cli.cli.stream.display_line import DisplayLine
 

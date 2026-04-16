@@ -4,12 +4,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_sdk.events import SootheEvent
+from soothe_sdk.verbosity import VerbosityTier
 
 from soothe.core.event_catalog import EventMeta
 from soothe.daemon.client_session import ClientSessionManager
 from soothe.daemon.event_bus import EventBus
-from soothe_sdk.events import SootheEvent
-from soothe_sdk.verbosity import VerbosityTier
 
 
 @pytest.mark.asyncio
@@ -108,7 +108,9 @@ async def test_remove_session():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Timing issue with async sender loop in unit test - covered by integration tests")
+@pytest.mark.xfail(
+    reason="Timing issue with async sender loop in unit test - covered by integration tests"
+)
 async def test_sender_loop_sends_events():
     """Test that sender loop sends events via transport."""
     bus = EventBus()

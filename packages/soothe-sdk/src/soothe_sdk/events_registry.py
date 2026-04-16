@@ -8,7 +8,6 @@ stored in a module-level dict that the daemon reads during plugin loading.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from soothe_sdk.events import SootheEvent
 from soothe_sdk.verbosity import VerbosityTier

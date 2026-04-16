@@ -21,7 +21,10 @@ def test_manifest_has_config_requirements():
         description="Test",
         config_requirements=["providers.openai.api_key", "model_settings.temperature"],
     )
-    assert manifest.config_requirements == ["providers.openai.api_key", "model_settings.temperature"]
+    assert manifest.config_requirements == [
+        "providers.openai.api_key",
+        "model_settings.temperature",
+    ]
 
     # Default should be empty list
     manifest2 = PluginManifest(name="test", version="1.0.0", description="Test")
@@ -49,10 +52,11 @@ def test_plugin_decorator_accepts_config_requirements():
 
 def test_config_dependency_resolution():
     """PluginLoader should validate config_requirements."""
+    from soothe_sdk.types.manifest import PluginManifest
+
     from soothe.plugin.exceptions import DependencyError
     from soothe.plugin.loader import PluginLoader
     from soothe.plugin.registry import PluginRegistry
-    from soothe_sdk.types.manifest import PluginManifest
 
     registry = PluginRegistry()
     loader = PluginLoader(registry)
@@ -153,10 +157,11 @@ async def test_health_check_invocation():
 
 def test_untrusted_plugin_blocked_by_default():
     """Untrusted plugins should be blocked unless env var is set."""
+    from soothe_sdk.types.manifest import PluginManifest
+
     from soothe.plugin.exceptions import ValidationError
     from soothe.plugin.loader import PluginLoader
     from soothe.plugin.registry import PluginRegistry
-    from soothe_sdk.types.manifest import PluginManifest
 
     # Ensure env var is not set
     original = os.environ.pop("SOOTHE_ALLOW_UNTRUSTED_PLUGINS", None)
@@ -184,9 +189,10 @@ def test_untrusted_plugin_blocked_by_default():
 
 def test_trusted_plugin_allowed():
     """Built-in, trusted, and standard plugins should always be allowed."""
+    from soothe_sdk.types.manifest import PluginManifest
+
     from soothe.plugin.loader import PluginLoader
     from soothe.plugin.registry import PluginRegistry
-    from soothe_sdk.types.manifest import PluginManifest
 
     registry = PluginRegistry()
     loader = PluginLoader(registry)

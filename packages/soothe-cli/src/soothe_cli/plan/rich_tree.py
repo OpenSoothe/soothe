@@ -6,8 +6,7 @@ import re
 
 from rich.text import Text
 from rich.tree import Tree
-
-from soothe.protocols.planner import Plan
+from soothe_sdk.protocol_schemas import Plan
 
 _TASK_NAME_RE = re.compile(r'"?name"?\s*:\s*"?(\w+)"?')
 _STATUS_MARKERS: dict[str, tuple[str, str]] = {

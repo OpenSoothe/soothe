@@ -72,7 +72,9 @@ class TestFileOpsTools:
 
         tool = WriteFileTool(work_dir=str(tmp_path))
         result = tool._run(path="new.txt", content="new content")
-        assert "success" in result.lower() or "created" in result.lower() or "wrote" in result.lower()
+        assert (
+            "success" in result.lower() or "created" in result.lower() or "wrote" in result.lower()
+        )
         assert (tmp_path / "new.txt").read_text() == "new content"
 
     def test_delete_file_tool(self, tmp_path: Path) -> None:
@@ -222,7 +224,15 @@ class TestResolverConsolidatedNames:
     def test_old_names_rejected(self) -> None:
         from soothe.core.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
-        for old_name in ("inquiry", "file_edit", "cli", "wizsearch", "tabular", "document", "python_executor"):
+        for old_name in (
+            "inquiry",
+            "file_edit",
+            "cli",
+            "wizsearch",
+            "tabular",
+            "document",
+            "python_executor",
+        ):
             tools = _resolve_single_tool_group_uncached(old_name)
             assert tools == [], f"'{old_name}' should not resolve (no backward compat)"
 

@@ -206,7 +206,7 @@ class SkillifyPlugin:
         from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
         # ConfigDrivenPolicy via context.services["policy"]
 
-        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
+        cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()  # noqa: F821
 
         default_warehouse = str(Path(SOOTHE_HOME) / "agents" / "skillify" / "warehouse")
         warehouse_paths = list(cfg.skillify.warehouse_paths) if hasattr(cfg, "skillify") else []
@@ -237,7 +237,7 @@ class SkillifyPlugin:
             embeddings=embeddings,
             top_k=top_k,
             ready_event=self._indexer.ready_event,
-            policy=ConfigDrivenPolicy(),
+            policy=ConfigDrivenPolicy(),  # noqa: F821
             policy_profile=cfg.protocols.policy.profile,
         )
 

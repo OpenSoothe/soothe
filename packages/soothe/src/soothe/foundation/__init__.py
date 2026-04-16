@@ -24,18 +24,10 @@ from soothe_sdk import (
 )
 
 from soothe.foundation.ai_message import extract_text_from_ai_message
-from soothe.foundation.slash_commands import (
-    KEYBOARD_SHORTCUTS,
-    SLASH_COMMANDS,
-    handle_slash_command,
-    parse_autonomous_command,
-)
 
 __all__ = [
     "INTERNAL_JSON_KEYS",
     "INVALID_WORKSPACE_DIRS",
-    "KEYBOARD_SHORTCUTS",
-    "SLASH_COMMANDS",
     "ErrorEvent",
     "LifecycleEvent",
     "OutputEvent",
@@ -47,8 +39,6 @@ __all__ = [
     "VerbosityTier",
     "classify_event_to_tier",
     "extract_text_from_ai_message",
-    "handle_slash_command",
-    "parse_autonomous_command",
     "should_show",
     "strip_internal_tags",
 ]

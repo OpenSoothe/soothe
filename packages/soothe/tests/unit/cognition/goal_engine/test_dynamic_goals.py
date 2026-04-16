@@ -255,7 +255,9 @@ class TestDAGConsistency:
         await engine.add_dependencies(goal_a.id, [goal_b.id])
 
         # Check consistency (should not abort)
-        deps_met = all(engine._goals.get(dep_id).status == "completed" for dep_id in goal_a.depends_on)
+        deps_met = all(
+            engine._goals.get(dep_id).status == "completed" for dep_id in goal_a.depends_on
+        )
 
         assert deps_met
 
@@ -270,6 +272,8 @@ class TestDAGConsistency:
         await engine.add_dependencies(goal_a.id, [goal_b.id])
 
         # Check consistency (should abort)
-        deps_met = all(engine._goals.get(dep_id).status == "completed" for dep_id in goal_a.depends_on)
+        deps_met = all(
+            engine._goals.get(dep_id).status == "completed" for dep_id in goal_a.depends_on
+        )
 
         assert not deps_met

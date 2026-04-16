@@ -75,7 +75,8 @@ def test_simple_query_gets_minimal_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -98,7 +99,8 @@ def test_medium_query_gets_medium_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -121,7 +123,8 @@ def test_complex_query_gets_full_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -160,7 +163,8 @@ def test_optimization_disabled_uses_default_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -181,7 +185,8 @@ def test_performance_disabled_uses_default_prompt():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -202,7 +207,8 @@ def test_custom_system_prompt_for_complex_queries():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)
@@ -230,7 +236,8 @@ def test_all_prompts_include_current_date():
         )
 
         request = MockModelRequest(
-            state={"unified_classification": classification}, system_message=SystemMessage(content="original")
+            state={"unified_classification": classification},
+            system_message=SystemMessage(content="original"),
         )
 
         modified = middleware.modify_request(request)
@@ -249,7 +256,8 @@ def test_chitchat_query_treated_as_chitchat():
     )
 
     request = MockModelRequest(
-        state={"unified_classification": classification}, system_message=SystemMessage(content="original prompt")
+        state={"unified_classification": classification},
+        system_message=SystemMessage(content="original prompt"),
     )
 
     modified = middleware.modify_request(request)

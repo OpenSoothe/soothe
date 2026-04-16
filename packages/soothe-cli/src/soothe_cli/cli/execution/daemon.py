@@ -11,13 +11,13 @@ import sys
 from typing import Any
 
 import typer
-
-from soothe_cli.cli.renderer import CliRenderer
-from soothe_cli.client import (
+from soothe_sdk.client import (
     bootstrap_thread_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
+
+from soothe_cli.cli.renderer import CliRenderer
 from soothe_cli.shared import EventProcessor
 from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input

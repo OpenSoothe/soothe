@@ -34,8 +34,8 @@ from soothe_cli.shared.presentation_engine import PresentationEngine
 logger = logging.getLogger(__name__)
 
 # Batch step events for parallel execution
-BATCH_STEP_STARTED = "soothe.cognition.plan.batch_step_started"
-BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch_step_completed"
+BATCH_STEP_STARTED = "soothe.cognition.plan.batch.started"
+BATCH_STEP_COMPLETED = "soothe.cognition.plan.batch.completed"
 
 GOAL_COMPLETE_EVENTS = {
     "soothe.cognition.agent_loop.completed",

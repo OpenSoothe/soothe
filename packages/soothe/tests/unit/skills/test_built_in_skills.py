@@ -33,7 +33,9 @@ def test_create_subagent_skill_exists() -> None:
     paths = get_built_in_skills_paths()
 
     skill_names = [Path(p).name for p in paths]
-    assert "create-subagent" in skill_names, "create-subagent skill should be included in built-in skills"
+    assert "create-subagent" in skill_names, (
+        "create-subagent skill should be included in built-in skills"
+    )
 
 
 def test_remember_skill_exists() -> None:

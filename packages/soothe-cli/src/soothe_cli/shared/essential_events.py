@@ -20,12 +20,12 @@ STEP_START_EVENT_TYPES: Final[frozenset[str]] = frozenset(
 
 STEP_COMPLETE_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     {
-        "soothe.cognition.plan.step_completed",
+        "soothe.cognition.plan.step.completed",
         "soothe.cognition.agent_loop.step.completed",
     }
 )
 
-LOOP_REASON_EVENT_TYPE: Final[str] = "soothe.cognition.agent_loop.reasoning"
+LOOP_REASON_EVENT_TYPE: Final[str] = "soothe.cognition.agent_loop.reasoned"
 
 ESSENTIAL_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
     set(GOAL_START_EVENT_TYPES)

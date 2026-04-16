@@ -280,7 +280,12 @@ class TestCheckpointRecovery:
         goals_snapshot = [
             {"id": "gA", "description": "First goal", "status": "completed"},
             {"id": "gB", "description": "Second goal", "status": "in_progress", "depends_on": []},
-            {"id": "gC", "description": "Third goal", "status": "pending", "depends_on": ["gA", "gB"]},
+            {
+                "id": "gC",
+                "description": "Third goal",
+                "status": "pending",
+                "depends_on": ["gA", "gB"],
+            },
         ]
 
         envelope = {
@@ -290,7 +295,10 @@ class TestCheckpointRecovery:
             "thread_id": "t1",
             "goals": goals_snapshot,
             "active_goal_id": "gB",
-            "plan": {"goal": "Second goal", "steps": [{"id": "s1", "description": "Search", "status": "completed"}]},
+            "plan": {
+                "goal": "Second goal",
+                "steps": [{"id": "s1", "description": "Search", "status": "completed"}],
+            },
             "completed_step_ids": ["s1"],
             "status": "in_progress",
         }

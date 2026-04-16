@@ -344,7 +344,9 @@ class TestAppendGoalProgress:
     async def test_appends_to_existing_progress_section(self, tmp_path) -> None:
         engine = GoalEngine()
         goal_file = tmp_path / "GOAL.md"
-        goal_file.write_text("---\nid: test\n---\n\n# Test Goal\n\n## Progress\n\n- [2024-01-01 00:00:00] Old entry\n")
+        goal_file.write_text(
+            "---\nid: test\n---\n\n# Test Goal\n\n## Progress\n\n- [2024-01-01 00:00:00] Old entry\n"
+        )
 
         g = await engine.create_goal("Test", source_file=str(goal_file), goal_id="test")
         await engine.append_goal_progress(g.id, "New entry")
@@ -504,7 +506,9 @@ class TestDiscoverGoalsFromFiles:
         autopilot = tmp_path / "autopilot"
         autopilot.mkdir()
         goal_file = autopilot / "GOAL.md"
-        goal_file.write_text("---\nid: single\npriority: 80\n---\n\n# Build the feature\n\nSome description.\n")
+        goal_file.write_text(
+            "---\nid: single\npriority: 80\n---\n\n# Build the feature\n\nSome description.\n"
+        )
 
         engine = GoalEngine()
         goals = await engine.discover_goals_from_files(autopilot_dir=str(tmp_path))
