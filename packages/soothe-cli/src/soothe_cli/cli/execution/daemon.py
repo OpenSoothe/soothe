@@ -88,19 +88,15 @@ async def run_headless_via_daemon(
 
         has_error = False
         query_started = False  # Track if we've seen the query start running
-        last_heartbeat = (
-            asyncio.get_event_loop().time()
-        )  # Track last heartbeat for timeout extension
 
         while True:
             try:
                 if query_started:
                     event = await client.read_event()
                 else:
-                    # Extend timeout if heartbeat received recently
-                    time_since_heartbeat = asyncio.get_event_loop().time() - last_heartbeat
-                    effective_timeout = max(1.0, _QUERY_START_TIMEOUT_S - time_since_heartbeat)
-                    event = await asyncio.wait_for(client.read_event(), timeout=effective_timeout)
+                    event = await asyncio.wait_for(
+                        client.read_event(), timeout=_QUERY_START_TIMEOUT_S
+                    )
             except TimeoutError:
                 return _DAEMON_FALLBACK_EXIT_CODE
             if not event:
@@ -108,15 +104,21 @@ async def run_headless_via_daemon(
 
             event_type = event.get("type", "")
 
-            # Handle heartbeat events - reset timeout tracking
-            if event_type == "event":
-                ev_data = event.get("data")
-                if (
-                    isinstance(ev_data, dict)
-                    and ev_data.get("type") == "soothe.system.daemon.heartbeat"
-                ):
-                    last_heartbeat = asyncio.get_event_loop().time()
-                    continue  # Don't process heartbeat as regular event
+            # IMMEDIATE error check - exit before any other processing
+            # This ensures errors before query starts return immediately (IG-181)
+            if event_type == "error":
+                typer.echo(f"Daemon error: {event.get('message', 'unknown')}", err=True)
+                return 1
+
+            # Check for soothe.error.* events before query starts
+            ev_data = event.get("data")
+            if (
+                not query_started
+                and isinstance(ev_data, dict)
+                and str(ev_data.get("type", "")).startswith("soothe.error")
+            ):
+                typer.echo(f"Daemon error: {ev_data.get('error', 'unknown')}", err=True)
+                return 1
 
             # Handle status changes (need to track query_started for timeout)
             if event_type == "status":
@@ -135,15 +137,6 @@ async def run_headless_via_daemon(
                             break
                         if not nxt:
                             break
-                        nt = nxt.get("type", "")
-                        if nt == "event":
-                            nd = nxt.get("data")
-                            if (
-                                isinstance(nd, dict)
-                                and nd.get("type") == "soothe.system.daemon.heartbeat"
-                            ):
-                                last_heartbeat = loop_clock.time()
-                                continue
                         if output_format == "jsonl":
                             namespace = nxt.get("namespace", [])
                             mode = nxt.get("mode", "")
@@ -161,20 +154,6 @@ async def run_headless_via_daemon(
 
                     processor.process_event(event)  # Finalize (on_turn_end after drain)
                     break
-
-            # Detect errors before query started as a hard failure
-            ev_data = event.get("data")
-            if event_type == "error":
-                typer.echo(f"Daemon error: {event.get('message', 'unknown')}", err=True)
-                return 1
-
-            if (
-                not query_started
-                and isinstance(ev_data, dict)
-                and str(ev_data.get("type", "")).startswith("soothe.error")
-            ):
-                typer.echo(f"Daemon error: {ev_data.get('error', 'unknown')}", err=True)
-                return 1
 
             # JSONL output bypass processor
             if output_format == "jsonl":

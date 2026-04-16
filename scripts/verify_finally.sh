@@ -388,7 +388,6 @@ run_tests() {
     print_header "Unit Tests"
 
     print_info "Running unit tests for daemon package..."
-    print_info "Note: This may take 20-30 minutes for full test suite..."
 
     # Run daemon package tests (only package with tests currently)
     # Daemon package has its own .venv with pytest installed
