@@ -55,7 +55,6 @@ from soothe_cli.shared.slash_commands import (
     show_history,
     show_keymaps,
     show_memory,
-    show_plan,
     show_policy,
 )
 
@@ -104,6 +103,5 @@ __all__ = [
     "show_history",
     "show_keymaps",
     "show_memory",
-    "show_plan",
     "show_policy",
 ]
