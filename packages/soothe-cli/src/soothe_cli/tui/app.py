@@ -65,7 +65,6 @@ from soothe_cli.tui.widgets.welcome import WelcomeBanner
 
 logger = logging.getLogger(__name__)
 _monotonic = time.monotonic
-_DAEMON_START_WAIT_TIMEOUT = 30  # seconds to wait for daemon startup
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -1319,13 +1318,10 @@ class SootheApp(App):
 
         try:
             from soothe_sdk.client import (
-                WebSocketClient,
                 is_daemon_live,
-                request_daemon_shutdown,
                 websocket_url_from_config,
             )
 
-            from soothe_cli.cli.commands.daemon_cmd import daemon_start
             from soothe_cli.tui.daemon_session import TuiDaemonSession
 
             ws_url = websocket_url_from_config(self._daemon_config)
@@ -1334,25 +1330,12 @@ class SootheApp(App):
             daemon_live = await is_daemon_live(ws_url, timeout=5.0)
 
             if not daemon_live:
-                # Attempt cleanup if stale daemon
-                try:
-                    client = WebSocketClient(url=ws_url)
-                    await client.connect()
-                    await request_daemon_shutdown(client, timeout=10.0)
-                    await client.close()
-                except Exception:
-                    pass  # No daemon running or already stopped
-
-                # Start daemon
-                daemon_start(config=None, foreground=False)
-
-                # Wait for daemon to become fully ready
-                start_time = time.time()
-                while time.time() - start_time < _DAEMON_START_WAIT_TIMEOUT:
-                    daemon_live = await is_daemon_live(ws_url, timeout=2.0)
-                    if daemon_live:
-                        break
-                    await asyncio.sleep(0.5)
+                # CLI does NOT control daemon start/stop per architectural separation (IG-174/IG-175)
+                # Show helpful error message instead
+                raise ConnectionError(
+                    f"Soothe daemon not running at {ws_url}. "
+                    f"Please start the daemon with: soothe daemon start"
+                )
 
             session = TuiDaemonSession(self._daemon_config)
             status_event = await session.connect(resume_thread_id=self._lc_thread_id)
