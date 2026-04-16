@@ -556,24 +556,58 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
 
 def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
+    """Test that headless stops stale daemon before restart (RFC-0013 WebSocket lifecycle).
+
+    After IG-174/IG-175 refactoring, headless.py uses WebSocket RPC checks instead
+    of SootheDaemon static methods. The flow is:
+    1. is_daemon_live() returns False (daemon not responsive)
+    2. WebSocketClient is created and request_daemon_shutdown() is called
+    3. Daemon is started via subprocess
+    """
     cfg = SootheConfig()
-    stop_running = MagicMock()
-    daemon_start = MagicMock()
-    captured: dict[str, object] = {}
+    shutdown_called = MagicMock()
+    captured_coros: list[object] = []
+    subprocess_popen = MagicMock()
 
-    # Import SootheDaemon from correct location
-    from soothe.daemon import SootheDaemon
+    # Mock WebSocketClient instance with connect/close methods
+    mock_client_instance = MagicMock()
+    mock_client_instance.connect = AsyncMock()
+    mock_client_instance.close = AsyncMock()
 
-    monkeypatch.setattr(SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False))
-    monkeypatch.setattr(SootheDaemon, "is_running", staticmethod(lambda: True))
-    monkeypatch.setattr(SootheDaemon, "stop_running", staticmethod(stop_running))
-    monkeypatch.setattr("soothe.cli.daemon_main.daemon_start", daemon_start)
+    # Patch SDK client helpers (WebSocket RPC checks)
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.headless.is_daemon_live",
+        AsyncMock(return_value=False),  # Daemon not responsive (stale)
+    )
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.headless.request_daemon_shutdown",
+        AsyncMock(side_effect=lambda client, timeout: shutdown_called()),
+    )
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.headless.WebSocketClient",
+        MagicMock(return_value=mock_client_instance),  # Return mock instance
+    )
 
-    def _fake_asyncio_run(coro: object) -> int:
-        captured["coro"] = coro
-        return 0
+    # Track asyncio.run calls
+    def _fake_asyncio_run(coro: object) -> object:
+        captured_coros.append(coro)
+        # First run: _check_and_ensure_daemon
+        # Second run: run_headless_via_daemon
+        if len(captured_coros) == 1:
+            # Execute the async _check_and_ensure_daemon function
+            # Use a fresh event loop since we're inside patched asyncio.run
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(coro)
+            finally:
+                loop.close()
+            return None
+        else:
+            # Second call: run_headless_via_daemon returns exit code
+            return 0
 
     monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
+    monkeypatch.setattr("subprocess.Popen", subprocess_popen)
     monkeypatch.setattr(
         headless_exec.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code))
     )
@@ -582,10 +616,15 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
         headless_exec.run_headless(cfg, "analyze project structure")
 
     assert exc.value.code == 0
-    stop_running.assert_called_once()
-    daemon_start.assert_called_once()
-    assert captured["coro"].cr_code.co_name == "run_headless_via_daemon"
-    captured["coro"].close()
+    shutdown_called.assert_called_once()  # Stale daemon cleanup called
+    subprocess_popen.assert_called_once()  # Daemon restart via subprocess
+    assert len(captured_coros) == 2
+    assert captured_coros[0].cr_code.co_name == "_check_and_ensure_daemon"
+    assert captured_coros[1].cr_code.co_name == "run_headless_via_daemon"
+    # Close coroutines to avoid warnings
+    for coro in captured_coros:
+        if hasattr(coro, "close"):
+            coro.close()
 
 
 @pytest.mark.asyncio
