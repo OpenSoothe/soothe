@@ -96,9 +96,13 @@ def test_help_subcommand_shows_root_help() -> None:
     result = runner.invoke(app, ["help"])
 
     assert result.exit_code == 0
-    assert "Usage: soothe-daemon [OPTIONS] COMMAND [ARGS]..." in result.stdout
-    assert "Commands" in result.stdout
-    assert "start" in result.stdout
+    # Strip ANSI color codes for assertion
+    import re
+
+    clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+    assert "Usage: soothe-daemon [OPTIONS] COMMAND [ARGS]..." in clean_output
+    assert "Commands" in clean_output
+    assert "start" in clean_output
 
 
 def _make_health_report(status: CheckStatus) -> HealthReport:
