@@ -26,16 +26,56 @@ jobs:
     - name: Set up Python
       run: uv python install 3.12
 
-    - name: Install dependencies (workspace)
-      run: uv sync
+    - name: Sync SDK dependencies
+      run: |
+        cd packages/soothe-sdk
+        uv sync --all-extras
+
+    - name: Get SDK version
+      id: sdk-version
+      run: |
+        cd packages/soothe-sdk
+        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if SDK version exists on PyPI
+      id: sdk-check
+      run: |
+        VERSION="${{ steps.sdk-version.outputs.version }}"
+        echo "Checking if soothe-sdk $VERSION exists on PyPI..."
+        if pip index versions soothe-sdk 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
 
     - name: Build SDK package
-      run: make sdk-build
+      if: steps.sdk-check.outputs.exists == 'false'
+      run: |
+        cd packages/soothe-sdk
+        uv build --out-dir ../../dist
+
+    - name: Verify SDK dist directory
+      if: steps.sdk-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep soothe_sdk)" ]; then
+          echo "❌ Error: dist directory doesn't contain SDK packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains SDK packages"
+        ls -la dist/ | grep soothe_sdk
 
     - name: Publish SDK to PyPI
+      if: steps.sdk-check.outputs.exists == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: packages/soothe-sdk/dist/
+        packages-dir: dist/
         verbose: true
         print-hash: true
 
@@ -57,16 +97,57 @@ jobs:
     - name: Set up Python
       run: uv python install 3.12
 
-    - name: Install dependencies (workspace)
-      run: uv sync
+    - name: Sync CLI dependencies
+      run: |
+        cd packages/soothe-cli
+        uv sync --all-extras
+
+    - name: Get CLI version
+      id: cli-version
+      run: |
+        cd packages/soothe-cli
+        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if CLI version exists on PyPI
+      id: cli-check
+      run: |
+        VERSION="${{ steps.cli-version.outputs.version }}"
+        echo "Checking if soothe-cli $VERSION exists on PyPI..."
+        if pip index versions soothe-cli 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
 
     - name: Build CLI package
-      run: make cli-build
+      if: steps.cli-check.outputs.exists == 'false'
+      run: |
+        rm -rf dist/
+        cd packages/soothe-cli
+        uv build --out-dir ../../dist
+
+    - name: Verify CLI dist directory
+      if: steps.cli-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep soothe_cli)" ]; then
+          echo "❌ Error: dist directory doesn't contain CLI packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains CLI packages"
+        ls -la dist/ | grep soothe_cli
 
     - name: Publish CLI to PyPI
+      if: steps.cli-check.outputs.exists == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: packages/soothe-cli/dist/
+        packages-dir: dist/
         verbose: true
         print-hash: true
 
@@ -93,19 +174,63 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
 
-    - name: Install dependencies (workspace)
-      run: uv sync
+    - name: Sync daemon dependencies
+      run: |
+        cd packages/soothe
+        uv sync --all-extras
+
+    - name: Get daemon version
+      id: daemon-version
+      run: |
+        cd packages/soothe
+        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if daemon version exists on PyPI
+      id: daemon-check
+      run: |
+        VERSION="${{ steps.daemon-version.outputs.version }}"
+        echo "Checking if soothe $VERSION exists on PyPI..."
+        if pip index versions soothe 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
 
     - name: Run tests
-      run: make test-unit
+      if: steps.daemon-check.outputs.exists == 'false'
+      run: |
+        cd packages/soothe
+        uv run pytest tests/unit/ -v
 
     - name: Build daemon package
-      run: make build
+      if: steps.daemon-check.outputs.exists == 'false'
+      run: |
+        rm -rf dist/
+        cd packages/soothe
+        uv build --out-dir ../../dist
+
+    - name: Verify daemon dist directory
+      if: steps.daemon-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep -E 'soothe-[0-9]')" ]; then
+          echo "❌ Error: dist directory doesn't contain daemon packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains daemon packages"
+        ls -la dist/ | grep -E 'soothe-[0-9]'
 
     - name: Publish daemon to PyPI
+      if: steps.daemon-check.outputs.exists == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: packages/soothe/dist/
+        packages-dir: dist/
         verbose: true
         print-hash: true
 
@@ -127,15 +252,56 @@ jobs:
     - name: Set up Python
       run: uv python install 3.12
 
-    - name: Install dependencies (workspace)
-      run: uv sync
+    - name: Sync community dependencies
+      run: |
+        cd packages/soothe-community
+        uv sync --all-extras
+
+    - name: Get community version
+      id: community-version
+      run: |
+        cd packages/soothe-community
+        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if community version exists on PyPI
+      id: community-check
+      run: |
+        VERSION="${{ steps.community-version.outputs.version }}"
+        echo "Checking if soothe-community $VERSION exists on PyPI..."
+        if pip index versions soothe-community 2>/dev/null | grep -q "$VERSION"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "✓ Version $VERSION not found on PyPI, will publish"
+        fi
 
     - name: Build community package
-      run: make community-build
+      if: steps.community-check.outputs.exists == 'false'
+      run: |
+        rm -rf dist/
+        cd packages/soothe-community
+        uv build --out-dir ../../dist
+
+    - name: Verify community dist directory
+      if: steps.community-check.outputs.exists == 'false'
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Error: dist directory not found"
+          exit 1
+        fi
+        if [ -z "$(ls -A dist | grep soothe_community)" ]; then
+          echo "❌ Error: dist directory doesn't contain community packages"
+          exit 1
+        fi
+        echo "✓ dist directory exists and contains community packages"
+        ls -la dist/ | grep soothe_community
 
     - name: Publish community to PyPI
+      if: steps.community-check.outputs.exists == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        packages-dir: packages/soothe-community/dist/
+        packages-dir: dist/
         verbose: true
         print-hash: true
