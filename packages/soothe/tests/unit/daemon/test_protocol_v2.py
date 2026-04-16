@@ -4,7 +4,6 @@ from __future__ import annotations
 
 
 from soothe.daemon.protocol_v2 import (
-    ERROR_AUTHENTICATION_REQUIRED,
     ERROR_INVALID_MESSAGE,
     ERROR_RATE_LIMITED,
     ProtocolError,
@@ -89,21 +88,6 @@ def test_validate_message_detach_valid() -> None:
     assert errors == []
 
 
-def test_validate_message_auth_valid() -> None:
-    """Test valid auth message validation."""
-    msg = {"type": "auth", "token": "sk_live_abc123"}
-    errors = validate_message(msg)
-    assert errors == []
-
-
-def test_validate_message_auth_missing_token() -> None:
-    """Test auth message missing token."""
-    msg = {"type": "auth"}
-    errors = validate_message(msg)
-    assert len(errors) == 1
-    assert "token" in errors[0]
-
-
 def test_validate_message_missing_type() -> None:
     """Test message missing required type field."""
     msg = {"text": "Hello"}
@@ -184,14 +168,14 @@ def test_protocol_error_to_dict() -> None:
 def test_protocol_error_to_dict_no_details() -> None:
     """Test ProtocolError to_dict without details."""
     error = ProtocolError(
-        code=ERROR_AUTHENTICATION_REQUIRED,
-        message="Authentication required",
+        code=ERROR_INVALID_MESSAGE,
+        message="Invalid message",
     )
 
     error_dict = error.to_dict()
 
     assert error_dict["type"] == "error"
-    assert error_dict["code"] == ERROR_AUTHENTICATION_REQUIRED
+    assert error_dict["code"] == ERROR_INVALID_MESSAGE
     assert "details" not in error_dict
 
 

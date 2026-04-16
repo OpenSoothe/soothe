@@ -32,7 +32,9 @@ class MockRenderer:
         is_main: bool,
         is_streaming: bool,
     ) -> None:
-        self.calls.append(("on_assistant_text", (text,), {"is_main": is_main, "is_streaming": is_streaming}))
+        self.calls.append(
+            ("on_assistant_text", (text,), {"is_main": is_main, "is_streaming": is_streaming})
+        )
 
     def on_tool_call(
         self,
@@ -53,7 +55,13 @@ class MockRenderer:
         is_error: bool,
         is_main: bool,
     ) -> None:
-        self.calls.append(("on_tool_result", (name, result, tool_call_id), {"is_error": is_error, "is_main": is_main}))
+        self.calls.append(
+            (
+                "on_tool_result",
+                (name, result, tool_call_id),
+                {"is_error": is_error, "is_main": is_main},
+            )
+        )
 
     def on_status_change(self, state: str) -> None:
         self.calls.append(("on_status_change", (state,), {}))
@@ -184,7 +192,9 @@ class TestEventProcessorErrorHandling:
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
-        processor.process_event({"type": "error", "message": "Something went wrong", "code": "TEST_ERROR"})
+        processor.process_event(
+            {"type": "error", "message": "Something went wrong", "code": "TEST_ERROR"}
+        )
 
         assert ("on_error", ("Something went wrong",), {"context": "TEST_ERROR"}) in renderer.calls
 

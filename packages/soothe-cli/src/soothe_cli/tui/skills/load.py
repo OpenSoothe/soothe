@@ -49,7 +49,7 @@ def load_skill_content(
         skill_path: Path to the skill directory **or** to a `SKILL.md` file.
         allowed_roots: Resolved directories that may contain the target file.
             When empty or ``None``, any resolved path is accepted (tests only —
-            production callers should pass roots from `discover_skills_and_roots`).
+            production callers should pass roots from daemon RPC).
 
     Returns:
         File contents as a string, or ``None`` only when the file is missing.

@@ -72,10 +72,18 @@ class TestClassifyEventToTier:
     def test_classify_agentic_events(self) -> None:
         """Agentic loop events classify to correct tiers."""
         assert classify_event_to_tier("soothe.cognition.agent_loop.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.cognition.agent_loop.completed") == VerbosityTier.QUIET
+        assert (
+            classify_event_to_tier("soothe.cognition.agent_loop.completed") == VerbosityTier.QUIET
+        )
         # Step descriptions and completion both visible at NORMAL for progress visibility
-        assert classify_event_to_tier("soothe.cognition.agent_loop.step.started") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.cognition.agent_loop.step.completed") == VerbosityTier.NORMAL
+        assert (
+            classify_event_to_tier("soothe.cognition.agent_loop.step.started")
+            == VerbosityTier.NORMAL
+        )
+        assert (
+            classify_event_to_tier("soothe.cognition.agent_loop.step.completed")
+            == VerbosityTier.NORMAL
+        )
 
     def test_classify_lifecycle_events(self) -> None:
         """Lifecycle events classify to DETAILED by default."""
@@ -95,14 +103,20 @@ class TestClassifyEventToTier:
         """
         # All tool events should be INTERNAL (invisible) to avoid duplicate display
         assert classify_event_to_tier("soothe.tool.execution.result") == VerbosityTier.INTERNAL
-        assert classify_event_to_tier("soothe.tool.websearch.search_started") == VerbosityTier.INTERNAL
+        assert (
+            classify_event_to_tier("soothe.tool.websearch.search_started") == VerbosityTier.INTERNAL
+        )
         assert classify_event_to_tier("soothe.tool.file_ops.read") == VerbosityTier.INTERNAL
-        assert classify_event_to_tier("soothe.tool.data.inspection_started") == VerbosityTier.INTERNAL
+        assert (
+            classify_event_to_tier("soothe.tool.data.inspection_started") == VerbosityTier.INTERNAL
+        )
 
     def test_classify_output_events(self) -> None:
         """Output events classify to QUIET (always visible)."""
         assert classify_event_to_tier("soothe.output.chitchat.response") == VerbosityTier.QUIET
-        assert classify_event_to_tier("soothe.output.autonomous.final_report") == VerbosityTier.QUIET
+        assert (
+            classify_event_to_tier("soothe.output.autonomous.final_report") == VerbosityTier.QUIET
+        )
         assert classify_event_to_tier("soothe.output.chitchat.started") == VerbosityTier.INTERNAL
 
     def test_classify_error_events(self) -> None:
@@ -112,7 +126,9 @@ class TestClassifyEventToTier:
     def test_classify_non_soothe_events(self) -> None:
         """Non-soothe events classify to DEBUG or DETAILED."""
         assert classify_event_to_tier("thinking.heartbeat", namespace=()) == VerbosityTier.DEBUG
-        assert classify_event_to_tier("some_event", namespace=("tools:abc",)) == VerbosityTier.DETAILED
+        assert (
+            classify_event_to_tier("some_event", namespace=("tools:abc",)) == VerbosityTier.DETAILED
+        )
         assert classify_event_to_tier("unknown_event", namespace=()) == VerbosityTier.DEBUG
 
     def test_classify_subagent_events(self) -> None:

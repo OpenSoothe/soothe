@@ -720,18 +720,8 @@ class SootheApp(App):
         """Startup task reference (set in on_mount)."""
 
         self._discovered_skills: list[ExtendedSkillMetadata] = []
-        """Cached skill metadata (populated by startup discovery worker,
-        refreshed on `/reload`).
-
-        Used by `_invoke_skill` to skip re-walking all skill directories on
-        every invocation.
-        """
-
-        self._skill_allowed_roots: list[Path] = []
-        """Pre-resolved skill root directories for containment checks in
-        `load_skill_content`.
-
-        Built alongside `_discovered_skills`.
+        """Cached skill metadata from daemon RPC (populated by startup
+        discovery worker, refreshed on `/reload`).
         """
 
         # Lazily imported here to avoid pulling image dependencies into
@@ -1004,46 +994,25 @@ class SootheApp(App):
             )
 
     async def _discover_skills(self) -> None:
-        """Discover skills, cache metadata, and update autocomplete.
+        """Discover skills from daemon RPC, cache metadata, and update autocomplete.
 
-        Caches the full `ExtendedSkillMetadata` list and pre-resolved
-        containment roots so that `/skill:<name>` invocations can skip
-        re-walking every skill directory.
-
-        Runs filesystem I/O in a thread to avoid blocking the event loop.
+        Fetches wire-safe skill metadata via daemon WebSocket RPC and caches
+        it for autocomplete and skill list display.
         """
         try:
-            skills, roots = await asyncio.to_thread(self._discover_skills_and_roots)
+            skills = await self._discover_skills()
             self._discovered_skills = skills
-            self._skill_allowed_roots = roots
             self._apply_slash_command_autocomplete()
             if skills and not self._chat_input:
                 logger.debug(
                     "Skill discovery completed (%d skills) but chat input not yet mounted; autocomplete deferred",
                     len(skills),
                 )
-        except OSError:
-            # Clear stale cache so /reload failures don't silently
-            # leave old data in place.
-            self._discovered_skills = []
-            self._skill_allowed_roots = []
-            logger.warning(
-                "Filesystem error during skill discovery",
-                exc_info=True,
-            )
-            self.notify(
-                "Could not scan skill directories. Some /skill: commands may be unavailable.",
-                severity="warning",
-                timeout=6,
-                markup=False,
-            )
-            self._apply_slash_command_autocomplete()
         except Exception:
             self._discovered_skills = []
-            self._skill_allowed_roots = []
             logger.exception("Unexpected error during skill discovery")
             self.notify(
-                "Skill discovery failed unexpectedly. /skill: commands may not work. Check logs for details.",
+                "Skill discovery failed. /skill: commands may not work. Check logs for details.",
                 severity="warning",
                 timeout=8,
                 markup=False,
@@ -1131,18 +1100,11 @@ class SootheApp(App):
 
         if not self._discovered_skills:
             try:
-                skills, roots = await asyncio.to_thread(self._discover_skills_and_roots)
+                skills = await self._discover_skills()
                 self._discovered_skills = skills
-                self._skill_allowed_roots = roots
                 self._apply_slash_command_autocomplete()
-            except OSError:
-                logger.warning("Filesystem error listing skills", exc_info=True)
-                await self._mount_message(
-                    AppMessage("Could not scan skill directories. Check logs for details."),
-                )
-                return
             except Exception:
-                logger.exception("Unexpected error listing skills")
+                logger.exception("Error fetching skills from daemon")
                 await self._mount_message(
                     AppMessage("Could not list skills. Check logs for details.")
                 )
@@ -1199,25 +1161,18 @@ class SootheApp(App):
         )
         await self._send_to_agent("", skip_daemon_send_turn=True)
 
-    async def _discover_skills_and_roots(
-        self,
-    ) -> tuple[list[ExtendedSkillMetadata], list[Path]]:
-        """Discover skills and build pre-resolved containment roots (IG-174 Phase 2).
+    async def _discover_skills(self) -> list[ExtendedSkillMetadata]:
+        """Discover skills from daemon via WebSocket RPC (IG-174 Phase 2).
 
-        Fetches wire-safe skill metadata from daemon via WebSocket RPC.
-        Shared by `_discover_skills` (startup/reload) and the cache-miss
-        fallback in `_invoke_skill`.
+        Fetches wire-safe skill metadata from daemon. No local filesystem
+        access — all skill discovery and invocation handled by daemon.
 
         Returns:
-            Tuple of `(skill metadata list, pre-resolved containment roots)`.
+            List of skill metadata dicts from daemon RPC.
         """
-        from soothe_cli.tui.skills.invocation import discover_skills_and_roots_async
+        from soothe_cli.tui.skills.invocation import discover_skills_async
 
-        assistant_id = self._assistant_id or "agent"
-        # Use daemon config for WebSocket RPC
-        return await discover_skills_and_roots_async(
-            assistant_id, daemon_config=self._daemon_config
-        )
+        return await discover_skills_async(daemon_config=self._daemon_config)
 
     async def _resolve_resume_thread(self) -> None:
         """Resolve a `-r` resume intent into a concrete thread ID.
@@ -2351,7 +2306,9 @@ class SootheApp(App):
                         cmd, self._initial_skill, self._initial_prompt or ""
                     )
                 else:
-                    await self._invoke_skill(self._initial_skill, self._initial_prompt or "")
+                    await self._mount_message(
+                        AppMessage("Skills require a daemon connection. Connect to a daemon first.")
+                    )
                 return
             if self._initial_prompt and self._initial_prompt.strip():
                 await self._handle_user_message(self._initial_prompt)
@@ -3048,135 +3005,8 @@ class SootheApp(App):
         with suppress(NoMatches, ScreenStackError):
             self.query_one("#chat", VerticalScroll).anchor()
 
-    async def _invoke_skill(
-        self,
-        skill_name: str,
-        args: str = "",
-        *,
-        command: str | None = None,
-    ) -> None:
-        """Load a skill, render its widget, and send its prompt to the agent.
-
-        Looks up the skill from cached metadata (populated at startup), falling
-        back to a fresh filesystem walk on cache miss. Reads the `SKILL.md`
-        body, wraps it in a prompt envelope with any user-provided arguments,
-        and sends the composed message to the agent.
-
-        Args:
-            skill_name: Skill name to invoke.
-            args: Optional user request to append after the skill body.
-            command: Original slash command text for UI echo, if any.
-        """
-        from soothe_cli.tui.skills.invocation import build_skill_invocation_envelope
-        from soothe_cli.tui.skills.load import load_skill_content
-
-        normalized_name = skill_name.strip().lower()
-
-        async def _mount_error(message: str) -> None:
-            if command is not None:
-                await self._mount_message(UserMessage(command))
-            await self._mount_message(AppMessage(message))
-
-        if not normalized_name:
-            if command is not None:
-                await self._mount_message(UserMessage(command))
-                await self._mount_message(AppMessage("Usage: /skill:<name> [args]"))
-            else:
-                await self._mount_message(AppMessage("Skill name is required."))
-            return
-
-        # Fast path: look up from the cached discovery results
-        cached = next(
-            (s for s in self._discovered_skills if s["name"] == normalized_name),
-            None,
-        )
-        allowed_roots = self._skill_allowed_roots
-
-        # Cache miss — fall back to fresh discovery (offloaded to thread)
-        if cached is None:
-            try:
-                skills, allowed_roots = await asyncio.to_thread(self._discover_skills_and_roots)
-                # Backfill cache so subsequent invocations are fast
-                self._discovered_skills = skills
-                self._skill_allowed_roots = allowed_roots
-                cached = next((s for s in skills if s["name"] == normalized_name), None)
-            except OSError as exc:
-                logger.warning("Filesystem error loading skill %r", normalized_name, exc_info=True)
-                await _mount_error(
-                    f"Could not load skill: {normalized_name}. Filesystem error: {exc}"
-                )
-                return
-            except Exception as exc:
-                logger.warning("Error searching for skill %r", normalized_name, exc_info=True)
-                await _mount_error(
-                    f"Error loading skill: {normalized_name}. Unexpected error: {type(exc).__name__}: {exc}"
-                )
-                return
-
-        if cached is None:
-            logger.warning("Skill not found: %r", normalized_name)
-            await _mount_error(f"Skill not found: {normalized_name}")
-            return
-
-        # Load SKILL.md content (filesystem I/O offloaded to thread)
-        skill_path = cached["path"]
-
-        def _load() -> str | None:
-            return load_skill_content(str(skill_path), allowed_roots=allowed_roots)
-
-        try:
-            content = await asyncio.to_thread(_load)
-        except PermissionError as exc:
-            logger.warning(
-                "Containment check failed for skill %r",
-                normalized_name,
-                exc_info=True,
-            )
-            await _mount_error(str(exc))
-            return
-        except OSError as exc:
-            logger.warning("Filesystem error loading skill %r", normalized_name, exc_info=True)
-            await _mount_error(f"Could not load skill: {normalized_name}. Filesystem error: {exc}")
-            return
-        except Exception as exc:
-            logger.warning("Error reading skill %r", normalized_name, exc_info=True)
-            await _mount_error(
-                f"Error loading skill: {normalized_name}. Unexpected error: {type(exc).__name__}: {exc}"
-            )
-            return
-
-        if content is None:
-            await _mount_error(
-                f"Could not read content for skill: {normalized_name}. "
-                "Check that the SKILL.md file exists, is readable, "
-                "and is saved as UTF-8."
-            )
-            return
-
-        if not content.strip():
-            await _mount_error(
-                f"Skill '{normalized_name}' has an empty SKILL.md file. Add instructions to the file before invoking."
-            )
-            return
-
-        envelope = build_skill_invocation_envelope(cached, content, args)
-
-        await self._mount_message(
-            SkillMessage(
-                skill_name=cached["name"],
-                description=str(cached.get("description", "")),
-                source=str(cached.get("source", "")),
-                body=content,
-                args=args,
-            )
-        )
-        await self._send_to_agent(
-            envelope.prompt,
-            message_kwargs=envelope.message_kwargs,
-        )
-
     async def _handle_skill_command(self, command: str) -> None:
-        """Handle a `/skill:<name>` command by loading and invoking a skill.
+        """Handle a `/skill:<name>` command via daemon RPC.
 
         Args:
             command: The full command string (e.g., `/skill:web-research find X`).
@@ -3190,7 +3020,11 @@ class SootheApp(App):
         if self._daemon_session is not None:
             await self._invoke_skill_daemon(command.strip(), skill_name, args)
             return
-        await self._invoke_skill(skill_name, args, command=command)
+        # No daemon session available — skills require daemon connection
+        await self._mount_message(UserMessage(command.strip()))
+        await self._mount_message(
+            AppMessage("Skills require a daemon connection. Connect to a daemon first.")
+        )
 
     async def _get_conversation_token_count(self) -> int | None:
         """Return the approximate conversation-only token count.

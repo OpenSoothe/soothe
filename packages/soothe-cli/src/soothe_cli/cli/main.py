@@ -310,6 +310,51 @@ def _thread_tag(
     thread_tag(thread_id=thread_id, tags=tags, config=config, remove=remove)
 
 
+@thread_app.command("create")
+def _thread_create(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Initial message to seed the thread."),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Tags for the thread (repeatable)."),
+    ] = None,
+) -> None:
+    """Create a new persisted thread.
+
+    Examples:
+        soothe thread create
+        soothe thread create --message "Hello world"
+        soothe thread create --tag research
+    """
+    from soothe_cli.cli.commands.thread_cmd import thread_create
+
+    thread_create(config=config, message=message, tag=tag)
+
+
+@thread_app.command("artifacts")
+def _thread_artifacts(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to list artifacts for.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """List artifacts for a thread.
+
+    Example:
+        soothe thread artifacts abc123
+    """
+    from soothe_cli.cli.commands.thread_cmd import thread_artifacts
+
+    thread_artifacts(thread_id=thread_id, config=config)
+
+
 # ---------------------------------------------------------------------------
 # Config Command (Nested Subcommands)
 # ---------------------------------------------------------------------------

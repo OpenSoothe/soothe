@@ -90,6 +90,18 @@ from soothe_sdk.utils import (
     parse_autopilot_goals,
 )
 from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
+from soothe_sdk.protocols import (
+    ActionRequest,
+    Permission,
+    PermissionSet,
+    PersistStore,
+    PolicyContext,
+    PolicyDecision,
+    PolicyProfile,
+    PolicyProtocol,
+    VectorRecord,
+    VectorStoreProtocol,
+)
 from soothe_sdk.verbosity import (
     ProgressCategory,
     VerbosityTier,
@@ -144,6 +156,17 @@ __all__ = [
     "should_show",
     "classify_event_to_tier",
     "ProgressCategory",
+    # Protocols (v0.3.0 - IG-175: Community plugin SDK decoupling)
+    "PersistStore",
+    "VectorRecord",
+    "VectorStoreProtocol",
+    "Permission",
+    "PermissionSet",
+    "ActionRequest",
+    "PolicyContext",
+    "PolicyDecision",
+    "PolicyProfile",
+    "PolicyProtocol",
     # Internal
     "INTERNAL_JSON_KEYS",
     "strip_internal_tags",
