@@ -541,9 +541,10 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
     stderr: list[str] = []
 
-    monkeypatch.setattr(
-        "soothe_sdk.client.websocket.WebSocketClient", lambda url=None: _BusyClient()
-    )
+    # Patch WebSocketClient where it's imported by daemon.py
+    # daemon.py imports: from soothe_sdk.client import WebSocketClient
+    # So we patch soothe_sdk.client.WebSocketClient (not websocket.WebSocketClient)
+    monkeypatch.setattr("soothe_sdk.client.WebSocketClient", lambda url=None: _BusyClient())
     monkeypatch.setattr(
         typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
     )
