@@ -118,6 +118,11 @@ class RunArtifactStore:
 
         self._run_dir.mkdir(parents=True, exist_ok=True)
 
+        # Reset FrameworkFilesystem to avoid test pollution (IG-181)
+        # Tests may initialize FrameworkFilesystem with a different workspace,
+        # causing path resolution issues in write methods
+        FrameworkFilesystem.reset()
+
         existing = self.load_manifest()
         if existing:
             self._manifest = existing
