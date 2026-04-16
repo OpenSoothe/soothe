@@ -163,12 +163,6 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
         if "args" in msg and not isinstance(msg["args"], str):
             errors.append("invoke_skill args must be a string")
 
-    elif msg_type == "auth":
-        if "token" not in msg:
-            errors.append("Auth message missing required field: token")
-        elif not isinstance(msg.get("token"), str):
-            errors.append("Auth token must be a string")
-
     else:
         # Unknown message type - allow but log warning
         # This provides forward compatibility for new message types
@@ -200,8 +194,6 @@ def validate_message_size(msg: dict[str, Any], max_size_bytes: int = 10 * 1024 *
 # Error code constants per RFC-0013
 ERROR_INVALID_MESSAGE = "INVALID_MESSAGE"
 ERROR_INVALID_JSON = "INVALID_JSON"
-ERROR_AUTHENTICATION_REQUIRED = "AUTHENTICATION_REQUIRED"
-ERROR_AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
 ERROR_RATE_LIMITED = "RATE_LIMITED"
 ERROR_INTERNAL_ERROR = "INTERNAL_ERROR"
 ERROR_UNKNOWN_MESSAGE_TYPE = "UNKNOWN_MESSAGE_TYPE"

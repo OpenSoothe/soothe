@@ -48,7 +48,7 @@ class TestCheckpointEventEmission:
         event_data = events[0][2]  # Third element is the data dict
 
         # Verify event structure
-        assert event_data["type"] == "soothe.lifecycle.checkpoint.saved"
+        assert event_data["type"] == "soothe.lifecycle.checkpoint.saving"
         assert event_data["thread_id"] == "test-thread-123"
         assert "completed_steps" in event_data
         assert "completed_goals" in event_data
@@ -166,8 +166,8 @@ class TestStepObservationReuse:
             )
         ]
 
-        assert chunks[0][2]["type"] == "soothe.cognition.plan.step_started"
-        assert chunks[-1][2]["type"] == "soothe.cognition.plan.step_completed"
+        assert chunks[0][2]["type"] == "soothe.cognition.plan.step.started"
+        assert chunks[-1][2]["type"] == "soothe.cognition.plan.step.completed"
         assert observed["context_projection"] is parent_state.context_projection
         assert observed["recalled_memories"] == parent_state.recalled_memories
         assert observed["observation_scope_key"] == "analyze project structure"

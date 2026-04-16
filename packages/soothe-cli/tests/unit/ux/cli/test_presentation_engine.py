@@ -8,15 +8,23 @@ from soothe_cli.shared.presentation_engine import PresentationEngine
 
 def test_reason_dedup_within_window() -> None:
     engine = PresentationEngine()
-    assert engine.should_emit_reason(content="Searching README files (80% sure)", step_id="1", now_s=10.0)
-    assert not engine.should_emit_reason(content="Searching README files (90% sure)", step_id="1", now_s=12.0)
+    assert engine.should_emit_reason(
+        content="Searching README files (80% sure)", step_id="1", now_s=10.0
+    )
+    assert not engine.should_emit_reason(
+        content="Searching README files (90% sure)", step_id="1", now_s=12.0
+    )
 
 
 def test_reason_rate_limit_by_step() -> None:
     engine = PresentationEngine()
     assert engine.should_emit_reason(content="Counting files", step_id="step-a", now_s=10.0)
-    assert not engine.should_emit_reason(content="Counting files in full tree", step_id="step-a", now_s=12.0)
-    assert engine.should_emit_reason(content="Counting files in full tree", step_id="step-a", now_s=16.0)
+    assert not engine.should_emit_reason(
+        content="Counting files in full tree", step_id="step-a", now_s=12.0
+    )
+    assert engine.should_emit_reason(
+        content="Counting files in full tree", step_id="step-a", now_s=16.0
+    )
 
 
 def test_tool_result_structured_payload_summary() -> None:

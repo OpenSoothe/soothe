@@ -23,7 +23,9 @@ def test_assistant_text_after_stderr_has_no_extra_blank_line(capsys: CaptureFixt
     assert "● Goal: x" in captured.err
 
 
-def test_stderr_icon_block_after_assistant_gets_leading_blank_line(capsys: CaptureFixture[str]) -> None:
+def test_stderr_icon_block_after_assistant_gets_leading_blank_line(
+    capsys: CaptureFixture[str],
+) -> None:
     r = CliRenderer()
     r.on_assistant_text("done", is_main=True, is_streaming=False)
     line = DisplayLine(level=1, content="Goal: next", icon="●", indent="")
@@ -44,7 +46,9 @@ def test_consecutive_stderr_icon_lines_no_blank_between_blocks(capsys: CaptureFi
     assert "○ Step" in captured.err
 
 
-def test_multi_step_suppresses_assistant_text_and_no_turn_end_replay(capsys: CaptureFixture[str]) -> None:
+def test_multi_step_suppresses_assistant_text_and_no_turn_end_replay(
+    capsys: CaptureFixture[str],
+) -> None:
     r = CliRenderer()
     r._state.suppression.multi_step_active = True
 
@@ -69,7 +73,9 @@ def test_tool_result_structured_payload_is_summarized(capsys: CaptureFixture[str
     assert "structured payload" in captured.err
 
 
-def test_agentic_loop_completed_writes_final_stdout_when_multi_step(capsys: CaptureFixture[str]) -> None:
+def test_agentic_loop_completed_writes_final_stdout_when_multi_step(
+    capsys: CaptureFixture[str],
+) -> None:
     r = CliRenderer()
     r.on_progress_event(
         "soothe.cognition.agent_loop.started",
@@ -160,7 +166,9 @@ def test_max_iter_one_multi_step_plan_suppresses_stdout_after_turn_end(
     assert "Found 12 README" in capsys.readouterr().out
 
 
-def test_agentic_loop_completed_skips_final_stdout_without_multi_step(capsys: CaptureFixture[str]) -> None:
+def test_agentic_loop_completed_skips_final_stdout_without_multi_step(
+    capsys: CaptureFixture[str],
+) -> None:
     r = CliRenderer()
     r.on_progress_event(
         "soothe.cognition.agent_loop.started",

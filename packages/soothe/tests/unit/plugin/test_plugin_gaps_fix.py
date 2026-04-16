@@ -227,6 +227,7 @@ def test_filesystem_discovery_adds_sys_path():
 # ---- Test 7: Entry point discovery works ----
 
 
+@pytest.mark.integration
 def test_entry_point_discovery():
     """discover_entry_points should find soothe-community plugins."""
     from soothe.plugin.discovery import discover_entry_points
@@ -244,6 +245,7 @@ def test_entry_point_discovery():
 # ---- Test 8: Plugin loading from entry points ----
 
 
+@pytest.mark.integration
 def test_plugin_load_from_entry_points():
     """Plugins should be loadable via entry points."""
     import importlib.metadata
@@ -267,6 +269,7 @@ def test_plugin_load_from_entry_points():
 # ---- Test 9: Full lifecycle with community plugins ----
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_lifecycle_loads_plugins():
     """PluginLifecycleManager should load discovered plugins including entry points."""

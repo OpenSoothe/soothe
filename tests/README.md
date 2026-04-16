@@ -1,13 +1,20 @@
 # Soothe Test Suite
 
-This directory contains integration tests and cross-package test docs for the Soothe workspace.
+This directory contains workspace-level integration tests for the Soothe project.
 
 ## Test Structure
 
 ```text
-packages/soothe/tests/unit/   # Daemon package unit tests (fast, isolated)
-tests/integration/            # Workspace integration tests (daemon + tools + transports)
+tests/integration/                          # Workspace integration tests (daemon + tools + transports)
+packages/soothe/tests/unit/                 # Daemon package unit tests (fast, isolated)
+packages/soothe/tests/unit/plugin/          # Plugin system unit tests
+packages/soothe/tests/unit/core/runner/     # Runner bridge tests (GoalEngine → AgentLoop)
+packages/soothe-cli/tests/unit/             # CLI package unit tests
+packages/soothe-sdk/tests/                  # SDK package tests (unit + integration)
+packages/soothe-community/tests/integration/ # Community plugin integration tests
 ```
+
+Unit-level tests have been moved into their respective packages. Integration tests remain here because they test workspace-level functionality requiring a running daemon and external services.
 
 ## Running Tests
 

@@ -1,4 +1,4 @@
-"""Tests for ``soothe.skills.catalog`` and slash helpers."""
+"""Tests for ``soothe.skills.catalog``."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from soothe.skills.catalog import (
     resolve_skill_directory,
     wire_entries_for_agent_config,
 )
-from soothe.ux.tui.command_registry import build_skill_commands_from_wire
 
 
 def test_wire_entries_sorted_and_pathless(tmp_path: Path) -> None:
@@ -63,14 +62,3 @@ def test_build_skill_invocation_envelope_includes_name() -> None:
     assert "Do thing" in env.prompt
     assert env.message_kwargs is not None
     assert env.message_kwargs["additional_kwargs"]["soothe_skill"] == "x"
-
-
-def test_build_skill_commands_from_wire_filters_aliases() -> None:
-    rows = [
-        {"name": "remember", "description": "R"},
-        {"name": "my-skill", "description": "M"},
-    ]
-    out = build_skill_commands_from_wire(rows)
-    names = [t[0] for t in out]
-    assert "/skill:remember" not in names
-    assert any(n == "/skill:my-skill" for n in names)

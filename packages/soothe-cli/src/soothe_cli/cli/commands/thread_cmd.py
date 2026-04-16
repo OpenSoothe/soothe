@@ -572,3 +572,82 @@ def thread_tag(
             await client.close()
 
     asyncio.run(_tag())
+
+
+def thread_create(
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+    *,
+    message: Annotated[
+        str | None,
+        typer.Option("--message", "-m", help="Initial message to seed the thread."),
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Tags for the thread (repeatable)."),
+    ] = None,
+) -> None:
+    """Create a new persisted thread.
+
+    Examples:
+        soothe thread create
+        soothe thread create --message "Hello world"
+        soothe thread create --tag research --tag analysis
+    """
+    cfg = load_config(config)
+    ws_url = websocket_url_from_config(cfg)
+    _require_daemon(ws_url)
+
+    metadata: dict[str, Any] | None = None
+    if tag:
+        metadata = {"tags": sorted(tag)}
+
+    resp = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_thread_create",
+            {"initial_message": message, "metadata": metadata},
+            "thread_created",
+        )
+    )
+    if resp.get("thread_id"):
+        typer.echo(f"Created thread {resp['thread_id']}")
+    else:
+        typer.echo(
+            f"Failed to create thread: {resp.get('message', resp.get('error', 'unknown'))}",
+            err=True,
+        )
+
+
+def thread_artifacts(
+    thread_id: Annotated[str, typer.Argument(help="Thread ID to list artifacts for.")],
+    config: Annotated[
+        str | None,
+        typer.Option("--config", "-c", help="Path to configuration file."),
+    ] = None,
+) -> None:
+    """List artifacts for a thread.
+
+    Example:
+        soothe thread artifacts abc123
+    """
+    cfg = load_config(config)
+    ws_url = websocket_url_from_config(cfg)
+    _require_daemon(ws_url)
+
+    resp = asyncio.run(
+        _rpc(ws_url, "send_thread_artifacts", {"thread_id": thread_id}, "thread_artifacts_response")
+    )
+    artifacts = resp.get("artifacts", [])
+    if not artifacts:
+        typer.echo("No artifacts found.")
+        return
+    typer.echo(f"{'Name':<30}  {'Type':<15}  {'Summary':<40}")
+    typer.echo("\u2500" * 90)
+    for a in artifacts:
+        name = str(a.get("name", ""))[:30]
+        a_type = str(a.get("type", ""))[:15]
+        summary = str(a.get("summary", ""))[:40]
+        typer.echo(f"{name:<30}  {a_type:<15}  {summary:<40}")

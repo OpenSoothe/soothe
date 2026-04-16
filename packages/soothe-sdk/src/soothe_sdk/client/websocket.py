@@ -28,18 +28,15 @@ class WebSocketClient:
 
     Args:
         url: WebSocket URL (e.g., "ws://localhost:8765").
-        token: Optional authentication token.
     """
 
-    def __init__(self, url: str = "ws://localhost:8765", token: str | None = None) -> None:
+    def __init__(self, url: str = "ws://localhost:8765") -> None:
         """Initialize WebSocket client.
 
         Args:
             url: WebSocket URL.
-            token: Optional authentication token.
         """
         self._url = url
-        self._token = token
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
 
@@ -57,21 +54,6 @@ class WebSocketClient:
                 ping_timeout=None,  # Use daemon heartbeats instead
             )
             self._connected = True
-
-            # Send auth message if token provided
-            if self._token:
-                auth_msg = {"type": "auth", "token": self._token}
-                await self._ws.send(encode(auth_msg).decode("utf-8").strip())
-
-                # Wait for auth response
-                response = await self._ws.recv()
-                if isinstance(response, bytes):
-                    response = response.decode("utf-8")
-                auth_response = decode(response.encode("utf-8"))
-
-                if not auth_response or not auth_response.get("success"):
-                    await self.close()
-                    raise ConnectionError("Authentication failed")
 
             logger.info("[Client] Connected to daemon at %s", self._url)
         except Exception as e:
@@ -289,6 +271,40 @@ class WebSocketClient:
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)
+
+    async def send_thread_create(
+        self,
+        *,
+        initial_message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        request_id: str | None = None,
+    ) -> None:
+        """Request creation of a persisted thread via daemon RPC (RFC-402 ``thread_create``).
+
+        Args:
+            initial_message: Optional seed message for the new thread.
+            metadata: Optional metadata dict (e.g., tags, workspace).
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "thread_create"}
+        if initial_message is not None:
+            payload["initial_message"] = initial_message
+        if metadata is not None:
+            payload["metadata"] = metadata
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_thread_artifacts(
+        self, thread_id: str, *, request_id: str | None = None
+    ) -> None:
+        """Request thread artifacts via daemon RPC (RFC-402 ``thread_artifacts``).
+
+        Args:
+            thread_id: Thread ID to retrieve artifacts for.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "thread_artifacts", "thread_id": thread_id}
         if request_id is not None:
             payload["request_id"] = request_id
         await self.send(payload)

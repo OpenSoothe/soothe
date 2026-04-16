@@ -14,7 +14,7 @@ def get_built_in_skills_paths() -> list[str]:
     Returns:
         Sorted absolute paths to skill directories.
     """
-    module_dir = Path(__file__).resolve().parent
+    module_dir = Path(__file__).resolve().parent.parent
     candidate_roots = [
         module_dir / "built_in_skills",
         Path.home() / ".cursor" / "skills-cursor",
