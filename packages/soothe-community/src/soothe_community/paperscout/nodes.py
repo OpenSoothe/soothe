@@ -16,7 +16,7 @@ from typing import Any
 import arxiv
 from pyzotero import zotero
 
-from soothe.backends.persistence import PersistStore
+from soothe_sdk import PersistStore
 from soothe_community.paperscout.email import construct_email_content, send_email
 from soothe_community.paperscout.events import (
     PaperScoutEmailSentEvent,

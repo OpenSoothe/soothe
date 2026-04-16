@@ -46,15 +46,17 @@ class SootheConfigProtocol(Protocol):
 
 
 class PluginContext:
-    """Context provided to plugin lifecycle hooks.
+    """Context provided to plugin lifecycle hooks (IG-175: Expanded with services).
 
     This class provides plugins with access to Soothe configuration,
-    logging, and event emission capabilities.
+    logging, event emission, and runtime service injection.
 
     Attributes:
         config: Plugin-specific configuration dictionary.
         soothe_config: Soothe configuration (via protocol).
         logger: Python logger instance for this plugin.
+        services: Runtime services dict (populated by daemon during plugin loading).
+            Keys include: "policy", "persistence", "emit_progress", "vector_store".
     """
 
     def __init__(
@@ -63,6 +65,7 @@ class PluginContext:
         soothe_config: SootheConfigProtocol,
         logger: logging.Logger,
         emit_event: Callable[[str, dict[str, Any]], None],
+        services: dict[str, Any] | None = None,
     ):
         """Initialize plugin context.
 
@@ -71,11 +74,13 @@ class PluginContext:
             soothe_config: Soothe configuration object.
             logger: Logger instance for this plugin.
             emit_event: Callback to emit events.
+            services: Runtime services dict (optional, defaults to empty dict).
         """
         self.config = config
         self.soothe_config = soothe_config
         self.logger = logger
         self._emit_event = emit_event
+        self.services: dict[str, Any] = services or {}
 
     def emit_event(self, name: str, data: dict[str, Any]) -> None:
         """Emit a plugin event.

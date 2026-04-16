@@ -15,7 +15,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from soothe.backends.persistence import PersistStore
+from soothe_sdk import PersistStore
 from soothe_community.paperscout.nodes import make_nodes
 from soothe_community.paperscout.state import AgentState, PaperScoutConfig
 

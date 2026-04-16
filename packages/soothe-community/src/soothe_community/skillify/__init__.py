@@ -48,7 +48,7 @@ SKILLIFY_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe.utils.progress import emit_progress
+    from soothe_sdk import emit_progress
 
     emit_progress(event, logger)
 
@@ -203,8 +203,8 @@ class SkillifyPlugin:
         Returns:
             CompiledSubAgent dict with background indexer.
         """
-        from soothe.config import SOOTHE_HOME, SootheConfig
-        from soothe.core.config_driven import ConfigDrivenPolicy
+        from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
+        # ConfigDrivenPolicy via context.services["policy"]
 
         cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
 

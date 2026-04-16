@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe.backends.persistence import PersistStore
+    from soothe_sdk import PersistStore
     from soothe_community.paperscout.state import PaperScoutConfig
 
 logger = logging.getLogger(__name__)

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from langchain_core.embeddings import Embeddings
 
-    from soothe.protocols.vector_store import VectorStoreProtocol
+    from soothe_sdk import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +132,7 @@ class SkillRetriever:
     def _check_policy(self, query: str) -> None:
         if self._policy is None:
             return
-        from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+        from soothe_sdk import ActionRequest, PermissionSet, PolicyContext
 
         permissions = PermissionSet(frozenset())
         get_profile = getattr(self._policy, "get_profile", None)

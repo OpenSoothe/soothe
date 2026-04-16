@@ -1,6 +1,6 @@
 """Tests for PaperScout event system."""
 
-from soothe.core.event_catalog import get_event_registry
+from soothe_sdk.events_registry import get_plugin_events
 from soothe_community.paperscout.events import (
     PAPERSCOUT_EMAIL_SENT,
     PAPERSCOUT_ERROR,
@@ -14,14 +14,14 @@ from soothe_community.paperscout.events import (
 
 
 def test_events_registered():
-    """Test that all PaperScout events are registered."""
-    registry = get_event_registry()
+    """Test that all PaperScout events are registered in plugin registry."""
+    plugin_events = get_plugin_events()
 
     # Check that all event types are registered
-    assert PAPERSCOUT_STEP in registry
-    assert PAPERSCOUT_PAPER_FOUND in registry
-    assert PAPERSCOUT_EMAIL_SENT in registry
-    assert PAPERSCOUT_ERROR in registry
+    assert PAPERSCOUT_STEP in plugin_events
+    assert PAPERSCOUT_PAPER_FOUND in plugin_events
+    assert PAPERSCOUT_EMAIL_SENT in plugin_events
+    assert PAPERSCOUT_ERROR in plugin_events
 
 
 def test_step_event():

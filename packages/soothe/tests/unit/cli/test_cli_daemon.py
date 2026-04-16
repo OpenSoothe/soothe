@@ -13,8 +13,8 @@ import typer
 from soothe.config import SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.server import _ClientConn
-from soothe.ux.cli.execution import daemon as daemon_exec, headless as headless_exec
-from soothe.ux.client import session as ux_client_session
+from soothe_cli.cli.execution import daemon as daemon_exec, headless as headless_exec
+from soothe_cli.tui import daemon_session as ux_client_session
 
 
 class _SequencedClient:
