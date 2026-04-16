@@ -34,13 +34,13 @@ class GlobalInputHistory:
     is in soothe.logging.global_history (daemon-side).
     """
 
-    def __init__(self, history_file: Path):
+    def __init__(self, history_file: Path | str):
         """Initialize global history manager.
 
         Args:
             history_file: Path to history JSONL file.
         """
-        self.history_file = history_file
+        self.history_file = Path(history_file)
         self._history: list[dict[str, Any]] = []
 
     def load(self) -> list[dict[str, Any]]:
@@ -60,6 +60,24 @@ class GlobalInputHistory:
             logging.warning(f"Failed to load history: {e}")
             return []
 
+    def add(
+        self, text: str, thread_id: str = "default", metadata: dict[str, Any] | None = None
+    ) -> None:
+        """Add entry to history (CLI-friendly API).
+
+        Args:
+            text: Input text to add.
+            thread_id: Thread ID for grouping.
+            metadata: Optional metadata dict.
+        """
+        entry = {
+            "text": text,
+            "thread_id": thread_id,
+            "timestamp": self._get_timestamp(),
+            "metadata": metadata or {},
+        }
+        self._append_to_file(entry)
+
     def append(self, entry: dict[str, Any]) -> None:
         """Append entry to history.
 
@@ -68,6 +86,21 @@ class GlobalInputHistory:
         """
         self._history.append(entry)
         self._save()
+
+    def _append_to_file(self, entry: dict[str, Any]) -> None:
+        """Append entry directly to file (concurrent-safe).
+
+        Args:
+            entry: History entry to append.
+        """
+        try:
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.history_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            # Also add to in-memory cache
+            self._history.append(entry)
+        except Exception as e:
+            logging.warning(f"Failed to append to history file: {e}")
 
     def _save(self) -> None:
         """Save history to file."""
@@ -78,6 +111,16 @@ class GlobalInputHistory:
                     f.write(json.dumps(entry) + "\n")
         except Exception as e:
             logging.warning(f"Failed to save history: {e}")
+
+    def _get_timestamp(self) -> str:
+        """Get current timestamp in ISO format.
+
+        Returns:
+            ISO format timestamp string.
+        """
+        from datetime import datetime, timezone
+
+        return datetime.now(timezone.utc).isoformat()
 
 
 def setup_logging(

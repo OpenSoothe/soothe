@@ -51,76 +51,100 @@ class ModelSpec:
         return cls(provider=prov, model=mod)
 
 
-def _load_soothe_config() -> Any:
-    """Load ``SootheConfig`` using the same path rules as the CLI/daemon."""
-    try:
-        from soothe_cli.shared.config_loader import load_config
+async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
+    """Fetch provider config from daemon via WebSocket RPC.
 
-        return load_config(None)
+    Args:
+        provider_name: Provider name to fetch.
+
+    Returns:
+        Provider config dict or None if not found.
+    """
+    try:
+        from soothe_sdk.client import WebSocketClient, fetch_config_section
+
+        from soothe_cli.config.cli_config import CLIConfig
+
+        cli_cfg = CLIConfig.from_config_file()
+        ws_url = cli_cfg.websocket_url()
+
+        client = WebSocketClient(url=ws_url)
+        await client.connect()
+        try:
+            providers_data = await fetch_config_section(client, "providers", timeout=5.0)
+            return providers_data.get(provider_name)
+        finally:
+            await client.close()
     except Exception:
-        logger.debug("Could not load SootheConfig for TUI model helpers", exc_info=True)
+        logger.debug("Could not fetch provider config from daemon", exc_info=True)
         return None
 
 
 class ModelConfig:
-    """TUI-facing view over ``SootheConfig`` providers and router (``config.yml``)."""
+    """TUI-facing view over daemon config providers and router.
+
+    Per IG-174/IG-175 architectural separation, this class is transitioning to
+    fetch config from daemon via WebSocket RPC instead of local SootheConfig.
+    Currently in transition period - gracefully degrades when daemon not reachable.
+    """
 
     @classmethod
     def load(cls) -> ModelConfig:
-        """Load from ``SootheConfig`` (cached via ``load_config``)."""
-        return cls(_cfg=_load_soothe_config())
+        """Load config from daemon (TODO: IG-175 Phase 2).
+
+        During transition, returns empty instance when daemon not reachable.
+        Full implementation will fetch defaults/providers from daemon RPC.
+        """
+        # TODO(IG-175): Replace with async daemon RPC fetch
+        # Currently returns empty instance for graceful degradation
+        logger.debug("ModelConfig.load() returning empty instance during IG-175 transition")
+        return cls(_cfg=None)
 
     def __init__(self, *, _cfg: Any = None) -> None:
-        """Initialize from an optional pre-loaded ``SootheConfig``."""
+        """Initialize from an optional pre-loaded config.
+
+        Args:
+            _cfg: Config instance (None during IG-175 transition).
+        """
         self._cfg = _cfg
         self.default_model: str | None = None
         self.recent_model: str | None = None
-        if _cfg is not None:
-            try:
-                self.default_model = _cfg.resolve_model("default")
-            except Exception:
-                logger.debug("Could not resolve default model from SootheConfig", exc_info=True)
-                self.default_model = None
+        # TODO(IG-175): Fetch default model from daemon RPC
 
     def get_kwargs(self, provider: str, model_name: str | None = None) -> dict[str, Any]:
-        """Return kwargs for ``init_chat_model`` for this provider (from ``SootheConfig``)."""
-        if not self._cfg or not provider:
+        """Return kwargs for ``init_chat_model`` for this provider.
+
+        TODO(IG-175): Fetch from daemon RPC.
+        Currently returns empty dict during transition.
+        """
+        if not provider:
             return {}
-        try:
-            _, kwargs = self._cfg._provider_kwargs(provider)  # noqa: SLF001
-        except Exception:
-            logger.debug("provider_kwargs failed for %r", provider, exc_info=True)
-            return {}
-        return dict(kwargs)
+        # TODO(IG-175): Implement daemon RPC fetch
+        logger.debug("get_kwargs returning empty dict during IG-175 transition")
+        return {}
 
     def get_base_url(self, provider: str) -> str | None:
-        """Resolved ``api_base_url`` for the named provider, if any."""
-        if not self._cfg or not provider:
-            return None
-        p = self._cfg._find_provider(provider)  # noqa: SLF001
-        if not p or not p.api_base_url:
-            return None
-        try:
-            from soothe_sdk.utils import resolve_provider_env
+        """Resolved ``api_base_url`` for the named provider.
 
-            resolved = resolve_provider_env(
-                p.api_base_url,
-                provider_name=p.name,
-                field_name="api_base_url",
-            )
-        except Exception:
-            logger.debug("Could not resolve api_base_url for %r", provider, exc_info=True)
+        TODO(IG-175): Fetch from daemon RPC.
+        Currently returns None during transition.
+        """
+        if not provider:
             return None
-        return str(resolved).strip() or None
+        # TODO(IG-175): Implement daemon RPC fetch
+        logger.debug("get_base_url returning None during IG-175 transition")
+        return None
 
     def get_api_key_env(self, provider: str) -> str | None:
-        """Infer env var name from provider ``api_key`` or fall back to static map."""
-        if self._cfg and provider:
-            p = self._cfg._find_provider(provider)  # noqa: SLF001
-            if p and p.api_key:
-                m = re.match(r"^\$\{([^}]+)\}\s*$", str(p.api_key).strip())
-                if m:
-                    return m.group(1)
+        """Infer env var name from provider ``api_key``.
+
+        TODO(IG-175): Fetch from daemon RPC.
+        Currently falls back to static map during transition.
+        """
+        if not provider:
+            return None
+        # TODO(IG-175): Implement daemon RPC fetch
+        # Fallback to static map during transition
         return PROVIDER_API_KEY_ENV.get(provider)
 
     def get_class_path(self, provider: str) -> str | None:
@@ -205,14 +229,27 @@ IMPLICIT_AUTH_PROVIDERS: frozenset[str] = frozenset(
 
 
 def get_credential_env_var(provider: str) -> str | None:
-    """Return the primary API-key env var name for ``provider``, if known."""
-    cfg = _load_soothe_config()
-    if cfg is not None and provider:
-        p = cfg._find_provider(provider)  # noqa: SLF001
-        if p and p.api_key:
-            m = re.match(r"^\$\{([^}]+)\}\s*$", str(p.api_key).strip())
-            if m:
-                return m.group(1)
+    """Return the primary API-key env var name for ``provider``, if known.
+
+    Per IG-174, fetches provider config from daemon via RPC.
+    Falls back to hardcoded env var mapping if daemon not reachable.
+    """
+    if provider:
+        # Try to fetch from daemon
+        try:
+            import asyncio
+
+            provider_data = asyncio.run(_fetch_provider_config(provider))
+            if provider_data and provider_data.get("api_key"):
+                api_key = provider_data["api_key"]
+                # Extract env var from ${ENV_VAR} syntax
+                m = re.match(r"^\$\{([^}]+)\}\s*$", str(api_key).strip())
+                if m:
+                    return m.group(1)
+        except Exception:
+            logger.debug("Could not fetch provider config from daemon", exc_info=True)
+
+    # Fallback to hardcoded mapping
     return PROVIDER_API_KEY_ENV.get(provider)
 
 
@@ -363,25 +400,57 @@ class ModelProfileEntry:
 
 
 def get_available_models() -> list[ModelProfileEntry]:
-    """List models declared on ``SootheConfig.providers`` (for ``/model`` UI)."""
-    cfg = _load_soothe_config()
-    if not cfg or not cfg.providers:
-        return []
-    out: list[ModelProfileEntry] = []
-    for p in cfg.providers:
-        if p.models:
-            for m in p.models:
-                out.append(ModelProfileEntry(p.name, m))
-        else:
-            out.append(
-                ModelProfileEntry(
-                    p.name,
-                    "",
-                    display_name=f"{p.name} ({p.provider_type})",
-                    description="Configure models: list under this provider in config.yml",
+    """List models declared on daemon config (for ``/model`` UI).
+
+    Per IG-174 architectural separation, CLI fetches providers from daemon via RPC.
+    Returns empty list if daemon not reachable.
+    """
+    try:
+        import asyncio
+
+        from soothe_sdk.client import WebSocketClient, fetch_config_section
+
+        # Use CLIConfig to get WebSocket URL
+        from soothe_cli.config.cli_config import CLIConfig
+
+        cli_cfg = CLIConfig.from_config_file()
+        ws_url = cli_cfg.websocket_url()
+
+        # Fetch providers section from daemon
+        client = WebSocketClient(url=ws_url)
+
+        async def _fetch_providers() -> dict:
+            await client.connect()
+            try:
+                return await fetch_config_section(client, "providers", timeout=5.0)
+            finally:
+                await client.close()
+
+        providers_data = asyncio.run(_fetch_providers())
+
+        if not providers_data:
+            return []
+
+        out: list[ModelProfileEntry] = []
+        for p_name, p_data in providers_data.items():
+            models = p_data.get("models", [])
+            if models:
+                for m in models:
+                    out.append(ModelProfileEntry(p_name, m))
+            else:
+                provider_type = p_data.get("provider_type", "unknown")
+                out.append(
+                    ModelProfileEntry(
+                        p_name,
+                        "",
+                        display_name=f"{p_name} ({provider_type})",
+                        description="Configure models: list under this provider in config.yml",
+                    )
                 )
-            )
-    return out
+        return out
+    except Exception:
+        logger.debug("Could not fetch providers from daemon", exc_info=True)
+        return []
 
 
 def get_model_profiles(cli_override: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
@@ -404,7 +473,11 @@ def get_model_profiles(cli_override: dict[str, Any] | None = None) -> dict[str, 
 
 
 def has_provider_credentials(provider: str) -> bool | None:
-    """Check credentials using ``SootheConfig`` providers when available."""
+    """Check credentials using daemon config when available.
+
+    Per IG-174, fetches provider config from daemon via RPC.
+    Falls back to environment variables if daemon not reachable.
+    """
     if not provider:
         return None
     if provider in IMPLICIT_AUTH_PROVIDERS:
@@ -413,23 +486,31 @@ def has_provider_credentials(provider: str) -> bool | None:
             return bool(proj and proj.strip())
         return None
 
-    cfg = _load_soothe_config()
-    if cfg is not None:
-        p = cfg._find_provider(provider)  # noqa: SLF001
-        if p is not None:
-            if p.provider_type in IMPLICIT_AUTH_PROVIDERS or p.provider_type == "ollama":
+    # Try to fetch from daemon
+    try:
+        import asyncio
+
+        provider_data = asyncio.run(_fetch_provider_config(provider))
+        if provider_data is not None:
+            provider_type = provider_data.get("provider_type", "")
+            if provider_type in IMPLICIT_AUTH_PROVIDERS or provider_type == "ollama":
                 return None
-            if p.api_key:
+            if provider_data.get("api_key"):
                 try:
                     from soothe_sdk.utils import resolve_provider_env
 
-                    v = resolve_provider_env(p.api_key, provider_name=p.name, field_name="api_key")
+                    v = resolve_provider_env(
+                        provider_data["api_key"], provider_name=provider, field_name="api_key"
+                    )
                 except Exception:
                     logger.debug("resolve api_key failed for provider %r", provider, exc_info=True)
                     return None
                 return bool(v and str(v).strip())
             return False
+    except Exception:
+        logger.debug("Could not fetch provider config from daemon", exc_info=True)
 
+    # Fallback to environment variable check
     env_name = PROVIDER_API_KEY_ENV.get(provider)
     if not env_name:
         return None
