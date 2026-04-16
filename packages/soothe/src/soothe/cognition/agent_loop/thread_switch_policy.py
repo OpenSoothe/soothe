@@ -36,7 +36,7 @@ class ThreadSwitchPolicyManager:
         self,
         checkpoint: AgentLoopCheckpoint,
         next_goal: str | None = None,
-        model: "BaseChatModel | None" = None
+        model: BaseChatModel | None = None,
     ) -> tuple[bool, str]:
         """Evaluate all triggers for thread switching.
 
@@ -110,18 +110,12 @@ class ThreadSwitchPolicyManager:
         reason_str = "; ".join(reasons) if reasons else "No trigger met"
 
         if should_switch:
-            logger.info(
-                "Thread switch triggered for loop %s: %s",
-                checkpoint.loop_id,
-                reason_str
-            )
+            logger.info("Thread switch triggered for loop %s: %s", checkpoint.loop_id, reason_str)
 
         return should_switch, reason_str
 
     def _evaluate_custom_trigger(
-        self,
-        metrics: ThreadHealthMetrics,
-        trigger: CustomSwitchTrigger
+        self, metrics: ThreadHealthMetrics, trigger: CustomSwitchTrigger
     ) -> bool:
         """Evaluate custom trigger condition (extensible).
 
@@ -137,10 +131,7 @@ class ThreadSwitchPolicyManager:
         # Placeholder for custom trigger evaluation
         # Could use safe expression parser or predefined operators
         # Example: {"trigger_condition": "custom_metrics.error_rate > threshold"}
-        logger.debug(
-            "Custom trigger '%s' evaluation (placeholder)",
-            trigger.trigger_name
-        )
+        logger.debug("Custom trigger '%s' evaluation (placeholder)", trigger.trigger_name)
 
         # Safe custom metric evaluation (predefined operators only)
         try:
@@ -150,11 +141,7 @@ class ThreadSwitchPolicyManager:
                 metric_value = metrics.custom_metrics[metric_key]
                 return metric_value > trigger.trigger_threshold
         except (KeyError, TypeError) as e:
-            logger.warning(
-                "Custom trigger '%s' evaluation failed: %s",
-                trigger.trigger_name,
-                e
-            )
+            logger.warning("Custom trigger '%s' evaluation failed: %s", trigger.trigger_name, e)
 
         return False
 

@@ -66,18 +66,21 @@ class DisplayLine:
         return "".join(parts)
 
 
-def indent_for_level(_level: int) -> str:
+def indent_for_level(level: int) -> str:
     """Get indentation string for a display level.
 
-    Headless CLI uses a flat information stream (no tree connectors).
+    IG-182: Headless CLI uses flat layout for levels 1-2, but tree indentation
+    for level-3 child nodes (step results with "|__" connector).
 
     Args:
-        _level: Display level (1, 2, or 3); retained for API compatibility.
+        level: Display level (1=goal, 2=step/tool, 3=result child).
 
     Returns:
-        Indentation string (always empty for stream layout).
+        Indentation string: "" for level 1-2, "  " for level 3 (tree child).
     """
-    return ""
+    if level >= 3:  # noqa: PLR2004
+        return "  "  # 2-space indent for tree children (IG-182)
+    return ""  # Flat layout for goal/step headers
 
 
 __all__ = ["DisplayLine", "indent_for_level"]

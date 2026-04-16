@@ -280,7 +280,7 @@ def format_reasoning(
         DisplayLine for reasoning.
     """
     # Polish: Add "Reasoning:" prefix to make internal analysis visible
-    content = f"💭 Reasoning: {reasoning}"
+    content = f"💭 {reasoning}"
 
     return DisplayLine(
         level=3,  # Use level 3 for less prominence (subordinate to next_action)
@@ -329,38 +329,72 @@ def format_judgement(
 
 
 def format_step_done(
-    description: str,
     duration_s: float,
     *,
     tool_call_count: int = 0,
+    success: bool = True,
+    error_msg: str | None = None,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
-) -> DisplayLine:
-    """Format a step completion line with solid checkbox.
+) -> list[DisplayLine]:
+    """Format step completion as level-3 child node (IG-182).
+
+    IG-159/IG-182: Shows brief "Done"/"Failed" with tree connector as child of step header.
+    No description repeat - user already saw it in the step header above.
 
     Args:
-        description: Step description (same as header).
         duration_s: Duration in seconds.
         tool_call_count: Number of tool calls made during step execution.
+        success: Whether step succeeded.
+        error_msg: Error message if failed.
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
     Returns:
-        DisplayLine for step done with solid circle icon.
+        List of DisplayLine objects for step result tree (1-2 lines).
     """
     duration_ms = int(duration_s * 1000)
-    # Abbreviate description for cleaner display
-    abbreviated = abbreviate_text(description, max_length=50)
     tool_info = f" [{tool_call_count} tools]" if tool_call_count > 0 else ""
-    content = f"✅ {abbreviated}{tool_info}"
-    return DisplayLine(
-        level=2,
-        content=content,
-        icon="●",  # Solid circle for completed step
-        indent=indent_for_level(2),
-        duration_ms=duration_ms,
-        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
-    )
+
+    # Success case: single line
+    if success:
+        content = f"Done{tool_info}"
+        return [
+            DisplayLine(
+                level=3,  # Child node of step header (level 2)
+                content=content,
+                icon="|__",  # Tree connector (IG-159)
+                indent=indent_for_level(3),
+                duration_ms=duration_ms,
+                source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+            )
+        ]
+
+    # Error case: result line + optional error detail
+    lines = [
+        DisplayLine(
+            level=3,
+            content=f"Failed{tool_info}",
+            icon="|__",
+            indent=indent_for_level(3),
+            duration_ms=duration_ms,
+            source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        )
+    ]
+
+    # Show error message on level-4 line if present
+    if error_msg:
+        lines.append(
+            DisplayLine(
+                level=4,  # Error detail as child of failed result
+                content=f"Error: {error_msg}",
+                icon="|__",
+                indent=indent_for_level(4),
+                source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+            )
+        )
+
+    return lines
 
 
 def format_goal_done(

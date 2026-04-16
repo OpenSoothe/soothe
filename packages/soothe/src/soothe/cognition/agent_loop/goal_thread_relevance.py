@@ -12,6 +12,7 @@ import re
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage
+
 from soothe.cognition.agent_loop.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
@@ -73,7 +74,7 @@ async def analyze_goal_thread_relevance(
     checkpoint: AgentLoopCheckpoint,
     next_goal: str,
     policy: ThreadSwitchPolicy,
-    model: "BaseChatModel"
+    model: BaseChatModel,
 ) -> GoalThreadRelevanceAnalysis:
     """LLM-based analysis of goal-thread relevance (RFC-608).
 
@@ -93,7 +94,7 @@ async def analyze_goal_thread_relevance(
         thread_summary=thread_summary,
         goal_history_text=goal_history_text,
         next_goal=next_goal,
-        confidence_threshold=policy.relevance_confidence_threshold
+        confidence_threshold=policy.relevance_confidence_threshold,
     )
 
     # Call LLM for analysis
@@ -111,13 +112,12 @@ async def analyze_goal_thread_relevance(
             "Goal-thread relevance analysis: is_relevant=%s, confidence=%.2f, switch=%s",
             analysis_result.is_relevant,
             analysis_result.confidence,
-            analysis_result.should_switch_thread
+            analysis_result.should_switch_thread,
         )
 
         if analysis_result.should_switch_thread:
             logger.info(
-                "Hindering factors detected: %s",
-                ", ".join(analysis_result.hindering_reasons)
+                "Hindering factors detected: %s", ", ".join(analysis_result.hindering_reasons)
             )
 
         return analysis_result
@@ -132,7 +132,7 @@ async def analyze_goal_thread_relevance(
             hindering_reasons=[],
             confidence=0.0,
             reasoning=f"Analysis failed: {e}",
-            should_switch_thread=False
+            should_switch_thread=False,
         )
 
 
@@ -236,7 +236,7 @@ def parse_llm_analysis_response(response_content: str) -> GoalThreadRelevanceAna
                 hindering_reasons=data.get("hindering_reasons", []),
                 confidence=float(data.get("confidence", 0.0)),
                 reasoning=data.get("reasoning", ""),
-                should_switch_thread=data.get("should_switch_thread", False)
+                should_switch_thread=data.get("should_switch_thread", False),
             )
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -256,7 +256,7 @@ def extract_json_from_response(content: str) -> str | None:
         Extracted JSON string or None
     """
     # Try to find JSON code block
-    json_pattern = r'```json\s*(.*?)\s*```'
+    json_pattern = r"```json\s*(.*?)\s*```"
     match = re.search(json_pattern, content, re.DOTALL)
 
     if match:
@@ -299,5 +299,5 @@ def parse_text_response_fallback(content: str) -> GoalThreadRelevanceAnalysis:
         hindering_reasons=hindering,
         confidence=0.5,  # Low confidence for fallback
         reasoning=content[:200],  # Truncate
-        should_switch_thread=len(hindering) > 0
+        should_switch_thread=len(hindering) > 0,
     )
