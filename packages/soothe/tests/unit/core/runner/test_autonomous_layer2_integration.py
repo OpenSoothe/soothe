@@ -280,21 +280,6 @@ async def test_agentloop_run_with_progress_interface():
     #   assert isinstance(event_data, dict)
 
 
-# Integration test placeholder (requires full setup)
-@pytest.mark.integration
-async def test_full_goalengine_to_agentloop_flow():
-    """Full integration test: GoalEngine creates goal → delegates to AgentLoop → reflection."""
-    # This test would require:
-    # 1. Full SootheRunner with real config
-    # 2. Real GoalEngine with goals
-    # 3. Real AgentLoop execution
-    # 4. Verify PlanResult flows to GoalEngine reflection
-    # 5. Verify goal status updates based on AgentLoop result
-
-    # Placeholder - would be implemented with proper test fixtures
-    pass
-
-
 if __name__ == "__main__":
     # Run basic tests
     import asyncio

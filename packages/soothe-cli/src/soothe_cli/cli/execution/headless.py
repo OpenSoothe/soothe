@@ -55,10 +55,15 @@ def run_headless(
             except Exception:
                 pass  # No daemon running or already stopped
 
-            # Start daemon
-            from soothe_cli.cli.commands.daemon_cmd import daemon_start
+            # Start daemon via subprocess (daemon manages its own lifecycle)
+            # Invoke daemon entry point without importing daemon modules
+            import subprocess
 
-            daemon_start(config=None, foreground=False)
+            subprocess.Popen(
+                [sys.executable, "-m", "soothe.cli.daemon_main", "start"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
             # Wait for daemon to become fully ready with timeout
             start_time = time.time()

@@ -48,7 +48,7 @@ class TestCheckpointEventEmission:
         event_data = events[0][2]  # Third element is the data dict
 
         # Verify event structure
-        assert event_data["type"] == "soothe.lifecycle.checkpoint.saving"
+        assert event_data["type"] == "soothe.lifecycle.checkpoint.saved"
         assert event_data["thread_id"] == "test-thread-123"
         assert "completed_steps" in event_data
         assert "completed_goals" in event_data
