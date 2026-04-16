@@ -76,7 +76,7 @@ from soothe_sdk.exceptions import (
     ValidationError,
 )
 from soothe_sdk.internal import INTERNAL_JSON_KEYS, strip_internal_tags
-from soothe_sdk.logging_utils import GlobalInputHistory, setup_logging
+from soothe_sdk.logging_utils import VERBOSITY_TO_LOG_LEVEL, GlobalInputHistory, setup_logging
 from soothe_sdk.progress import emit_progress  # IG-175
 from soothe_sdk.protocol import decode, encode
 from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
@@ -185,6 +185,7 @@ __all__ = [
     "PlanStep",
     "ToolOutput",
     "GlobalInputHistory",
+    "VERBOSITY_TO_LOG_LEVEL",
     "setup_logging",
     "format_cli_error",
     "log_preview",

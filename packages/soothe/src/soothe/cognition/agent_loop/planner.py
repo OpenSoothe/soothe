@@ -847,6 +847,11 @@ class LLMPlanner:
         # Concatenate reasoning from both phases (shows complete reasoning chain)
         combined_reasoning = f"{assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
 
+        # IG-XXX: Show full reasoning text (no truncation)
+        # Schema max_length=500 will handle truncation if needed, but we pass full text
+        # This matches IG-152 approach for next_action: full text transparency
+        reasoning_text = combined_reasoning
+
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # assessment.next_action is status-based (what LLM thinks should happen)
         # plan_result.next_action is plan-specific (what will actually be executed)
@@ -863,7 +868,7 @@ class LLMPlanner:
             status=assessment.status,
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
-            reasoning=combined_reasoning,
+            reasoning=reasoning_text,  # Full reasoning chain (no truncation)
             plan_action=plan_result.plan_action,
             decision=plan_result.decision,
             next_action=action_text,  # User sees concrete plan action (no duplication)
@@ -910,11 +915,12 @@ class LLMPlanner:
                 if assessment.status == "done":
                     logger.debug("[Plan] early-complete status=done (skip plan gen)")
                     # Build PlanResult from assessment only (IG-152: full text, no truncation)
+                    # IG-XXX: No truncation needed for single-phase reasoning (max 100 chars)
                     result = PlanResult(
                         status=assessment.status,
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
-                        reasoning=assessment.brief_reasoning,
+                        reasoning=assessment.brief_reasoning,  # Single phase, no truncation needed
                         plan_action="keep",  # No plan needed
                         decision=None,
                         next_action=assessment.next_action,  # User sees full action
