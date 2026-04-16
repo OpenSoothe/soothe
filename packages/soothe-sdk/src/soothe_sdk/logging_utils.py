@@ -9,7 +9,20 @@ This module is part of Phase 1 of IG-174: CLI import violations fix.
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+# Verbosity to log level mapping
+VERBOSITY_TO_LOG_LEVEL: dict[Literal["quiet", "minimal", "normal", "detailed", "debug"], str] = {
+    "quiet": "WARNING",
+    "minimal": "INFO",
+    "normal": "INFO",
+    "detailed": "DEBUG",
+    "debug": "DEBUG",
+}
+"""Map verbosity levels to Python logging levels.
+
+Used by CLI commands to convert user-facing verbosity to log level.
+"""
 
 
 class GlobalInputHistory:
@@ -67,14 +80,16 @@ class GlobalInputHistory:
             logging.warning(f"Failed to save history: {e}")
 
 
-def setup_logging(level: str = "INFO", log_file: Path = None, format_string: str = None) -> None:
+def setup_logging(
+    level: str = "INFO", log_file: Path | None = None, format_string: str | None = None
+) -> None:
     """Setup logging configuration.
 
     Configures Python logging for daemon or CLI.
 
     Args:
-        level: Log level (DEBUG, INFO, WARNING, ERROR).
-        log_file: Optional log file path.
+        level: Log level (DEBUG, INFO, WARNING, ERROR) for file logging.
+        log_file: Optional log file path (e.g., Path("~/.soothe/logs/soothe-cli.log")).
         format_string: Optional custom format string.
     """
     # Default format
@@ -84,20 +99,23 @@ def setup_logging(level: str = "INFO", log_file: Path = None, format_string: str
     # Configure root logger
     logging.basicConfig(level=getattr(logging, level.upper()), format=format_string, handlers=[])
 
-    # Add console handler
+    # Add console handler - WARNING level only to reduce noise
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(logging.Formatter(format_string))
+    console_handler.setLevel(logging.WARNING)
     logging.getLogger().addHandler(console_handler)
 
-    # Add file handler if specified
+    # Add file handler if specified - full log level
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter(format_string))
+        file_handler.setLevel(getattr(logging, level.upper()))
         logging.getLogger().addHandler(file_handler)
 
 
 __all__ = [
     "GlobalInputHistory",
+    "VERBOSITY_TO_LOG_LEVEL",
     "setup_logging",
 ]

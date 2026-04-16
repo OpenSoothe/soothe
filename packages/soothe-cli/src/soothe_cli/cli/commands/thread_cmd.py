@@ -6,9 +6,11 @@ The daemon must be running for thread commands to work.
 
 import asyncio
 import sys
+from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from soothe_sdk import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
 from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
 
 from soothe_cli.shared import load_config
@@ -206,7 +208,9 @@ def thread_continue(
     from soothe_cli.shared import setup_logging
 
     cfg = load_config(config)
-    setup_logging(cfg)
+    log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.logging.verbosity, "INFO")
+    log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
+    setup_logging(log_level, log_file=log_file)
     ws_url = websocket_url_from_config(cfg)
     _require_daemon(ws_url)
 

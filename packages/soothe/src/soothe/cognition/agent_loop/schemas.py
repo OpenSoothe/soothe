@@ -88,7 +88,7 @@ class AgentDecision(BaseModel):
 
 
 class PlanResult(BaseModel):
-    """Plan phase output with full reasoning chain (RFC-604, IG-152, IG-153).
+    """Plan phase output with full reasoning chain (RFC-604, IG-152, IG-153, IG-XXX).
 
     Result of the Plan-And-Execute loop's Plan phase, which combines planning,
     progress assessment, and goal-distance estimation in a single structured response.
@@ -97,8 +97,8 @@ class PlanResult(BaseModel):
         status: Whether to finish, continue current plan, or replan.
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
-        reasoning: Internal analysis truncated to 500 chars for token efficiency.
-        next_action: User-facing action summary (smart truncation to 100 chars).
+        reasoning: Internal analysis (full text, no truncation for transparency).
+        next_action: User-facing action summary (full text, no truncation).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
         decision: New steps to run when plan_action is new; None when keep.
@@ -111,8 +111,12 @@ class PlanResult(BaseModel):
     goal_progress: float = Field(default=0.0, ge=0.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0, default=0.8)
 
-    reasoning: str = Field(default="", max_length=500)
-    """Internal analysis, truncated to 500 chars for token efficiency."""
+    reasoning: str = Field(default="", max_length=1000)
+    """Internal analysis (full reasoning chain visible, no truncation).
+
+    IG-XXX: Increased from 500 to 1000 chars to show complete reasoning without mid-sentence truncation.
+    Combined reasoning from both phases (assessment + plan) can be 100-200 chars total.
+    """
 
     next_action: str = Field(default="", max_length=500)
     """Complete action text from both phases (no truncation, full reasoning chain visible)."""

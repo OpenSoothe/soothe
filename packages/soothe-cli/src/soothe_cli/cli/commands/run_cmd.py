@@ -3,9 +3,11 @@
 import logging
 import sys
 import time
+from pathlib import Path
 from typing import Literal
 
 import typer
+from soothe_sdk import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
 
 from soothe_cli.cli.execution import run_headless, run_tui
 from soothe_cli.shared import load_config, setup_logging
@@ -42,7 +44,9 @@ def run_impl(
         if verbosity is not None:
             logging_config = cfg.logging.model_copy(update={"verbosity": verbosity})
             cfg = cfg.model_copy(update={"logging": logging_config})
-        setup_logging(cfg)
+        log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.logging.verbosity, "INFO")
+        log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
+        setup_logging(log_level, log_file=log_file)
 
         # PostgreSQL availability check (requires daemon-side config)
         if hasattr(cfg, "protocols") and hasattr(cfg.protocols, "durability"):
