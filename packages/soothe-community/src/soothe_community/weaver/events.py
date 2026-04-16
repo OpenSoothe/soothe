@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict
 
-from soothe.foundation.base_events import SubagentEvent
+from soothe_sdk import SubagentEvent
 
 
 class WeaverDispatchedEvent(SubagentEvent):
@@ -166,9 +166,8 @@ class WeaverExecuteCompletedEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
-# Register all weaver events with the global registry
-from soothe.core.event_catalog import register_event  # noqa: E402
-from soothe.foundation.verbosity_tier import VerbosityTier  # noqa: E402
+# Register all weaver events with the plugin-level registry
+from soothe_sdk import register_event, VerbosityTier  # noqa: E402
 
 # Dispatch/Complete events visible at NORMAL
 register_event(

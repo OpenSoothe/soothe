@@ -65,6 +65,7 @@ from soothe_sdk.events import (
     SootheEvent,
     SubagentEvent,
 )
+from soothe_sdk.events_registry import register_event  # IG-175
 from soothe_sdk.exceptions import (
     DependencyError,
     DiscoveryError,
@@ -78,6 +79,7 @@ from soothe_sdk.internal import INTERNAL_JSON_KEYS, strip_internal_tags
 from soothe_sdk.logging_utils import GlobalInputHistory, setup_logging
 from soothe_sdk.protocol import decode, encode
 from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
+from soothe_sdk.progress import emit_progress  # IG-175
 from soothe_sdk.types.context import PluginContext, SootheConfigProtocol
 from soothe_sdk.types.health import PluginHealth
 from soothe_sdk.types.manifest import PluginManifest
@@ -140,6 +142,7 @@ __all__ = [
     # Protocol
     "encode",
     "decode",
+    "emit_progress",  # IG-175
     # Events
     "SootheEvent",
     "LifecycleEvent",
@@ -151,6 +154,7 @@ __all__ = [
     "CHITCHAT_RESPONSE",
     "FINAL_REPORT",
     "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
+    "register_event",  # IG-175
     # Verbosity
     "VerbosityTier",
     "should_show",

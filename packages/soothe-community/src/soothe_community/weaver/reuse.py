@@ -10,7 +10,7 @@ from .models import AgentManifest, CapabilitySignature, ReuseCandidate
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
 
-    from soothe.protocols.vector_store import VectorStoreProtocol
+    from soothe_sdk import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 

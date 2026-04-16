@@ -66,7 +66,7 @@ WEAVER_DESCRIPTION = (
 
 
 def _emit_progress(event: dict[str, Any]) -> None:
-    from soothe.utils.progress import emit_progress
+    from soothe_sdk import emit_progress
 
     emit_progress(event, logger)
 
@@ -93,7 +93,7 @@ def _build_weaver_graph(
     def _check_policy(action: str, tool_name: str, tool_args: dict[str, Any] | None = None) -> None:
         if policy is None:
             return
-        from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+        from soothe_sdk import ActionRequest, PermissionSet, PolicyContext
 
         permissions = PermissionSet(frozenset())
         get_profile = getattr(policy, "get_profile", None)
@@ -358,7 +358,7 @@ class WeaverPlugin:
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
-            from soothe.plugin.exceptions import PluginError
+            from soothe_sdk import PluginError
 
             raise PluginError(
                 "Weaver requires Skillify plugin. Install soothe-community with skillify support.",
@@ -399,8 +399,8 @@ class WeaverPlugin:
         """
         from langchain.chat_models import init_chat_model
 
-        from soothe.config import SOOTHE_HOME, SootheConfig
-        from soothe.core.config_driven import ConfigDrivenPolicy
+        from soothe_sdk import SOOTHE_HOME  # SootheConfig via context.soothe_config
+        # ConfigDrivenPolicy via context.services["policy"]
 
         cfg: SootheConfig = config if isinstance(config, SootheConfig) else SootheConfig()
 

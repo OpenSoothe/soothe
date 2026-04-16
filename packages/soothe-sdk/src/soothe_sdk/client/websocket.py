@@ -295,9 +295,7 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
-    async def send_thread_artifacts(
-        self, thread_id: str, *, request_id: str | None = None
-    ) -> None:
+async def send_thread_artifacts(self, thread_id: str, *, request_id: str | None = None) -> None:
         """Request thread artifacts via daemon RPC (RFC-402 ``thread_artifacts``).
 
         Args:

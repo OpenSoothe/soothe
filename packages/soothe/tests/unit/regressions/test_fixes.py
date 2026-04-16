@@ -16,9 +16,9 @@ from soothe.foundation.slash_commands import (
     _show_memory,
     handle_slash_command,
 )
-from soothe.ux.cli.stream import StreamDisplayPipeline
-from soothe.ux.shared.essential_events import is_essential_progress_event_type
-from soothe.ux.tui.textual_adapter import (
+from soothe_cli.cli.stream import StreamDisplayPipeline
+from soothe_cli.shared.essential_events import is_essential_progress_event_type
+from soothe_cli.tui.textual_adapter import (
     _extract_custom_output_text,
     _format_progress_event_lines_for_tui,
 )
@@ -68,7 +68,7 @@ async def test_show_memory_calls_await() -> None:
 
 def test_thread_list_via_daemon_uses_thread_list_protocol() -> None:
     """Daemon-backed list must not exit on handshake ``status`` idle (see IG / thread_cmd)."""
-    from soothe.ux.cli.commands.thread_cmd import _thread_list_via_daemon
+    from soothe_cli.cli.commands.thread_cmd import _thread_list_via_daemon
 
     source = inspect.getsource(_thread_list_via_daemon)
     assert "thread_list_response" in source
@@ -79,7 +79,7 @@ def test_thread_list_via_daemon_uses_thread_list_protocol() -> None:
 
 
 def test_thread_status_matches_cli_filter() -> None:
-    from soothe.ux.cli.commands.thread_cmd import _thread_status_matches_cli_filter
+    from soothe_cli.cli.commands.thread_cmd import _thread_status_matches_cli_filter
 
     assert _thread_status_matches_cli_filter("idle", None) is True
     assert _thread_status_matches_cli_filter("idle", "active") is True
@@ -97,7 +97,7 @@ def test_thread_continue_requires_daemon() -> None:
     """Test that thread continue command requires running daemon."""
     import inspect
 
-    from soothe.ux.cli.commands.thread_cmd import thread_continue
+    from soothe_cli.cli.commands.thread_cmd import thread_continue
 
     sig = inspect.signature(thread_continue)
     params = sig.parameters

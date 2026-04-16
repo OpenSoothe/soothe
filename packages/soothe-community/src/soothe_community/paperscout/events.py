@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import ConfigDict
 
-from soothe.core.base_events import SubagentEvent
+from soothe_sdk import SubagentEvent
 
 
 class PaperScoutStepEvent(SubagentEvent):
@@ -54,27 +54,28 @@ class PaperScoutErrorEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
-# Register all PaperScout events with the global registry
-from soothe.core.event_catalog import register_event  # noqa: E402
+# Register all PaperScout events with the plugin-level registry
+from soothe_sdk import register_event  # noqa: E402
+from soothe_sdk import VerbosityTier
 
 register_event(
     PaperScoutStepEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="{step}: {status}",
 )
 register_event(
     PaperScoutPaperFoundEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Found paper: {paper_title} (score: {score:.2f})",
 )
 register_event(
     PaperScoutEmailSentEvent,
-    verbosity="subagent_progress",
+    verbosity=VerbosityTier.NORMAL,
     summary_template="Email sent to {recipient} with {papers_count} papers",
 )
 register_event(
     PaperScoutErrorEvent,
-    verbosity="error",
+    verbosity=VerbosityTier.DEBUG,
     summary_template="Error in {step}: {error_message}",
 )
 
