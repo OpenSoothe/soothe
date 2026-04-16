@@ -40,8 +40,10 @@ async def test_daemon_persists_after_client_disconnect() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Simulate client disconnect by sending detach message
-    await daemon._handle_command("/detach")
+    # Simulate client disconnect via RPC detach command (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+    )
 
     # Daemon should keep running
     assert daemon._running is True
@@ -61,8 +63,10 @@ async def test_daemon_persists_after_exit_command() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Send /exit command
-    await daemon._handle_command("/exit")
+    # Send /exit RPC command (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+    )
 
     # IG-085: Daemon should KEEP RUNNING
     assert daemon._running is True
@@ -82,8 +86,10 @@ async def test_daemon_persists_after_quit_command() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Send /quit command
-    await daemon._handle_command("/quit")
+    # Send /quit RPC command (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+    )
 
     # IG-085: Daemon should KEEP RUNNING
     assert daemon._running is True
@@ -103,18 +109,24 @@ async def test_multiple_clients_connect_disconnect_daemon_persists() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Simulate first client connecting and disconnecting
-    await daemon._handle_command("/exit")
+    # Simulate first client connecting and disconnecting (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
-    # Simulate second client connecting and disconnecting
+    # Simulate second client connecting and disconnecting (RFC-404)
     sent.clear()
-    await daemon._handle_command("/quit")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
-    # Simulate third client connecting and detaching
+    # Simulate third client connecting and detaching (RPC-404)
     sent.clear()
-    await daemon._handle_command("/detach")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
 
@@ -125,11 +137,15 @@ async def test_only_explicit_stop_shutdowns_daemon() -> None:
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
 
-    # Multiple clients disconnect
-    await daemon._handle_command("/exit")
+    # Multiple clients disconnect via RPC (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
-    await daemon._handle_command("/quit")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
     # Only explicit stop() should shutdown daemon
@@ -144,8 +160,10 @@ async def test_cancel_command_does_not_stop_daemon() -> None:
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
     daemon._running = True
 
-    # Send /cancel command
-    await daemon._handle_command("/cancel")
+    # Send /cancel RPC command (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "cancel", "thread_id": "thread-1", "params": {}}
+    )
 
     # Daemon should keep running
     assert daemon._running is True
@@ -185,22 +203,30 @@ async def test_daemon_lifecycle_comprehensive_scenario() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Scenario: Client A connects, sends query, disconnects
-    await daemon._handle_command("/exit")
+    # Scenario: Client A connects, sends query, disconnects (RFC-404)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
-    # Scenario: Client B connects and cancels
+    # Scenario: Client B connects and cancels (RFC-404)
     sent.clear()
-    await daemon._handle_command("/cancel")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "cancel", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
     sent.clear()
-    await daemon._handle_command("/detach")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "detach", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
-    # Scenario: Client C connects and quits
+    # Scenario: Client C connects and quits (RFC-404)
     sent.clear()
-    await daemon._handle_command("/quit")
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "quit", "thread_id": "thread-1", "params": {}}
+    )
     assert daemon._running is True
 
     # Final: Explicit stop shuts down daemon

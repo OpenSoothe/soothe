@@ -226,16 +226,16 @@ setup_workspace() {
         exit 1
     fi
 
-    print_info "Syncing workspace packages..."
+    print_info "Syncing workspace packages with dev dependencies..."
 
-    if ! uv sync 2>&1 | tail -5 | grep -q "Audited"; then
+    if ! uv sync --all-extras 2>&1 | tail -5 | grep -q "Audited"; then
         # uv sync might take time, show progress
-        uv sync &
+        uv sync --all-extras &
         UV_PID=$!
         wait $UV_PID 2>/dev/null || true
     fi
 
-    print_success "Workspace synced"
+    print_success "Workspace synced (with dev dependencies)"
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -388,9 +388,18 @@ run_tests() {
     print_header "Unit Tests"
 
     print_info "Running unit tests for daemon package..."
+    print_info "Note: This may take 20-30 minutes for full test suite..."
 
     # Run daemon package tests (only package with tests currently)
-    if cd packages/soothe && uv run pytest tests/unit/ -v --tb=short 2>&1 | tail -20; then
+    # Daemon package has its own .venv with pytest installed
+    cd packages/soothe
+
+    # Ensure dev dependencies are synced in daemon package
+    uv sync --all-extras >/dev/null 2>&1 || true
+
+    # Run tests using python -m pytest (more reliable than pytest binary)
+    # Show full output so users can see progress (removed tail -20 suppression)
+    if uv run python -m pytest tests/unit/ -v --tb=short; then
         cd - >/dev/null
         print_success "Unit tests passed"
     else

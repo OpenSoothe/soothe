@@ -12,6 +12,7 @@ import typer
 from soothe_cli.cli.execution import daemon as daemon_exec
 from soothe_cli.cli.execution import headless as headless_exec
 from soothe_cli.tui import daemon_session as ux_client_session
+from soothe_sdk.client import session as sdk_session  # For retry logic (moved from CLI)
 
 from soothe.config import SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
@@ -42,6 +43,10 @@ class _FakeRunner:
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
         self.touched_thread_ids.append(thread_id)
+
+    async def memory_stats(self) -> dict[str, Any]:
+        """Stub for memory_stats RPC command (RFC-404)."""
+        return {"backend": "test", "entries": 5}
 
 
 class _FakeRunnerWithMessages:
@@ -275,7 +280,7 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_daemon_handles_slash_commands() -> None:
-    """Test that daemon executes slash commands and sends responses."""
+    """Test that daemon executes RPC commands via command_request (RFC-404)."""
     daemon = SootheDaemon(SootheConfig())
     daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
 
@@ -286,18 +291,18 @@ async def test_daemon_handles_slash_commands() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Test /help command
-    await daemon._handle_command("/help")
+    # Test /memory RPC command (now uses command_request protocol)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "memory", "thread_id": "thread-1", "params": {}}
+    )
 
     # Should have sent a command_response message
     response_msgs = [msg for msg in sent if msg.get("type") == "command_response"]
     assert len(response_msgs) >= 1
 
-    # The response should contain command table
-    content = response_msgs[0].get("content", "")
-    assert "/help" in content
-    assert "/exit" in content
-    assert "/memory" in content
+    # The response should contain memory stats
+    assert response_msgs[0].get("command") == "memory"
+    assert "data" in response_msgs[0]
 
 
 @pytest.mark.asyncio
@@ -319,8 +324,10 @@ async def test_daemon_command_exit_does_not_stop_daemon() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
 
-    # Test /exit command
-    await daemon._handle_command("/exit")
+    # Test /exit RPC command (RFC-404 protocol)
+    await daemon._handle_command_request(
+        {"type": "command_request", "command": "exit", "thread_id": "thread-1", "params": {}}
+    )
 
     # IG-085: Daemon should KEEP RUNNING (not stop)
     assert daemon._running is True
@@ -356,10 +363,10 @@ async def test_connect_with_retries_raises_after_exhaustion(monkeypatch) -> None
         return None
 
     monkeypatch.setattr(asyncio, "sleep", _no_sleep)
-    monkeypatch.setattr(ux_client_session, "_CONNECT_RETRY_COUNT", 2)
+    monkeypatch.setattr(sdk_session, "_CONNECT_RETRY_COUNT", 2)
 
     with pytest.raises(FileNotFoundError):
-        await ux_client_session.connect_websocket_with_retries(_FailingClient())
+        await sdk_session.connect_websocket_with_retries(_FailingClient())
 
 
 @pytest.mark.asyncio
@@ -401,7 +408,7 @@ async def test_wait_for_thread_status_skips_empty_handshake_status() -> None:
         ]
     )
 
-    event = await ux_client_session._wait_for_thread_status(client, timeout_s=0.5)
+    event = await sdk_session._wait_for_thread_status(client, timeout_s=0.5)
 
     assert event["thread_id"] == "thread-123"
 
@@ -535,7 +542,7 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
     stderr: list[str] = []
 
     monkeypatch.setattr(
-        "soothe.daemon.websocket_client.WebSocketClient", lambda url=None: _BusyClient()
+        "soothe_sdk.client.websocket.WebSocketClient", lambda url=None: _BusyClient()
     )
     monkeypatch.setattr(
         typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
@@ -553,12 +560,13 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     daemon_start = MagicMock()
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(
-        headless_exec.SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False)
-    )
-    monkeypatch.setattr(headless_exec.SootheDaemon, "is_running", staticmethod(lambda: True))
-    monkeypatch.setattr(headless_exec.SootheDaemon, "stop_running", staticmethod(stop_running))
-    monkeypatch.setattr("soothe.ux.cli.commands.daemon_cmd.daemon_start", daemon_start)
+    # Import SootheDaemon from correct location
+    from soothe.daemon import SootheDaemon
+
+    monkeypatch.setattr(SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False))
+    monkeypatch.setattr(SootheDaemon, "is_running", staticmethod(lambda: True))
+    monkeypatch.setattr(SootheDaemon, "stop_running", staticmethod(stop_running))
+    monkeypatch.setattr("soothe_cli.cli.commands.daemon_cmd.daemon_start", daemon_start)
 
     def _fake_asyncio_run(coro: object) -> int:
         captured["coro"] = coro

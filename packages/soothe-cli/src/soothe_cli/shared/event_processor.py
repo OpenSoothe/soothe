@@ -159,7 +159,43 @@ class EventProcessor:
             self._handle_stream_event(event)
         elif event_type == "error":
             self._handle_error_event(event)
-        # command_response and clear handled by caller if needed
+        elif event_type == "command_response":
+            self._handle_command_response(event)
+        elif event_type == "clear":
+            self._handle_clear_event(event)
+
+    def _handle_command_response(self, event: dict[str, Any]) -> None:
+        """Handle command response from daemon (RFC-404)."""
+        command = event.get("command")
+        data = event.get("data")
+        error = event.get("error")
+
+        if error:
+            self._renderer.on_error(error)
+            return
+
+        # Find rendering handler from registry
+        from soothe_cli.shared.command_router import find_command_by_daemon_command
+
+        entry = find_command_by_daemon_command(command)
+        if entry and entry.get("handler") and data:
+            handler = entry["handler"]
+            handler(self._renderer.console, data)
+        else:
+            # Default: pretty print JSON
+            import json
+
+            from rich.panel import Panel
+
+            self._renderer.console.print(
+                Panel(json.dumps(data, indent=2, default=str), title=command, border_style="cyan")
+            )
+
+    def _handle_clear_event(self, event: dict[str, Any]) -> None:
+        """Handle clear event from daemon."""
+        # Clear local UI state if renderer supports it
+        if hasattr(self._renderer, "clear"):
+            self._renderer.clear()
 
     def _handle_status(self, event: dict[str, Any]) -> None:
         """Process status changes, update thread_id, call on_status_change."""
