@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -126,27 +127,46 @@ class AgentLoop:
         # Initialize AgentLoop state manager (RFC-205)
         state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
 
-        # Try to recover from checkpoint
+        # Try to recover from checkpoint (RFC-608: loop-scoped)
         checkpoint = state_manager.load()
         if checkpoint and checkpoint.status == "running":
-            logger.info(
-                "Recovering from checkpoint at iteration %d",
-                checkpoint.iteration,
-            )
+            # Get current goal iteration (RFC-608: per-goal tracking)
+            current_goal_index = checkpoint.current_goal_index
+            if current_goal_index >= 0 and current_goal_index < len(checkpoint.goal_history):
+                goal_record = checkpoint.goal_history[current_goal_index]
+                iteration = goal_record.iteration
+                logger.info(
+                    "Recovering from checkpoint at iteration %d (goal: %s)",
+                    iteration,
+                    goal_record.goal_id,
+                )
+            else:
+                # No active goal in recovered checkpoint - shouldn't happen if status==running
+                logger.error("Checkpoint status is 'running' but no active goal found")
+                iteration = 0
+                goal_record = None
+
             # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
             plan_excerpts = prior_outputs
         else:
-            # Initialize new checkpoint - NO CoreAgent messages (RFC-205)
-            checkpoint = state_manager.initialize(goal, max_iterations)
+            # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
+            checkpoint = state_manager.initialize(thread_id, max_iterations)
+            iteration = 0  # New goal starts at iteration 0
             plan_excerpts = []  # Start fresh, no prior conversation from Layer 1
+            # Create new goal_record for this goal execution
+            goal_record = state_manager.start_new_goal(goal, max_iterations)
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+            checkpoint.goal_history.append(goal_record)
+            checkpoint.status = "running"
+            state_manager.save(checkpoint)
 
         state = LoopState(
             goal=goal,
             thread_id=thread_id,
             workspace=workspace,
             git_status=git_status,
-            iteration=checkpoint.iteration,  # Use checkpoint iteration
+            iteration=iteration,  # Use recovered or initial iteration
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
         )
@@ -312,8 +332,8 @@ Use all tool results and AI responses available in the conversation history to c
                 if final_output != plan_result.full_output:
                     plan_result = plan_result.model_copy(update={"full_output": final_output})
 
-                # Finalize checkpoint (RFC-205)
-                state_manager.finalize(status="completed")
+                # Finalize goal (RFC-608: mark completed, update metrics)
+                state_manager.finalize_goal(goal_record, final_output)
                 logger.info(
                     "[✓] Goal achieved in %d iterations (%dms)",
                     state.iteration,
@@ -376,8 +396,13 @@ Use all tool results and AI responses available in the conversation history to c
                     "Fatal error detected, aborting loop: %s",
                     fatal_errors[0].error,
                 )
-                # Finalize checkpoint on fatal error (RFC-205)
-                state_manager.finalize(status="failed")
+                # Mark goal as failed (RFC-608: update goal_record status)
+                goal_record.status = "failed"
+                goal_record.completed_at = datetime.now(UTC)
+                checkpoint.status = "ready_for_next_goal"
+                checkpoint.thread_health_metrics.consecutive_goal_failures += 1
+                checkpoint.thread_health_metrics.last_goal_status = "failed"
+                state_manager.save(checkpoint)
                 yield (
                     "fatal_error",
                     {
@@ -431,6 +456,7 @@ Use all tool results and AI responses available in the conversation history to c
 
             # Record iteration to checkpoint (RFC-205) with pre-increment value
             state_manager.record_iteration(
+                goal_record=goal_record,
                 iteration=iteration_completed,  # Use pre-increment value
                 plan_result=plan_result,
                 decision=decision,
@@ -463,8 +489,13 @@ Use all tool results and AI responses available in the conversation history to c
             state.previous_plan.goal_progress * 100 if state.previous_plan else 0,
         )
 
-        # Finalize checkpoint (RFC-205)
-        state_manager.finalize(status="failed")
+        # Mark goal as failed due to max iterations (RFC-608)
+        goal_record.status = "failed"
+        goal_record.completed_at = datetime.now(UTC)
+        checkpoint.status = "ready_for_next_goal"
+        checkpoint.thread_health_metrics.consecutive_goal_failures += 1
+        checkpoint.thread_health_metrics.last_goal_status = "failed"
+        state_manager.save(checkpoint)
 
         result = state.previous_plan or PlanResult(
             status="replan",

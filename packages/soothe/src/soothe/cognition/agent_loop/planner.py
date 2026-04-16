@@ -845,12 +845,8 @@ class LLMPlanner:
         from soothe.utils.text_preview import preview_first
 
         # Concatenate reasoning from both phases (shows complete reasoning chain)
-        combined_reasoning = f"{assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
-
-        # IG-XXX: Show full reasoning text (no truncation)
-        # Schema max_length=500 will handle truncation if needed, but we pass full text
-        # This matches IG-152 approach for next_action: full text transparency
-        reasoning_text = combined_reasoning
+        # reasoning_text = f"{assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
+        reasoning_text = f"{assessment.brief_reasoning}"
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # assessment.next_action is status-based (what LLM thinks should happen)

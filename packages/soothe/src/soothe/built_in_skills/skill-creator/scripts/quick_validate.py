@@ -67,7 +67,9 @@ def _parse_simple_frontmatter(frontmatter_text: str) -> dict[str, str] | None:
             multiline_key = key
             continue
 
-        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+        if (value.startswith('"') and value.endswith('"')) or (
+            value.startswith("'") and value.endswith("'")
+        ):
             value = value[1:-1]
         parsed[key] = value
         current_key = key

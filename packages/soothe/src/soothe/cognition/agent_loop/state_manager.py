@@ -18,7 +18,6 @@ from soothe.cognition.agent_loop.checkpoint import (
     ActWaveRecord,
     AgentLoopCheckpoint,
     GoalExecutionRecord,
-    GoalThreadRelevanceAnalysis,
     ReasonStepRecord,
     StepExecutionRecord,
     ThreadHealthMetrics,
@@ -76,17 +75,14 @@ class AgentLoopStateManager:
             goal_history=[],
             current_goal_index=-1,  # No active goal yet
             working_memory_state=WorkingMemoryState(entries=[], spill_files=[]),
-            thread_health_metrics=ThreadHealthMetrics(
-                thread_id=thread_id,
-                last_updated=now
-            ),
+            thread_health_metrics=ThreadHealthMetrics(thread_id=thread_id, last_updated=now),
             total_goals_completed=0,
             total_thread_switches=0,
             total_duration_ms=0,
             total_tokens_used=0,
             created_at=now,
             updated_at=now,
-            schema_version="2.0"
+            schema_version="2.0",
         )
 
         self._checkpoint = checkpoint
@@ -95,7 +91,7 @@ class AgentLoopStateManager:
         logger.info(
             "Initialized loop %s on thread %s (status: ready_for_next_goal)",
             self.loop_id,
-            thread_id
+            thread_id,
         )
 
         return checkpoint
@@ -116,7 +112,7 @@ class AgentLoopStateManager:
             if data.get("schema_version") != "2.0":
                 logger.warning(
                     "Checkpoint schema %s not supported (requires v2.0 for multi-thread)",
-                    data.get("schema_version")
+                    data.get("schema_version"),
                 )
                 return None
 
@@ -128,16 +124,13 @@ class AgentLoopStateManager:
                 self.loop_id,
                 checkpoint.status,
                 len(checkpoint.goal_history),
-                len(checkpoint.thread_ids)
+                len(checkpoint.thread_ids),
             )
 
             return checkpoint
 
         except (json.JSONDecodeError, ValueError):
-            logger.exception(
-                "Failed to load loop %s checkpoint",
-                self.loop_id
-            )
+            logger.exception("Failed to load loop %s checkpoint", self.loop_id)
             return None
 
     def save(self, checkpoint: AgentLoopCheckpoint) -> None:
@@ -167,11 +160,7 @@ class AgentLoopStateManager:
         tmp_path.replace(self.checkpoint_path)
         self._checkpoint = checkpoint
 
-        logger.debug(
-            "Saved loop %s checkpoint (status %s)",
-            self.loop_id,
-            checkpoint.status
-        )
+        logger.debug("Saved loop %s checkpoint (status %s)", self.loop_id, checkpoint.status)
 
     def start_new_goal(self, goal: str, max_iterations: int = 10) -> GoalExecutionRecord:
         """Create new goal record and clear working memory (RFC-608).
@@ -207,7 +196,7 @@ class AgentLoopStateManager:
             duration_ms=0,
             tokens_used=0,
             started_at=now,
-            completed_at=None
+            completed_at=None,
         )
 
         # Clear working memory for new goal
@@ -248,7 +237,7 @@ class AgentLoopStateManager:
             "Finalized goal %s on thread %s (loop %s)",
             goal_record.goal_id,
             goal_record.thread_id,
-            self.loop_id
+            self.loop_id,
         )
 
     def execute_thread_switch(self, new_thread_id: str) -> None:
@@ -269,8 +258,7 @@ class AgentLoopStateManager:
 
         # Reset thread health metrics for new thread
         checkpoint.thread_health_metrics = ThreadHealthMetrics(
-            thread_id=new_thread_id,
-            last_updated=datetime.now(UTC)
+            thread_id=new_thread_id, last_updated=datetime.now(UTC)
         )
 
         self.save(checkpoint)
@@ -279,7 +267,7 @@ class AgentLoopStateManager:
             "Thread switch executed: loop %s → thread %s (switch count: %d)",
             self.loop_id,
             new_thread_id,
-            checkpoint.total_thread_switches
+            checkpoint.total_thread_switches,
         )
 
     def inject_previous_goal_context(self, limit: int = 1) -> list[str]:
@@ -296,8 +284,7 @@ class AgentLoopStateManager:
 
         # Get most recent completed goals on current thread
         previous_goals = [
-            g for g in self._checkpoint.goal_history[-limit:]
-            if g.status == "completed"
+            g for g in self._checkpoint.goal_history[-limit:] if g.status == "completed"
         ]
 
         if not previous_goals:
@@ -318,9 +305,7 @@ class AgentLoopStateManager:
         return context_blocks
 
     def auto_recall_on_thread_switch(
-        self,
-        next_goal: str | None,
-        policy: ThreadSwitchPolicy
+        self, next_goal: str | None, policy: ThreadSwitchPolicy
     ) -> list[str]:
         """Auto /recall knowledge from previous threads on thread switch (RFC-608).
 
@@ -347,12 +332,14 @@ class AgentLoopStateManager:
         for goal_record in checkpoint.goal_history:
             if goal_record.thread_id in previous_thread_ids:
                 doc_text = f"{goal_record.goal_text}\n{goal_record.final_report}"
-                documents.append({
-                    "thread_id": goal_record.thread_id,
-                    "goal_id": goal_record.goal_id,
-                    "goal_text": goal_record.goal_text,
-                    "text": doc_text
-                })
+                documents.append(
+                    {
+                        "thread_id": goal_record.thread_id,
+                        "goal_id": goal_record.goal_id,
+                        "goal_text": goal_record.goal_text,
+                        "text": doc_text,
+                    }
+                )
 
         if not documents:
             return []  # No previous goals to recall
@@ -374,7 +361,7 @@ class AgentLoopStateManager:
         logger.info(
             "Auto /recall on thread switch: %d knowledge blocks from %d previous threads",
             len(recalled_knowledge),
-            len(previous_thread_ids)
+            len(previous_thread_ids),
         )
 
         return recalled_knowledge
@@ -469,11 +456,7 @@ class AgentLoopStateManager:
         self._checkpoint.status = status
         self.save(self._checkpoint)
 
-        logger.info(
-            "Finalized loop %s (status: %s)",
-            self.loop_id,
-            status
-        )
+        logger.info("Finalized loop %s (status: %s)", self.loop_id, status)
 
     def _derive_prior_step_outputs(self, goal_record: GoalExecutionRecord) -> list[str]:
         """Get prior step outputs from goal's previous Act waves."""
@@ -542,6 +525,7 @@ class AgentLoopStateManager:
         for line in lines:
             if "— full output in" in line and ".md`" in line:
                 import re
+
                 match = re.search(r"`([^`]+\.md)`", line)
                 if match:
                     spill_files.append(match.group(1))

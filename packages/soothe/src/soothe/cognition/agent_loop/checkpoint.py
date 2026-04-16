@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -112,6 +113,7 @@ class WorkingMemoryState(BaseModel):
 
 # RFC-608: New models for multi-thread lifecycle
 
+
 class ThreadHealthMetrics(BaseModel):
     """Current thread health state for switching policy evaluation."""
 
@@ -204,7 +206,7 @@ class GoalExecutionRecord(BaseModel):
     # Execution state
     iteration: int = 0
     max_iterations: int = 10
-    status: Literal["completed", "failed", "cancelled"] = "completed"
+    status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
     # Execution traces
     reason_history: list[ReasonStepRecord] = Field(default_factory=list)

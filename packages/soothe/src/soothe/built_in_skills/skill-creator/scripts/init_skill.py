@@ -275,7 +275,9 @@ def create_resource_dirs(
                 pass
 
 
-def init_skill(skill_name: str, path: str, resources: list[str], *, include_examples: bool) -> Path | None:
+def init_skill(
+    skill_name: str, path: str, resources: list[str], *, include_examples: bool
+) -> Path | None:
     """Initialize a new skill directory with template SKILL.md.
 
     Args:

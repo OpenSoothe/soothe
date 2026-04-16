@@ -390,13 +390,11 @@ class StreamDisplayPipeline:
         if duration_s == 0 and self._context.step_start_time:
             duration_s = time.time() - self._context.step_start_time
 
-        # Resolve description robustly for parallel/async step completions
-        description = (
-            self._context.step_descriptions.get(step_id, "")
-            or self._context.current_step_description
-            or event.get("description", "")
-            or "Completed action"
-        )
+        # Get success/error status (IG-182)
+        success = event.get("success", True)
+        error_msg = None
+        if not success:
+            error_msg = event.get("error", event.get("error_message", ""))
 
         # Get tool call count from event
         tool_call_count = event.get("tool_call_count", 0)
@@ -411,15 +409,15 @@ class StreamDisplayPipeline:
         self._context.current_step_description = None
         self._context.step_start_time = None
 
-        return [
-            format_step_done(
-                description,
-                duration_s,
-                tool_call_count=tool_call_count,
-                namespace=self._current_namespace,
-                verbosity_tier=self._verbosity_tier,
-            )
-        ]
+        # IG-182: Return list directly (formatter returns list now)
+        return format_step_done(
+            duration_s,
+            tool_call_count=tool_call_count,
+            success=success,
+            error_msg=error_msg,
+            namespace=self._current_namespace,
+            verbosity_tier=self._verbosity_tier,
+        )
 
     def _on_goal_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle goal completed event.
