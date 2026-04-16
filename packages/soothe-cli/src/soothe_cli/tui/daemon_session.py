@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import messages_from_dict
-from soothe_sdk.client import WebSocketClient
-
-from soothe_cli.client import (
+from soothe_sdk.client import (
+    WebSocketClient,
     bootstrap_thread_session,
     connect_websocket_with_retries,
     websocket_url_from_config,

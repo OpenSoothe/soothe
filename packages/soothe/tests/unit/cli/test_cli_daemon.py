@@ -9,12 +9,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import typer
+from soothe_cli.cli.execution import daemon as daemon_exec
+from soothe_cli.cli.execution import headless as headless_exec
+from soothe_cli.tui import daemon_session as ux_client_session
 
 from soothe.config import SootheConfig
 from soothe.daemon import SootheDaemon, WebSocketClient
 from soothe.daemon.server import _ClientConn
-from soothe_cli.cli.execution import daemon as daemon_exec, headless as headless_exec
-from soothe_cli.tui import daemon_session as ux_client_session
 
 
 class _SequencedClient:
@@ -80,7 +81,7 @@ class _FakeRunnerThatSwapsThread:
 
     async def astream(self, text: str, **kwargs):  # type: ignore[no-untyped-def]
         self.calls.append({"text": text, **kwargs})
-        yield ((), "custom", {"type": "soothe.plan.created", "goal": text, "steps": []})
+        yield ((), "custom", {"type": "soothe.cognition.plan.created", "goal": text, "steps": []})
         self.current_thread_id = "thread-final"
 
     async def touch_thread_activity_timestamp(self, thread_id: str) -> None:
@@ -255,8 +256,12 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     records = thread_logger.read_recent_records(limit=20)
 
     # Should have: user input, custom event, assistant response
-    user_inputs = [r for r in records if r.get("kind") == "conversation" and r.get("role") == "user"]
-    assistant_responses = [r for r in records if r.get("kind") == "conversation" and r.get("role") == "assistant"]
+    user_inputs = [
+        r for r in records if r.get("kind") == "conversation" and r.get("role") == "user"
+    ]
+    assistant_responses = [
+        r for r in records if r.get("kind") == "conversation" and r.get("role") == "assistant"
+    ]
     events = [r for r in records if r.get("kind") == "event"]
 
     assert len(user_inputs) == 1
@@ -376,7 +381,9 @@ async def test_websocket_client_wait_for_daemon_ready_returns_ready_event() -> N
 
 @pytest.mark.asyncio
 async def test_websocket_client_wait_for_daemon_ready_raises_on_error_state() -> None:
-    seq = _SequencedClient(events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}])
+    seq = _SequencedClient(
+        events=[{"type": "daemon_ready", "state": "error", "message": "startup failed"}]
+    )
     client = WebSocketClient()
     client._connected = True
     client.read_event = seq.read_event  # type: ignore[method-assign]
@@ -476,7 +483,12 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
             {"type": "status", "state": "idle", "thread_id": ""},
             {"type": "daemon_ready", "state": "ready"},
             {"type": "status", "state": "idle", "thread_id": "thread-123", "new_thread": True},
-            {"type": "subscription_confirmed", "thread_id": "thread-123", "client_id": "c1", "verbosity": "normal"},
+            {
+                "type": "subscription_confirmed",
+                "thread_id": "thread-123",
+                "client_id": "c1",
+                "verbosity": "normal",
+            },
             {"type": "error", "code": "DAEMON_BUSY", "message": "busy"},
         ]
     )
@@ -522,8 +534,12 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
     stderr: list[str] = []
 
-    monkeypatch.setattr("soothe.daemon.websocket_client.WebSocketClient", lambda url=None: _BusyClient())
-    monkeypatch.setattr(typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None)
+    monkeypatch.setattr(
+        "soothe.daemon.websocket_client.WebSocketClient", lambda url=None: _BusyClient()
+    )
+    monkeypatch.setattr(
+        typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
+    )
 
     code = await daemon_exec.run_headless_via_daemon(SootheConfig(), "analyze project structure")
 
@@ -537,7 +553,9 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     daemon_start = MagicMock()
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(headless_exec.SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False))
+    monkeypatch.setattr(
+        headless_exec.SootheDaemon, "_is_port_live", staticmethod(lambda h, p: False)
+    )
     monkeypatch.setattr(headless_exec.SootheDaemon, "is_running", staticmethod(lambda: True))
     monkeypatch.setattr(headless_exec.SootheDaemon, "stop_running", staticmethod(stop_running))
     monkeypatch.setattr("soothe.ux.cli.commands.daemon_cmd.daemon_start", daemon_start)
@@ -547,7 +565,9 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
         return 0
 
     monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
-    monkeypatch.setattr(headless_exec.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code)))
+    monkeypatch.setattr(
+        headless_exec.sys, "exit", lambda code: (_ for _ in ()).throw(SystemExit(code))
+    )
 
     with pytest.raises(SystemExit) as exc:
         headless_exec.run_headless(cfg, "analyze project structure")

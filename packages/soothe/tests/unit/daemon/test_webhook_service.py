@@ -50,7 +50,9 @@ class TestWebhookService:
         mock_session = AsyncMock()
         mock_session.post.return_value = mock_response
 
-        with patch("soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session):
+        with patch(
+            "soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session
+        ):
             await service.notify("goal_completed", {"goal_id": "abc123"})
 
         mock_session.post.assert_called_once()
@@ -69,7 +71,9 @@ class TestWebhookService:
         mock_session = MagicMock()
         mock_session.post = mock_cm
 
-        with patch("soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session):
+        with patch(
+            "soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session
+        ):
             await service.notify("goal_completed", {"goal_id": "abc"})
 
         call_kwargs = mock_cm.call_args[1]
@@ -99,7 +103,9 @@ class TestWebhookService:
         mock_session = MagicMock()
         mock_session.post = lambda *a, **k: FailingContextManager()  # type: ignore[assignment]
 
-        with patch("soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session):
+        with patch(
+            "soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session
+        ):
             await service.notify("goal_completed", {"goal_id": "abc"})
 
         assert call_count == 2  # retries=2
@@ -110,7 +116,9 @@ class TestWebhookService:
 
         mock_session = AsyncMock()
 
-        with patch("soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session):
+        with patch(
+            "soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session
+        ):
             await service.notify("dreaming_entered", {})
 
         mock_session.post.assert_not_called()
@@ -136,7 +144,9 @@ class TestWebhookService:
         mock_session = MagicMock()
         mock_session.post = lambda *a, **k: SuccessContextManager()  # type: ignore[assignment]
 
-        with patch("soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session):
+        with patch(
+            "soothe.cognition.goal_engine.webhooks._get_http_session", return_value=mock_session
+        ):
             await service.notify("goal_completed", {"goal_id": "abc"})
 
         assert call_count == 2

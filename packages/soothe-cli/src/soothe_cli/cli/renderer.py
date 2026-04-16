@@ -393,7 +393,7 @@ class CliRenderer:
 
         # Use pipeline for consistent formatting
         event = {
-            "type": "soothe.cognition.plan.step_completed",
+            "type": "soothe.cognition.plan.step.completed",
             "step_id": step_id,
             "success": success,
             "duration_ms": duration_ms,

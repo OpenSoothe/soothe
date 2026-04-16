@@ -38,7 +38,9 @@ class TestProposalQueue:
         queue = ProposalQueue()
         queue.enqueue(Proposal(type="report_progress", goal_id="g1", payload={"status": "50%"}))
         queue.enqueue(Proposal(type="add_finding", goal_id="g1", payload={"content": "Found X"}))
-        queue.enqueue(Proposal(type="suggest_goal", goal_id="g1", payload={"description": "New goal"}))
+        queue.enqueue(
+            Proposal(type="suggest_goal", goal_id="g1", payload={"description": "New goal"})
+        )
         queue.enqueue(Proposal(type="flag_blocker", goal_id="g1", payload={"reason": "Blocked"}))
 
         results = queue.drain()

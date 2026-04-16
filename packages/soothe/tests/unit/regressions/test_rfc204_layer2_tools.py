@@ -85,22 +85,32 @@ class TestProposalPayloadStructure:
     """Verify proposal payloads have the expected structure for _process_proposals."""
 
     def test_report_progress_payload(self) -> None:
-        p = Proposal(type="report_progress", goal_id="g1", payload={"status": "done", "findings": "all clear"})
+        p = Proposal(
+            type="report_progress",
+            goal_id="g1",
+            payload={"status": "done", "findings": "all clear"},
+        )
         assert "status" in p.payload
         assert "findings" in p.payload
 
     def test_suggest_goal_payload(self) -> None:
-        p = Proposal(type="suggest_goal", goal_id="", payload={"description": "Research X", "priority": 70})
+        p = Proposal(
+            type="suggest_goal", goal_id="", payload={"description": "Research X", "priority": 70}
+        )
         assert "description" in p.payload
         assert "priority" in p.payload
 
     def test_flag_blocker_payload(self) -> None:
-        p = Proposal(type="flag_blocker", goal_id="g1", payload={"reason": "blocked", "dependencies": "api"})
+        p = Proposal(
+            type="flag_blocker", goal_id="g1", payload={"reason": "blocked", "dependencies": "api"}
+        )
         assert "reason" in p.payload
         assert "dependencies" in p.payload
 
     def test_add_finding_payload(self) -> None:
-        p = Proposal(type="add_finding", goal_id="g1", payload={"content": "found it", "tags": ["a", "b"]})
+        p = Proposal(
+            type="add_finding", goal_id="g1", payload={"content": "found it", "tags": ["a", "b"]}
+        )
         assert "content" in p.payload
         assert "tags" in p.payload
 
@@ -120,7 +130,9 @@ class TestAddFindingToolWiring:
         """AddFindingTool should enqueue proposals when queue is set."""
         q = ProposalQueue()
         AddFindingTool.model_construct(proposal_queue=q)
-        q.enqueue(Proposal(type="add_finding", goal_id="g1", payload={"content": "test", "tags": []}))
+        q.enqueue(
+            Proposal(type="add_finding", goal_id="g1", payload={"content": "test", "tags": []})
+        )
         assert not q.is_empty()
         props = q.drain()
         assert len(props) == 1

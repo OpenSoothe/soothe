@@ -77,21 +77,9 @@ from soothe_sdk.exceptions import (
 )
 from soothe_sdk.internal import INTERNAL_JSON_KEYS, strip_internal_tags
 from soothe_sdk.logging_utils import GlobalInputHistory, setup_logging
+from soothe_sdk.progress import emit_progress  # IG-175
 from soothe_sdk.protocol import decode, encode
 from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
-from soothe_sdk.progress import emit_progress  # IG-175
-from soothe_sdk.types.context import PluginContext, SootheConfigProtocol
-from soothe_sdk.types.health import PluginHealth
-from soothe_sdk.types.manifest import PluginManifest
-from soothe_sdk.utils import (
-    _TASK_NAME_RE,
-    convert_and_abbreviate_path,
-    format_cli_error,
-    get_tool_display_name,
-    log_preview,
-    parse_autopilot_goals,
-)
-from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
 from soothe_sdk.protocols import (
     ActionRequest,
     Permission,
@@ -104,6 +92,18 @@ from soothe_sdk.protocols import (
     VectorRecord,
     VectorStoreProtocol,
 )
+from soothe_sdk.types.context import PluginContext, SootheConfigProtocol
+from soothe_sdk.types.health import PluginHealth
+from soothe_sdk.types.manifest import PluginManifest
+from soothe_sdk.utils import (
+    _TASK_NAME_RE,
+    convert_and_abbreviate_path,
+    format_cli_error,
+    get_tool_display_name,
+    log_preview,
+    parse_autopilot_goals,
+)
+from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
 from soothe_sdk.verbosity import (
     ProgressCategory,
     VerbosityTier,

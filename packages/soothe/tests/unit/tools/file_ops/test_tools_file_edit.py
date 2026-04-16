@@ -485,7 +485,9 @@ class TestStrippedAbsolutePathDetection:
 
         import os
 
-        tool = WriteFileTool(work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True)
+        tool = WriteFileTool(
+            work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True
+        )
 
         # Simulate a stripped absolute path to user's home
         user = os.environ.get("USER", "testuser")
@@ -504,7 +506,9 @@ class TestStrippedAbsolutePathDetection:
         if test_file.exists():
             test_file.unlink()
 
-    def test_create_file_tool_logs_correction(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    def test_create_file_tool_logs_correction(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """WriteFileTool should log when it corrects a stripped path."""
         if platform.system() != "Darwin":
             pytest.skip("macOS only")
@@ -515,7 +519,9 @@ class TestStrippedAbsolutePathDetection:
         # Set log level to capture INFO messages
         caplog.set_level(logging.INFO, logger="soothe.tools._internal.file_edit.tools")
 
-        tool = WriteFileTool(work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True)
+        tool = WriteFileTool(
+            work_dir=str(tmp_path), allow_outside_workdir=True, backup_enabled=True
+        )
 
         user = os.environ.get("USER", "testuser")
         stripped_path = f"Users/{user}/test_log_report.md"

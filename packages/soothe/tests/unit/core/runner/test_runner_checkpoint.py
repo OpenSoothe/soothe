@@ -56,7 +56,9 @@ class TestCheckpointEventEmission:
         assert isinstance(event_data["completed_goals"], int)
 
     @pytest.mark.asyncio
-    async def test_checkpoint_event_not_emitted_without_artifact_store(self, tmp_path: Path) -> None:
+    async def test_checkpoint_event_not_emitted_without_artifact_store(
+        self, tmp_path: Path
+    ) -> None:
         """Verify no event is emitted if artifact store is not initialized."""
         # Create runner without artifact store on state
         config = SootheConfig()
@@ -148,7 +150,9 @@ class TestStepObservationReuse:
 
         parent_state = RunnerState(
             thread_id="thread-1",
-            context_projection=SimpleNamespace(entries=[SimpleNamespace(source="ctx", content="data")]),
+            context_projection=SimpleNamespace(
+                entries=[SimpleNamespace(source="ctx", content="data")]
+            ),
             recalled_memories=[SimpleNamespace(source_thread="thread-0", content="memo")],
             observation_scope_key="analyze project structure",
         )
@@ -217,7 +221,9 @@ class TestAutonomousObservationReuse:
 
         parent_state = RunnerState(
             thread_id="thread-1",
-            context_projection=SimpleNamespace(entries=[SimpleNamespace(source="ctx", content="data")]),
+            context_projection=SimpleNamespace(
+                entries=[SimpleNamespace(source="ctx", content="data")]
+            ),
             recalled_memories=[SimpleNamespace(source_thread="thread-0", content="memo")],
             observation_scope_key="analyze project structure",
         )

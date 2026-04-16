@@ -72,7 +72,11 @@ class TestDetectRelationships:
         all_goals = [completed, pending]
 
         relationships = detect_relationships(completed, all_goals)
-        informs = [r for r in relationships if r.rel_type == "informs" and r.from_goal == "g1" and r.to_goal == "g2"]
+        informs = [
+            r
+            for r in relationships
+            if r.rel_type == "informs" and r.from_goal == "g1" and r.to_goal == "g2"
+        ]
         assert len(informs) > 0
         assert informs[0].confidence >= _FLAG_FOR_REVIEW_CONFIDENCE
 
@@ -96,7 +100,9 @@ class TestDetectRelationships:
 
     def test_skips_completed_goals(self) -> None:
         completed = Goal(id="g1", description="Analyze sales data and build report")
-        also_completed = Goal(id="g2", description="Sales report and data analysis", status="completed")
+        also_completed = Goal(
+            id="g2", description="Sales report and data analysis", status="completed"
+        )
         all_goals = [completed, also_completed]
 
         relationships = detect_relationships(completed, all_goals)

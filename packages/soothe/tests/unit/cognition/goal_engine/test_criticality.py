@@ -129,7 +129,9 @@ class TestEvaluateCriticalityAsync:
 
         mock_model = AsyncMock()
         mock_model.ainvoke.return_value.type = "ai"
-        mock_model.ainvoke.return_value.content = "RISK_LEVEL: medium\nREASONS: Moderate external system impact"
+        mock_model.ainvoke.return_value.content = (
+            "RISK_LEVEL: medium\nREASONS: Moderate external system impact"
+        )
 
         result = await evaluate_criticality_async(
             "Review the API documentation",
@@ -162,7 +164,9 @@ class TestEvaluateCriticalityAsync:
 
         mock_model = AsyncMock()
         mock_model.ainvoke.return_value.type = "ai"
-        mock_model.ainvoke.return_value.content = "RISK_LEVEL: low\nREASONS: No significant concerns identified"
+        mock_model.ainvoke.return_value.content = (
+            "RISK_LEVEL: low\nREASONS: No significant concerns identified"
+        )
 
         result = await evaluate_criticality_async(
             "Review the API documentation",

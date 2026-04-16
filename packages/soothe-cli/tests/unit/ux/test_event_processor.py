@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from unittest.mock import MagicMock
 
-
 from soothe.core.event_catalog import PLAN_CREATED
+
 from soothe_cli.shared.event_processor import EventProcessor
 from soothe_cli.shared.processor_state import ProcessorState
 

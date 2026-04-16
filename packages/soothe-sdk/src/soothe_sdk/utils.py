@@ -16,22 +16,6 @@ _logger = logging.getLogger(__name__)
 _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
 
 
-def strip_internal_tags(text: str) -> str:
-    """Strip internal thinking tags from text.
-
-    Removes internal reasoning tags that should not be shown to users.
-
-    Args:
-        text: Text possibly containing internal tags.
-
-    Returns:
-        Cleaned text without internal tags.
-    """
-    # Pattern for internal tags like <thinking>, <internal>, etc.
-    internal_pattern = re.compile(r"<(thinking|internal|reasoning)>.*?</\1>", re.DOTALL)
-    return internal_pattern.sub("", text).strip()
-
-
 def format_cli_error(error: Exception) -> str:
     """Format exception for CLI display.
 
@@ -215,7 +199,6 @@ is_path_argument = re.compile(r"^(file_path|path|directory|dir|folder|cwd)\b", r
 """Regex for detecting path-like argument names in tool calls."""
 
 __all__ = [
-    "strip_internal_tags",
     "format_cli_error",
     "log_preview",
     "convert_and_abbreviate_path",

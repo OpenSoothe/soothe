@@ -9,15 +9,15 @@ ESSENTIAL_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         # Lifecycle events (always show)
         "soothe.lifecycle.thread.started",
         "soothe.lifecycle.thread.completed",
-        "soothe.lifecycle.agent_loop.started",
-        "soothe.lifecycle.agent_loop.completed",
-        "soothe.lifecycle.goal.started",
-        "soothe.lifecycle.goal.completed",
-        # Protocol events (milestones)
-        "soothe.protocol.plan.started",
-        "soothe.protocol.plan.completed",
-        "soothe.protocol.plan.step_started",
-        "soothe.protocol.plan.step_completed",
+        "soothe.cognition.agent_loop.started",
+        "soothe.cognition.agent_loop.completed",
+        "soothe.cognition.goal.created",
+        "soothe.cognition.goal.completed",
+        # Cognition events (milestones)
+        "soothe.cognition.plan.created",
+        "soothe.cognition.plan.completed",
+        "soothe.cognition.plan.step.started",
+        "soothe.cognition.plan.step.completed",
         # Output events (user-facing content)
         "soothe.output.message",
         "soothe.output.report",

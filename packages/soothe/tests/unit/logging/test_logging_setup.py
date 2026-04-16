@@ -61,7 +61,9 @@ class TestLoggingSetup:
 
         root_logger = logging.getLogger("soothe")
         stream_handlers = [
-            h for h in root_logger.handlers if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 0
 
@@ -82,7 +84,9 @@ class TestLoggingSetup:
 
         root_logger = logging.getLogger("soothe")
         stream_handlers = [
-            h for h in root_logger.handlers if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 1
 
@@ -107,7 +111,9 @@ class TestLoggingSetup:
 
         root_logger = logging.getLogger("soothe")
         stream_handlers = [
-            h for h in root_logger.handlers if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 1
 
@@ -151,7 +157,9 @@ class TestLoggingSetup:
         assert file_handlers[0].level == logging.DEBUG
 
         stream_handlers = [
-            h for h in root_logger.handlers if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 1
         assert stream_handlers[0].level == logging.WARNING
@@ -184,7 +192,9 @@ class TestLoggingSetup:
 
         root_logger = logging.getLogger("soothe")
         stream_handlers = [
-            h for h in root_logger.handlers if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
+            h
+            for h in root_logger.handlers
+            if isinstance(h, StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         assert len(stream_handlers) == 1
 

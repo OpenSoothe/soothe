@@ -18,7 +18,9 @@ class TestDreamingModeInit:
         assert mode._health_check_interval == 60
 
     def test_custom_intervals(self, tmp_path: Path) -> None:
-        mode = DreamingMode(soothe_home=tmp_path, consolidation_interval=60, health_check_interval=10)
+        mode = DreamingMode(
+            soothe_home=tmp_path, consolidation_interval=60, health_check_interval=10
+        )
         assert mode._consolidation_interval == 60
         assert mode._health_check_interval == 10
 
@@ -66,7 +68,9 @@ class TestDreamingMode:
     async def test_poll_inbox_with_task(self, tmp_path: Path) -> None:
         inbox_dir = tmp_path / "autopilot" / "inbox"
         inbox_dir.mkdir(parents=True)
-        inbox_dir.joinpath("task.md").write_text("---\ntype: task_submit\npriority: 80\n---\n\nDo something.\n")
+        inbox_dir.joinpath("task.md").write_text(
+            "---\ntype: task_submit\npriority: 80\n---\n\nDo something.\n"
+        )
 
         mode = DreamingMode(soothe_home=tmp_path)
         result = mode._poll_inbox()
@@ -108,7 +112,9 @@ class TestDreamingMode:
         await mode._run_health_check()
         # Should not raise
 
-    async def test_health_check_warns_low_space(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    async def test_health_check_warns_low_space(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
         import logging
 
         mode = DreamingMode(soothe_home=tmp_path)

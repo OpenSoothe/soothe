@@ -66,12 +66,12 @@ class ErrorEvent(SootheEvent):
 # Exposed at DEBUG and DETAILED level for thread-level events display
 
 # Plan events
-PLAN_CREATED = "soothe.protocol.plan.created"
-PLAN_STEP_STARTED = "soothe.protocol.plan.step_started"
-PLAN_STEP_COMPLETED = "soothe.protocol.plan.step_completed"
+PLAN_CREATED = "soothe.cognition.plan.created"
+PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
+PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
 
 # Subagent events
-SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.running"
+SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.run"
 
 # Thread lifecycle events (exposed for DEBUG/DETAILED level)
 THREAD_CREATED = "soothe.lifecycle.thread.started"
@@ -85,8 +85,8 @@ TOOL_COMPLETED = "soothe.tool.execution.completed"
 TOOL_ERROR = "soothe.tool.execution.error"
 
 # Agent loop events (DEBUG level)
-AGENT_LOOP_STARTED = "soothe.protocol.agent_loop.started"
-AGENT_LOOP_ITERATION = "soothe.protocol.agent_loop.iteration"
+AGENT_LOOP_STARTED = "soothe.cognition.agent_loop.started"
+AGENT_LOOP_ITERATION = "soothe.cognition.agent_loop.iterated"
 AGENT_LOOP_COMPLETED = "soothe.cognition.agent_loop.completed"
 
 # Message events (DETAILED level)
@@ -94,8 +94,8 @@ MESSAGE_RECEIVED = "soothe.protocol.message.received"
 MESSAGE_SENT = "soothe.protocol.message.sent"
 
 # Output events (QUIET level - always visible)
-CHITCHAT_RESPONSE = "soothe.output.chitchat.responding"
-FINAL_REPORT = "soothe.output.autonomous.final_report.reporting"
+CHITCHAT_RESPONSE = "soothe.output.chitchat.responded"
+FINAL_REPORT = "soothe.output.autonomous.final_report.reported"
 
 # Agent loop configuration constants
 DEFAULT_AGENT_LOOP_MAX_ITERATIONS = 10

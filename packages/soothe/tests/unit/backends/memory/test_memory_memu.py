@@ -98,7 +98,9 @@ class TestMemUMemoryRemember:
     @pytest.mark.asyncio
     async def test_remember_basic(self, mock_config, mock_memory_store):
         """Test basic memory storage."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             item = MemoryItem(
@@ -115,7 +117,9 @@ class TestMemUMemoryRemember:
     @pytest.mark.asyncio
     async def test_remember_with_metadata(self, mock_config, mock_memory_store):
         """Test memory with metadata."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             item = MemoryItem(
@@ -135,7 +139,9 @@ class TestMemUMemoryRecall:
     @pytest.mark.asyncio
     async def test_recall_basic(self, mock_config, mock_memory_store):
         """Test basic semantic search."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             results = await memory.recall("test query", limit=5)
@@ -149,7 +155,9 @@ class TestMemUMemoryRecall:
     @pytest.mark.asyncio
     async def test_recall_respects_limit(self, mock_config, mock_memory_store):
         """Test that recall respects the limit parameter."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             results = await memory.recall("query", limit=1)
@@ -163,7 +171,9 @@ class TestMemUMemoryRecallByTags:
     @pytest.mark.asyncio
     async def test_recall_by_tags_basic(self, mock_config, mock_memory_store):
         """Test tag-based retrieval."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             results = await memory.recall_by_tags(["knowledge"], limit=10)
@@ -180,7 +190,9 @@ class TestMemUMemoryForget:
     @pytest.mark.asyncio
     async def test_forget_success(self, mock_config, mock_memory_store):
         """Test successful memory deletion."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             result = await memory.forget("memory-1")
@@ -193,7 +205,9 @@ class TestMemUMemoryForget:
         """Test failed memory deletion returns False."""
         mock_memory_store.delete.return_value = False
 
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             result = await memory.forget("invalid-id")
@@ -207,7 +221,9 @@ class TestMemUMemoryUpdate:
     @pytest.mark.asyncio
     async def test_update_success(self, mock_config, mock_memory_store):
         """Test successful memory update."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             await memory.update("memory-1", "Updated content")
@@ -219,7 +235,9 @@ class TestMemUMemoryUpdate:
         """Test update raises KeyError when memory not found."""
         mock_memory_store.update.return_value = False
 
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             with pytest.raises(KeyError, match="Memory item 'invalid-id' not found"):
@@ -232,7 +250,9 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_full_lifecycle(self, mock_config, mock_memory_store):
         """Test complete CRUD lifecycle."""
-        with patch("soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store):
+        with patch(
+            "soothe.backends.memory.memu_adapter.MemuMemoryStore", return_value=mock_memory_store
+        ):
             memory = MemUMemory(config=mock_config)
 
             # Create

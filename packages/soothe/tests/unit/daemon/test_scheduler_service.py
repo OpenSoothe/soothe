@@ -161,7 +161,9 @@ class TestSchedulerService:
 
     @pytest.mark.asyncio
     async def test_add_task_delay(self) -> None:
-        task = await self.scheduler.add_task("Delayed task", schedule_kind="delay", schedule_value="1h")
+        task = await self.scheduler.add_task(
+            "Delayed task", schedule_kind="delay", schedule_value="1h"
+        )
         assert task.description == "Delayed task"
         assert task.schedule.kind == "delay"
         assert task.schedule.value == "1h"
@@ -169,18 +171,24 @@ class TestSchedulerService:
 
     @pytest.mark.asyncio
     async def test_add_task_cron(self) -> None:
-        task = await self.scheduler.add_task("Cron task", schedule_kind="cron", schedule_value="0 9 * * *")
+        task = await self.scheduler.add_task(
+            "Cron task", schedule_kind="cron", schedule_value="0 9 * * *"
+        )
         assert task.schedule.kind == "cron"
         assert task.next_run is not None
 
     @pytest.mark.asyncio
     async def test_add_task_custom_id(self) -> None:
-        task = await self.scheduler.add_task("Named task", schedule_kind="delay", schedule_value="30m", task_id="my-id")
+        task = await self.scheduler.add_task(
+            "Named task", schedule_kind="delay", schedule_value="30m", task_id="my-id"
+        )
         assert task.id == "my-id"
 
     @pytest.mark.asyncio
     async def test_add_task_custom_priority(self) -> None:
-        task = await self.scheduler.add_task("Important", schedule_kind="delay", schedule_value="10m", priority=90)
+        task = await self.scheduler.add_task(
+            "Important", schedule_kind="delay", schedule_value="10m", priority=90
+        )
         assert task.priority == 90
 
     @pytest.mark.asyncio
@@ -237,7 +245,9 @@ class TestSchedulerService:
 
     @pytest.mark.asyncio
     async def test_schedule_next_recurring(self) -> None:
-        task = await self.scheduler.add_task("Recurring", schedule_kind="every", schedule_value="1h")
+        task = await self.scheduler.add_task(
+            "Recurring", schedule_kind="every", schedule_value="1h"
+        )
         self.scheduler.mark_running(task.id)
         self.scheduler.schedule_next(task.id)
         assert task.status == "pending"
@@ -258,7 +268,9 @@ class TestSchedulerService:
 
     @pytest.mark.asyncio
     async def test_cancel_task(self) -> None:
-        task = await self.scheduler.add_task("Cancel me", schedule_kind="delay", schedule_value="1h")
+        task = await self.scheduler.add_task(
+            "Cancel me", schedule_kind="delay", schedule_value="1h"
+        )
         result = self.scheduler.cancel_task(task.id)
         assert result is True
         assert task.status == "cancelled"
@@ -290,8 +302,12 @@ class TestSchedulerPersistence:
     async def test_save_and_load_survives_restart(self, tmp_path) -> None:
         persist_file = tmp_path / "scheduler.json"
         scheduler1 = SchedulerService(persist_path=str(persist_file))
-        await scheduler1.add_task("Persist me", schedule_kind="delay", schedule_value="2h", task_id="p1")
-        await scheduler1.add_task("Another", schedule_kind="cron", schedule_value="0 9 * * *", task_id="p2")
+        await scheduler1.add_task(
+            "Persist me", schedule_kind="delay", schedule_value="2h", task_id="p1"
+        )
+        await scheduler1.add_task(
+            "Another", schedule_kind="cron", schedule_value="0 9 * * *", task_id="p2"
+        )
 
         scheduler2 = SchedulerService(persist_path=str(persist_file))
         tasks = scheduler2.list_tasks()

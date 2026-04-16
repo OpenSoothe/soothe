@@ -143,7 +143,9 @@ class TestTransportManager:
     @pytest.mark.asyncio
     async def test_manager_double_start(self) -> None:
         """Manager handles double start gracefully."""
-        config = DaemonConfig(transports=TransportConfig(websocket=WebSocketConfig(enabled=True, port=18766)))
+        config = DaemonConfig(
+            transports=TransportConfig(websocket=WebSocketConfig(enabled=True, port=18766))
+        )
 
         manager = TransportManager(config)
         manager.set_message_handler(lambda msg: None)

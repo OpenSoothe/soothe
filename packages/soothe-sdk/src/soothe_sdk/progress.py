@@ -8,7 +8,8 @@ context (with stream writer callback).
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # Optional stream writer callback - set by the daemon at runtime
 _STREAM_WRITER: Callable[[dict[str, Any]], None] | None = None

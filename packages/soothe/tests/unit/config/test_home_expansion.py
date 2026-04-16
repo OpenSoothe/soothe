@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 from soothe.config import SootheConfig
 from soothe.utils import expand_path
 

@@ -243,7 +243,9 @@ class TestComplexityMapping:
         assert "<SOOTHE_" not in prompt
         assert "Today's date is" in prompt
 
-    def test_medium_gets_environment_only(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_medium_gets_environment_only(
+        self, middleware: SystemPromptOptimizationMiddleware
+    ) -> None:
         """Medium complexity gets ENVIRONMENT section (WORKSPACE is tool-triggered per RFC-210)."""
         state = {
             "workspace": Path("/project"),
@@ -260,11 +262,18 @@ class TestComplexityMapping:
         assert "<SOOTHE_PROTOCOLS" not in prompt
         assert prompt.strip().endswith(middleware._current_date_line())
 
-    def test_complex_gets_environment_only(self, middleware: SystemPromptOptimizationMiddleware) -> None:
+    def test_complex_gets_environment_only(
+        self, middleware: SystemPromptOptimizationMiddleware
+    ) -> None:
         """Complex complexity gets ENVIRONMENT section (other sections are tool/state-triggered per RFC-210)."""
         state = {
             "workspace": Path("/project"),
-            "git_status": {"branch": "main", "main_branch": "main", "status": "", "recent_commits": ""},
+            "git_status": {
+                "branch": "main",
+                "main_branch": "main",
+                "status": "",
+                "recent_commits": "",
+            },
             "thread_context": {"thread_id": "abc", "conversation_turns": 1},
             "protocol_summary": {"context": {"type": "VectorContext"}},
         }
@@ -315,8 +324,15 @@ class TestGitStatusHelper:
         from soothe.core.workspace import get_git_status
 
         subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=False)
-        subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=tmp_path, capture_output=True, check=False)
-        subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=False)
+        subprocess.run(
+            ["git", "config", "user.email", "test@test.com"],
+            cwd=tmp_path,
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=False
+        )
 
         result = await get_git_status(tmp_path)
 

@@ -69,7 +69,7 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
 # Event types that should NEVER be shown (internal implementation details)
 INTERNAL_EVENT_TYPES = frozenset(
     {
-        "soothe.capability.research.internal_llm.running",
+        "soothe.capability.research.internal_llm.run",
     }
 )
 
@@ -77,30 +77,30 @@ INTERNAL_EVENT_TYPES = frozenset(
 SKIP_EVENT_TYPES = frozenset(
     {
         # Plan events handled by renderer's plan update mechanism
-        "soothe.cognition.plan.batch_started",
+        "soothe.cognition.plan.batch.started",
         "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step_completed",
-        "soothe.cognition.plan.step_failed",
+        "soothe.cognition.plan.step.completed",
+        "soothe.cognition.plan.step.failed",
         # Policy events not rendered (RFC-0019)
-        "soothe.policy.checked",
-        "soothe.policy.denied",
+        "soothe.protocol.policy.checked",
+        "soothe.protocol.policy.denied",
     }
 )
 
 PLAN_EVENT_TYPES = frozenset(
     {
-        "soothe.cognition.plan.creating",
-        "soothe.cognition.plan.updated",
+        "soothe.cognition.plan.created",
+        "soothe.cognition.plan.reflected",
         "soothe.cognition.plan.step.started",
-        "soothe.cognition.plan.step_completed",
-        "soothe.cognition.plan.step_failed",
+        "soothe.cognition.plan.step.completed",
+        "soothe.cognition.plan.step.failed",
     }
 )
 
 MILESTONE_EVENT_TYPES = frozenset(
     {
-        "soothe.cognition.plan.step_completed",
-        "soothe.cognition.plan.step_failed",
+        "soothe.cognition.plan.step.completed",
+        "soothe.cognition.plan.step.failed",
     }
 )
 

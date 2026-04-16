@@ -113,7 +113,10 @@ class TestExtractReasoning:
 
     def test_extracts_reasoning_line(self) -> None:
         content = "DECISION: accept\nREASONING: The response is comprehensive and addresses all requirements."
-        assert _extract_reasoning(content) == "The response is comprehensive and addresses all requirements."
+        assert (
+            _extract_reasoning(content)
+            == "The response is comprehensive and addresses all requirements."
+        )
 
     def test_returns_content_if_no_reasoning(self) -> None:
         content = "The agent completed the task successfully."
@@ -145,7 +148,9 @@ class TestEvaluateGoalCompletion:
 
         mock_model = AsyncMock()
         mock_model.ainvoke.return_value.type = "ai"
-        mock_model.ainvoke.return_value.content = "DECISION: accept\nREASONING: Response is comprehensive."
+        mock_model.ainvoke.return_value.content = (
+            "DECISION: accept\nREASONING: Response is comprehensive."
+        )
 
         decision, reasoning = await evaluate_goal_completion(
             goal_description="Write a report",
@@ -159,7 +164,9 @@ class TestEvaluateGoalCompletion:
 
         mock_model = AsyncMock()
         mock_model.ainvoke.return_value.type = "ai"
-        mock_model.ainvoke.return_value.content = "DECISION: send_back\nREASONING: Missing key analysis section."
+        mock_model.ainvoke.return_value.content = (
+            "DECISION: send_back\nREASONING: Missing key analysis section."
+        )
 
         decision, reasoning = await evaluate_goal_completion(
             goal_description="Write a report",
@@ -174,7 +181,9 @@ class TestEvaluateGoalCompletion:
 
         mock_model = AsyncMock()
         mock_model.ainvoke.return_value.type = "ai"
-        mock_model.ainvoke.return_value.content = "DECISION: suspend\nREASONING: Requires external data source."
+        mock_model.ainvoke.return_value.content = (
+            "DECISION: suspend\nREASONING: Requires external data source."
+        )
 
         decision, reasoning = await evaluate_goal_completion(
             goal_description="Analyze dataset",

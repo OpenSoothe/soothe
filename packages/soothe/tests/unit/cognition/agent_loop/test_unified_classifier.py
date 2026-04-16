@@ -151,7 +151,9 @@ class TestClassifyRouting:
     async def test_routing_llm_failure_returns_defaults(self) -> None:
         mock_model = MagicMock()
         mock_routing = MagicMock()
-        mock_routing.ainvoke = AsyncMock(side_effect=[Exception("LLM error"), Exception("LLM error")])
+        mock_routing.ainvoke = AsyncMock(
+            side_effect=[Exception("LLM error"), Exception("LLM error")]
+        )
         mock_model.with_structured_output = MagicMock(return_value=mock_routing)
 
         classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
@@ -251,7 +253,9 @@ class TestChitchatResponseGuarantee:
         mock_model = MagicMock()
         mock_routing = MagicMock()
         # LLM returns chitchat complexity but forgets response
-        mock_routing.ainvoke = AsyncMock(return_value=RoutingResult(task_complexity="chitchat", chitchat_response=None))
+        mock_routing.ainvoke = AsyncMock(
+            return_value=RoutingResult(task_complexity="chitchat", chitchat_response=None)
+        )
         mock_model.with_structured_output = MagicMock(return_value=mock_routing)
 
         classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")
@@ -266,7 +270,9 @@ class TestChitchatResponseGuarantee:
         """Chinese chitchat queries get Chinese responses when LLM omits."""
         mock_model = MagicMock()
         mock_routing = MagicMock()
-        mock_routing.ainvoke = AsyncMock(return_value=RoutingResult(task_complexity="chitchat", chitchat_response=None))
+        mock_routing.ainvoke = AsyncMock(
+            return_value=RoutingResult(task_complexity="chitchat", chitchat_response=None)
+        )
         mock_model.with_structured_output = MagicMock(return_value=mock_routing)
 
         classifier = UnifiedClassifier(fast_model=mock_model, classification_mode="llm")

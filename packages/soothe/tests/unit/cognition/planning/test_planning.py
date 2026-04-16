@@ -78,7 +78,9 @@ class TestLLMPlanner:
         context = PlanContext(
             available_capabilities=["tool1", "tool2"],
             completed_steps=[
-                StepResult(step_id="prev_step", success=True, outcome={"type": "generic", "size_bytes": 4})
+                StepResult(
+                    step_id="prev_step", success=True, outcome={"type": "generic", "size_bytes": 4}
+                )
             ],
         )
 
@@ -178,7 +180,12 @@ class TestLLMPlanner:
 
         step_results = [
             StepResult(step_id="S_1", success=True, outcome={"type": "generic", "size_bytes": 4}),
-            StepResult(step_id="S_2", success=False, outcome={"type": "error", "error": "failed"}, error="failed"),
+            StepResult(
+                step_id="S_2",
+                success=False,
+                outcome={"type": "error", "error": "failed"},
+                error="failed",
+            ),
         ]
 
         reflection = await planner.reflect(plan, step_results)
@@ -203,8 +210,18 @@ class TestLLMPlanner:
         )
 
         step_results = [
-            StepResult(step_id="S_1", success=False, outcome={"type": "error", "error": "failed"}, error="failed"),
-            StepResult(step_id="S_2", success=False, outcome={"type": "error", "error": "failed"}, error="failed"),
+            StepResult(
+                step_id="S_1",
+                success=False,
+                outcome={"type": "error", "error": "failed"},
+                error="failed",
+            ),
+            StepResult(
+                step_id="S_2",
+                success=False,
+                outcome={"type": "error", "error": "failed"},
+                error="failed",
+            ),
         ]
 
         reflection = await planner.reflect(plan, step_results)

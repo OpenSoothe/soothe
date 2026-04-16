@@ -60,7 +60,9 @@ class TestPGVectorStoreUnit:
 
             for method_name in required_methods:
                 assert hasattr(PGVectorStore, method_name), f"Missing method: {method_name}"
-                assert callable(getattr(PGVectorStore, method_name)), f"Method not callable: {method_name}"
+                assert callable(getattr(PGVectorStore, method_name)), (
+                    f"Method not callable: {method_name}"
+                )
 
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
@@ -345,7 +347,9 @@ class TestWeaviateVectorStoreUnit:
 
             for method_name in required_methods:
                 assert hasattr(WeaviateVectorStore, method_name), f"Missing method: {method_name}"
-                assert callable(getattr(WeaviateVectorStore, method_name)), f"Method not callable: {method_name}"
+                assert callable(getattr(WeaviateVectorStore, method_name)), (
+                    f"Method not callable: {method_name}"
+                )
 
         except ImportError:
             pytest.skip("weaviate dependencies not installed")

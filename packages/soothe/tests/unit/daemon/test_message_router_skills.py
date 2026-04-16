@@ -45,7 +45,9 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
     assert payload["request_id"] == "rid-skills"
     skills = payload.get("skills", [])
     assert isinstance(skills, list)
-    match = next((s for s in skills if isinstance(s, dict) and s.get("name") == "router_skill"), None)
+    match = next(
+        (s for s in skills if isinstance(s, dict) and s.get("name") == "router_skill"), None
+    )
     assert match is not None
     assert match.get("description")
     assert "path" not in match

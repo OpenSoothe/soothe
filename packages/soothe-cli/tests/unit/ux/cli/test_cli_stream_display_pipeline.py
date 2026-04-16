@@ -7,7 +7,6 @@ Tool formatters remain for subagent dispatch display.
 
 from __future__ import annotations
 
-
 from soothe_cli.cli.stream.context import PipelineContext
 from soothe_cli.cli.stream.display_line import DisplayLine, indent_for_level
 from soothe_cli.cli.stream.formatter import (
