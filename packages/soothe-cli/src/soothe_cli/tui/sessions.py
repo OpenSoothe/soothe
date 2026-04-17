@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, NotRequired, cast
 
-from soothe_sdk import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_HOME
 from typing_extensions import TypedDict
 
 if TYPE_CHECKING:

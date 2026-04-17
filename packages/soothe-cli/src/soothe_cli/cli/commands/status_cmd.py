@@ -80,7 +80,7 @@ def agent_list(
         sys.exit(0)
     except Exception as e:
         logger.exception("Agent list error")
-        from soothe_sdk import format_cli_error
+        from soothe_sdk.utils import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
@@ -115,7 +115,7 @@ def agent_status(
         typer.echo(f"\nTotal: {enabled_count}/{total_count} agents enabled")
     except Exception as e:
         logger.exception("Agent status error")
-        from soothe_sdk import format_cli_error
+        from soothe_sdk.utils import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)

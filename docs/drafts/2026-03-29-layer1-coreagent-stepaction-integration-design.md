@@ -902,7 +902,7 @@ await core_agent.astream(
 - Layer 1 handles **how to execute** (runtime decisions with hints as context)
 ```
 
-### 10.2 RFC-201 Updates
+### 10.2 RFC-200 Updates
 
 **Update Section**: "ACT Phase" to mention hint propagation
 
@@ -975,7 +975,7 @@ stream = await core_agent.astream(
 ### 11.5 Phase 5: Documentation & RFC (Day 3-4)
 
 - [ ] Update RFC-100 with integration contract
-- [ ] Update RFC-201 with hint propagation
+- [ ] Update RFC-200 with hint propagation
 - [ ] Create architecture diagrams
 - [ ] Update user guide
 - [ ] Run `./scripts/verify_finally.sh`
@@ -1005,7 +1005,7 @@ stream = await core_agent.astream(
 
 ✅ **Documentation Updated**:
 - RFC-100 updated with integration contract
-- RFC-201 updated with hint propagation
+- RFC-200 updated with hint propagation
 - Code comments reference RFCs
 - User guide updated
 
@@ -1030,7 +1030,7 @@ stream = await core_agent.astream(
 ## 14. Related Documents
 
 - [RFC-100](../specs/RFC-100-coreagent-runtime.md) - Layer 1 Specification
-- [RFC-201](../specs/RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
+- [RFC-200](../specs/RFC-200-agentic-goal-execution-loop.md) - Layer 2 Specification
 - [RFC-200](../specs/RFC-200-autonomous-goal-management-loop.md) - Layer 3 Specification
 - [IG-097](./IG-097-layer2-loopagent-implementation.md) - Layer 2 Implementation Guide
 

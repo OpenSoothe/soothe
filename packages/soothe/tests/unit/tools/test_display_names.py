@@ -38,7 +38,7 @@ def test_auto_conversion_edge_cases():
 
 def test_tool_decorator_auto_conversion():
     """Test @tool decorator uses auto-conversion."""
-    from soothe_sdk.decorators.tool import tool
+    from soothe_sdk.plugin import tool
 
     # Define a class to hold the tool
     class TestPlugin:
@@ -61,7 +61,7 @@ def test_tool_decorator_auto_conversion():
 
 def test_subagent_decorator_auto_conversion():
     """Test @subagent decorator uses auto-conversion."""
-    from soothe_sdk.decorators.subagent import subagent
+    from soothe_sdk.plugin import subagent
 
     # Define a class to hold the subagent
     class TestPlugin:

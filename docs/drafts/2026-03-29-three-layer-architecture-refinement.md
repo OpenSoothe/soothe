@@ -1,7 +1,7 @@
 # Three-Layer Architecture Refinement Proposal
 
 **Created**: 2026-03-29
-**Purpose**: Establish RFC-200 and RFC-201 as foundational documents for the three-layer architecture, merge RFC-200 (merged) into RFC-200, and address documentation gaps
+**Purpose**: Establish RFC-200 and RFC-200 as foundational documents for the three-layer architecture, merge RFC-200 (merged) into RFC-200, and address documentation gaps
 
 ---
 
@@ -9,8 +9,8 @@
 
 The current RFC architecture has evolved organically, resulting in:
 1. **RFC-200 (merged)** should be merged into **RFC-200** (both address Layer 3 goal management)
-2. **RFC-200** and **RFC-201** should be established as the foundational documents for the three-layer architecture
-3. **RFC-201** has major gaps between documented "intended architecture" and actual implementation
+2. **RFC-200** and **RFC-200** should be established as the foundational documents for the three-layer architecture
+3. **RFC-200** has major gaps between documented "intended architecture" and actual implementation
 4. **Layer relationships** are unclear across RFCs, causing architectural fragmentation
 
 ---
@@ -25,7 +25,7 @@ Layer 3: Autonomous Loop (RFC-200)
 ├─ Max iterations: Large (10-50+ for complex problems)
 └─ Foundation: Delegates to Layer 2 for single-goal execution (PERFORM stage)
 
-Layer 2: Agentic Loop (RFC-201)
+Layer 2: Agentic Loop (RFC-200)
 ├─ Purpose: Execute single goals through iterative refinement
 ├─ Loop: PLAN → ACT → JUDGE (max iterations: ~8)
 ├─ Scope: LLM-driven step planning, goal-oriented execution and evaluation
@@ -72,13 +72,13 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 **Solution**: Add "Architecture Position" section to RFC-200:
 - Define Layer 3 scope explicitly
-- Specify PERFORM stage delegates to RFC-201's full loop
+- Specify PERFORM stage delegates to RFC-200's full loop
 - Detail how Layer 2 JudgeResult informs Layer 3 REFLECT
 - Establish three-layer hierarchy diagram
 
-### Gap 3: RFC-201 Documents Scaffolding, Not Active Runtime
+### Gap 3: RFC-200 Documents Scaffolding, Not Active Runtime
 
-**Current State**: RFC-201 says "transitional implementation... observe → act → verify is active"
+**Current State**: RFC-200 says "transitional implementation... observe → act → verify is active"
 
 **Problem**:
 - Documents intended PLAN → ACT → JUDGE but implementation differs
@@ -87,7 +87,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 - JudgeResult exists but unused - uses heuristics instead
 - Unclear layer positioning (Layer 2 foundation for Layer 1)
 
-**Solution**: Fundamental RFC-201 redesign (major revision):
+**Solution**: Fundamental RFC-200 redesign (major revision):
 - Define Layer 2 architecture position explicitly
 - Redesign AgentDecision for multi-step execution decisions
 - Specify iteration-scoped PLAN phase (inside loop)
@@ -95,16 +95,16 @@ Layer 1: Tool Loop (deepagents/langchain)
 - Define clear "continue steps OR replan" iteration semantics
 - Establish Layer 2 → Layer 1 delegation model
 
-### Gap 4: RFC-202 Orthogonal to Layer 2
+### Gap 4: RFC-200 Orthogonal to Layer 2
 
-**Current State**: RFC-202 (DAG execution) treats steps as static predetermined plan
+**Current State**: RFC-200 (DAG execution) treats steps as static predetermined plan
 
 **Problem**:
 - Layer 2 expects dynamic step selection based on judgment
-- RFC-202 StepScheduler executes fixed DAG, not LLM-driven decisions
+- RFC-200 StepScheduler executes fixed DAG, not LLM-driven decisions
 - Creates architectural tension between static and dynamic execution models
 
-**Solution**: Clarify RFC-202 role:
+**Solution**: Clarify RFC-200 role:
 - DAG execution is a **tool** for Layer 2's ACT phase
 - Layer 2 LLM decides which steps to execute (dynamic selection)
 - StepScheduler provides dependency-safe execution when LLM chooses steps
@@ -115,12 +115,12 @@ Layer 1: Tool Loop (deepagents/langchain)
 **Current State**: RFCs mention relationships but don't establish hierarchy
 
 **Problem**:
-- RFC-200, RFC-201, RFC-202 all mention each other but don't define layer stack
+- RFC-200, RFC-200, RFC-200 all mention each other but don't define layer stack
 - No clear delegation models between layers
 - Implementation guides don't follow layer boundaries
 
 **Solution**: Establish layer foundations:
-- Add "Architecture Layer" metadata to RFC-200, RFC-201, RFC-202
+- Add "Architecture Layer" metadata to RFC-200, RFC-200, RFC-200
 - Update RFC-000 (System Conceptual Design) to define three-layer model
 - Create cross-reference section in each foundational RFC
 - Update RFC index with layer annotations
@@ -147,14 +147,14 @@ Layer 1: Tool Loop (deepagents/langchain)
 1. Add new §2 "Architecture Layer Position":
    - Define Layer 3 scope and responsibilities
    - Three-layer hierarchy diagram
-   - Delegation model: PERFORM → Layer 2 (RFC-201)
+   - Delegation model: PERFORM → Layer 2 (RFC-200)
    - Integration with Layer 2 JudgeResult
 2. Update abstract to emphasize Layer 3 role
 3. Update title: "Layer 3: Autonomous Goal Management Loop"
-4. Add cross-reference to RFC-201 as Layer 2 foundation
+4. Add cross-reference to RFC-200 as Layer 2 foundation
 5. Update RFC-000 principles section to mention three-layer architecture
 
-### Phase 3: Redesign RFC-201 as Layer 2 Foundation
+### Phase 3: Redesign RFC-200 as Layer 2 Foundation
 
 **Actions**:
 1. Add new §2 "Architecture Layer Position":
@@ -173,7 +173,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 4. Update abstract to emphasize Layer 2 role
 5. Update title: "Layer 2: Agentic Goal Execution Loop"
 
-### Phase 4: Clarify RFC-202 Role in Layer 2
+### Phase 4: Clarify RFC-200 Role in Layer 2
 
 **Actions**:
 1. Add §2.1 "Role in Layer 2 Architecture":
@@ -181,7 +181,7 @@ Layer 1: Tool Loop (deepagents/langchain)
    - Static vs dynamic step selection models
    - When StepScheduler is appropriate
 2. Update abstract to clarify complementary role
-3. Add cross-reference to RFC-201 Layer 2 positioning
+3. Add cross-reference to RFC-200 Layer 2 positioning
 
 ### Phase 5: Update RFC-000 and Cross-References
 
@@ -201,12 +201,12 @@ Layer 1: Tool Loop (deepagents/langchain)
 1. For each merged/redesigned RFC:
    - Update status from "Draft" to "Revised"
    - Add changelog entry documenting layer positioning
-   - Note implementation gaps (especially RFC-201)
+   - Note implementation gaps (especially RFC-200)
 2. Create implementation roadmap:
    - RFC-200: ✅ Already implemented (including RFC-200 (merged) content)
-   - RFC-201: ❌ Major implementation gaps (needs IG)
-   - RFC-202: ✅ Implemented but needs Layer 2 integration
-3. Prioritize RFC-201 implementation as critical
+   - RFC-200: ❌ Major implementation gaps (needs IG)
+   - RFC-200: ✅ Implemented but needs Layer 2 integration
+3. Prioritize RFC-200 implementation as critical
 
 ---
 
@@ -215,10 +215,10 @@ Layer 1: Tool Loop (deepagents/langchain)
 **RFC-200**: "Layer 3: Autonomous Goal Management Loop"
 - Emphasizes Layer 3 positioning and goal management scope
 
-**RFC-201**: "Layer 2: Agentic Goal Execution Loop"
+**RFC-200**: "Layer 2: Agentic Goal Execution Loop"
 - Emphasizes Layer 2 positioning and single-goal execution scope
 
-**RFC-202**: "DAG-Based Step Execution and Concurrency Control"
+**RFC-200**: "DAG-Based Step Execution and Concurrency Control"
 - Clarifies role as execution infrastructure (complementary to Layer 2)
 
 **RFC-200 (merged)**: DEPRECATED - Merged into RFC-200
@@ -227,9 +227,9 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 ## Expected Outcomes
 
-1. **Clear layer architecture**: RFC-200 (L3) and RFC-201 (L2) become foundational documents
+1. **Clear layer architecture**: RFC-200 (L3) and RFC-200 (L2) become foundational documents
 2. **Reduced complexity**: One RFC for Layer 3 (merged), one for Layer 2 (redesigned)
-3. **Better implementation alignment**: RFC-201 documents actual expected runtime
+3. **Better implementation alignment**: RFC-200 documents actual expected runtime
 4. **Clear delegation models**: Each layer explicitly delegates to lower layer
 5. **RFC index clarity**: Layer annotations and logical ordering
 
@@ -238,13 +238,13 @@ Layer 1: Tool Loop (deepagents/langchain)
 ## Implementation Gaps After Refinement
 
 ### RFC-200 (Layer 3): ✅ Already Implemented
-- GoalEngine with DAG scheduling (RFC-202)
+- GoalEngine with DAG scheduling (RFC-200)
 - Dynamic goal management (RFC-200 (merged) already in code)
 - Reflection with goal directives
 - Safety mechanisms and validation
-- **Gap**: Missing explicit Layer 2 delegation (PERFORM → RFC-201 loop)
+- **Gap**: Missing explicit Layer 2 delegation (PERFORM → RFC-200 loop)
 
-### RFC-201 (Layer 2): ❌ Major Implementation Required
+### RFC-200 (Layer 2): ❌ Major Implementation Required
 - AgentDecision redesign for multi-step execution
 - Iteration-scoped planning (PLAN inside loop)
 - Structured JudgeEngine integration
@@ -252,7 +252,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 - "Continue steps OR replan" iteration flow
 - **Requires**: New implementation guide (IG-XXX)
 
-### RFC-202 (Execution Infrastructure): ✅ Implemented
+### RFC-200 (Execution Infrastructure): ✅ Implemented
 - StepScheduler with DAG execution
 - ConcurrencyController with semaphores
 - Progressive recording
@@ -265,7 +265,7 @@ Layer 1: Tool Loop (deepagents/langchain)
 1. **Review this draft** with user for alignment
 2. **Execute Phase 1-6** refinement actions
 3. **Run `specs-refine`** to validate all changes
-4. **Create RFC-201 implementation guide** (priority)
+4. **Create RFC-200 implementation guide** (priority)
 5. **Update implementation** to match refined specs
 6. **Run `review`** for compliance verification
 
@@ -275,18 +275,18 @@ Layer 1: Tool Loop (deepagents/langchain)
 
 1. Does the three-layer architecture model match your expectations?
 2. Should we proceed with merging RFC-200 (merged) into RFC-200?
-3. Should RFC-201 undergo fundamental redesign to match Layer 2 expectations?
+3. Should RFC-200 undergo fundamental redesign to match Layer 2 expectations?
 4. Are the layer positioning and delegation models correct?
-5. Should we prioritize RFC-201 implementation after refinement?
+5. Should we prioritize RFC-200 implementation after refinement?
 
 ---
 
 ## References
 
 - RFC-200: Autonomous Iteration Loop (current)
-- RFC-201: Agentic Loop Execution (current)
+- RFC-200: Agentic Loop Execution (current)
 - RFC-200 (merged): Dynamic Goal Management (to merge)
-- RFC-202: DAG-Based Execution
+- RFC-200: DAG-Based Execution
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture
 - User expectations discussion (2026-03-29)

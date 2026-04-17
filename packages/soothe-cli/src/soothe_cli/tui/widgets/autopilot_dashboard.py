@@ -14,8 +14,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from soothe_sdk import SOOTHE_HOME
-from soothe_sdk.protocol import preview_first
+from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.client.protocol import preview_first
 from textual.containers import Container, ScrollableContainer
 from textual.reactive import reactive
 from textual.widgets import Static
@@ -288,7 +288,7 @@ class AutopilotApp:
                 pass
 
         # Fallback: parse goal files
-        from soothe_sdk import parse_autopilot_goals
+        from soothe_sdk.utils import parse_autopilot_goals
 
         goals.extend(parse_autopilot_goals(autopilot_dir))
         return goals
@@ -303,6 +303,6 @@ def _parse_autopilot_files(autopilot_dir: Path) -> list[dict]:
     Returns:
         List of goal info dicts.
     """
-    from soothe_sdk import parse_autopilot_goals
+    from soothe_sdk.utils import parse_autopilot_goals
 
     return parse_autopilot_goals(autopilot_dir)

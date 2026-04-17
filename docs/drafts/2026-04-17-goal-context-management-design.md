@@ -3,7 +3,7 @@
 **Date**: 2026-04-17  
 **Status**: Draft  
 **Scope**: AgentLoop context management for Plan-Execute loops  
-**Related**: RFC-201 (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle)
+**Related**: RFC-200 (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle)
 
 ## Abstract
 
@@ -530,7 +530,7 @@ def get_execute_briefing(self, limit: int = 10) -> str | None:
 
 ## References
 
-- RFC-201: Agentic Goal Execution Loop
+- RFC-200: Agentic Goal Execution Loop
 - RFC-608: AgentLoop Multi-Thread Infinite Lifecycle
-- RFC-205: Layer 2 Unified State Model
+- RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)

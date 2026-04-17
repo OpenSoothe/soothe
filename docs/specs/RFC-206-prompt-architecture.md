@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-04-08  
-**Dependencies**: RFC-201, RFC-100
+**Dependencies**: RFC-200, RFC-100
 
 ## Abstract
 
@@ -333,7 +333,7 @@ class LLMPlanner:
 
 ## Related Specifications
 
-- **RFC-201**: Layer 2 Agentic Goal Execution
+- **RFC-200**: Layer 2 Agentic Goal Execution
 - **RFC-100**: Layer 1 CoreAgent Runtime
 - **IG-133**: Avoid prior conversation duplication in Reason prompts
 - **IG-134**: Layer 2 unified state checkpoint

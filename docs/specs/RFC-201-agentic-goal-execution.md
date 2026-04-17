@@ -1,4 +1,4 @@
-# RFC-201: Layer 2 - Agentic Goal Execution Loop
+# RFC-200: Layer 2 - Agentic Goal Execution Loop
 
 **RFC**: 0008
 **Title**: Layer 2: Agentic Goal Execution Loop
@@ -107,7 +107,7 @@ result = await planner.plan(goal, state, context, previous_plan)
 
 ```python
 if execution_mode == "parallel":
-    # RFC-209: All steps use parent thread_id (langgraph handles concurrency)
+    # RFC-207: All steps use parent thread_id (langgraph handles concurrency)
     results = await asyncio.gather([execute_step(step, thread_id=tid) for step in steps])
 elif execution_mode == "sequential":
     combined_input = build_sequential_input(steps)
@@ -116,13 +116,13 @@ elif execution_mode == "dependency":
     results = await execute_dag_steps(scheduler, core_agent, thread_id)
 ```
 
-**Context Isolation** (simplified by RFC-209):
+**Context Isolation** (simplified by RFC-207):
 - **Subagent steps**: task tool creates isolated thread branches automatically (`{thread_id}__task_{uuid}` internally)
 - **Tool-only steps**: Use parent thread context (langgraph handles concurrent execution safely)
 - **No manual thread ID generation**: executor passes parent thread_id to CoreAgent for all executions
 - **Thread safety**: langgraph's atomic state updates and message queue prevent conflicts
 
-**Note**: RFC-209 simplifies thread isolation by removing manual thread ID generation and leveraging langgraph's built-in concurrency handling and task tool automatic isolation. This reduces implementation complexity while maintaining thread safety guarantees.
+**Note**: RFC-207 simplifies thread isolation by removing manual thread ID generation and leveraging langgraph's built-in concurrency handling and task tool automatic isolation. This reduces implementation complexity while maintaining thread safety guarantees.
 
 **Execution Bounds**: Two-layer constraint prevents runaway subagent loops. Soft constraint: schema/prompt defines "one delegation = one call; retry = explicit second step". Hard constraint: `max_subagent_tasks_per_wave` cap (default 2) stops stream early. Cap hit signals metrics to Reason for replan/continue decision.
 
@@ -234,7 +234,7 @@ agentic:
 
 **Solution**: Thread isolation for delegation steps. Subagent sees only explicit task input, no prior wave outputs or conversation history.
 
-**Mechanism** (simplified by RFC-209): task tool automatically creates isolated thread branch (`{thread_id}__task_{uuid}` internally) for subagent delegations. Tool executions use parent thread_id with langgraph's concurrent safety.
+**Mechanism** (simplified by RFC-207): task tool automatically creates isolated thread branch (`{thread_id}__task_{uuid}` internally) for subagent delegations. Tool executions use parent thread_id with langgraph's concurrent safety.
 
 ### Output Duplication Prevention
 
@@ -312,7 +312,7 @@ agentic:
 - RFC-001: Core modules architecture
 - RFC-200: Layer 3 autonomous goal management
 - RFC-100: Layer 1 CoreAgent runtime
-- RFC-209: Executor thread isolation simplification (upcoming refactoring)
+- RFC-207: Executor thread isolation simplification (upcoming refactoring)
 - RFC-203: Loop working memory
 - IG-115: AgentLoop Plan-and-Execute migration (originally "ReAct", renamed in IG-153)
 - IG-130: Subagent task cap tracking

@@ -5,7 +5,7 @@ This plugin provides shell and Python execution capabilities.
 
 from typing import Any
 
-from soothe_sdk import plugin
+from soothe_sdk.plugin import plugin
 
 from soothe.config.constants import DEFAULT_EXECUTE_TIMEOUT
 

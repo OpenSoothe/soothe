@@ -13,9 +13,9 @@ Implement unified goal-level context management for AgentLoop following RFC-609.
 ## Dependencies
 
 - RFC-609 (this implementation)
-- RFC-201 (Agentic Goal Execution)
+- RFC-200 (Agentic Goal Execution)
 - RFC-608 (Multi-Thread Lifecycle)
-- RFC-205 (Layer 2 Unified State Model)
+- RFC-203 (Layer 2 Unified State Model)
 
 ## Implementation Scope
 
@@ -277,5 +277,5 @@ No data migration, no breaking changes - safe to enable/disable at any time.
 - RFC-609: Goal Context Management specification
 - Design draft: docs/drafts/2026-04-17-goal-context-management-design.md
 - RFC-608: Multi-Thread Lifecycle (thread_switch_pending integration)
-- RFC-201: Agentic Goal Execution (AgentLoop integration)
+- RFC-200: Agentic Goal Execution (AgentLoop integration)
 - CoreAgent briefing pattern (soothe_goal_briefing mechanism)

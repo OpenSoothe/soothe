@@ -5,7 +5,7 @@ This package provides Claude Code agent capabilities via the claude-agent-sdk.
 
 from typing import Any
 
-from soothe_sdk import plugin, subagent
+from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import create_claude_subagent as _create_claude_subagent
 

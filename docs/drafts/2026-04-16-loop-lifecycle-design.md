@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-16
 **Status**: Draft
-**Depends on**: RFC-205 (Layer 2 Unified State Model and Independent Checkpoint), RFC-201 (Agentic Goal Execution)
+**Depends on**: RFC-203 (Layer 2 Unified State Model and Independent Checkpoint), RFC-200 (Agentic Goal Execution)
 
 ## Problem Statement
 
@@ -588,7 +588,7 @@ def _should_switch_thread(
 
 **Trigger**: Loop checkpoint status = `running`
 
-**Process** (existing RFC-201 logic, unchanged):
+**Process** (existing RFC-200 logic, unchanged):
 - Plan phase: Generate PlanResult (status, decision, steps)
 - Execute phase: Execute steps via Layer 1 CoreAgent
 - Record iteration: Append ReasonStepRecord to `goal_record.reason_history`, ActWaveRecord to `goal_record.act_history`
@@ -1750,8 +1750,8 @@ SOOTHE_HOME/
 
 ## Related Documents
 
-- **RFC-205**: Layer 2 Unified State Model and Independent Checkpoint
-- **RFC-201**: Agentic Goal Execution Loop
+- **RFC-203**: Layer 2 Unified State Model and Independent Checkpoint
+- **RFC-200**: Agentic Goal Execution Loop
 - **RFC-203**: Loop Working Memory
 - **RFC-002**: MemoryProtocol (Cross-thread long-term memory)
 - **RFC-103**: VectorStoreProtocol

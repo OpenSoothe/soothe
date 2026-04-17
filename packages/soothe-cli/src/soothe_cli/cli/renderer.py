@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk import get_tool_display_name
+from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.cli.stream import DisplayLine, StreamDisplayPipeline
@@ -23,7 +23,7 @@ from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.suppression_state import SuppressionState
 
 if TYPE_CHECKING:
-    from soothe_sdk import Plan
+    from soothe_sdk.client.schemas import Plan
 
 
 @dataclass

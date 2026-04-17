@@ -3,7 +3,7 @@
 **Status**: Draft
 **Created**: 2026-04-03
 **Author**: Design session via Platonic Brainstorming
-**Related**: RFC-200 (Layer 3), RFC-201 (Layer 2), RFC-202 (DAG Execution)
+**Related**: RFC-200 (Layer 3), RFC-200 (Layer 2), RFC-200 (DAG Execution)
 
 ---
 
@@ -681,7 +681,7 @@ All three tools added to `create_layer2_tools()` return list.
 ## 11. References
 
 - RFC-200: Layer 3 Autonomous Goal Management
-- RFC-201: Layer 2 Agentic Goal Execution
-- RFC-202: DAG Execution & Failure Recovery
+- RFC-200: Layer 2 Agentic Goal Execution
+- RFC-200: DAG Execution & Failure Recovery
 - RFC-400: Daemon Communication Protocol
 - RFC-500: CLI TUI Architecture

@@ -1,4 +1,4 @@
-# RFC-209: Executor Thread Isolation Simplification
+# RFC-207: Executor Thread Isolation Simplification
 
 **RFC**: 209
 **Title**: Layer 2 Executor Thread Isolation Simplification
@@ -6,7 +6,7 @@
 **Kind**: Architecture Refactoring
 **Created**: 2026-04-09
 **Updated**: 2026-04-09
-**Dependencies**: RFC-201, RFC-100, RFC-001
+**Dependencies**: RFC-200, RFC-100, RFC-001
 
 ## Abstract
 
@@ -21,7 +21,7 @@ The executor in `src/soothe/cognition/agent_loop/executor.py` manually manages t
 1. **Manual Thread ID Generation**: Creates isolated thread IDs for subagent steps and parallel tool executions
 2. **Manual Merge Logic**: `_merge_isolated_act_into_parent_thread()` combines isolated thread messages back to parent
 3. **Mixed Strategy**: Different isolation strategies for subagent vs tool-only steps
-4. **Documentation Confusion**: RFC-201 states "isolation is automatic" but implementation is manual
+4. **Documentation Confusion**: RFC-200 states "isolation is automatic" but implementation is manual
 
 ### Key Observation
 
@@ -167,7 +167,7 @@ Executor should not manage thread IDs.
 - Lower memory footprint
 
 **Documentation Alignment**:
-- RFC-201 "automatic isolation" becomes accurate
+- RFC-200 "automatic isolation" becomes accurate
 - Implementation matches specification
 
 ### Risks
@@ -186,10 +186,10 @@ Executor should not manage thread IDs.
 
 ## Related Documents
 
-- RFC-201: Layer 2 Agentic Goal Execution (main spec)
+- RFC-200: Layer 2 Agentic Goal Execution (main spec)
 - RFC-100: Layer 1 CoreAgent Runtime
 - RFC-001: Core Modules Architecture
-- RFC-208: CoreAgent Message Optimization (similar simplification)
+- RFC-207: CoreAgent Message Optimization (similar simplification)
 - Design Draft: `docs/drafts/2026-04-09-thread-isolation-simplification-design.md`
 
 ## Implementation Guide
@@ -220,5 +220,5 @@ Create IG-NNN for this refactoring:
 
 ---
 
-**Status**: Draft - Pending `specs-refine` integration with RFC-201
+**Status**: Draft - Pending `specs-refine` integration with RFC-200
 **Next**: Run specs-refine to validate and integrate

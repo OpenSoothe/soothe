@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-13
-**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-204, RFC-402
+**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-203, RFC-402
 **Related**: RFC-600
 
 ## Abstract
@@ -184,7 +184,7 @@ Delete from `src/soothe/ux/tui/`:
 Keep from `src/soothe/ux/tui/`:
 | File | Purpose |
 |------|---------|
-| `autopilot_screen.py` | Autopilot dashboard screen (RFC-204) |
+| `autopilot_screen.py` | Autopilot dashboard screen (RFC-203) |
 | `autopilot_dashboard.py` | Autopilot widgets (GoalProgressWidget, ExecutionQueueWidget) |
 | `__init__.py` | Module init (needs update for new imports) |
 
@@ -813,7 +813,7 @@ def action_edit_tags(self):
 
 ### Autopilot Screen Mode
 
-**Purpose**: Preserve Soothe's autopilot dashboard (RFC-204) as alternate screen in deepagents TUI.
+**Purpose**: Preserve Soothe's autopilot dashboard (RFC-203) as alternate screen in deepagents TUI.
 
 **Files**:
 - Keep: `src/soothe/ux/tui/autopilot_screen.py`
@@ -907,7 +907,7 @@ async def stream_autopilot_events(self) -> AsyncIterator[Tuple]:
     """Stream autopilot-specific events.
 
     Used by: AutopilotScreen instead of chat message stream
-    Source: SootheRunner in autopilot mode (RFC-204)
+    Source: SootheRunner in autopilot mode (RFC-203)
     """
     async for namespace, mode, data in self.daemon_client.receive_events():
         event_type = data.get("type", "")
@@ -1271,7 +1271,7 @@ self.command_registry.register("/detach", self.action_detach)
 - **RFC-400**: Daemon Communication Protocol
 - **RFC-500**: CLI TUI Architecture (current)
 - **RFC-501**: VerbosityTier Unification
-- **RFC-204**: Autopilot Mode
+- **RFC-203**: Autopilot Mode
 - **RFC-402**: Unified Thread Management
 - **RFC-600**: Plugin Extension System
 - **deepagents-cli source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/`

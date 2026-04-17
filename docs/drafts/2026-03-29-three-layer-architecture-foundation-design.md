@@ -30,7 +30,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Agentic Goal Execution (RFC-201 - redesigned)      │
+│ Layer 2: Agentic Goal Execution (RFC-200 - redesigned)      │
 │                                                                │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: PLAN → ACT → JUDGE (max iterations: ~8)              │
@@ -178,7 +178,7 @@ async def reflect_on_goal(goal: Goal, judge_result: JudgeResult) -> Reflection:
 
 ### 3.1 Architecture Position
 
-**RFC**: RFC-201 (fundamental redesign)
+**RFC**: RFC-200 (fundamental redesign)
 **Title**: "Layer 2: Agentic Goal Execution Loop"
 **Status**: Layer 2 foundation for single-goal execution
 
@@ -349,7 +349,7 @@ async def act_phase(
         results = await collect_stream_results(result_stream)
 
     elif decision.execution_mode == "dependency":
-        # Use StepScheduler for DAG-based execution (RFC-202)
+        # Use StepScheduler for DAG-based execution (RFC-200)
         scheduler = StepScheduler(decision.steps)
         results = await execute_dag_steps(scheduler, core_agent, thread_id)
 
@@ -646,7 +646,7 @@ Layer 3: Goal DAG Management
 
 **Status**: Architecture revision (Draft → Revised)
 
-### 6.2 RFC-201 (Layer 2) - Fundamental Redesign
+### 6.2 RFC-200 (Layer 2) - Fundamental Redesign
 
 **Changes**:
 - Add §2 "Architecture Layer Position": Three-layer hierarchy, Layer 2 scope
@@ -686,7 +686,7 @@ Layer 3: Goal DAG Management
 - Add Principle 11: "Three-layer execution architecture"
 - Define layer hierarchy and delegation model
 - Update architecture diagram to show three-layer model
-- Reference RFC-200, RFC-201, RFC-00XX as foundational documents
+- Reference RFC-200, RFC-200, RFC-00XX as foundational documents
 
 **Status**: Architecture update (Draft → Revised)
 
@@ -710,7 +710,7 @@ Layer 3: Goal DAG Management
 - **Gap**: Missing explicit Layer 2 delegation (PERFORM → Layer 2 loop)
 - **Action**: Add Layer 2 invocation in PERFORM stage
 
-**Layer 2 (RFC-201)**: ❌ **Major Implementation Gaps**
+**Layer 2 (RFC-200)**: ❌ **Major Implementation Gaps**
 - Current implementation: observe → act → verify (not PLAN → ACT → JUDGE)
 - AgentDecision: Single tool model (not hybrid multi-step)
 - Planning: Happens before loop (not iteration-scoped)
@@ -732,7 +732,7 @@ Layer 3: Goal DAG Management
 **Phase 1: RFC Documentation** (Week 1-2)
 1. Merge RFC-200 (merged) into RFC-200
 2. Revise RFC-200 with Layer 3 positioning
-3. Fundamental redesign of RFC-201 (Layer 2)
+3. Fundamental redesign of RFC-200 (Layer 2)
 4. Create RFC-00XX (Layer 1 CoreAgent)
 5. Update RFC-000 with three-layer model
 6. Run `specs-refine` for validation
@@ -743,7 +743,7 @@ Layer 3: Goal DAG Management
 3. Add Layer 1 integration tests
 
 **Phase 3: Layer 2 Implementation** (Week 3-5) - **CRITICAL**
-1. Create IG for RFC-201 implementation
+1. Create IG for RFC-200 implementation
 2. Redesign AgentDecision schema
 3. Implement iteration-scoped planning
 4. Implement goal-directed judgment (JudgeEngine)
@@ -811,8 +811,8 @@ This design does not address:
 2. **Middleware implementation details**: Referenced from RFC-001 and deepagents documentation
 3. **LangGraph internals**: Layer 1 uses LangGraph as-is (RFC-000 Principle 2)
 4. **Protocol implementation details**: Referenced from RFC-001 (Context, Memory, Policy, Planner, Durability)
-5. **Concurrency policy details**: Referenced from RFC-202 (ConcurrencyController, StepScheduler)
-6. **Event system details**: Referenced from RFC-401, RFC-401
+5. **Concurrency policy details**: Referenced from RFC-200 (ConcurrencyController, StepScheduler)
+6. **Event system details**: Referenced from RFC-400, RFC-400
 7. **Plugin system details**: Referenced from RFC-600
 
 ---
@@ -824,19 +824,19 @@ This design does not address:
 - RFC-001: Core Modules Architecture
 - RFC-500: CLI TUI Architecture
 - RFC-200: Autonomous Iteration Loop (Layer 3 - revised)
-- RFC-201: Agentic Goal Execution Loop (Layer 2 - redesigned)
+- RFC-200: Agentic Goal Execution Loop (Layer 2 - redesigned)
 - RFC-00XX: CoreAgent Runtime Architecture (Layer 1 - new)
 
 ### Component RFCs
 - RFC-601: Skillify Agent Architecture
 - RFC-601: Weaver Agent Architecture
-- RFC-202: DAG-Based Execution and Unified Concurrency
-- RFC-202: Failure Recovery Persistence
+- RFC-200: DAG-Based Execution and Unified Concurrency
+- RFC-200: Failure Recovery Persistence
 - RFC-102: Secure Filesystem Policy
-- RFC-401: Progress Event Protocol
+- RFC-400: Progress Event Protocol
 - RFC-101: Tool Interface Optimization
 - RFC-600: Plugin Extension System
-- RFC-401: Unified Event Processing
+- RFC-400: Unified Event Processing
 - RFC-601: Research Subagent
 
 ### Merged RFCs

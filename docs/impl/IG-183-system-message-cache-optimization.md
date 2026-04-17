@@ -2,7 +2,7 @@
 
 **Status**: ✅ Completed
 **Created**: 2026-04-17
-**Dependencies**: RFC-207, RFC-201, RFC-604
+**Dependencies**: RFC-207, RFC-200, RFC-604
 **Verification**: All tests passed (1291 passed, 3 skipped, 1 xfailed)
 
 ---
@@ -31,7 +31,7 @@ This IG implements comprehensive system message optimization for prompt caching 
 ### Problem 2: Architecture Misalignment
 
 **Terminology incorrect**:
-- Code used "ReAct loop" but actual architecture is "Plan-Execute loop" (RFC-201)
+- Code used "ReAct loop" but actual architecture is "Plan-Execute loop" (RFC-200)
 - Misleading mental model for LLM and developers
 
 ### Problem 3: Volatile Cache-Breaking Content
@@ -110,7 +110,7 @@ This IG implements comprehensive system message optimization for prompt caching 
 | `config/models.py` | "Act wave" → "Execute wave" |
 | `config/config.yml` | "Act phase" → "Execute phase" |
 
-**Result**: Consistent terminology aligned with RFC-201 architecture
+**Result**: Consistent terminology aligned with RFC-200 architecture
 
 ### Phase 4: XML Cache Optimization
 
@@ -516,7 +516,7 @@ Verification: All tests passed (1291 passed, 3 skipped, 1 xfailed)
 
 ## References
 
-- **RFC-201**: Agentic Goal Execution (Plan-Execute loop definition)
+- **RFC-200**: Agentic Goal Execution (Plan-Execute loop definition)
 - **RFC-604**: Plan Phase Robustness (two-phase architecture)
 - **RFC-603**: Reasoning Quality & Progressive Actions
 - **RFC-207**: SystemMessage/HumanMessage separation

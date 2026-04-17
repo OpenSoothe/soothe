@@ -1,29 +1,35 @@
 """Framework-wide base primitives for Soothe.
 
-Includes former ``core.foundation`` types, assistant text helpers (daemon/UX),
+Includes former `core.foundation` types, assistant text helpers (daemon/UX),
 and slash-command dispatch (daemon/TUI).
 
-Note: Event types, verbosity, and internal helpers are now imported from soothe_sdk (v0.2.0).
+Note: Event types, verbosity, and internal helpers are now imported from soothe_sdk (v0.4.0).
 """
 
-from soothe_sdk import (
-    INTERNAL_JSON_KEYS,
-    INVALID_WORKSPACE_DIRS,
+from soothe_sdk.client import VerbosityLevel
+from soothe_sdk.events import (
     ErrorEvent,
     LifecycleEvent,
     OutputEvent,
-    ProgressCategory,
     ProtocolEvent,
     SootheEvent,
     SubagentEvent,
-    VerbosityLevel,
-    VerbosityTier,
+)
+from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
+from soothe_sdk.ux import (
+    INTERNAL_JSON_KEYS,
     classify_event_to_tier,
-    should_show,
     strip_internal_tags,
+)
+from soothe_sdk.verbosity import (
+    VerbosityTier,
+    should_show,
 )
 
 from soothe.foundation.ai_message import extract_text_from_ai_message
+
+# Backward compatibility alias
+ProgressCategory = VerbosityTier
 
 __all__ = [
     "INTERNAL_JSON_KEYS",

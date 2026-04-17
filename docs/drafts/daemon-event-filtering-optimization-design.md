@@ -16,7 +16,7 @@
 Backend Events → EventBus.publish(topic) → ClientSession.event_queue → sender_loop → Transport → Client
 ```
 
-**Client-Side Filtering (RFC-401)**:
+**Client-Side Filtering (RFC-400)**:
 - Clients subscribe to threads via `subscribe_thread` message
 - All backend events are emitted to subscribed clients
 - Clients use `DisplayPolicy` + `EventProcessor` to filter events based on verbosity
@@ -78,7 +78,7 @@ Backend Events → EventBus.publish(topic) → ClientSession.event_queue → sen
 ### Non-Goals
 
 - **Not replacing client filtering**: Client-side `DisplayPolicy` remains for edge cases
-- **Not changing event taxonomy**: RFC-401 event classification unchanged
+- **Not changing event taxonomy**: RFC-400 event classification unchanged
 - **Not implementing complex query language**: Simple verbosity-based filtering only
 
 ---
@@ -104,7 +104,7 @@ Backend Events → EventBus.publish(topic) → ClientSession.event_queue → sen
 - Add `verbosity` field to `ClientSession` (per-client preference)
 - Modify `EventBus.publish()` to accept event metadata (verbosity classification)
 - Filter events at `ClientSessionManager._sender_loop()` before enqueueing
-- Use RFC-401 `EventRegistry.get_verbosity()` to classify events
+- Use RFC-400 `EventRegistry.get_verbosity()` to classify events
 
 **Event Filtering Logic**:
 ```python
@@ -118,7 +118,7 @@ async def _filter_and_enqueue(self, session: ClientSession, event: dict) -> bool
     etype = event.get("type", "")
     event_verbosity = self._event_registry.get_verbosity(etype)
 
-    # Use RFC-401 should_show logic
+    # Use RFC-400 should_show logic
     if not should_show(event_verbosity, session.verbosity):
         return False  # Filter out
 
@@ -130,8 +130,8 @@ async def _filter_and_enqueue(self, session: ClientSession, event: dict) -> bool
 **Pros**:
 - ✅ Minimal protocol change (add optional field)
 - ✅ Backward compatible (default verbosity='normal')
-- ✅ Clear semantics (verbosity maps to RFC-401 categories)
-- ✅ Easy to implement (reuse RFC-401 logic)
+- ✅ Clear semantics (verbosity maps to RFC-400 categories)
+- ✅ Easy to implement (reuse RFC-400 logic)
 - ✅ Significant performance gain (70% reduction estimated)
 
 **Cons**:
@@ -209,7 +209,7 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 - ✅ Coarse filtering at daemon (domain-based)
 - ✅ Simple protocol (list of domains)
 - ✅ Backward compatible (default: all domains)
-- ✅ Structural classification (RFC-401 domain taxonomy)
+- ✅ Structural classification (RFC-400 domain taxonomy)
 
 **Cons**:
 - ❌ Still transfers unwanted events within domain (e.g., debug-level protocol events)
@@ -236,9 +236,9 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 **Default Verbosity**: 'normal' (backward compatible with existing clients)
 
 **Event Classification**:
-- Use RFC-401 `EventRegistry.get_verbosity(event_type)` to map events to verbosity categories
+- Use RFC-400 `EventRegistry.get_verbosity(event_type)` to map events to verbosity categories
 - Categories: assistant_text, protocol, tool_activity, subagent_progress, subagent_custom, error
-- Map verbosity levels to categories via `should_show(category, verbosity)` (RFC-401)
+- Map verbosity levels to categories via `should_show(category, verbosity)` (RFC-400)
 
 **Implementation Changes**:
 
@@ -501,7 +501,7 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 **Rejected**:
 - Too complex for primary use case
 - Client burden (must know taxonomy)
-- Verbosity simpler and aligns with RFC-401
+- Verbosity simpler and aligns with RFC-400
 
 ---
 
@@ -512,7 +512,7 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 **Risk**: Some events not classified in `EventRegistry`
 
 **Mitigation**:
-- RFC-401 ensures all events classified
+- RFC-400 ensures all events classified
 - Fallback: unclassified events default to 'protocol' category
 - Test coverage: verify classification completeness
 
@@ -521,7 +521,7 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 **Risk**: Client and daemon verbosity semantics differ
 
 **Mitigation**:
-- Use RFC-401 `should_show()` logic at both sides
+- Use RFC-400 `should_show()` logic at both sides
 - Shared classification logic (same function)
 - Test alignment: verify daemon/client filtering match
 
@@ -554,7 +554,7 @@ Backend Event → EventBus → Domain Filter (daemon) → Transport → Client �
 - ✅ Backward compatible
 - ✅ Clear semantics (verbosity categories)
 - ✅ Significant performance gain (60-70% reduction)
-- ✅ Easy to implement (reuse RFC-401 logic)
+- ✅ Easy to implement (reuse RFC-400 logic)
 
 **Enhancements**:
 - Dynamic verbosity change (Week 2)

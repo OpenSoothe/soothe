@@ -11,7 +11,7 @@ scope: Layer 1/Layer 2 message flow optimization
 **Date**: 2026-04-10
 **Author**: Platonic Brainstorming
 **Status**: Draft
-**Target**: RFC-201 (Layer 2 Agentic Goal Execution), RFC-100 (Layer 1 CoreAgent Runtime)
+**Target**: RFC-200 (Layer 2 Agentic Goal Execution), RFC-100 (Layer 1 CoreAgent Runtime)
 
 ## Problem Statement
 
@@ -1117,9 +1117,9 @@ execution:
 
 ## RFC Alignment
 
-- **RFC-201**: Layer 2 Agentic Goal Execution (message handling update)
+- **RFC-200**: Layer 2 Agentic Goal Execution (message handling update)
 - **RFC-100**: Layer 1 CoreAgent Runtime (final report generation)
-- **RFC-205**: Layer 2 Checkpoint (metadata-only storage)
+- **RFC-203**: Layer 2 Checkpoint (metadata-only storage)
 - **RFC-207**: Message Type Separation (outcome metadata structure)
 
 ## Future Enhancements

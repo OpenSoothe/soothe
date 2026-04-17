@@ -11,7 +11,9 @@ import json
 import re
 from typing import Any
 
-from soothe_sdk.internal import strip_internal_tags  # noqa: F401 — re-exported via shared.__init__
+from soothe_sdk.ux.internal import (
+    strip_internal_tags,  # noqa: F401 — re-exported via shared.__init__
+)
 
 # ============================================================================
 # Shared Tool Call Streaming Helpers (IG-053)
@@ -295,7 +297,7 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         >>> format_tool_call_args("read_file", {"args": {}, "_raw": '{"path": "file.txt"}'})
         'file.txt'
     """
-    from soothe_sdk import convert_and_abbreviate_path, is_path_argument
+    from soothe_sdk.utils import convert_and_abbreviate_path, is_path_argument
 
     max_value_length = 40  # Max length for displayed values
 

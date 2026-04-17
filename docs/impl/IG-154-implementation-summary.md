@@ -94,7 +94,7 @@ GoalEngine: _execute_autonomous_goal()
   → planner.reflect(agentloop_result) ✅ GoalEngine uses AgentLoop judgment
 ```
 
-**Fixed**: GoalEngine properly delegates to AgentLoop for single-goal execution, maintaining clean architectural boundaries as specified in RFC-200 and RFC-201.
+**Fixed**: GoalEngine properly delegates to AgentLoop for single-goal execution, maintaining clean architectural boundaries as specified in RFC-200 and RFC-200.
 
 ---
 

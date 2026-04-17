@@ -6,7 +6,7 @@ information sources. Converted from tool to subagent following RFC-0021.
 
 from typing import Any
 
-from soothe_sdk import plugin, subagent
+from soothe_sdk.plugin import plugin, subagent
 
 from .events import (
     SUBAGENT_RESEARCH_ANALYZE,

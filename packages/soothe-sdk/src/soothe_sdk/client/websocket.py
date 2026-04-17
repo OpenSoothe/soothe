@@ -12,7 +12,7 @@ from typing import Any, Literal
 import websockets.asyncio.client
 import websockets.exceptions
 
-from soothe_sdk.protocol import decode, encode
+from soothe_sdk.client.protocol import decode, encode
 
 # Type alias for verbosity levels (RFC-0015, RFC-0022)
 VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]

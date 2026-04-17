@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from soothe_sdk.protocol import preview_first
+from soothe_sdk.client.protocol import preview_first
 
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
 
@@ -55,7 +55,7 @@ def submit(
     """
     from datetime import UTC, datetime
 
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
@@ -72,7 +72,7 @@ def submit(
 @app.command("status")
 def status() -> None:
     """Show overall autopilot state."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     autopilot_dir = SOOTHE_HOME / "autopilot"
     state_file = autopilot_dir / "status.json"
@@ -106,7 +106,7 @@ def list_goals(
     status_filter: str = typer.Option("", "--status", "-s", help="Filter by status."),
 ) -> None:
     """List all goals."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     autopilot_dir = SOOTHE_HOME / "autopilot"
     goals = _discover_goals(autopilot_dir)
@@ -130,7 +130,7 @@ def show_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to show details for."),
 ) -> None:
     """Show details for a specific goal."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     autopilot_dir = SOOTHE_HOME / "autopilot"
     goals = _discover_goals(autopilot_dir)
@@ -160,7 +160,7 @@ def cancel_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to cancel."),
 ) -> None:
     """Cancel a goal (remove from inbox if pending)."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
     if not inbox_dir.exists():
@@ -190,7 +190,7 @@ def approve_goal(
     """Approve a MUST-confirmation goal."""
     import json
 
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
     if not confirmations_file.exists():
@@ -223,7 +223,7 @@ def reject_goal(
     """Reject a proposed goal."""
     import json
 
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     confirmations_file = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
     if not confirmations_file.exists():
@@ -248,7 +248,7 @@ def reject_goal(
 @app.command("wake")
 def wake() -> None:
     """Exit dreaming mode — resume active execution."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
@@ -261,7 +261,7 @@ def wake() -> None:
 @app.command("dream")
 def dream() -> None:
     """Force enter dreaming mode."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
     inbox_dir.mkdir(parents=True, exist_ok=True)
@@ -276,7 +276,7 @@ def view_inbox(
     limit: int = typer.Option(10, "--limit", "-n", help="Max tasks to show."),
 ) -> None:
     """View pending inbox tasks."""
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     inbox_dir = SOOTHE_HOME / "autopilot" / "inbox"
     if not inbox_dir.exists():

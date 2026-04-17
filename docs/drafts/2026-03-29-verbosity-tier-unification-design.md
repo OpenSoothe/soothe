@@ -399,5 +399,5 @@ class TestVerbosityTier:
 ## Mitigation
 
 1. Run full test suite after migration to catch all callers
-2. Update RFC-401 documentation to reflect new VerbosityTier system
+2. Update RFC-400 documentation to reflect new VerbosityTier system
 3. Single migration PR — no gradual rollout needed

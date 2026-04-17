@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **Created**: 2026-04-16
-**RFCs**: RFC-0019 (EventProcessor), RFC-401 (Event Processing)
+**RFCs**: RFC-0019 (EventProcessor), RFC-400 (Event Processing)
 
 ---
 
@@ -147,7 +147,7 @@ File: `packages/soothe/tests/unit/cli/test_cli_daemon.py`
 ## Risks
 
 1. **Heartbeat handling removal**: Need to verify if heartbeat is actually used elsewhere
-   - RFC-401 and RFC-0019 don't mention heartbeat for timeout extension
+   - RFC-400 and RFC-0019 don't mention heartbeat for timeout extension
    - Heartbeat likely for daemon health monitoring, not query timeout
 
 2. **Timeout semantics**: Ensure timeout still applies for legitimate "waiting for query start" cases
@@ -172,4 +172,4 @@ File: `packages/soothe/tests/unit/cli/test_cli_daemon.py`
 - Test file: `packages/soothe/tests/unit/cli/test_cli_daemon.py:487`
 - Implementation: `packages/soothe-cli/src/soothe_cli/cli/execution/daemon.py:32`
 - RFC-0019: `docs/specs/RFC-0019-event-processor.md`
-- RFC-401: `docs/specs/RFC-401-event-processing.md`
+- RFC-400: `docs/specs/RFC-400-event-processing.md`

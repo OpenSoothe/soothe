@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import websockets.asyncio.server
 import websockets.exceptions
-from soothe_sdk.protocol import decode, encode
+from soothe_sdk.client.protocol import decode, encode
 
 from soothe.config.daemon_config import WebSocketConfig
 from soothe.daemon.protocol_v2 import create_error_response, validate_message

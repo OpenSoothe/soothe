@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-10
-**Dependencies**: RFC-201, RFC-100, RFC-205, RFC-207
+**Dependencies**: RFC-200, RFC-100, RFC-203, RFC-207
 
 ## Abstract
 
@@ -315,12 +315,12 @@ execution:
 
 ## References
 
-- RFC-201: Layer 2 Agentic Goal Execution
+- RFC-200: Layer 2 Agentic Goal Execution
 - RFC-100: Layer 1 CoreAgent Runtime
-- RFC-205: Layer 2 Unified State Checkpoint
+- RFC-203: Layer 2 Unified State Checkpoint
 - RFC-207: Message Type Separation
-- RFC-209: Executor Thread Isolation Simplification
-- RFC-210: Dynamic Tool System Context
+- RFC-207: Executor Thread Isolation Simplification
+- RFC-207: Dynamic Tool System Context
 
 ---
 

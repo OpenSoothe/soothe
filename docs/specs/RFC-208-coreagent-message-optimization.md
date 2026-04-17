@@ -1,11 +1,11 @@
-# RFC-208: CoreAgent Message Optimization (Phase 4.2)
+# RFC-207: CoreAgent Message Optimization (Phase 4.2)
 
 **RFC**: 0208
 **Title**: Layer 1 CoreAgent Message Optimization
 **Status**: Implemented
 **Kind**: Architecture Refinement
 **Created**: 2026-04-09
-**Dependencies**: RFC-207, RFC-201, RFC-100, RFC-104
+**Dependencies**: RFC-207, RFC-200, RFC-100, RFC-104
 **Replaces**: None (refines Layer 1 message construction)
 
 ## Abstract
@@ -239,7 +239,7 @@ Context projection and memories are already available in `request.state`:
 ## Related Specifications
 
 - **RFC-207**: SystemMessage/HumanMessage Separation (Layer 2)
-- **RFC-201**: Layer 2 Agentic Goal Execution
+- **RFC-200**: Layer 2 Agentic Goal Execution
 - **RFC-100**: Layer 1 CoreAgent Runtime
 - **RFC-104**: Dynamic System Context
 

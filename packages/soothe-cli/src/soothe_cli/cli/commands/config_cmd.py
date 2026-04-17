@@ -113,7 +113,7 @@ def config_show(
         sys.exit(0)
     except Exception as e:
         logger.exception("Config command error")
-        from soothe_sdk import format_cli_error
+        from soothe_sdk.utils import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)
@@ -137,7 +137,7 @@ def config_init(
     from importlib.resources import as_file, files
     from pathlib import Path
 
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     home = Path(SOOTHE_HOME).expanduser()
     target = home / "config" / "config.yml"
@@ -209,7 +209,7 @@ def config_validate(
     """
     from pathlib import Path
 
-    from soothe_sdk import SOOTHE_HOME
+    from soothe_sdk.client.config import SOOTHE_HOME
 
     try:
         cfg = load_config(config)

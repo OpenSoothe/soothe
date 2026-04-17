@@ -5,7 +5,7 @@ This plugin provides Audio transcription and analysis capabilities.
 
 from typing import Any
 
-from soothe_sdk import plugin
+from soothe_sdk.plugin import plugin
 
 from .implementation import AudioQATool, AudioTranscriptionTool, create_audio_tools
 

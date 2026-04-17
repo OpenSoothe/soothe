@@ -4,7 +4,7 @@
 **Authors**: Soothe Team
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-401 (Event Processing), RFC-502 (Unified Presentation Engine)
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-400 (Event Processing), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0020, RFC-0024
 **Kind**: Implementation Interface Design
 
@@ -32,8 +32,8 @@ This RFC defines:
 
 This RFC does **not** define:
 
-* RendererProtocol interface (see RFC-401)
-* Event processing pipeline (see RFC-401)
+* RendererProtocol interface (see RFC-400)
+* Event processing pipeline (see RFC-400)
 * Daemon transport (see RFC-400)
 * CLI/TUI architecture (see RFC-500)
 
@@ -385,7 +385,7 @@ if should_show(VerbosityTier.DETAILED, self._verbosity):
 ## 13. Relationship to Other RFCs
 
 * **RFC-500 (CLI/TUI Architecture)**: Renderer implementations
-* **RFC-401 (Event Processing)**: EventProcessor uses verbosity filtering
+* **RFC-400 (Event Processing)**: EventProcessor uses verbosity filtering
 * **RFC-101 (Tool Interface)**: Tool event naming patterns
 * **RFC-400 (Daemon Communication)**: Transport for events
 

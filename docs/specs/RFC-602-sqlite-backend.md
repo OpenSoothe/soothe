@@ -5,8 +5,8 @@
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-04
-**Dependencies**: RFC-000, RFC-001, RFC-300, RFC-401
-**Related**: RFC-202
+**Dependencies**: RFC-000, RFC-001, RFC-300, RFC-400
+**Related**: RFC-200
 
 ## Abstract
 

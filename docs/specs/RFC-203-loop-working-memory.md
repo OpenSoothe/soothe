@@ -5,11 +5,11 @@
 **Status**: Draft  
 **Kind**: Architecture Design / Impl Interface  
 **Created**: 2026-04-02  
-**Dependencies**: RFC-201, RFC-103, RFC-100
+**Dependencies**: RFC-200, RFC-103, RFC-100
 
 ## Abstract
 
-The agentic Plan-and-Execute loop (Layer 2, RFC-201) passes progress to the next Plan call mainly via truncated step outputs. That loses structure and forces redundant exploration. This RFC defines **loop working memory**: a small, explicit store of durable facts and pointers that survives iterations, can live entirely in RAM, and **spills to the thread workspace** when content is too large for inline prompts—so Layer 1 tools can open the same files the planner references.
+The agentic Plan-and-Execute loop (Layer 2, RFC-200) passes progress to the next Plan call mainly via truncated step outputs. That loses structure and forces redundant exploration. This RFC defines **loop working memory**: a small, explicit store of durable facts and pointers that survives iterations, can live entirely in RAM, and **spills to the thread workspace** when content is too large for inline prompts—so Layer 1 tools can open the same files the planner references.
 
 ## Motivation
 
@@ -92,7 +92,7 @@ Concrete classes:
 - **`LoopWorkingMemory`**: In-memory deque/list + spill writer (`soothe.cognition.loop_working_memory`).
 - **`NullLoopWorkingMemory`**: No-op when disabled (optional).
 
-### Integration points (RFC-201 alignment)
+### Integration points (RFC-200 alignment)
 
 1. **Loop start**: Runner / `AgentLoop` constructs working memory from config.
 2. **Post-Act**: After each batch of `StepResult` objects, call `record_step_result` for each.
@@ -118,7 +118,7 @@ Rules stated to the model:
 
 ## Relationship to Other RFCs
 
-- **RFC-201**: The agentic loop owns loop working memory lifecycle for that goal.
+- **RFC-200**: The agentic loop owns loop working memory lifecycle for that goal.
 - **RFC-103**: Paths resolve inside workspace; enforce policy in tools (RFC-102).
 - **RFC-300**: Context ledger remains separate; loop working memory is not a protocol backend.
 
@@ -130,6 +130,6 @@ Rules stated to the model:
 
 ## References
 
-- RFC-201 Agentic Goal Execution  
+- RFC-200 Agentic Goal Execution  
 - RFC-103 Thread-Aware Workspace  
 - IG-122 Implementation Guide (companion)

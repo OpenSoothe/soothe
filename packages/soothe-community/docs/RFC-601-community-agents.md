@@ -306,7 +306,7 @@ weaver = "soothe_community.weaver:WeaverPlugin"
 
 - **RFC-600 (Plugin Extension System)**: Plugin decorator patterns, entry-point discovery
 - **RFC-301 (Protocol Registry)**: VectorStoreProtocol, PolicyProtocol
-- **RFC-401 (Event Processing)**: Event emission patterns
+- **RFC-400 (Event Processing)**: Event emission patterns
 - **RFC-100 (CoreAgent Runtime)**: CompiledSubAgent interface
 
 ---

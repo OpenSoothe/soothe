@@ -33,7 +33,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from soothe_sdk.internal import (
+from soothe_sdk.ux import classify_event_to_tier
+from soothe_sdk.ux.internal import (
     INTERNAL_JSON_KEYS,
     filter_confused_responses,
     filter_json_code_blocks,
@@ -41,12 +42,7 @@ from soothe_sdk.internal import (
     filter_search_data_tags,
     normalize_internal_whitespace,
 )
-from soothe_sdk.verbosity import (
-    VerbosityLevel,
-    VerbosityTier,
-    classify_event_to_tier,
-    should_show,
-)
+from soothe_sdk.verbosity import VerbosityLevel, VerbosityTier, should_show
 
 # =============================================================================
 # Type Definitions

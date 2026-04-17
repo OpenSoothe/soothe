@@ -1,11 +1,11 @@
-# RFC-204: Autopilot Mode
+# RFC-203: Autopilot Mode
 
 **RFC**: 0204
 **Title**: Autopilot Mode
 **Status**: Active
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Dependencies**: RFC-200, RFC-201, RFC-202, RFC-400, RFC-500
+**Dependencies**: RFC-200, RFC-200, RFC-200, RFC-400, RFC-500
 
 ## Abstract
 
@@ -684,8 +684,8 @@ All three tools added to `create_layer2_tools()` return list.
 ## Related Documents
 
 - [RFC-200](./RFC-200-autonomous-goal-management.md) — Layer 3 Foundation
-- [RFC-201](./RFC-201-agentic-goal-execution.md) — Layer 2 Execution
-- [RFC-202](./RFC-202-dag-execution.md) — DAG Execution
+- [RFC-200](./RFC-200-agentic-goal-execution.md) — Layer 2 Execution
+- [RFC-200](./RFC-200-dag-execution.md) — DAG Execution
 - [RFC-400](./RFC-400-daemon-communication.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 

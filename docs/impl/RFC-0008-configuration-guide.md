@@ -1,10 +1,10 @@
-# RFC-201 Configuration Guide
+# RFC-200 Configuration Guide
 
 > **DEPRECATED** (2026-04-05): This guide describes the old `use_judge_engine` config flag
 > which was removed after the Reason → Act migration (IG-115). The flag no longer affects
-> runtime behavior. See RFC-201 for the current Reason → Act architecture.
+> runtime behavior. See RFC-200 for the current Reason → Act architecture.
 
-## ✅ RFC-201 is Now Enabled by Default
+## ✅ RFC-200 is Now Enabled by Default
 
 **Status**: Production-ready (all tests passing)
 **Default Mode**: Reason → Act (single LLM call per iteration)
@@ -23,7 +23,7 @@ agentic:
   # Enable agentic loop mode
   enabled: true
 
-  # Use RFC-201 PLAN → ACT → JUDGE (now default!)
+  # Use RFC-200 PLAN → ACT → JUDGE (now default!)
   use_judge_engine: true  # ← ENABLED BY DEFAULT
 
   # Maximum loop iterations
@@ -40,7 +40,7 @@ agentic:
 
 ## Execution Modes
 
-### RFC-201 Mode (Default) - PLAN → ACT → JUDGE
+### RFC-200 Mode (Default) - PLAN → ACT → JUDGE
 
 ```yaml
 agentic:
@@ -73,7 +73,7 @@ agentic:
 
 ## How to Switch Modes
 
-### Enable RFC-201 (Default)
+### Enable RFC-200 (Default)
 ```yaml
 # config.yml
 agentic:
@@ -118,7 +118,7 @@ export SOOTHE_AGENTIC__USE_JUDGE_ENGINE=false
 
 ## Architecture
 
-### RFC-201 Execution Flow
+### RFC-200 Execution Flow
 
 ```
 User Request
@@ -158,7 +158,7 @@ Final Answer
 
 ## Events
 
-### RFC-201 Namespace: `soothe.cognition.loop.*`
+### RFC-200 Namespace: `soothe.cognition.loop.*`
 
 **Lifecycle Events:**
 - `LoopStartedEvent` - Loop starts
@@ -194,7 +194,7 @@ Events for legacy mode (backward compatibility).
 ### Manual Testing
 
 ```bash
-# Test with RFC-201 mode (default)
+# Test with RFC-200 mode (default)
 soothe -p "What is 2+2?"
 
 # Test with legacy mode
@@ -224,7 +224,7 @@ soothe -p "What is 2+2?"
 
 ### Files Created
 
-1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-201 implementation
+1. `src/soothe/core/runner/_runner_agentic_v2.py` - RFC-200 implementation
 2. `docs/impl/IG-074-*.md` - Implementation documentation
 
 ---
@@ -266,12 +266,12 @@ soothe -p "What is 2+2?"
 
 ## Migration Guide
 
-### From Legacy to RFC-201
+### From Legacy to RFC-200
 
 1. **Update config** (already done):
    ```yaml
    agentic:
-     use_judge_engine: true  # Enable RFC-201
+     use_judge_engine: true  # Enable RFC-200
    ```
 
 2. **Test thoroughly**:
@@ -335,7 +335,7 @@ agentic:
 
 ## Support
 
-- **RFC**: `docs/specs/RFC-201-agentic-loop-execution.md`
+- **RFC**: `docs/specs/RFC-200-agentic-loop-execution.md`
 - **Implementation**: `docs/impl/IG-074-final-summary.md`
 - **Progress**: `docs/impl/IG-074-implementation-progress.md`
 
@@ -343,7 +343,7 @@ agentic:
 
 ## Summary
 
-✅ **RFC-201 is production-ready and enabled by default**
+✅ **RFC-200 is production-ready and enabled by default**
 
 - All 923 tests passing
 - Zero linting errors

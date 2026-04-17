@@ -471,7 +471,7 @@ plan = await planner.create_plan(
 * **RFC-300 (Context & Memory Protocols)**: Sister RFC for context/memory interfaces
 * **RFC-102 (Security & Policy)**: PolicyProtocol security details
 * **RFC-200 (Autonomous Goal Management)**: PlannerProtocol goal lifecycle
-* **RFC-202 (DAG Execution)**: PlannerProtocol DAG support
+* **RFC-200 (DAG Execution)**: PlannerProtocol DAG support
 
 ---
 

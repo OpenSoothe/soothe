@@ -95,7 +95,7 @@ class ThreadLogger:
             data: Stream data payload.
         """
         if mode == "custom" and isinstance(data, dict):
-            from soothe_sdk.verbosity import classify_event_to_tier
+            from soothe_sdk.ux import classify_event_to_tier
 
             record: dict[str, Any] = {
                 "timestamp": datetime.now(UTC).isoformat(),

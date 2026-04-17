@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-16
-**Dependencies**: RFC-205 (Layer 2 Unified State Model), RFC-201 (Agentic Goal Execution)
+**Dependencies**: RFC-203 (Layer 2 Unified State Model), RFC-200 (Agentic Goal Execution)
 
 ## Abstract
 
@@ -48,7 +48,7 @@ AgentLoop becomes an abstract orchestration entity spanning multiple threads:
 
 ### Layer Integration
 
-This RFC extends RFC-205 (Layer 2 Unified State Model) and RFC-201 (Agentic Goal Execution):
+This RFC extends RFC-203 (Layer 2 Unified State Model) and RFC-200 (Agentic Goal Execution):
 
 - **Layer 2 AgentLoop**: Manages Plan → Execute loop across multiple threads
 - **Layer 1 CoreAgent**: Executes on specific thread (LangGraph thread_id)
@@ -487,8 +487,8 @@ SOOTHE_HOME/
 
 ## Related Specifications
 
-- RFC-205: Layer 2 Unified State Model
-- RFC-201: Agentic Goal Execution
+- RFC-203: Layer 2 Unified State Model
+- RFC-200: Agentic Goal Execution
 - RFC-203: Loop Working Memory
 - RFC-002: MemoryProtocol
 - RFC-103: VectorStoreProtocol

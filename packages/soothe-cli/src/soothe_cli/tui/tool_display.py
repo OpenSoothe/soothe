@@ -177,7 +177,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         if "command" in tool_args:
             command = _sanitize_display_value(tool_args["command"], max_length=120)
             timeout = _coerce_timeout_seconds(tool_args.get("timeout"))
-            from soothe_sdk import DEFAULT_EXECUTE_TIMEOUT
+            from soothe_sdk.client.config import DEFAULT_EXECUTE_TIMEOUT
 
             if timeout is not None and timeout != DEFAULT_EXECUTE_TIMEOUT:
                 timeout_str = _format_timeout(timeout)

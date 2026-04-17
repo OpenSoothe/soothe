@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.protocol import encode
+from soothe_sdk.client.protocol import encode
 
 from soothe.config import SOOTHE_HOME, SootheConfig
 from soothe.core import resolve_daemon_workspace

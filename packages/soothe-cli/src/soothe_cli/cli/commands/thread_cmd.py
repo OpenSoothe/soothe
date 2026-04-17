@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from soothe_sdk import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
 from soothe_sdk.client import WebSocketClient, is_daemon_live, websocket_url_from_config
+from soothe_sdk.client.config import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
 
 from soothe_cli.shared import load_config
 

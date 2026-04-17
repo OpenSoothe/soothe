@@ -126,7 +126,7 @@ response    mode         execution
 - `src/soothe/core/runner/_runner_agentic.py` - Agentic loop
 - `src/soothe/core/runner/_runner_autonomous.py` - Autonomous mode
 
-## 4. Agentic Loop (RFC-201)
+## 4. Agentic Loop (RFC-200)
 
 The default execution mode follows an iterative observe-act-verify cycle:
 
@@ -457,7 +457,7 @@ User Query
 
 ### RFC References
 
-- [RFC-201](../specs/RFC-201.md) - Agentic Loop Execution
+- [RFC-200](../specs/RFC-200.md) - Agentic Loop Execution
 - [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
-- [RFC-202](../specs/RFC-202.md) - Step Execution
+- [RFC-200](../specs/RFC-200.md) - Step Execution
 - [RFC-400](../specs/RFC-400.md) - Daemon Communication Protocol

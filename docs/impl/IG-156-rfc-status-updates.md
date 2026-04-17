@@ -1,7 +1,7 @@
 # IG-156: RFC Implementation Status Updates
 
 **ID**: IG-156
-**Title**: Update RFC-201 and RFC-202 Implementation Status
+**Title**: Update RFC-200 and RFC-200 Implementation Status
 **Status**: Draft
 **Created**: 2026-04-12
 **Priority**: P2 (Documentation Cleanup)
@@ -11,13 +11,13 @@
 
 ## Abstract
 
-This guide updates outdated implementation status sections in RFC-201 (Layer 2) and RFC-202 (DAG Execution), marking fully implemented features as complete. Current RFCs incorrectly label metrics aggregation and concurrency controller as "remaining" or "draft" when they are fully implemented in the codebase.
+This guide updates outdated implementation status sections in RFC-200 (Layer 2) and RFC-200 (DAG Execution), marking fully implemented features as complete. Current RFCs incorrectly label metrics aggregation and concurrency controller as "remaining" or "draft" when they are fully implemented in the codebase.
 
 ---
 
 ## Problem Statement
 
-### RFC-201 Implementation Status (Lines 256-268)
+### RFC-200 Implementation Status (Lines 256-268)
 
 **Current (INCORRECT)**:
 ```
@@ -42,11 +42,11 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 - `src/soothe/cognition/agent_loop/schemas.py:385-391` (LoopState fields)
 - `src/soothe/cognition/agent_loop/reason.py:39-52` (metrics used in Plan)
 
-### RFC-202 Status (Lines 1-7)
+### RFC-200 Status (Lines 1-7)
 
 **Current header**:
 ```
-# RFC-202: DAG Execution & Failure Recovery
+# RFC-200: DAG Execution & Failure Recovery
 
 **Status**: Draft    ❌ WRONG - This is Implemented
 ```
@@ -61,7 +61,7 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 
 ## Solution Design
 
-### Update RFC-201 Implementation Status
+### Update RFC-200 Implementation Status
 
 **Replace Lines 256-268** with:
 
@@ -85,18 +85,18 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 - ⚠️ Automatic isolation trigger logic (deferred - manual control sufficient)
 ```
 
-### Update RFC-202 Header and Add Status Section
+### Update RFC-200 Header and Add Status Section
 
 **Replace header (Lines 1-7)** with:
 
 ```markdown
-# RFC-202: DAG Execution & Failure Recovery
+# RFC-200: DAG Execution & Failure Recovery
 
 **Status**: Implemented
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-04-12
-**Depends on**: RFC-200 (Layer 3), RFC-201 (Layer 2), RFC-100 (Layer 1)
+**Depends on**: RFC-200 (Layer 3), RFC-200 (Layer 2), RFC-100 (Layer 1)
 **Supersedes**: RFC-0009, RFC-0010
 **Kind**: Architecture Design
 ```
@@ -106,19 +106,19 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 ```markdown
 ## Implementation Status
 
-- ✅ ConcurrencyController with hierarchical semaphores (RFC-202 §5.1)
+- ✅ ConcurrencyController with hierarchical semaphores (RFC-200 §5.1)
 - ✅ Unlimited mode handling (limit=0 pass-through)
 - ✅ Goal, step, and LLM call level semaphores
 - ✅ Global LLM budget circuit breaker
-- ✅ StepScheduler for DAG-based step execution (RFC-202 §5.2)
+- ✅ StepScheduler for DAG-based step execution (RFC-200 §5.2)
 - ✅ Dependency validation (cycle detection)
 - ✅ ready_steps() with parallelism modes
 - ✅ Transitive failure propagation
-- ✅ RunArtifactStore for structured output layout (RFC-202 §5.5)
+- ✅ RunArtifactStore for structured output layout (RFC-200 §5.5)
 - ✅ CheckpointEnvelope persistence model
 - ✅ Progressive checkpointing after step/goal completion
 - ✅ StepReport and GoalReport schemas
-- ✅ Recovery flow from crash (RFC-202 §9)
+- ✅ Recovery flow from crash (RFC-200 §9)
 - ⚠️ Goal parallelism integration (pending Layer 3 refactoring - IG-154)
 ```
 
@@ -126,9 +126,9 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 
 ## Implementation Steps
 
-### Step 1: Update RFC-201 File
+### Step 1: Update RFC-200 File
 
-**File**: `docs/specs/RFC-201-agentic-goal-execution.md`
+**File**: `docs/specs/RFC-200-agentic-goal-execution.md`
 
 **Edit Lines 256-268**:
 
@@ -154,20 +154,20 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 **Verification**: See `src/soothe/cognition/agent_loop/executor.py:_aggregate_wave_metrics()` and `schemas.py:LoopState` for metrics implementation.
 ```
 
-### Step 2: Update RFC-202 File
+### Step 2: Update RFC-200 File
 
-**File**: `docs/specs/RFC-202-dag-execution.md`
+**File**: `docs/specs/RFC-200-dag-execution.md`
 
 **Edit Lines 1-7**:
 
 ```markdown
-# RFC-202: DAG Execution & Failure Recovery
+# RFC-200: DAG Execution & Failure Recovery
 
 **Status**: Implemented
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-04-12
-**Depends on**: RFC-200 (Layer 3), RFC-201 (Layer 2), RFC-100 (Layer 1)
+**Depends on**: RFC-200 (Layer 3), RFC-200 (Layer 2), RFC-100 (Layer 1)
 **Supersedes**: RFC-0009, RFC-0010
 **Kind**: Architecture Design
 ```
@@ -179,33 +179,33 @@ This guide updates outdated implementation status sections in RFC-201 (Layer 2) 
 
 This RFC's core architecture is fully implemented:
 
-- ✅ **ConcurrencyController** (RFC-202 §5.1)
+- ✅ **ConcurrencyController** (RFC-200 §5.1)
   - Hierarchical semaphore control at goal, step, and LLM levels
   - Unlimited mode handling (limit=0 creates no semaphore)
   - Global LLM budget circuit breaker
   - Implementation: `src/soothe/core/concurrency.py`
   
-- ✅ **StepScheduler** (RFC-202 §5.2)
+- ✅ **StepScheduler** (RFC-200 §5.2)
   - DAG-based step scheduling with dependency resolution
   - Cycle detection in step dependencies
   - ready_steps() with sequential/dependency/max modes
   - Transitive failure propagation to blocked steps
   - Implementation: `src/soothe/core/step_scheduler.py`
   
-- ✅ **RunArtifactStore** (RFC-202 §5.5)
+- ✅ **RunArtifactStore** (RFC-200 §5.5)
   - Structured run directory: `$SOOTHE_HOME/runs/{thread_id}/`
   - Atomic checkpoint writes (tmp → rename)
   - StepReport and GoalReport in JSON + Markdown
   - Artifact tracking with manifest
   - Implementation: `src/soothe/core/artifact_store.py`
   
-- ✅ **CheckpointEnvelope** (RFC-202 §8.1)
+- ✅ **CheckpointEnvelope** (RFC-200 §8.1)
   - Progressive checkpoint model
   - Goal/plan/step state serialization
   - Recovery restoration
   - Implementation: `src/soothe/protocols/planner.py`
 
-- ✅ **Recovery Flow** (RFC-202 §9)
+- ✅ **Recovery Flow** (RFC-200 §9)
   - Thread resume from checkpoint
   - Crash mid-step-loop recovery
   - Crash mid-goal-DAG recovery
@@ -223,13 +223,13 @@ This RFC's core architecture is fully implemented:
 
 **File**: `docs/specs/rfc-index.md` (if exists)
 
-**Update RFC-201 and RFC-202 entries**:
+**Update RFC-200 and RFC-200 entries**:
 
 ```markdown
 | RFC | Title | Status | Kind | Created | Updated |
 |-----|-------|--------|------|---------|---------|
-| RFC-201 | Layer 2: Agentic Goal Execution Loop | ✅ Implemented | Architecture Design | 2026-03-16 | 2026-04-12 |
-| RFC-202 | DAG Execution & Failure Recovery | ✅ Implemented | Architecture Design | 2026-03-31 | 2026-04-12 |
+| RFC-200 | Layer 2: Agentic Goal Execution Loop | ✅ Implemented | Architecture Design | 2026-03-16 | 2026-04-12 |
+| RFC-200 | DAG Execution & Failure Recovery | ✅ Implemented | Architecture Design | 2026-03-31 | 2026-04-12 |
 ```
 
 ---
@@ -349,9 +349,9 @@ async with self._concurrency.acquire_llm_call():
 
 ```python
 def test_rfc_201_metrics_status():
-    """Verify RFC-201 correctly reports metrics implementation."""
-    # Read RFC-201 implementation status section
-    rfc_content = Path("docs/specs/RFC-201-agentic-goal-execution.md").read_text()
+    """Verify RFC-200 correctly reports metrics implementation."""
+    # Read RFC-200 implementation status section
+    rfc_content = Path("docs/specs/RFC-200-agentic-goal-execution.md").read_text()
     
     # Should NOT have "remaining" labels for metrics
     assert "Metrics aggregation in executor (remaining)" not in rfc_content
@@ -363,9 +363,9 @@ def test_rfc_201_metrics_status():
 
 
 def test_rfc_202_status():
-    """Verify RFC-202 correctly reports implementation status."""
-    # Read RFC-202 header
-    rfc_content = Path("docs/specs/RFC-202-dag-execution.md").read_text()
+    """Verify RFC-200 correctly reports implementation status."""
+    # Read RFC-200 header
+    rfc_content = Path("docs/specs/RFC-200-dag-execution.md").read_text()
     
     # Should NOT be marked as "Draft"
     assert "**Status**: Draft" not in rfc_content[:500]
@@ -452,12 +452,12 @@ def test_concurrency_controller_implemented():
 
 After updates:
 
-- [ ] RFC-201 status section updated
-- [ ] RFC-201 no longer marks metrics as "remaining"
-- [ ] RFC-201 adds IG-130, IG-151, IG-148 references
-- [ ] RFC-202 header changed from "Draft" to "Implemented"
-- [ ] RFC-202 implementation status section added
-- [ ] RFC-202 documents all implemented components
+- [ ] RFC-200 status section updated
+- [ ] RFC-200 no longer marks metrics as "remaining"
+- [ ] RFC-200 adds IG-130, IG-151, IG-148 references
+- [ ] RFC-200 header changed from "Draft" to "Implemented"
+- [ ] RFC-200 implementation status section added
+- [ ] RFC-200 documents all implemented components
 - [ ] RFC index updated (if exists)
 - [ ] All verification tests pass
 
@@ -465,8 +465,8 @@ After updates:
 
 ## References
 
-- RFC-201: Layer 2 Agentic Goal Execution
-- RFC-202: DAG Execution & Failure Recovery
+- RFC-200: Layer 2 Agentic Goal Execution
+- RFC-200: DAG Execution & Failure Recovery
 - IG-130: Subagent task cap tracking
 - IG-151: Accurate token tracking
 - IG-148: Evidence-driven Plan messages
@@ -478,8 +478,8 @@ After updates:
 
 ## Estimated Timeline
 
-- **Hour 1**: Update RFC-201 implementation status section
-- **Hour 2**: Update RFC-202 header and add status section
+- **Hour 1**: Update RFC-200 implementation status section
+- **Hour 2**: Update RFC-200 header and add status section
 
 **Total**: 1-2 hours
 

@@ -4,8 +4,8 @@
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-03-27
-**Related**: RFC-000, RFC-300, RFC-202
+**Updated**: 2026-04-17 (RFC consolidation note)
+**Related**: RFC-000, RFC-300, RFC-200
 
 ## Abstract
 
@@ -39,6 +39,85 @@ class ContextProtocol(Protocol):
 3. **Purpose-scoped projections** -- different views for orchestrator reasoning vs subagent briefing
 4. **Hierarchical summarization** -- entries summarized at multiple levels
 5. **Subagent isolation** -- subagents receive projections, not full context; return results only
+
+### ContextRetrievalModule
+
+Self-contained retrieval module for goal-centric context access. Stable API boundary enables algorithm evolution without breaking ContextProtocol interface.
+
+**Module Interface**:
+
+```python
+class ContextRetrievalModule:
+    """Self-contained retrieval module for ContextProtocol.
+
+    Stable API boundary enables algorithm evolution without
+    breaking ContextProtocol interface.
+    """
+
+    def __init__(self, embedding_model: Embeddings) -> None:
+        self._embedding_model = embedding_model
+        self._algorithm_version = "v1_keyword"  # Evolvable
+
+    def retrieve_by_goal_relevance(
+        self,
+        goal_id: str,
+        execution_context: dict[str, Any],
+        limit: int = 10,
+    ) -> list[ContextEntry]:
+        """
+        Goal-centric retrieval (not query-centric).
+
+        Relevance determined by goal relationship to history,
+        not keyword similarity.
+
+        Args:
+            goal_id: Target goal for relevance matching
+            execution_context: Current execution state
+            limit: Maximum entries to return
+
+        Returns:
+            ContextEntry list ranked by goal relevance
+
+        Stable API: Algorithm can evolve (keyword → embedding → hybrid)
+        without breaking callers.
+        """
+```
+
+**Algorithm Versions**:
+
+| Version | Algorithm | Description |
+|---------|-----------|-------------|
+| `v1_keyword` | Goal tag matching | Match entries with goal_id tag (current) |
+| `v2_embedding` | Semantic similarity | Embed goal description, match entry embeddings (future) |
+| `hybrid` | Combined approach | Keyword + embedding hybrid (future) |
+
+**Integration with ContextProtocol**:
+
+```python
+class KeywordContext(ContextProtocol):
+    def __init__(self, embedding_model: Embeddings | None = None) -> None:
+        self._entries: list[ContextEntry] = []
+        self._retrieval_module = ContextRetrievalModule(embedding_model)
+
+    # NEW: Expose retrieval module for goal-centric access
+    def get_retrieval_module(self) -> ContextRetrievalModule:
+        """Get retrieval module for goal-centric operations."""
+        return self._retrieval_module
+```
+
+**Usage Pattern**:
+
+```python
+# AgentLoop uses retrieval module for goal-centric context
+context = self._context.get_retrieval_module()
+relevant_history = context.retrieve_by_goal_relevance(
+    goal_id=state.current_goal_id,
+    execution_context={"iteration": state.iteration},
+    limit=10,
+)
+```
+
+**Design Principle**: Separate retrieval concerns from ContextProtocol interface. Stable API enables algorithm evolution while preserving ingest/project contract.
 
 ### Implementations
 
@@ -122,7 +201,7 @@ class PlannerProtocol(Protocol):
 - `PlanContext(recent_messages, available_capabilities, completed_steps)`
 - `Reflection(assessment, should_revise, feedback)`
 
-**Note**: RFC-202 introduces `StepScheduler` for DAG-based step execution using `PlanStep.depends_on`. Plans with multiple steps are iterated via a runner-driven step loop. `StepReport` and `GoalReport` models are added for progressive result recording.
+**Note**: RFC-200 introduces `StepScheduler` for DAG-based step execution using `PlanStep.depends_on`. Plans with multiple steps are iterated via a runner-driven step loop. `StepReport` and `GoalReport` models are added for progressive result recording.
 
 ### Implementations
 
@@ -172,7 +251,7 @@ class DurabilityProtocol(Protocol):
     async def list_threads(self, thread_filter: ThreadFilter | None = None) -> list[ThreadInfo]: ...
 ```
 
-State persistence for checkpoints, artifacts, and recovery data is handled by the RFC-202 persistence components rather than by `DurabilityProtocol` directly.
+State persistence for checkpoints, artifacts, and recovery data is handled by the RFC-200 persistence components rather than by `DurabilityProtocol` directly.
 
 ### Data Models
 
@@ -215,7 +294,7 @@ class ConcurrencyPolicy(BaseModel):
 
 Steps declare dependencies via `depends_on`, forming a DAG. The orchestrator schedules independent steps in parallel within configured limits.
 
-**Note**: RFC-202 introduces `ConcurrencyController` in `core/concurrency.py` that enforces these limits via `asyncio.Semaphore` at goal, step, and global LLM call levels.
+**Note**: RFC-200 introduces `ConcurrencyController` in `core/concurrency.py` that enforces these limits via `asyncio.Semaphore` at goal, step, and global LLM call levels.
 
 ## Module 8: VectorStoreProtocol
 
@@ -324,3 +403,50 @@ $SOOTHE_HOME/
 └── config/           # User config files
     └── config.yml
 ```
+
+
+---
+
+## RFC Consolidation Note (2026-04-17)
+
+**Important**: This RFC's 8 protocol modules have been consolidated into separate RFC drafts:
+
+- **Module 1 (ContextProtocol)** → [RFC-400 Draft](../drafts/2026-04-17-rfc-400-context-protocol-retrieval-merged.md)
+- **Module 2 (MemoryProtocol)** → [RFC-402 Draft](../drafts/2026-04-17-rfc-402-memory-protocol-merged.md)
+- **Module 3 (PlannerProtocol)** → [RFC-404 Draft](../drafts/2026-04-17-rfc-404-planner-protocol-merged.md)
+- **Module 4 (PolicyProtocol)** → [RFC-406 Draft](../drafts/2026-04-17-rfc-406-policy-protocol-merged.md)
+- **Module 5 (DurabilityProtocol)** → [RFC-408 Draft](../drafts/2026-04-17-rfc-408-durability-protocol-merged.md)
+- **Module 6 (RemoteAgentProtocol)** → [RFC-410 Draft](../drafts/2026-04-17-rfc-410-remote-agent-protocol-merged.md)
+- **Module 7 (ConcurrencyPolicy)** → Stayed in this RFC
+- **Module 8 (VectorStoreProtocol)** → Stayed in this RFC
+
+**See also**: Alias RFCs in  for backward compatibility (RFC-400-alias, RFC-402-alias, RFC-404-alias, RFC-406-alias, RFC-203-alias, RFC-410-alias, RFC-410-alias, RFC-410-alias).
+
+**Migration**: Merged RFC drafts provide unified protocol architecture. Original RFC-001 modules preserved for reference. Use merged RFCs for implementation.
+
+---
+
+## RFC Consolidation Note (2026-04-17)
+
+**Important**: This RFC's 8 protocol modules have been consolidated into separate RFC drafts for improved architectural organization:
+
+- **Module 1 (ContextProtocol)** → [RFC-400 Draft](../drafts/2026-04-17-rfc-400-context-protocol-retrieval-merged.md) (includes ContextRetrievalModule enhancement)
+- **Module 2 (MemoryProtocol)** → [RFC-402 Draft](../drafts/2026-04-17-rfc-402-memory-protocol-merged.md) (includes Context vs Memory separation)
+- **Module 3 (PlannerProtocol)** → [RFC-404 Draft](../drafts/2026-04-17-rfc-404-planner-protocol-merged.md) (includes Two-Phase architecture pattern)
+- **Module 4 (PolicyProtocol)** → [RFC-406 Draft](../drafts/2026-04-17-rfc-406-policy-protocol-merged.md) (includes Permission structure)
+- **Module 5 (DurabilityProtocol)** → [RFC-408 Draft](../drafts/2026-04-17-rfc-408-durability-protocol-merged.md) (Thread lifecycle management)
+- **Module 6 (RemoteAgentProtocol)** → [RFC-410 Draft](../drafts/2026-04-17-rfc-410-remote-agent-protocol-merged.md) (includes all backend implementations)
+- **Module 7 (ConcurrencyPolicy)** → Stayed in this RFC (configuration model)
+- **Module 8 (VectorStoreProtocol)** → Stayed in this RFC (persistence backend)
+
+**Backward Compatibility**: Alias RFCs created in `docs/specs/` preserving original numbers:
+- RFC-400-alias → RFC-400 (ContextRetrievalModule merged)
+- RFC-402-alias → RFC-402 (Context separation merged)
+- RFC-404-alias → RFC-404 (Two-Phase pattern merged)
+- RFC-406-alias → RFC-406 (Permission structure merged)
+- RFC-203-alias → RFC-203 (CheckpointEnvelope moved to Layer 2)
+- RFC-410-alias → RFC-410 (LangGraph implementation merged)
+- RFC-410-alias → RFC-410 (ACP implementation merged)
+- RFC-410-alias → RFC-410 (A2A implementation merged)
+
+**Migration**: Use merged RFC drafts for implementation. Original RFC-001 preserved for reference. All protocol content maintained with improved organization.

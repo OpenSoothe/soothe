@@ -17,7 +17,7 @@ This RFC defines Layer 1 of Soothe's three-layer execution architecture: the Cor
 
 ```
 Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
-Layer 2: Agentic Goal Execution (RFC-201) → Layer 1 (ACT phase)
+Layer 2: Agentic Goal Execution (RFC-200) → Layer 1 (ACT phase)
 Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 ```
 
@@ -25,7 +25,7 @@ Layer 1: CoreAgent Runtime (this RFC) → Tools/Subagents
 
 ### Layer Integration
 
-**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-209 simplifies to single thread_id for all executions).
+**Layer 2 → Layer 1**: Sequential execution `await core_agent.astream(input, config={"thread_id": tid})`, parallel execution `asyncio.gather([astream(step, thread_id=tid)])` (note: RFC-207 simplifies to single thread_id for all executions).
 
 **CoreAgent Usage**: Foundation for Layer 2 ACT phase, CLI direct usage, daemon queries, subagent tool calls.
 
@@ -89,7 +89,7 @@ Single thread context: `astream(input, config={"thread_id": "tid"})`. Shared con
 
 Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in steps])`. All steps use parent thread_id, langgraph handles concurrent message queue safely.
 
-**Thread Naming** (RFC-209 simplified): Parent `thread-123`, goals `thread-123__goal_id` (for Layer 3). No manual step thread suffixes.
+**Thread Naming** (RFC-207 simplified): Parent `thread-123`, goals `thread-123__goal_id` (for Layer 3). No manual step thread suffixes.
 
 ## Built-in Capabilities
 
@@ -201,7 +201,7 @@ mcp_servers:
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
 - RFC-200: Layer 3 autonomous goal management
-- RFC-201: Layer 2 agentic goal execution
+- RFC-200: Layer 2 agentic goal execution
 - RFC-601: Skillify subagent
 - RFC-601: Weaver subagent
 - RFC-101: Tool interface

@@ -5,12 +5,12 @@
 **Status**: Revised
 **Kind**: Architecture Design
 **Created**: 2026-03-15
-**Updated**: 2026-04-03
-**Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
+**Updated**: 2026-04-17
+**Dependencies**: RFC-000, RFC-001, RFC-500, RFC-200
 
 ## Abstract
 
-This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-200) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
@@ -24,7 +24,7 @@ Layer 3: Autonomous Goal Management (this RFC)
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
   └─ Delegation: PERFORM invokes Layer 2's full Plan → Execute loop
 
-Layer 2: Agentic Goal Execution (RFC-201)
+Layer 2: Agentic Goal Execution (RFC-200)
   ├─ Scope: Single-goal execution through iterative refinement
   ├─ Loop: Plan → Execute (max iterations: ~8)
   └─ Delegation: Execute invokes Layer 1 CoreAgent for step execution
@@ -184,7 +184,107 @@ class GoalEngine:
 - Returned goals activated (status: "pending" → "active")
 - Parallel execution when `len(ready_goals) > 1`
 
-### 2. Dynamic Goal Management
+### 2. GoalBackoffReasoner (`cognition/goal_engine/backoff_reasoner.py`)
+
+LLM-driven backoff reasoning for goal DAG restructuring. When goal execution fails, the reasoner analyzes full goal context and decides WHERE to backoff in the goal DAG, replacing hardcoded retry logic with reasoning-based decisions.
+
+**BackoffDecision Model**:
+
+```python
+class BackoffDecision(BaseModel):
+    """LLM-driven backoff decision for goal DAG restructuring."""
+
+    backoff_to_goal_id: str
+    """Target goal to backoff to (where to resume in DAG)."""
+
+    reason: str
+    """Natural language reasoning for backoff decision."""
+
+    new_directives: list[GoalDirective] = []
+    """Additional directives to apply after backoff."""
+
+    evidence_summary: str
+    """Summary of why current goal path failed."""
+```
+
+**GoalBackoffReasoner Interface**:
+
+```python
+class GoalBackoffReasoner:
+    def __init__(self, config: SootheConfig) -> None:
+        self._model = config.create_chat_model("reason")
+        self._prompt_template = BACKOFF_REASONING_PROMPT
+
+    async def reason_backoff(
+        self,
+        goal_id: str,
+        goal_context: GoalContext,
+        failed_evidence: str,
+    ) -> BackoffDecision:
+        """
+        LLM analyzes full goal context and decides WHERE to backoff.
+
+        Args:
+            goal_id: Failed goal identifier
+            goal_context: Snapshot of all goals (RFC-200 GoalContext)
+            failed_evidence: Evidence from Layer 2 execution
+
+        Returns:
+            BackoffDecision with backoff point + reasoning + directives
+        """
+```
+
+**Integration with GoalEngine**:
+
+```python
+class GoalEngine:
+    def __init__(self, config: SootheConfig) -> None:
+        self._goals: dict[str, Goal] = {}
+        self._backoff_reasoner = GoalBackoffReasoner(config)
+
+    async def fail_goal(
+        self,
+        goal_id: str,
+        error: str,
+        allow_retry: bool = True,
+    ) -> None:
+        """Mark goal failed with backoff reasoning."""
+        goal = self._goals[goal_id]
+        goal.status = "failed"
+        goal.error = error
+
+        if allow_retry and goal.retry_count < goal.max_retries:
+            # Call backoff reasoner instead of simple retry
+            goal_context = self._build_goal_context(goal_id)
+            decision = await self._backoff_reasoner.reason_backoff(
+                goal_id=goal_id,
+                goal_context=goal_context,
+                failed_evidence=error,
+            )
+
+            # Apply backoff decision
+            self._apply_backoff_decision(decision)
+
+        goal.retry_count += 1
+```
+
+**Backoff Reasoning Logic**:
+- LLM considers full goal DAG context (all goals + dependencies + execution evidence)
+- Decides optimal backoff point (where to resume after failure)
+- Generates GoalDirective for dynamic restructuring
+- Replaces hardcoded retry with reasoning-based recovery
+
+**Configuration**:
+
+```yaml
+autonomous:
+  goal_backoff:
+    enabled: true
+    llm_role: reason  # Use reasoning model for backoff decisions
+    max_backoff_depth: 3  # Limit backoff chain depth
+```
+
+### 3. Dynamic Goal Management
 
 Layer 3's reflection can dynamically restructure the goal DAG through structured directives (merged from RFC-0011).
 
@@ -238,7 +338,7 @@ async def reflect(
     """
 ```
 
-### 3. Safety Mechanisms
+### 4. Safety Mechanisms
 
 **Cycle Detection**:
 - DFS-based validation before adding dependencies
@@ -260,7 +360,7 @@ async def reflect(
 - Rejected directives logged with reasons
 - Atomic checkpoint after successful application
 
-### 4. DAG Consistency Handling
+### 5. DAG Consistency Handling
 
 **Critical Scenario**: When reflection adds a dependency to an active goal, the goal may no longer be executable because its newly added dependencies aren't satisfied yet.
 
@@ -285,7 +385,7 @@ Goal A (active) executing:
     - A becomes ready again
 ```
 
-### 5. IterationRecord
+### 6. IterationRecord
 
 After each iteration, a structured record is stored via `ContextProtocol.ingest()`:
 
@@ -301,7 +401,7 @@ class IterationRecord(BaseModel):
 
 Stored with tag `"iteration_record"` and importance 0.9.
 
-### 6. Goal Management Tools
+### 7. Goal Management Tools
 
 Exposed as langchain tools for explicit agent control:
 - `create_goal`: Create new goal
@@ -520,7 +620,7 @@ class GoalFileWatcher:
 
 ## Implementation Status
 
-- ✅ GoalEngine with DAG scheduling (RFC-202)
+- ✅ GoalEngine with DAG scheduling (RFC-200)
 - ✅ Dynamic goal management (merged into this RFC)
 - ✅ Reflection with goal directives
 - ✅ Safety mechanisms and validation
@@ -530,8 +630,8 @@ class GoalFileWatcher:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-201](./RFC-201-agentic-goal-execution.md) - Layer 2: Agentic Goal Execution
-- [RFC-202](./RFC-202-dag-execution.md) - DAG Execution & Failure Recovery
+- [RFC-200](./RFC-200-agentic-goal-execution.md) - Layer 2: Agentic Goal Execution
+- [RFC-200](./RFC-200-dag-execution.md) - DAG Execution & Failure Recovery
 
 ## Changelog
 

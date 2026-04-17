@@ -1,6 +1,6 @@
 # IG-176: Event Naming Unification Migration
 
-**RFC**: RFC-403 (Unified Event Naming Semantics)
+**RFC**: RFC-402 (Unified Event Naming Semantics)
 **Status**: Active Implementation
 **Date**: 2026-04-15
 **Duration**: 4-5 days
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-This implementation guide executes the systematic migration of Soothe's event naming system to unified semantics defined in RFC-403.
+This implementation guide executes the systematic migration of Soothe's event naming system to unified semantics defined in RFC-402.
 
 **Key changes**:
 - Present progressive tense for all action verbs
@@ -22,7 +22,7 @@ This implementation guide executes the systematic migration of Soothe's event na
 ## 2. Prerequisites
 
 Before starting:
-- RFC-403 approved and finalized
+- RFC-402 approved and finalized
 - Clean feature branch created
 - All tests passing baseline
 - Migration script tested on sample files
@@ -33,7 +33,7 @@ Before starting:
 
 ### 3.1 Pre-Migration Setup
 
-- [x] RFC-403 created and documented
+- [x] RFC-402 created and documented
 - [ ] Create `scripts/migrate_event_names.py`
 - [ ] Create `scripts/validate_event_names.py`
 - [ ] Test migration script on sample files
@@ -136,7 +136,7 @@ Before starting:
 - System: `autopilot.*` → `system.autopilot.*`
 - Output: `response` → `responding`
 
-**Complete map**: See RFC-403 Section 8.
+**Complete map**: See RFC-402 Section 8.
 
 ---
 
@@ -183,9 +183,9 @@ If critical failures:
 
 After successful migration:
 1. Merge feature branch to main
-2. Update RFC-403 status to "Implemented"
+2. Update RFC-402 status to "Implemented"
 3. Update IG-176 status to "Completed"
-4. Remove backward compatibility code (none needed per RFC-403)
+4. Remove backward compatibility code (none needed per RFC-402)
 5. Monitor event system stability
 6. Collect developer feedback on new naming
 
@@ -224,10 +224,10 @@ After successful migration:
 
 ## 11. References
 
-- **RFC-403**: `docs/specs/RFC-403-unified-event-naming.md`
+- **RFC-402**: `docs/specs/RFC-402-unified-event-naming.md`
 - **Design Draft**: `docs/drafts/2026-04-15-event-naming-semantics-unification-design.md`
 - **Event Catalog**: `docs/specs/event-catalog.md`
-- **RFC-401**: `docs/specs/RFC-401-event-processing.md`
+- **RFC-400**: `docs/specs/RFC-400-event-processing.md`
 
 ---
 

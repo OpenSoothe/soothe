@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-13
 **Updated**: 2026-04-13
-**Dependencies**: RFC-000, RFC-001, RFC-201, RFC-100, RFC-600
+**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-100, RFC-600
 **Related**: RFC-211
 
 ## Abstract
@@ -557,7 +557,7 @@ sections.append("""
 
 ## Related Documents
 
-- RFC-201: AgentLoop architecture
+- RFC-200: AgentLoop architecture
 - RFC-211: Layer 2 tool result optimization
 - RFC-600: Plugin extension system
 - Design draft: `docs/drafts/2026-04-13-explore-subagent-parallel-spawning-design.md`

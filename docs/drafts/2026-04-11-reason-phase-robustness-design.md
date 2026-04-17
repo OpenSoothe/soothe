@@ -747,7 +747,7 @@ class PlanGeneration(BaseModel):
 - `src/soothe/cognition/agent_loop/events.py` (ReasonPhaseCompleteEvent)
 
 **Related RFCs**:
-- RFC-201: Agentic Goal Execution (Reason phase architecture)
+- RFC-200: Agentic Goal Execution (Reason phase architecture)
 - RFC-603: Reasoning Quality & Progressive Actions
 
 **Related Implementation Guides**:

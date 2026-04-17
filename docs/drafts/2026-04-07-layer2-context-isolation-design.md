@@ -585,7 +585,7 @@ agentic:
 
 | RFC/IG | Relevance |
 |--------|-----------|
-| RFC-201 | Layer 2 agentic goal execution |
+| RFC-200 | Layer 2 agentic goal execution |
 | IG-131 | Sequential Act isolated thread pattern |
 | IG-130 | Subagent task cap tracking |
 | IG-128 | Prior conversation for Reason |

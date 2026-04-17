@@ -1,11 +1,11 @@
-# RFC-210: Dynamic Tool/System Context Injection
+# RFC-207: Dynamic Tool/System Context Injection
 
 **RFC**: 0210
 **Title**: Dynamic Tool/System Context Injection
 **Status**: Draft
 **Kind**: Architecture Refinement
 **Created**: 2026-04-09
-**Dependencies**: RFC-104, RFC-208, RFC-207, RFC-600, RFC-100
+**Dependencies**: RFC-104, RFC-207, RFC-207, RFC-600, RFC-100
 **Replaces**: None (refines RFC-104/208 context injection)
 
 ## Abstract
@@ -16,7 +16,7 @@ This RFC introduces dynamic, tool-driven system context injection where tools an
 
 ### Current Limitations
 
-Soothe's system message construction (RFC-104, RFC-208) injects context sections statically based on complexity:
+Soothe's system message construction (RFC-104, RFC-207) injects context sections statically based on complexity:
 
 **Problems**:
 
@@ -460,7 +460,7 @@ subagents:
 ## Related Specifications
 
 - RFC-104: Dynamic System Context Injection
-- RFC-208: CoreAgent Message Optimization
+- RFC-207: CoreAgent Message Optimization
 - RFC-207: SystemMessage/HumanMessage Separation
 - RFC-600: Plugin Extension System
 - RFC-100: CoreAgent Runtime
