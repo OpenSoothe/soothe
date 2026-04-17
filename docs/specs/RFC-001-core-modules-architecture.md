@@ -5,7 +5,7 @@
 **Status**: Implemented
 **Created**: 2026-03-12
 **Updated**: 2026-04-17 (RFC consolidation note)
-**Related**: RFC-000, RFC-300, RFC-200
+**Related**: RFC-000, RFC-200, RFC-400, RFC-402
 
 ## Abstract
 

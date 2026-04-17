@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design + Implementation Interface Design
 **Created**: 2026-04-04
-**Dependencies**: RFC-000, RFC-001, RFC-300, RFC-400
+**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-402
 **Related**: RFC-200
 
 ## Abstract
@@ -334,6 +334,7 @@ vector_store_router:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) -- System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) -- Core Modules Architecture
-- [RFC-300](./RFC-300-context-memory-protocols.md) -- Context & Memory Protocols
+- [RFC-400](./RFC-400-context-protocol-architecture.md) -- Context Protocol
+- [RFC-402](./RFC-402-memory-protocol-architecture.md) -- Memory Protocol
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)

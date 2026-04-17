@@ -10,7 +10,7 @@
 
 ## Abstract
 
-This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-200) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
+This RFC defines Layer 3 of Soothe's three-layer execution architecture: autonomous goal management for long-running complex workflows. Layer 3 manages goal DAGs with dependencies, priorities, and dynamic restructuring capabilities. It delegates single-goal execution to Layer 2 (RFC-201) through explicit PERFORM → Layer 2 delegation, and receives PlanResult for Layer 3 reflection. This RFC merges and supersedes RFC-0011 (Dynamic Goal Management).
 
 ## Architecture Position
 
@@ -24,12 +24,12 @@ Layer 3: Autonomous Goal Management (this RFC)
   ├─ Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update → repeat
   └─ Delegation: PERFORM invokes Layer 2's full Plan → Execute loop
 
-Layer 2: Agentic Goal Execution (RFC-200)
+Layer 2: Agentic Goal Execution (RFC-201)
   ├─ Scope: Single-goal execution through iterative refinement
   ├─ Loop: Plan → Execute (max iterations: ~8)
   └─ Delegation: Execute invokes Layer 1 CoreAgent for step execution
 
-Layer 1: CoreAgent Runtime (RFC-00XX)
+Layer 1: CoreAgent Runtime (RFC-100)
   ├─ Foundation: create_soothe_agent() → CompiledStateGraph
   └─ Execution: Model → Tools → Model loop (LangGraph native)
 ```
@@ -186,6 +186,8 @@ class GoalEngine:
 
 ### 2. GoalBackoffReasoner (`cognition/goal_engine/backoff_reasoner.py`)
 
+**Canonical ownership note**: This RFC is the single source of truth for `GoalBackoffReasoner`, `BackoffDecision`, and goal-failure backoff semantics. Other RFCs reference these models for integration only and must not redefine authoritative schemas.
+
 LLM-driven backoff reasoning for goal DAG restructuring. When goal execution fails, the reasoner analyzes full goal context and decides WHERE to backoff in the goal DAG, replacing hardcoded retry logic with reasoning-based decisions.
 
 **BackoffDecision Model**:
@@ -206,6 +208,45 @@ class BackoffDecision(BaseModel):
     evidence_summary: str
     """Summary of why current goal path failed."""
 ```
+
+### Shared Evidence Contract (Canonical)
+
+Layer 2 and Layer 3 exchange failure and progress evidence through a shared contract to avoid schema drift across AgentLoop, GoalEngine, and context ingestion.
+
+```python
+class EvidenceBundle(BaseModel):
+    """Canonical evidence payload exchanged across Layer 2 and Layer 3."""
+
+    structured: dict[str, Any]
+    """Machine-readable execution metrics/state for deterministic processing."""
+
+    narrative: str
+    """Natural language synthesis for LLM reasoning and operator visibility."""
+
+    source: Literal["layer2_execute", "layer2_plan", "layer3_reflect"]
+    """Evidence producer stage."""
+
+    timestamp: datetime
+    """Evidence emission time."""
+
+class GoalSubDAGStatus(BaseModel):
+    """Canonical DAG execution status for backoff and reflection."""
+
+    execution_states: dict[str, Literal["pending", "running", "success", "failed", "backoff_pending"]]
+    """Per-goal execution state."""
+
+    backoff_points: list[str]
+    """Goal IDs selected as backoff boundaries."""
+
+    evidence_annotations: dict[str, EvidenceBundle]
+    """Per-goal evidence mapping."""
+```
+
+**Contract mapping**:
+- Layer 2 `PlanResult.evidence_summary` is translated into `EvidenceBundle.narrative`.
+- Layer 2 wave/step metrics populate `EvidenceBundle.structured`.
+- Layer 3 backoff/reflection updates `GoalSubDAGStatus` and appends evidence annotations.
+- `ContextProtocol.ingest()` stores compact summaries with references to these canonical structures.
 
 **GoalBackoffReasoner Interface**:
 
@@ -336,6 +377,31 @@ async def reflect(
         - feedback: guidance for revision
         - goal_directives: DAG restructuring actions
     """
+```
+
+### 3.1 Experimental Adaptive Decomposition Mode
+
+The system supports an optional experimental mode for decomposition strategy selection when problem structure is uncertain.
+
+**Design intent**:
+- Well-scoped goals: favor hierarchical DAG decomposition.
+- Ill-scoped goals: allow temporary fluid decomposition before DAG stabilization.
+- Mixed goals: allow staged crystallization from fluid hypotheses to explicit DAG nodes.
+
+**Safety constraints**:
+- Disabled by default.
+- Must preserve goal ID stability once a node is committed.
+- Must pass existing DAG cycle and depth validation before activation.
+- Must emit explicit restructuring rationale for observability.
+
+**Configuration**:
+
+```yaml
+autonomous:
+  adaptive_decomposition:
+    enabled: false
+    mode: conservative  # conservative | balanced | exploratory
+    max_fluid_rounds: 2
 ```
 
 ### 4. Safety Mechanisms
@@ -630,8 +696,8 @@ class GoalFileWatcher:
 
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
-- [RFC-200](./RFC-200-agentic-goal-execution.md) - Layer 2: Agentic Goal Execution
-- [RFC-200](./RFC-200-dag-execution.md) - DAG Execution & Failure Recovery
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: AgentLoop Plan-Execute Loop
+- [RFC-202](./RFC-202-dag-execution.md) - DAG Execution & Failure Recovery
 
 ## Changelog
 

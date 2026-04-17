@@ -4,7 +4,7 @@
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-001 (Core Modules Architecture), RFC-300 (Context & Memory Protocols)
+**Depends on**: RFC-001 (Core Modules Architecture), RFC-400 (Context Protocol), RFC-402 (Memory Protocol)
 **Supersedes**: ---
 **Kind**: Implementation Interface Design
 
@@ -12,7 +12,7 @@
 
 ## 1. Abstract
 
-This RFC defines the interface contracts for Soothe's protocol layer excluding Context and Memory (covered in RFC-300). It specifies PlannerProtocol, PolicyProtocol, DurabilityProtocol, RemoteAgentProtocol, and VectorStoreProtocol with their data structures, method signatures, and implementation patterns.
+This RFC defines the interface contracts for Soothe's protocol layer excluding Context and Memory (covered in RFC-400 and RFC-402). It specifies PlannerProtocol, PolicyProtocol, DurabilityProtocol, RemoteAgentProtocol, and VectorStoreProtocol with their data structures, method signatures, and implementation patterns.
 
 ---
 
@@ -31,7 +31,7 @@ This RFC defines:
 
 This RFC does **not** define:
 
-* ContextProtocol and MemoryProtocol (see RFC-300)
+* ContextProtocol and MemoryProtocol (see RFC-400 and RFC-402)
 * Concrete backend implementations (see respective backend modules)
 * Protocol composition and wiring (see RFC-001 Core Modules)
 
@@ -468,7 +468,7 @@ plan = await planner.create_plan(
 ## 9. Relationship to Other RFCs
 
 * **RFC-001 (Core Modules Architecture)**: Protocol composition in `SootheRunner`
-* **RFC-300 (Context & Memory Protocols)**: Sister RFC for context/memory interfaces
+* **RFC-400/RFC-402 (Context & Memory Protocols)**: Sister RFC set for context/memory interfaces
 * **RFC-102 (Security & Policy)**: PolicyProtocol security details
 * **`RFC-200-autonomous-goal-management.md`**: PlannerProtocol goal lifecycle
 * **`RFC-202-dag-execution.md`**: PlannerProtocol DAG support
@@ -478,13 +478,13 @@ plan = await planner.create_plan(
 ## 10. Open Questions
 
 1. **JudgeProtocol** — Should judge be added to registry or kept separate in cognition layer?
-2. **PersistStore** — Currently in RFC-300, should it move here as cross-protocol dependency?
+2. **PersistStore** — Currently documented under RFC-001/RFC-400 context persistence sections; should it move here as cross-protocol dependency?
 3. **Protocol versioning** — How to handle breaking changes to protocol interfaces?
 
 ---
 
 ## 11. Conclusion
 
-This registry provides clear interface contracts for Soothe's protocol layer, enabling backend swappability, testability, and type safety. Together with RFC-300, it documents all 8 core protocols that form the abstraction backbone of the system.
+This registry provides clear interface contracts for Soothe's protocol layer, enabling backend swappability, testability, and type safety. Together with RFC-400 and RFC-402, it documents all 8 core protocols that form the abstraction backbone of the system.
 
 > **Protocols define what; backends define how.**

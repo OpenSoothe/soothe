@@ -21,7 +21,7 @@ This RFC defines Layer 2 of Soothe's three-layer execution architecture: agentic
 ### Three-Layer Model
 
 ```
-Layer 3: Autonomous Goal Management (RFC-300) → Layer 2 (PERFORM stage)
+Layer 3: Autonomous Goal Management (RFC-200) → Layer 2 (PERFORM stage)
 Layer 2: Agentic Goal Execution (this RFC) → Layer 1 (Execute phase)
 Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 ```
@@ -303,205 +303,50 @@ config = {
 
 ---
 
-## GoalEngine Backoff Reasoning Enhancement
+## Layer 2 Failure Evidence Handoff to Layer 3
 
-### LLM-Driven Backoff Architecture
+Layer 2 does not own backoff policy. It produces high-fidelity execution evidence and hands it to Layer 3 GoalEngine, which owns backoff reasoning and DAG restructuring.
 
-**Problem**: GoalEngine has GoalDirective for restructuring, but lacks explicit LLM-driven backoff reasoning. When goal DAG paths fail, hardcoded retry logic doesn't consider full execution context or provide intelligent backoff decision-making.
+**Ownership boundary**:
+- Layer 2 (`RFC-201`): produce execution evidence and failure context.
+- Layer 3 (`RFC-200`): define and execute `GoalBackoffReasoner` policy and `BackoffDecision`.
 
-**Solution**: Add `GoalBackoffReasoner` module that uses LLM to analyze complete goal context (all goals + dependencies + evidence) and decide WHERE to backoff in goal DAG.
+**Canonical models**:
+- Backoff and DAG-restructuring models: see `RFC-200`.
+- Shared evidence schema (`EvidenceBundle`, `GoalSubDAGStatus`): see `RFC-200`.
 
-### Module Definition
-
-```python
-class GoalBackoffReasoner:
-    """LLM-driven backoff reasoning for GoalEngine.
-    
-    Analyzes full goal context when goal fails and decides optimal
-    backoff point in goal DAG using LLM reasoning, not hardcoded rules.
-    """
-
-    def __init__(self, llm: BaseChatModel) -> None:
-        """Initialize with reasoning LLM."""
-        self._llm = llm
-
-    async def reason_backoff(
-        self,
-        goal_id: str,
-        goal_context: GoalContext,
-    ) -> BackoffDecision:
-        """
-        LLM analyzes full goal context (all goals + dependencies + evidence)
-        and decides WHERE to backoff in goal DAG.
-
-        Args:
-            goal_id: Failed goal node identifier
-            goal_context: Complete goal execution context including:
-                - All goals in DAG with statuses
-                - Dependency relationships
-                - Execution evidence from failed goal
-                - Similar goal execution history (via ThreadRelationshipModule)
-
-        Returns:
-            BackoffDecision with:
-                - backoff_to: Goal node ID to backoff to
-                - reason: Natural language reasoning for decision
-                - new_directives: List of GoalDirective for restructuring
-        """
-```
-
-### Data Model
+### Handoff Contract
 
 ```python
-class BackoffDecision(BaseModel):
-    """LLM-driven backoff decision for GoalEngine."""
+class Layer2FailureHandoff(BaseModel):
+    """Layer 2 handoff payload to Layer 3 on goal-path failure."""
 
-    backoff_to: str
-    """Goal node ID to backoff to in DAG."""
-
-    reason: str
-    """Natural language reasoning explaining backoff choice."""
-
-    new_directives: list[GoalDirective]
-    """Restructuring directives for goal DAG."""
-
-    confidence: float = Field(ge=0.0, le=1.0, default=0.8)
-    """Confidence in backoff decision."""
-
-class GoalContext(BaseModel):
-    """Goal execution context for backoff reasoning."""
-
-    current_goal_id: str
+    goal_id: str
     """Failed goal identifier."""
 
-    all_goals: list[GoalRecord]
-    """All goals in DAG with execution statuses."""
+    plan_result: PlanResult
+    """Latest PlanResult with iteration reasoning."""
 
-    dependency_graph: dict[str, list[str]]
-    """Goal dependency relationships (goal_id -> dependent_goal_ids)."""
+    evidence: EvidenceBundle
+    """Canonical evidence payload (RFC-200 shared contract)."""
 
-    execution_evidence: EvidenceBundle
-    """Structured + unstructured evidence from failed goal execution."""
-
-    similar_goals: list[GoalRecord]
-    """Similar goal execution history (from ThreadRelationshipModule)."""
+    thread_context_hint: str | None = None
+    """Optional thread-switch/goal-context note from RFC-207 components."""
 ```
 
-### Integration with GoalEngine
-
-```python
-class GoalEngine:
-    """Layer 3 goal lifecycle manager (enhanced with backoff reasoner)."""
-
-    def __init__(self, backoff_reasoner: GoalBackoffReasoner | None = None) -> None:
-        self._backoff_reasoner = backoff_reasoner
-
-    async def handle_goal_failure(
-        self,
-        goal_id: str,
-        evidence: EvidenceBundle,
-    ) -> None:
-        """Handle goal failure with LLM-driven backoff reasoning."""
-        
-        if not self._backoff_reasoner:
-            # Fallback: hardcoded retry logic (existing behavior)
-            self._mark_goal_failed(goal_id)
-            return
-
-        # Gather goal context
-        goal_context = GoalContext(
-            current_goal_id=goal_id,
-            all_goals=self._get_all_goals(),
-            dependency_graph=self._get_dependency_graph(),
-            execution_evidence=evidence,
-            similar_goals=self._get_similar_goals(goal_id),
-        )
-
-        # LLM-driven backoff decision
-        decision = await self._backoff_reasoner.reason_backoff(goal_id, goal_context)
-
-        logger.info(
-            "GoalEngine backoff: %s → %s (reason: %s)",
-            goal_id, decision.backoff_to, decision.reason,
-        )
-
-        # Apply backoff + restructuring
-        self._apply_backoff_decision(decision)
-```
-
-### Configuration
-
-```yaml
-goal_engine:
-  backoff_reasoning_enabled: true
-  backoff_llm_role: think  # Use 'think' role for reasoning
-  max_backoff_attempts: 3  # Maximum backoff iterations before final failure
-```
-
-### Backoff Process Flow
+### Integration Flow
 
 ```
-Goal execution failure
-├─ Gather goal context (all goals + dependencies + evidence)
-├─ Call GoalBackoffReasoner.reason_backoff()
-│  ├─ LLM analyzes full context
-│  ├─ Decides optimal backoff point (WHERE in DAG)
-│  └─ Generates restructuring directives (HOW to replan)
-├─ Apply BackoffDecision
-│  ├─ Mark goals from failed → backoff point as "backoff_pending"
-│  ├─ Apply GoalDirectives for restructuring
-│  └─ Reset execution state for backoff subtree
-└─ Resume execution from backoff point
+Layer 2 Execute/Plan detects failed path
+├─ Build canonical EvidenceBundle from wave metrics + summaries
+├─ Emit Layer2FailureHandoff(goal_id, plan_result, evidence)
+└─ Return control to Layer 3 PERFORM/REFLECT boundary
+
+Layer 3 GoalEngine receives handoff
+├─ Calls GoalBackoffReasoner (RFC-200)
+├─ Applies BackoffDecision + GoalDirectives
+└─ Reschedules DAG from selected backoff point
 ```
-
-### Example Backoff Scenario
-
-**Goal DAG**: Research → Analyze → Report → Translate
-
-**Failure**: Translate goal fails (language detection error due to research output contamination)
-
-**LLM Backoff Decision**:
-```json
-{
-  "backoff_to": "analyze",
-  "reason": "Research output contaminated language context. Backoff to 'analyze' to add language detection step before Report generation.",
-  "new_directives": [
-    {
-      "type": "insert_step",
-      "after_goal": "analyze",
-      "new_goal": "detect_language",
-      "description": "Detect document language before translation"
-    },
-    {
-      "type": "modify_goal",
-      "goal_id": "translate",
-      "modification": "Add language_hint parameter from detect_language step"
-    }
-  ],
-  "confidence": 0.85
-}
-```
-
-**Result**: GoalEngine backs off to "analyze", inserts language detection step, modifies translation goal, resumes execution.
-
-### Benefits
-
-| Aspect | Before (Hardcoded Retry) | After (LLM Backoff) |
-|--------|--------------------------|---------------------|
-| **Backoff decision** | Rule-based (retry N times) | LLM reasoning (consider full context) |
-| **Backoff location** | Fixed (current goal) | Dynamic (optimal DAG node) |
-| **Restructuring** | Manual revision | Automated via GoalDirective |
-| **Evidence usage** | Truncated summary | Full structured + unstructured |
-| **Similar goals** | ❌ Not considered | ✅ ThreadRelationshipModule integration |
-| **Reasoning transparency** | ❌ Hidden in code | ✅ Natural language explanation |
-
-### Implementation Status
-
-- ⚠️ **NEW**: GoalBackoffReasoner module (pending implementation)
-- ⚠️ **NEW**: BackoffDecision data model (pending implementation)
-- ⚠️ **NEW**: GoalContext integration with ThreadRelationshipModule (pending implementation)
-- ✅ GoalDirective restructuring mechanism (existing)
-- ✅ GoalEngine goal lifecycle management (existing)
 
 ---
 
@@ -567,6 +412,7 @@ agentic:
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
 - RFC-100: CoreAgent runtime
+- RFC-200: Layer 3 Goal management and backoff authority
 - RFC-203: AgentLoop State & Memory Architecture
 - RFC-207: AgentLoop Thread Management & Goal Context
 - RFC-213: AgentLoop Reasoning Quality & Robustness
