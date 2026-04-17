@@ -155,8 +155,6 @@ set is_sufficient to true.
 as topic) targeting the gaps.  For each, suggest which information domain \
 is best.
 
-Iteration: {iteration} of {max_loops}
-
 Summaries:
 {summaries}
 
@@ -435,8 +433,6 @@ def build_research_engine(
 
         prompt = _REFLECT.format(
             topic=topic,
-            iteration=loop_count + 1,
-            max_loops=state.get("max_loops", _default_config.max_loops),
             summaries=summaries[:4000] or "(no summaries yet)",
         )
 
