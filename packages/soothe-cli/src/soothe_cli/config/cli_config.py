@@ -73,7 +73,7 @@ class CLIConfig:
         Full config available via daemon RPC.
 
         Args:
-            config_path: Path to config file. Defaults to ~/.soothe/config.yml.
+            config_path: Path to config file. Defaults to ~/.soothe/config/cli_config.yml.
 
         Returns:
             CLIConfig instance with minimal settings.
@@ -81,7 +81,7 @@ class CLIConfig:
         import yaml
 
         if config_path is None:
-            config_path = Path.home() / ".soothe" / "config.yml"
+            config_path = Path.home() / ".soothe" / "config" / "cli_config.yml"
 
         if not config_path.exists():
             return cls()  # Use defaults

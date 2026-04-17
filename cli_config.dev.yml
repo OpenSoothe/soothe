@@ -1,0 +1,35 @@
+# Development CLI Configuration - Client display preferences and connection settings
+# Symlink to ~/.soothe/config/cli_config.yml for development
+#
+# Usage:
+#   mkdir -p ~/.soothe/config
+#   ln -sf /Users/chenxm/Workspace/Soothe/cli_config.dev.yml ~/.soothe/config/cli_config.yml
+
+# Client verbosity controls what events are DISPLAYED in TUI/CLI
+# Verbosity is a CLIENT-side preference, sent to daemon when subscribing to threads
+# Daemon filters events per-client before sending over WebSocket (RFC-401, RFC-501)
+#
+# Options:
+#   - quiet: Only errors and final answers
+#   - normal: Plan updates, tool summaries, subagent start/end (default)
+#   - detailed: Protocol events, tool calls, SUBAGENT INTERNALS/STEP PROGRESS
+#   - debug: Everything including thinking, heartbeats
+verbosity: detailed
+
+# WebSocket connection to daemon
+websocket:
+  host: "127.0.0.1"
+  port: 8765
+  retry_count: 40           # Connection retry attempts
+  retry_delay_s: 0.25       # Delay between retries
+  timeout_s: 5.0            # Connection timeout
+
+# UI preferences
+ui:
+  output_format: "text"     # Output format for headless mode: text or jsonl
+  activity_max_lines: 300   # Maximum activity lines to display
+
+# TUI preferences (optional)
+tui:
+  theme: "default"          # TUI theme (langchain, langchain-light, etc.)
+  show_token_usage: true    # Show token usage in status bar

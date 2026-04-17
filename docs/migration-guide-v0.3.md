@@ -42,18 +42,33 @@ pip install soothe-daemon[all]
 **Create CLI config** (new):
 
 ```bash
-# Create ~/.soothe/cli_config.yml
-cat > ~/.soothe/cli_config.yml << 'EOF'
+# Create ~/.soothe/config/cli_config.yml
+mkdir -p ~/.soothe/config
+cat > ~/.soothe/config/cli_config.yml << 'EOF'
+verbosity: "normal"  # Client display preference (quiet|normal|detailed|debug)
+
 websocket:
   host: "localhost"
   port: 8765
-
-ui:
-  verbosity: "normal"
 EOF
 ```
 
-**Daemon config unchanged**: Your existing `~/.soothe/config.yml` works with daemon.
+**Daemon config unchanged**: Your existing `~/.soothe/config/config.yml` works with daemon.
+
+### Verbosity Architecture
+
+**Important**: Verbosity is a **client-side display preference**, not a daemon setting.
+
+- **CLI config** (`cli_config.yml`): `verbosity: detailed` controls what events are **displayed** to you
+  - Client sends this to daemon when subscribing
+  - Daemon filters events **per-client** before sending
+  - Options: `quiet` (minimal), `normal` (default), `detailed` (subagent progress), `debug` (all internals)
+
+- **Daemon config** (`config.yml`): `logging.file.level: DEBUG` controls daemon **log file** verbosity
+  - Independent of client display
+  - What daemon writes to `~/.soothe/logs/soothe-daemon.log`
+
+**Example**: Multiple clients can connect with different verbosity levels. Each receives filtered events based on their preference, while daemon logs everything at its configured level.
 
 ### 4. Update Commands
 
@@ -106,8 +121,10 @@ soothe-sdk      0.2.0
 
 ```bash
 # Create CLI-specific config
-mkdir -p ~/.soothe
-cat > ~/.soothe/cli_config.yml << 'EOF'
+mkdir -p ~/.soothe/config
+cat > ~/.soothe/config/cli_config.yml << 'EOF'
+verbosity: "normal"  # Client display preference (quiet|normal|detailed|debug)
+
 websocket:
   host: "localhost"
   port: 8765
@@ -116,7 +133,6 @@ websocket:
   timeout_s: 5.0
 
 ui:
-  verbosity: "normal"
   activity_max_lines: 300
   format: "text"
 
@@ -127,7 +143,7 @@ EOF
 ```
 
 **Important**: Ensure websocket host/port match between:
-- `cli_config.yml` (websocket.host, websocket.port)
+- `cli_config.yml` (websocket.host, websocket.port, verbosity)
 - `config.yml` (daemon.transports.websocket.host, daemon.transports.websocket.port)
 
 ### Step 4: Test Commands
@@ -221,7 +237,7 @@ soothe-daemon start --foreground
 pip install soothe-cli
 
 # Configure CLI to connect to remote daemon
-cat > ~/.soothe/cli_config.yml << 'EOF'
+cat > ~/.soothe/config/cli_config.yml << 'EOF'
 websocket:
   host: "remote-server-ip"
   port: 8765
@@ -307,7 +323,7 @@ subagents: [...]
 grep -A 5 "websocket:" ~/.soothe/config.yml
 
 # Check CLI config
-grep -A 5 "websocket:" ~/.soothe/cli_config.yml
+grep -A 5 "websocket:" ~/.soothe/config/cli_config.yml
 
 # Ensure host/port match
 ```

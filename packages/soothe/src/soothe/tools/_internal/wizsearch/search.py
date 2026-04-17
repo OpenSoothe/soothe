@@ -147,12 +147,12 @@ class WizsearchSearchTool(BaseTool):
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
-        from wizsearch import WizSearch, WizSearchConfig
-
         from soothe.utils.output_capture import capture_subagent_output
 
         _require_wizsearch()
         _maybe_apply_tavily_key()
+
+        from wizsearch import WizSearch, WizSearchConfig
 
         config_kwargs: dict[str, object] = {
             "max_results_per_engine": max_results_per_engine or self.default_max_results_per_engine,

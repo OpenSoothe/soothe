@@ -38,11 +38,12 @@ class WizsearchCrawlPageTool(BaseTool):
         *,
         only_text: bool = False,
     ) -> dict[str, object]:
-        from wizsearch import PageCrawler
-
         from soothe.utils.output_capture import capture_subagent_output
 
         _require_wizsearch()
+
+        from wizsearch import PageCrawler
+
         selected_format = (content_format or self.default_content_format).strip().lower()
         if selected_format not in {"markdown", "html", "text"}:
             selected_format = self.default_content_format
