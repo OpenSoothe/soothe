@@ -127,6 +127,8 @@ Subagents receive projections, not full context:
 
 ## ContextRetrievalModule
 
+**Canonical section**: This is the **authoritative** specification for `ContextRetrievalModule` and goal-centric retrieval. [RFC-001](./RFC-001-core-modules-architecture.md) summarizes `ContextProtocol` and defers here for the full retrieval API and algorithm-version table.
+
 ### Self-Contained Goal-Centric Retrieval
 
 Self-contained retrieval module with stable API boundary enables algorithm evolution without breaking ContextProtocol interface.

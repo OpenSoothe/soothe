@@ -58,6 +58,26 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 **Why This Matters**: Brainstorming sessions sometimes confuse AgentLoop with "consciousness" because it maintains execution history. However, consciousness (unbounded knowledge with bounded projections) lives in ContextProtocol, not AgentLoop. AgentLoop's history is iteration-scoped execution state, not global knowledge accumulation.
 
+### Retrieval authority (AgentLoop versus ContextProtocol)
+
+Design discussions sometimes assign "unbounded retrieval authority" to the loop. In Soothe specs:
+
+- **ContextProtocol** owns append-only ledger semantics, persistence hooks, and the **retrieval module implementation** (see RFC-400).
+- **AgentLoop** owns **when** to retrieve, **for which goal**, and how retrieved entries combine with `GoalContextManager` output and Plan / Execute prompts. It exercises **operational retrieval authority** without owning the ledger.
+
+### GoalEngine-AgentLoop synchronization (dual trigger)
+
+Layer 3 (`GoalEngine`, RFC-200) and AgentLoop stay in sync through **two complementary triggers** (both may appear in a single run):
+
+1. **Reactive (event-bound)**: On thread completion, step boundaries, or failure paths, Layer 2 updates evidence and drives calls that mutate or query goal state as required by RFC-200 (for example failure handling and backoff application).
+2. **Need-based pull**: Before scheduling or thread decisions, Layer 2 **pulls** authoritative goal data (`ready_goals`, snapshots, directive results) whenever the next action depends on the DAG.
+
+Exact ordering is defined across RFC-200, RFC-203, and RFC-207; this subsection fixes the **contract** that synchronization is intentionally hybrid, not exclusively polling or exclusively push.
+
+### Execute-time packaging (`config.configurable` versus TaskPackage)
+
+The normative interchange for passing execution hints into CoreAgent today is **LangGraph `config.configurable`** (see Executor integration in this RFC). A **documentary alternative** is assembling a single **`TaskPackage`** object (goal briefing, history snippets, backoff evidence, and `StepAction`) and mapping it into config before `astream`. Either pattern satisfies "direct provisioning" from design brainstorms; promoting `TaskPackage` to a required wire type would be a separate RFC change.
+
 ---
 
 ## Plan-Execute Loop Model

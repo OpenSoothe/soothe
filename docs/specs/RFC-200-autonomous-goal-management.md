@@ -379,6 +379,10 @@ async def reflect(
     """
 ```
 
+### 3.0 Goal evolution (design stance, non-normative)
+
+Product and research language sometimes describe complex goals as **unknowable upfront** or **continually becoming** through evidence. RFCs specify **mechanisms** (directives, backoff, reflection, adaptive mode below) rather than a formal goal ontology. Implementations MUST still enforce DAG safety, cycle checks, and **stable goal IDs for committed nodes** regardless of narrative framing.
+
 ### 3.1 Experimental Adaptive Decomposition Mode
 
 The system supports an optional experimental mode for decomposition strategy selection when problem structure is uncertain.
@@ -387,6 +391,10 @@ The system supports an optional experimental mode for decomposition strategy sel
 - Well-scoped goals: favor hierarchical DAG decomposition.
 - Ill-scoped goals: allow temporary fluid decomposition before DAG stabilization.
 - Mixed goals: allow staged crystallization from fluid hypotheses to explicit DAG nodes.
+
+**Informative signals (implementation-defined)**:
+- How the engine classifies a problem as well-scoped versus ill-scoped (for example planner ambiguity scores, breadth of initial `GoalDirective` set, or explicit operator flags) is **not** fixed by this RFC.
+- **Crystallization** from fluid hypotheses to explicit DAG nodes is expected to follow **accumulating execution evidence**; the exact heuristics and telemetry are implementation-defined, subject to the safety constraints below.
 
 **Safety constraints**:
 - Disabled by default.
