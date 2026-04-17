@@ -4,7 +4,7 @@
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
 **Created**: 2026-03-12
-**Updated**: 2026-04-17 (RFC consolidation note)
+**Updated**: 2026-04-17 (RFC consolidation; retrieval module canonical in RFC-400)
 **Related**: RFC-000, RFC-200, RFC-400, RFC-402
 
 ## Abstract
@@ -25,7 +25,10 @@ class ContextProtocol(Protocol):
     async def summarize(self, scope: str | None = None) -> str: ...
     async def persist(self, thread_id: str) -> None: ...
     async def restore(self, thread_id: str) -> bool: ...
+    def get_retrieval_module(self) -> ContextRetrievalModule: ...
 ```
+
+**Extended methods**: `get_retrieval_module()` and the `ContextRetrievalModule` type are fully specified in [RFC-400](./RFC-400-context-protocol-architecture.md) (canonical retrieval surface). This RFC keeps the summary above aligned with implementations that expose goal-centric retrieval.
 
 ### Data Models
 
@@ -42,84 +45,22 @@ class ContextProtocol(Protocol):
 4. **Hierarchical summarization** -- entries summarized at multiple levels
 5. **Subagent isolation** -- subagents receive projections, not full context; return results only
 
-### ContextRetrievalModule
+### Goal-centric retrieval (canonical: RFC-400)
 
-Self-contained retrieval module for goal-centric context access. Stable API boundary enables algorithm evolution without breaking ContextProtocol interface.
+`ContextRetrievalModule`, `retrieve_by_goal_relevance(...)`, algorithm-version notes, and default wiring for `KeywordContext` / `VectorContext` are defined in **[RFC-400](./RFC-400-context-protocol-architecture.md)**. RFC-001 references that document as the **single authoritative** copy of the retrieval API to avoid schema drift.
 
-**Module Interface**:
-
-```python
-class ContextRetrievalModule:
-    """Self-contained retrieval module for ContextProtocol.
-
-    Stable API boundary enables algorithm evolution without
-    breaking ContextProtocol interface.
-    """
-
-    def __init__(self, embedding_model: Embeddings) -> None:
-        self._embedding_model = embedding_model
-        self._algorithm_version = "v1_keyword"  # Evolvable
-
-    def retrieve_by_goal_relevance(
-        self,
-        goal_id: str,
-        execution_context: dict[str, Any],
-        limit: int = 10,
-    ) -> list[ContextEntry]:
-        """
-        Goal-centric retrieval (not query-centric).
-
-        Relevance determined by goal relationship to history,
-        not keyword similarity.
-
-        Args:
-            goal_id: Target goal for relevance matching
-            execution_context: Current execution state
-            limit: Maximum entries to return
-
-        Returns:
-            ContextEntry list ranked by goal relevance
-
-        Stable API: Algorithm can evolve (keyword → embedding → hybrid)
-        without breaking callers.
-        """
-```
-
-**Algorithm Versions**:
-
-| Version | Algorithm | Description |
-|---------|-----------|-------------|
-| `v1_keyword` | Goal tag matching | Match entries with goal_id tag (current) |
-| `v2_embedding` | Semantic similarity | Embed goal description, match entry embeddings (future) |
-| `hybrid` | Combined approach | Keyword + embedding hybrid (future) |
-
-**Integration with ContextProtocol**:
+**Typical call pattern** (Layer 2 runner or runner integration assembling Plan / Execute context):
 
 ```python
-class KeywordContext(ContextProtocol):
-    def __init__(self, embedding_model: Embeddings | None = None) -> None:
-        self._entries: list[ContextEntry] = []
-        self._retrieval_module = ContextRetrievalModule(embedding_model)
-
-    # NEW: Expose retrieval module for goal-centric access
-    def get_retrieval_module(self) -> ContextRetrievalModule:
-        """Get retrieval module for goal-centric operations."""
-        return self._retrieval_module
-```
-
-**Usage Pattern**:
-
-```python
-# AgentLoop uses retrieval module for goal-centric context
-context = self._context.get_retrieval_module()
-relevant_history = context.retrieve_by_goal_relevance(
+retrieval = context.get_retrieval_module()
+relevant_history = retrieval.retrieve_by_goal_relevance(
     goal_id=state.current_goal_id,
     execution_context={"iteration": state.iteration},
     limit=10,
 )
 ```
 
-**Design Principle**: Separate retrieval concerns from ContextProtocol interface. Stable API enables algorithm evolution while preserving ingest/project contract.
+**Design principle**: Retrieval algorithms evolve behind a stable module API; `ingest` / `project` contracts stay stable.
 
 ### Implementations
 

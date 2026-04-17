@@ -31,6 +31,7 @@ AgentLoop becomes an abstract orchestration entity spanning multiple threads:
 - **Goal-thread relevance analysis**: LLM-based semantic analysis evaluates if current thread context hinders next goal (goal independence, domain mismatch, message pollution) before execution
 - **Auto /recall knowledge transfer**: When thread switches, automatically search previous threads' goal_history and inject top-K relevant knowledge into new thread's Plan phase
 - **Complete goal history**: Loop checkpoint maintains all goal execution records across all threads (GoalExecutionRecord includes thread_id)
+- **Knowledge-aware routing (optional policy dimension)**: In addition to LLM goal–thread relevance, policies MAY prefer threads whose **goal_history or tool evidence** aligns with the current goal’s topic or domain (for example embedding-neighbor goals or same-domain subagent traces, aligned with RFC-609 thread-relationship options). This does not replace semantic relevance analysis; it **narrows or ranks** candidate threads when multiple LangGraph threads are eligible.
 
 ## Architecture
 

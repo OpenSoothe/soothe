@@ -328,6 +328,12 @@ Executor subscribes to events for monitoring:
 - Error detection
 - Completion signaling
 
+### Report-back alternative (symmetric pattern)
+
+**Push events** (above) are one valid integration pattern. The **report-back** alternative places responsibility on CoreAgent (or middleware hooks) to **emit summaries or status payloads** at milestones so the Executor ingests the same facts without subscribing to a streaming event bus.
+
+Both patterns are **architecturally acceptable** for building Layer 2 monitoring and checkpoint updates, provided evidence payloads remain compatible with the shared contracts in RFC-200 (for example `EvidenceBundle` usage) and ordering constraints in RFC-203. Implementations choose push, pull, or both per transport and runtime constraints.
+
 ---
 
 ## Content Format

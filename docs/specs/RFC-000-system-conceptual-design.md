@@ -32,7 +32,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Agentic Goal Execution (RFC-200)                   │
+│ Layer 2: Agentic Goal Execution (RFC-201)                 │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: Plan → Execute (max iterations: ~8)                  │
 │ • Delegation: EXECUTE invokes Layer 1 CoreAgent for execution │
@@ -177,6 +177,15 @@ Controls parallel execution of plan steps, subagents, and tools. Steps declare d
 12. Plan state and context ledger survive thread suspend/resume via `DurabilityProtocol`.
 13. All protocol implementations are swappable via `SootheConfig`.
 14. Layer 2 (AgentLoop) and Layer 1 (CoreAgent) have independent persistence systems: Layer 2 uses DurabilityProtocol + ContextProtocol persistence, Layer 1 uses LangGraph checkpointer. This dual persistence architecture ensures architectural isolation and enables Layer 2 recovery without Layer 1 dependency.
+
+## Appendix A: Cross-domain analogies (non-normative)
+
+This appendix records **illustrative** comparisons from other fields. It is not normative: implementations MUST follow protocol RFCs, not these metaphors.
+
+- **Distributed schedulers (for example Kubernetes)**: A control plane reconciles desired state with reported status; workers run workloads. This parallels **AgentLoop + GoalEngine** coordinating threads while **CoreAgent** runs steps, and parallels **event-driven monitoring versus explicit report-back** as two ways status reaches the coordinator.
+- **Operating systems**: A small kernel mediates resources; user processes hold most execution context. This parallels **thin mediation at the runner** versus **heavy per-thread state** in LangGraph.
+- **Biological homeostasis**: Feedback loops maintain stability under changing load. This parallels **goal backoff and replanning** when execution evidence contradicts prior assumptions.
+- **Game AI**: A director layer selects high-level objectives while NPC controllers handle local tactics. This parallels **GoalEngine / Plan phase** versus **Execute phase** delegation to CoreAgent.
 
 ## Boundaries
 
