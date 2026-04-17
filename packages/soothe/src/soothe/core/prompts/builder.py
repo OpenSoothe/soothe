@@ -118,12 +118,6 @@ class PromptBuilder:
                 "</WORKSPACE_RULES>"
             )
 
-        # Loop iteration limits (system-level configuration context)
-        if state is not None:
-            parts.append(
-                f"<LOOP_CONFIG>\nIteration: {state.iteration} (max {state.max_iterations})\n</LOOP_CONFIG>"
-            )
-
         # Available capabilities (system-level resource context)
         if context.available_capabilities:
             parts.append(
