@@ -32,7 +32,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 └─────────────────────────────────────────────────────────────┘
                           ↓ PERFORM (full delegation)
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: Agentic Goal Execution (RFC-201)                   │
+│ Layer 2: Agentic Goal Execution (RFC-200)                   │
 │ • Scope: Single-goal execution through iterative refinement   │
 │ • Loop: Plan → Execute (max iterations: ~8)                  │
 │ • Delegation: EXECUTE invokes Layer 1 CoreAgent for execution │
@@ -201,5 +201,9 @@ This is the foundational Conceptual Design spec. All subsequent Architecture Des
 
 - [RFC Standard](./rfc-standard.md) - Specification kinds and process
 - [RFC Index](./rfc-index.md) - All RFCs
-- [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture Design
-- [RFC-202](./RFC-202-dag-execution.md) - DAG-Based Execution and Unified Concurrency
+- [RFC-200](./RFC-200-autonomous-goal-management.md) - Layer 3: Autonomous Goal Management
+- [RFC-200 (Alias)](./RFC-200-alias.md) - Merged into RFC-200 (AgentLoop Core Loop)
+- [RFC-200 (Alias)](./RFC-200-alias.md) - Merged into RFC-200 (AgentLoop Core Loop)
+- [RFC-400-410] - Core Protocols (Context, Memory, Planner, Policy, Durability, RemoteAgent)
+
+**Note**: RFC consolidation completed 2026-04-17. See merged RFC drafts in `docs/drafts/` and alias RFCs in `docs/specs/`.

@@ -4,7 +4,7 @@
 **Date**: 2026-04-09
 **Status**: Draft
 **Scope**: Layer 1 CoreAgent message construction optimization
-**Related**: RFC-207 (Layer 2 message separation), RFC-201 (Layer 2 execution)
+**Related**: RFC-207 (Layer 2 message separation), RFC-200 (Layer 2 execution)
 
 ---
 
@@ -960,7 +960,7 @@ soothe "Hello!"
 ### Related Specifications
 
 - **RFC-207**: SystemMessage/HumanMessage Separation (Layer 2)
-- **RFC-201**: Layer 2 Agentic Goal Execution (Reason/Act loop)
+- **RFC-200**: Layer 2 Agentic Goal Execution (Reason/Act loop)
 - **RFC-100**: Layer 1 CoreAgent Runtime
 - **RFC-104**: Context XML Injection
 

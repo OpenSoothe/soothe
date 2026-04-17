@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from soothe_sdk.types.manifest import PluginManifest
+from soothe_sdk.plugin import Manifest as PluginManifest
 
 logger = logging.getLogger(__name__)
 

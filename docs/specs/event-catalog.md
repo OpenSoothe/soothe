@@ -1,36 +1,36 @@
 # Event Catalog Reference
 
-**Purpose**: Complete catalog of Soothe progress event types (RFC-401, RFC-403)
-**Status**: Reference Document (Pending RFC-403 Migration)
+**Purpose**: Complete catalog of Soothe progress event types (RFC-400, RFC-402)
+**Status**: Reference Document (Pending RFC-402 Migration)
 **Last Updated**: 2026-04-15
 
-This document provides the complete catalog of all Soothe progress event types. For event naming semantics, grammar rules, and domain taxonomy, see [RFC-403](RFC-403-unified-event-naming.md). For event processing architecture, see [RFC-401](RFC-401-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
+This document provides the complete catalog of all Soothe progress event types. For event naming semantics, grammar rules, and domain taxonomy, see [RFC-402](RFC-402-unified-event-naming.md). For event processing architecture, see [RFC-400](RFC-400-event-processing.md). For verbosity classification, see [RFC-501](RFC-501-display-verbosity.md).
 
 ## Event Naming Pattern
 
-All events follow the 4-segment pattern defined in RFC-403:
+All events follow the 4-segment pattern defined in RFC-402:
 ```
 soothe.<domain>.<component>.<action_or_state>
 ```
 
-**Domains**: See RFC-403 for complete domain taxonomy with functional scope definitions.
+**Domains**: See RFC-402 for complete domain taxonomy with functional scope definitions.
 
-**Grammar**: All actions use present progressive tense; state nouns for reports. See RFC-403 for approved verb and state noun lists.
+**Grammar**: All actions use present progressive tense; state nouns for reports. See RFC-402 for approved verb and state noun lists.
 
-**Note**: This catalog reflects the current event naming system. RFC-403 defines the unified semantics and migration map for transitioning to present progressive tense grammar and function-based domains.
+**Note**: This catalog reflects the current event naming system. RFC-402 defines the unified semantics and migration map for transitioning to present progressive tense grammar and function-based domains.
 
 ---
 
-## RFC-403 Migration Status
+## RFC-402 Migration Status
 
-The event naming in this catalog will be updated following RFC-403 migration phases:
+The event naming in this catalog will be updated following RFC-402 migration phases:
 
 **Phase 1**: Core event catalog migration
 **Phase 2**: Emitter code updates
 **Phase 3**: Test migration
 **Phase 4**: Documentation updates (this catalog)
 
-Until migration completion, event types in this catalog reflect the current system. See RFC-403 Section 8 for the complete migration map.
+Until migration completion, event types in this catalog reflect the current system. See RFC-402 Section 8 for the complete migration map.
 
 ---
 
@@ -210,7 +210,7 @@ Where `{name}` is the concrete tool name (e.g., `search`, `crawl`, `read_file`, 
 
 ---
 
-## Autopilot Events (RFC-204)
+## Autopilot Events (RFC-203)
 
 | Type | Fields | VerbosityTier |
 |------|--------|---------------|
@@ -250,4 +250,4 @@ Events are classified into VerbosityTier values (RFC-0024) that determine visibi
 
 ---
 
-**See Also**: [RFC-401](RFC-401-event-processing.md) for event architecture, [RFC-501](RFC-501-display-verbosity.md) for VerbosityTier specification.
+**See Also**: [RFC-400](RFC-400-event-processing.md) for event architecture, [RFC-501](RFC-501-display-verbosity.md) for VerbosityTier specification.

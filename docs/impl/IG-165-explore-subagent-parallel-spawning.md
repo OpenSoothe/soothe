@@ -5,7 +5,7 @@
 **Title**: Explore Subagent and Parallel Spawning
 **Status**: Draft
 **Created**: 2026-04-13
-**Dependencies**: RFC-605, RFC-201, RFC-100, RFC-600
+**Dependencies**: RFC-605, RFC-200, RFC-100, RFC-600
 
 ## Overview
 

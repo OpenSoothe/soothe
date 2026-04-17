@@ -259,4 +259,4 @@ def on_step_completed(self, icon: str, summary: str, duration_ms: int) -> None:
 ## Related Documents
 
 - [RFC-501 Event Display Architecture](../specs/RFC-501-event-display-architecture.md)
-- [RFC-201 Agentic Loop Execution](../specs/RFC-201-agentic-loop-execution.md)
+- [RFC-200 Agentic Loop Execution](../specs/RFC-200-agentic-loop-execution.md)

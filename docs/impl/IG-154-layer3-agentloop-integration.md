@@ -4,7 +4,7 @@
 **Title**: Layer 3 AgentLoop Integration Refactoring
 **Status**: Draft
 **Created**: 2026-04-12
-**RFC References**: RFC-200 (Layer 3), RFC-201 (Layer 2)
+**RFC References**: RFC-200 (Layer 3), RFC-200 (Layer 2)
 **Priority**: P0 (Critical Architecture Fix)
 **Estimated Effort**: 3-4 days
 
@@ -492,7 +492,7 @@ After implementation:
 ## References
 
 - RFC-200: Layer 3 Autonomous Goal Management
-- RFC-201: Layer 2 Agentic Goal Execution
+- RFC-200: Layer 2 Agentic Goal Execution
 - RFC-100: Layer 1 CoreAgent Runtime
 - IG-115: AgentLoop Plan-and-Execute implementation
 - `src/soothe/cognition/agent_loop/agent_loop.py`

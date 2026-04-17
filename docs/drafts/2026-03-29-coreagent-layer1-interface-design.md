@@ -205,7 +205,7 @@ After this change, the layer boundaries are clean:
 Layer 3: Autonomous Goal Management (RFC-200)
   └─ GoalEngine, goal_tools, SootheRunner orchestration
 
-Layer 2: Agentic Goal Execution (RFC-201)
+Layer 2: Agentic Goal Execution (RFC-200)
   └─ AgentLoop with ACT/VERIFY/DECIDE phases
   └─ Calls CoreAgent.astream() for ACT phase
 

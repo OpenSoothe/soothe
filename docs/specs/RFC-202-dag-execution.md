@@ -1,10 +1,10 @@
-# RFC-202: DAG Execution & Failure Recovery
+# RFC-200: DAG Execution & Failure Recovery
 
 **Status**: Implemented
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-04-12
-**Depends on**: RFC-200 (GoalEngine), RFC-201 (AgentLoop), RFC-100 (CoreAgent)
+**Depends on**: RFC-200 (GoalEngine), RFC-200 (AgentLoop), RFC-100 (CoreAgent)
 **Supersedes**: RFC-0009, RFC-0010
 **Kind**: Architecture Design
 
@@ -79,7 +79,7 @@ This RFC defines:
 This RFC does **not** define:
 
 * Goal management lifecycle (see RFC-200)
-* Single-goal execution loop (see RFC-201)
+* Single-goal execution loop (see RFC-200)
 * CoreAgent runtime (see RFC-100)
 * PlannerProtocol interface (see RFC-301)
 
@@ -130,7 +130,7 @@ Each level nests inside the one above. The `global_max_llm_calls` semaphore acts
 |-----------|-----------------|-----------------|
 | Scope | Within single goal's plan | Across independent goals |
 | Mode | Both autonomous and non-autonomous | Autonomous only |
-| Thread model | Parent thread_id (RFC-209) | `{tid}__goal_{gid}` |
+| Thread model | Parent thread_id (RFC-207) | `{tid}__goal_{gid}` |
 | DAG source | `PlanStep.depends_on` | `Goal.depends_on` |
 | Typical scale | 1-5 parallel steps | 1-3 parallel goals |
 
@@ -501,7 +501,7 @@ execution:
 | Constraint | Rule |
 |------------|------|
 | LangGraph integration | Reuse `_stream_phase()` per step, no internal modifications |
-| Thread branching | Parallel steps use parent thread_id (RFC-209); goals use `{tid}__goal_{gid}` |
+| Thread branching | Parallel steps use parent thread_id (RFC-207); goals use `{tid}__goal_{gid}` |
 | Storage separation | DurabilityProtocol = lifecycle; RunArtifactStore = artifacts |
 
 ---
@@ -509,7 +509,7 @@ execution:
 ## 13. Relationship to Other RFCs
 
 * **RFC-200 (Layer 3)**: GoalEngine and autonomous goal management
-* **RFC-201 (Layer 2)**: Agentic goal execution loop
+* **RFC-200 (Layer 2)**: Agentic goal execution loop
 * **RFC-100 (Layer 1)**: CoreAgent runtime
 * **RFC-301 (Protocol Registry)**: PlannerProtocol interface
 * **RFC-300 (Context & Memory)**: ContextProtocol for step result ingestion

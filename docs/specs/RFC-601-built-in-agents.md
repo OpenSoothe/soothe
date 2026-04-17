@@ -34,7 +34,7 @@ This RFC does **not** define:
 
 - Plugin extension system (see RFC-600)
 - Protocol interfaces (see RFC-301)
-- Event processing (see RFC-401)
+- Event processing (see RFC-400)
 - Tool interfaces (see RFC-101)
 - Skillify or Weaver agents (see community docs)
 
@@ -227,7 +227,7 @@ src/soothe/subagents/
 
 - **RFC-600 (Plugin Extension System)**: Plugin decorator patterns
 - **RFC-301 (Protocol Registry)**: PolicyProtocol
-- **RFC-401 (Event Processing)**: Event emission patterns
+- **RFC-400 (Event Processing)**: Event emission patterns
 - **RFC-100 (CoreAgent Runtime)**: CompiledSubAgent interface
 - **RFC-200 (Autonomous Goal Management)**: Goal integration
 

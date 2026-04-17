@@ -6,8 +6,8 @@
 **Kind**: Architecture Design
 **Created**: 2026-03-23
 **Updated**: 2026-03-27
-**Dependencies**: RFC-000, RFC-001, RFC-201, RFC-400
-**Related**: RFC-401
+**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-400
+**Related**: RFC-400
 
 ## Abstract
 
@@ -335,9 +335,9 @@ class BrowserPlugin:
 
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture
-- RFC-201: Agentic Loop Execution
+- RFC-200: Agentic Loop Execution
 - RFC-400: Daemon Communication Protocol
-- RFC-401: Event Processing & Filtering
+- RFC-400: Event Processing & Filtering
 - PEP 440: Version Specification
 - PEP 517: Build System Format
 

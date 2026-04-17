@@ -40,11 +40,11 @@ The name "Plan-and-Execute" better captures:
 ## Scope
 
 ### RFC Specifications (Priority 1)
-- `docs/specs/RFC-201-agentic-goal-execution.md` - Core definition
+- `docs/specs/RFC-200-agentic-goal-execution.md` - Core definition
 - `docs/specs/RFC-603-reasoning-quality-progressive-actions.md` - Quality improvements
 - `docs/specs/RFC-604-reason-phase-robustness.md` - Robustness design
 - `docs/specs/RFC-203-loop-working-memory.md` - Working memory
-- `docs/specs/RFC-205-layer2-unified-state-checkpoint.md` - Checkpointing
+- `docs/specs/RFC-203-layer2-unified-state-checkpoint.md` - Checkpointing
 - `docs/specs/RFC-200-autonomous-goal-management.md` - Layer 3 integration
 - `docs/specs/RFC-000-system-conceptual-design.md` - Conceptual overview
 - `docs/specs/rfc-index.md` - Index entries
@@ -107,7 +107,7 @@ The name "Plan-and-Execute" better captures:
 ## Implementation Plan
 
 ### Phase 1: RFC Specifications (High Impact) - ✅ COMPLETED
-1. Update RFC-201 abstract and loop model sections ✅
+1. Update RFC-200 abstract and loop model sections ✅
 2. Rename "Reason → Act Loop" to "Plan → Execute Loop" ✅
 3. Rename "REASON Phase" to "PLAN Phase" ✅
 4. Rename "ACT Phase" to "EXECUTE Phase" ✅
@@ -115,7 +115,7 @@ The name "Plan-and-Execute" better captures:
 6. Update changelog with terminology change note ✅
 7. Update references section ✅
 
-**Completed**: RFC-201, RFC-000, RFC-200, RFC-203, RFC-204, RFC-205, RFC-207, RFC-603, RFC-604, rfc-index
+**Completed**: RFC-200, RFC-000, RFC-200, RFC-203, RFC-203, RFC-203, RFC-207, RFC-603, RFC-604, rfc-index
 
 ### Phase 2: Source Code Schemas (Critical) - ✅ COMPLETED
 1. Rename `ReasonResult` class to `PlanResult` ✅
@@ -206,7 +206,7 @@ Add deprecation warnings in v2.1.102, remove aliases in v3.0.0.
 **Completed**: 2026-04-12
 
 ### Files Updated
-**RFC Specifications (10):** RFC-201, RFC-000, RFC-200, RFC-203, RFC-204, RFC-205, RFC-207, RFC-603, RFC-604, rfc-index
+**RFC Specifications (10):** RFC-200, RFC-000, RFC-200, RFC-203, RFC-203, RFC-203, RFC-207, RFC-603, RFC-604, rfc-index
 
 **Source Code (13):**
 - src/soothe/cognition/agent_loop/schemas.py
@@ -267,7 +267,7 @@ All backward compatibility aliases removed. This is a clean refactoring requirin
 ## Next Steps
 
 1. Create backward compatibility aliases in schemas and protocols
-2. Update RFC-201 as canonical definition
+2. Update RFC-200 as canonical definition
 3. Update other RFCs referencing Layer 2
 4. Rename source code classes and modules
 5. Update implementation guides

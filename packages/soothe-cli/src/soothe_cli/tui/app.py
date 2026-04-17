@@ -1489,7 +1489,7 @@ class SootheApp(App):
             )
             from langchain_core.messages import AIMessage  # noqa: F401
             from langgraph.types import Command  # noqa: F401
-            from soothe_sdk import DEFAULT_EXECUTE_TIMEOUT  # noqa: F401
+            from soothe_sdk.client.config import DEFAULT_EXECUTE_TIMEOUT  # noqa: F401
         except Exception:
             logger.warning("Could not prewarm third-party imports", exc_info=True)
 

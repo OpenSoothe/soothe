@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-201 (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle), RFC-205 (Layer 2 Unified State Model)
+**Dependencies**: RFC-200 (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle), RFC-203 (Layer 2 Unified State Model)
 
 ## Abstract
 
@@ -85,10 +85,136 @@ class GoalContextManager:
 ```
 cognition/agent_loop/
 ├─ goal_context_manager.py (NEW)
+├─ thread_relationship.py (NEW - ThreadRelationshipModule)
 ├─ state_manager.py (MODIFIED - add flag management)
 ├─ agent_loop.py (MODIFIED - integrate GoalContextManager)
 ├─ executor.py (MODIFIED - inject briefing into CoreAgent)
 └─ checkpoint.py (MODIFIED - add thread_switch_pending field)
+```
+
+### Thread Relationship Module
+
+Thread relationship analysis for goal context construction. Computes goal similarity and constructs context with thread ecosystem awareness.
+
+**ThreadRelationshipModule Interface**:
+
+```python
+# cognition/goal_context/thread_relationship.py
+
+class ContextConstructionOptions(BaseModel):
+    """Options for goal context construction."""
+
+    include_same_goal_threads: bool = True
+    """Include multiple threads for same goal_id."""
+
+    include_similar_goals: bool = True
+    """Include threads with semantically similar goals."""
+
+    thread_selection_strategy: Literal["latest", "all", "best_performing"] = "latest"
+    """Strategy for selecting relevant threads."""
+
+    similarity_threshold: float = 0.7
+    """Embedding similarity threshold for goal matching."""
+
+class ThreadRelationshipModule:
+    """Thread relationship analysis for goal context construction."""
+
+    def __init__(self, embedding_model: Embeddings) -> None:
+        self._embedding_model = embedding_model
+
+    def compute_similarity(self, goal_a: Goal, goal_b: Goal) -> float:
+        """
+        Goal similarity for thread clustering.
+
+        Hierarchy (exact > semantic > dependency):
+        - Exact match: 1.0 (same goal_id)
+        - Semantic similarity: embedding distance
+        - Dependency relationship: same DAG path
+        """
+
+    def construct_goal_context(
+        self,
+        goal_id: str,
+        goal_history: list[GoalRecord],
+        options: ContextConstructionOptions,
+    ) -> GoalContext:
+        """
+        Context construction module.
+
+        Handles:
+        - Same goal multiple threads
+        - Similar goal execution history
+
+        Args:
+            goal_id: Target goal for context
+            goal_history: Previous goal records from checkpoint
+            options: Construction configuration
+
+        Returns:
+            GoalContext with execution memory + thread ecosystem
+        """
+```
+
+**Similarity Hierarchy**:
+
+1. **Exact Match**: Same goal_id (score: 1.0)
+2. **Semantic Similarity**: Embedding distance on goal descriptions
+3. **Dependency Relationship**: Goals in same DAG dependency chain
+
+**Context Construction Strategies**:
+
+| Strategy | Selection Logic |
+|----------|-----------------|
+| `latest` | Most recent thread execution |
+| `all` | All matching threads (bounded by limit) |
+| `best_performing` | Thread with best performance metrics (duration, success) |
+
+**Integration with GoalContextManager**:
+
+```python
+class GoalContextManager:
+    def __init__(
+        self,
+        state_manager: AgentLoopStateManager,
+        config: GoalContextConfig,
+        embedding_model: Embeddings,  # NEW parameter
+    ) -> None:
+        self._state_manager = state_manager
+        self._config = config
+        self._thread_relationship = ThreadRelationshipModule(embedding_model)  # NEW
+
+    def get_execute_briefing(self, limit: int | None = None) -> str | None:
+        """Get goal briefing for Execute phase (enhanced)."""
+        checkpoint = self._state_manager.load()
+        if not checkpoint or not checkpoint.thread_switch_pending:
+            return None
+
+        # NEW: Use thread relationship module for context construction
+        options = ContextConstructionOptions(
+            include_same_goal_threads=True,
+            include_similar_goals=self._config.include_similar_goals,
+            thread_selection_strategy=self._config.thread_selection_strategy,
+            similarity_threshold=self._config.similarity_threshold,
+        )
+
+        goal_context = self._thread_relationship.construct_goal_context(
+            goal_id=checkpoint.current_goal_id,
+            goal_history=checkpoint.goal_history,
+            options=options,
+        )
+
+        return self._format_execute_briefing(goal_context)
+```
+
+**Configuration Extension**:
+
+```yaml
+agentic:
+  goal_context:
+    include_similar_goals: true
+    thread_selection_strategy: latest  # latest | all | best_performing
+    similarity_threshold: 0.7
+    embedding_role: embedding
 ```
 
 ### Integration Points
@@ -561,8 +687,8 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 
 ## References
 
-- RFC-201: Agentic Goal Execution Loop
+- RFC-200: Agentic Goal Execution Loop
 - RFC-608: AgentLoop Multi-Thread Infinite Lifecycle
-- RFC-205: Layer 2 Unified State Model
+- RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)
 - Design draft: docs/drafts/2026-04-17-goal-context-management-design.md

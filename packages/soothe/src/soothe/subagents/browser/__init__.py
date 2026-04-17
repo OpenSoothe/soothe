@@ -5,7 +5,7 @@ This package provides browser automation capabilities using browser-use.
 
 from typing import Any
 
-from soothe_sdk import plugin, subagent
+from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import (
     _build_browser_graph,  # noqa: F401 - needed for tests

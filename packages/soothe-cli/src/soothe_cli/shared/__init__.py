@@ -9,7 +9,7 @@ This package provides:
 - Slash command handlers and plan rendering (IG-176)
 """
 
-from soothe_sdk import setup_logging
+from soothe_sdk.utils import setup_logging
 
 from soothe_cli.shared.config_loader import load_config
 from soothe_cli.shared.display_policy import (

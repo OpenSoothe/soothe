@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from soothe_sdk import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_HOME
 from textual.binding import Binding
 from textual.screen import Screen
 

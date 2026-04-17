@@ -41,7 +41,7 @@ No transport or UI dependencies.
 | Path | Responsibility |
 |------|----------------|
 | `agent/` | `CoreAgent` wraps `create_deep_agent()`. Owns the deepagents/langgraph boundary. 5 Soothe-specific middlewares injected here. |
-| `runner/` | `AgentLoop` orchestration — protocol pre/post processing, agentic loop (RFC-201), autonomous iteration (RFC-200), DAG step execution, checkpointing. Decomposed into mixins (`_runner_*.py`). |
+| `runner/` | `AgentLoop` orchestration — protocol pre/post processing, agentic loop (RFC-200), autonomous iteration (RFC-200), DAG step execution, checkpointing. Decomposed into mixins (`_runner_*.py`). |
 | `thread/` | Thread lifecycle manager, concurrent executor with rate limiting. Used by daemon and runner. |
 | `middleware/` | `SoothePolicyMiddleware`, `SystemPromptOptimizationMiddleware`, `ExecutionHintsMiddleware`, `WorkspaceContextMiddleware`, `SubagentContextMiddleware`. |
 | `resolver/` | Wires protocols from config: checkpointer, durability, goal engine, tools. |
@@ -90,7 +90,7 @@ All exports are lazy-loaded in `__init__.py` to keep startup fast.
 
 ```
 SootheRunner.astream(user_input)
-  → _run_agentic_loop()          # RFC-201 Reason → Act loop
+  → _run_agentic_loop()          # RFC-200 Reason → Act loop
     → pre-stream: context.restore, memory.recall, plan
     → PhasesMixin._stream_agent  # CoreAgent.astream → LangGraph
     → post-stream: context.ingest, memory.remember, checkpoint

@@ -1,196 +1,27 @@
-"""Soothe SDK - Decorator-based API for building Soothe plugins and client utilities.
+"""Soothe SDK - Minimal __init__.py matching langchain-core pattern.
 
-This SDK provides:
-1. A simple, decorator-based API for creating tools and subagents
-2. Client-side utilities for WebSocket communication with daemon
-3. Shared types, protocols, and helpers for both CLI and daemon
+This SDK provides decorator-based API for building Soothe plugins
+and client utilities for WebSocket communication with the daemon.
 
-Plugin developers only need this lightweight SDK package, not the full Soothe runtime.
+Following langchain-core pattern: minimal __init__.py (version only).
+Use package-level imports instead of root-level re-exports.
 
-Example plugin:
-    ```python
-    from soothe_sdk import plugin, tool, subagent
-
-
-    @plugin(
-        name="my-plugin",
-        version="1.0.0",
-        description="My awesome plugin",
-        dependencies=["langchain>=0.1.0"],
-    )
-    class MyPlugin:
-        @tool(name="greet", description="Greet someone")
-        def greet(self, name: str) -> str:
-            return f"Hello, {name}!"
-
-        @subagent(name="researcher", description="Research subagent")
-        async def create_researcher(self, model, config, context):
-            # ... create subagent ...
-            pass
-    ```
-
-Example client:
-    ```python
-    from soothe_sdk.client import WebSocketClient, bootstrap_thread_session
-
-    client = WebSocketClient(url="ws://localhost:8765")
-    await client.connect()
-    status = await bootstrap_thread_session(client, resume_thread_id=None, verbosity="normal")
-    await client.send_input("Research AI advances")
-    ```
+Example imports:
+    from soothe_sdk.plugin import plugin, tool, Manifest
+    from soothe_sdk.client import WebSocketClient
+    from soothe_sdk.events import SootheEvent
+    from soothe_sdk.exceptions import PluginError
+    from soothe_sdk.verbosity import VerbosityTier
+    from soothe_sdk.protocols import PersistStore
+    from soothe_sdk.utils import setup_logging
 """
 
-# Client utilities (v0.2.0)
-from soothe_sdk.client import (
-    VerbosityLevel,
-    WebSocketClient,
-    bootstrap_thread_session,
-    connect_websocket_with_retries,
-)
+__version__ = "0.4.0"
+__soothe_required_version__ = ">=0.4.0,<1.0.0"
 
-# Phase 1 exports (IG-174: CLI import violations fix)
-from soothe_sdk.config_constants import DEFAULT_EXECUTE_TIMEOUT, SOOTHE_HOME
-from soothe_sdk.decorators.plugin import plugin
-from soothe_sdk.decorators.subagent import subagent
-from soothe_sdk.decorators.tool import tool, tool_group
-from soothe_sdk.events import (
-    AGENT_LOOP_COMPLETED,
-    CHITCHAT_RESPONSE,
-    DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
-    FINAL_REPORT,
-    ErrorEvent,
-    LifecycleEvent,
-    OutputEvent,
-    ProtocolEvent,
-    SootheEvent,
-    SubagentEvent,
-)
-from soothe_sdk.events_registry import register_event  # IG-175
-from soothe_sdk.exceptions import (
-    DependencyError,
-    DiscoveryError,
-    InitializationError,
-    PluginError,
-    SubagentCreationError,
-    ToolCreationError,
-    ValidationError,
-)
-from soothe_sdk.internal import INTERNAL_JSON_KEYS, strip_internal_tags
-from soothe_sdk.logging_utils import VERBOSITY_TO_LOG_LEVEL, GlobalInputHistory, setup_logging
-from soothe_sdk.progress import emit_progress  # IG-175
-from soothe_sdk.protocol import decode, encode
-from soothe_sdk.protocol_schemas import Plan, PlanStep, ToolOutput
-from soothe_sdk.protocols import (
-    ActionRequest,
-    Permission,
-    PermissionSet,
-    PersistStore,
-    PolicyContext,
-    PolicyDecision,
-    PolicyProfile,
-    PolicyProtocol,
-    VectorRecord,
-    VectorStoreProtocol,
-)
-from soothe_sdk.types.context import PluginContext, SootheConfigProtocol
-from soothe_sdk.types.health import PluginHealth
-from soothe_sdk.types.manifest import PluginManifest
-from soothe_sdk.utils import (
-    _TASK_NAME_RE,
-    convert_and_abbreviate_path,
-    format_cli_error,
-    get_tool_display_name,
-    log_preview,
-    parse_autopilot_goals,
-)
-from soothe_sdk.ux_types import ESSENTIAL_EVENT_TYPES
-from soothe_sdk.verbosity import (
-    ProgressCategory,
-    VerbosityTier,
-    classify_event_to_tier,
-    should_show,
-)
-from soothe_sdk.workspace_types import INVALID_WORKSPACE_DIRS
-
-__version__ = "0.3.0"
-__soothe_required_version__ = ">=0.2.0,<1.0.0"
-
-__all__ = [
-    # Decorators
-    "plugin",
-    "tool",
-    "tool_group",
-    "subagent",
-    # Plugin types
-    "PluginManifest",
-    "PluginContext",
-    "SootheConfigProtocol",
-    "PluginHealth",
-    # Exceptions
-    "PluginError",
-    "DiscoveryError",
-    "ValidationError",
-    "DependencyError",
-    "InitializationError",
-    "ToolCreationError",
-    "SubagentCreationError",
-    # Client utilities (v0.2.0)
-    "WebSocketClient",
-    "VerbosityLevel",
-    "bootstrap_thread_session",
-    "connect_websocket_with_retries",
-    # Protocol
-    "encode",
-    "decode",
-    "emit_progress",  # IG-175
-    # Events
-    "SootheEvent",
-    "LifecycleEvent",
-    "ProtocolEvent",
-    "SubagentEvent",
-    "OutputEvent",
-    "ErrorEvent",
-    "AGENT_LOOP_COMPLETED",
-    "CHITCHAT_RESPONSE",
-    "FINAL_REPORT",
-    "DEFAULT_AGENT_LOOP_MAX_ITERATIONS",
-    "register_event",  # IG-175
-    # Verbosity
-    "VerbosityTier",
-    "should_show",
-    "classify_event_to_tier",
-    "ProgressCategory",
-    # Protocols (v0.3.0 - IG-175: Community plugin SDK decoupling)
-    "PersistStore",
-    "VectorRecord",
-    "VectorStoreProtocol",
-    "Permission",
-    "PermissionSet",
-    "ActionRequest",
-    "PolicyContext",
-    "PolicyDecision",
-    "PolicyProfile",
-    "PolicyProtocol",
-    # Internal
-    "INTERNAL_JSON_KEYS",
-    "strip_internal_tags",
-    # Types
-    "INVALID_WORKSPACE_DIRS",
-    # UX types
-    "ESSENTIAL_EVENT_TYPES",
-    # Phase 1 exports (IG-174)
-    "SOOTHE_HOME",
-    "DEFAULT_EXECUTE_TIMEOUT",
-    "Plan",
-    "PlanStep",
-    "ToolOutput",
-    "GlobalInputHistory",
-    "VERBOSITY_TO_LOG_LEVEL",
-    "setup_logging",
-    "format_cli_error",
-    "log_preview",
-    "convert_and_abbreviate_path",
-    "parse_autopilot_goals",
-    "get_tool_display_name",
-    "_TASK_NAME_RE",
-]
+# No re-exports - use package imports for clarity and performance
+# Core concepts remain accessible at root level:
+# - soothe_sdk.events (SootheEvent, LifecycleEvent, etc.)
+# - soothe_sdk.exceptions (PluginError, ValidationError, etc.)
+# - soothe_sdk.verbosity (VerbosityTier, should_show)
+# - soothe_sdk.protocols (PersistStore, PolicyProtocol, etc.)

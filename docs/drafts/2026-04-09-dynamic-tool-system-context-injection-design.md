@@ -6,7 +6,7 @@
 
 ## Problem Statement
 
-Soothe's current system message construction (RFC-104, RFC-208) injects all context sections statically based on complexity level. This creates inefficiencies:
+Soothe's current system message construction (RFC-104, RFC-207) injects all context sections statically based on complexity level. This creates inefficiencies:
 
 1. **Token bloat**: Simple queries receive workspace, thread, and protocol context even when irrelevant
 2. **No tool-specific guidance**: Tools/subagents cannot inject their own specialized system context
@@ -758,7 +758,7 @@ None. All design decisions finalized through brainstorming.
 ## References
 
 - RFC-104: Dynamic System Context Injection
-- RFC-208: CoreAgent Message Optimization
+- RFC-207: CoreAgent Message Optimization
 - RFC-207: SystemMessage/HumanMessage Separation
 - RFC-600: Plugin Extension System
 - RFC-100: CoreAgent Runtime

@@ -11,14 +11,15 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from soothe_sdk.client.protocol import preview_first
 from soothe_sdk.events import (
     PLAN_CREATED,
     PLAN_STEP_COMPLETED,
     PLAN_STEP_STARTED,
     SUBAGENT_RESEARCH_INTERNAL_LLM,
 )
-from soothe_sdk.protocol import preview_first
-from soothe_sdk.verbosity import VerbosityTier, classify_event_to_tier
+from soothe_sdk.ux import classify_event_to_tier
+from soothe_sdk.verbosity import VerbosityTier
 
 from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import (
@@ -37,7 +38,7 @@ from soothe_cli.shared.rendering import update_name_map_from_tool_calls
 from soothe_cli.shared.tui_trace_log import log_tui_trace
 
 if TYPE_CHECKING:
-    from soothe_sdk import Plan
+    from soothe_sdk.client.schemas import Plan
 
     from soothe_cli.shared.renderer_protocol import RendererProtocol
 
@@ -756,7 +757,7 @@ class EventProcessor:
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""
-        from soothe_sdk import Plan, PlanStep
+        from soothe_sdk.client.schemas import Plan, PlanStep
 
         steps = [
             PlanStep(

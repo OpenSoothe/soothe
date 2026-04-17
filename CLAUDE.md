@@ -188,9 +188,9 @@ All RFCs are in `docs/specs/`. Key specifications:
 |-----|-------|---------|
 | [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) | System Conceptual Design | Overall architecture |
 | [RFC-001](docs/specs/RFC-001-core-modules-architecture.md) | Core Modules Architecture | Module interactions |
-| [RFC-201](docs/specs/RFC-201-agentic-goal-execution.md) | Agentic Goal Execution (Layer 2) | Iteration patterns |
+| [RFC-200](docs/specs/RFC-200-agentic-goal-execution.md) | Agentic Goal Execution (Layer 2) | Iteration patterns |
 | [RFC-400](docs/specs/RFC-400-daemon-communication.md) | Daemon Communication Protocol | Multi-transport daemon |
-| [RFC-401](docs/specs/RFC-401-event-processing.md) | Event Processing & Filtering | Event system |
+| [RFC-400](docs/specs/RFC-400-event-processing.md) | Event Processing & Filtering | Event system |
 | [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) | Plugin Extension System | Plugin architecture |
 
 **See all RFCs**: Check `docs/specs/` directory.

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import typer
-from soothe_sdk import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
+from soothe_sdk.client.config import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
 
 from soothe_cli.cli.execution import run_headless, run_tui
 from soothe_cli.shared import load_config, setup_logging
@@ -81,7 +81,7 @@ def run_impl(
         sys.exit(0)
     except Exception as e:
         logger.exception("CLI run error")
-        from soothe_sdk import format_cli_error
+        from soothe_sdk.utils import format_cli_error
 
         typer.echo(f"Error: {format_cli_error(e)}", err=True)
         sys.exit(1)

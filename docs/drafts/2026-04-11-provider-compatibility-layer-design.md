@@ -1054,7 +1054,7 @@ simplify(schema, budget):
 
 **Related RFCs**:
 - RFC-000: System Conceptual Design (protocol-driven architecture)
-- RFC-201: Agentic Goal Execution (ReasonResult schema)
+- RFC-200: Agentic Goal Execution (ReasonResult schema)
 - RFC-603: Reasoning Quality & Progressive Actions (evidence-based confidence)
 
 **Related Implementation Guides**:

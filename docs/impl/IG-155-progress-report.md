@@ -174,8 +174,8 @@ def test_update_goal_status():
 - **COMMITTED** (commit 668d3e8)
 
 ### IG-156 ✅ COMPLETE  
-- RFC-201 status updated (metrics implemented)
-- RFC-202 status changed to "Implemented"
+- RFC-200 status updated (metrics implemented)
+- RFC-200 status changed to "Implemented"
 - Documentation cleaned
 - **COMMITTED** (commit 668d3e8)
 
@@ -199,7 +199,7 @@ def test_update_goal_status():
 - IG-154 implementation guide + summary
 - IG-155 implementation guide + progress report
 - IG-156 implementation guide
-- RFC-201/RFC-202 updates
+- RFC-200/RFC-200 updates
 
 **Tests**:
 - test_autonomous_agentloop_integration.py (7 test functions)

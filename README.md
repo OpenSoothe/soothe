@@ -156,7 +156,7 @@ soothe-daemon stop
 
 - **[RFCs & Specs](docs/specs/)** - Technical specifications and architecture design
   - [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) - System conceptual design
-  - [RFC-201](docs/specs/RFC-201-agentic-goal-execution.md) - Execution architecture
+  - [RFC-200](docs/specs/RFC-200-agentic-goal-execution.md) - Execution architecture
   - [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) - Plugin system design
 
 ### 🛠️ For Developers

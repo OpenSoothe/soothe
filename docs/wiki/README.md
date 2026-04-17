@@ -79,7 +79,7 @@ User Query → PLAN (LLM plans, assesses progress, decides steps) → EXECUTE (e
 - Sub-second responses for simple queries
 - Intelligent iteration for complex tasks
 
-Learn more: [RFC-201: Agentic Loop Execution](../specs/RFC-201-agentic-loop-execution.md)
+Learn more: [RFC-200: Agentic Loop Execution](../specs/RFC-200-agentic-loop-execution.md)
 
 ### Plugin System
 
@@ -103,7 +103,7 @@ Learn more: [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension
 
 | Feature | Status | Documentation |
 |---------|--------|---------------|
-| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-201](../specs/RFC-201-agentic-loop-execution.md) |
+| **Intelligent Execution Loop** | ✅ Production Ready | [RFC-200](../specs/RFC-200-agentic-loop-execution.md) |
 | **Research Subagent** | ✅ Production Ready | [Subagents Guide](subagents.md#research-subagent) |
 | **Plugin System** | ✅ Production Ready | [RFC-600](../specs/RFC-600-plugin-extension-system.md) |
 | **Multi-Transport Daemon** | ✅ Production Ready | [Multi-Transport Setup](multi-transport.md) |

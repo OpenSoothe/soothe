@@ -3,7 +3,7 @@
 **Status**: Draft  
 **Authors**: Soothe Team  
 **Created**: 2026-04-02  
-**Depends on**: RFC-401 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)  
+**Depends on**: RFC-400 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)  
 **Kind**: Implementation Interface Design
 
 ---
@@ -48,8 +48,8 @@ This RFC defines:
 Non-goals:
 
 - transport protocol changes (RFC-400)
-- plan/goal execution semantics (RFC-201/200)
-- event naming schema changes (RFC-401)
+- plan/goal execution semantics (RFC-200/200)
+- event naming schema changes (RFC-400)
 
 ---
 
@@ -133,7 +133,7 @@ No daemon protocol changes are required.
 
 ## 9. References
 
-- RFC-401: Event Processing & Filtering
+- RFC-400: Event Processing & Filtering
 - RFC-501: Display & Verbosity
 - RFC-500: CLI/TUI Architecture
 

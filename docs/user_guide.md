@@ -72,13 +72,13 @@ Technical documentation for developers and system architects.
 | [RFC-601](specs/RFC-601.md) | Weaver Agent Architecture |
 | [RFC-300](specs/RFC-300.md) | Context and Memory Architecture |
 | [RFC-200](specs/RFC-200.md) | Autonomous Iteration Loop |
-| [RFC-201](specs/RFC-201.md) | Protocol Specification |
-| [RFC-202](specs/RFC-202.md) | DAG-Based Execution and Unified Concurrency |
-| [RFC-202](specs/RFC-202.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
+| [RFC-200](specs/RFC-200.md) | Protocol Specification |
+| [RFC-200](specs/RFC-200.md) | DAG-Based Execution and Unified Concurrency |
+| [RFC-200](specs/RFC-200.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
 | [RFC-102](specs/RFC-102.md) | Unified Complexity Classification |
 | [RFC-400](specs/RFC-400.md) | Unified Daemon Communication Protocol |
-| [RFC-401](specs/RFC-401.md) | Progress Event Protocol |
-| [RFC-401](specs/RFC-401.md) | Authentication and Security Model |
+| [RFC-400](specs/RFC-400.md) | Progress Event Protocol |
+| [RFC-400](specs/RFC-400.md) | Authentication and Security Model |
 | [RFC-101](specs/RFC-101.md) | HTTP REST API Specification |
 
 ### Implementation Guides
@@ -110,7 +110,7 @@ Technical documentation for developers and system architects.
 | [IG-023](impl/023-failure-recovery-progressive-persistence.md) | Failure Recovery, Progressive Persistence |
 | [IG-024](impl/024-existing-browser-connection.md) | Existing Browser Connection |
 | [IG-025](impl/025-subagent-progress-visibility.md) | Subagent Progress Visibility |
-| [IG-026](impl/026-rfc0009-logging-enhancements.md) | RFC-202 Logging Enhancements |
+| [IG-026](impl/026-rfc0009-logging-enhancements.md) | RFC-200 Logging Enhancements |
 | [IG-027](impl/027-final-report-cli-output.md) | Final Report CLI Output |
 | [IG-028](impl/028-direct-to-simple-planner-renaming.md) | Direct to Simple Planner Renaming |
 | [IG-029](impl/029-planner-refactoring.md) | Planner Refactoring |

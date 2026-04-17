@@ -1,7 +1,7 @@
 # IG-151: Accurate Token Tracking for AgentLoop
 
 **Status:** Draft
-**Spec traceability:** RFC-201 (Layer 2 Agentic Goal Execution)
+**Spec traceability:** RFC-200 (Layer 2 Agentic Goal Execution)
 **Platonic phase:** Implementation (IMPL) — code + tests + verification
 
 ---
@@ -388,7 +388,7 @@ After implementation:
 
 | RFC/IG | Relevance |
 |--------|-----------|
-| RFC-201 | Layer 2 metrics specification |
+| RFC-200 | Layer 2 metrics specification |
 | IG-132 | Metrics aggregation (estimation-based, this IG improves) |
 | RFC-203 | Loop working memory (context management) |
 

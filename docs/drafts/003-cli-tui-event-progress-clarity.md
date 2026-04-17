@@ -650,4 +650,4 @@ start_line = behavior.render_start(event)
 - TUI renderer: `src/soothe/ux/tui/renderers.py`
 - Message processing: `src/soothe/ux/shared/message_processing.py`
 - Event catalog: `src/soothe/core/event_catalog.py`
-- RFC-401: Event System Design
+- RFC-400: Event System Design

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from textual.widgets import Static
-
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,

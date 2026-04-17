@@ -1,4 +1,8 @@
-"""WebSocket client and session management for Soothe daemon."""
+"""WebSocket client utilities for connecting to Soothe daemon.
+
+This package provides the client-side WebSocket connection,
+session management, and daemon communication helpers.
+"""
 
 from soothe_sdk.client.helpers import (
     check_daemon_status,
@@ -19,7 +23,6 @@ __all__ = [
     "VerbosityLevel",
     "bootstrap_thread_session",
     "connect_websocket_with_retries",
-    # Helper functions (IG-174 Phase 0)
     "websocket_url_from_config",
     "check_daemon_status",
     "is_daemon_live",

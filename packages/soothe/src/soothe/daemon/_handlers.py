@@ -11,7 +11,7 @@ import contextlib
 import logging
 from typing import Any
 
-from soothe_sdk.protocol import decode, encode
+from soothe_sdk.client.protocol import decode, encode
 
 from soothe.core.event_catalog import ERROR
 

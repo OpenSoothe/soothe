@@ -291,7 +291,7 @@ Parsed ReasonResult
 
 ## Related Work
 
-- **RFC-201**: Layer 2 Agentic Goal Execution (Reason-Act loop)
+- **RFC-200**: Layer 2 Agentic Goal Execution (Reason-Act loop)
 - **IG-133**: Avoid prior conversation duplication in Reason prompts
 - **IG-134**: Layer 2 unified state checkpoint (recent conversation logging)
 

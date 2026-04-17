@@ -1,11 +1,11 @@
-# RFC-205: Layer 2 Unified State Model and Independent Checkpoint
+# RFC-203: Layer 2 Unified State Model and Independent Checkpoint
 
 **RFC**: 0205  
 **Title**: Layer 2 Unified State Model and Independent Checkpoint  
 **Status**: Draft  
 **Kind**: Architecture Design  
 **Created**: 2026-04-08  
-**Dependencies**: RFC-201, RFC-203, RFC-100
+**Dependencies**: RFC-200, RFC-203, RFC-100
 
 ## Abstract
 
@@ -512,7 +512,7 @@ Expected:
 
 ## Related Specifications
 
-- **RFC-201**: Layer 2 Agentic Goal Execution
+- **RFC-200**: Layer 2 Agentic Goal Execution
 - **RFC-203**: Loop Working Memory
 - **RFC-100**: Layer 1 CoreAgent Runtime
 - **RFC-402**: Unified Thread Management

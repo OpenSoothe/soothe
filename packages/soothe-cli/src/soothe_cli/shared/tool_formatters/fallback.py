@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.protocol import preview_first
+from soothe_sdk.client.protocol import preview_first
 
 from soothe_cli.shared.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tool_output_formatter import ToolBrief
@@ -87,7 +87,7 @@ class FallbackFormatter(BaseFormatter):
 
         # Handle ToolOutput (if available)
         try:
-            from soothe_sdk import ToolOutput
+            from soothe_sdk.client.schemas import ToolOutput
 
             if isinstance(result, ToolOutput):
                 if not result.success:

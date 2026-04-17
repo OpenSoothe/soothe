@@ -722,7 +722,7 @@ class SootheApp(App):  # Modified from deepagents App
 **Modify**: `autopilot_screen.py` to use deepagents widgets where applicable
 
 ```python
-"""Autopilot dashboard screen - RFC-204.
+"""Autopilot dashboard screen - RFC-203.
 
 Uses: deepagents status bar, message display
 Adds: Soothe-specific goal progress widgets
@@ -1193,7 +1193,7 @@ def action_detach(self):
 - **RFC-400**: Daemon Communication Protocol
 - **RFC-500**: CLI TUI Architecture (current)
 - **RFC-501**: VerbosityTier Unification
-- **RFC-204**: Autopilot Mode
+- **RFC-203**: Autopilot Mode
 - **RFC-600**: Plugin Extension System
 - **RFC-402**: Unified Thread Management
 - **deepagents-cli source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/`

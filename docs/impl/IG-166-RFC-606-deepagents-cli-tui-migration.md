@@ -5,7 +5,7 @@
 **Title**: DeepAgents CLI TUI Migration
 **Status**: In Progress
 **Created**: 2026-04-13
-**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-204, RFC-402
+**Dependencies**: RFC-000, RFC-001, RFC-400, RFC-500, RFC-501, RFC-203, RFC-402
 
 ## Overview
 
@@ -75,7 +75,7 @@ Delete from `src/soothe/ux/tui/`:
 #### Files to Keep
 
 Keep from Soothe:
-- `autopilot_screen.py` (RFC-204)
+- `autopilot_screen.py` (RFC-203)
 - `autopilot_dashboard.py`
 - `__init__.py` (update imports)
 
@@ -508,7 +508,7 @@ This runs:
 - RFC-400: Daemon Communication Protocol
 - RFC-500: CLI TUI Architecture
 - RFC-501: VerbosityTier Unification
-- RFC-204: Autopilot Mode
+- RFC-203: Autopilot Mode
 - RFC-402: Unified Thread Management
 - Design draft: `docs/drafts/2026-04-13-deepagents-cli-migration-design.md`
 

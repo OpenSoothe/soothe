@@ -80,7 +80,7 @@ For detailed rendering (two-level tool call trees, special tool behaviors, plan 
 Thread management → Context restoration → Policy check → Context projection → Memory recall → Plan creation → Enriched input assembly.
 
 **Phase 2: LangGraph Stream**
-`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. HITL interrupt loop: collect `__interrupt__`, auto-approve, resume with `Command(resume=...)`. See RFC-202 for StepScheduler multi-step execution.
+`agent.astream()` with `stream_mode=["messages", "updates", "custom"]`, `subgraphs=True`. HITL interrupt loop: collect `__interrupt__`, auto-approve, resume with `Command(resume=...)`. See RFC-200 for StepScheduler multi-step execution.
 
 **Phase 3: Protocol Post-processing**
 Context ingestion → Context persistence → Memory storage → Plan reflection → Thread persistence via `ThreadContextManager`.
@@ -203,7 +203,7 @@ TUI inherits `PolicyProtocol` enforcement. HITL interrupts from `HumanInTheLoopM
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
 - RFC-300: Context and memory architecture
-- RFC-202: DAG-based execution
+- RFC-200: DAG-based execution
 - RFC-400: Unified daemon communication
 - RFC-501: VerbosityTier unification
 

@@ -5,7 +5,7 @@ This module contains reusable display helpers used by both TUI and headless mode
 
 from __future__ import annotations
 
-from soothe_sdk import _TASK_NAME_RE
+from soothe_sdk.utils import _TASK_NAME_RE
 
 __all__ = [
     "update_name_map_from_tool_calls",

@@ -40,7 +40,7 @@ def __getattr__(name: str) -> Any:
 
         return PromptBuilder
     if name == "INVALID_WORKSPACE_DIRS":
-        from soothe_sdk import INVALID_WORKSPACE_DIRS
+        from soothe_sdk.utils import INVALID_WORKSPACE_DIRS
 
         return INVALID_WORKSPACE_DIRS
     if name == "resolve_daemon_workspace":

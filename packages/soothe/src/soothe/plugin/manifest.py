@@ -7,6 +7,6 @@ The actual implementation lives in soothe_sdk.types.manifest
 to keep the SDK self-contained for third-party distribution.
 """
 
-from soothe_sdk.types.manifest import PluginManifest
+from soothe_sdk.plugin import Manifest as PluginManifest
 
 __all__ = ["PluginManifest"]

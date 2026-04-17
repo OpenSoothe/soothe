@@ -11,7 +11,7 @@ scope: Layer 2 executor.py thread management simplification
 **Date**: 2026-04-09
 **Author**: Platonic Brainstorming
 **Status**: Draft
-**Target**: RFC-201 Layer 2 Agentic Goal Execution
+**Target**: RFC-200 Layer 2 Agentic Goal Execution
 
 ## Problem Statement
 
@@ -20,7 +20,7 @@ The current thread isolation implementation in `src/soothe/cognition/agent_loop/
 1. **Manual Thread ID Generation**: executor creates isolated thread IDs like `{thread_id}__l2act{uuid}` and `{thread_id}__step_{i}`
 2. **Manual Merge Logic**: `_merge_isolated_act_into_parent_thread()` combines isolated thread messages back to parent
 3. **Mixed Isolation Strategy**: Different strategies for subagent steps vs tool-only steps
-4. **Documentation Confusion**: RFC-201 states "isolation is automatic" but implementation is manual
+4. **Documentation Confusion**: RFC-200 states "isolation is automatic" but implementation is manual
 
 **Key Observation**: langgraph's `task` tool already provides automatic thread isolation for subagent delegations. The manual thread management appears to duplicate work that langgraph already handles.
 
@@ -453,7 +453,7 @@ decision = AgentDecision(
 
 ### Documentation Alignment
 
-- RFC-201 "automatic isolation" becomes accurate
+- RFC-200 "automatic isolation" becomes accurate
 - Implementation matches specification
 - Easier for developers to understand behavior
 
@@ -513,7 +513,7 @@ decision = AgentDecision(
 
 ### Phase 3: Documentation
 
-1. Update RFC-201 to clarify automatic isolation meaning
+1. Update RFC-200 to clarify automatic isolation meaning
 2. Update llm-communication-analysis.md thread isolation section
 3. Remove verbose thread ID generation from examples
 4. Update implementation guides

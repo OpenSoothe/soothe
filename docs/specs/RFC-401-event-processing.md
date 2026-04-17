@@ -1,10 +1,10 @@
-# RFC-401: Event Processing & Filtering
+# RFC-400: Event Processing & Filtering
 
 **Status**: Implemented
 **Authors**: Soothe Team
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-400 (Daemon Communication), RFC-403 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
+**Depends on**: RFC-400 (Daemon Communication), RFC-402 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
 
@@ -29,7 +29,7 @@ This RFC defines:
 * EventProcessor unified processing architecture
 * Integration boundary with PresentationEngine
 
-**Note**: Event naming conventions and domain taxonomy are defined in RFC-403 (Unified Event Naming).
+**Note**: Event naming conventions and domain taxonomy are defined in RFC-402 (Unified Event Naming).
 
 ### 2.2 Non-Goals
 
@@ -67,16 +67,16 @@ This RFC does **not** define:
 
 ## 4. Naming Conventions
 
-Event naming semantics, including grammar rules, domain taxonomy, and approved vocabularies, are defined in **RFC-403 (Unified Event Naming)**.
+Event naming semantics, including grammar rules, domain taxonomy, and approved vocabularies, are defined in **RFC-402 (Unified Event Naming)**.
 
-This RFC references RFC-403 for:
+This RFC references RFC-402 for:
 * Event type hierarchy format: `soothe.<domain>.<component>.<action>`
 * Domain definitions and scope
 * Present progressive tense grammar rules
 * Plugin extension namespace conventions
 * Approved verb and state noun lists
 
-For complete naming guidelines, migration rules, and validation criteria, see RFC-403.
+For complete naming guidelines, migration rules, and validation criteria, see RFC-402.
 
 ---
 

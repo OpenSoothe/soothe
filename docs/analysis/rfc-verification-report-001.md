@@ -17,7 +17,7 @@ This report provides systematic verification of 31 RFC specifications (excluding
 - **Layer 3 Violation**: Architectural boundary violation - bypasses Layer 2
 - **Spec Drift**: RFC-001 describes obsolete Memory/Planner architectures
 - **Missing Feature**: Autopilot working directory not implemented
-- **Status Accuracy**: RFC-201 and RFC-202 status sections outdated
+- **Status Accuracy**: RFC-200 and RFC-200 status sections outdated
 
 ---
 
@@ -126,7 +126,7 @@ class CoreAgent:
 
 ---
 
-#### RFC-201: Layer 2 Agentic Goal Execution
+#### RFC-200: Layer 2 Agentic Goal Execution
 
 **Status**: ✅ **Verified** (Fully implemented, RFC status outdated)
 
@@ -200,7 +200,7 @@ else:
 
 ### Tier 3: Execution Features RFCs
 
-#### RFC-202: DAG Execution & Failure Recovery
+#### RFC-200: DAG Execution & Failure Recovery
 
 **Status**: ✅ **Verified** (Core implemented, RFC status outdated)
 
@@ -249,7 +249,7 @@ def __init__(self, policy: ConcurrencyPolicy) -> None:
 
 ---
 
-#### RFC-204: Autopilot Mode
+#### RFC-203: Autopilot Mode
 
 **Status**: ❌ **Missing** (Spec exists, no implementation)
 
@@ -264,7 +264,7 @@ def __init__(self, policy: ConcurrencyPolicy) -> None:
 
 ---
 
-#### RFC-205: Layer 2 Unified State Checkpoint
+#### RFC-203: Layer 2 Unified State Checkpoint
 
 **Status**: ⚠️ **Not Verified** (Need to examine)
 
@@ -308,7 +308,7 @@ def __init__(self, policy: ConcurrencyPolicy) -> None:
 
 ---
 
-#### RFC-401: Event Processing
+#### RFC-400: Event Processing
 
 **Status**: ⚠️ **Partial Verification**
 
@@ -421,7 +421,7 @@ def __init__(self, policy: ConcurrencyPolicy) -> None:
 1. Layer 3 architectural boundary violation (bypasses Layer 2)
 2. Autopilot working directory not implemented
 3. RFC documentation drift (Memory/Planner obsolete descriptions)
-4. RFC status sections outdated (RFC-201, RFC-202)
+4. RFC status sections outdated (RFC-200, RFC-200)
 
 ---
 
@@ -454,7 +454,7 @@ middlewares - NO goal infrastructure (Layer 2/3 responsibility)."""
 
 ---
 
-### RFC-201 Verification Log
+### RFC-200 Verification Log
 
 **Spec**: Layer 2 Agentic Goal Execution
 
@@ -554,7 +554,7 @@ reflection = await self._planner.reflect(
 
 ---
 
-### RFC-202 Verification Log
+### RFC-200 Verification Log
 
 **Spec**: DAG Execution & Failure Recovery
 
@@ -614,14 +614,14 @@ async def acquire_goal(self) -> AsyncGenerator[None]:
 ### P2: Documentation Cleanup
 
 3. **IG-156**: RFC Status Updates
-   - Update RFC-201 status (remove "remaining" labels)
-   - Update RFC-202 status (change "Draft" → "Implemented")
+   - Update RFC-200 status (remove "remaining" labels)
+   - Update RFC-200 status (change "Draft" → "Implemented")
    - Update RFC-001 (remove obsolete Memory/Planner descriptions)
 
 ### P3: Verification Continuation
 
 4. **RFC-203 Verification**: Loop Working Memory
-5. **RFC-204 Verification**: Autopilot Mode features
+5. **RFC-203 Verification**: Autopilot Mode features
 6. **RFC-500 Verification**: CLI TUI Architecture
 7. **RFC-601 Verification**: Built-in Agents
 8. **RFC-602 Verification**: SQLite Backend

@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 from packaging.version import InvalidVersion, Version
-from soothe_sdk import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_HOME
 
 from soothe_cli.tui._version import PYPI_URL, USER_AGENT, __version__
 

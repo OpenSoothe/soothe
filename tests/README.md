@@ -293,5 +293,5 @@ Tests are designed to run in CI/CD pipelines:
 ## References
 
 - RFC-400: Unified Daemon Communication Protocol
-- RFC-401: Event Protocol Specification
+- RFC-400: Event Protocol Specification
 - Test patterns inspired by the noesium project's test suite

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.protocol import preview_first
+from soothe_sdk.client.protocol import preview_first
 
 from soothe_cli.shared.tool_formatters.base import BaseFormatter
 from soothe_cli.shared.tool_output_formatter import ToolBrief
@@ -28,7 +28,7 @@ class StructuredFormatter(BaseFormatter):
             ToolBrief with structured summary.
 
         Example:
-            >>> from soothe_sdk import ToolOutput
+            >>> from soothe_sdk.client.schemas import ToolOutput
             >>> formatter = StructuredFormatter()
             >>> output = ToolOutput.ok(data="file content")
             >>> brief = formatter.format("read_file", output)
@@ -37,7 +37,7 @@ class StructuredFormatter(BaseFormatter):
         """
         # Import ToolOutput (may not be available in all contexts)
         try:
-            from soothe_sdk import ToolOutput
+            from soothe_sdk.client.schemas import ToolOutput
 
             if not isinstance(result, ToolOutput):
                 # Not a ToolOutput - should not happen if classifier works correctly

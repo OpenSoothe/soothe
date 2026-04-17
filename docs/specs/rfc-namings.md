@@ -50,12 +50,12 @@ This document defines the terminology and naming conventions used in this projec
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| Progress Event | A `soothe.*` custom event dict emitted via the LangGraph stream for protocol observability. Follows the 4-segment naming convention `soothe.<domain>.<component>.<action>`. | RFC-401 |
-| Event Domain | The second segment of a progress event type string. One of: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`. Enables structural classification without heuristics. | RFC-401 |
-| `SootheEvent` | Pydantic `BaseModel` base class for all typed progress events. Subclassed by domain base classes (`LifecycleEvent`, `ProtocolEvent`, `ToolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`). | RFC-401 |
-| `EventRegistry` | Central registry mapping event type strings to `EventMeta` (model, domain, verbosity, summary template) and handler callables. Provides O(1) dispatch. | RFC-401 |
-| `EventRenderer` | Protocol for rendering progress events. Implementations: `CliEventRenderer` (stderr text), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough). | RFC-401 |
-| `EventMeta` | Frozen dataclass holding metadata for a registered event type: type string, model class, domain, component, action, verbosity category, and summary template. | RFC-401 |
+| Progress Event | A `soothe.*` custom event dict emitted via the LangGraph stream for protocol observability. Follows the 4-segment naming convention `soothe.<domain>.<component>.<action>`. | RFC-400 |
+| Event Domain | The second segment of a progress event type string. One of: `lifecycle`, `protocol`, `tool`, `subagent`, `output`, `error`. Enables structural classification without heuristics. | RFC-400 |
+| `SootheEvent` | Pydantic `BaseModel` base class for all typed progress events. Subclassed by domain base classes (`LifecycleEvent`, `ProtocolEvent`, `ToolEvent`, `SubagentEvent`, `OutputEvent`, `ErrorEvent`). | RFC-400 |
+| `EventRegistry` | Central registry mapping event type strings to `EventMeta` (model, domain, verbosity, summary template) and handler callables. Provides O(1) dispatch. | RFC-400 |
+| `EventRenderer` | Protocol for rendering progress events. Implementations: `CliEventRenderer` (stderr text), `TuiEventRenderer` (Rich Text), `JsonlEventRenderer` (passthrough). | RFC-400 |
+| `EventMeta` | Frozen dataclass holding metadata for a registered event type: type string, model class, domain, component, action, verbosity category, and summary template. | RFC-400 |
 
 ### Tool Interface Terms (RFC-101)
 
@@ -68,34 +68,34 @@ This document defines the terminology and naming conventions used in this projec
 | Session Manager | Singleton managing Python sessions with thread_id isolation, cleanup, and thread-safe execution. | RFC-101 |
 | Structured Error | Error response with standardized format: error, details, suggestions, recoverable, auto_retry_hint. Provides actionable guidance for LLM recovery. | RFC-101 |
 
-### Autopilot Terms (RFC-204)
+### Autopilot Terms (RFC-203)
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| Autopilot Mode | Layer 3 extension enabling long-running autonomous operation with dreaming mode and continuous improvement. | RFC-204 |
-| Dreaming Mode | Persistent idle state where Soothe performs memory consolidation, indexing, goal anticipation, and health monitoring. | RFC-204 |
-| Consensus Loop | Layer 3 validation of Layer 2 completion judgment with send-back capability and budget. | RFC-204 |
-| Send-Back Budget | Per-goal limit on Layer 3 rejections (default: 3 rounds). Independent from Layer 2 iteration budget. | RFC-204 |
-| Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Generic routing by type prefix. | RFC-204 |
-| ChannelMessage | Data structure with type, payload, timestamp, sender fields for channel communication. | RFC-204 |
-| CriticalityEvaluator | Module in GoalEngine that determines if a proposed goal requires user confirmation (MUST status). | RFC-204 |
-| SchedulerService | Independent service in `cognition/scheduler/` for time-based task execution (delay, cron, recurrence). | RFC-204 |
-| Goal Relationship | Connection between goals: `depends_on` (hard), `informs` (soft), `conflicts_with` (mutual exclusion). | RFC-204 |
-| Context Envelope | Rich context package sent from Layer 3 to Layer 2 containing world info, goals, memory, instructions. | RFC-204 |
-| Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-204 |
-| Critical Message | Channel message requiring acknowledgment (e.g., blocker_alert, MUST goal confirmation). Retries with backoff. | RFC-204 |
+| Autopilot Mode | Layer 3 extension enabling long-running autonomous operation with dreaming mode and continuous improvement. | RFC-203 |
+| Dreaming Mode | Persistent idle state where Soothe performs memory consolidation, indexing, goal anticipation, and health monitoring. | RFC-203 |
+| Consensus Loop | Layer 3 validation of Layer 2 completion judgment with send-back capability and budget. | RFC-203 |
+| Send-Back Budget | Per-goal limit on Layer 3 rejections (default: 3 rounds). Independent from Layer 2 iteration budget. | RFC-203 |
+| Channel Protocol | Message-centric protocol for user ↔ Soothe communication. Generic routing by type prefix. | RFC-203 |
+| ChannelMessage | Data structure with type, payload, timestamp, sender fields for channel communication. | RFC-203 |
+| CriticalityEvaluator | Module in GoalEngine that determines if a proposed goal requires user confirmation (MUST status). | RFC-203 |
+| SchedulerService | Independent service in `cognition/scheduler/` for time-based task execution (delay, cron, recurrence). | RFC-203 |
+| Goal Relationship | Connection between goals: `depends_on` (hard), `informs` (soft), `conflicts_with` (mutual exclusion). | RFC-203 |
+| Context Envelope | Rich context package sent from Layer 3 to Layer 2 containing world info, goals, memory, instructions. | RFC-203 |
+| Same-Cron Conflict | Multiple tasks with identical cron expression. Resolved by sequential execution, ordered by creation/priority. | RFC-203 |
+| Critical Message | Channel message requiring acknowledgment (e.g., blocker_alert, MUST goal confirmation). Retries with backoff. | RFC-203 |
 
-### Layer 2 Execution Terms (RFC-201)
+### Layer 2 Execution Terms (RFC-200)
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| Context Isolation | Thread isolation for delegation steps where subagents receive only explicit task input, no prior conversation history. Prevents cross-wave contamination. | RFC-201 |
-| Thread Isolation | Automatic isolation provided by task tool for subagent delegations. Tool executions use parent thread_id with langgraph concurrent safety. Simplified in RFC-209. | RFC-201, RFC-209 |
-| Execution Bounds | Two-layer constraint preventing runaway subagent loops: soft constraint (schema/prompt) and hard constraint (subagent task cap). | RFC-201 |
-| Wave Metrics | Structured metrics collected per Act wave (tool_call_count, subagent_task_count, output_length, error_count, context_window) informing Reason decisions. | RFC-201 |
-| Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-201 |
-| Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-201 |
-| Manual Thread ID Generation (deprecated) | Old pattern where executor created isolated thread IDs (`{thread_id}__l2act{uuid}`, `{thread_id}__step_{i}`) and manually merged results. Removed in RFC-209. | RFC-201 (deprecated), RFC-209 |
+| Context Isolation | Thread isolation for delegation steps where subagents receive only explicit task input, no prior conversation history. Prevents cross-wave contamination. | RFC-200 |
+| Thread Isolation | Automatic isolation provided by task tool for subagent delegations. Tool executions use parent thread_id with langgraph concurrent safety. Simplified in RFC-207. | RFC-200, RFC-207 |
+| Execution Bounds | Two-layer constraint preventing runaway subagent loops: soft constraint (schema/prompt) and hard constraint (subagent task cap). | RFC-200 |
+| Wave Metrics | Structured metrics collected per Act wave (tool_call_count, subagent_task_count, output_length, error_count, context_window) informing Reason decisions. | RFC-200 |
+| Subagent Task Cap | Maximum subagent delegations per Act wave (default 2). Stops stream early on cap hit, signals metrics to Reason. | RFC-200 |
+| Output Contract | Layer 2 anti-repetition instructions preventing main model from pasting full subagent output after streaming. | RFC-200 |
+| Manual Thread ID Generation (deprecated) | Old pattern where executor created isolated thread IDs (`{thread_id}__l2act{uuid}`, `{thread_id}__step_{i}`) and manually merged results. Removed in RFC-207. | RFC-200 (deprecated), RFC-207 |
 | Outcome Metadata | Structured dict replacing full tool result content in StepResult. Contains type, tool_call_id, success_indicators, entities, size_bytes, optional file_ref. Enables Layer 2 reasoning without content bloat. | RFC-211 |
 | Tool Call ID | Unique identifier from LangChain for each tool invocation (format: `call_<uuid>`). Guaranteed unique even for same tool called multiple times. Used for file cache naming. | RFC-211 |
 | Tool Result Cache | File system cache for large tool results (>50KB) at `~/.soothe/runs/{thread_id}/tool_results/{tool_call_id}.json`. Optional, cleaned up after thread completion. | RFC-211 |

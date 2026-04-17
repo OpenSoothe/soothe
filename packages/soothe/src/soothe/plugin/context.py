@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.types.context import PluginContext
+from soothe_sdk.plugin import Context as PluginContext
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig

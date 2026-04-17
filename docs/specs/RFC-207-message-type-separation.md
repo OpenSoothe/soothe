@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Refinement
 **Created**: 2026-04-08
-**Dependencies**: RFC-206, RFC-201, RFC-100
+**Dependencies**: RFC-206, RFC-200, RFC-100
 **Replaces**: None (refines RFC-206 implementation)
 
 ## Abstract
@@ -454,7 +454,7 @@ These are **out of scope** for RFC-207 but worth considering for future iteratio
 ## Related Specifications
 
 - **RFC-206**: Hierarchical Prompt Architecture (conceptual foundation)
-- **RFC-201**: Layer 2 Agentic Goal Execution (Plan/Execute loop)
+- **RFC-200**: Layer 2 Agentic Goal Execution (Plan/Execute loop)
 - **RFC-100**: Layer 1 CoreAgent Runtime (BaseChatModel interface)
 - **IG-135**: Prompt Architecture Implementation (RFC-206 implementation)
 - **IG-136**: LLM Tracing Middleware (message logging support)

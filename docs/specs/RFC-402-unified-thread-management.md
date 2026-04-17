@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-03-22
-**Dependencies**: RFC-000, RFC-001, RFC-201, RFC-400, RFC-101
+**Dependencies**: RFC-000, RFC-001, RFC-200, RFC-400, RFC-101
 **Implements**: Thread lifecycle management, multi-threading support, unified transport APIs
 
 ## Abstract

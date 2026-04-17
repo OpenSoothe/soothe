@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Created:** 2026-04-08
-**Related:** RFC-201, RFC-203, IG-133
+**Related:** RFC-200, RFC-203, IG-133
 
 ## Problem Statement
 

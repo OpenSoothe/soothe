@@ -180,7 +180,7 @@ uv run soothe -p "List files in src directory" --no-tui -v normal
 - RFC-606: DeepAgents CLI TUI Migration (backend adapters, ProtocolEventWidget)
 - RFC-501: Display Verbosity (verbosity tier filtering)
 - RFC-500: CLI/TUI Architecture (progressive display pipeline)
-- RFC-401: Event Processing (event dispatch)
+- RFC-400: Event Processing (event dispatch)
 
 ---
 

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from soothe_sdk import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_HOME
 
 from soothe_cli.config.cli_config import CLIConfig
 
