@@ -99,6 +99,22 @@ Thread relationship analysis for goal context construction. Computes goal simila
 **ThreadRelationshipModule Interface**:
 
 ```python
+class ContextConstructionOptions(BaseModel):
+    """Options for goal context construction."""
+    
+    include_same_goal_threads: bool = True
+    """Include multiple threads for same goal_id."""
+    
+    include_similar_goals: bool = True
+    """Include threads with semantically similar goals."""
+    
+    thread_selection_strategy: Literal["latest", "all", "best_performing"] = "latest"
+    """Strategy for selecting relevant threads."""
+    
+    similarity_threshold: float = 0.7
+    """Embedding similarity threshold for goal matching."""
+
+```python
 # cognition/goal_context/thread_relationship.py
 
 class ContextConstructionOptions(BaseModel):
@@ -135,7 +151,7 @@ class ThreadRelationshipModule:
     def construct_goal_context(
         self,
         goal_id: str,
-        goal_history: list[GoalRecord],
+        goal_history: list[GoalExecutionRecord],
         options: ContextConstructionOptions,
     ) -> GoalContext:
         """
@@ -147,7 +163,7 @@ class ThreadRelationshipModule:
 
         Args:
             goal_id: Target goal for context
-            goal_history: Previous goal records from checkpoint
+            goal_history: Previous goal records from checkpoint (RFC-608 GoalExecutionRecord)
             options: Construction configuration
 
         Returns:
@@ -155,7 +171,36 @@ class ThreadRelationshipModule:
         """
 ```
 
-**Similarity Hierarchy**:
+### GoalContext Data Model (NEW)
+
+Result of context construction containing previous goal execution records and thread relationship metadata.
+
+```python
+class GoalContext(BaseModel):
+    """Goal context with execution memory and thread ecosystem (RFC-609)."""
+
+    goal_id: str
+    """Target goal for context."""
+
+    execution_memory: list[GoalExecutionRecord] = Field(default_factory=list)
+    """Previous goal execution records from RFC-608 checkpoint."""
+
+    thread_ecosystem: dict[str, list[str]] = Field(default_factory=dict)
+    """Thread relationship metadata: {thread_id: [related_goal_ids]}."""
+
+    total_threads: int = 0
+    """Count of relevant threads."""
+
+    similarity_scores: dict[str, float] = Field(default_factory=dict)
+    """Similarity scores for included goals: {goal_id: score}."""
+```
+
+**Integration with GoalExecutionRecord** (RFC-608):
+- `execution_memory` contains `GoalExecutionRecord` instances from checkpoint
+- Thread ecosystem maps thread_ids to goal_ids for relationship awareness
+- Similarity scores enable confidence-based filtering
+
+### Similarity Hierarchy:
 
 1. **Exact Match**: Same goal_id (score: 1.0)
 2. **Semantic Similarity**: Embedding distance on goal descriptions
@@ -184,7 +229,7 @@ class GoalContextManager:
         self._thread_relationship = ThreadRelationshipModule(embedding_model)  # NEW
 
     def get_execute_briefing(self, limit: int | None = None) -> str | None:
-        """Get goal briefing for Execute phase (enhanced)."""
+        """Get goal briefing for Execute phase (enhanced with thread ecosystem)."""
         checkpoint = self._state_manager.load()
         if not checkpoint or not checkpoint.thread_switch_pending:
             return None
@@ -203,7 +248,20 @@ class GoalContextManager:
             options=options,
         )
 
-        return self._format_execute_briefing(goal_context)
+        # Use goal_context.execution_memory for briefing
+        return self._format_execute_briefing(goal_context.execution_memory, checkpoint.current_thread_id)
+```
+
+**Wiring in AgentLoop**:
+
+```python
+# agent_loop.py run_with_progress()
+embedding_model = config.create_embedding_model(config.agentic.goal_context.embedding_role)
+goal_context_manager = GoalContextManager(
+    state_manager, 
+    config.agentic.goal_context,
+    embedding_model,  # NEW
+)
 ```
 
 **Configuration Extension**:
@@ -576,15 +634,34 @@ agentic:
     plan_limit: 10  # Number of previous goals for Plan phase
     execute_limit: 10  # Number of previous goals for Execute briefing
     enabled: true  # Enable/disable goal context injection
+
+    # ThreadRelationshipModule configuration (RFC-609)
+    include_similar_goals: true  # Include threads with semantically similar goals
+    thread_selection_strategy: latest  # latest | all | best_performing
+    similarity_threshold: 0.7  # Embedding similarity threshold
+    embedding_role: embedding  # Model role for embedding computation
 ```
 
 ```python
 class GoalContextConfig(BaseModel):
-    """Goal context injection configuration."""
-    
+    """Goal context injection configuration (RFC-609)."""
+
     plan_limit: int = Field(default=10, ge=1, le=50)
     execute_limit: int = Field(default=10, ge=1, le=50)
     enabled: bool = Field(default=True)
+
+    # ThreadRelationshipModule configuration
+    include_similar_goals: bool = Field(default=True)
+    """Include threads with semantically similar goals."""
+
+    thread_selection_strategy: Literal["latest", "all", "best_performing"] = Field(default="latest")
+    """Strategy for selecting relevant threads."""
+
+    similarity_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    """Embedding similarity threshold for goal matching."""
+
+    embedding_role: str = Field(default="embedding")
+    """Model role for embedding computation (from SootheConfig.create_embedding_model())."""
 
 class AgenticConfig(BaseModel):
     """Agentic loop configuration."""
