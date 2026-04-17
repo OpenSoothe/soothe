@@ -45,7 +45,6 @@ This index reflects the post-consolidation RFC set and defines which files are c
 
 | RFC | File | Purpose |
 |-----|------|---------|
-| RFC-300 | [RFC-300-context-memory-protocols.md](./RFC-300-context-memory-protocols.md) | Context and memory protocol contracts |
 | RFC-301 | [RFC-301-protocol-registry.md](./RFC-301-protocol-registry.md) | Protocol registration and resolution |
 | RFC-400 | [RFC-400-context-protocol-architecture.md](./RFC-400-context-protocol-architecture.md) | Unified context protocol and retrieval (merged) |
 | RFC-402 | [RFC-402-memory-protocol-architecture.md](./RFC-402-memory-protocol-architecture.md) | Unified memory protocol and separation (merged) |

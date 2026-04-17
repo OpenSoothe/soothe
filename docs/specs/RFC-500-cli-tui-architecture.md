@@ -5,7 +5,7 @@
 **Status**: Implemented
 **Created**: 2026-03-12
 **Updated**: 2026-03-28
-**Related**: RFC-000, RFC-001, RFC-300
+**Related**: RFC-000, RFC-001, RFC-400, RFC-402
 
 ## Abstract
 
@@ -202,9 +202,10 @@ TUI inherits `PolicyProtocol` enforcement. HITL interrupts from `HumanInTheLoopM
 
 - RFC-000: System conceptual design
 - RFC-001: Core modules architecture
-- RFC-300: Context and memory architecture
-- RFC-200: DAG-based execution
-- RFC-400: Unified daemon communication
+- RFC-400: Context protocol architecture
+- RFC-402: Memory protocol architecture
+- RFC-202: DAG-based execution
+- RFC-450: Unified daemon communication
 - RFC-501: VerbosityTier unification
 
 ---

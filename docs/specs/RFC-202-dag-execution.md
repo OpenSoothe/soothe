@@ -80,9 +80,9 @@ This RFC defines:
 This RFC does **not** define:
 
 * Goal management lifecycle (see RFC-200)
-* Single-goal execution loop (see RFC-200)
+* Single-goal execution loop (see RFC-201)
 * CoreAgent runtime (see RFC-100)
-* PlannerProtocol interface (see RFC-301)
+* PlannerProtocol interface (see RFC-404)
 
 ---
 
@@ -513,7 +513,7 @@ execution:
 * **`RFC-201-agentloop-plan-execute-loop.md` (Layer 2)**: Agentic goal execution loop
 * **RFC-100 (Layer 1)**: CoreAgent runtime
 * **RFC-301 (Protocol Registry)**: PlannerProtocol interface
-* **RFC-300 (Context & Memory)**: ContextProtocol for step result ingestion
+* **RFC-400 / RFC-402**: ContextProtocol and MemoryProtocol for step result ingestion
 
 ---
 

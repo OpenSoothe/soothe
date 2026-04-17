@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-200, RFC-203, RFC-608
+**Dependencies**: RFC-201, RFC-203, RFC-608
 **Related**: RFC-213 (Reasoning)
 
 ---
@@ -205,6 +205,8 @@ async def execute(decision, state):
 
 Thread relationship analysis for goal context construction:
 
+When thread-derived context participates in failure diagnosis/backoff preparation, evidence payloads must align with the canonical shared contract in `RFC-200` (`EvidenceBundle`, `GoalSubDAGStatus`) to avoid cross-layer schema drift.
+
 ```python
 class ContextConstructionOptions(BaseModel):
     """Options for goal context construction."""
@@ -399,7 +401,7 @@ agentic:
 
 ## References
 
-- RFC-200: AgentLoop Plan-Execute Loop Architecture
+- RFC-201: AgentLoop Plan-Execute Loop Architecture
 - RFC-203: AgentLoop State & Memory Architecture
 - RFC-608: Loop Multi-Thread Lifecycle (original source)
 - RFC-609: Goal Context Management (original source)

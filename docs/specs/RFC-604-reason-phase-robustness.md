@@ -4,7 +4,7 @@
 **Authors**: Claude Sonnet 4.6
 **Created**: 2026-04-11
 **Last Updated**: 2026-04-12 (IG-153 terminology refactoring)
-**Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-200-agentic-goal-execution
+**Depends on**: RFC-603-reasoning-quality-progressive-actions, RFC-201-agentloop-plan-execute-loop
 **Supersedes**: ---
 **Stage**: Cognition/AgentLoop
 **Kind**: Architecture Design
@@ -630,7 +630,7 @@ for attempt in range(3):
 ### 13.1 Dependencies
 
 * **RFC-603-reasoning-quality-progressive-actions**: Provides Plan phase architecture and quality improvements that this RFC builds upon
-* **RFC-200-agentic-goal-execution**: Defines Layer 2 AgentLoop architecture where Plan phase operates
+* **RFC-201-agentloop-plan-execute-loop**: Defines Layer 2 AgentLoop architecture where Plan phase operates
 
 ### 13.2 Integration Points
 

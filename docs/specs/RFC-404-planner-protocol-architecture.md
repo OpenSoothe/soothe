@@ -136,7 +136,7 @@ class Reflection(BaseModel):
 - Generate full Plan/PlanResult
 - Create execution steps
 
-**Implementation** (in Layer 2 AgentLoop, RFC-200):
+**Implementation** (in Layer 2 AgentLoop, RFC-201):
 ```python
 # Two-phase Plan execution is Layer 2 implementation
 # PlannerProtocol interface remains protocol-level (no phases)
@@ -149,7 +149,7 @@ class LLMPlanner(PlannerProtocol):
         response = await self._model.ainvoke(prompt)
         return Plan.model_validate_json(response.content)
 
-    # Two-phase execution happens in AgentLoop (RFC-200)
+    # Two-phase execution happens in AgentLoop (RFC-201)
     # Not in PlannerProtocol implementation
 ```
 
@@ -212,15 +212,15 @@ cognition:
 - ✅ Reflection generation
 - ✅ Goal directive support (Layer 3)
 - ✅ Dependency DAG structure
-- ⚠️ Two-phase execution pattern (Layer 2 RFC-200 implementation)
+- ⚠️ Two-phase execution pattern (Layer 2 RFC-201 implementation)
 
 ---
 
 ## References
 
 - RFC-000: System Conceptual Design
-- RFC-200: AgentLoop Plan-Execute Loop Architecture (two-phase execution)
-- RFC-300: GoalEngine Goal DAG Management
+- RFC-201: AgentLoop Plan-Execute Loop Architecture (two-phase execution)
+- RFC-200: GoalEngine Goal DAG Management
 - RFC-001: Core Modules Architecture (original Module 3)
 
 ---
@@ -229,11 +229,11 @@ cognition:
 
 ### 2026-04-17
 - Consolidated RFC-001 Module 3 (PlannerProtocol) with plan architecture design
-- Defined protocol interface without two-phase implementation details (stays in RFC-200)
+- Defined protocol interface without two-phase implementation details (stays in RFC-201)
 - Clarified separation: Protocol interface vs Layer 2 execution patterns
 - Maintained hierarchical plan support and goal directive integration
 - Preserved runtime-agnostic design principle
 
 ---
 
-*PlannerProtocol plan creation and revision interface with LLMPlanner default implementation. Two-phase execution pattern implemented in Layer 2 (RFC-200), not in protocol.*
+*PlannerProtocol plan creation and revision interface with LLMPlanner default implementation. Two-phase execution pattern implemented in Layer 2 (RFC-201), not in protocol.*

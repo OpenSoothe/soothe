@@ -684,9 +684,9 @@ All three tools added to `create_layer2_tools()` return list.
 ## Related Documents
 
 - [RFC-200](./RFC-200-autonomous-goal-management.md) — Layer 3 Foundation
-- [RFC-200](./RFC-200-agentic-goal-execution.md) — Layer 2 Execution
-- [RFC-200](./RFC-200-dag-execution.md) — DAG Execution
-- [RFC-400](./RFC-400-daemon-communication.md) — Daemon Protocol
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) — Layer 2 Execution
+- [RFC-202](./RFC-202-dag-execution.md) — DAG Execution
+- [RFC-450](./RFC-450-daemon-communication-protocol.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 
 ## Changelog
