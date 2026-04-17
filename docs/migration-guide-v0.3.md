@@ -378,13 +378,251 @@ soothe-daemon doctor
 - **Implementation Guide**: docs/impl/IG-173
 - **Issues**: GitHub Issues
 
+---
+
+## v0.4.0 Breaking Changes: SDK Module Structure Refactoring
+
+**Release date:** 2026-04-17  
+**Breaking change:** All SDK import paths changed  
+**No backward compatibility:** Direct breaking change, update imports before upgrading
+
+### Overview
+
+SDK refactored to match langchain-core patterns:
+- Minimal `__init__.py` (version only, no re-exports)
+- Core concepts at root level (events, exceptions, verbosity)
+- Purpose packages for subsystems (plugin/, client/, ux/, utils/, protocols/)
+- 15 root files → 3 core files + organized packages
+
+### Quick Migration
+
+**Update all `from soothe_sdk import` statements to package-level imports:**
+
+```python
+# Before (v0.3.x)
+from soothe_sdk import plugin, tool, WebSocketClient, setup_logging
+
+# After (v0.4.0)
+from soothe_sdk.plugin import plugin, tool
+from soothe_sdk.client import WebSocketClient
+from soothe_sdk.utils import setup_logging
+```
+
+**Core imports unchanged (still at root level):**
+
+```python
+# These stay at root level - NO CHANGE
+from soothe_sdk.events import SootheEvent, LifecycleEvent
+from soothe_sdk.exceptions import PluginError, ValidationError
+from soothe_sdk.verbosity import VerbosityTier, should_show
+```
+
+### Complete Import Mapping Table
+
+| Old Import (v0.3.x) | New Import (v0.4.0) | Package |
+|---------------------|---------------------|---------|
+| **Plugin API** |
+| `from soothe_sdk import plugin` | `from soothe_sdk.plugin import plugin` | plugin |
+| `from soothe_sdk import tool` | `from soothe_sdk.plugin import tool` | plugin |
+| `from soothe_sdk import tool_group` | `from soothe_sdk.plugin import tool_group` | plugin |
+| `from soothe_sdk import subagent` | `from soothe_sdk.plugin import subagent` | plugin |
+| `from soothe_sdk import PluginManifest` | `from soothe_sdk.plugin import Manifest` | plugin |
+| `from soothe_sdk import PluginContext` | `from soothe_sdk.plugin import Context` | plugin |
+| `from soothe_sdk import PluginHealth` | `from soothe_sdk.plugin import Health` | plugin |
+| `from soothe_sdk import register_event` | `from soothe_sdk.plugin import register_event` | plugin |
+| `from soothe_sdk import emit_progress` | `from soothe_sdk.plugin import emit_progress` | plugin |
+| **Client Utilities** |
+| `from soothe_sdk import WebSocketClient` | `from soothe_sdk.client import WebSocketClient` | client |
+| `from soothe_sdk import VerbosityLevel` | `from soothe_sdk.client import VerbosityLevel` | client |
+| `from soothe_sdk import bootstrap_thread_session` | `from soothe_sdk.client import bootstrap_thread_session` | client |
+| `from soothe_sdk import connect_websocket_with_retries` | `from soothe_sdk.client import connect_websocket_with_retries` | client |
+| `from soothe_sdk import websocket_url_from_config` | `from soothe_sdk.client import websocket_url_from_config` | client |
+| `from soothe_sdk import check_daemon_status` | `from soothe_sdk.client import check_daemon_status` | client |
+| `from soothe_sdk import is_daemon_live` | `from soothe_sdk.client import is_daemon_live` | client |
+| `from soothe_sdk import request_daemon_shutdown` | `from soothe_sdk.client import request_daemon_shutdown` | client |
+| `from soothe_sdk import fetch_skills_catalog` | `from soothe_sdk.client import fetch_skills_catalog` | client |
+| `from soothe_sdk import fetch_config_section` | `from soothe_sdk.client import fetch_config_section` | client |
+| `from soothe_sdk import encode` | `from soothe_sdk.client.protocol import encode` | client |
+| `from soothe_sdk import decode` | `from soothe_sdk.client.protocol import decode` | client |
+| `from soothe_sdk import Plan` | `from soothe_sdk.client.schemas import Plan` | client |
+| `from soothe_sdk import PlanStep` | `from soothe_sdk.client.schemas import PlanStep` | client |
+| `from soothe_sdk import ToolOutput` | `from soothe_sdk.client.schemas import ToolOutput` | client |
+| `from soothe_sdk import SOOTHE_HOME` | `from soothe_sdk.client.config import SOOTHE_HOME` | client |
+| `from soothe_sdk import DEFAULT_EXECUTE_TIMEOUT` | `from soothe_sdk.client.config import DEFAULT_EXECUTE_TIMEOUT` | client |
+| **Protocols** |
+| `from soothe_sdk import PersistStore` | `from soothe_sdk.protocols import PersistStore` | protocols |
+| `from soothe_sdk import VectorRecord` | `from soothe_sdk.protocols import VectorRecord` | protocols |
+| `from soothe_sdk import VectorStoreProtocol` | `from soothe_sdk.protocols import VectorStoreProtocol` | protocols |
+| `from soothe_sdk import Permission` | `from soothe_sdk.protocols import Permission` | protocols |
+| `from soothe_sdk import PermissionSet` | `from soothe_sdk.protocols import PermissionSet` | protocols |
+| `from soothe_sdk import ActionRequest` | `from soothe_sdk.protocols import ActionRequest` | protocols |
+| `from soothe_sdk import PolicyContext` | `from soothe_sdk.protocols import PolicyContext` | protocols |
+| `from soothe_sdk import PolicyDecision` | `from soothe_sdk.protocols import PolicyDecision` | protocols |
+| `from soothe_sdk import PolicyProfile` | `from soothe_sdk.protocols import PolicyProfile` | protocols |
+| `from soothe_sdk import PolicyProtocol` | `from soothe_sdk.protocols import PolicyProtocol` | protocols |
+| **Utilities** |
+| `from soothe_sdk import setup_logging` | `from soothe_sdk.utils import setup_logging` | utils |
+| `from soothe_sdk import GlobalInputHistory` | `from soothe_sdk.utils import GlobalInputHistory` | utils |
+| `from soothe_sdk import VERBOSITY_TO_LOG_LEVEL` | `from soothe_sdk.utils import VERBOSITY_TO_LOG_LEVEL` | utils |
+| `from soothe_sdk import format_cli_error` | `from soothe_sdk.utils import format_cli_error` | utils |
+| `from soothe_sdk import log_preview` | `from soothe_sdk.utils import log_preview` | utils |
+| `from soothe_sdk import convert_and_abbreviate_path` | `from soothe_sdk.utils import convert_and_abbreviate_path` | utils |
+| `from soothe_sdk import parse_autopilot_goals` | `from soothe_sdk.utils import parse_autopilot_goals` | utils |
+| `from soothe_sdk import get_tool_display_name` | `from soothe_sdk.utils import get_tool_display_name` | utils |
+| `from soothe_sdk import _TASK_NAME_RE` | `from soothe_sdk.utils import _TASK_NAME_RE` | utils |
+| `from soothe_sdk import resolve_provider_env` | `from soothe_sdk.utils import resolve_provider_env` | utils |
+| `from soothe_sdk import INVALID_WORKSPACE_DIRS` | `from soothe_sdk.utils import INVALID_WORKSPACE_DIRS` | utils |
+| **UX/Display** |
+| `from soothe_sdk import ESSENTIAL_EVENT_TYPES` | `from soothe_sdk.ux import ESSENTIAL_EVENT_TYPES` | ux |
+| `from soothe_sdk import strip_internal_tags` | `from soothe_sdk.ux import strip_internal_tags` | ux |
+| `from soothe_sdk import INTERNAL_JSON_KEYS` | `from soothe_sdk.ux import INTERNAL_JSON_KEYS` | ux |
+| `from soothe_sdk import classify_event_to_tier` | `from soothe_sdk.ux import classify_event_to_tier` | ux |
+| **Core (Unchanged)** |
+| `from soothe_sdk import SootheEvent` | `from soothe_sdk.events import SootheEvent` | **root** |
+| `from soothe_sdk import LifecycleEvent` | `from soothe_sdk.events import LifecycleEvent` | **root** |
+| `from soothe_sdk import ProtocolEvent` | `from soothe_sdk.events import ProtocolEvent` | **root** |
+| `from soothe_sdk import SubagentEvent` | `from soothe_sdk.events import SubagentEvent` | **root** |
+| `from soothe_sdk import OutputEvent` | `from soothe_sdk.events import OutputEvent` | **root** |
+| `from soothe_sdk import ErrorEvent` | `from soothe_sdk.events import ErrorEvent` | **root** |
+| `from soothe_sdk import PluginError` | `from soothe_sdk.exceptions import PluginError` | **root** |
+| `from soothe_sdk import ValidationError` | `from soothe_sdk.exceptions import ValidationError` | **root** |
+| `from soothe_sdk import DependencyError` | `from soothe_sdk.exceptions import DependencyError` | **root** |
+| `from soothe_sdk import VerbosityTier` | `from soothe_sdk.verbosity import VerbosityTier` | **root** |
+| `from soothe_sdk import should_show` | `from soothe_sdk.verbosity import should_show` | **root** |
+
+### Package Structure Reference
+
+```
+soothe_sdk/
+├── events.py           # Core: Base event classes (SootheEvent, etc.)
+├── exceptions.py       # Core: All exception types
+├── verbosity.py        # Core: VerbosityTier, should_show()
+│
+├── plugin/             # Plugin development API
+│   ├── decorators.py   # @plugin, @tool, @tool_group, @subagent
+│   ├── manifest.py     # PluginManifest (import as Manifest)
+│   ├── context.py      # PluginContext (import as Context)
+│   ├── health.py       # PluginHealth
+│   ├── depends.py      # depends.library() helper
+│   ├── registry.py     # register_event()
+│   └── emit.py         # emit_progress(), set_stream_writer()
+│
+├── client/             # WebSocket client utilities
+│   ├── websocket.py    # WebSocketClient
+│   ├── session.py      # Session bootstrap functions
+│   ├── helpers.py      # Daemon communication helpers
+│   ├── protocol.py     # Wire protocol encode/decode
+│   ├── schemas.py      # Plan, PlanStep, ToolOutput
+│   └── config.py       # SOOTHE_HOME, DEFAULT_EXECUTE_TIMEOUT
+│
+├── protocols/          # Protocol definitions (stable interfaces)
+│   ├── persistence.py  # PersistStore
+│   ├── policy.py       # PolicyProtocol + permission types
+│   └── vector_store.py # VectorStoreProtocol
+│
+├── ux/                 # Display/UX concerns
+│   ├── types.py        # ESSENTIAL_EVENT_TYPES
+│   ├── internal.py     # strip_internal_tags, INTERNAL_JSON_KEYS
+│   └── classification.py # classify_event_to_tier()
+│
+├── utils/              # Shared utilities
+│   ├── logging.py      # setup_logging, GlobalInputHistory
+│   ├── display.py      # Formatting utilities
+│   ├── parsing.py      # Parsing utilities
+│   └── workspace.py    # Workspace constants
+│
+└── types/              # DEPRECATED (empty, will be removed)
+```
+
+### Migration Steps
+
+**1. Update all import statements**
+
+```bash
+# Example migration
+# Old code:
+from soothe_sdk import plugin, tool, WebSocketClient
+
+# New code:
+from soothe_sdk.plugin import plugin, tool
+from soothe_sdk.client import WebSocketClient
+```
+
+**2. Update type imports**
+
+```python
+# Old:
+from soothe_sdk import PluginManifest, PluginContext
+
+# New:
+from soothe_sdk.plugin import Manifest, Context
+```
+
+**3. Update utility imports**
+
+```python
+# Old:
+from soothe_sdk import setup_logging, format_cli_error
+
+# New:
+from soothe_sdk.utils import setup_logging, format_cli_error
+```
+
+**4. Update protocol imports**
+
+```python
+# Old:
+from soothe_sdk import PersistStore, PolicyProtocol
+
+# New:
+from soothe_sdk.protocols import PersistStore, PolicyProtocol
+```
+
+**5. Test your code**
+
+```bash
+# Run tests after updating imports
+pytest tests/
+```
+
+### Benefits
+
+- **Matches langchain patterns** - Familiar to ecosystem developers
+- **Clear purpose boundaries** - plugin/, client/, ux/, utils/, protocols/
+- **Better performance** - Minimal __init__.py loads faster
+- **Easier navigation** - Organized package structure
+- **Future-proof** - Scales well with new features
+
+### Breaking Change Details
+
+**Why no backward compatibility?**
+
+Cleaner architecture without maintenance burden. Faster migration (1-2 weeks vs 7 months).
+
+**Action required:**
+
+Update all imports before upgrading to v0.4.0. Version bump signals breaking change.
+
+**Deprecation timeline:**
+
+- v0.4.0 released: 2026-04-17 (breaking change)
+- No compatibility period
+- Users must update imports immediately
+
+### See Also
+
+- [RFC-610: SDK Module Structure Refactoring](docs/specs/RFC-610-sdk-module-structure-refactoring.md)
+- [IG-185: Implementation Guide](docs/impl/IG-185-sdk-module-structure-refactoring.md)
+- [Final Status Report](docs/impl/IG-185-final-status-report.md)
+
+---
+
 ## Next Steps
 
-After migration:
+After migration to v0.4.0:
 
-1. Read [CLI-Daemon Architecture](cli-daemon-architecture.md)
-2. Review [RFC-400](../specs/RFC-400-daemon-communication.md) for protocol details
-3. Update any custom scripts or integrations
-4. Test your workflows with new commands
+1. Review new SDK package structure
+2. Test your code with updated imports
+3. Report issues at GitHub Issues
 
 Migration complete! 🎉

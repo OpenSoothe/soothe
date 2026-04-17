@@ -86,7 +86,7 @@ Learn more: [RFC-200: Agentic Loop Execution](../specs/RFC-200-agentic-loop-exec
 Soothe's extensible architecture allows you to add custom capabilities:
 
 ```python
-from soothe_sdk import plugin, tool
+from soothe_sdk.plugin import plugin, tool
 
 @plugin(name="my-plugin", version="1.0.0")
 class MyPlugin:

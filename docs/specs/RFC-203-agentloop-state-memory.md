@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design / Impl Interface
 **Created**: 2026-04-17
-**Dependencies**: RFC-200, RFC-100
+**Dependencies**: RFC-201, RFC-100
 **Related**: RFC-207 (Thread), RFC-213 (Reasoning)
 
 ---

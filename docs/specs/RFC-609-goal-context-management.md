@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-17
-**Dependencies**: RFC-200 (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle), RFC-203 (Layer 2 Unified State Model)
+**Dependencies**: `RFC-201-agentloop-plan-execute-loop.md` (Agentic Goal Execution), RFC-608 (Multi-Thread Lifecycle), RFC-203 (Layer 2 Unified State Model)
 
 ## Abstract
 

@@ -470,8 +470,8 @@ plan = await planner.create_plan(
 * **RFC-001 (Core Modules Architecture)**: Protocol composition in `SootheRunner`
 * **RFC-300 (Context & Memory Protocols)**: Sister RFC for context/memory interfaces
 * **RFC-102 (Security & Policy)**: PolicyProtocol security details
-* **RFC-200 (Autonomous Goal Management)**: PlannerProtocol goal lifecycle
-* **RFC-200 (DAG Execution)**: PlannerProtocol DAG support
+* **`RFC-200-autonomous-goal-management.md`**: PlannerProtocol goal lifecycle
+* **`RFC-202-dag-execution.md`**: PlannerProtocol DAG support
 
 ---
 

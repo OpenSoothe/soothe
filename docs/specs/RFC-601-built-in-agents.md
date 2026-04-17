@@ -227,9 +227,9 @@ src/soothe/subagents/
 
 - **RFC-600 (Plugin Extension System)**: Plugin decorator patterns
 - **RFC-301 (Protocol Registry)**: PolicyProtocol
-- **RFC-400 (Event Processing)**: Event emission patterns
+- **`RFC-401-event-processing.md`**: Event emission patterns
 - **RFC-100 (CoreAgent Runtime)**: CompiledSubAgent interface
-- **RFC-200 (Autonomous Goal Management)**: Goal integration
+- **`RFC-200-autonomous-goal-management.md`**: Goal integration
 
 ---
 

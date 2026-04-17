@@ -4,7 +4,7 @@
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-03-31
-**Depends on**: RFC-100 (CoreAgent Runtime), RFC-400 (Event Processing)
+**Depends on**: RFC-100 (CoreAgent Runtime), `RFC-401-event-processing.md` (Event Processing)
 **Supersedes**: RFC-0016, RFC-0025
 **Kind**: Implementation Interface Design
 
@@ -480,7 +480,7 @@ After (single-purpose): run_command(command="ls")
 ## 9. Relationship to Other RFCs
 
 * **RFC-100 (CoreAgent Runtime)**: Tool execution runtime
-* **RFC-400 (Event Processing)**: Event pipeline that processes tool events
+* **`RFC-401-event-processing.md`**: Event pipeline that processes tool events
 * **RFC-102 (Security Policy)**: Permission checks for tool invocation
 * **RFC-500 (CLI/TUI Architecture)**: Tool output display
 

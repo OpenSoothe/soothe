@@ -3,7 +3,7 @@
 **Status**: Draft  
 **Authors**: Soothe Team  
 **Created**: 2026-04-02  
-**Depends on**: RFC-400 (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)  
+**Depends on**: `RFC-401-event-processing.md` (Event Processing), RFC-501 (Display & Verbosity), RFC-500 (CLI/TUI Architecture)  
 **Kind**: Implementation Interface Design
 
 ---

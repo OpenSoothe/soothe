@@ -460,4 +460,4 @@ User Query
 - [RFC-200](../specs/RFC-200.md) - Agentic Loop Execution
 - [RFC-200](../specs/RFC-200.md) - Autonomous Iteration Loop
 - [RFC-200](../specs/RFC-200.md) - Step Execution
-- [RFC-400](../specs/RFC-400.md) - Daemon Communication Protocol
+- [RFC-400](../specs/RFC-400-context-protocol-architecture.md) - Daemon Communication Protocol

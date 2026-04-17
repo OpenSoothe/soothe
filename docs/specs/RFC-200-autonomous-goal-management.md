@@ -1,12 +1,12 @@
 # RFC-200: Layer 3 - Autonomous Goal Management Loop
 
-**RFC**: 0007
+**RFC**: 200
 **Title**: Layer 3: Autonomous Goal Management Loop
-**Status**: Revised
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-15
 **Updated**: 2026-04-17
-**Dependencies**: RFC-000, RFC-001, RFC-500, RFC-200
+**Dependencies**: RFC-000, RFC-001, RFC-500, RFC-201
 
 ## Abstract
 

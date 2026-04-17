@@ -1,9 +1,10 @@
-# RFC-404: Slash Command Architecture
+# RFC-454: Slash Command Architecture
 
+**RFC**: 454
 **Status**: Draft
 **Created**: 2026-04-16
 **Author**: Claude (Sonnet 4.6)
-**Extends**: RFC-400 (Daemon Communication Protocol)
+**Extends**: RFC-450 (Daemon Communication Protocol)
 **Related**: RFC-500 (CLI/TUI Architecture), IG-176 (Move Rich to CLI)
 
 ---

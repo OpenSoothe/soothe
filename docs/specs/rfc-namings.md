@@ -132,6 +132,27 @@ This document defines the terminology and naming conventions used in this projec
 | Config fields | snake_case | `planner_routing`, `policy_profiles` |
 | Module directories | snake_case | `src/soothe/protocols/`, `src/soothe/middleware/` |
 
+### RFC File Naming
+
+RFC specification files use:
+
+`RFC-NNN-short-semantic-name.md`
+
+Rules:
+
+1. `NNN` is the canonical RFC number (3 digits).
+2. `short-semantic-name` is lowercase kebab-case, concise, and stable.
+3. Prefer domain + function wording (e.g., `agentloop-state-memory`, `policy-protocol-architecture`).
+4. Avoid generic suffix-only names like `final`, `draft2`, or `updated`.
+
+Examples:
+
+| RFC | Filename |
+|-----|----------|
+| RFC-201 | `RFC-201-agentloop-plan-execute-loop.md` |
+| RFC-400 | `RFC-400-context-protocol-architecture.md` |
+| RFC-450 | `RFC-450-daemon-communication-protocol.md` |
+
 ## Related Documents
 
 - [RFC Standard](./rfc-standard.md) - Specification kinds

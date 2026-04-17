@@ -85,13 +85,13 @@ twine upload dist/*
 pip install soothe-sdk
 
 # Verify import
-python -c "from soothe_sdk import plugin, tool, subagent; print('OK')"
+python -c "from soothe_sdk.plugin import plugin, tool, subagent; print('OK')"
 
 # Test with Soothe plugin
 python -c "from soothe.plugin.global_registry import load_plugins; print('OK')"
 ```
 
-## Directory Structure
+## Directory Structure (v0.4.0)
 
 ```
 soothe-sdk/
@@ -100,19 +100,25 @@ soothe-sdk/
 ├── .gitignore
 ├── src/
 │   └── soothe_sdk/
-│       ├── __init__.py
-│       ├── decorators/
-│       │   ├── __init__.py
-│       │   ├── plugin.py
-│       │   ├── subagent.py
-│       │   └── tool.py
-│       ├── types/
-│       │   ├── __init__.py
+│       ├── __init__.py           # Minimal (version only)
+│       ├── events.py             # Core concept at root
+│       ├── exceptions.py         # Core concept at root
+│       ├── verbosity.py          # Core concept at root
+│       ├── protocols/            # Protocol definitions
+│       ├── client/               # Client utilities
+│       │   ├── protocol.py
+│       │   ├── websocket_client.py
+│       │   └── config.py         # Merged constants + types
+│       ├── plugin/               # Plugin API
+│       │   ├── decorators.py     # Merged @plugin, @tool, @subagent
+│       │   ├── manifest.py
 │       │   ├── context.py
 │       │   ├── health.py
-│       │   └── manifest.py
-│       ├── exceptions.py
-│       └── depends.py
+│       │   ├── registry.py
+│       │   └── emit.py
+│       ├── ux/                   # UX/display helpers
+│       ├── utils/                # Shared utilities
+│       └── types/                # Deprecated (empty)
 └── tests/
     ├── conftest.py
     ├── test_decorators.py
@@ -125,7 +131,7 @@ soothe-sdk/
 After installing soothe-sdk:
 
 ```python
-from soothe_sdk import plugin, tool, subagent
+from soothe_sdk.plugin import plugin, tool, subagent
 
 @plugin(name="my-plugin", version="1.0.0", description="My plugin")
 class MyPlugin:

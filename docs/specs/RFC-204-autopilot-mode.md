@@ -1,11 +1,11 @@
-# RFC-203: Autopilot Mode
+# RFC-204: Autopilot Mode
 
-**RFC**: 0204
-**Title**: Autopilot Mode
-**Status**: Active
+**RFC**: 204
+**Title**: Autopilot Mode (Layer 3 Extension)
+**Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-04-03
-**Dependencies**: RFC-200, RFC-200, RFC-200, RFC-400, RFC-500
+**Dependencies**: RFC-200, RFC-201, RFC-203, RFC-451, RFC-500
 
 ## Abstract
 

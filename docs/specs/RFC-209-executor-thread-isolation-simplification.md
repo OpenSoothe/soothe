@@ -1,12 +1,13 @@
-# RFC-207: Executor Thread Isolation Simplification
+# RFC-209: Executor Thread Isolation Simplification
 
 **RFC**: 209
 **Title**: Layer 2 Executor Thread Isolation Simplification
-**Status**: Draft
+**Status**: Deprecated
 **Kind**: Architecture Refactoring
 **Created**: 2026-04-09
 **Updated**: 2026-04-09
 **Dependencies**: RFC-200, RFC-100, RFC-001
+**Redirect**: Superseded by `RFC-207-agentloop-thread-context-lifecycle.md`
 
 ## Abstract
 

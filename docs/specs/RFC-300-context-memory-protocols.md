@@ -1,6 +1,6 @@
 # RFC-300: Context and Memory Architecture Design
 
-**RFC**: 0006
+**RFC**: 300
 **Title**: Context and Memory Architecture Design
 **Status**: Implemented
 **Created**: 2026-03-14

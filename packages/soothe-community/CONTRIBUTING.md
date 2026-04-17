@@ -35,7 +35,7 @@ src/soothe_community/
 Create your plugin class in `__init__.py`:
 
 ```python
-from soothe_sdk import plugin, subagent, tool
+from soothe_sdk.plugin import plugin, subagent, tool
 
 @plugin(
     name="your_plugin",

@@ -232,7 +232,7 @@ register_event(MyCustomEvent, summary_template="Custom: {data}")
 
 ### Plugin Structure
 ```python
-from soothe_sdk import plugin, tool, subagent
+from soothe_sdk.plugin import plugin, tool, subagent, register_event
 
 @plugin(name="my-plugin", version="1.0.0")
 class MyPlugin:

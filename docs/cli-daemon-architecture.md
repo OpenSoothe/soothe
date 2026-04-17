@@ -240,7 +240,8 @@ from soothe.foundation import SootheEvent, VerbosityTier
 ```python
 from soothe_sdk.client import WebSocketClient
 from soothe_sdk.protocol import encode, decode
-from soothe_sdk import SootheEvent, VerbosityTier
+from soothe_sdk.events import SootheEvent
+from soothe_sdk.verbosity import VerbosityTier
 ```
 
 **Backward Compatibility**: Old imports still work (main package re-exports from SDK).

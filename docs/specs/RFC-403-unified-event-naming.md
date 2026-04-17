@@ -1,10 +1,11 @@
-# RFC-402: Unified Event Naming Semantics
+# RFC-403: Unified Event Naming Semantics
 
+**RFC**: 453
 **Status**: Draft
 **Authors**: Platonic Brainstorming Session
 **Created**: 2026-04-15
-**Last Updated**: 2026-04-15
-**Depends on**: RFC-400 (Event Processing)
+**Last Updated**: 2026-04-17
+**Depends on**: `RFC-401-event-processing.md` (Event Processing)
 **Kind**: Implementation Interface Design
 
 ---
@@ -494,7 +495,7 @@ Migration is successful when:
 
 ## 11. Relationship to Other RFCs
 
-* **RFC-400 (Event Processing)**: Architecture and registry implementation; RFC-402 defines naming semantics
+* **RFC-401 (Event Processing)**: Architecture and registry implementation; RFC-403 defines naming semantics
 * **RFC-501 (Display & Verbosity)**: VerbosityTier classification for events
 * **RFC-600 (Plugin Extension System)**: Plugin lifecycle managed by core
 * **event-catalog.md**: Complete event type registry using RFC-402 naming

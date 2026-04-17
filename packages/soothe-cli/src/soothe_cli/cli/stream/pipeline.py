@@ -114,7 +114,7 @@ class StreamDisplayPipeline:
         Returns:
             VerbosityTier for the event.
         """
-        from soothe_sdk.verbosity import classify_event_to_tier
+        from soothe_sdk.ux import classify_event_to_tier
 
         # Goal events - NORMAL
         if is_goal_start_event_type(event_type):

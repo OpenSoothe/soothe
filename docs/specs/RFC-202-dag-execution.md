@@ -1,12 +1,13 @@
-# RFC-200: DAG Execution & Failure Recovery
+# RFC-202: DAG Execution & Failure Recovery
 
-**Status**: Implemented
+**Status**: Deprecated
 **Authors**: Xiaming Chen
 **Created**: 2026-03-31
 **Last Updated**: 2026-04-12
-**Depends on**: RFC-200 (GoalEngine), RFC-200 (AgentLoop), RFC-100 (CoreAgent)
+**Depends on**: `RFC-200-autonomous-goal-management.md` (GoalEngine), `RFC-201-agentloop-plan-execute-loop.md` (AgentLoop), RFC-100 (CoreAgent)
 **Supersedes**: RFC-0009, RFC-0010
 **Kind**: Architecture Design
+**Redirect**: Superseded by `RFC-201-agentloop-plan-execute-loop.md` and `RFC-203-agentloop-state-memory.md`
 
 ---
 
@@ -508,8 +509,8 @@ execution:
 
 ## 13. Relationship to Other RFCs
 
-* **RFC-200 (Layer 3)**: GoalEngine and autonomous goal management
-* **RFC-200 (Layer 2)**: Agentic goal execution loop
+* **`RFC-200-autonomous-goal-management.md` (Layer 3)**: GoalEngine and autonomous goal management
+* **`RFC-201-agentloop-plan-execute-loop.md` (Layer 2)**: Agentic goal execution loop
 * **RFC-100 (Layer 1)**: CoreAgent runtime
 * **RFC-301 (Protocol Registry)**: PlannerProtocol interface
 * **RFC-300 (Context & Memory)**: ContextProtocol for step result ingestion
