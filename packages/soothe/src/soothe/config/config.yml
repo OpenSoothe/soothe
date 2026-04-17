@@ -112,14 +112,14 @@ agentic:
   # Maximum loop iterations (default: 10, max: 50)
   max_iterations: 10
 
-  # Cap subagent ``task`` tool completions per Act wave (0 = unlimited). Use 1 to stop double-delegation.
+  # Cap subagent ``task`` tool completions per Execute wave (0 = unlimited). Use 1 to stop double-delegation.
   max_subagent_tasks_per_wave: 2
 
-  # Ask CoreAgent not to paste full tool output again during AgentLoop Act phase
+  # Ask CoreAgent not to paste full tool output again during AgentLoop Execute phase
   agent_loop_output_contract_enabled: true
 
-  # Maximum prior messages to inject into Reason prompts
-  # Only used when Act execution uses isolated threads (no checkpoint access)
+  # Maximum prior messages to inject into Plan prompts
+  # Only used when Execute phase uses isolated threads (no checkpoint access)
   prior_conversation_limit: 10
 
   # Goal context injection configuration (RFC-609)

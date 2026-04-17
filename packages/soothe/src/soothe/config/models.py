@@ -570,20 +570,20 @@ class AgenticLoopConfig(BaseModel):
 
     max_subagent_tasks_per_wave: int = Field(
         default=2,
-        description="Max completed subagent ``task`` tool results per Act wave (0 = no limit)",
+        description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",
         ge=0,
         le=20,
     )
 
     agent_loop_output_contract_enabled: bool = Field(
         default=True,
-        description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Act phase",
+        description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Execute phase",
     )
 
     prior_conversation_limit: int = Field(
         default=10,
         description=(
-            "Maximum prior messages to format for Reason prompts when Act execution uses isolated threads"
+            "Maximum prior messages to format for Plan prompts when Execute phase uses isolated threads"
         ),
         ge=1,
         le=50,

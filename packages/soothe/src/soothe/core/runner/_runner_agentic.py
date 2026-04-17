@@ -1,6 +1,6 @@
 """Layer 2 Agentic Loop Runner (RFC-0008).
 
-Implements Reason → Act (ReAct) loop using AgentLoop.
+Implements Plan → Execute loop using AgentLoop (RFC-201).
 """
 
 from __future__ import annotations

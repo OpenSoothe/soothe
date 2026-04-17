@@ -52,16 +52,19 @@ def test_metrics_section_removed_rfc207(config, state, context):
     state.context_percentage_consumed = 0.15
 
     builder = PromptBuilder(config)
-    prompt = builder.build_plan_prompt("Test goal", state, context)
+    messages = builder.build_plan_messages("Test goal", state, context)
+
+    # Combine SystemMessage and HumanMessage content for checking
+    full_content = "\n".join([m.content for m in messages])
 
     # RFC-207: Wave metrics removed from prompts (internal tracking only)
-    assert "<SOOTHE_WAVE_METRICS>" not in prompt
-    assert "Subagent calls:" not in prompt
-    assert "Tool calls:" not in prompt
-    assert "Output length:" not in prompt
-    assert "Errors:" not in prompt
-    assert "Cap hit:" not in prompt
-    assert "Context used:" not in prompt
+    assert "<SOOTHE_WAVE_METRICS>" not in full_content
+    assert "Subagent calls:" not in full_content
+    assert "Tool calls:" not in full_content
+    assert "Output length:" not in full_content
+    assert "Errors:" not in full_content
+    assert "Cap hit:" not in full_content
+    assert "Context used:" not in full_content
 
 
 def test_last_act_wave_metrics_removed_rfc207(config, state, context):
@@ -70,7 +73,10 @@ def test_last_act_wave_metrics_removed_rfc207(config, state, context):
     state.last_wave_subagent_task_count = 1
 
     builder = PromptBuilder(config)
-    prompt = builder.build_plan_prompt("Test goal", state, context)
+    messages = builder.build_plan_messages("Test goal", state, context)
+
+    # Combine SystemMessage and HumanMessage content for checking
+    full_content = "\n".join([m.content for m in messages])
 
     # RFC-207: Last Act wave metrics removed from prompts
-    assert "<SOOTHE_LAST_ACT_WAVE_METRICS>" not in prompt
+    assert "<SOOTHE_LAST_ACT_WAVE_METRICS>" not in full_content
