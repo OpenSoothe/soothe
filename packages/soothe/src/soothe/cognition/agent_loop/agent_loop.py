@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.executor import Executor
+from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.reason import PlanPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult
@@ -65,6 +66,7 @@ class AgentLoop:
             core_agent,
             max_parallel_steps=config.execution.concurrency.max_parallel_steps,
             config=config,
+            # Executor receives GoalContextManager per-run (created in run_with_progress)
         )
 
     async def run(
@@ -127,6 +129,12 @@ class AgentLoop:
         # Initialize AgentLoop state manager (RFC-205)
         state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
 
+        # RFC-609: Create GoalContextManager for goal-level context injection
+        from soothe.config.models import GoalContextConfig
+
+        goal_context_config = getattr(self.config.agentic, "goal_context", GoalContextConfig())
+        goal_context_manager = GoalContextManager(state_manager, goal_context_config)
+
         # Try to recover from checkpoint (RFC-608: loop-scoped)
         checkpoint = state_manager.load()
         if checkpoint and checkpoint.status == "running":
@@ -148,12 +156,17 @@ class AgentLoop:
 
             # Derive prior conversation from step outputs (RFC-205)
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
-            plan_excerpts = prior_outputs
+            # RFC-609: Add goal-level context to plan excerpts
+            plan_goal_excerpts = goal_context_manager.get_plan_context()
+            plan_excerpts = plan_goal_excerpts + list(prior_outputs)
         else:
             # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
             checkpoint = state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
-            plan_excerpts = []  # Start fresh, no prior conversation from Layer 1
+            # RFC-609: Inject previous goal context for Plan phase
+            plan_goal_excerpts = goal_context_manager.get_plan_context()
+            # Combine goal-level context + step-derived context (empty for new goal)
+            plan_excerpts = plan_goal_excerpts
             # Create new goal_record for this goal execution
             goal_record = state_manager.start_new_goal(goal, max_iterations)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -381,7 +394,14 @@ Use all tool results and AI responses available in the conversation history to c
                 )
 
             step_results = []
-            async for item in self.executor.execute(
+            # RFC-609: Create Executor with GoalContextManager for this run
+            run_executor = Executor(
+                self.core_agent,
+                max_parallel_steps=self.config.execution.concurrency.max_parallel_steps,
+                config=self.config,
+                goal_context_manager=goal_context_manager,
+            )
+            async for item in run_executor.execute(
                 decision=decision,
                 state=state,
             ):

@@ -241,7 +241,7 @@ class AgentLoopStateManager:
         )
 
     def execute_thread_switch(self, new_thread_id: str) -> None:
-        """Execute thread switch: update checkpoint with new thread (RFC-608).
+        """Execute thread switch: update checkpoint with new thread (RFC-608, RFC-609).
 
         Args:
             new_thread_id: New thread to switch to
@@ -256,6 +256,9 @@ class AgentLoopStateManager:
         checkpoint.current_thread_id = new_thread_id
         checkpoint.total_thread_switches += 1
 
+        # RFC-609: Set thread switch flag for Execute briefing injection
+        checkpoint.thread_switch_pending = True
+
         # Reset thread health metrics for new thread
         checkpoint.thread_health_metrics = ThreadHealthMetrics(
             thread_id=new_thread_id, last_updated=datetime.now(UTC)
@@ -264,7 +267,7 @@ class AgentLoopStateManager:
         self.save(checkpoint)
 
         logger.info(
-            "Thread switch executed: loop %s → thread %s (switch count: %d)",
+            "Thread switch executed: loop %s → thread %s (switch count: %d, briefing flag set)",
             self.loop_id,
             new_thread_id,
             checkpoint.total_thread_switches,

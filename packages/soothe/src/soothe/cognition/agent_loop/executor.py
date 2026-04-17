@@ -21,6 +21,7 @@ from soothe.utils.text_preview import create_output_summary, preview_first
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
     from soothe.config import SootheConfig
     from soothe.core.agent import CoreAgent
 
@@ -61,6 +62,7 @@ class Executor:
         *,
         max_parallel_steps: int = 1,
         config: SootheConfig | None = None,
+        goal_context_manager: GoalContextManager | None = None,
     ) -> None:
         """Initialize ACT phase.
 
@@ -68,10 +70,12 @@ class Executor:
             core_agent: Layer 1 CoreAgent for step execution
             max_parallel_steps: Max steps per wave; ``0`` means unlimited (RFC-201 / concurrency).
             config: Optional Soothe config for Act wave caps (IG-130).
+            goal_context_manager: Optional GoalContextManager for goal briefing injection (RFC-609).
         """
         self.core_agent = core_agent
         self._max_parallel_steps = max_parallel_steps
         self._config = config
+        self._goal_context_manager = goal_context_manager
 
     def _max_subagent_tasks_per_wave(self) -> int:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
@@ -442,6 +446,12 @@ class Executor:
             # Pass current_decision for middleware to inject agent loop output contract
             if state.current_decision:
                 configurable["current_decision"] = state.current_decision
+            # RFC-609: Inject goal briefing on thread switch
+            if self._goal_context_manager:
+                goal_briefing = self._goal_context_manager.get_execute_briefing()
+                if goal_briefing:
+                    configurable["soothe_goal_briefing"] = goal_briefing
+                    logger.info("Execute briefing injected (%d chars)", len(goal_briefing))
 
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
@@ -617,6 +627,16 @@ class Executor:
             }
             if workspace:
                 configurable["workspace"] = workspace
+            # RFC-609: Inject goal briefing on thread switch (for single-step execution)
+            if self._goal_context_manager:
+                goal_briefing = self._goal_context_manager.get_execute_briefing()
+                if goal_briefing:
+                    configurable["soothe_goal_briefing"] = goal_briefing
+                    logger.info(
+                        "Execute briefing injected for step %s (%d chars)",
+                        step.id,
+                        len(goal_briefing),
+                    )
             # Pass current_decision for middleware to inject agent loop output contract
             # Note: For single step execution, we don't have LoopState here
             # The middleware should check for absence and not inject contract

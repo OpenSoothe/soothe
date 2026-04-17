@@ -252,6 +252,14 @@ class AgentLoopCheckpoint(BaseModel):
     total_duration_ms: int = 0
     total_tokens_used: int = 0
 
+    # RFC-609: Goal context injection control
+    thread_switch_pending: bool = False
+    """Flag indicating thread just switched, Execute phase needs goal briefing.
+
+    Set by execute_thread_switch(), cleared by get_execute_briefing().
+    Ensures goal context injection only on thread switch (not every iteration).
+    """
+
     # Timestamps
     created_at: datetime
     updated_at: datetime
