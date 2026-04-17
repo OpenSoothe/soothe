@@ -60,10 +60,22 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 ### Retrieval authority (AgentLoop versus ContextProtocol)
 
-Design discussions sometimes assign "unbounded retrieval authority" to the loop. In Soothe specs:
+**Architectural clarification**: Brainstorming sessions sometimes assign "unbounded retrieval authority" to AgentLoop. RFCs clarify the ownership boundary:
 
-- **ContextProtocol** owns append-only ledger semantics, persistence hooks, and the **retrieval module implementation** (see RFC-400).
-- **AgentLoop** owns **when** to retrieve, **for which goal**, and how retrieved entries combine with `GoalContextManager` output and Plan / Execute prompts. It exercises **operational retrieval authority** without owning the ledger.
+**ContextProtocol ownership** (RFC-001, RFC-400):
+- Append-only ledger semantics (unbounded knowledge accumulator)
+- Persistence hooks (thread-level restore/persist)
+- **Retrieval module implementation** (RFC-400 `ContextRetrievalModule`)
+- Retrieval algorithm evolution behind stable API
+
+**AgentLoop operational authority** (this RFC):
+- **When** to retrieve (iteration start, thread switch, goal dependency)
+- **For which goal** (goal-centric retrieval via `retrieve_by_goal_relevance()`)
+- **How** retrieved entries combine with GoalContextManager output and Plan/Execute prompts
+
+**Integration**: AgentLoop calls `ContextProtocol.get_retrieval_module().retrieve_by_goal_relevance(goal_id, execution_context, limit)` when building Plan/Execute context. Retrieval algorithm implementation details stay encapsulated in ContextProtocol, preserving architectural separation.
+
+**Reference**: RFC-400 defines canonical retrieval API. RFC-001 §28-62 references RFC-400 as single authoritative retrieval specification.
 
 ### GoalEngine-AgentLoop synchronization (dual trigger)
 

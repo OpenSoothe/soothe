@@ -97,7 +97,7 @@ Soothe operates through a hierarchical execution model with three distinct layer
 
 11. **Three-layer execution architecture** -- Soothe operates through three distinct layers: Layer 3 (autonomous goal management), Layer 2 (agentic goal execution), and Layer 1 (CoreAgent runtime). Each layer has distinct responsibilities, clear delegation boundaries, and explicit integration contracts. Higher layers delegate to lower layers through well-defined interfaces.
 
-12. **Architectural component isolation** -- Each layer maintains clear architectural component boundaries: AgentLoop is Layer 2 Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in AgentLoop or GoalEngine.
+12. **Architectural component isolation** -- Each layer maintains clear architectural component boundaries: AgentLoop is Layer 2 Plan → Execute loop runner (not consciousness), ContextProtocol is the consciousness (unbounded knowledge ledger with bounded projections), GoalEngine manages goal lifecycle. These are separate architectural components with distinct ownership boundaries. Consciousness lives in ContextProtocol, not in AgentLoop or GoalEngine. This separation prevents confusion from design brainstorming sessions that assign consciousness to AgentLoop. **See also**: RFC-201 §50-60 (AgentLoop role clarification), RFC-201 §61-66 (retrieval authority clarification), RFC-001 §14-47 (ContextProtocol consciousness concept).
 
 ## Core Abstractions
 
