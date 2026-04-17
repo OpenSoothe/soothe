@@ -6,7 +6,7 @@
 **Created**: 2026-03-31
 **Author**: Design brainstorming session
 **Design Draft**: [2026-03-31-thread-aware-workspace-design.md](../drafts/2026-03-31-thread-aware-workspace-design.md)
-**Depends On**: RFC-102 (Security Filesystem Policy), RFC-400 (Daemon Communication), RFC-402 (Thread Management)
+**Depends On**: RFC-102 (Security Filesystem Policy), `RFC-450-daemon-communication-protocol.md` (Daemon Communication), `RFC-452-unified-thread-management.md` (Thread Management)
 
 ## Abstract
 

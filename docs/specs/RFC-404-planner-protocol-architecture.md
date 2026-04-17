@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-17
 **Dependencies**: RFC-000, RFC-400
-**Related**: RFC-200 (AgentLoop)
+**Related**: `RFC-201-agentloop-plan-execute-loop.md` (AgentLoop)
 
 ---
 

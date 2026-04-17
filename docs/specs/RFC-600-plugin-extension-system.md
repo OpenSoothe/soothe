@@ -1,6 +1,6 @@
 # RFC-600: Plugin Extension Specification
 
-**RFC**: 0018
+**RFC**: 600
 **Title**: Plugin Extension Specification
 **Status**: Implemented
 **Kind**: Architecture Design

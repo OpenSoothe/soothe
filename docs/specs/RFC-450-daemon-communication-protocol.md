@@ -1,12 +1,13 @@
-# RFC-400: Unified Daemon Communication Protocol
+# RFC-450: Unified Daemon Communication Protocol
 
-**RFC**: 0013
+**RFC**: 450
 **Title**: Unified Daemon Communication Protocol for WebSocket IPC
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-19
 **Updated**: 2026-04-14
 **Dependencies**: RFC-000, RFC-001, RFC-500
+**Number**: 450
 
 ## Abstract
 

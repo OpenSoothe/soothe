@@ -1,6 +1,6 @@
 # RFC-001: Architecture Design for Core Protocol Modules
 
-**RFC**: 0002
+**RFC**: 001
 **Title**: Architecture Design for Core Protocol Modules
 **Status**: Implemented
 **Created**: 2026-03-12
@@ -33,6 +33,8 @@ class ContextProtocol(Protocol):
 - `ContextProjection(entries, summary, total_entries, token_count)` -- bounded view
 
 ### Design Principles
+
+**Consciousness Concept**: ContextProtocol implements the architectural "consciousness" pattern identified in autonomous agent design: an unbounded knowledge ledger maintaining complete execution history (success/failure experience) with bounded projections for LLM reasoning. This separation ensures the orchestrator has full knowledge access while LLMs receive token-efficient context windows.
 
 1. **Accumulate, never discard** -- ledger is append-only and unbounded
 2. **Relevance-based projection** -- entries ranked by relevance to query, not just recency
@@ -407,46 +409,23 @@ $SOOTHE_HOME/
 
 ---
 
-## RFC Consolidation Note (2026-04-17)
+## RFC Protocol Module Extraction (2026-04-17)
 
-**Important**: This RFC's 8 protocol modules have been consolidated into separate RFC drafts:
+**Important**: This RFC's protocol modules have been extracted into dedicated RFC specifications:
 
-- **Module 1 (ContextProtocol)** → [RFC-400 Draft](../drafts/2026-04-17-rfc-400-context-protocol-retrieval-merged.md)
-- **Module 2 (MemoryProtocol)** → [RFC-402 Draft](../drafts/2026-04-17-rfc-402-memory-protocol-merged.md)
-- **Module 3 (PlannerProtocol)** → [RFC-404 Draft](../drafts/2026-04-17-rfc-404-planner-protocol-merged.md)
-- **Module 4 (PolicyProtocol)** → [RFC-406 Draft](../drafts/2026-04-17-rfc-406-policy-protocol-merged.md)
-- **Module 5 (DurabilityProtocol)** → [RFC-408 Draft](../drafts/2026-04-17-rfc-408-durability-protocol-merged.md)
-- **Module 6 (RemoteAgentProtocol)** → [RFC-410 Draft](../drafts/2026-04-17-rfc-410-remote-agent-protocol-merged.md)
-- **Module 7 (ConcurrencyPolicy)** → Stayed in this RFC
-- **Module 8 (VectorStoreProtocol)** → Stayed in this RFC
+| Module | Protocol | RFC | Status |
+|--------|----------|-----|--------|
+| **Module 1** | ContextProtocol | [RFC-400](./RFC-400-context-protocol-architecture.md) | Draft |
+| **Module 2** | MemoryProtocol | [RFC-402](./RFC-402-memory-protocol-architecture.md) | Draft |
+| **Module 3** | PlannerProtocol | [RFC-404](./RFC-404-planner-protocol-architecture.md) | Draft |
+| **Module 4** | PolicyProtocol | [RFC-406](./RFC-406-policy-protocol-architecture.md) | Draft |
+| **Module 5** | DurabilityProtocol | [RFC-408](./RFC-408-durability-protocol-architecture.md) | Draft |
+| **Module 6** | RemoteAgentProtocol | [RFC-410](./RFC-410-remote-agent-protocol-architecture.md) | Draft |
+| **Module 7** | ConcurrencyPolicy | Stayed in RFC-001 | — |
+| **Module 8** | VectorStoreProtocol | Stayed in RFC-001 | — |
 
-**See also**: Alias RFCs in  for backward compatibility (RFC-400-alias, RFC-402-alias, RFC-404-alias, RFC-406-alias, RFC-203-alias, RFC-410-alias, RFC-410-alias, RFC-410-alias).
+**Numbering Scheme**:
+- **4xx**: Core protocol definitions (400-410)
+- **45x**: Daemon and communication layer (450-454)
 
-**Migration**: Merged RFC drafts provide unified protocol architecture. Original RFC-001 modules preserved for reference. Use merged RFCs for implementation.
-
----
-
-## RFC Consolidation Note (2026-04-17)
-
-**Important**: This RFC's 8 protocol modules have been consolidated into separate RFC drafts for improved architectural organization:
-
-- **Module 1 (ContextProtocol)** → [RFC-400 Draft](../drafts/2026-04-17-rfc-400-context-protocol-retrieval-merged.md) (includes ContextRetrievalModule enhancement)
-- **Module 2 (MemoryProtocol)** → [RFC-402 Draft](../drafts/2026-04-17-rfc-402-memory-protocol-merged.md) (includes Context vs Memory separation)
-- **Module 3 (PlannerProtocol)** → [RFC-404 Draft](../drafts/2026-04-17-rfc-404-planner-protocol-merged.md) (includes Two-Phase architecture pattern)
-- **Module 4 (PolicyProtocol)** → [RFC-406 Draft](../drafts/2026-04-17-rfc-406-policy-protocol-merged.md) (includes Permission structure)
-- **Module 5 (DurabilityProtocol)** → [RFC-408 Draft](../drafts/2026-04-17-rfc-408-durability-protocol-merged.md) (Thread lifecycle management)
-- **Module 6 (RemoteAgentProtocol)** → [RFC-410 Draft](../drafts/2026-04-17-rfc-410-remote-agent-protocol-merged.md) (includes all backend implementations)
-- **Module 7 (ConcurrencyPolicy)** → Stayed in this RFC (configuration model)
-- **Module 8 (VectorStoreProtocol)** → Stayed in this RFC (persistence backend)
-
-**Backward Compatibility**: Alias RFCs created in `docs/specs/` preserving original numbers:
-- RFC-400-alias → RFC-400 (ContextRetrievalModule merged)
-- RFC-402-alias → RFC-402 (Context separation merged)
-- RFC-404-alias → RFC-404 (Two-Phase pattern merged)
-- RFC-406-alias → RFC-406 (Permission structure merged)
-- RFC-203-alias → RFC-203 (CheckpointEnvelope moved to Layer 2)
-- RFC-410-alias → RFC-410 (LangGraph implementation merged)
-- RFC-410-alias → RFC-410 (ACP implementation merged)
-- RFC-410-alias → RFC-410 (A2A implementation merged)
-
-**Migration**: Use merged RFC drafts for implementation. Original RFC-001 preserved for reference. All protocol content maintained with improved organization.
+**Migration**: Protocol content moved to dedicated RFCs. RFC-001 preserved for architectural overview and remaining modules (ConcurrencyPolicy, VectorStoreProtocol, PersistStore). Use dedicated RFCs for implementation details.

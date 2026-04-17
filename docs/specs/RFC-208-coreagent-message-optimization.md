@@ -1,12 +1,13 @@
-# RFC-207: CoreAgent Message Optimization (Phase 4.2)
+# RFC-208: CoreAgent Message Optimization (Phase 4.2)
 
-**RFC**: 0208
+**RFC**: 208
 **Title**: Layer 1 CoreAgent Message Optimization
-**Status**: Implemented
+**Status**: Deprecated
 **Kind**: Architecture Refinement
 **Created**: 2026-04-09
 **Dependencies**: RFC-207, RFC-200, RFC-100, RFC-104
 **Replaces**: None (refines Layer 1 message construction)
+**Redirect**: Superseded by `RFC-207-agentloop-thread-context-lifecycle.md`
 
 ## Abstract
 

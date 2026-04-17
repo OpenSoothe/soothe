@@ -1,6 +1,6 @@
 # RFC-206: Hierarchical Prompt Architecture
 
-**RFC**: 0206  
+**RFC**: 206  
 **Title**: Hierarchical Prompt Architecture with System/User Separation  
 **Status**: Draft  
 **Kind**: Architecture Design  

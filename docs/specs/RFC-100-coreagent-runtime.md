@@ -1,6 +1,6 @@
 # RFC-100: Layer 1 - CoreAgent Runtime Architecture
 
-**RFC**: 0023
+**RFC**: 100
 **Title**: Layer 1: CoreAgent Runtime Architecture
 **Status**: Draft
 **Kind**: Architecture Design

@@ -1,11 +1,12 @@
-# RFC-207: Dynamic Tool/System Context Injection
+# RFC-210: Dynamic Tool/System Context Injection
 
-**RFC**: 0210
+**RFC**: 210
 **Title**: Dynamic Tool/System Context Injection
-**Status**: Draft
+**Status**: Deprecated
 **Kind**: Architecture Refinement
 **Created**: 2026-04-09
-**Dependencies**: RFC-104, RFC-207, RFC-207, RFC-600, RFC-100
+**Dependencies**: RFC-104, RFC-207, RFC-600, RFC-100
+**Redirect**: Superseded by `RFC-207-agentloop-thread-context-lifecycle.md`
 **Replaces**: None (refines RFC-104/208 context injection)
 
 ## Abstract

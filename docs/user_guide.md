@@ -76,9 +76,9 @@ Technical documentation for developers and system architects.
 | [RFC-200](specs/RFC-200.md) | DAG-Based Execution and Unified Concurrency |
 | [RFC-200](specs/RFC-200.md) | Failure Recovery, Progressive Persistence, and Artifact Storage |
 | [RFC-102](specs/RFC-102.md) | Unified Complexity Classification |
-| [RFC-400](specs/RFC-400.md) | Unified Daemon Communication Protocol |
-| [RFC-400](specs/RFC-400.md) | Progress Event Protocol |
-| [RFC-400](specs/RFC-400.md) | Authentication and Security Model |
+| [RFC-400](specs/RFC-400-context-protocol-architecture.md) | Unified Daemon Communication Protocol |
+| [RFC-400](specs/RFC-400-context-protocol-architecture.md) | Progress Event Protocol |
+| [RFC-400](specs/RFC-400-context-protocol-architecture.md) | Authentication and Security Model |
 | [RFC-101](specs/RFC-101.md) | HTTP REST API Specification |
 
 ### Implementation Guides

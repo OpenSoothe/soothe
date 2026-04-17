@@ -686,7 +686,7 @@ Keep protocols separate from loop runners:
 
 ## References
 
-- Brainstorming Session: `_bmad-output/brainstorming/brainstorming-session-2026-04-17-144552.md`
+- Brainstorming Session: Consolidation intermediate artifact removed during cleanup (2026-04-17); key decisions are reflected in consolidated RFCs.
 - RFC-000: System Conceptual Design
 - RFC-001: Core Modules Architecture
 - RFC-200: Layer 3 Autonomous Goal Management

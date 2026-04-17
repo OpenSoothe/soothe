@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Literal
 
 import typer
-from soothe_sdk.client.config import SOOTHE_HOME, VERBOSITY_TO_LOG_LEVEL
+from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.utils.logging import VERBOSITY_TO_LOG_LEVEL
 
 from soothe_cli.cli.execution import run_headless, run_tui
 from soothe_cli.shared import load_config, setup_logging

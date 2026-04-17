@@ -78,7 +78,7 @@ Before:                           After:
 
 | File | Change |
 |------|--------|
-| `docs/specs/RFC-400.md` | Update transport layer section, remove Unix socket from wire format and client sections |
+| `docs/specs/RFC-400-context-protocol-architecture.md` | Update transport layer section, remove Unix socket from wire format and client sections |
 | `docs/user_guide.md` | Update daemon connection instructions |
 
 ---

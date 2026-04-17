@@ -11,7 +11,7 @@ pip install soothe-sdk
 ## Quick Start
 
 ```python
-from soothe_sdk import plugin, tool, subagent
+from soothe_sdk.plugin import plugin, tool, subagent
 
 @plugin(
     name="my-plugin",
@@ -155,8 +155,8 @@ class MyPlugin:
 
     async def health_check(self):
         """Return plugin health status."""
-        from soothe_sdk.types import PluginHealth
-        return PluginHealth(status="healthy")
+        from soothe_sdk.plugin import Health
+        return Health(status="healthy")
 ```
 
 ## Publishing Your Plugin
@@ -204,20 +204,50 @@ ruff format src/soothe_sdk/
 
 ## Architecture
 
-The SDK provides decorator-based APIs for defining plugins:
+The SDK provides decorator-based APIs for defining plugins (v0.4.0 structure):
 
 ```
 soothe_sdk/
-├── decorators/
-│   ├── plugin.py      # @plugin decorator
-│   ├── tool.py        # @tool and @tool_group decorators
-│   └── subagent.py    # @subagent decorator
-├── types/
-│   ├── manifest.py    # PluginManifest metadata
-│   ├── context.py     # PluginContext for lifecycle hooks
-│   └── health.py      # PluginHealth status
-├── exceptions.py      # SDK-specific exceptions
-└── depends.py         # Dependency utilities
+├── __init__.py           # Minimal (version only)
+├── events.py             # Core concept at root
+├── exceptions.py         # Core concept at root
+├── verbosity.py          # Core concept at root
+├── protocols/            # Protocol definitions (stable interfaces)
+├── client/               # Client utilities (WebSocket + config)
+│   ├── protocol.py       # WebSocketClientProtocol
+│   ├── websocket_client.py
+│   └── config.py         # Config constants + types (merged)
+├── plugin/               # Plugin API (decorators + types)
+│   ├── decorators.py     # @plugin, @tool, @tool_group, @subagent (merged)
+│   ├── manifest.py       # PluginManifest (Manifest alias)
+│   ├── context.py        # PluginContext (Context alias)
+│   ├── health.py         # PluginHealth (Health alias)
+│   ├── registry.py       # register_event() API
+│   └── emit.py           # emit_progress(), set_stream_writer()
+├── ux/                   # UX/display helpers
+│   ├── classification.py # classify_event_to_tier
+│   └── internal.py       # Internal content filtering
+├── utils/                # Shared utilities
+│   ├── logging.py
+│   ├── display.py
+│   ├── parsing.py
+│   └── workspace.py
+└── types/                # Deprecated (empty)
+```
+
+**Import Pattern** (v0.4.0):
+```python
+# Core concepts - import from root
+from soothe_sdk import __version__
+from soothe_sdk.events import SootheEvent, OutputEvent
+from soothe_sdk.exceptions import SootheSDKError
+from soothe_sdk.verbosity import VerbosityLevel, VerbosityTier
+
+# Purpose packages - import from subpackage
+from soothe_sdk.plugin import plugin, tool, subagent, register_event
+from soothe_sdk.client import WebSocketClient, VerbosityLevel
+from soothe_sdk.ux import classify_event_to_tier
+from soothe_sdk.utils import format_cli_error, setup_logging
 ```
 
 ## Key Design Principles

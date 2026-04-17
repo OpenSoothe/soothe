@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-sdk"
-version = "0.2.0"
-description = "SDK for building Soothe plugins and client utilities with WebSocket support"
+version = "0.4.0"
+description = "SDK for building Soothe plugins and client utilities - restructured module architecture (breaking change)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10,<3.15"

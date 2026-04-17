@@ -1,12 +1,14 @@
-# RFC-400: Event Processing & Filtering
+# RFC-401: Event Processing & Filtering
 
+**RFC**: 451
 **Status**: Implemented
 **Authors**: Soothe Team
 **Created**: 2026-03-31
-**Last Updated**: 2026-03-31
-**Depends on**: RFC-400 (Daemon Communication), RFC-402 (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
+**Last Updated**: 2026-04-17
+**Depends on**: RFC-450 (Daemon Communication), `RFC-403-unified-event-naming.md` (Unified Event Naming), RFC-500 (CLI/TUI Architecture), RFC-502 (Unified Presentation Engine)
 **Supersedes**: RFC-0015, RFC-0019, RFC-0022
 **Kind**: Implementation Interface Design
+**Legacy Note**: Daemon/event consolidation references this document alongside `RFC-450-daemon-communication-protocol.md` and `RFC-453.md`.
 
 ---
 
@@ -467,7 +469,7 @@ processor = EventProcessor(LoggingRenderer())
 
 ## 11. Relationship to Other RFCs
 
-* **RFC-400 (Daemon Communication)**: Transport layer for events
+* **RFC-450 (Daemon Communication)**: Transport layer for events
 * **RFC-500 (CLI/TUI Architecture)**: Renderer implementations
 * **RFC-501 (Display & Verbosity)**: VerbosityTier classification
 * **RFC-101 (Tool Interface)**: Tool event naming patterns
