@@ -162,6 +162,9 @@ def _strip_success_exit_line(text: str) -> str:
 class UserMessage(_TimestampClickMixin, Static):
     """Widget displaying a user message."""
 
+    can_select = True
+    """Enable text selection for copy functionality."""
+
     DEFAULT_CSS = """
     UserMessage {
         height: auto;
@@ -249,6 +252,9 @@ class QueuedUserMessage(Static):
     This is an ephemeral widget that gets removed when the message is dequeued.
     """
 
+    can_select = True
+    """Enable text selection for copy functionality."""
+
     DEFAULT_CSS = """
     QueuedUserMessage {
         height: auto;
@@ -329,6 +335,9 @@ class SkillMessage(Vertical):
     (`_SkillToggle`) so clicks on the rendered markdown body do not trigger
     expansion toggles (preserving text selection, for instance).
     """
+
+    can_select = True
+    """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
     SkillMessage {
@@ -564,6 +573,9 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
     the full content on each update.
     """
 
+    can_select = True
+    """Enable text selection for copy functionality."""
+
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
@@ -677,6 +689,9 @@ class ToolCallMessage(Vertical):
     Press Ctrl+O to expand/collapse the full output.
     Shows an animated "Running..." indicator while the tool is executing.
     """
+
+    can_select = True
+    """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
     ToolCallMessage {
@@ -1523,6 +1538,9 @@ class ToolCallMessage(Vertical):
 class DiffMessage(_TimestampClickMixin, Static):
     """Widget displaying a diff with syntax highlighting."""
 
+    can_select = True
+    """Enable text selection for copy functionality."""
+
     DEFAULT_CSS = """
     DiffMessage {
         height: auto;
@@ -1595,6 +1613,9 @@ class DiffMessage(_TimestampClickMixin, Static):
 class ErrorMessage(_TimestampClickMixin, Static):
     """Widget displaying an error message."""
 
+    can_select = True
+    """Enable text selection for copy functionality."""
+
     DEFAULT_CSS = """
     ErrorMessage {
         height: auto;
@@ -1645,6 +1666,9 @@ class AppMessage(Static):
     # each render. This means highlight_link_id never stabilizes, causing an
     # infinite hover-refresh loop.
     auto_links = False
+
+    can_select = True
+    """Enable text selection for copy functionality."""
 
     DEFAULT_CSS = """
     AppMessage {

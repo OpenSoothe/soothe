@@ -122,6 +122,22 @@ agentic:
   # Only used when Act execution uses isolated threads (no checkpoint access)
   prior_conversation_limit: 10
 
+  # Goal context injection configuration (RFC-609)
+  # Injects previous goal summaries into Plan/Execute phases for continuity
+  goal_context:
+    # Number of previous goals for Plan phase (same-thread only)
+    plan_limit: 10  # Default: 10, range: 1-50
+    # Number of previous goals for Execute briefing (thread switch only)
+    execute_limit: 10  # Default: 10, range: 1-50
+    # Enable/disable goal context injection
+    enabled: true  # Default: true
+
+  # Working memory for large step outputs (RFC-203)
+  working_memory:
+    enabled: false  # Enable/disable working memory
+    max_inline_chars: 2000  # Max inline chars before spill
+    max_entry_chars_before_spill: 4000  # Threshold to spill to disk
+
   # Model context window token limit for percentage calculation (IG-151)
   context_window_limit: 200000  # Claude models default (200k tokens)
 

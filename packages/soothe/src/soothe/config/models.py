@@ -525,6 +525,24 @@ class EarlyTerminationConfig(BaseModel):
     )
 
 
+class GoalContextConfig(BaseModel):
+    """Goal context injection configuration (RFC-609).
+
+    Args:
+        plan_limit: Number of previous goals to inject into Plan phase.
+        execute_limit: Number of previous goals for Execute briefing on thread switch.
+        enabled: Enable goal context injection.
+    """
+
+    plan_limit: int = Field(
+        default=10, ge=1, le=50, description="Number of previous goals for Plan phase"
+    )
+    execute_limit: int = Field(
+        default=10, ge=1, le=50, description="Number of previous goals for Execute briefing"
+    )
+    enabled: bool = Field(default=True, description="Enable goal context injection")
+
+
 class AgenticLoopConfig(BaseModel):
     """Configuration for agentic loop execution mode (RFC-201).
 
@@ -591,6 +609,11 @@ class AgenticLoopConfig(BaseModel):
     working_memory: LoopWorkingMemoryConfig = Field(
         default_factory=LoopWorkingMemoryConfig,
         description="Loop working memory (RFC-203)",
+    )
+
+    goal_context: GoalContextConfig = Field(
+        default_factory=GoalContextConfig,
+        description="Goal context injection for Plan/Execute phases (RFC-609)",
     )
 
 
