@@ -1,4 +1,4 @@
-"""ACT phase logic for AgentLoop (RFC-201)."""
+"""Execute phase logic for AgentLoop (RFC-201)."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
 
 
 class Executor:
-    """ACT phase: Execute steps via Layer 1 CoreAgent.
+    """Execute phase: Execute steps via Layer 1 CoreAgent.
 
     This component handles step execution with three modes:
     - parallel: Execute ready steps concurrently with isolated threads (chunked)
@@ -64,7 +64,7 @@ class Executor:
         config: SootheConfig | None = None,
         goal_context_manager: GoalContextManager | None = None,
     ) -> None:
-        """Initialize ACT phase.
+        """Initialize Execute phase.
 
         Args:
             core_agent: Layer 1 CoreAgent for step execution

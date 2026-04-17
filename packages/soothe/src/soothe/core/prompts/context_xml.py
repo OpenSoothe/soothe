@@ -28,6 +28,8 @@ def _xml_attr(value: object) -> str:
 def build_soothe_environment_section(*, model: str) -> str:
     """Build nested ENVIRONMENT XML block (RFC-207: removed SOOTHE_ prefix).
 
+    IG-183: Optimized for prompt caching - removed version attribute.
+
     Args:
         model: Resolved default model id (e.g. from ``config.resolve_model`` for the default role).
 
@@ -49,8 +51,8 @@ def build_soothe_environment_section(*, model: str) -> str:
             f"<knowledge_cutoff>{_xml_text(cutoff)}</knowledge_cutoff>",
         ]
     )
-    ver = RFC104_CONTEXT_XML_VERSION
-    return f'<ENVIRONMENT version="{_xml_attr(ver)}">\n{inner}\n</ENVIRONMENT>'
+    # IG-183: Removed version attribute for cache optimization
+    return f"<ENVIRONMENT>\n{inner}\n</ENVIRONMENT>"
 
 
 def _safe_list_dir_names(root: Path, *, max_entries: int) -> str | None:
@@ -91,6 +93,8 @@ def build_soothe_workspace_section(
 ) -> str:
     """Build nested WORKSPACE XML block (RFC-207: removed SOOTHE_ prefix).
 
+    IG-183: Optimized for prompt caching - excludes volatile fields (status, recent_commits).
+
     Args:
         workspace: Project root; when None, the process current working directory is used.
         git_status: Optional dict from ``get_git_status`` (None if not a git repo).
@@ -116,12 +120,7 @@ def build_soothe_workspace_section(
         lines.append(
             f"  <main_branch>{_xml_text(git_status.get('main_branch', 'main'))}</main_branch>"
         )
-        status = git_status.get("status", "")
-        if status:
-            lines.append(f"  <status>{_xml_text(status)}</status>")
-        commits = git_status.get("recent_commits", "")
-        if commits:
-            lines.append(f"  <recent_commits>{_xml_text(commits)}</recent_commits>")
+        # IG-183: Removed volatile fields (status, recent_commits) for cache optimization
     lines.append("</vcs>")
 
     if include_layout_preview and root.is_dir():
@@ -137,12 +136,15 @@ def build_soothe_workspace_section(
             lines.append(f"<readme_excerpt>{_xml_text(excerpt)}</readme_excerpt>")
 
     inner = "\n".join(lines)
-    ver = RFC104_CONTEXT_XML_VERSION
-    return f'<WORKSPACE version="{_xml_attr(ver)}">\n{inner}\n</WORKSPACE>'
+    # IG-183: Removed version attribute for cache optimization
+    return f"<WORKSPACE>\n{inner}\n</WORKSPACE>"
 
 
 def build_soothe_thread_section(thread_context: dict[str, Any]) -> str:
-    """Build SOOTHE_THREAD XML block from runner thread dict."""
+    """Build SOOTHE_THREAD XML block from runner thread dict.
+
+    IG-183: Optimized for prompt caching - removed version attribute.
+    """
     thread_id = thread_context.get("thread_id", "unknown")
     goals = thread_context.get("active_goals", [])
     turns = thread_context.get("conversation_turns", 0)
@@ -158,12 +160,15 @@ def build_soothe_thread_section(thread_context: dict[str, Any]) -> str:
     if plan:
         parts.append(f"<current_plan>{_xml_text(preview_first(str(plan), 100))}</current_plan>")
     inner = "\n".join(parts)
-    ver = RFC104_CONTEXT_XML_VERSION
-    return f'<SOOTHE_THREAD version="{_xml_attr(ver)}">\n{inner}\n</SOOTHE_THREAD>'
+    # IG-183: Removed version attribute for cache optimization
+    return f"<SOOTHE_THREAD>\n{inner}\n</SOOTHE_THREAD>"
 
 
 def build_soothe_protocols_section(protocol_summary: dict[str, Any]) -> str:
-    """Build SOOTHE_PROTOCOLS XML block, or empty string when nothing is active."""
+    """Build SOOTHE_PROTOCOLS XML block, or empty string when nothing is active.
+
+    IG-183: Optimized for prompt caching - removed version attribute.
+    """
     entries: list[str] = []
     proto_names = ["memory", "planner", "policy"]
     for proto_name in proto_names:
@@ -179,8 +184,8 @@ def build_soothe_protocols_section(protocol_summary: dict[str, Any]) -> str:
     if not entries:
         return ""
     inner = "\n".join(entries)
-    ver = RFC104_CONTEXT_XML_VERSION
-    return f'<SOOTHE_PROTOCOLS version="{_xml_attr(ver)}">\n{inner}\n</SOOTHE_PROTOCOLS>'
+    # IG-183: Removed version attribute for cache optimization
+    return f"<SOOTHE_PROTOCOLS>\n{inner}\n</SOOTHE_PROTOCOLS>"
 
 
 def build_shared_environment_workspace_prefix(

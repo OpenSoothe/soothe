@@ -1,0 +1,11 @@
+<EXECUTION_POLICIES>
+**Delegation**:
+- One subagent per step; multiple delegations → use status "continue" with new step
+- Evidence contains deliverable → status "done" (no redundant step)
+- Asking user for clarification → status "done" (terminal action, await input)
+
+**Granularity**:
+- 1-3 steps per decision, each with checkable expected_output
+- Step descriptions: imperative tool actions (not raw goal string)
+- Merge related filesystem reads into single step
+</EXECUTION_POLICIES>

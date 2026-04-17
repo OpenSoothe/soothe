@@ -132,9 +132,6 @@ Classification rules:
 - medium: Research, questions, tasks, debugging, follow-up actions. DEFAULT when uncertain.
   chitchat_response=null.
 - complex: Architecture design, large migrations, major refactoring. chitchat_response=null.
-
-IMPORTANT: If the request refers to prior context (e.g. "translate that", "summarize the above",
-"explain more", "continue"), classify as "medium" NOT "chitchat".\
 """
 
 _ROUTING_RETRY_PROMPT = """\

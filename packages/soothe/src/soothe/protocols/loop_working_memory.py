@@ -1,4 +1,4 @@
-"""LoopWorkingMemoryProtocol — agentic ReAct scratchpad (RFC-203)."""
+"""LoopWorkingMemoryProtocol — agentic Plan-Execute scratchpad (RFC-203)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Protocol
 
 
 class LoopWorkingMemoryProtocol(Protocol):
-    """Bounded working memory for Layer 2 Reason prompts; optional workspace spill."""
+    """Bounded working memory for Layer 2 Plan prompts; optional workspace spill."""
 
     def clear(self) -> None:
         """Reset for a new goal."""

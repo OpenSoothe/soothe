@@ -55,7 +55,8 @@ class TestEnvironmentSection:
         section = build_soothe_environment_section(model="claude-opus-4-6")
 
         # RFC-207: Removed SOOTHE_ prefix from ENVIRONMENT tag
-        assert '<ENVIRONMENT version="1">' in section
+        # IG-183: Removed version attribute for cache optimization
+        assert "<ENVIRONMENT>" in section
         assert "</ENVIRONMENT>" in section
         assert "<platform>" in section
         assert "<shell>" in section
@@ -77,7 +78,8 @@ class TestWorkspaceSection:
         section = build_soothe_workspace_section(Path("/tmp/test"), None)
 
         # RFC-207: Removed SOOTHE_ prefix from WORKSPACE tag
-        assert '<WORKSPACE version="1">' in section
+        # IG-183: Removed version attribute for cache optimization
+        assert "<WORKSPACE>" in section
         assert "</WORKSPACE>" in section
         assert "<root>" in section
         assert "/tmp/test" in section
@@ -85,12 +87,12 @@ class TestWorkspaceSection:
         assert "<branch>" not in section
 
     def test_workspace_section_with_git(self) -> None:
-        """Workspace section includes git status when available."""
+        """Workspace section includes git branch info when available (IG-183: removed volatile fields)."""
         git_status = {
             "branch": "feature/test",
             "main_branch": "main",
-            "status": "M src/file.py",
-            "recent_commits": "abc123 fix: something",
+            "status": "M src/file.py",  # IG-183: This field is now excluded (volatile)
+            "recent_commits": "abc123 fix: something",  # IG-183: This field is now excluded (volatile)
         }
 
         section = build_soothe_workspace_section(Path("/project"), git_status)
@@ -98,8 +100,9 @@ class TestWorkspaceSection:
         assert 'present="true"' in section
         assert "feature/test" in section
         assert "main" in section
-        assert "M src/file.py" in section
-        assert "abc123" in section
+        # IG-183: status and recent_commits removed for cache optimization
+        assert "M src/file.py" not in section
+        assert "abc123" not in section
 
     def test_workspace_section_no_workspace_uses_cwd(self) -> None:
         """Workspace section uses cwd when workspace is None."""
@@ -120,7 +123,8 @@ class TestThreadSection:
 
         section = build_soothe_thread_section(thread_context)
 
-        assert '<SOOTHE_THREAD version="1">' in section
+        # IG-183: Removed version attribute for cache optimization
+        assert "<SOOTHE_THREAD>" in section
         assert "</SOOTHE_THREAD>" in section
         assert "abc123" in section
         assert "<conversation_turns>3</conversation_turns>" in section
@@ -177,7 +181,8 @@ class TestProtocolsSection:
 
         section = build_soothe_protocols_section(protocol_summary)
 
-        assert '<SOOTHE_PROTOCOLS version="1">' in section
+        # IG-183: Removed version attribute for cache optimization
+        assert "<SOOTHE_PROTOCOLS>" in section
         assert 'id="memory"' in section
         assert 'id="planner"' in section
         assert 'id="policy"' in section
