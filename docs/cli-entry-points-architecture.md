@@ -125,8 +125,25 @@ soothe agent list                # List agents
 
 | File | Package | Purpose |
 |------|---------|---------|
-| `~/.soothe/config/config.yml` | soothe (daemon) | Agent configuration, providers, persistence |
-| `~/.soothe/config/cli_config.yml` | soothe-cli (client) | UI settings, WebSocket connection |
+| `~/.soothe/config/config.yml` | soothe (daemon) | Agent configuration, providers, persistence, daemon **file logging** |
+| `~/.soothe/config/cli_config.yml` | soothe-cli (client) | **Client display verbosity**, WebSocket connection, UI settings |
+
+### Verbosity Architecture
+
+**Important**: Verbosity is a **client-side display preference**, not a daemon configuration.
+
+- **Client config (`cli_config.yml`)**: `verbosity: detailed` controls what events are **displayed** in TUI/CLI
+  - Client sends verbosity to daemon when subscribing to a thread
+  - Daemon filters events **per-client** before sending over WebSocket
+  - Options: `quiet`, `normal`, `detailed`, `debug`
+
+- **Daemon config (`config.yml`)**: `logging.file.level: DEBUG` controls daemon **log file** verbosity
+  - Independent of client display preference
+  - Controls what daemon writes to `~/.soothe/logs/soothe-daemon.log`
+  - Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`
+  - **Do NOT set `verbosity` field in daemon config** - it's unused and causes confusion
+
+**Example**: Client with `verbosity: normal` receives filtered events (no subagent internals), but daemon logs at `DEBUG` level record all internals.
 
 ## Architecture Benefits
 

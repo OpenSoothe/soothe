@@ -66,10 +66,10 @@ daemon:
       port: 8766
 
 # Dev logging - verbose for debugging
+# Daemon file logging uses logging.file.level (independent of client display verbosity)
 logging:
   file:
     level: DEBUG
-  verbosity: normal
   thread_logging:
     enabled: true
     retention_days: 30
