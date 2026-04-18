@@ -33,9 +33,10 @@ class SootheEvent(BaseModel):
 
         Note: This method requires daemon-side implementation.
         For SDK use, events are typically sent via WebSocket.
+
+        SDK-side event base class: provides type definition and serialization.
+        Daemon-side implementation in soothe.utils.progress provides actual emit.
         """
-        # This is a stub for SDK compatibility
-        # The actual implementation is in soothe.utils.progress on daemon side
         pass
 
 

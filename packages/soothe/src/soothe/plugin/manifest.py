@@ -3,7 +3,7 @@
 This module provides a local import path matching the RFC-600
 specification: src/soothe/plugin/manifest.py
 
-The actual implementation lives in soothe_sdk.types.manifest
+The actual implementation lives in soothe_sdk.plugin.manifest
 to keep the SDK self-contained for third-party distribution.
 """
 

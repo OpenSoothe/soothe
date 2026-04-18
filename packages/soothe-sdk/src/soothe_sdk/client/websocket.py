@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 class WebSocketClient:
-    """WebSocket client for connecting to the daemon.
+    """WebSocket client for communicating with Soothe daemon.
 
     This client connects to the daemon via WebSocket and provides
-    the same interface as the legacy Unix socket client.
+    streaming event access and bidirectional message passing.
 
     Args:
         url: WebSocket URL (e.g., "ws://localhost:8765").
