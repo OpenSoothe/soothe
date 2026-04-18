@@ -237,7 +237,8 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             if pat is not None and pat != "*":
                 pshown = _sanitize_display_value(pat, max_length=80)
                 return f'{prefix} {tool_name}("{pshown}")'
-        return f"{prefix} {tool_name}()"
+        # No path/pattern in payload — model often omits kwargs for workspace default listing.
+        return f"{prefix} {tool_name}(.)"
 
     elif tool_key == "glob":
         pat = _first_nonempty_str_arg(
@@ -265,7 +266,8 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
                 for k, v in tool_args.items()
             )
             return f"{prefix} {tool_name}({args_str})"
-        return f"{prefix} {tool_name}()"
+        # Default glob when the model sends `{}` — show a visible pattern hint.
+        return f'{prefix} {tool_name}("*")'
 
     elif tool_key == "fetch_url":
         # Fetch URL: show the URL being fetched
@@ -279,7 +281,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         if agent_type:
             agent_type = _sanitize_display_value(agent_type, max_length=40)
             return f"{prefix} {tool_name} [{agent_type}]"
-        return f"{prefix} {tool_name}"
+        return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "ask_user":
         if "questions" in tool_args and isinstance(tool_args["questions"], list):
@@ -288,7 +290,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f"{prefix} {tool_name}({count} {label})"
 
     elif tool_key == "compact_conversation":
-        return f"{prefix} {tool_name}()"
+        return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "write_todos":
         if "todos" in tool_args and isinstance(tool_args["todos"], list):
@@ -301,4 +303,6 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         f"{_sanitize_display_value(k, max_length=30)}={_sanitize_display_value(v, max_length=50)}"
         for k, v in tool_args.items()
     )
+    if not args_str:
+        return f"{prefix} {tool_name}(…)"
     return f"{prefix} {tool_name}({args_str})"

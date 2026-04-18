@@ -62,3 +62,18 @@ def test_read_file_unwraps_nested_args_envelope() -> None:
 def test_tool_call_message_infers_name_from_tool_call_id() -> None:
     w = ToolCallMessage("tool", {}, tool_call_id="functions.glob:2", id="x")
     assert w._tool_name == "glob"
+
+
+def test_ls_empty_args_shows_workspace_default_not_bare_parens() -> None:
+    s = format_tool_display("ls", {})
+    assert "(.)" in s
+
+
+def test_glob_empty_args_shows_default_pattern_hint() -> None:
+    s = format_tool_display("glob", {})
+    assert "*" in s
+
+
+def test_unknown_tool_empty_args_shows_ellipsis_not_bare_parens() -> None:
+    s = format_tool_display("custom_tool", {})
+    assert "(…)" in s
