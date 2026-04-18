@@ -58,6 +58,22 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
     return "normal"
 
 
+def should_show_tool_call_ui(verbosity: str | VerbosityLevel) -> bool:
+    """Whether the TUI should mount tool-call rows (``ToolCallMessage`` / tool output).
+
+    Controlled only by ``logging.verbosity`` (same scale as CLI progress), not by
+    LangGraph namespace or event type. ``quiet`` hides tool UI; other levels show it.
+
+    Args:
+        verbosity: Raw or normalized verbosity string (e.g. from daemon config).
+
+    Returns:
+        False when verbosity is ``quiet``; True for ``normal``, ``detailed``, and ``debug``.
+    """
+    v = normalize_verbosity(verbosity) if isinstance(verbosity, str) else verbosity
+    return v != "quiet"
+
+
 # =============================================================================
 # Policy Configuration Constants
 # =============================================================================
@@ -406,4 +422,6 @@ __all__ = [
     "VerbosityLevel",
     "VerbosityTier",
     "create_display_policy",
+    "normalize_verbosity",
+    "should_show_tool_call_ui",
 ]

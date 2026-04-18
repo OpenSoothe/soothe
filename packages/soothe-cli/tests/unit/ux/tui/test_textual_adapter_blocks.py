@@ -43,3 +43,97 @@ def test_chunk_string_fallback() -> None:
     msg = AIMessageChunk(content="partial")
     blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
     assert blocks == [{"type": "text", "text": "partial"}]
+
+
+def test_dict_payload_with_aimessage_type_string_yields_tool_blocks() -> None:
+    """Wire dicts may use ``type: \"AIMessage\"``; must still yield tool blocks."""
+    msg = {
+        "type": "AIMessage",
+        "content": "",
+        "tool_calls": [
+            {
+                "name": "read_file",
+                "args": {"file_path": "x.txt"},
+                "id": "call-1",
+                "type": "tool_call",
+            }
+        ],
+    }
+    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    assert any(b.get("type") == "tool_call" for b in blocks)
+
+
+def test_tool_calls_attr_without_content_blocks() -> None:
+    """LangChain often sets ``tool_calls`` only — TUI must still build tool blocks."""
+    msg = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "read_file",
+                "args": {"file_path": "x.txt"},
+                "id": "call-1",
+                "type": "tool_call",
+            }
+        ],
+    )
+    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    assert blocks == [
+        {
+            "type": "tool_call",
+            "name": "read_file",
+            "args": {"file_path": "x.txt"},
+            "id": "call-1",
+        }
+    ]
+
+
+def test_nonstandard_tool_use_expands_to_tool_call() -> None:
+    """Anthropic-style ``tool_use`` is wrapped as ``non_standard`` by LangChain."""
+    msg = AIMessage(
+        content=[
+            {
+                "type": "non_standard",
+                "value": {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "read_file",
+                    "input": {"file_path": "README.md"},
+                },
+            }
+        ]
+    )
+    blocks = _tui_effective_ai_blocks(msg, ns_key=(), direct_subagent_turn=False)
+    assert blocks == [
+        {
+            "type": "tool_call",
+            "name": "read_file",
+            "id": "toolu_1",
+            "args": {"file_path": "README.md"},
+        }
+    ]
+
+
+def test_tool_calls_visible_on_nested_namespace_without_direct_route() -> None:
+    """Subgraph text is suppressed but tool cards from ``tool_calls`` must render."""
+    msg = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "task",
+                "args": {"description": "sub"},
+                "id": "call-sub",
+                "type": "tool_call",
+            }
+        ],
+    )
+    blocks = _tui_effective_ai_blocks(
+        msg, ns_key=("graphs", "n1"), direct_subagent_turn=False
+    )
+    assert blocks == [
+        {
+            "type": "tool_call",
+            "name": "task",
+            "args": {"description": "sub"},
+            "id": "call-sub",
+        }
+    ]

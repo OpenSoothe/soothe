@@ -30,6 +30,22 @@ def test_envelope_wraps_flat_chunk_dict() -> None:
     assert restored[0].content == "partial"
 
 
+def test_envelope_maps_aimessage_class_name_to_wire_tag() -> None:
+    """Serializers that emit ``type: \"AIMessage\"`` must map to ``ai`` for LC."""
+    flat = {
+        "type": "AIMessage",
+        "content": "",
+        "tool_calls": [
+            {"name": "read_file", "args": {"file_path": "a.txt"}, "id": "call-1", "type": "tool_call"}
+        ],
+    }
+    wrapped = _envelope_langchain_message_dict(flat)
+    assert wrapped["type"] == "ai"
+    restored = messages_from_dict([wrapped])
+    assert isinstance(restored[0], AIMessage)
+    assert restored[0].tool_calls
+
+
 def test_envelope_idempotent_when_data_present() -> None:
     """Already-enveloped LC dicts are unchanged."""
     m = AIMessage(content="x")

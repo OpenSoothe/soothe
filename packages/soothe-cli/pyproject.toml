@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-cli"
-version = "0.2.2"
+version = "0.3.3"
 description = "Soothe CLI client - communicates with daemon via WebSocket (updated for SDK v0.4.0)"
 readme = "README.md"
 license = { text = "MIT" }
