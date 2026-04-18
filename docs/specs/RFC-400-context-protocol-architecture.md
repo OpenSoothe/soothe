@@ -171,11 +171,54 @@ class ContextRetrievalModule:
 
 ### Algorithm Versions
 
-| Version | Algorithm | Description |
-|---------|-----------|-------------|
-| `v1_keyword` | Goal tag matching | Match entries with goal_id tag (current) |
-| `v2_embedding` | Semantic similarity | Embed goal description, match entry embeddings (future) |
-| `hybrid` | Combined approach | Keyword + embedding hybrid (future) |
+| Version | Algorithm | Description | Status |
+|---------|-----------|-------------|--------|
+| `v1_keyword` | Goal tag matching | Match entries with `goal_id` tag (immediate) | ✅ Recommended MVP |
+| `v2_embedding` | Semantic similarity | Embed goal description, match entry embeddings | ⚠️ Future enhancement |
+| `hybrid` | Combined approach | Keyword + embedding hybrid scoring | ⚠️ Future enhancement |
+
+**Version Selection**: Configurable via `context.retrieval.algorithm_version`. Algorithm evolution behind stable API preserves integration contracts.
+
+### AgentLoop Integration Pattern
+
+**Integration with RFC-201 AgentLoop.Executor**:
+
+```python
+# AgentLoop.Executor calls ContextRetrievalModule
+retrieval = context.get_retrieval_module()
+relevant_history = retrieval.retrieve_by_goal_relevance(
+    goal_id=state.current_goal_id,
+    execution_context={"iteration": state.iteration},
+    limit=10,
+)
+# Build task package with goal-centric context
+```
+
+**Ownership Boundary** (RFC-201 §61-78):
+- **ContextProtocol ownership**: Retrieval module implementation, algorithm versions, stable API
+- **AgentLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output
+
+### Evidence Storage Pattern
+
+**GoalEngine Failure Evidence Storage**:
+
+```python
+# GoalEngine stores failure evidence
+evidence_entry = ContextEntry(
+    source="goal_engine",
+    content=f"Goal {goal_id} failed: {error}",
+    tags=["failure", goal_id],
+    importance=0.8,  # High importance for failures
+    goal_id=goal_id,
+)
+await context.ingest(evidence_entry)
+```
+
+**Tagging Schema**:
+- Goal-centric entries tagged with `goal_id` for retrieval
+- Failure entries tagged with `["failure", goal_id]` (importance: 0.8)
+- Success entries tagged with `["success", goal_id]` (importance: 0.5-0.7)
+- Reflection entries tagged with `["reflection", goal_id]` (importance: 0.9)
 
 ### Stable API Design
 
@@ -188,6 +231,20 @@ class ContextRetrievalModule:
 - Algorithm experimentation without breaking changes
 - Performance optimization transparent to callers
 - Future embedding integration seamless
+
+---
+
+## Implementation Priority
+
+**Critical Foundation**: ContextProtocol is specified but not yet implemented. This is a foundational protocol required by:
+- GoalBackoffReasoner (RFC-200) - needs ContextProtocol for evidence storage
+- ThreadRelationshipModule (RFC-609) - needs ContextProtocol for embedding model access
+- AgentLoop.Executor (RFC-201) - needs ContextProtocol for goal-centric retrieval
+
+**Recommended Implementation Sequence**:
+1. Phase 1: KeywordContext backend (v1_keyword algorithm, JSON persistence)
+2. Phase 2: Integration with SootheRunner, AgentLoop.Executor, GoalEngine
+3. Phase 3: VectorContext backend (v2_embedding algorithm, requires vector store)
 
 ---
 
@@ -346,16 +403,17 @@ protocols:
 
 ## Implementation Status
 
-- ✅ ContextProtocol interface
-- ✅ ContextEntry data model
-- ✅ ContextProjection bounded view
-- ✅ KeywordContext implementation
-- ✅ VectorContext implementation (partial)
-- ✅ ContextRetrievalModule stable API
-- ✅ Goal-centric retrieval (v1_keyword)
+- ✅ ContextProtocol interface (defined in this RFC)
+- ✅ ContextEntry data model (defined in this RFC)
+- ✅ ContextProjection bounded view (defined in this RFC)
+- ⚠️ KeywordContext implementation (not yet implemented - critical gap)
+- ⚠️ VectorContext implementation (future work)
+- ✅ ContextRetrievalModule stable API (design documented - RFC-400 §128-191)
+- ⚠️ Goal-centric retrieval v1_keyword (not yet implemented)
 - ⚠️ v2_embedding algorithm (future work)
-- ✅ Persistence integration
-- ✅ Subagent isolation pattern
+- ⚠️ Persistence integration (not yet implemented)
+- ⚠️ AgentLoop integration (not yet implemented)
+- ⚠️ Evidence storage pattern (not yet implemented)
 
 ---
 

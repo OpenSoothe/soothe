@@ -36,9 +36,50 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 ### Integration with Layer 3
 
-**Layer 3 → Layer 2**: `judge_result = await agentic_loop.astream(goal_description, thread_id, max_iterations=8)`
+**AgentLoop Goal Pull Architecture** (Inverted Control Flow):
 
-**Layer 2 → Layer 3**: Return `PlanResult` with status, evidence_summary, goal_progress, confidence, reasoning.
+Layer 2 AgentLoop actively queries Layer 3 GoalEngine for goal assignment and reports execution results. GoalEngine provides goal state service, never invokes AgentLoop.
+
+**Integration Pattern**:
+
+```python
+# AgentLoop initialization (run_with_progress)
+async def run_with_progress(...):
+    # PULL: AgentLoop queries GoalEngine for current goal
+    goal_engine = config.resolve_goal_engine()
+    current_goal = goal_engine.get_next_ready_goal()
+    
+    if not current_goal:
+        return None
+    
+    # Execute Layer 2 loop (AgentLoop drives)
+    state = LoopState(
+        current_goal_id=current_goal.id,
+        goal_text=current_goal.description,
+        ...
+    )
+    
+    plan_result = await self.run_iteration(state)
+    
+    # REPORT: AgentLoop reports result to GoalEngine
+    if plan_result.status == "done":
+        goal_engine.complete_goal(current_goal.id, plan_result)
+    elif plan_result.status == "failed":
+        evidence = EvidenceBundleBuilder().build_from_plan_result(...)
+        await goal_engine.fail_goal(current_goal.id, evidence)
+    
+    return plan_result
+```
+
+**Integration Contract**:
+
+| Trigger | AgentLoop Action | GoalEngine Response |
+|---------|------------------|---------------------|
+| Goal assignment | `get_next_ready_goal()` | Return DAG-satisfied goal |
+| Goal completion | `complete_goal(goal_id, plan_result)` | Update goal status |
+| Goal failure | `fail_goal(goal_id, EvidenceBundle)` | Apply BackoffReasoner |
+
+**Architectural Principle**: AgentLoop owns execution timing, GoalEngine provides goal state service (inverted control flow, no active PERFORM delegation).
 
 ### Integration with Layer 1
 
@@ -75,16 +116,67 @@ Layer 1: CoreAgent Runtime (RFC-100) → Tools/Subagents
 
 **Integration**: AgentLoop calls `ContextProtocol.get_retrieval_module().retrieve_by_goal_relevance(goal_id, execution_context, limit)` when building Plan/Execute context. Retrieval algorithm implementation details stay encapsulated in ContextProtocol, preserving architectural separation.
 
+**Integration Pattern Example**:
+
+```python
+# AgentLoop.Executor calls ContextProtocol retrieval module
+retrieval = context.get_retrieval_module()
+relevant_history = retrieval.retrieve_by_goal_relevance(
+    goal_id=state.current_goal_id,
+    execution_context={"iteration": state.iteration},
+    limit=10,
+)
+# Combine with GoalContextManager output for Plan/Execute context
+```
+
 **Reference**: RFC-400 defines canonical retrieval API. RFC-001 §28-62 references RFC-400 as single authoritative retrieval specification.
 
-### GoalEngine-AgentLoop synchronization (dual trigger)
+### Dual Trigger Synchronization Ordering
 
-Layer 3 (`GoalEngine`, RFC-200) and AgentLoop stay in sync through **two complementary triggers** (both may appear in a single run):
+Layer 2 (AgentLoop) and Layer 3 (GoalEngine, RFC-200) stay synchronized through **ordered complementary triggers** with precise timing guarantees.
 
-1. **Reactive (event-bound)**: On thread completion, step boundaries, or failure paths, Layer 2 updates evidence and drives calls that mutate or query goal state as required by RFC-200 (for example failure handling and backoff application).
-2. **Need-based pull**: Before scheduling or thread decisions, Layer 2 **pulls** authoritative goal data (`ready_goals`, snapshots, directive results) whenever the next action depends on the DAG.
+**Trigger Types**:
 
-Exact ordering is defined across RFC-200, RFC-203, and RFC-207; this subsection fixes the **contract** that synchronization is intentionally hybrid, not exclusively polling or exclusively push.
+**REACTIVE Trigger** (Event-Bound):
+- Timing: Fired after execution boundaries (completion, failure, step completion)
+- Purpose: Push evidence to GoalEngine immediately
+- Direction: AgentLoop → GoalEngine (push)
+- Examples: complete_goal(), fail_goal(), event emission
+
+**PULL Trigger** (Need-Based):
+- Timing: Fired before decisions requiring goal context (Plan, after backoff, iteration boundaries)
+- Purpose: Query GoalEngine for authoritative state
+- Direction: AgentLoop → GoalEngine (query)
+- Examples: get_goal(), get_next_ready_goal(), ready_goals()
+
+**Ordered Sync Sequence (Per Iteration)**:
+
+| Step | Trigger | When | AgentLoop Call | Purpose |
+|------|---------|------|----------------|---------|
+| 1 | **PULL #1** | Before Plan | `get_goal(goal_id)` | Get goal state (priority, dependencies) |
+| 2 | PLAN | - | - | LLM reasoning with goal context |
+| 3 | EXECUTE | - | - | Run steps, collect evidence |
+| 4 | **REACTIVE #1** | Goal completion | `complete_goal()` | Mark goal completed |
+| 5 | **REACTIVE #2** | Execution failure | `fail_goal(evidence)` | Handoff failure evidence |
+| 6 | **PULL #2** | After backoff | `get_goal(goal_id)` | Check updated goal status |
+| 7 | **REACTIVE #3** | Step completion | `emit_event()` | Observability (optional) |
+| 8 | **PULL #3** | Before next iteration | `ready_goals()` | Check DAG consistency |
+
+**Critical Ordering Constraints**:
+
+1. **PULL before Plan (mandatory)**: Planning requires authoritative goal state. Violation: stale goal context, wrong priority order.
+2. **REACTIVE after execution (immediate)**: GoalEngine needs evidence for DAG decisions. Violation: state stale during reflection.
+3. **PULL after backoff (before continuing)**: Backoff may reset goal status. Violation: AgentLoop continues on inactive goal.
+4. **PULL before iteration boundary**: Reflection may add dependencies. Violation: executing goal with unsatisfied dependencies.
+
+**Race Condition Handling**:
+
+- **External DAG mutation**: PULL #1 detects status change → abort iteration
+- **Parallel threads**: Each thread pulls independently, GoalEngine atomic updates
+- **Backoff while executing**: PULL #2 detects goal "pending" → end iteration
+- **Reflection adds dependency**: PULL #3 detects goal not ready → defer iteration
+
+**Contract**: Synchronization is intentionally hybrid (PULL + REACTIVE) with ordering guarantees for consistency.
 
 ### Execute-time packaging (`config.configurable` versus TaskPackage)
 
@@ -201,42 +293,30 @@ class PlanResult(BaseModel):
 
 ### Planning Decision Logic
 
-```python
-# Reuse plan if previous PlanResult says "continue" and has remaining steps
-if previous_plan.status == "continue" and has_remaining_steps(previous_decision):
-    return previous_decision  # Skip PLAN phase
-
-# Create new plan (initial or replan)
-result = await planner.plan(goal, state, context, previous_plan)
-```
-
 **Iteration-Scoped Planning**: PLAN inside loop (not before loop starts).
-- Reuse plan on "continue" (skip PLAN phase)
-- Replan on "replan" (new PLAN phase)
+
+**Reuse Logic**:
+- Reuse plan if previous PlanResult.status == "continue" and has remaining steps (skip PLAN phase)
+- Create new plan (initial or replan) when PlanResult.status == "replan" or plan exhausted
+
+**Plan Metrics Enhancement**: Structured wave metrics inform Plan decisions.
+
+### GoalContext Construction for Plan
+
+**Dependency-Driven Retrieval**: Plan phase requires dependency-aware context synthesized from GoalEngine and ContextProtocol.
+
+**Synthesis Components**:
+1. **GoalEngine metadata**: Current goal priority, dependency goal IDs
+2. **ContextProtocol retrieval**: 
+   - Dependency goals: retrieve execution history (5 entries per dependency)
+   - Current goal: goal-centric retrieval (10 entries)
+3. **GoalContextManager summaries**: Previous goal summaries (5 entries)
+
+**PlanContext Integration**: AgentLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` during PULL #1 before Plan phase.
+
+**Architectural Principle**: Goal dependencies define relevant context scope. Prerequisite goal execution history provides constraints and learned patterns for planning.
 
 ### Plan Metrics Enhancement
-
-Structured wave metrics inform Plan decisions:
-```python
-class LoopState(BaseModel):
-    # Wave execution metrics
-    last_wave_tool_call_count: int = 0
-    last_wave_subagent_task_count: int = 0
-    last_wave_hit_subagent_cap: bool = False
-    last_wave_output_length: int = 0
-    last_wave_error_count: int = 0
-
-    # Context window metrics
-    total_tokens_used: int = 0
-    context_percentage_consumed: float = 0.0
-```
-
-**Metrics-Driven Approach**: Prevents premature `continue` after satisfactory output by considering:
-- Tool call count
-- Subagent task count
-- Output length
-- Error count
-- Context window usage
 
 ---
 
@@ -279,16 +359,7 @@ async def execute(decision: AgentDecision, state: LoopState):
 
 ### Layer 1 Integration
 
-```python
-config = {
-    "configurable": {
-        "thread_id": tid,
-        "soothe_step_tools": step.tools,
-        "soothe_step_subagent": step.subagent,
-        "soothe_step_expected_output": step.expected_output,
-    }
-}
-```
+**CoreAgent Config Injection**: Executor passes execution hints via `config.configurable` (thread_id, step tools, subagent hints, expected output).
 
 **CoreAgent Responsibilities**:
 - Execute tools/subagents
@@ -298,10 +369,10 @@ config = {
 - Return streaming results
 
 **Layer 2 Controls**:
-- What to execute
-- Execution suggestions
+- What to execute (AgentDecision.steps)
+- Execution suggestions (tools, subagent hints)
 - Timing and sequencing
-- Thread isolation (automatic)
+- Thread isolation (automatic via RFC-207)
 - Execution bounds (soft + hard cap)
 - Metrics aggregation
 
@@ -337,48 +408,50 @@ config = {
 
 ## Layer 2 Failure Evidence Handoff to Layer 3
 
-Layer 2 does not own backoff policy. It produces high-fidelity execution evidence and hands it to Layer 3 GoalEngine, which owns backoff reasoning and DAG restructuring.
+Layer 2 does not own backoff policy. It produces high-fidelity execution evidence and hands it to Layer 3 GoalEngine, which owns backoff reasoning and DAG restructuring (encapsulated).
 
-**Ownership boundary**:
-- Layer 2 (`RFC-201`): produce execution evidence and failure context.
-- Layer 3 (`RFC-200`): define and execute `GoalBackoffReasoner` policy and `BackoffDecision`.
+**Ownership Boundary**:
+- **Layer 2 (`RFC-201`)**: Produce execution evidence via EvidenceBundleBuilder, call GoalEngine.fail_goal()
+- **Layer 3 (`RFC-200`)**: Define and execute GoalBackoffReasoner policy internally, apply BackoffDecision
+- **Shared contract**: EvidenceBundle (RFC-200 §14-22) with structured + narrative fields
+- **Encapsulation**: AgentLoop never calls BackoffReasoner directly
 
-**Canonical models**:
-- Backoff and DAG-restructuring models: see `RFC-200`.
-- Shared evidence schema (`EvidenceBundle`, `GoalSubDAGStatus`): see `RFC-200`.
+### EvidenceBundle Contract
 
-### Handoff Contract
+**EvidenceBundle Data Model** (RFC-200 §14-22 canonical structure):
 
-```python
-class Layer2FailureHandoff(BaseModel):
-    """Layer 2 handoff payload to Layer 3 on goal-path failure."""
+**Structured Field**: Machine-readable execution metrics from LoopState wave tracking (§236-245)
+- iteration: int
+- wave_tool_calls: int (last_wave_tool_call_count)
+- wave_subagent_tasks: int (last_wave_subagent_task_count)
+- wave_errors: int (last_wave_error_count)
+- wave_output_length: int (last_wave_output_length)
+- wave_hit_subagent_cap: bool
+- goal_progress: float
+- confidence: float
+- plan_status: str
 
-    goal_id: str
-    """Failed goal identifier."""
+**Narrative Field**: Natural language synthesis for GoalBackoffReasoner
+- Synthesized from: PlanResult.reasoning, evidence_summary, user_summary
+- Wave metrics pattern analysis: tool/subagent counts, error patterns, resource constraints
 
-    plan_result: PlanResult
-    """Latest PlanResult with iteration reasoning."""
+**Source**: "layer2_execute" or "layer2_plan" (evidence producer stage)
+**Timestamp**: Evidence emission time
 
-    evidence: EvidenceBundle
-    """Canonical evidence payload (RFC-200 shared contract)."""
+### Handoff Integration Architecture
 
-    thread_context_hint: str | None = None
-    """Optional thread-switch/goal-context note from RFC-207 components."""
-```
+**AgentLoop → GoalEngine Flow**:
 
-### Integration Flow
+1. **Build Evidence**: AgentLoop Executor constructs EvidenceBundle from execution context (PlanResult + LoopState wave metrics)
+2. **Handoff**: REACTIVE trigger #2 - AgentLoop calls GoalEngine.fail_goal(goal_id, evidence)
+3. **GoalEngine Processing** (encapsulated):
+   - Build GoalContext snapshot from goal DAG
+   - Call BackoffReasoner.reason_backoff() with goal context + evidence
+   - Apply BackoffDecision (DAG restructuring, reset backoff target to "pending")
+   - Persist DAG mutation
+4. **Next Iteration**: PULL #2 checks updated goal status → abort if "pending"
 
-```
-Layer 2 Execute/Plan detects failed path
-├─ Build canonical EvidenceBundle from wave metrics + summaries
-├─ Emit Layer2FailureHandoff(goal_id, plan_result, evidence)
-└─ Return control to Layer 3 PERFORM/REFLECT boundary
-
-Layer 3 GoalEngine receives handoff
-├─ Calls GoalBackoffReasoner (RFC-200)
-├─ Applies BackoffDecision + GoalDirectives
-└─ Reschedules DAG from selected backoff point
-```
+**Architectural Guarantee**: AgentLoop hands off evidence, GoalEngine owns backoff reasoning (clear ownership boundary, no circular dependency).
 
 ---
 

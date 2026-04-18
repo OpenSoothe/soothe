@@ -148,6 +148,135 @@ class ThreadRelationshipModule:
         - Dependency relationship: same DAG path
         """
 
+### Goal Similarity Computation Details
+
+**Similarity Hierarchy**:
+
+| Level | Type | Computation | Score Range |
+|-------|------|-------------|-------------|
+| 1 | Exact Match | Same `goal_id` | 1.0 (exact) |
+| 2 | Semantic Similarity | Embedding cosine distance on goal descriptions | 0.0-0.99 |
+| 3 | Dependency Relationship | Goals in same DAG path (same dependency chain) | 0.0-0.8 |
+
+**Embedding Integration Pattern**:
+
+```python
+class ThreadRelationshipModule:
+    def __init__(self, embedding_model: Embeddings) -> None:
+        self._embedding_model = embedding_model
+
+    def compute_similarity(self, goal_a: Goal, goal_b: Goal) -> float:
+        # Level 1: Exact match
+        if goal_a.id == goal_b.id:
+            return 1.0
+
+        # Level 2: Semantic similarity
+        emb_a = self._embedding_model.embed_query(goal_a.description)
+        emb_b = self._embedding_model.embed_query(goal_b.description)
+        semantic_sim = cosine_similarity(emb_a, emb_b)
+
+        # Level 3: Dependency relationship (future - requires GoalEngine DAG traversal)
+        # TODO: Check if goals share dependency path
+
+        return semantic_sim
+```
+
+**Configuration Schema**:
+
+```yaml
+agentic:
+  goal_context:
+    # Thread relationship configuration
+    include_similar_goals: true
+    thread_selection_strategy: latest  # latest | all | best_performing
+    similarity_threshold: 0.7
+    embedding_role: embedding  # Role for embedding model
+```
+
+### Thread Selection Strategies
+
+**Strategy Details**:
+
+| Strategy | Selection Logic | Use Case |
+|----------|----------------|----------|
+| `latest` | Most recent thread execution (by timestamp) | Default - focus on recent context |
+| `all` | All matching threads (bounded by limit) | Comprehensive analysis |
+| `best_performing` | Thread with best metrics (duration, success rate) | Performance optimization |
+
+**Selection Implementation Pattern**:
+
+```python
+def _apply_strategy(
+    self,
+    similar_goals: list[tuple[GoalExecutionRecord, float]],
+    strategy: Literal["latest", "all", "best_performing"],
+) -> list[GoalExecutionRecord]:
+    if strategy == "latest":
+        # Sort by timestamp descending, return top N
+        return sorted(similar_goals, key=lambda x: x[0].timestamp, reverse=True)[:limit]
+    elif strategy == "all":
+        # Return all within limit
+        return [r for r, _ in similar_goals][:limit]
+    elif strategy == "best_performing":
+        # Sort by performance metrics (duration + success), return top N
+        return sorted(similar_goals, key=lambda x: x[0].performance_score, reverse=True)[:limit]
+```
+
+### GoalContext Construction Module Architecture
+
+**Design Principle**: Goal context requires **CONSTRUCTION** (not just retrieval) - context is assembled/constructed entity based on policy, not just fetched entity.
+
+**API Contract** (stable API, evolvable construction logic):
+
+```python
+def construct_goal_context(
+    goal_id: str,
+    goal_history: list[GoalExecutionRecord],
+    options: ContextConstructionOptions,
+) -> GoalContext:
+    """Construct goal context with thread ecosystem.
+
+    Returns:
+        GoalContext containing:
+        - execution_memory: selected goal execution records
+        - thread_ecosystem: {thread_id: [goal_ids]} mapping
+        - similarity_scores: {goal_id: similarity_score} mapping
+    """
+```
+
+**GoalContext Model**:
+
+```python
+class GoalContext(BaseModel):
+    """Goal context with execution memory and thread ecosystem."""
+
+    goal_id: str
+    execution_memory: list[GoalExecutionRecord] = []
+    thread_ecosystem: dict[str, list[str]] = {}  # {thread_id: [goal_ids]}
+    total_threads: int = 0
+    similarity_scores: dict[str, float] = {}  # {goal_id: similarity}
+```
+
+**Integration with GoalContextManager**:
+
+```python
+# In GoalContextManager.get_execute_briefing()
+options = ContextConstructionOptions(
+    include_similar_goals=self._config.include_similar_goals,
+    thread_selection_strategy=self._config.thread_selection_strategy,
+    similarity_threshold=self._config.similarity_threshold,
+)
+
+goal_context = self._thread_relationship.construct_goal_context(
+    goal_id=checkpoint.current_goal_id,
+    goal_history=checkpoint.goal_history,
+    options=options,
+)
+
+# Format briefing with thread ecosystem metadata
+return self._format_execute_briefing(goal_context)
+```
+
     def construct_goal_context(
         self,
         goal_id: str,
@@ -761,6 +890,19 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 - goal_history empty (first goal)
 - thread_switch_pending=False (normal execution)
 - goal_context.enabled=False (explicit disable)
+
+## Implementation Status
+
+- ✅ GoalContextManager core (implemented)
+- ✅ GoalExecutionRecord data model (implemented in checkpoint)
+- ✅ thread_switch_pending flag mechanism (implemented)
+- ✅ Plan phase goal context injection (implemented)
+- ✅ Execute phase briefing injection (implemented)
+- ⚠️ ThreadRelationshipModule (design documented - RFC-609 §95-172 - brainstorming refinement)
+- ⚠️ Goal similarity computation (not yet implemented)
+- ⚠️ Embedding integration for similarity (not yet implemented)
+- ⚠️ Thread selection strategies (not yet implemented - only "latest" available)
+- ⚠️ GoalContext construction module (not yet implemented)
 
 ## References
 
