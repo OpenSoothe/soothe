@@ -330,7 +330,7 @@ class MessageData:
                     id=self.id,
                 )
                 if snap:
-                    w._deferred_snapshot = snap
+                    w._apply_snapshot(snap)
                 return w
 
             case _:

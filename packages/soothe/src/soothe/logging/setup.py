@@ -105,6 +105,7 @@ def _suppress_noisy_third_party() -> None:
         "browser_use",
         "bubus",
         "cdp_use",
+        "websockets",
     )
     for name in noisy:
         logging.getLogger(name).setLevel(logging.WARNING)
