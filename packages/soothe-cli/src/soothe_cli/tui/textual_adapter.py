@@ -73,6 +73,7 @@ from soothe_cli.tui.tool_display import format_tool_message_content
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionGoalTreeMessage,
     CognitionPlanReasonMessage,
     CognitionStepMessage,
     DiffMessage,
@@ -84,6 +85,8 @@ logger = logging.getLogger(__name__)
 
 AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
 AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
+AGENT_LOOP_GOAL_STARTED = "soothe.cognition.agent_loop.started"
+AGENT_LOOP_GOAL_COMPLETED = "soothe.cognition.agent_loop.completed"
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -358,6 +361,9 @@ class TextualUIAdapter:
         self._current_step_messages: dict[str, CognitionStepMessage] = {}
         """Map of agent-loop act step IDs to step card widgets."""
 
+        self._goal_tree_by_namespace: dict[tuple[Any, ...], CognitionGoalTreeMessage] = {}
+        """Live Goal→steps tree card per stream namespace (agentic Layer 2)."""
+
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
         """Called with total context tokens after each LLM response."""
@@ -390,6 +396,9 @@ class TextualUIAdapter:
         for step_msg in list(self._current_step_messages.values()):
             step_msg.set_interrupted(message)
         self._current_step_messages.clear()
+        for tree in list(self._goal_tree_by_namespace.values()):
+            tree.set_interrupted(message)
+        self._goal_tree_by_namespace.clear()
 
 
 def _build_interrupted_ai_message(
@@ -1063,6 +1072,40 @@ async def execute_task_textual(
                             if adapter._set_spinner:
                                 await adapter._set_spinner(None)
                             continue
+
+                        if event_type == AGENT_LOOP_GOAL_STARTED:
+                            goal = str(data.get("goal", "")).strip()
+                            max_it = int(data.get("max_iterations", 0))
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+                            tree = CognitionGoalTreeMessage(
+                                goal=goal or "(goal)",
+                                max_iterations=max_it,
+                                id=f"goaltree-{uuid.uuid4().hex[:8]}",
+                            )
+                            adapter._goal_tree_by_namespace[ns_key] = tree
+                            await adapter._mount_message(tree)
+                            continue
+
+                        if event_type == AGENT_LOOP_GOAL_COMPLETED:
+                            tr = adapter._goal_tree_by_namespace.get(ns_key)
+                            if tr is not None:
+                                tr.set_loop_finished(
+                                    status=str(data.get("status", "")),
+                                    goal_progress=float(data.get("goal_progress", 0.0)),
+                                    completion_summary=str(data.get("completion_summary", "")),
+                                    total_steps=int(data.get("total_steps", 0)),
+                                )
+                                adapter._goal_tree_by_namespace.pop(ns_key, None)
+
                         if output_text := _extract_custom_output_text(data):
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             if pending_text:
@@ -1101,6 +1144,10 @@ async def execute_task_textual(
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
+                                goal_tree = adapter._goal_tree_by_namespace.get(ns_key)
+                                if goal_tree is not None:
+                                    goal_tree.add_step_running(step_id, description or "(step)")
+                                    continue
                                 step_widget = CognitionStepMessage(
                                     step_id=step_id,
                                     description=description or "(step)",
@@ -1132,6 +1179,16 @@ async def execute_task_textual(
                                 )
                                 if not summary.strip():
                                     summary = "Failed" if not success else "Done"
+                                goal_tree = adapter._goal_tree_by_namespace.get(ns_key)
+                                if goal_tree is not None:
+                                    goal_tree.complete_step(
+                                        step_id,
+                                        success,
+                                        duration_ms,
+                                        tool_call_count,
+                                        summary,
+                                    )
+                                    continue
                                 widget = adapter._current_step_messages.pop(step_id, None)
                                 if widget is not None:
                                     widget.set_complete(
@@ -1521,6 +1578,10 @@ async def _handle_interrupt_cleanup(
     for step_msg in list(adapter._current_step_messages.values()):
         step_msg.set_interrupted("Interrupted by user")
     adapter._current_step_messages.clear()
+
+    for gt in list(adapter._goal_tree_by_namespace.values()):
+        gt.set_interrupted("Interrupted by user")
+    adapter._goal_tree_by_namespace.clear()
 
     # Keep the token count marked stale whenever interrupted state was captured,
     # including tool-only turns after assistant text was already flushed.

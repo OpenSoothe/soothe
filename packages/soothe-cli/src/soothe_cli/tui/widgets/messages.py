@@ -1890,6 +1890,321 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
             self.styles.border = ("ascii", colors.primary)
 
 
+_MAX_GOAL_HEADER = 100
+_MAX_GOAL_STEP_DESC = 200
+
+
+class _StepLineState:
+    """Mutable row state for the goal → steps aggregate."""
+
+    __slots__ = (
+        "step_id",
+        "description",
+        "phase",
+        "success",
+        "duration_ms",
+        "tool_call_count",
+        "summary",
+    )
+
+    def __init__(
+        self,
+        step_id: str,
+        description: str,
+        *,
+        phase: str = "running",
+        success: bool = True,
+        duration_ms: int = 0,
+        tool_call_count: int = 0,
+        summary: str = "",
+    ) -> None:
+        self.step_id = step_id
+        self.description = description
+        self.phase = phase
+        self.success = success
+        self.duration_ms = duration_ms
+        self.tool_call_count = tool_call_count
+        self.summary = summary
+
+
+class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
+    """Two-level Goal → steps tree; one aggregate block updates in place."""
+
+    can_select = True
+
+    DEFAULT_CSS = """
+    CognitionGoalTreeMessage {
+        height: auto;
+        padding: 0 1 0 0;
+        margin: 0 0 1 0;
+        background: transparent;
+        border-left: wide $cognition;
+    }
+
+    CognitionGoalTreeMessage .cognition-goal-tree-header {
+        height: auto;
+        margin: 0;
+        color: $cognition;
+        text-style: bold;
+    }
+
+    CognitionGoalTreeMessage .cognition-goal-tree-steps {
+        height: auto;
+        margin: 0;
+        color: $text-muted;
+    }
+
+    CognitionGoalTreeMessage .cognition-goal-tree-footer {
+        height: auto;
+        margin: 0;
+        color: $text-muted;
+    }
+
+    CognitionGoalTreeMessage:hover {
+        border-left: wide $cognition-hover;
+    }
+    """
+
+    def __init__(
+        self,
+        *,
+        goal: str,
+        max_iterations: int = 0,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize an empty goal tree (steps render as events arrive).
+
+        Args:
+            goal: Primary goal text (clipped for header).
+            max_iterations: Shown in header when greater than 1.
+            **kwargs: Passed to ``Vertical``.
+        """
+        super().__init__(**kwargs)
+        self._goal_text = goal.strip()
+        self._max_iterations = int(max_iterations)
+        self._step_order: list[str] = []
+        self._steps: dict[str, _StepLineState] = {}
+        self._footer_plain: str = ""
+        self._footer_visible: bool = False
+        self._deferred_snapshot: dict[str, Any] | None = None
+        self._steps_static: Static | None = None
+
+    @staticmethod
+    def _clip(text: str, max_len: int) -> str:
+        t = (text or "").strip().replace("\n", " ")
+        if len(t) <= max_len:
+            return t
+        return t[: max_len - 1].rstrip() + "…"
+
+    def _goal_header_content(self) -> Content:
+        prefix = get_glyphs().tool_prefix
+        g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
+        suffix = ""
+        if self._max_iterations > 1:
+            suffix = f" · ≤{self._max_iterations} iter"
+        line = f"{prefix} Goal · {g}{suffix}"
+        return Content.styled(line, "bold")
+
+    def _indent_prefix(self) -> str:
+        g = get_glyphs()
+        return f"  {g.box_vertical} "
+
+    def _format_step_line(self, st: _StepLineState) -> str:
+        g = get_glyphs()
+        body = self._clip(st.description, _MAX_GOAL_STEP_DESC)
+        if st.phase == "running":
+            return f"{self._indent_prefix()}{g.circle_empty} {body}"
+        icon = g.checkmark if st.success else g.error
+        dur_s = max(0.001, st.duration_ms / 1000.0)
+        dur = format_duration(dur_s)
+        line = f"{self._indent_prefix()}{icon} {body} · {dur}"
+        if st.tool_call_count > 0:
+            line += f" · {st.tool_call_count} tools"
+        tail = (st.summary or "").strip()
+        if tail and tail not in ("Done", "Failed"):
+            line += f" — {self._clip(tail, 80)}"
+        return line
+
+    def _refresh_steps_display(self) -> None:
+        if self._steps_static is None:
+            return
+        lines = [
+            self._format_step_line(self._steps[sid])
+            for sid in self._step_order
+            if sid in self._steps
+        ]
+        text = "\n".join(lines)
+        self._steps_static.update(Content.styled(text, "dim") if text else Content(""))
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            self._goal_header_content(),
+            id="cognition-goal-tree-header",
+            classes="cognition-goal-tree-header",
+        )
+        yield Static("", id="cognition-goal-tree-steps", classes="cognition-goal-tree-steps")
+        yield Static("", id="cognition-goal-tree-footer", classes="cognition-goal-tree-footer")
+
+    def on_mount(self) -> None:
+        """Wire step aggregate; restore snapshot when rehydrating from the store."""
+        self._steps_static = self.query_one("#cognition-goal-tree-steps", Static)
+        if is_ascii_mode():
+            colors = theme.get_theme_colors(self)
+            self.styles.border = ("ascii", colors.primary)
+        if self._deferred_snapshot is not None:
+            self._apply_snapshot(self._deferred_snapshot)
+            self._deferred_snapshot = None
+        else:
+            try:
+                self.query_one("#cognition-goal-tree-footer", Static).display = False
+            except Exception:
+                logger.debug("goal tree footer hide failed", exc_info=True)
+        self._refresh_steps_display()
+
+    def snapshot_dict(self) -> dict[str, Any]:
+        """Serialize tree state for the message store."""
+        steps_out: list[dict[str, Any]] = []
+        for sid in self._step_order:
+            st = self._steps.get(sid)
+            if st is None:
+                continue
+            steps_out.append(
+                {
+                    "id": st.step_id,
+                    "description": st.description,
+                    "phase": st.phase,
+                    "success": st.success,
+                    "duration_ms": st.duration_ms,
+                    "tool_call_count": st.tool_call_count,
+                    "summary": st.summary,
+                }
+            )
+        return {
+            "goal": self._goal_text,
+            "max_iterations": self._max_iterations,
+            "steps": steps_out,
+            "footer_visible": self._footer_visible,
+            "footer_text": self._footer_plain,
+        }
+
+    def _apply_snapshot(self, snap: dict[str, Any]) -> None:
+        self._goal_text = str(snap.get("goal", self._goal_text))
+        self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
+        self._footer_plain = str(snap.get("footer_text", ""))
+        self._footer_visible = bool(snap.get("footer_visible", False))
+        self._step_order = []
+        self._steps.clear()
+        for row in snap.get("steps", []) or []:
+            sid = str(row.get("id", "")).strip()
+            if not sid:
+                continue
+            st = _StepLineState(
+                sid,
+                str(row.get("description", "")),
+                phase=str(row.get("phase", "running")),
+                success=bool(row.get("success", True)),
+                duration_ms=int(row.get("duration_ms", 0)),
+                tool_call_count=int(row.get("tool_call_count", 0)),
+                summary=str(row.get("summary", "")),
+            )
+            self._step_order.append(sid)
+            self._steps[sid] = st
+        try:
+            hdr = self.query_one("#cognition-goal-tree-header", Static)
+            hdr.update(self._goal_header_content())
+        except Exception:
+            logger.debug("goal tree header restore failed", exc_info=True)
+        try:
+            ft = self.query_one("#cognition-goal-tree-footer", Static)
+            if self._footer_visible and self._footer_plain:
+                ft.update(Content.styled(self._footer_plain, "dim"))
+                ft.display = True
+            else:
+                ft.display = False
+        except Exception:
+            logger.debug("goal tree footer apply failed", exc_info=True)
+
+    def add_step_running(self, step_id: str, description: str) -> None:
+        """Register a step in running state and refresh the aggregate."""
+        sid = step_id.strip()
+        if not sid:
+            return
+        desc = (description or "").strip() or "(step)"
+        if sid not in self._steps:
+            self._step_order.append(sid)
+        self._steps[sid] = _StepLineState(sid, desc, phase="running")
+        self._refresh_steps_display()
+
+    def complete_step(
+        self,
+        step_id: str,
+        success: bool,
+        duration_ms: int,
+        tool_call_count: int,
+        summary: str,
+    ) -> None:
+        """Update a step row to its final state."""
+        sid = step_id.strip()
+        if not sid:
+            return
+        st = self._steps.get(sid)
+        if st is None:
+            self._step_order.append(sid)
+            st = _StepLineState(sid, "(step)", phase="running")
+            self._steps[sid] = st
+        st.phase = "done" if success else "error"
+        st.success = success
+        st.duration_ms = duration_ms
+        st.tool_call_count = tool_call_count
+        st.summary = summary or ""
+        self._refresh_steps_display()
+
+    def set_loop_finished(
+        self,
+        *,
+        status: str,
+        goal_progress: float,
+        completion_summary: str,
+        total_steps: int,
+    ) -> None:
+        """Show a compact footer when the agentic loop completes."""
+        pct = int(float(goal_progress) * 100)
+        parts: list[str] = [str(status or "done"), f"{pct}%"]
+        if total_steps:
+            parts.append(f"{total_steps} step(s)")
+        cs = (completion_summary or "").strip()
+        if cs:
+            parts.append(self._clip(cs, 100))
+        self._footer_plain = " · ".join(parts)
+        self._footer_visible = True
+        try:
+            footer = self.query_one("#cognition-goal-tree-footer", Static)
+            footer.update(Content.styled(self._footer_plain, "dim"))
+            footer.display = True
+        except Exception:
+            pass
+
+    def set_interrupted(self, message: str) -> None:
+        """Mark running steps as failed and show a footer (stream cancel/error)."""
+        msg = (message or "Interrupted").strip()
+        for sid in list(self._step_order):
+            st = self._steps.get(sid)
+            if st is not None and st.phase == "running":
+                st.phase = "error"
+                st.success = False
+                st.duration_ms = 0
+                st.summary = msg
+        self._refresh_steps_display()
+        self._footer_plain = self._clip(msg, 120)
+        self._footer_visible = True
+        try:
+            footer = self.query_one("#cognition-goal-tree-footer", Static)
+            footer.update(Content.styled(self._footer_plain, "dim"))
+            footer.display = True
+        except Exception:
+            pass
+
+
 class ErrorMessage(_TimestampClickMixin, Static):
     """Widget displaying an error message."""
 
