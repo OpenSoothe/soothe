@@ -47,38 +47,51 @@ Layer 3 operates at the highest abstraction level, focusing on goal lifecycle ma
 
 ### Integration with Layer 2
 
-**PERFORM → Layer 2 (Full Delegation)**:
+**AgentLoop Goal Pull Architecture** (Inverted Control Flow):
 
-Layer 3's PERFORM stage invokes Layer 2's **complete Plan → Execute loop** for single-goal execution:
+Layer 2 AgentLoop actively queries Layer 3 GoalEngine for goal assignment (pull-based). GoalEngine provides goal state service, never invokes AgentLoop.
 
 ```python
-# Layer 3 PERFORM stage
-async def perform_goal(goal: Goal) -> PlanResult:
-    # Delegate to Layer 2's full loop
-    plan_result = await agentic_loop.astream(
-        goal_description=goal.description,
-        thread_id=f"{parent_tid}__goal_{goal.id}",
-        max_iterations=8  # Layer 2 iteration budget
+# AgentLoop initialization (run_with_progress)
+async def run_with_progress(...):
+    # PULL: AgentLoop queries GoalEngine for current goal
+    goal_engine = config.resolve_goal_engine()
+    current_goal = goal_engine.get_next_ready_goal()  # Pull-based assignment
+    
+    if not current_goal:
+        logger.info("No goals ready for execution")
+        return None
+    
+    # AgentLoop owns execution loop
+    thread_id = f"{base_tid}__goal_{current_goal.id}"
+    state = LoopState(
+        current_goal_id=current_goal.id,
+        goal_text=current_goal.description,
+        thread_id=thread_id,
     )
-    return plan_result  # Layer 2 returns final result
+    
+    # Execute Layer 2 Plan → Execute loop (AgentLoop drives)
+    plan_result = await self.run_iteration(state)
+    
+    # REPORT: AgentLoop reports completion to GoalEngine
+    if plan_result.status == "done":
+        goal_engine.complete_goal(
+            goal_id=current_goal.id,
+            plan_result=plan_result,
+        )
+    
+    return plan_result
 ```
 
-**REFLECT Stage Integration**:
+**Goal Pull Integration Contract**:
 
-Layer 3's REFLECT stage receives Layer 2's PlanResult and uses evidence_summary for goal DAG evaluation:
+| Trigger | AgentLoop Action | GoalEngine Response |
+|---------|------------------|---------------------|
+| Goal assignment | `get_next_ready_goal()` | Return highest-priority DAG-satisfied goal |
+| Goal completion | `complete_goal(goal_id, plan_result)` | Update goal status, store GoalReport |
+| Goal failure | `fail_goal(goal_id, evidence)` | Apply BackoffReasoner, mutate DAG |
 
-```python
-# Layer 3 REFLECT stage
-reflection = await planner.reflect(
-    plan=goal_plan,
-    step_results=goal_step_results,
-    goal_context=goal_context,
-    layer2_plan=plan_result  # Layer 2 evaluation
-)
-# reflection includes:
-# - should_revise: whether goal plan needs revision
-# - goal_directives: DAG restructuring actions
-```
+**Architectural Principle**: AgentLoop drives execution timing, GoalEngine provides goal state service. GoalEngine never invokes AgentLoop (inverted control flow).
 
 ## Loop Model
 
@@ -163,26 +176,31 @@ class Goal(BaseModel):
 ```
 
 **GoalEngine Interface**:
-```python
-class GoalEngine:
-    def create_goal(description, priority, parent_id) -> Goal
-    def next_goal() -> Goal | None  # Backward-compatible single-goal
-    def ready_goals(limit) -> list[Goal]  # DAG-satisfied, activated
-    def complete_goal(goal_id) -> None
-    def fail_goal(goal_id, error, allow_retry) -> None
-    def list_goals(status) -> list[Goal]
-    def get_goal(goal_id) -> Goal | None
-    def snapshot() -> dict  # Checkpoint persistence
-    def restore_from_snapshot(snapshot) -> None
-    def add_dependencies(goal_id, depends_on) -> None  # Safe with cycle check
-    def validate_dependency(goal_id, depends_on) -> bool
-```
+
+**Core Operations**:
+- `create_goal(description, priority, parent_id)` → Goal
+- `next_goal()` → Goal | None (backward-compatible single-goal)
+- `ready_goals(limit)` → list[Goal] (DAG-satisfied, activated goals)
+- `complete_goal(goal_id, plan_result)` → None (mark completed with Layer 2 evidence)
+- `fail_goal(goal_id, evidence, allow_retry)` → BackoffDecision | None (apply backoff reasoning)
+- `list_goals(status)` → list[Goal]
+- `get_goal(goal_id)` → Goal | None (query goal metadata)
+- `snapshot()` → dict (checkpoint persistence)
+- `restore_from_snapshot(snapshot)` → None
+
+**Dependency Management**:
+- `add_dependencies(goal_id, depends_on)` → None (cycle-safe)
+- `validate_dependency(goal_id, depends_on)` → bool
+
+**Service Provider Role**: GoalEngine never invokes AgentLoop (inverted control flow). AgentLoop queries GoalEngine via pull-based API.
 
 **DAG Scheduling**:
 - `ready_goals(limit)` returns goals whose `depends_on` are all completed
-- Goals sorted by `(-priority, created_at)`
+- Goals sorted by `(-priority, created_at)` (higher priority first)
 - Returned goals activated (status: "pending" → "active")
 - Parallel execution when `len(ready_goals) > 1`
+
+**Integration with Layer 2**: GoalEngine provides goal state service. AgentLoop queries via `get_next_ready_goal()`, reports via `complete_goal()` / `fail_goal()` (§48-82).
 
 ### 2. GoalBackoffReasoner (`cognition/goal_engine/backoff_reasoner.py`)
 
@@ -275,38 +293,104 @@ class GoalBackoffReasoner:
         """
 ```
 
-**Integration with GoalEngine**:
+**GoalEngine API for Layer 2 Integration**:
 
 ```python
 class GoalEngine:
-    def __init__(self, config: SootheConfig) -> None:
-        self._goals: dict[str, Goal] = {}
-        self._backoff_reasoner = GoalBackoffReasoner(config)
-
+    """Layer 3 Goal Lifecycle Manager (Service Provider).
+    
+    Provides goal state service for AgentLoop queries.
+    Never invokes AgentLoop (inverted control flow).
+    """
+    
+    def get_next_ready_goal(self) -> Goal | None:
+        """Get next goal ready for execution (DAG-satisfied, highest priority).
+        
+        Called by: AgentLoop before starting Layer 2 loop.
+        
+        Returns:
+            Goal with dependencies satisfied, or None if no goals ready.
+        """
+        ready_goals = self.ready_goals(limit=1)
+        if not ready_goals:
+            return None
+        
+        goal = ready_goals[0]
+        goal.status = "active"  # Activate on assignment
+        return goal
+    
+    def complete_goal(
+        self,
+        goal_id: str,
+        plan_result: PlanResult,  # From Layer 2
+    ) -> None:
+        """Mark goal completed with Layer 2 execution evidence.
+        
+        Called by: AgentLoop after successful Plan → Execute loop.
+        
+        Args:
+            goal_id: Completed goal identifier.
+            plan_result: Layer 2 final result with evidence_summary.
+        """
+        goal = self._goals[goal_id]
+        goal.status = "completed"
+        goal.updated_at = datetime.now()
+        
+        goal.report = GoalReport(
+            goal_id=goal_id,
+            summary=plan_result.evidence_summary,
+            iteration_count=...,  # Extract from execution context
+            step_count=...,       # Extract from execution history
+            final_plan_result=plan_result,
+        )
+        
+        # Emit event for observability (optional)
+        emit_event(GoalCompletedEvent(...))
+    
     async def fail_goal(
         self,
         goal_id: str,
-        error: str,
+        evidence: EvidenceBundle,  # Layer 2 failure evidence (RFC-200 §14-22)
         allow_retry: bool = True,
-    ) -> None:
-        """Mark goal failed with backoff reasoning."""
+    ) -> BackoffDecision | None:
+        """Mark goal failed with evidence, apply backoff reasoning.
+        
+        Called by: AgentLoop when Layer 2 execution fails.
+        
+        Args:
+            goal_id: Failed goal identifier.
+            evidence: Layer 2 execution evidence (RFC-200 EvidenceBundle contract).
+            allow_retry: Whether retry is allowed.
+        
+        Returns:
+            BackoffDecision if backoff reasoning applied, None if no retry.
+        
+        Backoff reasoning (GoalEngine internal):
+        - Call GoalBackoffReasoner with goal context + evidence
+        - Apply BackoffDecision (DAG restructuring)
+        - Reset backoff target goal to "pending"
+        
+        Encapsulation: AgentLoop never calls BackoffReasoner directly.
+        """
         goal = self._goals[goal_id]
         goal.status = "failed"
-        goal.error = error
-
+        goal.error = evidence.narrative
+        goal.retry_count += 1
+        
         if allow_retry and goal.retry_count < goal.max_retries:
-            # Call backoff reasoner instead of simple retry
+            # GoalEngine owns backoff reasoning (encapsulated)
             goal_context = self._build_goal_context(goal_id)
             decision = await self._backoff_reasoner.reason_backoff(
                 goal_id=goal_id,
                 goal_context=goal_context,
-                failed_evidence=error,
+                failed_evidence=evidence,
             )
-
-            # Apply backoff decision
+            
+            # Apply backoff decision (GoalEngine internal)
             self._apply_backoff_decision(decision)
-
-        goal.retry_count += 1
+            return decision
+        
+        return None
 ```
 
 **Backoff Reasoning Logic**:
@@ -325,7 +409,178 @@ autonomous:
     max_backoff_depth: 3  # Limit backoff chain depth
 ```
 
-### 3. Dynamic Goal Management
+### 2.1 GoalBackoffReasoner Integration Pattern
+
+**Purpose**: Replace hardcoded exponential backoff with LLM-driven reasoning that analyzes full goal DAG context and decides optimal backoff strategy.
+
+**Ownership Boundary**:
+- **Layer 2 (RFC-201)**: Produces execution evidence and failure context via `EvidenceBundle`
+- **Layer 3 (RFC-200)**: Defines and executes GoalBackoffReasoner policy and BackoffDecision
+- **Shared contract**: EvidenceBundle (RFC-200 §14-22) with structured + narrative fields
+- **Encapsulation**: AgentLoop never calls BackoffReasoner directly; GoalEngine owns backoff reasoning
+
+**Integration Pattern** (Layer 2 → Layer 3 handoff):
+
+```python
+# AgentLoop.Executor failure detection
+async def execute(self, decision: AgentDecision, state: LoopState):
+    try:
+        results = await self.core_agent.astream(...)
+        
+        if execution_failed(results):
+            # BUILD: AgentLoop constructs EvidenceBundle
+            evidence = EvidenceBundleBuilder().build_from_plan_result(
+                plan_result=state.last_plan_result,
+                wave_metrics=state.last_wave_metrics,  # RFC-201 §236-245
+                iteration=state.iteration,
+            )
+            
+            # HANDOFF: AgentLoop → GoalEngine with evidence
+            goal_engine = self.config.resolve_goal_engine()
+            backoff_decision = await goal_engine.fail_goal(
+                goal_id=state.current_goal_id,
+                evidence=evidence,
+                allow_retry=True,
+            )
+            
+            # REACT: Log decision (GoalEngine already applied internally)
+            if backoff_decision:
+                logger.info(
+                    "Goal %s backoff: %s → %s",
+                    state.current_goal_id,
+                    backoff_decision.reason,
+                    backoff_decision.backoff_to_goal_id,
+                )
+            
+            return FailureResult(backoff_decision=backoff_decision)
+```
+
+**EvidenceBundle Contract** (RFC-200 §14-22 canonical structure):
+
+```python
+class EvidenceBundle(BaseModel):
+    """Canonical evidence payload for Layer 2 → Layer 3 handoff."""
+    
+    structured: dict[str, Any]
+    """Machine-readable execution metrics from RFC-201 LoopState §236-245.
+    
+    Examples:
+    - iteration: int
+    - wave_tool_calls: int (last_wave_tool_call_count)
+    - wave_errors: int (last_wave_error_count)
+    - goal_progress: float
+    - confidence: float
+    """
+    
+    narrative: str
+    """Natural language synthesis for LLM reasoning.
+    
+    Synthesized from:
+    - PlanResult.reasoning
+    - PlanResult.evidence_summary
+    - PlanResult.user_summary
+    - Wave metrics pattern analysis
+    """
+    
+    source: Literal["layer2_execute", "layer2_plan", "layer3_reflect"]
+    """Evidence producer stage."""
+    
+    timestamp: datetime
+    """Evidence emission time."""
+```
+
+**GoalEngine Internal Backoff Application**:
+
+```python
+# GoalEngine internal (encapsulated, not called by AgentLoop)
+def _apply_backoff_decision(self, decision: BackoffDecision) -> None:
+    """Apply backoff decision to Goal DAG (GoalEngine internal).
+    
+    Args:
+        decision: LLM reasoning result with:
+        - backoff_to_goal_id: WHERE to backoff in DAG
+        - reason: Natural language reasoning
+        - new_directives: GoalDirective[] for restructuring
+    """
+    backoff_goal = self._goals[decision.backoff_to_goal_id]
+    backoff_goal.status = "pending"  # Reset for re-execution
+    backoff_goal.retry_count = 0
+    
+    # Apply new directives
+    for directive in decision.new_directives:
+        self.apply_directive(directive)
+    
+    logger.info(
+        "Goal backoff applied: goal %s → backoff to %s",
+        decision.backoff_to_goal_id,
+        decision.reason,
+    )
+    
+    # Persist DAG mutation
+    self._persist_goal_state()
+```
+
+**LLM Prompt Structure**:
+- Input: Failed goal ID, full goal DAG snapshot (all goals + dependencies + statuses), EvidenceBundle
+- Output: Structured BackoffDecision JSON
+- Reasoning dimensions:
+  1. Retry appropriateness (transient vs permanent failure)
+  2. Backoff target selection (which goal to resume from)
+  3. New directive generation (guidance for retry)
+
+**Configuration Schema**:
+```yaml
+autonomous:
+  goal_backoff:
+    enabled: true
+    llm_role: reason  # Use reasoning-optimized model
+    max_backoff_depth: 3  # Limit backoff chain depth
+```
+
+**Design Principle**: GoalEngine backoff is reasoning process (LLM) not rule process - fundamentally different from traditional DAG rollback algorithms. LLM considers entire execution history to decide optimal recovery strategy.
+
+### 3. GoalContext Construction for Plan Phase
+
+**Dependency-Driven Retrieval Architecture**:
+
+AgentLoop Plan phase requires dependency-aware context synthesized from GoalEngine goal metadata and ContextProtocol retrieval.
+
+**Synthesis Strategy**:
+1. **GoalEngine.get_goal()** → current goal metadata (priority, dependencies)
+2. **Dependency retrieval**: For each dependency goal, retrieve execution history from ContextProtocol
+3. **Current goal retrieval**: Goal-centric context for current problem
+4. **Previous goal summaries**: Execution patterns from GoalContextManager
+
+**Entry Limits** (fixed, no token budget):
+- Dependency context: 5 entries per dependency goal
+- Current goal context: 10 entries
+- Previous goals: 5 summaries
+
+**PlanContext Data Model**:
+
+```python
+class PlanContext(BaseModel):
+    """Dependency-aware context for AgentLoop Plan phase."""
+    
+    entries: list[ContextEntry]
+    """Combined entries: dependency + current + previous goals.
+    
+    Entry metadata:
+    - goal_id: Source goal identifier
+    - goal_text: Goal description
+    - goal_priority: GoalEngine priority (0-100)
+    - dependency_relation: "prerequisite" | "current" | "previous_goal"
+    """
+    
+    metadata: dict[str, Any]
+    """Synthesis metadata: goal_id, priority, dependencies, entry counts."""
+```
+
+**Integration Point**: AgentLoop calls `GoalContextConstructor.construct_plan_context(goal_id)` before Plan phase (PULL #1 integration). GoalEngine dependencies drive ContextProtocol retrieval.
+
+**Architectural Principle**: Prerequisite goal execution history provides critical constraints and learned patterns for planning. Goal dependencies define relevant context scope.
+
+### 4. Dynamic Goal Management
 
 Layer 3's reflection can dynamically restructure the goal DAG through structured directives (merged from RFC-0011).
 
@@ -698,7 +953,9 @@ class GoalFileWatcher:
 - ✅ Dynamic goal management (merged into this RFC)
 - ✅ Reflection with goal directives
 - ✅ Safety mechanisms and validation
+- ✅ GoalBackoffReasoner design documented (RFC-200 §2.1 - brainstorming refinement)
 - ⚠️ Missing: Explicit Layer 2 delegation (PERFORM → Layer 2 loop integration)
+- ⚠️ Missing: GoalBackoffReasoner implementation (code not yet implemented)
 
 ## Related Documents
 

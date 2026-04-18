@@ -39,6 +39,17 @@ class ContextProtocol(Protocol):
 
 **Consciousness Concept**: ContextProtocol implements the architectural "consciousness" pattern identified in autonomous agent design: an unbounded knowledge ledger maintaining complete execution history (success/failure experience) with bounded projections for LLM reasoning. This separation ensures the orchestrator has full knowledge access while LLMs receive token-efficient context windows.
 
+**Retrieval Authority Clarification** (brainstorming-derived architectural separation):
+
+- **ContextProtocol ownership**: Retrieval module implementation (RFC-400 `ContextRetrievalModule`), algorithm versions, stable API boundary
+- **AgentLoop operational authority**: WHEN to retrieve, FOR WHICH goal, HOW to combine with GoalContextManager output (RFC-201 §61-78)
+- **Architectural principle**: Retrieval algorithms evolve behind stable API in ContextProtocol, preserving integration contracts with AgentLoop
+
+**Implementation Status**:
+- ✅ ContextProtocol interface defined (RFC-400)
+- ⚠️ KeywordContext implementation (not yet implemented - critical gap)
+- ⚠️ ContextRetrievalModule (not yet implemented)
+
 1. **Accumulate, never discard** -- ledger is append-only and unbounded
 2. **Relevance-based projection** -- entries ranked by relevance to query, not just recency
 3. **Purpose-scoped projections** -- different views for orchestrator reasoning vs subagent briefing
