@@ -1610,6 +1610,190 @@ class DiffMessage(_TimestampClickMixin, Static):
             self.styles.border = ("ascii", colors.primary)
 
 
+_MAX_STEP_DESC_DISPLAY = 120
+
+
+class CognitionStepMessage(_TimestampClickMixin, Vertical):
+    """Single card for an agent-loop act step: running, then completion (like ToolCallMessage)."""
+
+    can_select = True
+
+    DEFAULT_CSS = """
+    CognitionStepMessage {
+        height: auto;
+        padding: 0 1;
+        margin: 0 0 1 0;
+        background: transparent;
+        border-left: wide $cognition;
+    }
+
+    CognitionStepMessage .step-header {
+        height: auto;
+        color: $cognition;
+        text-style: bold;
+    }
+
+    CognitionStepMessage .step-status {
+        margin-left: 3;
+    }
+
+    CognitionStepMessage .step-status.pending {
+        color: $warning;
+    }
+
+    CognitionStepMessage .step-detail {
+        margin-left: 0;
+        margin-top: 0;
+        color: $text-muted;
+        height: auto;
+    }
+
+    CognitionStepMessage:hover {
+        border-left: wide $cognition-hover;
+    }
+    """
+
+    def __init__(
+        self,
+        step_id: str,
+        description: str,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._step_id = step_id
+        raw = description.strip()
+        if len(raw) > _MAX_STEP_DESC_DISPLAY:
+            raw = raw[: _MAX_STEP_DESC_DISPLAY - 3].rstrip() + "..."
+        self._description = raw
+        self._status = "pending"  # pending | running | success | error
+        self._spinner_position = 0
+        self._start_time: float | None = None
+        self._animation_timer: Timer | None = None
+        self._status_widget: Static | None = None
+        self._detail_widget: Static | None = None
+        self._deferred_complete: tuple[bool, int, int, str] | None = None
+        self._deferred_running: bool = False
+        self._last_success: bool | None = None
+        self._last_duration_ms: int = 0
+        self._last_tool_call_count: int = 0
+        self._last_summary: str = ""
+        self._interrupt_message: str | None = None
+        self._deferred_interrupted: str | None = None
+
+    def compose(self) -> ComposeResult:
+        prefix = get_glyphs().tool_prefix
+        header = f"{prefix} Step · {self._description}"
+        yield Static(header, markup=False, classes="step-header")
+        yield Static("", classes="step-status", id="step-cognition-status")
+        yield Static("", classes="step-detail", id="step-cognition-detail")
+
+    def on_mount(self) -> None:
+        self._status_widget = self.query_one("#step-cognition-status", Static)
+        self._detail_widget = self.query_one("#step-cognition-detail", Static)
+        self._status_widget.display = False
+        self._detail_widget.display = False
+        if self._deferred_interrupted is not None:
+            msg = self._deferred_interrupted
+            self._deferred_interrupted = None
+            self.set_interrupted(msg)
+        elif self._deferred_complete is not None:
+            success, duration_ms, tool_call_count, summary = self._deferred_complete
+            self._deferred_complete = None
+            self.set_complete(success, duration_ms, tool_call_count, summary)
+        elif self._deferred_running:
+            self._deferred_running = False
+            self.set_running()
+
+    def set_running(self) -> None:
+        """Show animated running state (call after mount)."""
+        if self._status == "running":
+            return
+        self._status = "running"
+        self._start_time = time()
+        if self._status_widget:
+            self._status_widget.add_class("pending")
+            self._status_widget.display = True
+        self._update_running_animation()
+        self._animation_timer = self.set_interval(0.1, self._update_running_animation)
+
+    def _stop_animation(self) -> None:
+        if self._animation_timer is not None:
+            self._animation_timer.stop()
+            self._animation_timer = None
+
+    def _update_running_animation(self) -> None:
+        if self._status != "running" or self._status_widget is None:
+            return
+        frames = get_glyphs().spinner_frames
+        frame = frames[self._spinner_position]
+        self._spinner_position = (self._spinner_position + 1) % len(frames)
+        elapsed = ""
+        if self._start_time is not None:
+            elapsed_secs = int(time() - self._start_time)
+            elapsed = f" ({format_duration(elapsed_secs)})"
+        colors = theme.get_theme_colors(self)
+        self._status_widget.update(Content.styled(f"{frame} Running...{elapsed}", colors.warning))
+
+    def set_complete(
+        self,
+        success: bool,
+        duration_ms: int,
+        tool_call_count: int,
+        summary: str,
+    ) -> None:
+        """Finalize step with duration, tool count, and summary text."""
+        self._stop_animation()
+        self._status = "success" if success else "error"
+        self._last_success = success
+        self._last_duration_ms = duration_ms
+        self._last_tool_call_count = tool_call_count
+        self._last_summary = summary.strip()
+        if self._status_widget is None or self._detail_widget is None:
+            self._deferred_complete = (success, duration_ms, tool_call_count, summary)
+            return
+
+        colors = theme.get_theme_colors(self)
+
+        duration_s = duration_ms / 1000.0
+        dur_str = f"{duration_s:.1f}s"
+        tool_part = f" · {tool_call_count} tools" if tool_call_count > 0 else ""
+
+        if success:
+            if self._status_widget:
+                self._status_widget.remove_class("pending")
+                self._status_widget.display = False
+            detail = f"Done · {dur_str}{tool_part}"
+            if summary.strip() and summary.strip() not in ("Done",):
+                detail = f"{detail}\n{summary.strip()}"
+            self._detail_widget.update(Content.styled(detail, "dim"))
+            self._detail_widget.display = True
+            return
+
+        err_text = summary.strip() or "Step failed"
+        if self._status_widget:
+            self._status_widget.remove_class("pending")
+            self._status_widget.add_class("error")
+            icon = get_glyphs().error
+            self._status_widget.update(Content.styled(f"{icon} Failed · {dur_str}", colors.error))
+            self._status_widget.display = True
+        self._detail_widget.update(Content(err_text))
+        self._detail_widget.display = True
+
+    def set_interrupted(self, message: str) -> None:
+        """Mark step as aborted (stream error / cancel) while still running."""
+        self._stop_animation()
+        self._status = "error"
+        self._interrupt_message = message
+        colors = theme.get_theme_colors(self)
+        if self._status_widget:
+            self._status_widget.remove_class("pending")
+            self._status_widget.add_class("error")
+            self._status_widget.update(Content.styled(message, colors.error))
+            self._status_widget.display = True
+        if self._detail_widget:
+            self._detail_widget.display = False
+
+
 class ErrorMessage(_TimestampClickMixin, Static):
     """Widget displaying an error message."""
 

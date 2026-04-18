@@ -54,6 +54,7 @@ from soothe_cli.tui.widgets.message_store import (
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionStepMessage,
     ErrorMessage,
     QueuedUserMessage,
     SkillMessage,
@@ -748,7 +749,8 @@ class SootheApp(App):
         Most styling uses Textual's built-in variables (`$primary`,
         `$text-muted`, `$error-muted`, etc.).  This override injects the
         app-specific variables (`$mode-bash`, `$mode-command`, `$skill`,
-        `$skill-hover`, `$tool`, `$tool-hover`) that have no Textual equivalent.
+        `$skill-hover`, `$tool`, `$tool-hover`, `$cognition`, `$cognition-hover`)
+        that have no Textual equivalent.
 
         Returns:
             Dict of CSS variable names to hex color values.
@@ -3180,6 +3182,7 @@ class SootheApp(App):
             # when streaming aborts before tool results arrive.
             if self._ui_adapter:
                 self._ui_adapter.finalize_pending_tools_with_error(f"Agent error: {e}")
+                self._ui_adapter.finalize_pending_steps_with_error(f"Agent error: {e}")
             try:
                 await self._mount_message(ErrorMessage(f"Agent error: {e}"))
             except Exception:
@@ -3654,7 +3657,8 @@ class SootheApp(App):
             await self._mount_message(AppMessage(f"Could not load history: {e}"))
 
     async def _mount_message(
-        self, widget: Static | AssistantMessage | ToolCallMessage | SkillMessage
+        self,
+        widget: Static | AssistantMessage | ToolCallMessage | SkillMessage | CognitionStepMessage,
     ) -> None:
         """Mount a message widget to the messages area.
 

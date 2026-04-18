@@ -275,6 +275,7 @@ class AgenticMixin:
                 # Level 2: Step description (clip — Reason can embed a full brief; avoids TUI duplicate wall)
                 yield _custom(
                     AgenticStepStartedEvent(
+                        step_id=str(event_data.get("step_id", "")),
                         description=_clip_agentic_step_description(event_data["description"]),
                     ).to_dict()
                 )
@@ -288,6 +289,7 @@ class AgenticMixin:
 
                 yield _custom(
                     AgenticStepCompletedEvent(
+                        step_id=str(event_data.get("step_id", "")),
                         success=success,
                         summary=summary[:100],
                         duration_ms=event_data["duration_ms"],
