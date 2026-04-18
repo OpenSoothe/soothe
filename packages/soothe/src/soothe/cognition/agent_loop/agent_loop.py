@@ -109,7 +109,7 @@ class AgentLoop:
         workspace: str | None = None,
         git_status: dict[str, Any] | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
-        plan_conversation_excerpts: list[str] | None = None,  # noqa: ARG002 - Reserved for future use
+        plan_conversation_excerpts: list[str] | None = None,
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -158,15 +158,17 @@ class AgentLoop:
             prior_outputs = state_manager.derive_plan_conversation(limit=10)
             # RFC-609: Add goal-level context to plan excerpts
             plan_goal_excerpts = goal_context_manager.get_plan_context()
-            plan_excerpts = plan_goal_excerpts + list(prior_outputs)
+            runner_prior = list(plan_conversation_excerpts or [])
+            plan_excerpts = plan_goal_excerpts + runner_prior + list(prior_outputs)
         else:
             # Initialize new checkpoint (RFC-608: pass thread_id, not goal)
             checkpoint = state_manager.initialize(thread_id, max_iterations)
             iteration = 0  # New goal starts at iteration 0
             # RFC-609: Inject previous goal context for Plan phase
             plan_goal_excerpts = goal_context_manager.get_plan_context()
-            # Combine goal-level context + step-derived context (empty for new goal)
-            plan_excerpts = plan_goal_excerpts
+            # Prior Human/Assistant turns from LangGraph checkpointer (IG-128, IG-198)
+            runner_prior = list(plan_conversation_excerpts or [])
+            plan_excerpts = plan_goal_excerpts + runner_prior
             # Create new goal_record for this goal execution
             goal_record = state_manager.start_new_goal(goal, max_iterations)
             checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
@@ -228,14 +230,6 @@ class AgentLoop:
                 },
             )
 
-            import sys as _sys
-
-            print(
-                f"[DEBUG-LOOP] plan_result.status={plan_result.status}, is_done()={plan_result.is_done()}",
-                file=_sys.stderr,
-                flush=True,
-            )
-
             if plan_result.is_done():
                 state.previous_plan = plan_result
                 state.iteration += 1
@@ -243,13 +237,6 @@ class AgentLoop:
 
                 # RFC-211: Agentic loop signals core agent to generate final report
                 final_output = plan_result.full_output or plan_result.evidence_summary
-                import sys as _sys
-
-                print(
-                    f"[DEBUG-LOOP] is_done=True, full_output={len(plan_result.full_output or '')} chars, evidence={len(plan_result.evidence_summary or '')} chars",
-                    file=_sys.stderr,
-                    flush=True,
-                )
                 logger.info(
                     "Starting final report generation (full_output=%d chars, evidence=%d chars)",
                     len(plan_result.full_output or ""),
