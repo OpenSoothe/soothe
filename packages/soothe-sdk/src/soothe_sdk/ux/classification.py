@@ -35,7 +35,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     Examples:
         >>> classify_event_to_tier("soothe.error.general.failed")
         <VerbosityTier.QUIET: 0>
-        >>> classify_event_to_tier("soothe.output.chitchat.responding")
+        >>> classify_event_to_tier("soothe.output.chitchat.responded")
         <VerbosityTier.QUIET: 0>
         >>> classify_event_to_tier("soothe.cognition.plan.creating")
         <VerbosityTier.NORMAL: 1>
