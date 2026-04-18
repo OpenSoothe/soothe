@@ -40,7 +40,6 @@ def run(
         autonomous=True,
         max_iterations=max_iterations,
         output_format=output_format,
-        verbosity=None,
     )
 
 

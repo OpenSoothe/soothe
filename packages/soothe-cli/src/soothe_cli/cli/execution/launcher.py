@@ -11,7 +11,6 @@ def run_tui(
     cfg: CLIConfig,
     *,
     thread_id: str | None = None,
-    config_path: str | None = None,
     initial_prompt: str | None = None,
 ) -> None:
     """Launch the Textual TUI (with daemon auto-start)."""

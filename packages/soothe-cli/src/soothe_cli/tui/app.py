@@ -29,6 +29,7 @@ from textual.style import Style as TStyle
 from textual.theme import Theme
 from textual.widgets import Static
 
+from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui._session_stats import (
@@ -3174,9 +3175,6 @@ class SootheApp(App):
                 ),
                 turn_stats=turn_stats,
                 skip_daemon_send_turn=skip_daemon_send_turn,
-                progress_verbosity=(
-                    self._daemon_config.logging.verbosity if self._daemon_config else None
-                ),
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
@@ -3346,13 +3344,20 @@ class SootheApp(App):
                 if tc_id and tc_id in pending_tool_indices:
                     idx = pending_tool_indices.pop(tc_id)
                     data = result[idx]
-                    status = getattr(msg, "status", "success")
-                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                    if status == "success":
-                        data.tool_status = ToolStatus.SUCCESS
+                    payload = extract_tool_result_card_payload(msg)
+                    if payload is not None:
+                        data.tool_status = (
+                            ToolStatus.ERROR if payload.is_error else ToolStatus.SUCCESS
+                        )
+                        data.tool_output = payload.output_display
                     else:
-                        data.tool_status = ToolStatus.ERROR
-                    data.tool_output = content
+                        status = getattr(msg, "status", "success")
+                        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                        if status == "success":
+                            data.tool_status = ToolStatus.SUCCESS
+                        else:
+                            data.tool_status = ToolStatus.ERROR
+                        data.tool_output = content
                 else:
                     logger.debug(
                         "ToolMessage with tool_call_id=%r could not be matched to a pending tool call",

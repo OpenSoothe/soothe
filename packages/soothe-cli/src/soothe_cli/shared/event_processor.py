@@ -35,6 +35,10 @@ from soothe_cli.shared.message_processing import (
 from soothe_cli.shared.presentation_engine import PresentationEngine
 from soothe_cli.shared.processor_state import ProcessorState
 from soothe_cli.shared.rendering import update_name_map_from_tool_calls
+from soothe_cli.shared.tool_card_payload import (
+    extract_tool_result_card_payload,
+    infer_tool_output_suggests_error,
+)
 from soothe_cli.shared.tui_trace_log import log_tui_trace
 
 if TYPE_CHECKING:
@@ -458,10 +462,9 @@ class EventProcessor:
                 is_main=pending.get("is_main", is_main),
             )
 
-        # Determine if error
-        is_error = any(
-            indicator in content.lower()
-            for indicator in ["error", "failed", "exception", "traceback"]
+        payload = extract_tool_result_card_payload(msg)
+        is_error = (
+            payload.is_error if payload is not None else infer_tool_output_suggests_error(content)
         )
 
         # Log tool result for audit trail
@@ -644,10 +647,9 @@ class EventProcessor:
                 is_main=pending.get("is_main", is_main),
             )
 
-        # Determine if error
-        is_error = any(
-            indicator in content.lower()
-            for indicator in ["error", "failed", "exception", "traceback"]
+        payload = extract_tool_result_card_payload(msg)
+        is_error = (
+            payload.is_error if payload is not None else infer_tool_output_suggests_error(content)
         )
 
         # Log tool result for audit trail

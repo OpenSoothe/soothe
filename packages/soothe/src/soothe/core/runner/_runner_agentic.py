@@ -138,6 +138,42 @@ def _agentic_final_stdout_text(
 
 _AGENTIC_STEP_DESC_UI_MAX = 220
 
+_STREAM_CHUNK_LEN = 3
+_MSG_PAIR_LEN = 2
+
+
+def _is_tool_stream_chunk(chunk: object) -> bool:
+    """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
+
+    The agentic loop previously dropped all ``stream_event`` tuples to avoid duplicating
+    assistant prose on stdout (IG-119). Tool rows must still reach the WebSocket so the
+    CLI can render ``on_tool_call`` / ``on_tool_result`` (RFC-0020).
+
+    Args:
+        chunk: Deepagents stream chunk ``(namespace, mode, data)``.
+
+    Returns:
+        True only for ``ToolMessage`` payloads (object or serialized dict).
+    """
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    _namespace, mode, data = chunk
+    if mode != "messages":
+        return False
+    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
+        return False
+    msg = data[0]
+    from langchain_core.messages import ToolMessage
+
+    if isinstance(msg, ToolMessage):
+        return True
+    if isinstance(msg, dict):
+        raw = msg.get("type")
+        if raw in ("tool", "ToolMessage"):
+            return True
+        return isinstance(raw, str) and raw.endswith("ToolMessage")
+    return False
+
 
 def _stringify_llm_message_content(content: object) -> str:
     """Flatten LangChain message content to a single string."""
@@ -298,10 +334,10 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # Suppress intermediate stream events during agentic execution.
-                # Only step_started, step_completed, reason, and final report
-                # are shown to the user; raw LLM/tool chunks are not propagated.
-                pass
+                # Forward tool message chunks only — avoids duplicating assistant AIMessage
+                # stream text (IG-119) while allowing CLI/TUI tool cards (RFC-0020).
+                if _is_tool_stream_chunk(event_data):
+                    yield event_data
 
             elif event_type == "plan":
                 yield _custom(
