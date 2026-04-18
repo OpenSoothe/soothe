@@ -354,6 +354,14 @@ class AutonomousMixin(GoalDirectivesMixin):
                 config=self._config,
             )
 
+            # Prior Human/Assistant turns for Plan phase (same thread as IG-128 / IG-198)
+            await self._ensure_checkpointer_initialized()
+            prior_limit = self._config.agentic.prior_conversation_limit if self._config else 10
+            recent_for_thread = await self._load_recent_messages(thread_id, limit=16)
+            plan_excerpts = self._format_thread_messages_for_plan(
+                recent_for_thread, limit=prior_limit
+            )
+
             # Use AgentLoop.run_with_progress() to get streaming events
             goal_result = None
             async for event_type, event_data in agent_loop.run_with_progress(
@@ -362,6 +370,7 @@ class AutonomousMixin(GoalDirectivesMixin):
                 workspace=getattr(parent_state, "workspace", None),
                 git_status=getattr(parent_state, "git_status", None),
                 max_iterations=DEFAULT_AGENT_LOOP_MAX_ITERATIONS,  # AgentLoop iteration budget
+                plan_conversation_excerpts=plan_excerpts,
             ):
                 # Propagate AgentLoop events to autonomous stream
                 if event_type == "completed":
