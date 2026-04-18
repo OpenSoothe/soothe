@@ -161,6 +161,12 @@ def _build_claude_graph(
         messages = state.get("messages", [])
         task = messages[-1].content if messages else ""
 
+        logger.debug(
+            "Claude subagent starting: messages=%d, task_preview=%s",
+            len(messages),
+            str(task)[:100] if task else "<empty>",
+        )
+
         options = ClaudeAgentOptions(
             permission_mode=permission_mode,
             max_turns=max_turns,
@@ -187,6 +193,19 @@ def _build_claude_graph(
         if resume_sid:
             options.resume = resume_sid
 
+        logger.debug(
+            "Claude options: model=%s, cwd=%s, resume=%s, thread_id=%s, "
+            "permission_mode=%s, max_turns=%d, allowed_tools=%s, disallowed_tools=%s",
+            claude_model or "<default>",
+            resolved_cwd,
+            resume_sid or "<none>",
+            thread_id or "<none>",
+            permission_mode,
+            max_turns,
+            allowed_tools or [],
+            disallowed_tools or [],
+        )
+
         _emit(
             ClaudeStartedEvent(
                 task=str(task)[:500] if task else "",
@@ -205,11 +224,22 @@ def _build_claude_graph(
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             collected_text.append(block.text)
+                            logger.debug(
+                                "Claude text block: length=%d, preview=%s",
+                                len(block.text),
+                                block.text[:50] if len(block.text) > 50 else block.text,
+                            )
                             _emit(
                                 ClaudeTextEvent(text=block.text).to_dict(),
                                 logger,
                             )
                         elif isinstance(block, ToolUseBlock):
+                            tool_input = getattr(block, "input", None)
+                            logger.debug(
+                                "Claude tool use: tool=%s, input=%s",
+                                block.name,
+                                str(tool_input)[:200] if tool_input else "<none>",
+                            )
                             _emit(
                                 ClaudeToolUseEvent(tool=block.name).to_dict(),
                                 logger,
@@ -222,10 +252,19 @@ def _build_claude_graph(
                         and not last_claude_session_id.strip()
                     ):
                         last_claude_session_id = None
+                    duration_ms = int(getattr(message, "duration_ms", 0) or 0)
+                    logger.debug(
+                        "Claude result: cost_usd=%.4f, duration_ms=%d, session_id=%s, "
+                        "text_length=%d",
+                        cost_usd,
+                        duration_ms,
+                        last_claude_session_id or "<none>",
+                        len(collected_text),
+                    )
                     _emit(
                         ClaudeResultEvent(
                             cost_usd=cost_usd,
-                            duration_ms=int(getattr(message, "duration_ms", 0) or 0),
+                            duration_ms=duration_ms,
                             claude_session_id=last_claude_session_id,
                         ).to_dict(),
                         logger,
@@ -234,6 +273,13 @@ def _build_claude_graph(
             logger.exception("Claude agent failed")
             collected_text.append("Claude agent encountered an error.")
         else:
+            logger.debug(
+                "Recording Claude session: thread_id=%s, cwd=%s, session_id=%s, durability=%s",
+                thread_id or "<none>",
+                resolved_cwd,
+                last_claude_session_id or "<none>",
+                "yes" if durability else "no",
+            )
             await record_claude_session(
                 thread_id=thread_id,
                 cwd=resolved_cwd,
@@ -244,6 +290,12 @@ def _build_claude_graph(
         result = "\n".join(collected_text) or "Claude task completed (no text output)."
         if cost_usd > 0:
             result += f"\n\n[Cost: ${cost_usd:.4f}]"
+
+        logger.debug(
+            "Claude subagent complete: result_length=%d, total_cost=%.4f",
+            len(result),
+            cost_usd,
+        )
 
         return {"messages": [AIMessage(content=result)]}
 

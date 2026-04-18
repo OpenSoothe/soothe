@@ -2003,7 +2003,6 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         self._steps: dict[str, _StepLineState] = {}
         self._footer_plain: str = ""
         self._footer_visible: bool = False
-        self._deferred_snapshot: dict[str, Any] | None = None
         self._steps_static: Static | None = None
 
     @staticmethod
@@ -2063,19 +2062,29 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         yield Static("", id="cognition-goal-tree-footer", classes="cognition-goal-tree-footer")
 
     def on_mount(self) -> None:
-        """Wire step aggregate; restore snapshot when rehydrating from the store."""
+        """Wire step aggregate; sync static children from in-memory state."""
         self._steps_static = self.query_one("#cognition-goal-tree-steps", Static)
         if is_ascii_mode():
             colors = theme.get_theme_colors(self)
             self.styles.border = ("ascii", colors.primary)
-        if self._deferred_snapshot is not None:
-            self._apply_snapshot(self._deferred_snapshot)
-            self._deferred_snapshot = None
-        else:
-            try:
-                self.query_one("#cognition-goal-tree-footer", Static).display = False
-            except Exception:
-                logger.debug("goal tree footer hide failed", exc_info=True)
+        self._sync_goal_tree_widgets()
+
+    def _sync_goal_tree_widgets(self) -> None:
+        """Push goal, steps, and footer state to child widgets (requires mount)."""
+        try:
+            hdr = self.query_one("#cognition-goal-tree-header", Static)
+            hdr.update(self._goal_header_content())
+        except Exception:
+            logger.debug("goal tree header sync failed", exc_info=True)
+        try:
+            ft = self.query_one("#cognition-goal-tree-footer", Static)
+            if self._footer_visible and self._footer_plain:
+                ft.update(Content.styled(self._footer_plain, "dim"))
+                ft.display = True
+            else:
+                ft.display = False
+        except Exception:
+            logger.debug("goal tree footer sync failed", exc_info=True)
         self._refresh_steps_display()
 
     def snapshot_dict(self) -> dict[str, Any]:
@@ -2105,6 +2114,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
         }
 
     def _apply_snapshot(self, snap: dict[str, Any]) -> None:
+        """Restore in-memory goal tree state from :meth:`snapshot_dict` output."""
         self._goal_text = str(snap.get("goal", self._goal_text))
         self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
         self._footer_plain = str(snap.get("footer_text", ""))
@@ -2126,20 +2136,6 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
             )
             self._step_order.append(sid)
             self._steps[sid] = st
-        try:
-            hdr = self.query_one("#cognition-goal-tree-header", Static)
-            hdr.update(self._goal_header_content())
-        except Exception:
-            logger.debug("goal tree header restore failed", exc_info=True)
-        try:
-            ft = self.query_one("#cognition-goal-tree-footer", Static)
-            if self._footer_visible and self._footer_plain:
-                ft.update(Content.styled(self._footer_plain, "dim"))
-                ft.display = True
-            else:
-                ft.display = False
-        except Exception:
-            logger.debug("goal tree footer apply failed", exc_info=True)
 
     def add_step_running(self, step_id: str, description: str) -> None:
         """Register a step in running state and refresh the aggregate."""
