@@ -11,6 +11,7 @@ in the DOM and recreates older ones on demand.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -50,6 +51,7 @@ class MessageType(StrEnum):
     SUMMARIZATION = "summarization"
     STEP_PROGRESS = "step_progress"
     COGNITION_PLAN = "cognition_plan"
+    COGNITION_GOAL_TREE = "cognition_goal_tree"
     DIFF = "diff"
 
 
@@ -172,6 +174,9 @@ class MessageData:
     cognition_plan_legacy_reasoning: str | None = None
     """Combined reasoning when structured fields are absent (COGNITION_PLAN only)."""
 
+    cognition_goal_snapshot_json: str | None = None
+    """JSON blob from ``CognitionGoalTreeMessage.snapshot_dict()`` (COGNITION_GOAL_TREE only)."""
+
     is_streaming: bool = False
     """Whether the message is still being streamed.
 
@@ -215,6 +220,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionGoalTreeMessage,
             CognitionPlanReasonMessage,
             CognitionStepMessage,
             DiffMessage,
@@ -305,6 +311,28 @@ class MessageData:
                     id=self.id,
                 )
 
+            case MessageType.COGNITION_GOAL_TREE:
+                snap: dict[str, Any] = {}
+                if self.cognition_goal_snapshot_json:
+                    try:
+                        raw = json.loads(self.cognition_goal_snapshot_json)
+                        if isinstance(raw, dict):
+                            snap = raw
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "Invalid cognition_goal_snapshot_json for %s",
+                            self.id,
+                        )
+                goal = str(snap.get("goal", "")).strip()
+                w = CognitionGoalTreeMessage(
+                    goal=goal or " ",
+                    max_iterations=int(snap.get("max_iterations", 0)),
+                    id=self.id,
+                )
+                if snap:
+                    w._deferred_snapshot = snap
+                return w
+
             case _:
                 logger.warning(
                     "Unknown MessageType %r for message %s, falling back to AppMessage",
@@ -328,6 +356,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionGoalTreeMessage,
             CognitionPlanReasonMessage,
             CognitionStepMessage,
             DiffMessage,
@@ -339,6 +368,14 @@ class MessageData:
         )
 
         widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+        if isinstance(widget, CognitionGoalTreeMessage):
+            return cls(
+                type=MessageType.COGNITION_GOAL_TREE,
+                content="",
+                id=widget_id,
+                cognition_goal_snapshot_json=json.dumps(widget.snapshot_dict()),
+            )
 
         if isinstance(widget, CognitionPlanReasonMessage):
             return cls(
