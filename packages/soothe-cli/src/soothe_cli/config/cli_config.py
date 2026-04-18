@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from soothe_sdk.client.config import SOOTHE_HOME
+
+# Sole on-disk location for CLI client settings (WebSocket address, progress verbosity, …).
+CLI_CONFIG_FILE = Path(SOOTHE_HOME) / "config" / "cli_config.yml"
+
 
 @dataclass
 class CLIConfig:
@@ -81,7 +86,7 @@ class CLIConfig:
         import yaml
 
         if config_path is None:
-            config_path = Path.home() / ".soothe" / "config" / "cli_config.yml"
+            config_path = CLI_CONFIG_FILE
 
         if not config_path.exists():
             return cls()  # Use defaults
@@ -97,7 +102,7 @@ class CLIConfig:
         return cls(
             daemon_host=websocket.get("host", "127.0.0.1"),
             daemon_port=websocket.get("port", 8765),
-            verbosity=data.get("logging", {}).get("verbosity", "normal"),
+            verbosity=data.get("verbosity", "normal"),
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 

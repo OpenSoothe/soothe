@@ -3,11 +3,37 @@
 Tests for whitespace normalization and internal tag stripping.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 from soothe_cli.shared.message_processing import (
+    accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
     format_tool_call_args,
     strip_internal_tags,
+    try_parse_pending_tool_call_args,
 )
+
+
+class TestAccumulateToolCallChunks:
+    """Streaming tool_call_chunks accumulation (IG-053)."""
+
+    def test_dict_args_on_first_chunk_serializes_for_parse(self) -> None:
+        """When the first chunk carries args as a dict, briefs/cards can resolve."""
+        pending: dict[str, Any] = {}
+        accumulate_tool_call_chunks(
+            pending,
+            [
+                {
+                    "id": "call-dict",
+                    "name": "read_file",
+                    "args": {"path": "/tmp/a.txt"},
+                }
+            ],
+        )
+        parsed = try_parse_pending_tool_call_args(pending["call-dict"])
+        assert parsed == {"path": "/tmp/a.txt"}
 
 
 class TestFormatToolCallArgs:

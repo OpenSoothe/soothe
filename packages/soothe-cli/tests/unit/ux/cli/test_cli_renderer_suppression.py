@@ -6,6 +6,38 @@ from unittest.mock import patch
 from soothe_cli.cli.renderer import CliRenderer
 
 
+def test_on_tool_call_emits_during_multi_step_suppression():
+    """Tool stderr lines must still show when assistant text is suppressed (multi-step)."""
+    renderer = CliRenderer(verbosity="normal")
+    renderer._state.suppression.multi_step_active = True
+    renderer._state.suppression.agentic_stdout_suppressed = True
+
+    with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+        renderer.on_tool_call("read_file", {"path": "/tmp/x"}, "tc-arch-1", is_main=True)
+
+    err = mock_stderr.getvalue()
+    assert "⚙" in err
+    assert "/tmp/x" in err
+
+
+def test_on_tool_result_emits_during_multi_step_suppression():
+    """Tool results on stderr must not be gated by multi-step assistant suppression."""
+    renderer = CliRenderer(verbosity="normal")
+    renderer._state.suppression.multi_step_active = True
+    renderer._state.tool_call_start_times["tc-arch-2"] = 0.0
+
+    with patch("sys.stderr", new_callable=StringIO) as mock_stderr:
+        renderer.on_tool_result(
+            name="glob",
+            result="ok",
+            tool_call_id="tc-arch-2",
+            is_error=False,
+            is_main=True,
+        )
+
+    assert "✓" in mock_stderr.getvalue()
+
+
 def test_on_assistant_text_hard_suppress_multi_step():
     """Verify no text leaks during multi_step_active."""
     renderer = CliRenderer(verbosity="normal")

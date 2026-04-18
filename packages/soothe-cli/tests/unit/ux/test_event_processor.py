@@ -364,6 +364,33 @@ class TestEventProcessorVerbosityFiltering:
         assert len(tool_result_calls) == 1
         assert tool_result_calls[0][1][0] == "read_file"
 
+    def test_tool_message_dict_status_error_sets_is_error(self) -> None:
+        """Explicit ToolMessage status=error must set is_error even when content is benign."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        tool_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "ToolMessage",
+                    "name": "read_file",
+                    "content": "ok",
+                    "tool_call_id": "tc-err-status",
+                    "status": "error",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(tool_event)
+
+        tool_result_calls = [c for c in renderer.calls if c[0] == "on_tool_result"]
+        assert len(tool_result_calls) == 1
+        assert tool_result_calls[0][2]["is_error"] is True
+
     def test_quiet_cleans_and_extracts_answer(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="quiet")

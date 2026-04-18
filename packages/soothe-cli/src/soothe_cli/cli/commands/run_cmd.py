@@ -4,7 +4,6 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Literal
 
 import typer
 from soothe_sdk.client.config import SOOTHE_HOME
@@ -24,27 +23,23 @@ def run_impl(
     autonomous: bool,  # noqa: FBT001
     max_iterations: int | None,
     output_format: str,
-    verbosity: Literal["quiet", "minimal", "normal", "detailed", "debug"] | None,
 ) -> None:
     """Core implementation for running Soothe agent.
 
     Args:
         prompt: Optional prompt for headless mode
-        config: Path to config file
+        config: Deprecated; passed through for ``--config`` compatibility (ignored for
+            client settings; see ``load_config``).
         thread_id: Thread ID to resume
         no_tui: Force headless mode
         autonomous: Enable autonomous iteration mode
         max_iterations: Max iterations for autonomous mode
         output_format: Output format (text or jsonl)
-        verbosity: Verbosity level
     """
     startup_start = time.perf_counter()
 
     try:
         cfg = load_config(config)
-        if verbosity is not None:
-            # CLIConfig is a dataclass, update verbosity directly
-            cfg.verbosity = verbosity
         log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.verbosity, "INFO")
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)
@@ -72,7 +67,7 @@ def run_impl(
             )
         else:
             # TUI mode (with optional initial prompt)
-            run_tui(cfg, thread_id=thread_id, config_path=config, initial_prompt=prompt)
+            run_tui(cfg, thread_id=thread_id, initial_prompt=prompt)
 
         run_elapsed_s = time.perf_counter() - run_start
         typer.echo(f"Total running time: {run_elapsed_s:.2f}s", err=True)

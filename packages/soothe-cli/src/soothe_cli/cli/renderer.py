@@ -207,9 +207,9 @@ class CliRenderer:
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
-        # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.suppression.should_suppress_output():
-            return
+        # Multi-step / agentic suppression applies to assistant stdout only (IG-143).
+        # Tool calls and results still stream to stderr at normal+ verbosity so headless
+        # runs show the same tool activity as the TUI.
 
         self._stderr_begin_icon_block()
 
@@ -251,9 +251,7 @@ class CliRenderer:
         if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
-        # HARD SUPPRESS during multi-step execution (IG-143)
-        if self._state.suppression.should_suppress_output():
-            return
+        # See on_tool_call: do not suppress stderr tool results during multi-step runs.
 
         self._stderr_begin_icon_block()
 

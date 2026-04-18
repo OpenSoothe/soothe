@@ -55,6 +55,7 @@ from soothe_cli.shared.message_processing import (
     try_parse_pending_tool_call_args,
 )
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
 from soothe_cli.tui._session_stats import (
@@ -76,7 +77,6 @@ from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
-from soothe_cli.tui.tool_display import format_tool_message_content
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -571,6 +571,60 @@ def _tool_block_ids(blocks: list[dict[str, Any]]) -> set[str]:
     return out
 
 
+def _tool_block_args_meaningful(args: Any) -> bool:
+    """True if a tool block already has displayable arguments."""
+    if args is None:
+        return False
+    if isinstance(args, dict):
+        return bool(args)
+    if isinstance(args, str):
+        return bool(args.strip())
+    return True
+
+
+def _merge_streaming_tool_extra_into_blocks(
+    blocks: list[dict[str, Any]],
+    streaming_extra: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Upgrade placeholder tool blocks (empty args) with chunk-accumulated args.
+
+    ``message.tool_calls`` often arrives with empty ``args`` while args stream in
+    ``tool_call_chunks``. We previously appended streaming extras only when the ID
+    was absent from blocks, so the TUI mounted ``ToolCallMessage`` with ``{}`` and
+    showed ``ls()`` / ``read_file()`` with no parameters.
+    """
+    if not streaming_extra:
+        return blocks
+    extras_by_id = {str(x.get("id") or ""): x for x in streaming_extra if str(x.get("id") or "")}
+    out: list[dict[str, Any]] = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            out.append(b)
+            continue
+        btype = b.get("type")
+        if btype not in ("tool_call", "tool_call_chunk", "tool_use"):
+            out.append(b)
+            continue
+        tid = str(b.get("id") or "")
+        ex = extras_by_id.get(tid)
+        cur_args = b.get("args")
+        if btype == "tool_use" and cur_args is None:
+            cur_args = b.get("input")
+        if ex and not _tool_block_args_meaningful(cur_args):
+            nb = dict(b)
+            nb["type"] = "tool_call"
+            nb["args"] = ex.get("args", {})
+            nb["name"] = ex.get("name") or b.get("name")
+            out.append(nb)
+        else:
+            out.append(b)
+    seen = _tool_block_ids(out)
+    for tid, ex in extras_by_id.items():
+        if tid not in seen:
+            out.append(ex)
+    return out
+
+
 def _append_tool_calls_from_message_attr(
     message: Any,
     blocks: list[dict[str, Any]],
@@ -674,7 +728,6 @@ async def execute_task_textual(
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
-    progress_verbosity: str | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
 
@@ -706,9 +759,11 @@ async def execute_task_textual(
         skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
             ``send_turn`` and only consume chunks (daemon already queued the
             prompt, e.g. after ``invoke_skill``).
-        progress_verbosity: Progress/event display level (``quiet`` … ``debug``).
-            Defaults to ``normal``. Use ``detailed`` (or higher) to show browser
-            step milestones and other DETAILED-tier capability events.
+
+    Note:
+        Progress verbosity (``quiet`` … ``debug``) for tool UI and the stream
+        pipeline is read from ``cli_config.yml`` via
+        :func:`soothe_cli.shared.load_config`.
 
     Returns:
         Stats accumulated over this turn (request count, token counts,
@@ -722,16 +777,17 @@ async def execute_task_textual(
         HITLRequest,
         RejectDecision,
     )
-    from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+    from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
     from langgraph.types import Command
     from pydantic import ValidationError
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
+    from soothe_cli.shared.config_loader import load_config
     from soothe_cli.shared.display_policy import normalize_verbosity, should_show_tool_call_ui
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
-    pv = normalize_verbosity(progress_verbosity) if progress_verbosity else "normal"
+    pv = normalize_verbosity(load_config().verbosity)
     show_tool_ui = should_show_tool_call_ui(pv)
     progress_pipeline = StreamDisplayPipeline(verbosity=pv)
 
@@ -983,27 +1039,24 @@ async def execute_task_textual(
                             pending_text_by_namespace[ns_key] = ""
                         continue
 
-                    if isinstance(message, ToolMessage):
-                        tc_clear = getattr(message, "tool_call_id", None)
-                        if tc_clear:
-                            pending_tool_calls_lc.pop(str(tc_clear), None)
+                    tool_card = extract_tool_result_card_payload(message)
+                    if tool_card is not None:
+                        tool_id = tool_card.tool_call_id or None
+                        if tool_id:
+                            pending_tool_calls_lc.pop(str(tool_id), None)
 
                         if not show_tool_ui:
                             continue
 
-                        tool_name = getattr(message, "name", "")
-                        tool_status = getattr(message, "status", "success")
-                        tool_content = format_tool_message_content(message.content)
                         record = file_op_tracker.complete_with_message(message)
 
-                        # Update tool call status with output
-                        tool_id = getattr(message, "tool_call_id", None)
+                        # Update tool call status with output (unified ToolMessage / wire dict)
                         if tool_id and tool_id in adapter._current_tool_messages:
                             # Pop before widget calls so the dict drains even
                             # if set_success/set_error raises.
                             tool_msg = adapter._current_tool_messages.pop(tool_id)
-                            output_str = str(tool_content) if tool_content else ""
-                            if tool_status == "success":
+                            output_str = tool_card.output_display
+                            if not tool_card.is_error:
                                 tool_msg.set_success(output_str)
                             else:
                                 tool_msg.set_error(output_str or "Error")
@@ -1011,9 +1064,24 @@ async def execute_task_textual(
                                     "tool.error",
                                     {"tool_names": [tool_msg._tool_name]},
                                 )
+                        elif tool_id and show_tool_ui:
+                            # Orphan result: no prior AIMessage tool card (daemon wire
+                            # shape, streaming chunks, or missing tool_call blocks).
+                            tname = tool_card.tool_name or "tool"
+                            orphan = ToolCallMessage(tname, {})
+                            await adapter._mount_message(orphan)
+                            output_str = tool_card.output_display
+                            if not tool_card.is_error:
+                                orphan.set_success(output_str)
+                            else:
+                                orphan.set_error(output_str or "Error")
+                                await dispatch_hook(
+                                    "tool.error",
+                                    {"tool_names": [tname]},
+                                )
                         elif tool_id:
                             logger.debug(
-                                "ToolMessage tool_call_id=%s not in "
+                                "Tool result tool_call_id=%s not in "
                                 "_current_tool_messages; spinner gating "
                                 "may be stale",
                                 tool_id,
@@ -1096,12 +1164,9 @@ async def execute_task_textual(
                         direct_subagent_turn=direct_subagent_turn,
                     )
                     if streaming_tool_extra:
-                        seen_tc = _tool_block_ids(blocks)
-                        for tb in streaming_tool_extra:
-                            tid = str(tb.get("id") or "")
-                            if tid and tid not in seen_tc:
-                                seen_tc.add(tid)
-                                blocks = [*blocks, tb]
+                        blocks = _merge_streaming_tool_extra_into_blocks(
+                            blocks, streaming_tool_extra
+                        )
                     blocks = _expand_nonstandard_tool_blocks(blocks)
                     if not blocks:
                         logger.debug(

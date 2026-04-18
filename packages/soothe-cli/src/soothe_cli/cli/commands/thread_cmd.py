@@ -246,7 +246,7 @@ def thread_continue(
 
         thread_id = asyncio.run(get_last_thread_via_daemon())
 
-    run_tui(cfg, thread_id=thread_id, config_path=config)
+    run_tui(cfg, thread_id=thread_id)
 
 
 def thread_archive(

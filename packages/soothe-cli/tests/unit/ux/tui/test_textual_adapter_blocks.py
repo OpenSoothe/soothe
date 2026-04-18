@@ -4,7 +4,27 @@ from unittest.mock import create_autospec
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from soothe_cli.tui.textual_adapter import _tui_effective_ai_blocks
+from soothe_cli.tui.textual_adapter import (
+    _merge_streaming_tool_extra_into_blocks,
+    _tui_effective_ai_blocks,
+)
+
+
+def test_merge_streaming_tool_extra_replaces_empty_tool_call_args() -> None:
+    """Placeholder tool_calls with empty args must accept chunk-accumulated args."""
+    blocks = [
+        {"type": "tool_call", "name": "read_file", "id": "c1", "args": {}},
+    ]
+    extra = [
+        {
+            "type": "tool_call",
+            "name": "read_file",
+            "id": "c1",
+            "args": {"path": "/README.md"},
+        }
+    ]
+    merged = _merge_streaming_tool_extra_into_blocks(blocks, extra)
+    assert merged[0]["args"] == {"path": "/README.md"}
 
 
 def test_string_content_fallback_when_no_content_blocks_root() -> None:

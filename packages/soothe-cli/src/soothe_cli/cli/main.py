@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from importlib.metadata import version  # noqa: E402
-from typing import Annotated, Literal  # noqa: E402
+from typing import Annotated  # noqa: E402
 
 import typer  # noqa: E402
 
@@ -54,7 +54,11 @@ def main(
     ctx: typer.Context,
     config: Annotated[
         str | None,
-        typer.Option("--config", "-c", help="Path to configuration file."),
+        typer.Option(
+            "--config",
+            "-c",
+            help="Ignored for client settings; edit ~/.soothe/config/cli_config.yml instead.",
+        ),
     ] = None,
     prompt: Annotated[
         str | None,
@@ -70,14 +74,6 @@ def main(
         str,
         typer.Option("--format", "-f", help="Output format for headless mode: text or jsonl."),
     ] = "text",
-    verbosity: Annotated[
-        Literal["quiet", "minimal", "normal", "detailed", "debug"] | None,
-        typer.Option(
-            "--verbosity",
-            "-v",
-            help="Verbosity level: quiet, normal, detailed, debug. 'minimal' is accepted as an alias.",
-        ),
-    ] = None,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -96,7 +92,7 @@ def main(
     Examples:
         soothe                           # Interactive TUI mode
         soothe -p "Research AI advances" # Headless single-prompt mode
-        soothe --config custom.yml       # Use custom CLI config
+        soothe --config custom.yml       # Ignored for client settings; use ~/.soothe/config/cli_config.yml
         soothe thread list               # List conversation threads
     """
     # Handle -h/--help flag
@@ -121,7 +117,6 @@ def main(
             autonomous=False,
             max_iterations=None,
             output_format=output_format,
-            verbosity=verbosity,
         )
 
 

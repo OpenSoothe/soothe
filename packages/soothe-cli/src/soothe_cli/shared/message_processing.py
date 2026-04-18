@@ -46,13 +46,22 @@ def accumulate_tool_call_chunks(
 
         # First chunk with a tool name: register the pending tool call
         if tc_name and tc_id and tc_id not in pending_tool_calls:
+            if isinstance(tc_args, str):
+                args_str = tc_args
+            elif isinstance(tc_args, dict) and tc_args:
+                args_str = json.dumps(tc_args)
+            else:
+                args_str = ""
             pending_tool_calls[tc_id] = {
                 "name": tc_name,
-                "args_str": tc_args if isinstance(tc_args, str) else "",
+                "args_str": args_str,
                 "emitted": False,
                 "is_main": is_main,
             }
-        # Subsequent chunks: accumulate args
+        # Some providers send final args as a dict on a later chunk
+        elif tc_id in pending_tool_calls and isinstance(tc_args, dict) and tc_args:
+            pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
+        # Subsequent chunks: accumulate partial JSON strings
         elif tc_args and isinstance(tc_args, str):
             # Find the tool call to accumulate args for (by order, first non-emitted)
             for pending in pending_tool_calls.values():
@@ -224,7 +233,7 @@ def tool_calls_have_any_arg_dict(tc_list: list[Any]) -> bool:
 # Maps tool name to list of argument keys to display (supports multiple args)
 _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     # File operations — deepagents uses ``file_path`` for read/write/edit (see IG-053)
-    "read_file": ["file_path", "path"],
+    "read_file": ["file_path", "path", "path_name"],
     "write_file": ["file_path", "path"],
     "delete_file": ["file_path", "path"],
     "file_info": ["path", "file_path"],
@@ -233,7 +242,8 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     "delete_lines": ["path", "file_path"],
     "apply_diff": ["path", "file_path"],
     "edit_file": ["file_path", "path"],
-    "ls": ["path", "pattern"],  # Multiple args support
+    # Models vary: ``path``, ``directory`` (deepagents), ``target_directory``
+    "ls": ["path", "path_name", "directory", "target_directory", "dir", "pattern"],
     "glob": ["pattern", "path"],  # Glob tool
     "list_files": ["pattern"],
     "search_files": ["pattern"],
@@ -297,9 +307,19 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         >>> format_tool_call_args("read_file", {"args": {}, "_raw": '{"path": "file.txt"}'})
         'file.txt'
     """
-    from soothe_sdk.utils import convert_and_abbreviate_path, is_path_argument
+    from soothe_sdk.utils import convert_and_abbreviate_path
+    from soothe_sdk.utils.parsing import is_path_argument as _path_arg_name_pattern
+
+    def _is_path_arg_name(key: str) -> bool:
+        return _path_arg_name_pattern.match(key) is not None
 
     max_value_length = 40  # Max length for displayed values
+
+    def _display_path_value(raw: str) -> str:
+        out = convert_and_abbreviate_path(raw)
+        if len(out) > max_value_length:
+            return out[: max_value_length - 3] + "..."
+        return out
 
     args = coerce_tool_call_args_to_dict(tool_call.get("args"))
     internal = _normalize_tool_name_for_arg_map(tool_name)
@@ -328,8 +348,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                     match = re.search(pattern, raw_args_str)
                     if match:
                         value = match.group(1)
-                        if is_path_argument(key_arg):
-                            value = convert_and_abbreviate_path(value, max_length=max_value_length)
+                        if _is_path_arg_name(key_arg):
+                            value = _display_path_value(value)
                         return value
                     # Also match non-string values like "key": 123 or "key": true
                     pattern2 = '"' + key_arg + '"\\s*:\\s*([^,\\}]+)'
@@ -352,8 +372,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
         if key_arg in args:
             value = str(args[key_arg])
             # Convert and abbreviate path arguments
-            if is_path_argument(key_arg):
-                value = convert_and_abbreviate_path(value, max_value_length)
+            if _is_path_arg_name(key_arg):
+                value = _display_path_value(value)
             elif len(value) > max_value_length:
                 # Truncate non-path long values
                 value = value[: max_value_length - 3] + "..."
@@ -370,8 +390,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                     continue
                 s = str(v)
                 # Convert and abbreviate path arguments
-                if is_path_argument(k):
-                    s = convert_and_abbreviate_path(s, max_value_length)
+                if _is_path_arg_name(k):
+                    s = _display_path_value(s)
                 elif len(s) > max_value_length:
                     s = s[: max_value_length - 3] + "..."
                 parts.append(s)
@@ -386,8 +406,8 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                     match = re.search(pattern, raw)
                     if match:
                         value = match.group(1)
-                        if is_path_argument(key_arg):
-                            value = convert_and_abbreviate_path(value, max_value_length)
+                        if _is_path_arg_name(key_arg):
+                            value = _display_path_value(value)
                         return value
         # Known tool but no matching args found
         return "..."

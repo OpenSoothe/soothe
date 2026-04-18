@@ -124,6 +124,7 @@ _MAX_WEB_CONTENT_LEN = 100
 _TOOLS_WITH_HEADER_INFO: set[str] = {
     # Filesystem tools
     "ls",
+    "list_files",
     "read_file",
     "write_file",
     "edit_file",
@@ -132,6 +133,8 @@ _TOOLS_WITH_HEADER_INFO: set[str] = {
     "execute",  # sandbox shell
     # Shell tools
     "shell",  # local shell
+    "bash",
+    "run_command",
     # Web tools
     "web_search",
     "fetch_url",

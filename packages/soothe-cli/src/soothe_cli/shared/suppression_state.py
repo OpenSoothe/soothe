@@ -16,15 +16,16 @@ from soothe_sdk.events import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 class SuppressionState:
     """Shared state for IG-143 multi-step/agentic suppression.
 
-    This tracks execution state to suppress intermediate LLM responses,
-    tool calls, and tool results during multi-step execution, showing
-    only essential progress events and the final aggregated report.
+    This tracks execution state to suppress intermediate LLM responses on stdout
+    during multi-step execution. Tool calls and tool results on stderr are still
+    rendered by ``CliRenderer`` at normal+ verbosity; only assistant streaming text
+    is accumulated for the final report.
 
     Usage:
         # In renderer state:
         suppression: SuppressionState = field(default_factory=SuppressionState)
 
-        # Check suppression:
+        # Check suppression (assistant stdout only in CliRenderer):
         if suppression.should_suppress_output():
             return
 

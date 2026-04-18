@@ -5,31 +5,25 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from soothe_sdk.client.config import SOOTHE_HOME
 
-from soothe_cli.config.cli_config import CLIConfig
+from soothe_cli.config.cli_config import CLI_CONFIG_FILE, CLIConfig
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config.yml"
 
 # Config cache for performance
 _config_cache: dict[str, CLIConfig] = {}
 
 
 def load_config(config_path: str | None = None) -> CLIConfig:
-    """Load CLIConfig from a file path or defaults with caching.
+    """Load CLI client configuration from ``cli_config.yml`` only.
 
-    CLIConfig is minimal and designed for independent CLI package installation.
-    Full daemon config available via WebSocket RPC when needed.
-
-    When no ``config_path`` is provided, automatically checks
-    ``~/.soothe/config.yml`` and loads it if present.
-
-    Uses an in-memory cache to avoid re-parsing config files.
+    Client settings (WebSocket endpoint, progress verbosity, etc.) always come from
+    :data:`~soothe_cli.config.cli_config.CLI_CONFIG_FILE`. The optional ``config_path``
+    argument is accepted for backward compatibility with existing ``--config`` flags
+    but is **ignored**; a warning is logged when it is non-``None``.
 
     Args:
-        config_path: Path to a YAML config file, or ``None`` for defaults.
+        config_path: Deprecated. If set, ignored after logging a warning.
 
     Returns:
         A ``CLIConfig`` instance.
@@ -38,15 +32,14 @@ def load_config(config_path: str | None = None) -> CLIConfig:
     # This ensures LangSmith and other env vars are available
     load_dotenv()
 
-    # Determine the actual path to use
-    path_to_load: Path | None = None
-    if config_path:
-        path_to_load = Path(config_path)
-    elif _DEFAULT_CONFIG_PATH.is_file():
-        path_to_load = _DEFAULT_CONFIG_PATH
+    if config_path is not None:
+        logger.warning(
+            "Ignoring --config %s; CLI client settings are loaded only from %s",
+            config_path,
+            CLI_CONFIG_FILE,
+        )
 
-    # Use "default" as cache key when no path is provided
-    cache_key = str(path_to_load) if path_to_load else "default"
+    cache_key = str(CLI_CONFIG_FILE)
 
     # Check cache first
     if cache_key in _config_cache:
@@ -55,14 +48,17 @@ def load_config(config_path: str | None = None) -> CLIConfig:
 
     load_start = time.perf_counter()
 
-    # Load minimal CLI config
-    config = CLIConfig.from_config_file(path_to_load)
+    config = CLIConfig.from_config_file(CLI_CONFIG_FILE)
     _config_cache[cache_key] = config
 
     elapsed_ms = (time.perf_counter() - load_start) * 1000
-    if path_to_load:
-        logger.info("Loaded CLI config from '%s' in %.1fms", path_to_load, elapsed_ms)
+    if Path(CLI_CONFIG_FILE).is_file():
+        logger.info("Loaded CLI config from '%s' in %.1fms", CLI_CONFIG_FILE, elapsed_ms)
     else:
-        logger.debug("Created default CLI config in %.1fms", elapsed_ms)
+        logger.debug(
+            "CLI config file missing at %s; using defaults (%.1fms)",
+            CLI_CONFIG_FILE,
+            elapsed_ms,
+        )
 
     return config

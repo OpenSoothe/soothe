@@ -61,11 +61,12 @@ def normalize_verbosity(verbosity: str) -> VerbosityLevel:
 def should_show_tool_call_ui(verbosity: str | VerbosityLevel) -> bool:
     """Whether the TUI should mount tool-call rows (``ToolCallMessage`` / tool output).
 
-    Controlled only by ``logging.verbosity`` (same scale as CLI progress), not by
+    Controlled only by ``logging.verbosity`` in the CLI client config
+    (``~/.soothe/config/cli_config.yml``), same scale as CLI progress — not by
     LangGraph namespace or event type. ``quiet`` hides tool UI; other levels show it.
 
     Args:
-        verbosity: Raw or normalized verbosity string (e.g. from daemon config).
+        verbosity: Raw or normalized verbosity string (e.g. from ``cli_config.yml``).
 
     Returns:
         False when verbosity is ``quiet``; True for ``normal``, ``detailed``, and ``debug``.

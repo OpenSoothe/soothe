@@ -6,11 +6,11 @@ Imported at module level by `textual_adapter` (itself deferred from the startup
 path). Heavy SDK dependencies (e.g., `backends`) are deferred to function bodies.
 """
 
-import json
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from soothe_cli.shared.message_processing import _normalize_tool_name_for_arg_map
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
 
@@ -95,6 +95,18 @@ def _sanitize_display_value(value: object, *, max_length: int = MAX_ARG_LENGTH) 
     return display
 
 
+def _first_nonempty_str_arg(tool_args: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    """Return the first present, non-empty string value for any of ``keys``."""
+    for k in keys:
+        v = tool_args.get(k)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s
+    return None
+
+
 def format_tool_display(tool_name: str, tool_args: dict) -> str:
     """Format tool calls for display with tool-specific smart formatting.
 
@@ -113,6 +125,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         execute(command="pip install foo") → '<prefix> execute("pip install foo")'
     """
     prefix = get_glyphs().tool_prefix
+    tool_key = _normalize_tool_name_for_arg_map(tool_name or "")
 
     def abbreviate_path(path_str: str, max_length: int = 60) -> str:
         """Abbreviate a file path intelligently - show basename or relative path.
@@ -147,35 +160,38 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             # Otherwise, just show basename (filename only)
             return path.name
 
-    # Tool-specific formatting - show the most important argument(s)
-    if tool_name in {"read_file", "write_file", "edit_file"}:
-        # File operations: show the primary file path argument (file_path or path)
-        path_value = tool_args.get("file_path")
-        if path_value is None:
-            path_value = tool_args.get("path")
-        if path_value is not None:
-            path_raw = strip_dangerous_unicode(str(path_value))
+    # Tool-specific formatting - show the most important argument(s).
+    # Branch on normalized ``tool_key`` so PascalCase names (``ReadFile``) still match;
+    # display the original ``tool_name`` substring for consistency with model output.
+    if tool_key in {"read_file", "write_file", "edit_file"}:
+        raw_path = _first_nonempty_str_arg(
+            tool_args,
+            ("file_path", "path", "path_name", "target_file", "file", "filepath"),
+        )
+        if raw_path is not None:
+            path_raw = strip_dangerous_unicode(raw_path)
             path = abbreviate_path(path_raw)
-            if path_raw != str(path_value):
+            if path_raw != raw_path:
                 path += _HIDDEN_CHAR_MARKER
             return f"{prefix} {tool_name}({path})"
 
-    elif tool_name == "web_search":
+    elif tool_key == "web_search":
         # Web search: show the query string
         if "query" in tool_args:
             query = _sanitize_display_value(tool_args["query"], max_length=100)
             return f'{prefix} {tool_name}("{query}")'
 
-    elif tool_name == "grep":
-        # Grep: show the search pattern
-        if "pattern" in tool_args:
-            pattern = _sanitize_display_value(tool_args["pattern"], max_length=70)
+    elif tool_key == "grep":
+        pat = _first_nonempty_str_arg(tool_args, ("pattern", "regex", "regexp"))
+        if pat is not None:
+            pattern = _sanitize_display_value(pat, max_length=70)
             return f'{prefix} {tool_name}("{pattern}")'
 
-    elif tool_name == "execute":
+    elif tool_key in {"execute", "shell", "bash", "run_command"}:
         # Execute: show the command, and timeout only if non-default
-        if "command" in tool_args:
-            command = _sanitize_display_value(tool_args["command"], max_length=120)
+        cmd = _first_nonempty_str_arg(tool_args, ("command", "cmd", "script"))
+        if cmd is not None:
+            command = _sanitize_display_value(cmd, max_length=120)
             timeout = _coerce_timeout_seconds(tool_args.get("timeout"))
             from soothe_sdk.client.config import DEFAULT_EXECUTE_TIMEOUT
 
@@ -184,29 +200,38 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
                 return f'{prefix} {tool_name}("{command}", timeout={timeout_str})'
             return f'{prefix} {tool_name}("{command}")'
 
-    elif tool_name == "ls":
-        # ls: show directory, or empty if current directory
-        if tool_args.get("path"):
-            path_raw = strip_dangerous_unicode(str(tool_args["path"]))
+    elif tool_key in {"ls", "list_files"}:
+        # ls / list_files: directory varies by provider (path, directory, …)
+        raw_path = _first_nonempty_str_arg(
+            tool_args,
+            ("path", "path_name", "directory", "target_directory", "dir", "folder"),
+        )
+        if raw_path is not None and str(raw_path).strip() not in (".", ""):
+            path_raw = strip_dangerous_unicode(str(raw_path))
             path = abbreviate_path(path_raw)
-            if path_raw != str(tool_args["path"]):
+            if path_raw != raw_path:
                 path += _HIDDEN_CHAR_MARKER
             return f"{prefix} {tool_name}({path})"
+        if tool_key == "list_files":
+            pat = _first_nonempty_str_arg(tool_args, ("pattern", "glob_pattern", "glob"))
+            if pat is not None and pat != "*":
+                pshown = _sanitize_display_value(pat, max_length=80)
+                return f'{prefix} {tool_name}("{pshown}")'
         return f"{prefix} {tool_name}()"
 
-    elif tool_name == "glob":
-        # Glob: show the pattern
-        if "pattern" in tool_args:
-            pattern = _sanitize_display_value(tool_args["pattern"], max_length=80)
+    elif tool_key == "glob":
+        pat = _first_nonempty_str_arg(tool_args, ("pattern", "glob_pattern", "glob"))
+        if pat is not None:
+            pattern = _sanitize_display_value(pat, max_length=80)
             return f'{prefix} {tool_name}("{pattern}")'
 
-    elif tool_name == "fetch_url":
+    elif tool_key == "fetch_url":
         # Fetch URL: show the URL being fetched
         if "url" in tool_args:
             url = _sanitize_display_value(tool_args["url"], max_length=80)
             return f'{prefix} {tool_name}("{url}")'
 
-    elif tool_name == "task":
+    elif tool_key == "task":
         # Task: show subagent type badge
         agent_type = tool_args.get("subagent_type", "")
         if agent_type:
@@ -214,16 +239,16 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f"{prefix} {tool_name} [{agent_type}]"
         return f"{prefix} {tool_name}"
 
-    elif tool_name == "ask_user":
+    elif tool_key == "ask_user":
         if "questions" in tool_args and isinstance(tool_args["questions"], list):
             count = len(tool_args["questions"])
             label = "question" if count == 1 else "questions"
             return f"{prefix} {tool_name}({count} {label})"
 
-    elif tool_name == "compact_conversation":
+    elif tool_key == "compact_conversation":
         return f"{prefix} {tool_name}()"
 
-    elif tool_name == "write_todos":
+    elif tool_key == "write_todos":
         if "todos" in tool_args and isinstance(tool_args["todos"], list):
             count = len(tool_args["todos"])
             return f"{prefix} {tool_name}({count} items)"
@@ -235,63 +260,3 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         for k, v in tool_args.items()
     )
     return f"{prefix} {tool_name}({args_str})"
-
-
-def _format_content_block(block: dict) -> str:
-    """Format a single content block dict for display.
-
-    Replaces large binary payloads (e.g. base64 image/video data) with a
-    human-readable placeholder so they don't flood the terminal.
-
-    Args:
-        block: An `ImageContentBlock`, `VideoContentBlock`, or `FileContentBlock`
-            dictionary.
-
-    Returns:
-        A display-friendly string for the block.
-    """
-    if block.get("type") == "image" and isinstance(block.get("base64"), str):
-        b64 = block["base64"]
-        size_kb = len(b64) * 3 // 4 // 1024  # approximate decoded size
-        mime = block.get("mime_type", "image")
-        return f"[Image: {mime}, ~{size_kb}KB]"
-    if block.get("type") == "video" and isinstance(block.get("base64"), str):
-        b64 = block["base64"]
-        size_kb = len(b64) * 3 // 4 // 1024  # approximate decoded size
-        mime = block.get("mime_type", "video")
-        return f"[Video: {mime}, ~{size_kb}KB]"
-    if block.get("type") == "file" and isinstance(block.get("base64"), str):
-        b64 = block["base64"]
-        size_kb = len(b64) * 3 // 4 // 1024  # approximate decoded size
-        mime = block.get("mime_type", "file")
-        return f"[File: {mime}, ~{size_kb}KB]"
-    try:
-        # Preserve non-ASCII characters (CJK, emoji, etc.) instead of \uXXXX escapes
-        return json.dumps(block, ensure_ascii=False)
-    except (TypeError, ValueError):
-        return str(block)
-
-
-def format_tool_message_content(content: Any) -> str:  # noqa: ANN401  # Content can be str, list, or dict
-    """Convert `ToolMessage` content into a printable string.
-
-    Returns:
-        Formatted string representation of the tool message content.
-    """
-    if content is None:
-        return ""
-    if isinstance(content, list):
-        parts = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                parts.append(_format_content_block(item))
-            else:
-                try:
-                    # Preserve non-ASCII characters (CJK, emoji, etc.)
-                    parts.append(json.dumps(item, ensure_ascii=False))
-                except (TypeError, ValueError):
-                    parts.append(str(item))
-        return "\n".join(parts)
-    return str(content)
