@@ -60,7 +60,7 @@ help:
 	@echo "  make community-publish-test - Publish community package to TestPyPI"
 	@echo ""
 	@echo "Multi-Package Targets:"
-	@echo "  make all-sync    - Sync all workspace dependencies with extras (uv sync --all-extras)"
+	@echo "  make all-sync    - Sync all packages with all extras (each package individually)"
 	@echo "  make all-format  - Format all packages"
 	@echo "  make all-lint    - Lint all packages"
 	@echo "  make all-lint-fix  - Auto-fix all linting issues"
@@ -277,8 +277,8 @@ community-publish-test:
 
 all-sync:
 	@echo "Syncing all workspace dependencies with extras..."
-	uv sync --all-extras
-	@echo "✓ All packages synced"
+	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli --package soothe-community
+	@echo "✓ All packages synced with all dependencies and extras"
 
 all-format: format sdk-format cli-format community-format
 	@echo "✓ All packages formatted"

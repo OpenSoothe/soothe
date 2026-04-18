@@ -238,21 +238,45 @@ def _format_progress_event_lines_for_tui(
     *,
     pipeline: Any,
 ) -> list[str]:
-    """Format essential progress events with the same pipeline as CLI."""
+    """Format progress events with the same pipeline as CLI.
+
+    IG-192: Show subagent capability events at DETAILED verbosity level.
+    """
     event_type = str(event_data.get("type", ""))
-    if not is_essential_progress_event_type(event_type):
-        return []
 
-    event_for_pipeline = dict(event_data)
-    event_for_pipeline["namespace"] = list(namespace)
-    lines = pipeline.process(event_for_pipeline)
+    # Essential progress events (goal/step/reason) - always show
+    if is_essential_progress_event_type(event_type):
+        event_for_pipeline = dict(event_data)
+        event_for_pipeline["namespace"] = list(namespace)
+        lines = pipeline.process(event_for_pipeline)
 
-    rendered: list[str] = []
-    for line in lines:
-        line_text = line.format().lstrip("\n").strip()
-        if line_text:
-            rendered.append(line_text)
-    return rendered
+        rendered: list[str] = []
+        for line in lines:
+            line_text = line.format().lstrip("\n").strip()
+            if line_text:
+                rendered.append(line_text)
+        return rendered
+
+    # Subagent capability events - show at DETAILED verbosity
+    # IG-192: Use SDK helper to identify capability events
+    from soothe_sdk.ux import is_subagent_progress_event
+
+    if event_type.startswith("soothe.capability."):
+        # Only show important progress events (started/completed/judgement)
+        # Internal steps (step.running, text.running, etc.) filtered at DETAILED tier
+        if is_subagent_progress_event(event_type):
+            event_for_pipeline = dict(event_data)
+            event_for_pipeline["namespace"] = list(namespace)
+            lines = pipeline.process(event_for_pipeline)
+
+            rendered: list[str] = []
+            for line in lines:
+                line_text = line.format().lstrip("\n").strip()
+                if line_text:
+                    rendered.append(line_text)
+            return rendered
+
+    return []
 
 
 class TextualUIAdapter:

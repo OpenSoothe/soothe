@@ -302,6 +302,17 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
+        # IG-192: SUBAGENT_ROUTING_DIRECTIVE (routing hint injection - static, always included)
+        subagent_directive = state.get("_subagent_routing_directive") if state else None
+        if subagent_directive:
+            directive_section = (
+                f"<SUBAGENT_ROUTING_DIRECTIVE>\n"
+                f"Use the 'task' tool with subagent_type='{subagent_directive}' to handle this request.\n"
+                f"This is the preferred routing for this query. Provide a detailed task description.\n"
+                f"</SUBAGENT_ROUTING_DIRECTIVE>"
+            )
+            static_sections.append(directive_section)
+
         # Agent loop output contract (Layer 2 only)
         if state and state.get("current_decision"):
             contract_section = self._build_agent_loop_output_contract_section(self._config)
@@ -523,6 +534,19 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             classification.is_plan_only if hasattr(classification, "is_plan_only") else False,
         )
 
+        # Check for direct subagent routing hint (preferred_subagent + routing_hint='subagent')
+        # IG-192: Inject explicit directive to use task tool when routing hint present
+        routing_hint = getattr(classification, "routing_hint", None)
+        preferred_subagent = getattr(classification, "preferred_subagent", None)
+
+        if routing_hint == "subagent" and preferred_subagent:
+            logger.info(
+                "Direct subagent routing detected: preferred_subagent=%s",
+                preferred_subagent,
+            )
+            # Inject directive into state for prompt builder
+            request.state["_subagent_routing_directive"] = preferred_subagent
+
         # Extract state for XML section building
         state_dict: dict[str, Any] = {}
         if hasattr(request.state, "get"):
@@ -535,6 +559,9 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "active_goals": request.state.get("active_goals", []),  # For THREAD condition
                 "context_projection": request.state.get("context_projection"),
                 "recalled_memories": request.state.get("recalled_memories"),
+                "_subagent_routing_directive": request.state.get(
+                    "_subagent_routing_directive"
+                ),  # IG-192
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)

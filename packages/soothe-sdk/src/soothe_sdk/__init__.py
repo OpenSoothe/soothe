@@ -19,7 +19,11 @@ Example imports:
 __version__ = "0.4.0"
 __soothe_required_version__ = ">=0.4.0,<1.0.0"
 
-# No re-exports - use package imports for clarity and performance
+# Re-export plugin decorators for convenience (fixes community plugin imports)
+# This allows both patterns: `from soothe_sdk import plugin` and `from soothe_sdk.plugin import plugin`
+from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: F401
+
+# No other re-exports - use package imports for clarity and performance
 # Core concepts remain accessible at root level:
 # - soothe_sdk.events (SootheEvent, LifecycleEvent, etc.)
 # - soothe_sdk.exceptions (PluginError, ValidationError, etc.)

@@ -43,9 +43,9 @@ def run_impl(
     try:
         cfg = load_config(config)
         if verbosity is not None:
-            logging_config = cfg.logging.model_copy(update={"verbosity": verbosity})
-            cfg = cfg.model_copy(update={"logging": logging_config})
-        log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.logging.verbosity, "INFO")
+            # CLIConfig is a dataclass, update verbosity directly
+            cfg.verbosity = verbosity
+        log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.verbosity, "INFO")
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)
 
