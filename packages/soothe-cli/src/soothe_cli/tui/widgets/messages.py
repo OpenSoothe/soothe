@@ -917,6 +917,20 @@ class ToolCallMessage(Vertical):
                 # pending or unknown - leave as default
                 pass
 
+    def refresh_tool_args(self, args: dict[str, Any]) -> None:
+        """Update displayed arguments when they arrive after the card was first mounted.
+
+        Streaming providers sometimes emit a first chunk with ``args: {{}}``; real
+        kwargs follow on later chunks. The adapter may mount early and then call
+        this when a fuller argument dict is available.
+        """
+        self._args = args or {}
+        try:
+            header = self.query_one(".tool-header", Static)
+        except Exception:  # noqa: BLE001  # Widget tree not ready or query miss
+            return
+        header.update(format_tool_display(self._tool_name, self._args), markup=False)
+
     def set_running(self) -> None:
         """Mark the tool as running (approved and executing).
 
@@ -1805,7 +1819,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
     DEFAULT_CSS = """
     CognitionPlanReasonMessage {
         height: auto;
-        padding: 0 1 0 0;
+        padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
         border-left: wide $cognition;
@@ -1820,7 +1834,7 @@ class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
 
     CognitionPlanReasonMessage .plan-section-line {
         height: auto;
-        margin: 0;
+        margin-left: 3;
         color: $text-muted;
     }
 
@@ -1938,7 +1952,7 @@ class CognitionGoalTreeMessage(_TimestampClickMixin, Vertical):
     DEFAULT_CSS = """
     CognitionGoalTreeMessage {
         height: auto;
-        padding: 0 1 0 0;
+        padding: 0 1;
         margin: 0 0 1 0;
         background: transparent;
         border-left: wide $cognition;

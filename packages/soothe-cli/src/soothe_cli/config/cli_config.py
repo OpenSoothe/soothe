@@ -24,8 +24,11 @@ class CLIConfig:
     daemon_host: str = "127.0.0.1"
     daemon_port: int = 8765
 
-    # CLI behavior
+    # CLI behavior — verbosity: progress/event display (quiet … debug).
     verbosity: str = "normal"
+    # logging_level: DEBUG/INFO/… for ~/.soothe/logs/soothe-cli.log; None = derive from verbosity.
+    logging_level: str | None = None
+
     output_format: str = "text"
 
     # Paths
@@ -99,10 +102,15 @@ class CLIConfig:
         transports = daemon_section.get("transports", {})
         websocket = transports.get("websocket", {})
 
+        raw_level = data.get("logging_level")
+        if raw_level is not None and not isinstance(raw_level, str):
+            raw_level = None
+
         return cls(
             daemon_host=websocket.get("host", "127.0.0.1"),
             daemon_port=websocket.get("port", 8765),
             verbosity=data.get("verbosity", "normal"),
+            logging_level=raw_level,
             soothe_home=Path(data.get("home", str(Path.home() / ".soothe"))),
         )
 
@@ -118,10 +126,17 @@ class CLIConfig:
         Returns:
             CLIConfig with WebSocket settings extracted.
         """
+        level_from_full = getattr(soothe_config.logging, "level", None)
+        if isinstance(level_from_full, str) and level_from_full.strip():
+            logging_level = level_from_full.strip()
+        else:
+            logging_level = None
+
         return cls(
             daemon_host=soothe_config.daemon.transports.websocket.host,
             daemon_port=soothe_config.daemon.transports.websocket.port,
             verbosity=soothe_config.logging.verbosity,
+            logging_level=logging_level,
             soothe_home=Path(soothe_config.home),
         )
 
@@ -152,7 +167,11 @@ class CLIConfig:
     @property
     def logging(self) -> Any:
         """Compatibility property: return logging config structure."""
-        return type("LoggingConfig", (), {"verbosity": self.verbosity})()
+        return type(
+            "LoggingConfig",
+            (),
+            {"verbosity": self.verbosity, "level": self.logging_level},
+        )()
 
     @property
     def home(self) -> str:

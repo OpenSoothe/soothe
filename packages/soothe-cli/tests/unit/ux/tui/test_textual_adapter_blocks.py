@@ -4,27 +4,57 @@ from unittest.mock import create_autospec
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
+from soothe_cli.shared.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
 from soothe_cli.tui.textual_adapter import (
-    _merge_streaming_tool_extra_into_blocks,
+    _defer_tool_card_for_empty_streaming_args,
+    _expand_nonstandard_tool_blocks,
     _tui_effective_ai_blocks,
 )
 
 
-def test_merge_streaming_tool_extra_replaces_empty_tool_call_args() -> None:
-    """Placeholder tool_calls with empty args must accept chunk-accumulated args."""
-    blocks = [
-        {"type": "tool_call", "name": "read_file", "id": "c1", "args": {}},
-    ]
-    extra = [
-        {
-            "type": "tool_call",
-            "name": "read_file",
-            "id": "c1",
-            "args": {"path": "/README.md"},
-        }
-    ]
-    merged = _merge_streaming_tool_extra_into_blocks(blocks, extra)
+def test_materialize_merges_tool_calls_over_empty_content_block() -> None:
+    """Empty block args + ``tool_calls`` on the same chunk → merged kwargs."""
+    msg = AIMessageChunk(
+        content="",
+        content_blocks=[
+            {"type": "tool_call", "name": "read_file", "id": "c1", "args": {}},
+        ],
+        tool_calls=[
+            {"name": "read_file", "id": "c1", "args": {"file_path": "/README.md"}},
+        ],
+    )
+    raw = _expand_nonstandard_tool_blocks(
+        [b for b in (msg.content_blocks or []) if isinstance(b, dict)]
+    )
+    merged = materialize_ai_blocks_with_resolved_tools(raw, msg, streaming_overlay=None)
+    assert merged[0]["args"] == {"file_path": "/README.md"}
+
+
+def test_materialize_applies_streaming_overlay() -> None:
+    """Streaming overlay fills empty block args for matching id."""
+    msg = AIMessageChunk(
+        content="",
+        content_blocks=[{"type": "tool_call", "id": "c1", "name": "read_file", "args": {}}],
+    )
+    blocks = [{"type": "tool_call", "name": "read_file", "id": "c1", "args": {}}]
+    merged = materialize_ai_blocks_with_resolved_tools(
+        blocks,
+        msg,
+        streaming_overlay={"c1": {"path": "/README.md"}},
+    )
     assert merged[0]["args"] == {"path": "/README.md"}
+
+
+def test_defer_empty_tool_args_until_last_stream_chunk() -> None:
+    """Empty args on mid-stream chunks defer tool card finalization elsewhere."""
+    mid = AIMessageChunk(content="")
+    assert _defer_tool_card_for_empty_streaming_args(mid) is True
+
+    last = AIMessageChunk(content="", chunk_position="last")
+    assert _defer_tool_card_for_empty_streaming_args(last) is False
+
+    full = AIMessage(content="")
+    assert _defer_tool_card_for_empty_streaming_args(full) is False
 
 
 def test_string_content_fallback_when_no_content_blocks_root() -> None:
@@ -146,9 +176,7 @@ def test_tool_calls_visible_on_nested_namespace_without_direct_route() -> None:
             }
         ],
     )
-    blocks = _tui_effective_ai_blocks(
-        msg, ns_key=("graphs", "n1"), direct_subagent_turn=False
-    )
+    blocks = _tui_effective_ai_blocks(msg, ns_key=("graphs", "n1"), direct_subagent_turn=False)
     assert blocks == [
         {
             "type": "tool_call",

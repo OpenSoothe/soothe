@@ -16,6 +16,10 @@
 #   - debug: Everything including thinking, heartbeats
 verbosity: normal
 
+# Optional: Python logging level for ~/.soothe/logs/soothe-cli.log only (does not change TUI
+# progress verbosity above). When omitted, level follows verbosity. SOOTHE_LOG_LEVEL overrides.
+logging_level: DEBUG
+
 # WebSocket connection to daemon
 websocket:
   host: "127.0.0.1"

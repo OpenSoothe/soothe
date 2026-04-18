@@ -35,6 +35,7 @@ from soothe_cli.shared.event_processor import EventProcessor
 from soothe_cli.shared.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
+    extract_tool_args_dict,
     extract_tool_brief,
     finalize_pending_tool_call,
     format_tool_call_args,
@@ -75,6 +76,7 @@ __all__ = [
     "VerbosityLevel",
     "accumulate_tool_call_chunks",
     "coerce_tool_call_args_to_dict",
+    "extract_tool_args_dict",
     # Display Policy (unified filtering module)
     "create_display_policy",
     "extract_tool_brief",

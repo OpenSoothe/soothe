@@ -7,7 +7,7 @@ from pathlib import Path
 
 import typer
 from soothe_sdk.client.config import SOOTHE_HOME
-from soothe_sdk.utils.logging import VERBOSITY_TO_LOG_LEVEL
+from soothe_sdk.utils.logging import resolve_cli_log_level
 
 from soothe_cli.cli.execution import run_headless, run_tui
 from soothe_cli.shared import load_config, setup_logging
@@ -40,7 +40,7 @@ def run_impl(
 
     try:
         cfg = load_config(config)
-        log_level = VERBOSITY_TO_LOG_LEVEL.get(cfg.verbosity, "INFO")
+        log_level = resolve_cli_log_level(cfg.verbosity, logging_level=cfg.logging_level)
         log_file = Path(SOOTHE_HOME) / "logs" / "soothe-cli.log"
         setup_logging(log_level, log_file=log_file)
 

@@ -13,6 +13,7 @@ from soothe_sdk.utils.display import (
 from soothe_sdk.utils.logging import (
     VERBOSITY_TO_LOG_LEVEL,
     GlobalInputHistory,
+    resolve_cli_log_level,
     setup_logging,
 )
 from soothe_sdk.utils.parsing import (
@@ -27,6 +28,7 @@ __all__ = [
     "setup_logging",
     "GlobalInputHistory",
     "VERBOSITY_TO_LOG_LEVEL",
+    "resolve_cli_log_level",
     "format_cli_error",
     "log_preview",
     "convert_and_abbreviate_path",

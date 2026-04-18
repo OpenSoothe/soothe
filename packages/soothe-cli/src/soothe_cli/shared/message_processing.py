@@ -40,7 +40,8 @@ def accumulate_tool_call_chunks(
     for tcc in tool_call_chunks:
         if not isinstance(tcc, dict):
             continue
-        tc_id = tcc.get("id", "")
+        tc_id_raw = tcc.get("id")
+        tc_id = str(tc_id_raw) if tc_id_raw not in (None, "") else ""
         tc_name = tcc.get("name")
         tc_args = tcc.get("args", "")
 
@@ -59,11 +60,13 @@ def accumulate_tool_call_chunks(
                 "is_main": is_main,
             }
         # Some providers send final args as a dict on a later chunk
-        elif tc_id in pending_tool_calls and isinstance(tc_args, dict) and tc_args:
+        elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, dict) and tc_args:
             pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
-        # Subsequent chunks: accumulate partial JSON strings
-        elif tc_args and isinstance(tc_args, str):
-            # Find the tool call to accumulate args for (by order, first non-emitted)
+        # Subsequent chunks: accumulate partial JSON strings for this tool call id
+        elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, str) and tc_args:
+            pending_tool_calls[tc_id]["args_str"] += tc_args
+        elif tc_args and isinstance(tc_args, str) and tc_args:
+            # Legacy: chunks missing ``id`` — attach to the first non-emitted pending call
             for pending in pending_tool_calls.values():
                 if not pending["emitted"]:
                     pending["args_str"] += tc_args
@@ -197,6 +200,51 @@ def coerce_tool_call_args_to_dict(raw: Any) -> dict[str, Any]:
     return {}
 
 
+# Keys that are metadata on tool-call blocks / ``tool_calls`` entries, not tool parameters.
+_TOOL_CALL_METADATA_KEYS: frozenset[str] = frozenset(
+    {"name", "id", "type", "index", "tool_call_id"},
+)
+
+
+def extract_tool_args_dict(tool_like: Any) -> dict[str, Any]:
+    """Flatten tool arguments from a ``tool_calls`` entry, content block, or args dict.
+
+    Providers and transports differ: some use ``args``, others ``arguments`` (JSON string),
+    Anthropic-style ``input``, or top-level parameter keys without an ``args`` envelope.
+    """
+    if not isinstance(tool_like, dict):
+        return coerce_tool_call_args_to_dict(tool_like)
+
+    base = coerce_tool_call_args_to_dict(tool_like.get("args"))
+    if base:
+        return base
+
+    base = coerce_tool_call_args_to_dict(tool_like.get("arguments"))
+    if base:
+        return base
+
+    inp = tool_like.get("input")
+    if isinstance(inp, dict) and inp:
+        return dict(inp)
+    if isinstance(inp, str) and inp.strip():
+        base = coerce_tool_call_args_to_dict(inp)
+        if base:
+            return base
+
+    raw_s = tool_like.get("_raw") or tool_like.get("raw_args_str")
+    if isinstance(raw_s, str) and raw_s.strip():
+        base = coerce_tool_call_args_to_dict(raw_s)
+        if base:
+            return base
+
+    skip = _TOOL_CALL_METADATA_KEYS | {"args", "arguments", "input", "_raw", "raw_args_str"}
+    flat = {k: v for k, v in tool_like.items() if k not in skip}
+    if flat:
+        return flat
+
+    return {}
+
+
 def coerce_tool_call_entry_to_dict(tc: Any) -> dict[str, Any] | None:
     """Normalize a ``tool_calls`` entry to a plain dict (handles Pydantic models)."""
     if isinstance(tc, dict):
@@ -224,9 +272,7 @@ def normalize_tool_calls_list(raw: list[Any]) -> list[dict[str, Any]]:
 
 def tool_calls_have_any_arg_dict(tc_list: list[Any]) -> bool:
     """True if any tool call has non-empty coerced argument dict."""
-    return any(
-        coerce_tool_call_args_to_dict(tc.get("args")) for tc in normalize_tool_calls_list(tc_list)
-    )
+    return any(extract_tool_args_dict(tc) for tc in normalize_tool_calls_list(tc_list))
 
 
 # Argument display mapping for tool calls (see IG-053)
@@ -321,20 +367,12 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
             return out[: max_value_length - 3] + "..."
         return out
 
-    args = coerce_tool_call_args_to_dict(tool_call.get("args"))
+    args = extract_tool_args_dict(tool_call)
     internal = _normalize_tool_name_for_arg_map(tool_name)
     key_args = _ARG_DISPLAY_MAP.get(internal)
 
-    # Check for raw args string fallback
+    # Partial streaming JSON (``extract_tool_args_dict`` needs complete JSON)
     raw_args_str = tool_call.get("_raw") or tool_call.get("raw_args_str", "")
-
-    # If args are empty, try to extract from raw args string
-    if not args and raw_args_str:
-        # Try to parse raw string as JSON
-        with contextlib.suppress(json.JSONDecodeError):
-            parsed_raw = json.loads(raw_args_str)
-            if isinstance(parsed_raw, dict):
-                args = parsed_raw
 
     # If args are still empty but tool is known, show placeholder
     if not args:

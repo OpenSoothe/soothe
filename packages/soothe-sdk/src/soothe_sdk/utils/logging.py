@@ -8,8 +8,13 @@ This module is part of Phase 1 of IG-174: CLI import violations fix.
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Literal
+
+# Valid values for SOOTHE_LOG_LEVEL (same names as logging module levels).
+_SOOTHE_LOG_LEVEL_ENV = "SOOTHE_LOG_LEVEL"
+_VALID_STD_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
 # Verbosity to log level mapping
 VERBOSITY_TO_LOG_LEVEL: dict[Literal["quiet", "minimal", "normal", "detailed", "debug"], str] = {
@@ -23,6 +28,46 @@ VERBOSITY_TO_LOG_LEVEL: dict[Literal["quiet", "minimal", "normal", "detailed", "
 
 Used by CLI commands to convert user-facing verbosity to log level.
 """
+
+
+def resolve_cli_log_level(
+    verbosity: str,
+    *,
+    logging_level: str | None = None,
+) -> str:
+    """Resolve effective log level for the CLI client.
+
+    Precedence:
+
+    #. Environment variable ``SOOTHE_LOG_LEVEL`` (standard level name).
+    #. ``logging_level`` from ``cli_config.yml`` when set to a valid level.
+    #. ``verbosity`` mapped via :data:`VERBOSITY_TO_LOG_LEVEL`.
+
+    Args:
+        verbosity: CLI config verbosity key (e.g. ``normal``, ``debug``).
+        logging_level: Optional explicit level from config (``DEBUG``, ``INFO``, …).
+            Ignored when ``None`` or not a valid standard level (falls through with a
+            warning).
+
+    Returns:
+        Log level string suitable for :func:`setup_logging` (e.g. ``DEBUG``).
+    """
+    env_raw = os.environ.get(_SOOTHE_LOG_LEVEL_ENV, "").strip().upper()
+    if env_raw in _VALID_STD_LOG_LEVELS:
+        return env_raw
+
+    if logging_level is not None and str(logging_level).strip() != "":
+        cfg_raw = str(logging_level).strip().upper()
+        if cfg_raw in _VALID_STD_LOG_LEVELS:
+            return cfg_raw
+        logging.getLogger(__name__).warning(
+            "Invalid logging_level %r in cli_config.yml; expected one of %s. "
+            "Falling back to verbosity mapping.",
+            logging_level,
+            ", ".join(sorted(_VALID_STD_LOG_LEVELS)),
+        )
+
+    return VERBOSITY_TO_LOG_LEVEL.get(verbosity, "INFO")
 
 
 class GlobalInputHistory:
@@ -130,8 +175,13 @@ def setup_logging(
 
     Configures Python logging for daemon or CLI.
 
+    The console handler (stderr) stays at WARNING so interactive Textual TUI output
+    is not corrupted by DEBUG lines. Full ``level`` (including DEBUG from
+    ``SOOTHE_LOG_LEVEL``) applies to ``log_file`` when set — tail that file for
+    diagnostics.
+
     Args:
-        level: Log level (DEBUG, INFO, WARNING, ERROR) for file logging.
+        level: Log level (DEBUG, INFO, WARNING, ERROR) for the root logger and file.
         log_file: Optional log file path (e.g., Path("~/.soothe/logs/soothe-cli.log")).
         format_string: Optional custom format string.
     """
@@ -139,10 +189,13 @@ def setup_logging(
     if not format_string:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-    # Configure root logger
-    logging.basicConfig(level=getattr(logging, level.upper()), format=format_string, handlers=[])
+    level_upper = level.upper()
+    root_level = getattr(logging, level_upper)
 
-    # Add console handler - WARNING level only to reduce noise
+    # Configure root logger
+    logging.basicConfig(level=root_level, format=format_string, handlers=[])
+
+    # Console: WARNING only — DEBUG/INFO must not stream to the terminal during TUI.
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(logging.Formatter(format_string))
     console_handler.setLevel(logging.WARNING)
@@ -153,12 +206,13 @@ def setup_logging(
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter(format_string))
-        file_handler.setLevel(getattr(logging, level.upper()))
+        file_handler.setLevel(root_level)
         logging.getLogger().addHandler(file_handler)
 
 
 __all__ = [
     "GlobalInputHistory",
     "VERBOSITY_TO_LOG_LEVEL",
+    "resolve_cli_log_level",
     "setup_logging",
 ]
