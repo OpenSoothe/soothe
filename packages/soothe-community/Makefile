@@ -90,13 +90,13 @@ build:
 # Publish package to PyPI
 publish:
 	@echo "Publishing package to PyPI..."
-	uv publish dist/*
+	uv publish dist/* --native-tls
 	@echo "✓ Package published to PyPI"
 
 # Publish package to TestPyPI
 publish-test:
 	@echo "Publishing package to TestPyPI..."
-	uv publish dist/* --index-url https://test.pypi.org/simple/
+	uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 	@echo "✓ Package published to TestPyPI"
 
 # Clean build artifacts
