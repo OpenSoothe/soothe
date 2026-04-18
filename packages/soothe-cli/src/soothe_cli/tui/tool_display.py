@@ -10,7 +10,10 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from soothe_cli.shared.message_processing import _normalize_tool_name_for_arg_map
+from soothe_cli.shared.message_processing import (
+    _normalize_tool_name_for_arg_map,
+    extract_tool_args_dict,
+)
 from soothe_cli.tui.config import MAX_ARG_LENGTH, get_glyphs
 from soothe_cli.tui.unicode_security import strip_dangerous_unicode
 
@@ -125,6 +128,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         execute(command="pip install foo") → '<prefix> execute("pip install foo")'
     """
     prefix = get_glyphs().tool_prefix
+    tool_args = extract_tool_args_dict(tool_args) if tool_args else {}
     tool_key = _normalize_tool_name_for_arg_map(tool_name or "")
 
     def abbreviate_path(path_str: str, max_length: int = 60) -> str:

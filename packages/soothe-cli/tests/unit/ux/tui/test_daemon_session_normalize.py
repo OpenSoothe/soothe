@@ -36,7 +36,12 @@ def test_envelope_maps_aimessage_class_name_to_wire_tag() -> None:
         "type": "AIMessage",
         "content": "",
         "tool_calls": [
-            {"name": "read_file", "args": {"file_path": "a.txt"}, "id": "call-1", "type": "tool_call"}
+            {
+                "name": "read_file",
+                "args": {"file_path": "a.txt"},
+                "id": "call-1",
+                "type": "tool_call",
+            }
         ],
     }
     wrapped = _envelope_langchain_message_dict(flat)

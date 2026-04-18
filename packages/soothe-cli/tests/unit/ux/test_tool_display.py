@@ -39,3 +39,9 @@ def test_grep_accepts_regex_alias() -> None:
 def test_fallback_shows_kv_when_unknown_tool() -> None:
     s = format_tool_display("custom_tool", {"x": 1})
     assert "x=" in s
+
+
+def test_read_file_unwraps_nested_args_envelope() -> None:
+    """Some transports nest kwargs under ``args``; header must still show the path."""
+    s = format_tool_display("read_file", {"args": {"file_path": "/tmp/README.md"}})
+    assert "README.md" in s

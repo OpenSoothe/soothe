@@ -48,13 +48,9 @@ from soothe_cli.shared.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_essential_progress_event_type,
 )
-from soothe_cli.shared.message_processing import (
-    accumulate_tool_call_chunks,
-    coerce_tool_call_args_to_dict,
-    normalize_tool_calls_list,
-    try_parse_pending_tool_call_args,
-)
+from soothe_cli.shared.message_processing import accumulate_tool_call_chunks, extract_tool_args_dict
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+from soothe_cli.shared.tool_call_resolution import build_streaming_args_overlay
 from soothe_cli.shared.tool_card_payload import extract_tool_result_card_payload
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
@@ -557,97 +553,13 @@ def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[s
     return out
 
 
-def _tool_block_ids(blocks: list[dict[str, Any]]) -> set[str]:
-    """IDs already represented as tool-ish blocks (avoid duplicate cards)."""
-    out: set[str] = set()
-    for b in blocks:
-        if not isinstance(b, dict):
-            continue
-        btype = b.get("type")
-        if btype in ("tool_call", "tool_call_chunk", "tool_use", "non_standard"):
-            bid = b.get("id")
-            if bid is not None:
-                out.add(str(bid))
-    return out
+def _defer_tool_card_for_empty_streaming_args(message: Any) -> bool:
+    """True when more tool args may arrive on a later ``AIMessageChunk``."""
+    from langchain_core.messages import AIMessageChunk
 
-
-def _tool_block_args_meaningful(args: Any) -> bool:
-    """True if a tool block already has displayable arguments."""
-    if args is None:
+    if not isinstance(message, AIMessageChunk):
         return False
-    if isinstance(args, dict):
-        return bool(args)
-    if isinstance(args, str):
-        return bool(args.strip())
-    return True
-
-
-def _merge_streaming_tool_extra_into_blocks(
-    blocks: list[dict[str, Any]],
-    streaming_extra: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Upgrade placeholder tool blocks (empty args) with chunk-accumulated args.
-
-    ``message.tool_calls`` often arrives with empty ``args`` while args stream in
-    ``tool_call_chunks``. We previously appended streaming extras only when the ID
-    was absent from blocks, so the TUI mounted ``ToolCallMessage`` with ``{}`` and
-    showed ``ls()`` / ``read_file()`` with no parameters.
-    """
-    if not streaming_extra:
-        return blocks
-    extras_by_id = {str(x.get("id") or ""): x for x in streaming_extra if str(x.get("id") or "")}
-    out: list[dict[str, Any]] = []
-    for b in blocks:
-        if not isinstance(b, dict):
-            out.append(b)
-            continue
-        btype = b.get("type")
-        if btype not in ("tool_call", "tool_call_chunk", "tool_use"):
-            out.append(b)
-            continue
-        tid = str(b.get("id") or "")
-        ex = extras_by_id.get(tid)
-        cur_args = b.get("args")
-        if btype == "tool_use" and cur_args is None:
-            cur_args = b.get("input")
-        if ex and not _tool_block_args_meaningful(cur_args):
-            nb = dict(b)
-            nb["type"] = "tool_call"
-            nb["args"] = ex.get("args", {})
-            nb["name"] = ex.get("name") or b.get("name")
-            out.append(nb)
-        else:
-            out.append(b)
-    seen = _tool_block_ids(out)
-    for tid, ex in extras_by_id.items():
-        if tid not in seen:
-            out.append(ex)
-    return out
-
-
-def _append_tool_calls_from_message_attr(
-    message: Any,
-    blocks: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Append synthetic ``tool_call`` blocks from ``AIMessage.tool_calls`` (CLI parity).
-
-    Many providers attach ``tool_calls`` without ``content_blocks``; the headless path
-    uses these directly — the TUI must do the same or tool cards never appear.
-    """
-    seen = _tool_block_ids(blocks)
-    extra: list[dict[str, Any]] = []
-    raw_tc = getattr(message, "tool_calls", None)
-    if not isinstance(raw_tc, list):
-        raw_tc = []
-    for tc in normalize_tool_calls_list(raw_tc):
-        name = str(tc.get("name") or "")
-        tc_id = str(tc.get("id") or "")
-        args = coerce_tool_call_args_to_dict(tc.get("args"))
-        if not name or not tc_id or tc_id in seen:
-            continue
-        seen.add(tc_id)
-        extra.append({"type": "tool_call", "name": name, "args": args, "id": tc_id})
-    return blocks + extra
+    return getattr(message, "chunk_position", None) != "last"
 
 
 def _tui_effective_ai_blocks(
@@ -655,26 +567,16 @@ def _tui_effective_ai_blocks(
     *,
     ns_key: tuple[Any, ...],
     direct_subagent_turn: bool,
+    streaming_overlay: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build content blocks for TUI streaming, aligned with CLI ``EventProcessor``.
+    """Build content blocks for TUI streaming (text + tool calls).
 
-    Daemon WebSocket payloads often restore ``AIMessage`` with string ``content`` only
-    (no ``content_blocks``). The CLI emits that text via ``_handle_ai_message`` /
-    ``_handle_dict_message`` fallbacks; the TUI previously required ``content_blocks``
-    and skipped the whole chunk, so users saw no assistant output.
-
-    Also merges ``message.tool_calls`` (and list ``content`` tool blocks for subgraphs)
-    so tool cards match headless ``EventProcessor`` behavior.
-
-    Args:
-        message: LangChain ``AIMessage`` / ``AIMessageChunk`` (or compatible).
-        ns_key: Stream namespace tuple (empty tuple = root graph).
-        direct_subagent_turn: Whether this turn used ``/browser``|``/claude``|``/research`` routing.
-
-    Returns:
-        List of block dicts (``type`` / ``text`` / tool fields) to iterate.
+    Tool kwargs are merged in
+    :func:`soothe_cli.shared.tool_call_resolution.materialize_ai_blocks_with_resolved_tools`.
     """
     from langchain_core.messages import AIMessage, AIMessageChunk
+
+    from soothe_cli.shared.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
 
     message = _coerce_ai_message_for_blocks(message)
     if not isinstance(message, (AIMessage, AIMessageChunk)):
@@ -685,9 +587,9 @@ def _tui_effective_ai_blocks(
     blocks: list[dict[str, Any]] = []
     if raw_blocks:
         blocks = _expand_nonstandard_tool_blocks([b for b in raw_blocks if isinstance(b, dict)])
-
-    if blocks:
-        return _append_tool_calls_from_message_attr(message, blocks)
+        return materialize_ai_blocks_with_resolved_tools(
+            blocks, message, streaming_overlay=streaming_overlay
+        )
 
     raw = getattr(message, "content", None)
     if not allow_plain_string:
@@ -699,19 +601,30 @@ def _tui_effective_ai_blocks(
                 and b.get("type") in ("tool_call", "tool_call_chunk", "tool_use", "non_standard")
             ]
             if toolish:
-                return _append_tool_calls_from_message_attr(
-                    message, _expand_nonstandard_tool_blocks(toolish)
+                expanded = _expand_nonstandard_tool_blocks(toolish)
+                return materialize_ai_blocks_with_resolved_tools(
+                    expanded, message, streaming_overlay=streaming_overlay
                 )
-        return _append_tool_calls_from_message_attr(message, [])
+        return materialize_ai_blocks_with_resolved_tools(
+            [], message, streaming_overlay=streaming_overlay
+        )
     if isinstance(raw, str) and raw.strip():
         merged = [{"type": "text", "text": raw}]
-        return _append_tool_calls_from_message_attr(message, merged)
+        return materialize_ai_blocks_with_resolved_tools(
+            merged, message, streaming_overlay=streaming_overlay
+        )
     if isinstance(raw, list):
         part = _expand_nonstandard_tool_blocks([b for b in raw if isinstance(b, dict)])
         if not part:
-            return _append_tool_calls_from_message_attr(message, [])
-        return _append_tool_calls_from_message_attr(message, part)
-    return _append_tool_calls_from_message_attr(message, [])
+            return materialize_ai_blocks_with_resolved_tools(
+                [], message, streaming_overlay=streaming_overlay
+            )
+        return materialize_ai_blocks_with_resolved_tools(
+            part, message, streaming_overlay=streaming_overlay
+        )
+    return materialize_ai_blocks_with_resolved_tools(
+        [], message, streaming_overlay=streaming_overlay
+    )
 
 
 async def execute_task_textual(
@@ -992,12 +905,6 @@ async def execute_task_textual(
 
                     message, metadata = data
                     message = _normalize_lc_stream_message(message)
-                    logger.debug(
-                        "Processing message: type=%s id=%s has_content_blocks=%s",
-                        type(message).__name__,
-                        getattr(message, "id", None),
-                        hasattr(message, "content_blocks"),
-                    )
 
                     # Filter out summarization model output, but keep UI feedback.
                     # The summarization model streams AIMessage chunks tagged
@@ -1051,10 +958,11 @@ async def execute_task_textual(
                         record = file_op_tracker.complete_with_message(message)
 
                         # Update tool call status with output (unified ToolMessage / wire dict)
-                        if tool_id and tool_id in adapter._current_tool_messages:
+                        sid = str(tool_id) if tool_id else ""
+                        if sid and sid in adapter._current_tool_messages:
                             # Pop before widget calls so the dict drains even
                             # if set_success/set_error raises.
-                            tool_msg = adapter._current_tool_messages.pop(tool_id)
+                            tool_msg = adapter._current_tool_messages.pop(sid)
                             output_str = tool_card.output_display
                             if not tool_card.is_error:
                                 tool_msg.set_success(output_str)
@@ -1079,13 +987,6 @@ async def execute_task_textual(
                                     "tool.error",
                                     {"tool_names": [tname]},
                                 )
-                        elif tool_id:
-                            logger.debug(
-                                "Tool result tool_call_id=%s not in "
-                                "_current_tool_messages; spinner gating "
-                                "may be stale",
-                                tool_id,
-                            )
 
                         # Reshow spinner only when all in-flight tools have
                         # completed (avoids premature "Thinking..." when
@@ -1132,54 +1033,26 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, total_toks, 0)
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
-                    streaming_tool_extra: list[dict[str, Any]] = []
+                    streaming_overlay: dict[str, dict[str, Any]] = {}
                     if isinstance(message, (AIMessage, AIMessageChunk)):
                         accumulate_tool_call_chunks(
                             pending_tool_calls_lc,
                             getattr(message, "tool_call_chunks", None) or [],
                             is_main=(ns_key == ()),
                         )
-                        for tc_id, pend in list(pending_tool_calls_lc.items()):
-                            if pend.get("tui_stream_mounted"):
-                                continue
-                            parsed = try_parse_pending_tool_call_args(pend)
-                            if parsed is None:
-                                continue
-                            name = str(pend.get("name") or "")
-                            if not name:
-                                continue
-                            pend["tui_stream_mounted"] = True
-                            streaming_tool_extra.append(
-                                {
-                                    "type": "tool_call",
-                                    "name": name,
-                                    "args": parsed,
-                                    "id": tc_id,
-                                }
-                            )
+                        streaming_overlay = build_streaming_args_overlay(
+                            message, pending_tool_calls_lc
+                        )
 
                     blocks = _tui_effective_ai_blocks(
                         message,
                         ns_key=ns_key,
                         direct_subagent_turn=direct_subagent_turn,
+                        streaming_overlay=streaming_overlay or None,
                     )
-                    if streaming_tool_extra:
-                        blocks = _merge_streaming_tool_extra_into_blocks(
-                            blocks, streaming_tool_extra
-                        )
-                    blocks = _expand_nonstandard_tool_blocks(blocks)
                     if not blocks:
-                        logger.debug(
-                            "No displayable AI blocks after CLI-aligned fallback: type=%s",
-                            type(message).__name__,
-                        )
                         continue
 
-                    logger.debug(
-                        "content_blocks count=%d blocks=%s",
-                        len(blocks),
-                        repr(blocks)[:500],
-                    )
                     for block in blocks:
                         block_type = block.get("type")
 
@@ -1278,6 +1151,11 @@ async def execute_task_textual(
                             if not isinstance(parsed_args, dict):
                                 parsed_args = {"value": parsed_args}
 
+                            if isinstance(parsed_args, dict):
+                                parsed_args = extract_tool_args_dict(parsed_args)
+
+                            lookup_id = str(buffer_id) if buffer_id is not None else ""
+
                             # Flush pending text before tool call
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             if pending_text:
@@ -1290,14 +1168,25 @@ async def execute_task_textual(
                                 pending_text_by_namespace[ns_key] = ""
                                 assistant_message_by_namespace.pop(ns_key, None)
 
-                            logger.debug(
-                                "Tool call buffer: name=%s id=%s args=%s",
-                                buffer_name,
-                                buffer_id,
-                                repr(parsed_args)[:200],
-                            )
-                            if buffer_id is not None and buffer_id not in displayed_tool_ids:
-                                displayed_tool_ids.add(buffer_id)
+                            args_meaningful = bool(parsed_args)
+                            if not args_meaningful and _defer_tool_card_for_empty_streaming_args(
+                                message
+                            ):
+                                # Keep buffer; a later chunk should carry real kwargs.
+                                continue
+
+                            if (
+                                lookup_id
+                                and args_meaningful
+                                and lookup_id in adapter._current_tool_messages
+                            ):
+                                existing = adapter._current_tool_messages[lookup_id]
+                                existing.refresh_tool_args(parsed_args)
+                                tool_call_buffers.pop(buffer_key, None)
+                                continue
+
+                            if lookup_id and lookup_id not in displayed_tool_ids:
+                                displayed_tool_ids.add(lookup_id)
                                 if show_tool_ui:
                                     file_op_tracker.start_operation(
                                         buffer_name, parsed_args, buffer_id
@@ -1308,14 +1197,9 @@ async def execute_task_textual(
                                         await adapter._set_spinner(None)
 
                                     # Mount tool call message
-                                    logger.debug(
-                                        "Mounting ToolCallMessage: %s(%s)",
-                                        buffer_name,
-                                        repr(parsed_args)[:200],
-                                    )
                                     tool_msg = ToolCallMessage(buffer_name, parsed_args)
                                     await adapter._mount_message(tool_msg)
-                                    adapter._current_tool_messages[buffer_id] = tool_msg
+                                    adapter._current_tool_messages[lookup_id] = tool_msg
 
                             tool_call_buffers.pop(buffer_key, None)
 
@@ -1468,11 +1352,6 @@ async def execute_task_textual(
                                         summary,
                                     )
                                 else:
-                                    logger.debug(
-                                        "agent_loop.step.completed for unknown step_id=%s; "
-                                        "using pipeline fallback",
-                                        step_id,
-                                    )
                                     ev = dict(data)
                                     ev["namespace"] = list(ns_key)
                                     for line in progress_pipeline.process(ev):
@@ -1611,10 +1490,11 @@ async def execute_task_textual(
                             if isinstance(answers, list):
                                 resume_payload[interrupt_id] = {"answers": answers}
                                 tool_id = ask_req["tool_call_id"]
-                                if tool_id in adapter._current_tool_messages:
-                                    tool_msg = adapter._current_tool_messages[tool_id]
+                                tc_sid = str(tool_id) if tool_id is not None else ""
+                                if tc_sid and tc_sid in adapter._current_tool_messages:
+                                    tool_msg = adapter._current_tool_messages[tc_sid]
                                     tool_msg.set_success("User answered")
-                                    adapter._current_tool_messages.pop(tool_id, None)
+                                    adapter._current_tool_messages.pop(tc_sid, None)
                             else:
                                 logger.error(
                                     "ask_user answered payload had non-list answers: %s",

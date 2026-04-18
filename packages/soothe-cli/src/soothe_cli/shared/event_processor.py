@@ -24,7 +24,7 @@ from soothe_sdk.verbosity import VerbosityTier
 from soothe_cli.shared.display_policy import DisplayPolicy, VerbosityLevel, normalize_verbosity
 from soothe_cli.shared.message_processing import (
     accumulate_tool_call_chunks,
-    coerce_tool_call_args_to_dict,
+    extract_tool_args_dict,
     extract_tool_brief,
     finalize_pending_tool_call,
     normalize_tool_calls_list,
@@ -357,7 +357,7 @@ class EventProcessor:
                     if name and self._presentation.tier_visible(
                         VerbosityTier.NORMAL, self._verbosity
                     ):
-                        coerced = coerce_tool_call_args_to_dict(block.get("args"))
+                        coerced = extract_tool_args_dict(block)
                         # Skip if no args - will be emitted when tool result arrives
                         if not coerced:
                             continue
@@ -397,7 +397,7 @@ class EventProcessor:
                     VerbosityTier.NORMAL, self._verbosity
                 ):
                     continue
-                tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
+                tc_args = extract_tool_args_dict(tc)
 
                 # Skip chunks with empty args - they'll come from tool_call_chunks
                 if is_chunk and not tc_args and not has_tc_args:
@@ -551,7 +551,7 @@ class EventProcessor:
             elif btype in ("tool_call_chunk", "tool_call"):
                 name = block.get("name", "")
                 if name and self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
-                    args = coerce_tool_call_args_to_dict(block.get("args", {}))
+                    args = extract_tool_args_dict(block)
                     tool_call_id = block.get("id", "")
                     # Deduplicate tool calls
                     if tool_call_id and tool_call_id in self._state.emitted_tool_call_ids:
@@ -579,7 +579,7 @@ class EventProcessor:
                     if name and self._presentation.tier_visible(
                         VerbosityTier.NORMAL, self._verbosity
                     ):
-                        args = coerce_tool_call_args_to_dict(tc.get("args", {}))
+                        args = extract_tool_args_dict(tc)
                         tool_call_id = tc.get("id", "")
 
                         # Skip emitting if args are empty - they'll come from tool_call_chunks

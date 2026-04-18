@@ -9,7 +9,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop import AgentLoop
 from soothe.cognition.agent_loop.events import LoopAgentReasonEvent
@@ -175,6 +175,79 @@ def _is_tool_stream_chunk(chunk: object) -> bool:
     return False
 
 
+def _dict_block_is_tool_invocation(block: dict[str, Any]) -> bool:
+    """True if a content / content_blocks item describes a tool call."""
+    t = block.get("type")
+    if t in ("tool_call", "tool_call_chunk", "tool_use"):
+        return True
+    if t == "non_standard" and isinstance(block.get("value"), dict):
+        inner_t = block["value"].get("type")
+        return inner_t in ("tool_use", "tool_call", "tool_call_chunk")
+    return False
+
+
+def _message_has_tool_invocation_metadata(msg: object) -> bool:
+    """True when an AI message carries tool-call ids/args (not plain assistant text only)."""
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    if isinstance(msg, (AIMessage, AIMessageChunk)):
+        tc = getattr(msg, "tool_calls", None)
+        if isinstance(tc, list) and len(tc) > 0:
+            return True
+        tcc = getattr(msg, "tool_call_chunks", None)
+        if isinstance(tcc, list) and len(tcc) > 0:
+            return True
+        for field in ("content_blocks", "content"):
+            raw = getattr(msg, field, None)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and _dict_block_is_tool_invocation(item):
+                        return True
+        return False
+
+    if isinstance(msg, dict):
+        raw_type = msg.get("type")
+        if not isinstance(raw_type, str):
+            return False
+        if raw_type not in ("ai", "AIMessage", "AIMessageChunk") and not raw_type.endswith(
+            "AIMessageChunk"
+        ):
+            return False
+        if msg.get("tool_calls") or msg.get("tool_call_chunks"):
+            return True
+        for key in ("content", "content_blocks"):
+            raw = msg.get(key)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and _dict_block_is_tool_invocation(item):
+                        return True
+        return False
+    return False
+
+
+def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
+    """Return True for ``messages`` chunks that carry AI tool-call metadata.
+
+    IG-119 forwards ``ToolMessage`` chunks but previously dropped all ``AIMessage`` chunks
+    to avoid duplicating assistant prose. The TUI still needs AI chunks that contain
+    ``tool_calls`` / ``tool_call_chunks`` so it can mount ``ToolCallMessage`` with args
+    before tool results arrive (otherwise only orphan result rows with ``{}`` appear).
+    """
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    _namespace, mode, data = chunk
+    if mode != "messages":
+        return False
+    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
+        return False
+    return _message_has_tool_invocation_metadata(data[0])
+
+
+def _forward_messages_chunk_for_tool_ui(chunk: object) -> bool:
+    """Whether to forward a ``stream_event`` messages chunk to WebSocket / TUI."""
+    return _is_tool_stream_chunk(chunk) or _is_ai_tool_invocation_messages_chunk(chunk)
+
+
 def _stringify_llm_message_content(content: object) -> str:
     """Flatten LangChain message content to a single string."""
     if isinstance(content, str):
@@ -334,9 +407,9 @@ class AgenticMixin:
                 )
 
             elif event_type == "stream_event":
-                # Forward tool message chunks only — avoids duplicating assistant AIMessage
-                # stream text (IG-119) while allowing CLI/TUI tool cards (RFC-0020).
-                if _is_tool_stream_chunk(event_data):
+                # Forward tool results and AI tool-call metadata — not plain AIMessage text
+                # (IG-119) — so TUI can show tool args before ToolMessage (RFC-0020).
+                if _forward_messages_chunk_for_tool_ui(event_data):
                     yield event_data
 
             elif event_type == "plan":

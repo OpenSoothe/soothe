@@ -3277,6 +3277,11 @@ class SootheApp(App):
         """
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+        from soothe_cli.shared.message_processing import (
+            extract_tool_args_dict,
+            normalize_tool_calls_list,
+        )
+
         result: list[MessageData] = []
         # Maps tool_call_id -> index into result list
         pending_tool_indices: dict[str, int] = {}
@@ -3322,10 +3327,10 @@ class SootheApp(App):
                     result.append(MessageData(type=MessageType.ASSISTANT, content=text))
 
                 # Track tool calls for later matching
-                for tc in getattr(msg, "tool_calls", []):
+                for tc in normalize_tool_calls_list(getattr(msg, "tool_calls", [])):
                     tc_id = tc.get("id")
                     name = tc.get("name", "unknown")
-                    args = tc.get("args", {})
+                    args = extract_tool_args_dict(tc)
                     data = MessageData(
                         type=MessageType.TOOL,
                         content="",

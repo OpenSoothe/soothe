@@ -10,6 +10,7 @@ from typing import Any
 from soothe_cli.shared.message_processing import (
     accumulate_tool_call_chunks,
     coerce_tool_call_args_to_dict,
+    extract_tool_args_dict,
     format_tool_call_args,
     strip_internal_tags,
     try_parse_pending_tool_call_args,
@@ -34,6 +35,34 @@ class TestAccumulateToolCallChunks:
         )
         parsed = try_parse_pending_tool_call_args(pending["call-dict"])
         assert parsed == {"path": "/tmp/a.txt"}
+
+    def test_parallel_streams_accumulate_by_tool_call_id(self) -> None:
+        """String fragments must append to the matching id (not the first pending)."""
+        pending: dict[str, Any] = {}
+        accumulate_tool_call_chunks(
+            pending,
+            [
+                {"id": "call-a", "name": "read_file", "args": ""},
+                {"id": "call-b", "name": "ls", "args": ""},
+                {"id": "call-a", "args": '{"file_path": "'},
+                {"id": "call-a", "args": '/tmp/x.md"}'},
+                {"id": "call-b", "args": '{"directory": "/proj"}'},
+            ],
+        )
+        assert pending["call-a"]["args_str"] == '{"file_path": "/tmp/x.md"}'
+        assert pending["call-b"]["args_str"] == '{"directory": "/proj"}'
+
+
+class TestExtractToolArgsDict:
+    """``extract_tool_args_dict`` normalizes provider-specific shapes."""
+
+    def test_openai_style_arguments_json_string(self) -> None:
+        assert extract_tool_args_dict(
+            {"name": "read_file", "id": "1", "arguments": '{"file_path": "/a.txt"}'}
+        ) == {"file_path": "/a.txt"}
+
+    def test_anthropic_style_input_dict(self) -> None:
+        assert extract_tool_args_dict({"name": "ls", "input": {"path": "/b"}}) == {"path": "/b"}
 
 
 class TestFormatToolCallArgs:
