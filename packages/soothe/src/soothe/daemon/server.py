@@ -201,7 +201,7 @@ class SootheDaemon(DaemonHandlersMixin):
             thread_manager = self._runner.thread_context_manager()
 
             # Initialize ThreadExecutor for multi-threading support (RFC-402)
-            max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 4)
+            max_concurrent = getattr(self._config.daemon, "max_concurrent_threads", 100)
             self._thread_executor = ThreadExecutor(
                 self._runner, max_concurrent_threads=max_concurrent
             )

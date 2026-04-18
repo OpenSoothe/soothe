@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 
 from soothe_cli.shared.tool_call_resolution import materialize_ai_blocks_with_resolved_tools
 from soothe_cli.tui.textual_adapter import (
+    _defer_first_tool_card_mount_until_final_stream_chunk,
     _defer_tool_card_for_empty_streaming_args,
     _expand_nonstandard_tool_blocks,
     _tui_effective_ai_blocks,
@@ -55,6 +56,24 @@ def test_defer_empty_tool_args_until_last_stream_chunk() -> None:
 
     full = AIMessage(content="")
     assert _defer_tool_card_for_empty_streaming_args(full) is False
+
+
+def test_defer_first_tool_mount_only_on_explicit_nonfinal_chunk() -> None:
+    """First tool card mount waits until ``chunk_position == last`` for marked mid-stream chunks.
+
+    LangChain typically only validates ``last``; other markers use ``model_construct``.
+    """
+    mid = AIMessageChunk.model_construct(content="", chunk_position="partial")
+    assert _defer_first_tool_card_mount_until_final_stream_chunk(mid) is True
+
+    last = AIMessageChunk(content="", chunk_position="last")
+    assert _defer_first_tool_card_mount_until_final_stream_chunk(last) is False
+
+    unknown = AIMessageChunk(content="")
+    assert _defer_first_tool_card_mount_until_final_stream_chunk(unknown) is False
+
+    full = AIMessage(content="")
+    assert _defer_first_tool_card_mount_until_final_stream_chunk(full) is False
 
 
 def test_string_content_fallback_when_no_content_blocks_root() -> None:

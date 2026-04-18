@@ -90,7 +90,7 @@ class DaemonConfig(BaseModel):
     """
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
-    max_concurrent_threads: int = Field(default=4, description="Maximum concurrent threads")
+    max_concurrent_threads: int = Field(default=100, description="Maximum concurrent threads")
     multi_threading_enabled: bool = Field(
         default=False, description="Enable multi-threaded execution"
     )

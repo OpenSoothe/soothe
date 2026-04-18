@@ -10,14 +10,12 @@ from typing import TYPE_CHECKING, ClassVar, cast
 
 from rich.cells import cell_len
 from textual.binding import Binding, BindingType
-from textual.color import Color as TColor
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
 from textual.css.query import NoMatches
 from textual.fuzzy import Matcher
 from textual.message import Message
 from textual.screen import ModalScreen
-from textual.style import Style as TStyle
 from textual.widgets import Checkbox, Input, Static
 
 if TYPE_CHECKING:
@@ -30,16 +28,12 @@ if TYPE_CHECKING:
 
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
-    build_langsmith_thread_url,
     get_glyphs,
     is_ascii_mode,
 )
 from soothe_cli.tui.widgets._links import open_style_link
 
 logger = logging.getLogger(__name__)
-
-_URL_FETCH_TIMEOUT = 2.0
-"""Seconds to wait for LangSmith thread-URL resolution before giving up."""
 
 _column_widths_cache: (
     tuple[
@@ -722,30 +716,14 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
                 self._selected_index = i
                 break
 
-    def _build_title(self, thread_url: str | None = None) -> str | Content:
-        """Build the title, optionally with a clickable thread ID link.
-
-        Args:
-            thread_url: LangSmith thread URL. When provided, the thread ID is
-                rendered as a clickable hyperlink.
+    def _build_title(self) -> str:
+        """Build the title with the current thread ID.
 
         Returns:
-            Plain string or `Content` with an embedded hyperlink.
+            Plain string with the current thread ID.
         """
         if not self._current_thread:
             return "Select Thread"
-        if thread_url:
-            return Content.assemble(
-                "Select Thread (current: ",
-                (
-                    self._current_thread,
-                    TStyle(
-                        foreground=TColor.parse(theme.get_theme_colors(self).primary),
-                        link=thread_url,
-                    ),
-                ),
-                ")",
-            )
         return f"Select Thread (current: {self._current_thread})"
 
     def _build_help_text(self) -> str:
@@ -905,8 +883,6 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
 
         if self._has_initial_threads:
             self.call_after_refresh(self._scroll_selected_into_view)
-            if self._current_thread:
-                self._resolve_thread_url()
 
         if self._has_initial_threads:
             # Defer by one message cycle so Textual finishes processing
@@ -1364,9 +1340,6 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
 
         self._schedule_checkpoint_enrichment()
 
-        if self._current_thread:
-            self._resolve_thread_url()
-
     async def _load_checkpoint_details(self) -> None:
         """Populate checkpoint-derived thread fields in one background pass."""
         if not self._threads:
@@ -1428,43 +1401,6 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
                 except NoMatches:
                     continue
                 cell.update(cell_text[tid, key])
-
-    def _resolve_thread_url(self) -> None:
-        """Start exclusive background worker to resolve LangSmith thread URL."""
-        self.run_worker(self._fetch_thread_url, exclusive=True, group="thread-selector-url")
-
-    async def _fetch_thread_url(self) -> None:
-        """Resolve the LangSmith URL and update the title with a clickable link."""
-        if not self._current_thread:
-            return
-        try:
-            thread_url = await asyncio.wait_for(
-                asyncio.to_thread(build_langsmith_thread_url, self._current_thread),
-                timeout=_URL_FETCH_TIMEOUT,
-            )
-        except (TimeoutError, OSError):
-            logger.debug(
-                "Could not resolve LangSmith thread URL for '%s'",
-                self._current_thread,
-                exc_info=True,
-            )
-            return
-        except Exception:
-            logger.debug(
-                "Unexpected error resolving LangSmith thread URL for '%s'",
-                self._current_thread,
-                exc_info=True,
-            )
-            return
-        if thread_url:
-            try:
-                title_widget = self.query_one("#thread-title", Static)
-                title_widget.update(self._build_title(thread_url))
-            except NoMatches:
-                logger.debug(
-                    "Title widget #thread-title not found; "
-                    "thread selector may have been dismissed during URL resolution"
-                )
 
     async def _show_mount_error(self, detail: str) -> None:
         """Display an error message inside the thread list and refocus.

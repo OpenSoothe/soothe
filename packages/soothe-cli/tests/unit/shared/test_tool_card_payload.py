@@ -52,3 +52,16 @@ def test_extract_from_wire_dict_tool() -> None:
 def test_extract_from_non_tool_returns_none() -> None:
     assert extract_tool_result_card_payload(AIMessage(content="hi")) is None
     assert extract_tool_result_card_payload({"type": "human"}) is None
+
+
+def test_extract_infers_tool_name_from_functions_id_when_name_is_placeholder() -> None:
+    """Orphan / wire payloads sometimes use name ``tool``; recover from ``functions.*`` id."""
+    msg = ToolMessage(
+        content="[]",
+        tool_call_id="functions.ls:0",
+        name="tool",
+        status="success",
+    )
+    p = extract_tool_result_card_payload(msg)
+    assert p is not None
+    assert p.tool_name == "ls"

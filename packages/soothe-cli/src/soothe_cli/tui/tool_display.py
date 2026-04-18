@@ -205,17 +205,33 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f'{prefix} {tool_name}("{command}")'
 
     elif tool_key in {"ls", "list_files"}:
-        # ls / list_files: directory varies by provider (path, directory, …)
-        raw_path = _first_nonempty_str_arg(
-            tool_args,
-            ("path", "path_name", "directory", "target_directory", "dir", "folder"),
+        # ls / list_files: directory varies by provider (path, directory, …).
+        # Show explicit cwd (".") — omitting it produced bare ls() and looked like missing args.
+        path_keys = (
+            "path",
+            "path_name",
+            "directory",
+            "target_directory",
+            "dir",
+            "folder",
         )
-        if raw_path is not None and str(raw_path).strip() not in (".", ""):
-            path_raw = strip_dangerous_unicode(str(raw_path))
-            path = abbreviate_path(path_raw)
-            if path_raw != raw_path:
-                path += _HIDDEN_CHAR_MARKER
-            return f"{prefix} {tool_name}({path})"
+        raw_path_val = None
+        for k in path_keys:
+            if k in tool_args:
+                raw_path_val = tool_args.get(k)
+                break
+        if raw_path_val is not None:
+            s = str(raw_path_val).strip()
+            if s == "":
+                pass
+            elif s == ".":
+                return f"{prefix} {tool_name}(.)"
+            else:
+                path_raw = strip_dangerous_unicode(s)
+                path = abbreviate_path(path_raw)
+                if path_raw != s:
+                    path += _HIDDEN_CHAR_MARKER
+                return f"{prefix} {tool_name}({path})"
         if tool_key == "list_files":
             pat = _first_nonempty_str_arg(tool_args, ("pattern", "glob_pattern", "glob"))
             if pat is not None and pat != "*":
@@ -224,10 +240,32 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         return f"{prefix} {tool_name}()"
 
     elif tool_key == "glob":
-        pat = _first_nonempty_str_arg(tool_args, ("pattern", "glob_pattern", "glob"))
+        pat = _first_nonempty_str_arg(
+            tool_args,
+            ("pattern", "glob_pattern", "glob", "glob_file_pattern", "include"),
+        )
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=80)
             return f'{prefix} {tool_name}("{pattern}")'
+        loc_raw = None
+        for k in ("path", "directory", "dir", "root", "cwd", "base_path"):
+            if k in tool_args and tool_args[k] is not None:
+                loc_raw = str(tool_args[k]).strip()
+                if loc_raw:
+                    break
+        if loc_raw is not None:
+            path_raw = strip_dangerous_unicode(loc_raw)
+            path = abbreviate_path(path_raw)
+            if path_raw != loc_raw:
+                path += _HIDDEN_CHAR_MARKER
+            return f"{prefix} {tool_name}(dir={path})"
+        if tool_args:
+            args_str = ", ".join(
+                f"{_sanitize_display_value(k, max_length=30)}={_sanitize_display_value(v, max_length=50)}"
+                for k, v in tool_args.items()
+            )
+            return f"{prefix} {tool_name}({args_str})"
+        return f"{prefix} {tool_name}()"
 
     elif tool_key == "fetch_url":
         # Fetch URL: show the URL being fetched

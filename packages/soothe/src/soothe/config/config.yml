@@ -196,6 +196,9 @@ daemon:
         - "http://localhost:*"
         - "http://127.0.0.1:*"
 
+  # Concurrent thread/query limit when multi-threading is enabled (RFC-402)
+  max_concurrent_threads: 100
+
 # =============================================================================
 # Subagents
 # =============================================================================

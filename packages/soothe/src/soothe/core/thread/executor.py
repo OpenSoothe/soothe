@@ -22,7 +22,7 @@ class ThreadExecutor:
     def __init__(
         self,
         runner: SootheRunner,
-        max_concurrent_threads: int = 4,
+        max_concurrent_threads: int = 100,
     ) -> None:
         """Initialize thread executor.
 
