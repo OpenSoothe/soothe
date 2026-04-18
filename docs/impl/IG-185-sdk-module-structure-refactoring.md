@@ -375,8 +375,8 @@ __all__ = []
 
 **Example:**
 ```python
-# Before: plugin/decorators.py imports
-from soothe_sdk.types.manifest import PluginManifest
+# Before: plugin/decorators.py imports (deprecated types module removed)
+# from soothe_sdk.types.manifest import PluginManifest
 
 # After: plugin/decorators.py imports
 from soothe_sdk.plugin.manifest import PluginManifest as Manifest
