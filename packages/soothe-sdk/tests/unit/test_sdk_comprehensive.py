@@ -21,9 +21,9 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from soothe_sdk.types.context import SootheConfigProtocol
+from soothe_sdk.plugin.context import SootheConfigProtocol
 
-from soothe_sdk import (
+from soothe_sdk.exceptions import (
     DependencyError,
     DiscoveryError,
     InitializationError,
@@ -31,12 +31,16 @@ from soothe_sdk import (
     SubagentCreationError,
     ToolCreationError,
     ValidationError,
+)
+from soothe_sdk.plugin import (
     plugin,
     subagent,
     tool,
     tool_group,
+    Context as PluginContext,
+    Health as PluginHealth,
+    Manifest as PluginManifest,
 )
-from soothe_sdk.types import PluginContext, PluginHealth, PluginManifest
 
 
 class TestPluginDecorator:

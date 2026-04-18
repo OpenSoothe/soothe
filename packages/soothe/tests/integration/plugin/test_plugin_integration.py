@@ -13,7 +13,7 @@ import pytest
 
 def test_manifest_has_config_requirements():
     """PluginManifest should have config_requirements field."""
-    from soothe_sdk.types.manifest import PluginManifest
+    from soothe_sdk.plugin.manifest import PluginManifest
 
     manifest = PluginManifest(
         name="test-plugin",
@@ -52,7 +52,7 @@ def test_plugin_decorator_accepts_config_requirements():
 
 def test_config_dependency_resolution():
     """PluginLoader should validate config_requirements."""
-    from soothe_sdk.types.manifest import PluginManifest
+    from soothe_sdk.plugin.manifest import PluginManifest
 
     from soothe.plugin.exceptions import DependencyError
     from soothe.plugin.loader import PluginLoader
@@ -157,7 +157,7 @@ async def test_health_check_invocation():
 
 def test_untrusted_plugin_blocked_by_default():
     """Untrusted plugins should be blocked unless env var is set."""
-    from soothe_sdk.types.manifest import PluginManifest
+    from soothe_sdk.plugin.manifest import PluginManifest
 
     from soothe.plugin.exceptions import ValidationError
     from soothe.plugin.loader import PluginLoader
@@ -189,7 +189,7 @@ def test_untrusted_plugin_blocked_by_default():
 
 def test_trusted_plugin_allowed():
     """Built-in, trusted, and standard plugins should always be allowed."""
-    from soothe_sdk.types.manifest import PluginManifest
+    from soothe_sdk.plugin.manifest import PluginManifest
 
     from soothe.plugin.loader import PluginLoader
     from soothe.plugin.registry import PluginRegistry
@@ -256,7 +256,7 @@ def test_plugin_load_from_entry_points():
     """Plugins should be loadable via entry points."""
     import importlib.metadata
 
-    from soothe_sdk.types.manifest import PluginManifest
+    from soothe_sdk.plugin.manifest import PluginManifest
 
     # Check community entry points exist
     eps = list(importlib.metadata.entry_points(group="soothe.plugins"))
