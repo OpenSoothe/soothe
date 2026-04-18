@@ -2707,6 +2707,35 @@ class SootheApp(App):
         Args:
             command: The slash command (including /)
         """
+        from soothe_cli.shared.command_router import (
+            parse_slash_command,
+            validate_command,
+        )
+        from soothe_cli.shared.slash_commands import COMMANDS as _RFC404_COMMANDS
+
+        # RFC-404 daemon *routing* commands (/browser, /claude, /research, /plan):
+        # send the full line as a normal user turn so ``parse_subagent_from_input``
+        # runs in the daemon adapter (same as headless CLI). Without this branch,
+        # ``cmd == "/claude …"`` never matches the bare ``/claude`` handlers below.
+        full_stripped = command.strip()
+        first_word, query = parse_slash_command(full_stripped)
+        if first_word:
+            entry = _RFC404_COMMANDS.get(first_word)
+            if entry and entry.get("location") == "daemon" and entry.get("type") == "routing":
+                thread_id = self._session_state.thread_id if self._session_state else None
+                ok, err = validate_command(entry, first_word, query, thread_id)
+                if not ok:
+                    await self._mount_message(UserMessage(command))
+                    await self._mount_message(AppMessage(f"Error: {err}"))
+                    with suppress(NoMatches, ScreenStackError):
+                        self.query_one("#chat", VerticalScroll).anchor()
+                    return
+                await self._mount_message(UserMessage(command))
+                await self._send_to_agent(full_stripped)
+                with suppress(NoMatches, ScreenStackError):
+                    self.query_one("#chat", VerticalScroll).anchor()
+                return
+
         from soothe_cli.tui.config import newline_shortcut, settings
 
         cmd = command.lower().strip()
@@ -2720,6 +2749,7 @@ class SootheApp(App):
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /theme, "
                 "/tokens, /threads, /trace, "
+                "/browser, /claude, /research, /plan (subagent routing), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
                 "  Enter           Submit your message\n"

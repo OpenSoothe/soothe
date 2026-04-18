@@ -26,6 +26,37 @@ _MIN_FINDINGS_FOR_RESEARCH = 3
 _MIN_CODE_MENTIONS_FOR_IMPLEMENTATION = 5
 
 
+def evidence_requires_final_synthesis(state: LoopState, plan_result: PlanResult) -> bool:
+    """Return True when accumulated step evidence warrants a consolidated synthesis pass.
+
+    Uses the same evidence-based thresholds as ``SynthesisPhase.should_synthesize`` (RFC-603).
+
+    Args:
+        state: Loop state with accumulated step results.
+        plan_result: Final plan result (reserved for future hints).
+
+    Returns:
+        True if a final thread synthesis should run based on evidence volume and diversity.
+    """
+    _ = plan_result
+    if len(state.step_results) < _SYNTHESIS_MIN_STEPS:
+        return False
+
+    successful_steps = [r for r in state.step_results if r.success]
+    if not successful_steps:
+        return False
+    success_rate = len(successful_steps) / len(state.step_results)
+    if success_rate < _SYNTHESIS_MIN_SUCCESS_RATE:
+        return False
+
+    total_evidence_length = sum(len(r.to_evidence_string(truncate=False)) for r in successful_steps)
+    if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
+        return False
+
+    unique_step_ids = {r.step_id for r in successful_steps}
+    return len(unique_step_ids) >= _SYNTHESIS_MIN_UNIQUE_STEPS
+
+
 class SynthesisPhase:
     """Generate comprehensive final reports from evidence.
 
@@ -50,7 +81,7 @@ class SynthesisPhase:
         """
         self.llm = llm_client
 
-    def should_synthesize(self, _goal: str, state: LoopState, _plan_result: PlanResult) -> bool:
+    def should_synthesize(self, _goal: str, state: LoopState, plan_result: PlanResult) -> bool:
         """Determine if synthesis phase should run.
 
         Uses evidence-based heuristics only (no keyword matching).
@@ -58,34 +89,12 @@ class SynthesisPhase:
         Args:
             _goal: Goal description (reserved for future use).
             state: Loop state with accumulated evidence.
-            _plan_result: Final plan result (reserved for future use).
+            plan_result: Final plan result (reserved for future use).
 
         Returns:
             True if synthesis should run.
         """
-        # Criterion 1: Enough evidence
-        if len(state.step_results) < _SYNTHESIS_MIN_STEPS:
-            return False
-
-        # Criterion 2: High success rate
-        successful_steps = [r for r in state.step_results if r.success]
-        if not successful_steps:
-            return False
-        success_rate = len(successful_steps) / len(state.step_results)
-        if success_rate < _SYNTHESIS_MIN_SUCCESS_RATE:
-            return False
-
-        # Criterion 3: Sufficient evidence volume
-        # Use full output, not truncated evidence strings
-        total_evidence_length = sum(
-            len(r.to_evidence_string(truncate=False)) for r in successful_steps
-        )
-        if total_evidence_length < _SYNTHESIS_MIN_EVIDENCE_LENGTH:
-            return False
-
-        # Criterion 4: Multiple perspectives (unique step types)
-        unique_step_ids = {r.step_id for r in successful_steps}
-        return len(unique_step_ids) >= _SYNTHESIS_MIN_UNIQUE_STEPS
+        return evidence_requires_final_synthesis(state, plan_result)
 
     def _classify_goal_type(self, evidence: str) -> str:
         """Classify goal type from evidence patterns.

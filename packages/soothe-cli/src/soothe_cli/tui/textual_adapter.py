@@ -436,6 +436,51 @@ def _read_mentioned_file(file_path: Path, max_embed_bytes: int) -> str:
     return f"\n### {file_path.name}\nPath: `{file_path}`\n```\n{content}\n```"
 
 
+def _tui_effective_ai_blocks(
+    message: Any,
+    *,
+    ns_key: tuple[Any, ...],
+    direct_subagent_turn: bool,
+) -> list[dict[str, Any]]:
+    """Build content blocks for TUI streaming, aligned with CLI ``EventProcessor``.
+
+    Daemon WebSocket payloads often restore ``AIMessage`` with string ``content`` only
+    (no ``content_blocks``). The CLI emits that text via ``_handle_ai_message`` /
+    ``_handle_dict_message`` fallbacks; the TUI previously required ``content_blocks``
+    and skipped the whole chunk, so users saw no assistant output.
+
+    Args:
+        message: LangChain ``AIMessage`` / ``AIMessageChunk`` (or compatible).
+        ns_key: Stream namespace tuple (empty tuple = root graph).
+        direct_subagent_turn: Whether this turn used ``/browser``|``/claude``|``/research`` routing.
+
+    Returns:
+        List of block dicts (``type`` / ``text`` / tool fields) to iterate.
+    """
+    from langchain_core.messages import AIMessage, AIMessageChunk
+
+    if not isinstance(message, (AIMessage, AIMessageChunk)):
+        return []
+
+    allow_plain_string = (not ns_key) or direct_subagent_turn
+    raw_blocks = getattr(message, "content_blocks", None)
+    blocks: list[dict[str, Any]] = []
+    if raw_blocks:
+        blocks = [b for b in raw_blocks if isinstance(b, dict)]
+
+    if blocks:
+        return blocks
+
+    raw = getattr(message, "content", None)
+    if not allow_plain_string:
+        return []
+    if isinstance(raw, str) and raw.strip():
+        return [{"type": "text", "text": raw}]
+    if isinstance(raw, list):
+        return [b for b in raw if isinstance(b, dict)]
+    return []
+
+
 async def execute_task_textual(
     user_input: str,
     agent: Any,  # noqa: ANN401  # Dynamic agent graph type
@@ -594,6 +639,9 @@ async def execute_task_textual(
 
     # Track summarization lifecycle so spinner status and notification stay in sync.
     summarization_in_progress = False
+    # True when this daemon turn used explicit /browser, /claude, or /research routing
+    # (``send_turn(..., subagent=...)``). Replies stream on subgraph namespaces, not ().
+    direct_subagent_turn = False
 
     try:
         while True:
@@ -627,6 +675,7 @@ async def execute_task_textual(
                     subagent_name, routed_text = parse_subagent_from_input(
                         daemon_text if isinstance(daemon_text, str) else final_input
                     )
+                    direct_subagent_turn = subagent_name is not None
                     ctx_model = context.get("model") if context else None
                     raw_mp = context.get("model_params") if context else None
                     mp = raw_mp if isinstance(raw_mp, dict) else None
@@ -651,9 +700,9 @@ async def execute_task_textual(
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
 
-                # Filter out subagent outputs - only show main agent (empty
-                # namespace). Subagents run via Task tool and should only
-                # report back to the main agent
+                # Root graph uses namespace ``()``; Task-spawned subagents use non-empty
+                # namespaces (hide those). Direct /browser|/claude|/research turns stream
+                # entirely on a subgraph — show those streams.
                 is_main_agent = ns_key == ()
 
                 # Handle UPDATES stream - for interrupts and todos
@@ -692,8 +741,7 @@ async def execute_task_textual(
 
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
-                    # Skip subagent outputs - only render main agent content in chat
-                    if not is_main_agent:
+                    if not is_main_agent and not direct_subagent_turn:
                         logger.debug("Skipping subagent message ns=%s", ns_key)
                         continue
 
@@ -826,16 +874,18 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, total_toks, 0)
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
-                    # Check if this is an AIMessageChunk with content
-                    if not hasattr(message, "content_blocks"):
+                    blocks = _tui_effective_ai_blocks(
+                        message,
+                        ns_key=ns_key,
+                        direct_subagent_turn=direct_subagent_turn,
+                    )
+                    if not blocks:
                         logger.debug(
-                            "Message has no content_blocks: type=%s",
+                            "No displayable AI blocks after CLI-aligned fallback: type=%s",
                             type(message).__name__,
                         )
                         continue
 
-                    # Process content blocks
-                    blocks = message.content_blocks
                     logger.debug(
                         "content_blocks count=%d blocks=%s",
                         len(blocks),

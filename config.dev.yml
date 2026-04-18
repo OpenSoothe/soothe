@@ -36,6 +36,10 @@ router:
 
 debug: false
 
+# Agentic loop (merged with defaults; see packages/soothe/src/soothe/config/config.yml)
+agentic:
+  final_response: adaptive
+
 # Dev update preferences (optional)
 # update:
 #   auto_update: false  # Disable auto-update in dev

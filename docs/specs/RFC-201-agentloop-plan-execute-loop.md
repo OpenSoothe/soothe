@@ -87,6 +87,15 @@ async def run_with_progress(...):
 
 **Layer 1 → Layer 2**: CoreAgent returns streaming execution results for evidence accumulation.
 
+### Adaptive final user response (IG-199)
+
+When the Plan phase returns `status: done`, AgentLoop must produce the user-visible completion text. Two strategies exist:
+
+1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, AgentLoop records the assistant-visible text from the CoreAgent stream. For simple goals (light evidence, single-wave semantics, no parallel multi-step wave), this text may be returned directly without a second CoreAgent turn.
+2. **Final thread synthesis**: An additional CoreAgent turn asks for a consolidated report over full thread history. Used when evidence heuristics indicate a multi-step or heavy run, when the last wave used parallel multi-step execution, when the subagent task cap was hit, or when no assistant text was captured.
+
+Configuration (`agentic.final_response`): `adaptive` (default) applies the policy above; `always_synthesize` always runs the report turn; `always_last_execute` skips the report when last Execute text exists (falling back to plan evidence otherwise).
+
 ### Architectural Role Clarification
 
 **Important**: AgentLoop is the **Layer 2 Plan → Execute loop runner**, not a consciousness module or knowledge accumulator. Its responsibilities are execution orchestration and iterative refinement, not knowledge persistence.

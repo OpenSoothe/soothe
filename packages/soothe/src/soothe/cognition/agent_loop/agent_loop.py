@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.cognition.agent_loop.executor import Executor
+from soothe.cognition.agent_loop.final_response_policy import needs_final_thread_synthesis
 from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.reason import PlanPhase
@@ -235,19 +236,36 @@ class AgentLoop:
                 state.iteration += 1
                 state.total_duration_ms += int((time.perf_counter() - iteration_start) * 1000)
 
-                # RFC-211: Agentic loop signals core agent to generate final report
+                # RFC-211 / IG-199: Final report — adaptive second CoreAgent turn vs last Execute text
                 final_output = plan_result.full_output or plan_result.evidence_summary
-                logger.info(
-                    "Starting final report generation (full_output=%d chars, evidence=%d chars)",
-                    len(plan_result.full_output or ""),
-                    len(plan_result.evidence_summary or ""),
-                )
+                mode = self.config.agentic.final_response
+                run_synth = needs_final_thread_synthesis(state, plan_result, mode)
 
-                try:
-                    from langchain_core.messages import HumanMessage
+                if not run_synth:
+                    reuse = (state.last_execute_assistant_text or "").strip()
+                    final_output = (
+                        reuse
+                        or (plan_result.full_output or "").strip()
+                        or (plan_result.evidence_summary or "").strip()
+                    )
+                    logger.info(
+                        "Final response: branch=reuse_execute assistant_chars=%d full_output_chars=%d",
+                        len(reuse),
+                        len(plan_result.full_output or ""),
+                    )
+                else:
+                    logger.info(
+                        "Starting final report generation (full_output=%d chars, evidence=%d chars, mode=%s)",
+                        len(plan_result.full_output or ""),
+                        len(plan_result.evidence_summary or ""),
+                        mode,
+                    )
 
-                    # Agentic loop sends message to core agent requesting final report
-                    report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
+                    try:
+                        from langchain_core.messages import HumanMessage
+
+                        # Agentic loop sends message to core agent requesting final report
+                        report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
 
 The report should:
 1. Summarize what was accomplished
@@ -257,76 +275,78 @@ The report should:
 
 Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
 
-                    # Send to Layer 1 CoreAgent — accumulate streaming chunks and final AI text
-                    accumulated_chunks = ""  # Accumulate AIMessageChunk content during streaming
-                    final_ai_message_text = ""  # Capture final AIMessage (non-chunk) content
-                    chunk_count = 0
-                    ai_msg_count = 0
-                    async for chunk in self.core_agent.astream(
-                        {"messages": [HumanMessage(content=report_request)]},
-                        config={"configurable": {"thread_id": state.thread_id}},
-                        stream_mode=["messages"],
-                        subgraphs=False,
-                    ):
-                        chunk_count += 1
-                        if isinstance(chunk, tuple) and len(chunk) >= 2:
-                            mode, data = chunk[0], chunk[1]
-                            if mode == "messages":
-                                from langchain_core.messages import AIMessage, AIMessageChunk
-
-                                if isinstance(data, tuple) and len(data) >= 2:
-                                    msg, _ = data
-                                    if isinstance(msg, (AIMessage, AIMessageChunk)):
-                                        ai_msg_count += 1
-                                        content = msg.content
-                                        # Extract text from content (handle str or list formats)
-                                        extracted_text = ""
-                                        if isinstance(content, str):
-                                            extracted_text = content
-                                        elif isinstance(content, list):
-                                            parts = []
-                                            for block in content:
-                                                if isinstance(block, dict) and "text" in block:
-                                                    parts.append(block["text"])
-                                                elif isinstance(block, str):
-                                                    parts.append(block)
-                                            extracted_text = "".join(parts)
-
-                                        # AIMessageChunk: accumulate streaming text
-                                        if isinstance(msg, AIMessageChunk) and extracted_text:
-                                            accumulated_chunks += extracted_text
-                                        # AIMessage (non-chunk): capture final message text
-                                        elif isinstance(msg, AIMessage) and extracted_text:
-                                            final_ai_message_text = extracted_text
-
-                    # Prefer accumulated chunks (streaming content) over final AIMessage
-                    # because streaming sends 100s of AIMessageChunk instances with actual text,
-                    # while final AIMessage may only contain synthesized metadata or minimal content.
-                    last_ai_text = (
-                        accumulated_chunks
-                        if len(accumulated_chunks) >= len(final_ai_message_text)
-                        else final_ai_message_text
-                    )
-
-                    logger.info(
-                        "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
-                        chunk_count,
-                        ai_msg_count,
-                        len(accumulated_chunks),
-                        len(final_ai_message_text),
-                        len(last_ai_text),
-                    )
-                    if last_ai_text:
-                        final_output = last_ai_text
-                        logger.info(
-                            "Final report generated via CoreAgent (%d chars)", len(final_output)
+                        # Send to CoreAgent — accumulate streaming chunks and final AI text
+                        accumulated_chunks = (
+                            ""  # Accumulate AIMessageChunk content during streaming
                         )
-                    else:
-                        logger.warning("No AI text response from CoreAgent, using evidence")
+                        final_ai_message_text = ""  # Capture final AIMessage (non-chunk) content
+                        chunk_count = 0
+                        ai_msg_count = 0
+                        async for chunk in self.core_agent.astream(
+                            {"messages": [HumanMessage(content=report_request)]},
+                            config={"configurable": {"thread_id": state.thread_id}},
+                            stream_mode=["messages"],
+                            subgraphs=False,
+                        ):
+                            chunk_count += 1
+                            if isinstance(chunk, tuple) and len(chunk) >= 2:
+                                stream_mode_name, data = chunk[0], chunk[1]
+                                if stream_mode_name == "messages":
+                                    from langchain_core.messages import AIMessage, AIMessageChunk
 
-                except Exception as e:
-                    # Fallback to evidence on failure
-                    logger.warning("Final report generation failed: %s, using evidence", e)
+                                    if isinstance(data, tuple) and len(data) >= 2:
+                                        msg, _ = data
+                                        if isinstance(msg, (AIMessage, AIMessageChunk)):
+                                            ai_msg_count += 1
+                                            content = msg.content
+                                            # Extract text from content (handle str or list formats)
+                                            extracted_text = ""
+                                            if isinstance(content, str):
+                                                extracted_text = content
+                                            elif isinstance(content, list):
+                                                parts = []
+                                                for block in content:
+                                                    if isinstance(block, dict) and "text" in block:
+                                                        parts.append(block["text"])
+                                                    elif isinstance(block, str):
+                                                        parts.append(block)
+                                                extracted_text = "".join(parts)
+
+                                            # AIMessageChunk: accumulate streaming text
+                                            if isinstance(msg, AIMessageChunk) and extracted_text:
+                                                accumulated_chunks += extracted_text
+                                            # AIMessage (non-chunk): capture final message text
+                                            elif isinstance(msg, AIMessage) and extracted_text:
+                                                final_ai_message_text = extracted_text
+
+                        # Prefer accumulated chunks (streaming content) over final AIMessage
+                        # because streaming sends 100s of AIMessageChunk instances with actual text,
+                        # while final AIMessage may only contain synthesized metadata or minimal content.
+                        last_ai_text = (
+                            accumulated_chunks
+                            if len(accumulated_chunks) >= len(final_ai_message_text)
+                            else final_ai_message_text
+                        )
+
+                        logger.info(
+                            "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
+                            chunk_count,
+                            ai_msg_count,
+                            len(accumulated_chunks),
+                            len(final_ai_message_text),
+                            len(last_ai_text),
+                        )
+                        if last_ai_text:
+                            final_output = last_ai_text
+                            logger.info(
+                                "Final report generated via CoreAgent (%d chars)", len(final_output)
+                            )
+                        else:
+                            logger.warning("No AI text response from CoreAgent, using evidence")
+
+                    except Exception as e:
+                        # Fallback to evidence on failure
+                        logger.warning("Final report generation failed: %s, using evidence", e)
 
                 # Update plan_result with final output
                 if final_output != plan_result.full_output:
