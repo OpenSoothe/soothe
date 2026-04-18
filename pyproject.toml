@@ -3,6 +3,12 @@ name = "soothe-workspace"
 version = "0.0.0"
 description = "Soothe monorepo workspace (meta-package, no dependencies)"
 requires-python = ">=3.11,<4.0"
+dependencies = [
+    "soothe-sdk",
+    "soothe-cli",
+    "soothe",
+    "soothe-community",
+]
 
 [tool.uv.workspace]
 members = ["packages/*"]
