@@ -19,6 +19,7 @@ from langgraph.graph.message import add_messages
 
 from soothe.subagents.claude.events import (
     ClaudeResultEvent,
+    ClaudeStartedEvent,
     ClaudeTextEvent,
     ClaudeToolUseEvent,
 )
@@ -99,6 +100,13 @@ def _build_claude_graph(
             options.disallowed_tools = disallowed_tools
         if cwd:
             options.cwd = cwd
+
+        _emit(
+            ClaudeStartedEvent(
+                task=str(task)[:500] if task else "",
+            ).to_dict(),
+            logger,
+        )
 
         collected_text: list[str] = []
         cost_usd: float = 0.0

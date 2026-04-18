@@ -140,6 +140,13 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("soothe.subagent.browser.dispatched") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.subagent.research.completed") == VerbosityTier.NORMAL
 
+    def test_classify_capability_events(self) -> None:
+        """RFC-210 capability events: milestones NORMAL, stream internals DETAILED (IG-195)."""
+        assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.capability.claude.started") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.capability.claude.completed") == VerbosityTier.NORMAL
+        assert classify_event_to_tier("soothe.capability.claude.text.running") == VerbosityTier.DETAILED
+
     def test_classify_loop_agent_events(self) -> None:
         """Loop agent judgment events classify to NORMAL (user-visible progress)."""
         # Judgment events show agent reasoning about goal progress

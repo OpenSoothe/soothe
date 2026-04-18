@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -47,6 +48,53 @@ logger = logging.getLogger(__name__)
 _STREAM_CHUNK_LEN = 3
 _MSG_PAIR_LEN = 2
 _MAX_HITL_ITERATIONS = 50
+# IG-157: wake periodically for cooperative cancellation without cancelling the stream read (IG-193)
+_STREAM_POLL_INTERVAL_S = 0.5
+
+
+async def _await_next_astream_chunk(chunk_iter: AsyncIterator[Any]) -> Any:
+    """Wait for the next ``astream`` chunk with periodic cancellation checks.
+
+    ``asyncio.wait_for(anext(), timeout)`` cancels the awaited ``__anext__()`` when
+    the timeout fires. That breaks iterators that legitimately take longer than
+    the poll interval between chunks (typical for LLM calls). Here we use
+    ``asyncio.wait(..., timeout=...)``, which does not cancel the pending read when
+    the interval elapses; we only cancel the read when the runner task is
+    cancelling.
+
+    Args:
+        chunk_iter: Async iterator from ``CompiledStateGraph.astream``.
+
+    Returns:
+        The next chunk tuple from the graph.
+
+    Raises:
+        StopAsyncIteration: When the graph stream is exhausted.
+        asyncio.CancelledError: When the current task is cancelled cooperatively.
+    """
+    anext_task = asyncio.create_task(chunk_iter.__anext__())
+    try:
+        while not anext_task.done():
+            await asyncio.wait({anext_task}, timeout=_STREAM_POLL_INTERVAL_S)
+            if anext_task.done():
+                break
+            current_task = asyncio.current_task()
+            if current_task and current_task.cancelling():
+                logger.info("Runner stream detected cancellation request, stopping")
+                anext_task.cancel()
+                try:
+                    await anext_task
+                except asyncio.CancelledError:
+                    pass
+                raise asyncio.CancelledError
+        return anext_task.result()
+    finally:
+        if not anext_task.done():
+            anext_task.cancel()
+            try:
+                await anext_task
+            except (asyncio.CancelledError, StopAsyncIteration):
+                pass
 
 
 class PhasesMixin:
@@ -398,20 +446,23 @@ class PhasesMixin:
                         break
 
                     try:
-                        # Wait for next chunk with short timeout to enable responsive cancellation
-                        chunk = await asyncio.wait_for(chunk_iter.__anext__(), timeout=0.5)
-                    except TimeoutError:
-                        # Timeout reached - loop back to check cancellation status
-                        continue
+                        # IG-193: use _await_next_astream_chunk — not asyncio.wait_for — so slow
+                        # streams (gaps > poll interval between chunks) are not corrupted.
+                        chunk = await _await_next_astream_chunk(chunk_iter)
                     except StopAsyncIteration:
                         # Stream finished normally
+                        logger.debug("StopAsyncIteration received - agent stream finished")
                         break
-                    except Exception:
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as stream_exc:
                         # Graph node error (e.g. model API failure).
                         # Re-raise so the outer handler can emit an error event.
+                        logger.exception("Agent stream exception: %s", stream_exc)
                         raise
 
                     if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+                        logger.debug("Skipping non-tuple chunk: type=%s", type(chunk).__name__)
                         continue
 
                     namespace, mode, data = chunk
