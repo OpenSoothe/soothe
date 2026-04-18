@@ -80,6 +80,23 @@ class Executor:
         self._config = config
         self._goal_context_manager = goal_context_manager
 
+    async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:
+        """Load Claude session ids + durability handle for subagent resume (IG-202)."""
+        if not thread_id or self._config is None:
+            return {}
+        try:
+            from soothe.core.resolver import resolve_durability
+
+            d = resolve_durability(self._config)
+            info = await d.get_thread(thread_id)
+            extras: dict[str, Any] = {"soothe_durability": d}
+            if info:
+                extras["claude_sessions"] = dict(info.metadata.claude_sessions)
+            return extras
+        except Exception:
+            logger.debug("Claude runner config extras failed", exc_info=True)
+            return {}
+
     def _max_subagent_tasks_per_wave(self) -> int:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
         if self._config is None:
@@ -481,6 +498,7 @@ class Executor:
                 if goal_briefing:
                     configurable["soothe_goal_briefing"] = goal_briefing
                     logger.info("Execute briefing injected (%d chars)", len(goal_briefing))
+            configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
@@ -668,6 +686,7 @@ class Executor:
                         step.id,
                         len(goal_briefing),
                     )
+            configurable.update(await self._claude_runner_config_extras(thread_id))
             # Pass current_decision for middleware to inject agent loop output contract
             # Note: For single step execution, we don't have LoopState here
             # The middleware should check for absence and not inject contract

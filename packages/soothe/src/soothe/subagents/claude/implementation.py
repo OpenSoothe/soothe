@@ -23,6 +23,7 @@ from soothe.subagents.claude.events import (
     ClaudeTextEvent,
     ClaudeToolUseEvent,
 )
+from soothe.subagents.claude.session_bridge import record_claude_session, resolve_resume_session_id
 from soothe.utils import expand_path
 
 if TYPE_CHECKING:
@@ -66,6 +67,42 @@ def _resolve_claude_cwd(fallback: str) -> str:
 
     base = fallback.strip() if fallback.strip() else str(Path.cwd())
     return str(expand_path(base))
+
+
+def _get_langgraph_configurable() -> dict[str, Any]:
+    """Return the current graph ``configurable`` dict, or empty."""
+    try:
+        from langgraph.config import get_config
+
+        cfg = get_config()
+        if isinstance(cfg, dict):
+            conf = cfg.get("configurable")
+            return conf if isinstance(conf, dict) else {}
+    except Exception:
+        logger.debug("LangGraph config unavailable for Claude session bridge", exc_info=True)
+    return {}
+
+
+def _get_soothe_thread_id() -> str | None:
+    tid = _get_langgraph_configurable().get("thread_id")
+    if isinstance(tid, str) and tid.strip():
+        return tid.strip()
+    return None
+
+
+def _get_claude_sessions_from_config() -> dict[str, str]:
+    raw = _get_langgraph_configurable().get("claude_sessions")
+    if isinstance(raw, dict):
+        return {
+            str(k): str(v)
+            for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, str) and k.strip() and v.strip()
+        }
+    return {}
+
+
+def _get_soothe_durability() -> Any | None:
+    return _get_langgraph_configurable().get("soothe_durability")
 
 
 CLAUDE_DESCRIPTION = (
@@ -136,17 +173,31 @@ def _build_claude_graph(
             options.allowed_tools = allowed_tools
         if disallowed_tools:
             options.disallowed_tools = disallowed_tools
-        options.cwd = _resolve_claude_cwd(cwd if cwd else str(Path.cwd()))
+        resolved_cwd = _resolve_claude_cwd(cwd if cwd else str(Path.cwd()))
+        options.cwd = resolved_cwd
+
+        thread_id = _get_soothe_thread_id()
+        claude_sessions_cfg = _get_claude_sessions_from_config()
+        durability = _get_soothe_durability()
+        resume_sid = await resolve_resume_session_id(
+            thread_id=thread_id,
+            cwd=resolved_cwd,
+            claude_sessions_from_config=claude_sessions_cfg,
+        )
+        if resume_sid:
+            options.resume = resume_sid
 
         _emit(
             ClaudeStartedEvent(
                 task=str(task)[:500] if task else "",
+                resume_session_id=resume_sid,
             ).to_dict(),
             logger,
         )
 
         collected_text: list[str] = []
         cost_usd: float = 0.0
+        last_claude_session_id: str | None = None
 
         try:
             async for message in query(prompt=task, options=options):
@@ -165,16 +216,30 @@ def _build_claude_graph(
                             )
                 elif isinstance(message, ResultMessage):
                     cost_usd = message.total_cost_usd or 0.0
+                    last_claude_session_id = getattr(message, "session_id", None)
+                    if (
+                        isinstance(last_claude_session_id, str)
+                        and not last_claude_session_id.strip()
+                    ):
+                        last_claude_session_id = None
                     _emit(
                         ClaudeResultEvent(
                             cost_usd=cost_usd,
-                            duration_ms=message.duration_ms,
+                            duration_ms=int(getattr(message, "duration_ms", 0) or 0),
+                            claude_session_id=last_claude_session_id,
                         ).to_dict(),
                         logger,
                     )
         except Exception:
             logger.exception("Claude agent failed")
             collected_text.append("Claude agent encountered an error.")
+        else:
+            await record_claude_session(
+                thread_id=thread_id,
+                cwd=resolved_cwd,
+                session_id=last_claude_session_id,
+                durability=durability,
+            )
 
         result = "\n".join(collected_text) or "Claude task completed (no text output)."
         if cost_usd > 0:

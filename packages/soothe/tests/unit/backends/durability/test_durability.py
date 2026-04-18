@@ -39,6 +39,32 @@ class TestJsonDurability:
         assert thread.updated_at is not None
 
     @pytest.mark.asyncio
+    async def test_get_thread_read_only(self, tmp_path: Path) -> None:
+        """get_thread loads info without changing lifecycle status."""
+        persist_dir = str(tmp_path)
+        durability = JsonDurability(persist_dir=persist_dir)
+
+        metadata = ThreadMetadata(plan_summary="Read Test")
+        created = await durability.create_thread(metadata)
+        await durability.suspend_thread(created.thread_id)
+
+        loaded = await durability.get_thread(created.thread_id)
+        assert loaded is not None
+        assert loaded.thread_id == created.thread_id
+        assert loaded.status == "suspended"
+
+        again = await durability.list_threads()
+        still = next(t for t in again if t.thread_id == created.thread_id)
+        assert still.status == "suspended"
+
+    @pytest.mark.asyncio
+    async def test_get_thread_missing_returns_none(self, tmp_path: Path) -> None:
+        """get_thread returns None when thread id is unknown."""
+        persist_dir = str(tmp_path)
+        durability = JsonDurability(persist_dir=persist_dir)
+        assert await durability.get_thread("no-such-thread") is None
+
+    @pytest.mark.asyncio
     async def test_create_thread_generates_unique_ids(self, tmp_path: Path) -> None:
         """Test that each thread gets a unique ID."""
         persist_dir = str(tmp_path)

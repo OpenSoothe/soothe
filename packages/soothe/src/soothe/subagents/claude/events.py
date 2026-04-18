@@ -17,6 +17,7 @@ class ClaudeStartedEvent(SubagentEvent):
 
     type: Literal["soothe.capability.claude.started"] = "soothe.capability.claude.started"
     task: str = ""
+    resume_session_id: str | None = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -45,6 +46,7 @@ class ClaudeResultEvent(SubagentEvent):
     type: Literal["soothe.capability.claude.completed"] = "soothe.capability.claude.completed"
     cost_usd: float = 0.0
     duration_ms: int = 0
+    claude_session_id: str | None = None
 
     model_config = ConfigDict(extra="allow")
 

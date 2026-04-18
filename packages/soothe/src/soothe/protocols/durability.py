@@ -18,6 +18,8 @@ class ThreadMetadata(BaseModel):
         labels: User-defined labels for organization (RFC-402).
         priority: Thread priority level (RFC-402).
         category: User-defined category (RFC-402).
+        claude_sessions: Maps resolved workspace cwd (absolute path) to Claude Agent SDK
+            session UUID for ``ClaudeAgentOptions.resume`` (IG-202).
     """
 
     tags: list[str] = Field(default_factory=list)
@@ -27,6 +29,7 @@ class ThreadMetadata(BaseModel):
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
+    claude_sessions: dict[str, str] = Field(default_factory=dict)
 
 
 class ThreadInfo(BaseModel):
@@ -134,6 +137,17 @@ class DurabilityProtocol(Protocol):
 
         Raises:
             KeyError: If thread not found.
+        """
+        ...
+
+    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
+        """Load thread information without changing lifecycle status.
+
+        Args:
+            thread_id: Thread ID to load.
+
+        Returns:
+            ThreadInfo if found, else ``None``.
         """
         ...
 
