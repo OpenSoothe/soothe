@@ -138,13 +138,13 @@ build:
 # Publish package to PyPI
 publish:
 	@echo "Publishing package to PyPI..."
-	cd packages/soothe && uv publish dist/*
+	cd packages/soothe && uv publish dist/* --native-tls
 	@echo "✓ Package published to PyPI"
 
 # Publish package to TestPyPI
 publish-test:
 	@echo "Publishing package to TestPyPI..."
-	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/
+	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 	@echo "✓ Package published to TestPyPI"
 
 # Clean build artifacts
@@ -185,12 +185,12 @@ sdk-build:
 
 sdk-publish:
 	@echo "Publishing SDK package to PyPI..."
-	cd packages/soothe-sdk && uv publish dist/*
+	cd packages/soothe-sdk && uv publish dist/* --native-tls
 	@echo "✓ SDK package published to PyPI"
 
 sdk-publish-test:
 	@echo "Publishing SDK package to TestPyPI..."
-	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/
+	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 	@echo "✓ SDK package published to TestPyPI"
 
 # ============================================================================
@@ -224,12 +224,12 @@ cli-build:
 
 cli-publish:
 	@echo "Publishing CLI package to PyPI..."
-	cd packages/soothe-cli && uv publish dist/*
+	cd packages/soothe-cli && uv publish dist/* --native-tls
 	@echo "✓ CLI package published to PyPI"
 
 cli-publish-test:
 	@echo "Publishing CLI package to TestPyPI..."
-	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/
+	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 	@echo "✓ CLI package published to TestPyPI"
 
 # ============================================================================
@@ -263,12 +263,12 @@ community-build:
 
 community-publish:
 	@echo "Publishing community package to PyPI..."
-	cd packages/soothe-community && uv publish dist/*
+	cd packages/soothe-community && uv publish dist/* --native-tls
 	@echo "✓ Community package published to PyPI"
 
 community-publish-test:
 	@echo "Publishing community package to TestPyPI..."
-	cd packages/soothe-community && uv publish dist/* --index-url https://test.pypi.org/simple/
+	cd packages/soothe-community && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 	@echo "✓ Community package published to TestPyPI"
 
 # ============================================================================
