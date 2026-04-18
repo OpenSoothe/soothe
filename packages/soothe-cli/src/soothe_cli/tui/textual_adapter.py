@@ -562,6 +562,25 @@ def _defer_tool_card_for_empty_streaming_args(message: Any) -> bool:
     return getattr(message, "chunk_position", None) != "last"
 
 
+def _defer_first_tool_card_mount_until_final_stream_chunk(message: Any) -> bool:
+    """True when the first tool card for this call should wait for a terminal chunk.
+
+    Mounting only on the final ``AIMessageChunk`` avoids header flicker when name/args
+    are refined across chunks. Chunks with no ``chunk_position`` use legacy behavior
+    (mount as soon as args are meaningful) so streams that never mark ``last`` still work.
+    """
+    from langchain_core.messages import AIMessageChunk
+
+    if not isinstance(message, AIMessageChunk):
+        return False
+    pos = getattr(message, "chunk_position", None)
+    if pos == "last":
+        return False
+    if pos is None:
+        return False
+    return True
+
+
 def _tui_effective_ai_blocks(
     message: Any,
     *,
@@ -702,6 +721,11 @@ async def execute_task_textual(
     ask_user_adapter = _get_ask_user_adapter()
     pv = normalize_verbosity(load_config().verbosity)
     show_tool_ui = should_show_tool_call_ui(pv)
+    logger.debug(
+        "TUI turn: verbosity=%r show_tool_ui=%s (tool-call rows follow this flag)",
+        pv,
+        show_tool_ui,
+    )
     progress_pipeline = StreamDisplayPipeline(verbosity=pv)
 
     # Parse file mentions and inject content if any — defer blocking I/O
@@ -953,7 +977,18 @@ async def execute_task_textual(
                             pending_tool_calls_lc.pop(str(tool_id), None)
 
                         if not show_tool_ui:
+                            logger.debug(
+                                "Tool result skipped (tool UI off): tool_call_id=%r name=%r",
+                                tool_id,
+                                tool_card.tool_name,
+                            )
                             continue
+
+                        if not tool_id:
+                            logger.debug(
+                                "Tool result has no tool_call_id (cannot match card): name=%r",
+                                tool_card.tool_name,
+                            )
 
                         record = file_op_tracker.complete_with_message(message)
 
@@ -964,6 +999,12 @@ async def execute_task_textual(
                             # if set_success/set_error raises.
                             tool_msg = adapter._current_tool_messages.pop(sid)
                             output_str = tool_card.output_display
+                            logger.debug(
+                                "Tool result matched pending card: tool_call_id=%s name=%s error=%s",
+                                sid,
+                                tool_msg._tool_name,
+                                tool_card.is_error,
+                            )
                             if not tool_card.is_error:
                                 tool_msg.set_success(output_str)
                             else:
@@ -975,8 +1016,19 @@ async def execute_task_textual(
                         elif tool_id and show_tool_ui:
                             # Orphan result: no prior AIMessage tool card (daemon wire
                             # shape, streaming chunks, or missing tool_call blocks).
+                            # ``extract_tool_result_card_payload`` normalizes name + id;
+                            # ``ToolCallMessage`` applies the same id→name inference as cards.
                             tname = tool_card.tool_name or "tool"
-                            orphan = ToolCallMessage(tname, {})
+                            logger.debug(
+                                "Tool result orphan (no pending card): tool_call_id=%s name=%s",
+                                tool_id,
+                                tname,
+                            )
+                            orphan = ToolCallMessage(
+                                tname,
+                                {},
+                                tool_call_id=str(tool_id),
+                            )
                             await adapter._mount_message(orphan)
                             output_str = tool_card.output_display
                             if not tool_card.is_error:
@@ -985,7 +1037,7 @@ async def execute_task_textual(
                                 orphan.set_error(output_str or "Error")
                                 await dispatch_hook(
                                     "tool.error",
-                                    {"tool_names": [tname]},
+                                    {"tool_names": [orphan._tool_name]},
                                 )
 
                         # Reshow spinner only when all in-flight tools have
@@ -1173,6 +1225,13 @@ async def execute_task_textual(
                                 message
                             ):
                                 # Keep buffer; a later chunk should carry real kwargs.
+                                logger.debug(
+                                    "Tool call card deferred (streaming args incomplete): "
+                                    "name=%s id=%r chunk_position=%r",
+                                    buffer_name,
+                                    chunk_id,
+                                    getattr(message, "chunk_position", None),
+                                )
                                 continue
 
                             if (
@@ -1182,10 +1241,24 @@ async def execute_task_textual(
                             ):
                                 existing = adapter._current_tool_messages[lookup_id]
                                 existing.refresh_tool_args(parsed_args)
+                                logger.debug(
+                                    "Tool call args refreshed on existing card: id=%s name=%s",
+                                    lookup_id,
+                                    buffer_name,
+                                )
                                 tool_call_buffers.pop(buffer_key, None)
                                 continue
 
                             if lookup_id and lookup_id not in displayed_tool_ids:
+                                if _defer_first_tool_card_mount_until_final_stream_chunk(message):
+                                    logger.debug(
+                                        "Tool call first mount deferred (non-final stream chunk): "
+                                        "name=%s tool_call_id=%r chunk_position=%r",
+                                        buffer_name,
+                                        lookup_id,
+                                        getattr(message, "chunk_position", None),
+                                    )
+                                    continue
                                 displayed_tool_ids.add(lookup_id)
                                 if show_tool_ui:
                                     file_op_tracker.start_operation(
@@ -1197,9 +1270,35 @@ async def execute_task_textual(
                                         await adapter._set_spinner(None)
 
                                     # Mount tool call message
-                                    tool_msg = ToolCallMessage(buffer_name, parsed_args)
+                                    tool_msg = ToolCallMessage(
+                                        buffer_name,
+                                        parsed_args,
+                                        tool_call_id=lookup_id,
+                                    )
+                                    logger.debug(
+                                        "Tool call card mounted: name=%s tool_call_id=%s "
+                                        "namespace=%s direct_subagent_turn=%s",
+                                        buffer_name,
+                                        lookup_id,
+                                        ns_key,
+                                        direct_subagent_turn,
+                                    )
                                     await adapter._mount_message(tool_msg)
                                     adapter._current_tool_messages[lookup_id] = tool_msg
+                                else:
+                                    logger.debug(
+                                        "Tool call block not shown as card (tool UI off): "
+                                        "name=%s tool_call_id=%s",
+                                        buffer_name,
+                                        lookup_id,
+                                    )
+                            elif show_tool_ui and args_meaningful and buffer_name and not lookup_id:
+                                logger.debug(
+                                    "Tool call has no stable id; card not mounted: "
+                                    "name=%s namespace=%s",
+                                    buffer_name,
+                                    ns_key,
+                                )
 
                             tool_call_buffers.pop(buffer_key, None)
 

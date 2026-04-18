@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import random
 from typing import TYPE_CHECKING, Any
 
@@ -19,10 +18,8 @@ from soothe_cli.tui._version import __version__
 from soothe_cli.tui.config import (
     _get_editable_install_path,
     _is_editable_install,
-    fetch_langsmith_project_url,
     get_banner,
     get_glyphs,
-    get_langsmith_project_name,
 )
 from soothe_cli.tui.widgets._links import open_style_link
 
@@ -98,36 +95,9 @@ class WelcomeBanner(Static):
         self._local_server = local_server
         self._failed = False
         self._failure_error: str = ""
-        self._project_name: str | None = get_langsmith_project_name()
-        self._project_url: str | None = None
         self._tip: str = random.choice(_TIPS)  # noqa: S311
 
         super().__init__(self._build_banner(), **kwargs)
-
-    def on_mount(self) -> None:
-        """Kick off background fetch for LangSmith project URL."""
-        self.watch(self.app, "theme", self._on_theme_change, init=False)
-        if self._project_name:
-            self.run_worker(self._fetch_and_update, exclusive=True)
-
-    def _on_theme_change(self) -> None:
-        """Re-render the banner when the app theme changes."""
-        self.update(self._build_banner(self._project_url))
-
-    async def _fetch_and_update(self) -> None:
-        """Fetch the LangSmith URL in a thread and update the banner."""
-        if not self._project_name:
-            return
-        try:
-            project_url = await asyncio.wait_for(
-                asyncio.to_thread(fetch_langsmith_project_url, self._project_name),
-                timeout=2.0,
-            )
-        except (TimeoutError, OSError):
-            project_url = None
-        if project_url:
-            self._project_url = project_url
-            self.update(self._build_banner(project_url))
 
     def update_thread_id(self, thread_id: str) -> None:
         """Update the displayed thread ID and re-render the banner.
@@ -136,7 +106,7 @@ class WelcomeBanner(Static):
             thread_id: The new thread ID to display.
         """
         self._cli_thread_id = thread_id
-        self.update(self._build_banner(self._project_url))
+        self.update(self._build_banner())
 
     def set_connected(self, mcp_tool_count: int = 0) -> None:
         """Transition from "connecting" to "ready" state.
@@ -147,7 +117,7 @@ class WelcomeBanner(Static):
         self._connecting = False
         self._failed = False
         self._mcp_tool_count = mcp_tool_count
-        self.update(self._build_banner(self._project_url))
+        self.update(self._build_banner())
 
     def set_failed(self, error: str) -> None:
         """Transition from "connecting" to a persistent failure state.
@@ -158,21 +128,14 @@ class WelcomeBanner(Static):
         self._connecting = False
         self._failed = True
         self._failure_error = error
-        self.update(self._build_banner(self._project_url))
+        self.update(self._build_banner())
 
     def on_click(self, event: Click) -> None:  # noqa: PLR6301  # Textual event handler
         """Open style-embedded hyperlinks on single click."""
         open_style_link(event)
 
-    def _build_banner(self, project_url: str | None = None) -> Content:
+    def _build_banner(self) -> Content:
         """Build the banner content.
-
-        When a `project_url` is provided and a thread ID is set, the thread ID
-        is rendered as a clickable hyperlink to the LangSmith thread view.
-
-        Args:
-            project_url: LangSmith project URL used for linking the project
-                name and thread ID. When `None`, text is rendered without links.
 
         Returns:
             Content object containing the formatted banner.
@@ -205,47 +168,14 @@ class WelcomeBanner(Static):
             parts.append((banner + "\n", primary_style))
 
         # For ANSI theme, use "bold" (terminal foreground) instead of hex
-        accent: str | TStyle = "bold" if ansi else colors.primary
         success_color: str = "bold green" if ansi else colors.success
 
         editable_path = _get_editable_install_path()
         if editable_path:
             parts.extend([("Installed from: ", "dim"), (editable_path, "dim"), "\n"])
 
-        if self._project_name:
-            parts.extend(
-                [
-                    (f"{get_glyphs().checkmark} ", success_color),
-                    "LangSmith tracing: ",
-                ]
-            )
-            if project_url:
-                link_style: str | TStyle
-                if ansi:
-                    url = f"{project_url}?utm_source=soothe"
-                    link_style = TStyle(bold=True, link=url)
-                else:
-                    link_style = TStyle(
-                        foreground=TColor.parse(colors.primary),
-                        link=f"{project_url}?utm_source=Soothe",
-                    )
-                parts.append((f"'{self._project_name}'", link_style))
-            else:
-                parts.append((f"'{self._project_name}'", accent))
-            parts.append("\n")
-
         if self._cli_thread_id:
-            if project_url:
-                thread_url = f"{project_url.rstrip('/')}/t/{self._cli_thread_id}?utm_source=Soothe"
-                parts.extend(
-                    [
-                        ("Thread: ", "dim"),
-                        (self._cli_thread_id, TStyle(dim=True, link=thread_url)),
-                        ("\n", "dim"),
-                    ]
-                )
-            else:
-                parts.append((f"Thread: {self._cli_thread_id}\n", "dim"))
+            parts.append((f"Thread: {self._cli_thread_id}\n", "dim"))
 
         if self._mcp_tool_count > 0:
             parts.append((f"{get_glyphs().checkmark} ", success_color))

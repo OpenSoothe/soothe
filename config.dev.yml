@@ -59,6 +59,7 @@ llm_tracing:
 
 # Dev daemon configuration - enable HTTP REST for BM-003 benchmark
 daemon:
+  max_concurrent_threads: 100
   transports:
     websocket:
       enabled: true

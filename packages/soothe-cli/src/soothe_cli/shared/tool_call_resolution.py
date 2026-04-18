@@ -23,6 +23,33 @@ from soothe_cli.shared.message_processing import (
 )
 
 
+def infer_tool_name_from_call_id(tool_call_id: str) -> str | None:
+    """Recover a real tool name from common ``functions.<name>:<idx>`` id shapes.
+
+    Some transports set ``name`` to the literal ``\"tool\"`` or leave it empty while
+    the id still encodes the actual tool (e.g. ``functions.ls:0`` → ``ls``).
+
+    Args:
+        tool_call_id: LangChain / provider tool call id.
+
+    Returns:
+        Inferred snake_case tool name, or ``None`` if not recognized.
+    """
+    tid = (tool_call_id or "").strip()
+    if not tid:
+        return None
+    prefix = "functions."
+    if not tid.startswith(prefix):
+        return None
+    rest = tid[len(prefix) :]
+    if ":" in rest:
+        rest = rest.split(":", 1)[0]
+    name = rest.strip()
+    if not name or name == "tool":
+        return None
+    return name
+
+
 def tool_args_meaningful(raw: Any) -> bool:
     """True if ``raw`` yields a non-empty normalized argument dict."""
     if raw is None:
@@ -105,6 +132,8 @@ def resolve_tool_invocations_for_display(
         if tid_raw is None:
             continue
         tid = str(tid_raw)
+        if not tid:
+            continue
         name = str(b.get("name") or "")
         args = _args_from_toolish_block(b)
         if tid not in block_by_id:
@@ -124,7 +153,7 @@ def resolve_tool_invocations_for_display(
     all_ids: list[str] = []
     seen: set[str] = set()
     for tid in list(order) + list(tc_by_id.keys()) + list(streaming_overlay.keys()):
-        if tid in seen:
+        if not tid or tid in seen:
             continue
         seen.add(tid)
         all_ids.append(tid)
@@ -134,7 +163,13 @@ def resolve_tool_invocations_for_display(
         block_name, block_args = block_by_id.get(tid, ("", {}))
         tc_name, tc_args = tc_by_id.get(tid, ("", {}))
         stream_args = streaming_overlay.get(tid, {})
-        name = tc_name or block_name or "tool"
+        name = tc_name or block_name or ""
+        if not name or name == "tool":
+            inferred = infer_tool_name_from_call_id(tid)
+            if inferred:
+                name = inferred
+        if not name:
+            name = "tool"
         merged = _pick_args_from_sources(
             from_streaming=stream_args,
             from_tool_call_attr=tc_args,
@@ -236,6 +271,7 @@ def build_streaming_args_overlay(
 __all__ = [
     "ResolvedToolInvocation",
     "build_streaming_args_overlay",
+    "infer_tool_name_from_call_id",
     "is_toolish_display_block",
     "materialize_ai_blocks_with_resolved_tools",
     "resolve_tool_invocations_for_display",

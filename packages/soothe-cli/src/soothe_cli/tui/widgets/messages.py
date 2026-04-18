@@ -18,6 +18,7 @@ from textual.events import Click
 from textual.reactive import var
 from textual.widgets import Static
 
+from soothe_cli.shared.tool_call_resolution import infer_tool_name_from_call_id
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import (
     MODE_DISPLAY_GLYPHS,
@@ -773,6 +774,8 @@ class ToolCallMessage(Vertical):
         self,
         tool_name: str,
         args: dict[str, Any] | None = None,
+        *,
+        tool_call_id: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize a tool call message.
@@ -780,10 +783,20 @@ class ToolCallMessage(Vertical):
         Args:
             tool_name: Name of the tool being called
             args: Tool arguments (optional)
+            tool_call_id: Provider tool-call id (e.g. ``functions.ls:0``) used to recover
+                the real tool name when ``tool_name`` is empty or the placeholder ``tool``.
             **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)
-        self._tool_name = tool_name
+        tn = (tool_name or "").strip()
+        tcid = (tool_call_id or "").strip()
+        if tcid and (not tn or tn == "tool"):
+            inferred = infer_tool_name_from_call_id(tcid)
+            if inferred:
+                tn = inferred
+        if not tn:
+            tn = "tool"
+        self._tool_name = tn
         self._args = args or {}
         self._status = "pending"  # Waiting for approval or auto-approve
         self._output: str = ""
