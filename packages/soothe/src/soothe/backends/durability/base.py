@@ -116,6 +116,13 @@ class BasePersistStoreDurability:
         info = info.model_copy(update={"status": "archived", "updated_at": datetime.now(tz=UTC)})
         self._store.save(f"thread:{thread_id}", info.model_dump(mode="json"))
 
+    async def get_thread(self, thread_id: str) -> ThreadInfo | None:
+        """Load thread information without changing lifecycle status."""
+        data = self._store.load(f"thread:{thread_id}")
+        if data is None:
+            return None
+        return ThreadInfo.model_validate(data)
+
     async def update_thread_metadata(
         self,
         thread_id: str,

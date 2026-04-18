@@ -38,6 +38,8 @@ def mock_durability():
     )
     durability.list_threads = AsyncMock(return_value=[])
     durability.archive_thread = AsyncMock()
+    durability.get_thread = AsyncMock(return_value=None)
+    durability.update_thread_metadata = AsyncMock()
     return durability
 
 

@@ -132,19 +132,19 @@ test-coverage: sync-dev
 # Build package
 build:
 	@echo "Building package..."
-	cd packages/soothe && uv build
+	cd packages/soothe && uv build --out-dir dist
 	@echo "✓ Package built"
 
 # Publish package to PyPI
 publish:
 	@echo "Publishing package to PyPI..."
-	cd packages/soothe && uv publish
+	cd packages/soothe && uv publish dist/*
 	@echo "✓ Package published to PyPI"
 
 # Publish package to TestPyPI
 publish-test:
 	@echo "Publishing package to TestPyPI..."
-	cd packages/soothe && uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe && uv publish dist/* --index-url https://test.pypi.org/simple/
 	@echo "✓ Package published to TestPyPI"
 
 # Clean build artifacts
@@ -180,17 +180,17 @@ sdk-test:
 
 sdk-build:
 	@echo "Building SDK package..."
-	cd packages/soothe-sdk && uv build
+	cd packages/soothe-sdk && uv build --out-dir dist
 	@echo "✓ SDK package built"
 
 sdk-publish:
 	@echo "Publishing SDK package to PyPI..."
-	cd packages/soothe-sdk && uv publish
+	cd packages/soothe-sdk && uv publish dist/*
 	@echo "✓ SDK package published to PyPI"
 
 sdk-publish-test:
 	@echo "Publishing SDK package to TestPyPI..."
-	cd packages/soothe-sdk && uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/
 	@echo "✓ SDK package published to TestPyPI"
 
 # ============================================================================
@@ -219,17 +219,17 @@ cli-test:
 
 cli-build:
 	@echo "Building CLI package..."
-	cd packages/soothe-cli && uv build
+	cd packages/soothe-cli && uv build --out-dir dist
 	@echo "✓ CLI package built"
 
 cli-publish:
 	@echo "Publishing CLI package to PyPI..."
-	cd packages/soothe-cli && uv publish
+	cd packages/soothe-cli && uv publish dist/*
 	@echo "✓ CLI package published to PyPI"
 
 cli-publish-test:
 	@echo "Publishing CLI package to TestPyPI..."
-	cd packages/soothe-cli && uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/
 	@echo "✓ CLI package published to TestPyPI"
 
 # ============================================================================
@@ -258,17 +258,17 @@ community-test:
 
 community-build:
 	@echo "Building community package..."
-	cd packages/soothe-community && uv build
+	cd packages/soothe-community && uv build --out-dir dist
 	@echo "✓ Community package built"
 
 community-publish:
 	@echo "Publishing community package to PyPI..."
-	cd packages/soothe-community && uv publish
+	cd packages/soothe-community && uv publish dist/*
 	@echo "✓ Community package published to PyPI"
 
 community-publish-test:
 	@echo "Publishing community package to TestPyPI..."
-	cd packages/soothe-community && uv publish --index-url https://test.pypi.org/simple/
+	cd packages/soothe-community && uv publish dist/* --index-url https://test.pypi.org/simple/
 	@echo "✓ Community package published to TestPyPI"
 
 # ============================================================================

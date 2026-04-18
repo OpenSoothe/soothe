@@ -1,12 +1,12 @@
-# Makefile for Soothe SDK Package
+# Makefile for Soothe Community Package
 #
-# This Makefile manages the soothe-sdk package independently
+# This Makefile manages the soothe-community package independently
 
 .PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-coverage build publish publish-test clean help
 
 # Default target
 help:
-	@echo "Soothe SDK Package"
+	@echo "Soothe Community Package"
 	@echo ""
 	@echo "Development:"
 	@echo "  make sync       - Sync dependencies with uv"
@@ -78,7 +78,7 @@ test-unit: sync-dev
 # Run tests with coverage
 test-coverage: sync-dev
 	@echo "Running tests with coverage..."
-	uv run pytest tests/ --cov=soothe_sdk --cov-report=term-missing --cov-report=html
+	uv run pytest tests/ --cov=soothe_community --cov-report=term-missing --cov-report=html
 	@echo "✓ Coverage report generated in htmlcov/"
 
 # Build package

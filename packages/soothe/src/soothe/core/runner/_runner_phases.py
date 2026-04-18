@@ -423,6 +423,16 @@ class PhasesMixin:
         config = {"configurable": {"thread_id": lg_tid}}
         if state.workspace:
             config["configurable"]["workspace"] = state.workspace
+        if lg_tid:
+            try:
+                thread_info = await self._durability.get_thread(lg_tid)
+                if thread_info:
+                    config["configurable"]["claude_sessions"] = dict(
+                        thread_info.metadata.claude_sessions
+                    )
+            except Exception:
+                logger.debug("Claude session snapshot load failed", exc_info=True)
+            config["configurable"]["soothe_durability"] = self._durability
 
         hitl_iterations = 0
         while True:
