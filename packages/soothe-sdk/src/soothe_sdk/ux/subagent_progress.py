@@ -22,7 +22,8 @@ SUBAGENT_PROGRESS_EVENT_TYPES: Final[frozenset[str]] = frozenset(
         # Browser subagent lifecycle
         "soothe.capability.browser.started",
         "soothe.capability.browser.completed",
-        # Claude subagent completion (cost/duration visible)
+        # Claude subagent lifecycle (dispatch + completion visible)
+        "soothe.capability.claude.started",
         "soothe.capability.claude.completed",
         # Research subagent lifecycle and meaningful progress
         "soothe.capability.research.started",

@@ -12,6 +12,15 @@ from pydantic import ConfigDict
 from soothe_sdk.events import SubagentEvent
 
 
+class ClaudeStartedEvent(SubagentEvent):
+    """Claude subagent run started (mirrors browser ``started`` for CLI display)."""
+
+    type: Literal["soothe.capability.claude.started"] = "soothe.capability.claude.started"
+    task: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
 class ClaudeTextEvent(SubagentEvent):
     """Claude text event."""
 
@@ -45,6 +54,11 @@ from soothe_sdk.verbosity import VerbosityTier  # noqa: E402
 
 from soothe.core.event_catalog import register_event  # noqa: E402
 
+register_event(
+    ClaudeStartedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Claude: {task}",
+)
 # IG-089: Claude subagent internal events at DETAILED (hidden at normal)
 register_event(
     ClaudeTextEvent,
@@ -63,15 +77,18 @@ register_event(
 )
 
 # Event type constants for convenient imports
+SUBAGENT_CLAUDE_STARTED = "soothe.capability.claude.started"
 SUBAGENT_CLAUDE_TEXT = "soothe.capability.claude.text.running"
 SUBAGENT_CLAUDE_TOOL_USE = "soothe.capability.claude.tool.running"
 SUBAGENT_CLAUDE_RESULT = "soothe.capability.claude.completed"
 
 __all__ = [
     "SUBAGENT_CLAUDE_RESULT",
+    "SUBAGENT_CLAUDE_STARTED",
     "SUBAGENT_CLAUDE_TEXT",
     "SUBAGENT_CLAUDE_TOOL_USE",
     "ClaudeResultEvent",
+    "ClaudeStartedEvent",
     "ClaudeTextEvent",
     "ClaudeToolUseEvent",
 ]

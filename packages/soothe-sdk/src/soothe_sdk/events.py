@@ -78,6 +78,7 @@ SUBAGENT_BROWSER_STEP_RUNNING = "soothe.capability.browser.step.running"
 SUBAGENT_BROWSER_CDP_CONNECTING = "soothe.capability.browser.cdp.connecting"
 
 # Claude subagent events
+SUBAGENT_CLAUDE_STARTED = "soothe.capability.claude.started"
 SUBAGENT_CLAUDE_TEXT_RUNNING = "soothe.capability.claude.text.running"
 SUBAGENT_CLAUDE_TOOL_RUNNING = "soothe.capability.claude.tool.running"
 SUBAGENT_CLAUDE_COMPLETED = "soothe.capability.claude.completed"
@@ -133,6 +134,7 @@ __all__ = [
     "SUBAGENT_BROWSER_STEP_RUNNING",
     "SUBAGENT_BROWSER_CDP_CONNECTING",
     # Claude subagent
+    "SUBAGENT_CLAUDE_STARTED",
     "SUBAGENT_CLAUDE_TEXT_RUNNING",
     "SUBAGENT_CLAUDE_TOOL_RUNNING",
     "SUBAGENT_CLAUDE_COMPLETED",

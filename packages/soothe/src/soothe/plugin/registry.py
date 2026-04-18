@@ -13,6 +13,39 @@ from soothe_sdk.plugin import Manifest as PluginManifest
 logger = logging.getLogger(__name__)
 
 
+def _resolve_plugin_tool_name(tool_like: Any) -> str | None:
+    """Resolve invoke name from a plugin tool method or LangChain tool."""
+    explicit = getattr(tool_like, "_tool_name", None)
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    name = getattr(tool_like, "name", None)
+    return name if isinstance(name, str) and name else None
+
+
+def _rfc210_metadata_from_tool_like(tool_like: Any) -> dict[str, Any] | None:
+    """Build ``triggers`` / ``system_context`` from ``@tool`` or wrapped BaseTool."""
+
+    def _extract(target: Any) -> dict[str, Any] | None:
+        triggers = getattr(target, "_tool_triggers", None)
+        system_context = getattr(target, "_tool_system_context", None)
+        meta: dict[str, Any] = {}
+        if triggers:
+            meta["triggers"] = list(triggers)
+        if system_context:
+            meta["system_context"] = system_context
+        return meta if meta else None
+
+    direct = _extract(tool_like)
+    if direct is not None:
+        return direct
+    inner = getattr(tool_like, "func", None)
+    if inner is None:
+        inner = getattr(tool_like, "coroutine", None)
+    if inner is not None and inner is not tool_like:
+        return _extract(inner)
+    return None
+
+
 @dataclass
 class RegistryEntry:
     """Entry in the plugin registry.
@@ -213,6 +246,47 @@ class PluginRegistry:
             for factory in entry.subagents
             if hasattr(factory, "_subagent_name")
         ]
+
+    def get_tool_metadata(self, tool_name: str) -> dict[str, Any] | None:
+        """Return RFC-210 metadata for a plugin-registered tool by invoke name.
+
+        Used by ``ToolTriggerRegistry`` / ``ToolContextRegistry``. Resolves metadata
+        from ``@tool``-decorated callables and from LangChain ``BaseTool`` instances
+        (metadata may live on the wrapped ``func`` / ``coroutine``).
+
+        Args:
+            tool_name: Tool name as exposed to the model (e.g. ``glob``).
+
+        Returns:
+            Dict with optional ``triggers`` and ``system_context`` keys, or ``None``.
+        """
+        for entry in self._plugins.values():
+            for tool in entry.tools:
+                resolved = _resolve_plugin_tool_name(tool)
+                if resolved == tool_name:
+                    return _rfc210_metadata_from_tool_like(tool)
+        return None
+
+    def get_subagent_metadata(self, subagent_name: str) -> dict[str, Any] | None:
+        """Return RFC-210 metadata for a plugin subagent factory by name.
+
+        Args:
+            subagent_name: Subagent name (e.g. ``claude``).
+
+        Returns:
+            Dict with optional ``triggers`` and ``system_context`` keys, or ``None``.
+        """
+        factory = self.get_subagent_factory(subagent_name)
+        if factory is None:
+            return None
+        meta: dict[str, Any] = {}
+        triggers = getattr(factory, "_subagent_triggers", None)
+        if triggers:
+            meta["triggers"] = list(triggers)
+        ctx = getattr(factory, "_subagent_system_context", None)
+        if ctx:
+            meta["system_context"] = ctx
+        return meta if meta else None
 
     def clear(self) -> None:
         """Clear all registered plugins.

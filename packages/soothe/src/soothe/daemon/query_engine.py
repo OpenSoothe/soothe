@@ -196,12 +196,6 @@ class QueryEngine:
                                 )
                                 continue
                             namespace, mode, data = chunk
-                            logger.debug(
-                                "Received chunk #%d: namespace=%s, mode=%s",
-                                chunk_count,
-                                namespace,
-                                mode,
-                            )
 
                             d._thread_logger.log(tuple(namespace), mode, data)
 
@@ -246,12 +240,6 @@ class QueryEngine:
                             )
                             continue
                         namespace, mode, data = chunk
-                        logger.debug(
-                            "Received chunk #%d: namespace=%s, mode=%s",
-                            chunk_count,
-                            namespace,
-                            mode,
-                        )
 
                         d._thread_logger.log(tuple(namespace), mode, data)
 
