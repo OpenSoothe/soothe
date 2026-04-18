@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 
 from soothe_cli.shared.essential_events import is_essential_progress_event_type
+from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
 from soothe_cli.tui._session_stats import (
@@ -240,7 +241,8 @@ def _format_progress_event_lines_for_tui(
 ) -> list[str]:
     """Format progress events with the same pipeline as CLI.
 
-    IG-192: Show subagent capability events at DETAILED verbosity level.
+    ``StreamDisplayPipeline`` applies verbosity tiers: NORMAL milestones
+    (e.g. ``browser.started``) vs DETAILED internals (e.g. ``browser.step.running``).
     """
     event_type = str(event_data.get("type", ""))
 
@@ -257,24 +259,19 @@ def _format_progress_event_lines_for_tui(
                 rendered.append(line_text)
         return rendered
 
-    # Subagent capability events - show at DETAILED verbosity
-    # IG-192: Use SDK helper to identify capability events
-    from soothe_sdk.ux import is_subagent_progress_event
-
+    # All soothe.capability.* events — pipeline classifies NORMAL vs DETAILED
+    # (browser step.running, claude text.running, etc. need DETAILED verbosity)
     if event_type.startswith("soothe.capability."):
-        # Only show important progress events (started/completed/judgement)
-        # Internal steps (step.running, text.running, etc.) filtered at DETAILED tier
-        if is_subagent_progress_event(event_type):
-            event_for_pipeline = dict(event_data)
-            event_for_pipeline["namespace"] = list(namespace)
-            lines = pipeline.process(event_for_pipeline)
+        event_for_pipeline = dict(event_data)
+        event_for_pipeline["namespace"] = list(namespace)
+        lines = pipeline.process(event_for_pipeline)
 
-            rendered: list[str] = []
-            for line in lines:
-                line_text = line.format().lstrip("\n").strip()
-                if line_text:
-                    rendered.append(line_text)
-            return rendered
+        rendered: list[str] = []
+        for line in lines:
+            line_text = line.format().lstrip("\n").strip()
+            if line_text:
+                rendered.append(line_text)
+        return rendered
 
     return []
 
@@ -443,6 +440,7 @@ async def execute_task_textual(
     message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
+    progress_verbosity: str | None = None,
 ) -> SessionStats:
     """Execute a task with output directed to Textual UI.
 
@@ -474,6 +472,9 @@ async def execute_task_textual(
         skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
             ``send_turn`` and only consume chunks (daemon already queued the
             prompt, e.g. after ``invoke_skill``).
+        progress_verbosity: Progress/event display level (``quiet`` … ``debug``).
+            Defaults to ``normal``. Use ``detailed`` (or higher) to show browser
+            step milestones and other DETAILED-tier capability events.
 
     Returns:
         Stats accumulated over this turn (request count, token counts,
@@ -492,10 +493,12 @@ async def execute_task_textual(
     from pydantic import ValidationError
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
+    from soothe_cli.shared.display_policy import normalize_verbosity
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
-    progress_pipeline = StreamDisplayPipeline(verbosity="detailed")
+    pv = normalize_verbosity(progress_verbosity) if progress_verbosity else "normal"
+    progress_pipeline = StreamDisplayPipeline(verbosity=pv)
 
     # Parse file mentions and inject content if any — defer blocking I/O
     prompt_text, mentioned_files = await asyncio.to_thread(parse_file_mentions, user_input)
@@ -611,12 +614,16 @@ async def execute_task_textual(
                     daemon_text = (
                         message_content if isinstance(message_content, str) else final_input
                     )
+                    subagent_name, routed_text = parse_subagent_from_input(
+                        daemon_text if isinstance(daemon_text, str) else final_input
+                    )
                     ctx_model = context.get("model") if context else None
                     raw_mp = context.get("model_params") if context else None
                     mp = raw_mp if isinstance(raw_mp, dict) else None
                     await daemon_session.send_turn(
-                        daemon_text,
+                        routed_text,
                         interactive=True,
+                        subagent=subagent_name,
                         model=ctx_model
                         if isinstance(ctx_model, str) and ctx_model.strip()
                         else None,

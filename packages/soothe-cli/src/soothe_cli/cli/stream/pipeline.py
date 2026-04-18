@@ -175,8 +175,8 @@ class StreamDisplayPipeline:
                 if "judgement" in action:
                     return self._on_subagent_judgement(event)
 
-                # Step events (browser automation steps)
-                if "step" in action and "running" in action:
+                # Step events (browser automation): type ends with .step.running
+                if len(parts) >= 5 and parts[3] == "step" and parts[4] == "running":  # noqa: PLR2004
                     return self._on_capability_step(event, subagent)
 
                 # Completed events

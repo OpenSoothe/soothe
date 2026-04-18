@@ -88,6 +88,7 @@ def test_cleanup_browser_temp_files() -> None:
 def test_browser_subagent_config_defaults() -> None:
     """Test BrowserSubagentConfig default values."""
     config = BrowserSubagentConfig()
+    assert config.max_steps == 10
     assert config.runtime_dir == ""
     assert config.downloads_dir == ""
     assert config.user_data_dir == ""

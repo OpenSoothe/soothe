@@ -109,7 +109,14 @@ Capture screenshots at key navigation points for debugging.
 
         # Extract common parameters
         headless = kwargs.get("headless", True)
-        max_steps = kwargs.get("max_steps", 100)
+        browser_cfg = kwargs.get("config")
+        if not isinstance(browser_cfg, BrowserSubagentConfig):
+            browser_cfg = (
+                browser_config
+                if isinstance(browser_config, BrowserSubagentConfig)
+                else BrowserSubagentConfig()
+            )
+        max_steps = kwargs.get("max_steps", browser_cfg.max_steps)
         use_vision = kwargs.get("use_vision", True)
 
         # Create subagent using internal factory
@@ -144,7 +151,7 @@ def create_browser_subagent(
     model: Any = None,
     *,
     headless: bool = True,
-    max_steps: int = 100,
+    max_steps: int | None = None,
     use_vision: bool = True,
     config: Any = None,
     **kwargs: Any,
@@ -156,7 +163,8 @@ def create_browser_subagent(
             LLM. If a BaseChatModel instance is passed, the model name is
             extracted automatically.
         headless: Run browser in headless mode.
-        max_steps: Maximum browser agent steps.
+        max_steps: Maximum browser agent steps. When ``None``, uses
+            ``BrowserSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
         config: Browser subagent configuration object with runtime directories,
             cleanup settings, and feature flags.

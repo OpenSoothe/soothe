@@ -202,6 +202,7 @@ subagents:
   browser:
     enabled: true
     config:
+      max_steps: 10  # Browser-use agent loop limit per delegated task
       runtime_dir: ""  # Empty = use SOOTHE_HOME/agents/browser/
       downloads_dir: ""  # Empty = runtime_dir/downloads/
       user_data_dir: ""  # Empty = runtime_dir/profiles/default/
