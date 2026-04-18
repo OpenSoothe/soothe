@@ -48,6 +48,12 @@ from soothe_cli.shared.essential_events import (
     LOOP_REASON_EVENT_TYPE,
     is_essential_progress_event_type,
 )
+from soothe_cli.shared.message_processing import (
+    accumulate_tool_call_chunks,
+    coerce_tool_call_args_to_dict,
+    normalize_tool_calls_list,
+    try_parse_pending_tool_call_args,
+)
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
@@ -64,6 +70,7 @@ from soothe_cli.tui._session_stats import (
     format_token_count as format_token_count,
 )
 from soothe_cli.tui.config import build_stream_config
+from soothe_cli.tui.daemon_session import _envelope_langchain_message_dict
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.hooks import dispatch_hook
@@ -462,6 +469,133 @@ def _read_mentioned_file(file_path: Path, max_embed_bytes: int) -> str:
     return f"\n### {file_path.name}\nPath: `{file_path}`\n```\n{content}\n```"
 
 
+def _normalize_lc_stream_message(message: Any) -> Any:
+    """Turn daemon JSON dicts into LangChain message objects when possible.
+
+    ``DaemonSession._normalize_stream_data`` already does this; this is a safety net
+    for any path that still yields a raw dict (restore failure, alternate transports).
+    """
+    if not isinstance(message, dict):
+        return message
+    try:
+        from langchain_core.messages import messages_from_dict
+
+        wrapped = _envelope_langchain_message_dict(message)
+        restored = messages_from_dict([wrapped])
+        if restored:
+            return restored[0]
+    except Exception:
+        logger.debug("TUI could not restore LangChain message from dict", exc_info=True)
+    return message
+
+
+def _coerce_ai_message_for_blocks(message: Any) -> Any:
+    """Best-effort dict → ``AIMessage`` / ``AIMessageChunk`` for block extraction.
+
+    If the wire payload uses ``type: \"AIMessage\"`` (class name) instead of ``ai``,
+    :func:`messages_from_dict` would fail; :func:`_envelope_langchain_message_dict`
+    canonicalizes first (see ``daemon_session``).
+    """
+    from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
+
+    if isinstance(message, (AIMessage, AIMessageChunk)):
+        return message
+    if not isinstance(message, dict):
+        return message
+    try:
+        wrapped = _envelope_langchain_message_dict(message)
+        restored = messages_from_dict([wrapped])
+        if restored and isinstance(restored[0], (AIMessage, AIMessageChunk)):
+            return restored[0]
+    except Exception:
+        logger.debug("TUI could not coerce dict to AIMessage for blocks", exc_info=True)
+    return message
+
+
+def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Map LangChain ``non_standard`` tool wrappers to plain ``tool_call`` blocks.
+
+    Anthropic-style ``tool_use`` content is often stored as
+    ``{\"type\": \"non_standard\", \"value\": {\"type\": \"tool_use\", ...}}``.
+    The TUI loop only understands ``tool_call`` / ``tool_call_chunk`` — without this,
+    tool cards never mount for Claude/Anthropic providers.
+    """
+    out: list[dict[str, Any]] = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        if b.get("type") != "non_standard":
+            out.append(b)
+            continue
+        val = b.get("value")
+        if not isinstance(val, dict):
+            out.append(b)
+            continue
+        inner_t = val.get("type")
+        if inner_t == "tool_use":
+            out.append(
+                {
+                    "type": "tool_call",
+                    "name": val.get("name"),
+                    "id": val.get("id"),
+                    "args": val.get("input") if val.get("input") is not None else {},
+                }
+            )
+            continue
+        if inner_t in ("tool_call", "tool_call_chunk"):
+            out.append(
+                {
+                    "type": inner_t,
+                    "name": val.get("name"),
+                    "id": val.get("id"),
+                    "args": val.get("args"),
+                    "index": val.get("index"),
+                }
+            )
+            continue
+        out.append(b)
+    return out
+
+
+def _tool_block_ids(blocks: list[dict[str, Any]]) -> set[str]:
+    """IDs already represented as tool-ish blocks (avoid duplicate cards)."""
+    out: set[str] = set()
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        btype = b.get("type")
+        if btype in ("tool_call", "tool_call_chunk", "tool_use", "non_standard"):
+            bid = b.get("id")
+            if bid is not None:
+                out.add(str(bid))
+    return out
+
+
+def _append_tool_calls_from_message_attr(
+    message: Any,
+    blocks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Append synthetic ``tool_call`` blocks from ``AIMessage.tool_calls`` (CLI parity).
+
+    Many providers attach ``tool_calls`` without ``content_blocks``; the headless path
+    uses these directly — the TUI must do the same or tool cards never appear.
+    """
+    seen = _tool_block_ids(blocks)
+    extra: list[dict[str, Any]] = []
+    raw_tc = getattr(message, "tool_calls", None)
+    if not isinstance(raw_tc, list):
+        raw_tc = []
+    for tc in normalize_tool_calls_list(raw_tc):
+        name = str(tc.get("name") or "")
+        tc_id = str(tc.get("id") or "")
+        args = coerce_tool_call_args_to_dict(tc.get("args"))
+        if not name or not tc_id or tc_id in seen:
+            continue
+        seen.add(tc_id)
+        extra.append({"type": "tool_call", "name": name, "args": args, "id": tc_id})
+    return blocks + extra
+
+
 def _tui_effective_ai_blocks(
     message: Any,
     *,
@@ -475,6 +609,9 @@ def _tui_effective_ai_blocks(
     ``_handle_dict_message`` fallbacks; the TUI previously required ``content_blocks``
     and skipped the whole chunk, so users saw no assistant output.
 
+    Also merges ``message.tool_calls`` (and list ``content`` tool blocks for subgraphs)
+    so tool cards match headless ``EventProcessor`` behavior.
+
     Args:
         message: LangChain ``AIMessage`` / ``AIMessageChunk`` (or compatible).
         ns_key: Stream namespace tuple (empty tuple = root graph).
@@ -485,6 +622,7 @@ def _tui_effective_ai_blocks(
     """
     from langchain_core.messages import AIMessage, AIMessageChunk
 
+    message = _coerce_ai_message_for_blocks(message)
     if not isinstance(message, (AIMessage, AIMessageChunk)):
         return []
 
@@ -492,19 +630,34 @@ def _tui_effective_ai_blocks(
     raw_blocks = getattr(message, "content_blocks", None)
     blocks: list[dict[str, Any]] = []
     if raw_blocks:
-        blocks = [b for b in raw_blocks if isinstance(b, dict)]
+        blocks = _expand_nonstandard_tool_blocks([b for b in raw_blocks if isinstance(b, dict)])
 
     if blocks:
-        return blocks
+        return _append_tool_calls_from_message_attr(message, blocks)
 
     raw = getattr(message, "content", None)
     if not allow_plain_string:
-        return []
+        if isinstance(raw, list):
+            toolish = [
+                b
+                for b in raw
+                if isinstance(b, dict)
+                and b.get("type") in ("tool_call", "tool_call_chunk", "tool_use", "non_standard")
+            ]
+            if toolish:
+                return _append_tool_calls_from_message_attr(
+                    message, _expand_nonstandard_tool_blocks(toolish)
+                )
+        return _append_tool_calls_from_message_attr(message, [])
     if isinstance(raw, str) and raw.strip():
-        return [{"type": "text", "text": raw}]
+        merged = [{"type": "text", "text": raw}]
+        return _append_tool_calls_from_message_attr(message, merged)
     if isinstance(raw, list):
-        return [b for b in raw if isinstance(b, dict)]
-    return []
+        part = _expand_nonstandard_tool_blocks([b for b in raw if isinstance(b, dict)])
+        if not part:
+            return _append_tool_calls_from_message_attr(message, [])
+        return _append_tool_calls_from_message_attr(message, part)
+    return _append_tool_calls_from_message_attr(message, [])
 
 
 async def execute_task_textual(
@@ -569,16 +722,17 @@ async def execute_task_textual(
         HITLRequest,
         RejectDecision,
     )
-    from langchain_core.messages import HumanMessage, ToolMessage
+    from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
     from langgraph.types import Command
     from pydantic import ValidationError
 
     from soothe_cli.cli.stream import StreamDisplayPipeline
-    from soothe_cli.shared.display_policy import normalize_verbosity
+    from soothe_cli.shared.display_policy import normalize_verbosity, should_show_tool_call_ui
 
     hitl_request_adapter = _get_hitl_request_adapter(HITLRequest)
     ask_user_adapter = _get_ask_user_adapter()
     pv = normalize_verbosity(progress_verbosity) if progress_verbosity else "normal"
+    show_tool_ui = should_show_tool_call_ui(pv)
     progress_pipeline = StreamDisplayPipeline(verbosity=pv)
 
     # Parse file mentions and inject content if any — defer blocking I/O
@@ -648,6 +802,8 @@ async def execute_task_textual(
     file_op_tracker = FileOpTracker(assistant_id=assistant_id)
     displayed_tool_ids: set[str] = set()
     tool_call_buffers: dict[str | int, dict] = {}
+    # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
+    pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
 
     # Track pending text and assistant messages PER NAMESPACE to avoid interleaving
     # when multiple subagents stream in parallel
@@ -726,10 +882,14 @@ async def execute_task_textual(
                 # Convert namespace to hashable tuple for dict keys
                 ns_key = tuple(namespace) if namespace else ()
 
-                # Root graph uses namespace ``()``; Task-spawned subagents use non-empty
-                # namespaces (hide those). Direct /browser|/claude|/research turns stream
-                # entirely on a subgraph — show those streams.
+                # Root graph uses namespace ``()``; delegated subgraphs use non-empty
+                # namespaces. Assistant *text* from subgraphs is suppressed unless the
+                # user routed with /browser|/claude|/research (avoids duplicate prose).
+                # Tool-call UI is gated by ``show_tool_ui`` (logging verbosity), not namespace.
                 is_main_agent = ns_key == ()
+                suppress_subgraph_assistant_text = (not is_main_agent) and (
+                    not direct_subagent_turn
+                )
 
                 # Handle UPDATES stream - for interrupts and todos
                 if current_stream_mode == "updates":
@@ -767,10 +927,6 @@ async def execute_task_textual(
 
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
-                    if not is_main_agent and not direct_subagent_turn:
-                        logger.debug("Skipping subagent message ns=%s", ns_key)
-                        continue
-
                     if not isinstance(data, tuple) or len(data) != 2:  # noqa: PLR2004  # message stream data is a 2-tuple (message, metadata)
                         logger.debug(
                             "Skipping non-2-tuple message data: type=%s",
@@ -779,6 +935,7 @@ async def execute_task_textual(
                         continue
 
                     message, metadata = data
+                    message = _normalize_lc_stream_message(message)
                     logger.debug(
                         "Processing message: type=%s id=%s has_content_blocks=%s",
                         type(message).__name__,
@@ -827,6 +984,13 @@ async def execute_task_textual(
                         continue
 
                     if isinstance(message, ToolMessage):
+                        tc_clear = getattr(message, "tool_call_id", None)
+                        if tc_clear:
+                            pending_tool_calls_lc.pop(str(tc_clear), None)
+
+                        if not show_tool_ui:
+                            continue
+
                         tool_name = getattr(message, "name", "")
                         tool_status = getattr(message, "status", "success")
                         tool_content = format_tool_message_content(message.content)
@@ -900,11 +1064,45 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, total_toks, 0)
                                 captured_input_tokens = max(captured_input_tokens, total_toks)
 
+                    streaming_tool_extra: list[dict[str, Any]] = []
+                    if isinstance(message, (AIMessage, AIMessageChunk)):
+                        accumulate_tool_call_chunks(
+                            pending_tool_calls_lc,
+                            getattr(message, "tool_call_chunks", None) or [],
+                            is_main=(ns_key == ()),
+                        )
+                        for tc_id, pend in list(pending_tool_calls_lc.items()):
+                            if pend.get("tui_stream_mounted"):
+                                continue
+                            parsed = try_parse_pending_tool_call_args(pend)
+                            if parsed is None:
+                                continue
+                            name = str(pend.get("name") or "")
+                            if not name:
+                                continue
+                            pend["tui_stream_mounted"] = True
+                            streaming_tool_extra.append(
+                                {
+                                    "type": "tool_call",
+                                    "name": name,
+                                    "args": parsed,
+                                    "id": tc_id,
+                                }
+                            )
+
                     blocks = _tui_effective_ai_blocks(
                         message,
                         ns_key=ns_key,
                         direct_subagent_turn=direct_subagent_turn,
                     )
+                    if streaming_tool_extra:
+                        seen_tc = _tool_block_ids(blocks)
+                        for tb in streaming_tool_extra:
+                            tid = str(tb.get("id") or "")
+                            if tid and tid not in seen_tc:
+                                seen_tc.add(tid)
+                                blocks = [*blocks, tb]
+                    blocks = _expand_nonstandard_tool_blocks(blocks)
                     if not blocks:
                         logger.debug(
                             "No displayable AI blocks after CLI-aligned fallback: type=%s",
@@ -921,6 +1119,8 @@ async def execute_task_textual(
                         block_type = block.get("type")
 
                         if block_type == "text":
+                            if suppress_subgraph_assistant_text:
+                                continue
                             text = block.get("text", "")
                             if text:
                                 # Track accumulated text for reference
@@ -951,9 +1151,11 @@ async def execute_task_textual(
                                 # better performance)
                                 await current_msg.append_content(text)
 
-                        elif block_type in {"tool_call_chunk", "tool_call"}:
+                        elif block_type in {"tool_call_chunk", "tool_call", "tool_use"}:
                             chunk_name = block.get("name")
                             chunk_args = block.get("args")
+                            if chunk_args is None and block_type == "tool_use":
+                                chunk_args = block.get("input")
                             chunk_id = block.get("id")
                             chunk_index = block.get("index")
 
@@ -1031,21 +1233,24 @@ async def execute_task_textual(
                             )
                             if buffer_id is not None and buffer_id not in displayed_tool_ids:
                                 displayed_tool_ids.add(buffer_id)
-                                file_op_tracker.start_operation(buffer_name, parsed_args, buffer_id)
+                                if show_tool_ui:
+                                    file_op_tracker.start_operation(
+                                        buffer_name, parsed_args, buffer_id
+                                    )
 
-                                # Hide spinner before showing tool call
-                                if adapter._set_spinner:
-                                    await adapter._set_spinner(None)
+                                    # Hide spinner before showing tool call
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner(None)
 
-                                # Mount tool call message
-                                logger.debug(
-                                    "Mounting ToolCallMessage: %s(%s)",
-                                    buffer_name,
-                                    repr(parsed_args)[:200],
-                                )
-                                tool_msg = ToolCallMessage(buffer_name, parsed_args)
-                                await adapter._mount_message(tool_msg)
-                                adapter._current_tool_messages[buffer_id] = tool_msg
+                                    # Mount tool call message
+                                    logger.debug(
+                                        "Mounting ToolCallMessage: %s(%s)",
+                                        buffer_name,
+                                        repr(parsed_args)[:200],
+                                    )
+                                    tool_msg = ToolCallMessage(buffer_name, parsed_args)
+                                    await adapter._mount_message(tool_msg)
+                                    adapter._current_tool_messages[buffer_id] = tool_msg
 
                             tool_call_buffers.pop(buffer_key, None)
 

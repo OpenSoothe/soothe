@@ -338,6 +338,32 @@ class TestEventProcessorVerbosityFiltering:
         tool_result_calls = [c for c in renderer.calls if c[0] == "on_tool_result"]
         assert len(tool_result_calls) == 0
 
+    def test_normal_verbosity_shows_tool_result(self) -> None:
+        """Default (normal) verbosity must surface tool stderr lines (not only detailed)."""
+        renderer = MockRenderer()
+        processor = EventProcessor(renderer, verbosity="normal")
+
+        tool_event = {
+            "type": "event",
+            "mode": "messages",
+            "namespace": [],
+            "data": [
+                {
+                    "type": "ToolMessage",
+                    "name": "read_file",
+                    "content": "file contents",
+                    "tool_call_id": "tc-normal",
+                },
+                {},
+            ],
+        }
+
+        processor.process_event(tool_event)
+
+        tool_result_calls = [c for c in renderer.calls if c[0] == "on_tool_result"]
+        assert len(tool_result_calls) == 1
+        assert tool_result_calls[0][1][0] == "read_file"
+
     def test_quiet_cleans_and_extracts_answer(self) -> None:
         renderer = MockRenderer()
         processor = EventProcessor(renderer, verbosity="quiet")

@@ -351,7 +351,7 @@ class EventProcessor:
                         continue
                     name = block.get("name", "")
                     if name and self._presentation.tier_visible(
-                        VerbosityTier.DETAILED, self._verbosity
+                        VerbosityTier.NORMAL, self._verbosity
                     ):
                         coerced = coerce_tool_call_args_to_dict(block.get("args"))
                         # Skip if no args - will be emitted when tool result arrives
@@ -390,7 +390,7 @@ class EventProcessor:
             for tc in tcs:
                 name = tc.get("name", "")
                 if not name or not self._presentation.tier_visible(
-                    VerbosityTier.DETAILED, self._verbosity
+                    VerbosityTier.NORMAL, self._verbosity
                 ):
                     continue
                 tc_args = coerce_tool_call_args_to_dict(tc.get("args"))
@@ -428,7 +428,7 @@ class EventProcessor:
         namespace: tuple[str, ...],  # noqa: ARG002
     ) -> None:
         """Handle ToolMessage objects."""
-        if not self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
         tool_name = getattr(msg, "name", "tool")
@@ -611,7 +611,7 @@ class EventProcessor:
             msg: ToolMessage serialized as dict.
             is_main: True if from main agent.
         """
-        if not self._presentation.tier_visible(VerbosityTier.DETAILED, self._verbosity):
+        if not self._presentation.tier_visible(VerbosityTier.NORMAL, self._verbosity):
             return
 
         tool_name = msg.get("name", "tool")
@@ -679,7 +679,7 @@ class EventProcessor:
                 continue
             parsed_args = try_parse_pending_tool_call_args(pending)
             if parsed_args is not None and self._presentation.tier_visible(
-                VerbosityTier.DETAILED, self._verbosity
+                VerbosityTier.NORMAL, self._verbosity
             ):
                 self._state.emitted_tool_call_ids.add(tc_id)
                 self._renderer.on_tool_call(
@@ -761,18 +761,17 @@ class EventProcessor:
 
         steps = [
             PlanStep(
-                id=s.get("id", str(i)),
-                description=s.get("description", ""),
-                depends_on=s.get("depends_on", []),
-                status="pending",
+                step_id=str(s.get("step_id") or s.get("id") or i),
+                description=str(s.get("description", "")),
+                status=str(s.get("status", "pending")),
             )
             for i, s in enumerate(data.get("steps", []))
         ]
         plan = Plan(
-            goal=data.get("goal", ""),
+            plan_id=str(data.get("plan_id") or "local-plan"),
+            goal=str(data.get("goal", "")),
             steps=steps,
-            reasoning=data.get("reasoning"),
-            is_plan_only=data.get("is_plan_only", False),
+            status=str(data.get("plan_status", data.get("status", "created"))),
         )
         self._state.current_plan = plan
         self._renderer.on_plan_created(plan)
@@ -784,7 +783,7 @@ class EventProcessor:
 
         if self._state.current_plan:
             for step in self._state.current_plan.steps:
-                if step.id == step_id:
+                if step.step_id == step_id:
                     step.status = "in_progress"
                     break
 
@@ -798,7 +797,7 @@ class EventProcessor:
 
         if self._state.current_plan:
             for step in self._state.current_plan.steps:
-                if step.id == step_id:
+                if step.step_id == step_id:
                     step.status = "completed" if success else "failed"
                     break
 

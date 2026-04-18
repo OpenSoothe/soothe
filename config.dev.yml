@@ -29,7 +29,7 @@ providers:
 # Dev model routing
 router:
   default: "coding-plan:kimi-k2.5"
-  think: "coding-plan:qwen3.5-plus"
+  think: "coding-plan:kimi-k2.5"
   fast: "coding-plan:kimi-k2.5"
   image: "coding-plan:qwen3.5-plus"
   embedding: "dashscope:multimodal-embedding-v1"
