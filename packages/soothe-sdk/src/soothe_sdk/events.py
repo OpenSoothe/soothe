@@ -71,7 +71,21 @@ PLAN_CREATED = "soothe.cognition.plan.created"
 PLAN_STEP_STARTED = "soothe.cognition.plan.step.started"
 PLAN_STEP_COMPLETED = "soothe.cognition.plan.step.completed"
 
-# Subagent events
+# Browser subagent events
+SUBAGENT_BROWSER_STARTED = "soothe.capability.browser.started"
+SUBAGENT_BROWSER_COMPLETED = "soothe.capability.browser.completed"
+SUBAGENT_BROWSER_STEP_RUNNING = "soothe.capability.browser.step.running"
+SUBAGENT_BROWSER_CDP_CONNECTING = "soothe.capability.browser.cdp.connecting"
+
+# Claude subagent events
+SUBAGENT_CLAUDE_TEXT_RUNNING = "soothe.capability.claude.text.running"
+SUBAGENT_CLAUDE_TOOL_RUNNING = "soothe.capability.claude.tool.running"
+SUBAGENT_CLAUDE_COMPLETED = "soothe.capability.claude.completed"
+
+# Research subagent events
+SUBAGENT_RESEARCH_STARTED = "soothe.capability.research.started"
+SUBAGENT_RESEARCH_COMPLETED = "soothe.capability.research.completed"
+SUBAGENT_RESEARCH_JUDGEMENT_REPORTING = "soothe.capability.research.judgement.reporting"
 SUBAGENT_RESEARCH_INTERNAL_LLM = "soothe.capability.research.internal_llm.run"
 
 # Thread lifecycle events (exposed for DEBUG/DETAILED level)
@@ -113,7 +127,19 @@ __all__ = [
     "PLAN_CREATED",
     "PLAN_STEP_STARTED",
     "PLAN_STEP_COMPLETED",
-    # Subagent
+    # Browser subagent
+    "SUBAGENT_BROWSER_STARTED",
+    "SUBAGENT_BROWSER_COMPLETED",
+    "SUBAGENT_BROWSER_STEP_RUNNING",
+    "SUBAGENT_BROWSER_CDP_CONNECTING",
+    # Claude subagent
+    "SUBAGENT_CLAUDE_TEXT_RUNNING",
+    "SUBAGENT_CLAUDE_TOOL_RUNNING",
+    "SUBAGENT_CLAUDE_COMPLETED",
+    # Research subagent
+    "SUBAGENT_RESEARCH_STARTED",
+    "SUBAGENT_RESEARCH_COMPLETED",
+    "SUBAGENT_RESEARCH_JUDGEMENT_REPORTING",
     "SUBAGENT_RESEARCH_INTERNAL_LLM",
     # Thread lifecycle (DEBUG/DETAILED)
     "THREAD_CREATED",

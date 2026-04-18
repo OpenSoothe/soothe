@@ -114,7 +114,7 @@ class StreamDisplayPipeline:
         Returns:
             VerbosityTier for the event.
         """
-        from soothe_sdk.ux import classify_event_to_tier
+        from soothe_sdk.ux import classify_event_to_tier, is_subagent_progress_event
 
         # Goal events - NORMAL
         if is_goal_start_event_type(event_type):
@@ -128,8 +128,16 @@ class StreamDisplayPipeline:
         if event_type in GOAL_COMPLETE_EVENTS:
             return VerbosityTier.QUIET
 
+        # Subagent capability events - DETAILED by default, NORMAL for important progress
+        # IG-192: Use SDK helper to identify important progress events (started/completed/judgement)
+        if event_type.startswith("soothe.capability."):
+            if is_subagent_progress_event(event_type):
+                return VerbosityTier.NORMAL
+            # Other capability events (internal steps) - DETAILED
+            return VerbosityTier.DETAILED
+
         # soothe.* events: defer to SDK domain-based classification (RFC-0020)
-        # Step completion, tool events, subagent events all use domain defaults
+        # Step completion, tool events use domain defaults
         if event_type.startswith("soothe."):
             return classify_event_to_tier(event_type)
 
@@ -150,12 +158,36 @@ class StreamDisplayPipeline:
         Returns:
             List of DisplayLine objects.
         """
-        if is_goal_start_event_type(event_type):
-            return self._on_goal_started(event)
+        # Capability events (soothe.capability.<subagent>.<action>)
+        # IG-192: Handle new unified naming scheme for subagent events
+        if event_type.startswith("soothe.capability."):
+            parts = event_type.split(".")
+            if len(parts) >= 4:  # noqa: PLR2004
+                # soothe.capability.<subagent>.<action>
+                subagent = parts[2]
+                action = parts[3]
 
-        if is_step_start_event_type(event_type):
-            return self._on_step_started(event)
+                # Started/dispatched events
+                if action in ("started", "dispatching"):
+                    return self._on_subagent_dispatched(event, subagent)
 
+                # Judgement events (research)
+                if "judgement" in action:
+                    return self._on_subagent_judgement(event)
+
+                # Step events (browser automation steps)
+                if "step" in action and "running" in action:
+                    return self._on_capability_step(event, subagent)
+
+                # Completed events
+                if action == "completed":
+                    return self._on_subagent_completed(event, subagent)
+
+                # Text/tool events (claude) - DETAILED level
+                if action in ("text", "tool") and "running" in event_type:
+                    return self._on_capability_activity(event, subagent, action)
+
+        # Legacy subagent events (.subagent.* format)
         if ".subagent." in event_type and ".dispatched" in event_type:
             return self._on_subagent_dispatched(event)
 
@@ -167,6 +199,13 @@ class StreamDisplayPipeline:
 
         if ".subagent." in event_type and ".completed" in event_type:
             return self._on_subagent_completed(event)
+
+        # Goal/step events
+        if is_goal_start_event_type(event_type):
+            return self._on_goal_started(event)
+
+        if is_step_start_event_type(event_type):
+            return self._on_step_started(event)
 
         if is_step_complete_event_type(event_type):
             return self._on_step_completed(event)
@@ -244,24 +283,27 @@ class StreamDisplayPipeline:
             )
         ]
 
-    def _on_subagent_dispatched(self, event: dict[str, Any]) -> list[DisplayLine]:
+    def _on_subagent_dispatched(
+        self, event: dict[str, Any], subagent_name: str = ""
+    ) -> list[DisplayLine]:
         """Handle subagent dispatched event.
 
         Args:
             event: Event dictionary.
+            subagent_name: Subagent name (extracted from event type).
 
         Returns:
             Display lines (none for dispatch, just tracking).
         """
-        # Extract name from event type: soothe.subagent.<name>.dispatched
+        # Extract name from event type: soothe.capability.<name>.started
         event_type = event.get("type", "")
         parts = event_type.split(".")
         name = ""
-        # Pattern: soothe.subagent.<name>.dispatched -> parts[0]=soothe, parts[1]=subagent, parts[2]=name
-        # Need at least 3 parts for valid subagent event type
-        if len(parts) >= 3 and parts[1] == "subagent":  # noqa: PLR2004
+        # Pattern: soothe.capability.<name>.started -> parts[0]=soothe, parts[1]=capability, parts[2]=name
+        # Need at least 3 parts for valid capability event type
+        if len(parts) >= 3 and parts[1] == "capability":  # noqa: PLR2004
             name = parts[2]
-        name = name or event.get("name", event.get("subagent_name", ""))
+        name = name or subagent_name or event.get("name", event.get("subagent_name", ""))
         self._context.subagent_name = name
         self._context.subagent_milestones.clear()
 
@@ -272,6 +314,7 @@ class StreamDisplayPipeline:
             format_tool_call(
                 f"{name}_subagent",
                 args_summary,
+                running=True,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
@@ -334,11 +377,14 @@ class StreamDisplayPipeline:
             )
         ]
 
-    def _on_subagent_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
+    def _on_subagent_completed(
+        self, event: dict[str, Any], subagent_name: str = ""
+    ) -> list[DisplayLine]:
         """Handle subagent completed event.
 
         Args:
             event: Event dictionary.
+            subagent_name: Subagent name (extracted from event type).
 
         Returns:
             Display lines for completion.
@@ -370,6 +416,57 @@ class StreamDisplayPipeline:
                 verbosity_tier=self._verbosity_tier,
             )
         ]
+
+    def _on_capability_step(self, event: dict[str, Any], subagent_name: str) -> list[DisplayLine]:
+        """Handle capability step event (e.g., browser automation steps).
+
+        Args:
+            event: Event dictionary.
+            subagent_name: Subagent name (browser, etc.).
+
+        Returns:
+            Display lines for step milestone.
+        """
+        # Extract step info from different event schemas
+        step = event.get("step", "")
+        url = event.get("url", "")
+        action = event.get("action", "")
+        title = event.get("title", "")
+
+        # Build brief description
+        if url:
+            brief = f"Step {step}: {action} on {url}"
+        elif action:
+            brief = f"Step {step}: {action}"
+        elif title:
+            brief = f"Step {step}: {title}"
+        else:
+            brief = f"Step {step}"
+
+        return [
+            format_subagent_milestone(
+                preview_first(brief, 60),
+                namespace=self._current_namespace,
+                verbosity_tier=self._verbosity_tier,
+            )
+        ]
+
+    def _on_capability_activity(
+        self, event: dict[str, Any], subagent_name: str, action_type: str
+    ) -> list[DisplayLine]:
+        """Handle capability activity event (e.g., claude text/tool).
+
+        Args:
+            event: Event dictionary.
+            subagent_name: Subagent name (claude, etc.).
+            action_type: Activity type (text, tool).
+
+        Returns:
+            Display lines for activity milestone (empty for DETAILED events).
+        """
+        # Claude text/tool events are DETAILED level - not shown at normal verbosity
+        # Just return empty list, classification already filters them
+        return []
 
     def _on_step_completed(self, event: dict[str, Any]) -> list[DisplayLine]:
         """Handle step completed event.
