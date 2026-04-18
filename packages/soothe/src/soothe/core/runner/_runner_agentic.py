@@ -311,6 +311,9 @@ class AgenticMixin:
                         confidence=event_data["confidence"],
                         next_action=event_data.get("next_action", ""),
                         reasoning=event_data.get("reasoning", ""),
+                        assessment_reasoning=event_data.get("assessment_reasoning", ""),
+                        plan_reasoning=event_data.get("plan_reasoning", ""),
+                        plan_action=event_data.get("plan_action", "new"),
                         iteration=event_data["iteration"],
                     ).to_dict()
                 )

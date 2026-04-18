@@ -844,9 +844,14 @@ class LLMPlanner:
         from soothe.cognition.agent_loop.schemas import PlanResult
         from soothe.utils.text_preview import preview_first
 
-        # Concatenate reasoning from both phases (shows complete reasoning chain)
-        # reasoning_text = f"{assessment.brief_reasoning} [Plan] {plan_result.brief_reasoning}"
-        reasoning_text = f"{assessment.brief_reasoning}"
+        ar = (assessment.brief_reasoning or "").strip()
+        pr = (plan_result.brief_reasoning or "").strip()
+        if ar and pr:
+            reasoning_text = f"{ar} [Plan] {pr}"
+        elif pr:
+            reasoning_text = pr
+        else:
+            reasoning_text = ar
 
         # IG-152: Use plan_result.next_action (concrete, actionable) for user
         # assessment.next_action is status-based (what LLM thinks should happen)
@@ -865,6 +870,8 @@ class LLMPlanner:
             goal_progress=assessment.goal_progress,
             confidence=assessment.confidence,
             reasoning=reasoning_text,  # Full reasoning chain (no truncation)
+            assessment_reasoning=ar,
+            plan_reasoning=pr,
             plan_action=plan_result.plan_action,
             decision=plan_result.decision,
             next_action=action_text,  # User sees concrete plan action (no duplication)
@@ -917,6 +924,8 @@ class LLMPlanner:
                         goal_progress=assessment.goal_progress,
                         confidence=assessment.confidence,
                         reasoning=assessment.brief_reasoning,  # Single phase, no truncation needed
+                        assessment_reasoning=assessment.brief_reasoning,
+                        plan_reasoning="",
                         plan_action="keep",  # No plan needed
                         decision=None,
                         next_action=assessment.next_action,  # User sees full action
@@ -1005,6 +1014,8 @@ class LLMPlanner:
                                                 goal_progress=assessment.goal_progress,
                                                 confidence=assessment.confidence,
                                                 reasoning=assessment.brief_reasoning,
+                                                assessment_reasoning=assessment.brief_reasoning,
+                                                plan_reasoning="",
                                                 plan_action="new",
                                                 decision=_default_agent_decision(
                                                     goal, state.iteration
@@ -1017,6 +1028,8 @@ class LLMPlanner:
                                                 goal_progress=assessment.goal_progress,
                                                 confidence=assessment.confidence,
                                                 reasoning=assessment.brief_reasoning,
+                                                assessment_reasoning=assessment.brief_reasoning,
+                                                plan_reasoning="",
                                                 plan_action="keep",
                                                 decision=None,
                                                 next_action=assessment.next_action,

@@ -145,7 +145,10 @@ class TestClassifyEventToTier:
         assert classify_event_to_tier("soothe.capability.browser.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.capability.claude.started") == VerbosityTier.NORMAL
         assert classify_event_to_tier("soothe.capability.claude.completed") == VerbosityTier.NORMAL
-        assert classify_event_to_tier("soothe.capability.claude.text.running") == VerbosityTier.DETAILED
+        assert (
+            classify_event_to_tier("soothe.capability.claude.text.running")
+            == VerbosityTier.DETAILED
+        )
 
     def test_classify_loop_agent_events(self) -> None:
         """Loop agent judgment events classify to NORMAL (user-visible progress)."""

@@ -226,7 +226,9 @@ class AgentLoop:
                     "progress": plan_result.goal_progress,
                     "confidence": plan_result.confidence,
                     "next_action": plan_result.next_action,  # Full action (no truncation)
-                    "reasoning": plan_result.reasoning,  # Internal technical analysis
+                    "reasoning": plan_result.reasoning,  # Combined chain (backward compatible)
+                    "assessment_reasoning": plan_result.assessment_reasoning,
+                    "plan_reasoning": plan_result.plan_reasoning,
                     "plan_action": plan_result.plan_action,
                 },
             )

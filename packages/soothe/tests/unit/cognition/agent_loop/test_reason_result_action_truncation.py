@@ -61,6 +61,10 @@ def test_next_action_uses_plan_action(
 
     result = planner._combine_results(sample_assessment, sample_plan_result)
 
+    assert result.assessment_reasoning == sample_assessment.brief_reasoning
+    assert result.plan_reasoning == sample_plan_result.brief_reasoning
+    assert "[Plan]" in result.reasoning
+
     # Should use plan_result.next_action (concrete action), not assessment.next_action
     assert result.next_action == sample_plan_result.next_action
     assert "Read key implementation files" in result.next_action

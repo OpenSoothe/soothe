@@ -49,6 +49,7 @@ class MessageType(StrEnum):
     APP = "app"
     SUMMARIZATION = "summarization"
     STEP_PROGRESS = "step_progress"
+    COGNITION_PLAN = "cognition_plan"
     DIFF = "diff"
 
 
@@ -150,6 +151,27 @@ class MessageData:
     step_summary: str | None = None
     """Result or error summary text (STEP_PROGRESS only)."""
 
+    cognition_plan_next_action: str | None = None
+    """User-facing next step (COGNITION_PLAN only)."""
+
+    cognition_plan_status: str | None = None
+    """Plan status: continue, replan, done (COGNITION_PLAN only)."""
+
+    cognition_plan_iteration: int | None = None
+    """Agent-loop iteration (COGNITION_PLAN only)."""
+
+    cognition_plan_action: str | None = None
+    """``keep`` or ``new`` (COGNITION_PLAN only)."""
+
+    cognition_plan_assessment: str | None = None
+    """Phase-1 assessment text (COGNITION_PLAN only)."""
+
+    cognition_plan_strategy: str | None = None
+    """Phase-2 plan reasoning (COGNITION_PLAN only)."""
+
+    cognition_plan_legacy_reasoning: str | None = None
+    """Combined reasoning when structured fields are absent (COGNITION_PLAN only)."""
+
     is_streaming: bool = False
     """Whether the message is still being streamed.
 
@@ -193,6 +215,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionPlanReasonMessage,
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
@@ -270,6 +293,18 @@ class MessageData:
                     )
                 return w
 
+            case MessageType.COGNITION_PLAN:
+                return CognitionPlanReasonMessage(
+                    next_action=self.cognition_plan_next_action or "",
+                    status=self.cognition_plan_status or "",
+                    iteration=int(self.cognition_plan_iteration or 0),
+                    plan_action=self.cognition_plan_action or "new",
+                    assessment_reasoning=self.cognition_plan_assessment or "",
+                    plan_reasoning=self.cognition_plan_strategy or "",
+                    legacy_reasoning=self.cognition_plan_legacy_reasoning or "",
+                    id=self.id,
+                )
+
             case _:
                 logger.warning(
                     "Unknown MessageType %r for message %s, falling back to AppMessage",
@@ -293,6 +328,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionPlanReasonMessage,
             CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
@@ -303,6 +339,20 @@ class MessageData:
         )
 
         widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+        if isinstance(widget, CognitionPlanReasonMessage):
+            return cls(
+                type=MessageType.COGNITION_PLAN,
+                content="",
+                id=widget_id,
+                cognition_plan_next_action=widget._next_action,
+                cognition_plan_status=widget._status,
+                cognition_plan_iteration=widget._iteration,
+                cognition_plan_action=widget._plan_action,
+                cognition_plan_assessment=widget._assessment_reasoning,
+                cognition_plan_strategy=widget._plan_reasoning,
+                cognition_plan_legacy_reasoning=widget._legacy_reasoning,
+            )
 
         if isinstance(widget, CognitionStepMessage):
             phase = widget._status

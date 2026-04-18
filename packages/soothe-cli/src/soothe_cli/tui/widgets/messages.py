@@ -1794,6 +1794,102 @@ class CognitionStepMessage(_TimestampClickMixin, Vertical):
             self._detail_widget.display = False
 
 
+class CognitionPlanReasonMessage(_TimestampClickMixin, Vertical):
+    """Single card for plan assessment, plan reasoning, and next action (keep/new)."""
+
+    can_select = True
+
+    DEFAULT_CSS = """
+    CognitionPlanReasonMessage {
+        height: auto;
+        padding: 0 1 0 0;
+        margin: 0 0 1 0;
+        background: transparent;
+        border-left: wide $cognition;
+    }
+
+    CognitionPlanReasonMessage .cognition-plan-header {
+        height: auto;
+        margin: 0;
+        color: $cognition;
+        text-style: bold;
+    }
+
+    CognitionPlanReasonMessage .plan-section-line {
+        height: auto;
+        margin: 0;
+        color: $text-muted;
+    }
+
+    CognitionPlanReasonMessage:hover {
+        border-left: wide $cognition-hover;
+    }
+    """
+
+    def __init__(
+        self,
+        *,
+        next_action: str,
+        status: str,
+        iteration: int,
+        plan_action: str = "new",
+        assessment_reasoning: str = "",
+        plan_reasoning: str = "",
+        legacy_reasoning: str = "",
+        **kwargs: Any,
+    ) -> None:
+        """Initialize a plan-reason card.
+
+        Args:
+            next_action: User-facing next step line.
+            status: Plan status (continue, replan, done).
+            iteration: Agent-loop iteration index.
+            plan_action: ``keep`` or ``new`` (execution strategy).
+            assessment_reasoning: Phase-1 status justification.
+            plan_reasoning: Phase-2 plan-strategy text.
+            legacy_reasoning: Combined reasoning when structured fields are absent.
+            **kwargs: Passed to ``Vertical``.
+        """
+        super().__init__(**kwargs)
+        self._next_action = next_action.strip()
+        self._status = status
+        self._iteration = iteration
+        self._plan_action = plan_action if plan_action in ("keep", "new") else "new"
+        self._assessment_reasoning = assessment_reasoning.strip()
+        self._plan_reasoning = plan_reasoning.strip()
+        self._legacy_reasoning = legacy_reasoning.strip()
+
+    def compose(self) -> ComposeResult:
+        prefix = get_glyphs().tool_prefix
+        badge = f" [{self._plan_action}]" if self._plan_action in ("keep", "new") else ""
+        header = f"{prefix} Plan · {self._next_action}{badge}"
+        yield Static(header, markup=False, classes="cognition-plan-header")
+        if self._assessment_reasoning:
+            yield Static(
+                f"A: {self._assessment_reasoning}",
+                markup=False,
+                classes="plan-section-line",
+            )
+        if self._plan_reasoning:
+            yield Static(
+                f"P: {self._plan_reasoning}",
+                markup=False,
+                classes="plan-section-line",
+            )
+        if not self._assessment_reasoning and not self._plan_reasoning and self._legacy_reasoning:
+            yield Static(
+                self._legacy_reasoning,
+                markup=False,
+                classes="plan-section-line",
+            )
+
+    def on_mount(self) -> None:
+        """Use ASCII border variant when configured."""
+        if is_ascii_mode():
+            colors = theme.get_theme_colors(self)
+            self.styles.border = ("ascii", colors.primary)
+
+
 class ErrorMessage(_TimestampClickMixin, Static):
     """Widget displaying an error message."""
 

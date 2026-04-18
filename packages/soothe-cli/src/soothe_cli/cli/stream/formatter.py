@@ -261,6 +261,25 @@ def format_subagent_done(
     )
 
 
+def format_plan_phase_reasoning(
+    label: str,
+    text: str,
+    *,
+    namespace: tuple[str, ...] = (),
+    verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
+) -> DisplayLine:
+    """Format a labeled plan-phase reasoning line (assessment vs plan strategy)."""
+    content = f"💭 {label}: {text}"
+    return DisplayLine(
+        level=3,
+        content=content,
+        icon="•",
+        indent=indent_for_level(3),
+        source_prefix=_derive_source_prefix(namespace, verbosity_tier),
+        newline_before=True,
+    )
+
+
 def format_reasoning(
     reasoning: str,
     *,
@@ -296,6 +315,7 @@ def format_judgement(
     judgement: str,
     action: str,
     *,
+    plan_action: str | None = None,
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
@@ -307,6 +327,7 @@ def format_judgement(
     Args:
         judgement: Human-readable summary of the decision.
         action: Action taken ("continue" or "complete").
+        plan_action: When set, show ``[keep]`` or ``[new]`` before the judgement text.
         namespace: Event namespace.
         verbosity_tier: Current verbosity tier.
 
@@ -315,8 +336,12 @@ def format_judgement(
     """
     action_icon = "→" if action == "continue" else "✓"
 
+    badge = ""
+    if plan_action in ("keep", "new"):
+        badge = f"[{plan_action}] "
+
     # Polish: Add "Reason:" prefix to make LLM reasoning prominent
-    content = f"🌀 {judgement}"
+    content = f"🌀 {badge}{judgement}"
 
     return DisplayLine(
         level=2,  # Use level 2 for more prominence (like step headers)
@@ -436,6 +461,7 @@ __all__ = [
     "format_goal_done",
     "format_goal_header",
     "format_judgement",
+    "format_plan_phase_reasoning",
     "format_reasoning",
     "format_step_done",
     "format_step_header",
