@@ -30,6 +30,44 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _resolve_claude_cwd(fallback: str) -> str:
+    """Pick Claude Code CLI working directory (RFC-103, multi-client daemon).
+
+    Matches tool resolution: LangGraph ``configurable.workspace`` from the parent
+    run, then ``FrameworkFilesystem`` thread workspace, then factory-time fallback.
+
+    Args:
+        fallback: Directory from ``create_claude_subagent`` / ``resolve_subagents``
+            when no dynamic workspace is available.
+
+    Returns:
+        Absolute path string for ``ClaudeAgentOptions.cwd``.
+    """
+    try:
+        from langgraph.config import get_config
+
+        cfg = get_config()
+        configurable = cfg.get("configurable", {}) if isinstance(cfg, dict) else {}
+        workspace = configurable.get("workspace")
+        if isinstance(workspace, str) and workspace.strip():
+            return str(expand_path(workspace))
+    except Exception:
+        logger.debug("LangGraph config workspace unavailable for Claude cwd", exc_info=True)
+
+    try:
+        from soothe.core import FrameworkFilesystem
+
+        dynamic = FrameworkFilesystem.get_current_workspace()
+        if dynamic is not None:
+            return str(dynamic.expanduser().resolve())
+    except Exception:
+        logger.debug("FrameworkFilesystem workspace unavailable for Claude cwd", exc_info=True)
+
+    base = fallback.strip() if fallback.strip() else str(Path.cwd())
+    return str(expand_path(base))
+
+
 CLAUDE_DESCRIPTION = (
     "Claude Code agent with full capabilities: file read/write/edit, bash execution, "
     "web search/fetch, MCP server integration, and subagent spawning. "
@@ -65,7 +103,7 @@ def _build_claude_graph(
         system_prompt: Custom system prompt for the Claude agent.
         allowed_tools: Tool names to auto-approve.
         disallowed_tools: Tool names to block.
-        cwd: Working directory for the Claude CLI.
+        cwd: Fallback working directory when no per-run workspace is set.
 
     Returns:
         Compiled LangGraph runnable.
@@ -98,8 +136,7 @@ def _build_claude_graph(
             options.allowed_tools = allowed_tools
         if disallowed_tools:
             options.disallowed_tools = disallowed_tools
-        if cwd:
-            options.cwd = cwd
+        options.cwd = _resolve_claude_cwd(cwd if cwd else str(Path.cwd()))
 
         _emit(
             ClaudeStartedEvent(
@@ -175,7 +212,7 @@ def create_claude_subagent(
         system_prompt: Custom system prompt.
         allowed_tools: Tool names to auto-approve.
         disallowed_tools: Tool names to block.
-        cwd: Working directory for the Claude CLI.
+        cwd: Fallback working directory when no per-run LangGraph workspace is set.
         **kwargs: Additional config (ignored for forward compat).
 
     Returns:
