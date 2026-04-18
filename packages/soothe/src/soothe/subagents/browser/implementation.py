@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import TYPE_CHECKING, Annotated, Any
 
 from langchain_core.messages import AIMessage
@@ -99,7 +100,7 @@ Examples:
         logger.warning("LLM intent detection failed: %s", e)
         return False  # Fallback to new instance
     else:
-        logger.debug("Intent detection for '%s...': %s", preview_first(prompt, 50), result)
+        logger.info("Intent detection for '%s...': %s", preview_first(prompt, 50), result)
         return result
 
 
@@ -137,7 +138,7 @@ def _suppress_external_browser_loggers() -> None:
 def _build_browser_graph(
     *,
     headless: bool = True,
-    max_steps: int = 100,
+    max_steps: int | None = None,
     use_vision: bool = True,
     browser_model: str | None = None,
     browser_base_url: str | None = None,
@@ -148,7 +149,8 @@ def _build_browser_graph(
 
     Args:
         headless: Run browser in headless mode.
-        max_steps: Maximum steps for the browser agent.
+        max_steps: Maximum steps for the browser agent. When ``None``, uses
+            ``BrowserSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
         browser_model: Model name for browser-use LLM (e.g. `qwen3.5-flash`).
         browser_base_url: Base URL for the browser-use LLM.
@@ -158,8 +160,8 @@ def _build_browser_graph(
     Returns:
         Compiled LangGraph runnable.
     """
-    # Use provided config or create default
     browser_config = config or BrowserSubagentConfig()
+    resolved_max_steps = max_steps if max_steps is not None else browser_config.max_steps
 
     async def _run_browser_async(state: dict[str, Any]) -> dict[str, Any]:
         # Disable browser-use privacy-invasive features before importing
@@ -200,7 +202,7 @@ def _build_browser_graph(
             profile_name = f"session-{uuid.uuid4().hex[:12]}"
             browser_user_data_dir = str(get_browser_user_data_dir(profile_name))
             ephemeral_profile_dir = browser_user_data_dir
-            logger.debug("Using ephemeral browser profile: %s", profile_name)
+            logger.info("Using ephemeral browser profile: %s", profile_name)
         else:
             browser_user_data_dir = str(get_browser_user_data_dir())
 
@@ -222,6 +224,7 @@ def _build_browser_graph(
             logger,
         )
 
+        run_t0 = time.perf_counter()
         try:
             with capture_subagent_output("browser", suppress=True):
                 from browser_use import Agent as BrowserAgent
@@ -234,6 +237,17 @@ def _build_browser_graph(
                 model_name = browser_model or "qwen3.5-flash"
                 if ":" in model_name:
                     model_name = model_name.split(":", 1)[1]
+
+                logger.info(
+                    "Browser subagent: starting run task_len=%d chars headless=%s max_steps=%d "
+                    "use_vision=%s browser_use_model=%s",
+                    len(task) if isinstance(task, str) else 0,
+                    headless,
+                    resolved_max_steps,
+                    use_vision,
+                    model_name,
+                )
+                logger.info("Browser subagent: task preview: %s", preview_first(str(task), 400))
 
                 llm_kwargs: dict[str, Any] = {"model": model_name}
                 if browser_base_url:
@@ -284,8 +298,16 @@ def _build_browser_graph(
                     args=extra_args,
                     user_data_dir=browser_user_data_dir,
                 )
+                logger.info(
+                    "Browser subagent: Browser() ready cdp_url=%r headless_effective=%s "
+                    "user_data_dir=%s",
+                    cdp_url,
+                    headless if not cdp_url else False,
+                    preview_first(str(browser_user_data_dir), 120),
+                )
 
                 async def on_step_end(agent: Any) -> None:
+                    nonlocal last_step_wall
                     step_num = agent.state.n_steps
                     last = agent.history.history[-1] if agent.history.history else None
                     action_desc = ""
@@ -299,6 +321,22 @@ def _build_browser_graph(
                         if hasattr(last, "state"):
                             url = getattr(last.state, "url", None)
                             page_title = preview_first(getattr(last.state, "title", ""), 60)
+                    now = time.perf_counter()
+                    wall_since_prev = now - last_step_wall
+                    last_step_wall = now
+                    logger.info(
+                        "Browser subagent step: n_steps=%s wall_since_prev=%.2fs "
+                        "since_run_start=%.1fs url=%r title=%r action=%r is_done=%s "
+                        "history_len=%d",
+                        step_num,
+                        wall_since_prev,
+                        now - run_t0,
+                        url or "",
+                        page_title,
+                        action_desc or "(none)",
+                        agent.history.is_done(),
+                        len(agent.history.history) if agent.history.history else 0,
+                    )
                     _emit(
                         BrowserStepEvent(
                             step=step_num,
@@ -319,14 +357,37 @@ def _build_browser_graph(
 
                 # Start the browser session (Agent.run() does this automatically,
                 # but we're calling step() directly to emit progress events)
+                logger.info("Browser subagent: calling browser_session.start()")
+                sess_t0 = time.perf_counter()
                 await agent.browser_session.start()
+                logger.info(
+                    "Browser subagent: browser_session.start() finished in %.2fs",
+                    time.perf_counter() - sess_t0,
+                )
+
+                last_step_wall = time.perf_counter()
 
                 # Run step-by-step to emit progress events
-                for _ in range(max_steps):
+                for step_idx in range(resolved_max_steps):
                     try:
+                        iter_t0 = time.perf_counter()
+                        logger.info(
+                            "Browser subagent: invoking agent.step() (%d/%d, elapsed=%.1fs)",
+                            step_idx + 1,
+                            resolved_max_steps,
+                            iter_t0 - run_t0,
+                        )
                         await agent.step()
+                        logger.info(
+                            "Browser subagent: agent.step() returned in %.2fs",
+                            time.perf_counter() - iter_t0,
+                        )
                         await on_step_end(agent)
                         if agent.history.is_done():
+                            logger.info(
+                                "Browser subagent: agent reports is_done=True after %d step(s)",
+                                step_idx + 1,
+                            )
                             break
                     except Exception:
                         logger.exception("Browser step failed")
@@ -334,6 +395,13 @@ def _build_browser_graph(
 
                 history = agent.history
                 result = history.final_result() or "Browser task completed (no extracted content)."
+                logger.info(
+                    "Browser subagent: loop finished total_wall=%.1fs steps_executed=%d "
+                    "result_preview=%s",
+                    time.perf_counter() - run_t0,
+                    len(history.history) if history.history else 0,
+                    preview_first(str(result), 300),
+                )
 
                 # Emit completed event (RFC-0020)
                 _emit(
@@ -343,9 +411,10 @@ def _build_browser_graph(
 
                 # Stop the browser session
                 try:
+                    logger.info("Browser subagent: stopping browser_session")
                     await agent.browser_session.stop()
                 except Exception:
-                    logger.debug("Failed to stop browser session (already stopped?)")
+                    logger.info("Failed to stop browser session (already stopped?)")
 
                 if browser_config.cleanup_on_exit:
                     from soothe.utils.runtime import cleanup_browser_temp_files
@@ -368,7 +437,7 @@ def _build_browser_graph(
                 import shutil
 
                 shutil.rmtree(ephemeral_profile_dir, ignore_errors=True)
-                logger.debug("Cleaned up ephemeral profile: %s", ephemeral_profile_dir)
+                logger.info("Cleaned up ephemeral profile: %s", ephemeral_profile_dir)
 
         return {"messages": [AIMessage(content=result)]}
 
@@ -404,7 +473,7 @@ def create_browser_subagent(
     model: Any = None,
     *,
     headless: bool = True,
-    max_steps: int = 100,
+    max_steps: int | None = None,
     use_vision: bool = True,
     config: BrowserSubagentConfig | None = None,
     **kwargs: Any,
@@ -416,7 +485,8 @@ def create_browser_subagent(
             LLM. If a BaseChatModel instance is passed, the model name is
             extracted automatically.
         headless: Run browser in headless mode.
-        max_steps: Maximum browser agent steps.
+        max_steps: Maximum browser agent steps. When ``None``, uses
+            ``BrowserSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
         config: Browser subagent configuration object with runtime directories,
             cleanup settings, and feature flags.

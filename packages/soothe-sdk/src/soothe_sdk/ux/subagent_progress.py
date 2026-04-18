@@ -50,7 +50,7 @@ def is_subagent_progress_event(event_type: str) -> bool:
         >>> is_subagent_progress_event("soothe.capability.browser.started")
         True
         >>> is_subagent_progress_event("soothe.capability.browser.step.running")
-        False  # DETAILED tier - internal step
+        False  # DETAILED — shown via CLI/TUI pipeline when verbosity is detailed+
         >>> is_subagent_progress_event("soothe.capability.research.judgement.reporting")
         True  # Meaningful progress at NORMAL tier
     """

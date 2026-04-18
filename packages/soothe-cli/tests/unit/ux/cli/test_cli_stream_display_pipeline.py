@@ -556,3 +556,30 @@ class TestStreamDisplayPipeline:
         lines2 = pipeline.process(event)
         assert len(lines1) == 1
         assert lines2 == []
+
+    def test_capability_browser_step_suppressed_at_normal_verbosity(self) -> None:
+        """Browser automation steps are DETAILED tier — hidden at normal."""
+        pipeline = StreamDisplayPipeline(verbosity="normal")
+        event = {
+            "type": "soothe.capability.browser.step.running",
+            "step": 3,
+            "url": "https://example.com/news",
+            "action": "scroll",
+            "title": "News",
+        }
+        assert pipeline.process(event) == []
+
+    def test_capability_browser_step_renders_at_detailed_verbosity(self) -> None:
+        """Browser step milestones render when verbosity is detailed or higher."""
+        pipeline = StreamDisplayPipeline(verbosity="detailed")
+        event = {
+            "type": "soothe.capability.browser.step.running",
+            "step": 3,
+            "url": "https://example.com/news",
+            "action": "scroll",
+            "title": "News",
+        }
+        lines = pipeline.process(event)
+        assert len(lines) == 1
+        assert "Step 3" in lines[0].content
+        assert "scroll" in lines[0].content

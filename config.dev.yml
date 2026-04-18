@@ -65,6 +65,12 @@ daemon:
       host: "127.0.0.1"
       port: 8766
 
+# Subagent overrides (merged with builtin defaults; see packages/soothe/src/soothe/config/config.yml)
+subagents:
+  browser:
+    config:
+      max_steps: 10
+
 # Dev logging - verbose for debugging
 # Daemon file logging uses logging.file.level (independent of client display verbosity)
 logging:

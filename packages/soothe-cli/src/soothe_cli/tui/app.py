@@ -3140,6 +3140,9 @@ class SootheApp(App):
                 ),
                 turn_stats=turn_stats,
                 skip_daemon_send_turn=skip_daemon_send_turn,
+                progress_verbosity=(
+                    self._daemon_config.logging.verbosity if self._daemon_config else None
+                ),
             )
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")

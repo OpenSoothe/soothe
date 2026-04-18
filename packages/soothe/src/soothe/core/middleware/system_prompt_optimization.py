@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
-from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
@@ -23,6 +23,32 @@ if TYPE_CHECKING:
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
+
+# deepagents / Soothe main graph: subagents are invoked only via this tool name.
+_TASK_TOOL_NAME = "task"
+
+
+def _last_message_is_human(messages: list[AnyMessage] | None) -> bool:
+    """True when the model is about to produce the first reply to the latest user turn."""
+    if not messages:
+        return False
+    return isinstance(messages[-1], HumanMessage)
+
+
+def _filter_tools_to_task_only(
+    tools: list[Any],
+) -> list[Any]:
+    """Keep only the ``task`` tool so the model cannot substitute ``search_web`` etc."""
+    kept: list[Any] = []
+    for tool in tools:
+        name: str | None
+        if isinstance(tool, dict):
+            name = tool.get("name")
+        else:
+            name = getattr(tool, "name", None)
+        if name == _TASK_TOOL_NAME:
+            kept.append(tool)
+    return kept
 
 
 class _OptimizationState(TypedDict):
@@ -302,13 +328,15 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
-        # IG-192: SUBAGENT_ROUTING_DIRECTIVE (routing hint injection - static, always included)
+        # IG-192 / IG-196: SUBAGENT_ROUTING_DIRECTIVE (explicit /browser, /claude, /research)
         subagent_directive = state.get("_subagent_routing_directive") if state else None
         if subagent_directive:
             directive_section = (
                 f"<SUBAGENT_ROUTING_DIRECTIVE>\n"
-                f"Use the 'task' tool with subagent_type='{subagent_directive}' to handle this request.\n"
-                f"This is the preferred routing for this query. Provide a detailed task description.\n"
+                f"The user explicitly requested the **{subagent_directive}** subagent. You MUST use the "
+                f"'{_TASK_TOOL_NAME}' tool with subagent_type='{subagent_directive}' for this request.\n"
+                f"Do not use search_web, filesystem, shell, or other tools at the root agent — delegate "
+                f"via '{_TASK_TOOL_NAME}' only. Provide a detailed task description in the tool call.\n"
                 f"</SUBAGENT_ROUTING_DIRECTIVE>"
             )
             static_sections.append(directive_section)
@@ -539,13 +567,22 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
         routing_hint = getattr(classification, "routing_hint", None)
         preferred_subagent = getattr(classification, "preferred_subagent", None)
 
-        if routing_hint == "subagent" and preferred_subagent:
+        msgs_for_hop = getattr(request, "messages", None) or []
+        first_after_user = _last_message_is_human(msgs_for_hop)
+        explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
+
+        if explicit_subagent and first_after_user:
             logger.info(
-                "Direct subagent routing detected: preferred_subagent=%s",
+                "Explicit subagent routing (enforce): preferred_subagent=%s",
                 preferred_subagent,
             )
-            # Inject directive into state for prompt builder
             request.state["_subagent_routing_directive"] = preferred_subagent
+        else:
+            # Drop directive after the first model hop so follow-up synthesis can use normal tools.
+            try:
+                request.state.pop("_subagent_routing_directive", None)
+            except (AttributeError, TypeError):
+                pass
 
         # Extract state for XML section building
         state_dict: dict[str, Any] = {}
@@ -561,13 +598,30 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
                 "recalled_memories": request.state.get("recalled_memories"),
                 "_subagent_routing_directive": request.state.get(
                     "_subagent_routing_directive"
-                ),  # IG-192
+                ),  # IG-192 / IG-196
             }
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
 
         new_system_message = SystemMessage(content=optimized_prompt)
-        return request.override(system_message=new_system_message)
+        overrides: dict[str, Any] = {"system_message": new_system_message}
+
+        if explicit_subagent and first_after_user:
+            tool_list = getattr(request, "tools", None) or []
+            task_only = _filter_tools_to_task_only(tool_list)
+            if task_only:
+                overrides["tools"] = task_only
+                logger.info(
+                    "Explicit subagent routing: model tools narrowed to '%s' only",
+                    _TASK_TOOL_NAME,
+                )
+            else:
+                logger.warning(
+                    "Explicit subagent routing but '%s' tool not in request; leaving full tool set",
+                    _TASK_TOOL_NAME,
+                )
+
+        return request.override(**overrides)
 
     def wrap_model_call(
         self,

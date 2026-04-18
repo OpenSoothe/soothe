@@ -1,7 +1,10 @@
 """Tests for SystemPromptOptimizationMiddleware."""
 
+from types import SimpleNamespace
+
 from langchain.agents.middleware.types import ModelRequest
-from langchain_core.messages import SystemMessage
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from soothe.config import SootheConfig
 from soothe.core.middleware import SystemPromptOptimizationMiddleware
@@ -265,3 +268,51 @@ def test_chitchat_query_treated_as_chitchat():
     # Should get simple prompt
     assert "helpful AI assistant" in modified.system_message.content
     assert len(modified.system_message.content) < 500  # Simple prompt with creator info
+
+
+def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
+    """Explicit /browser-style routing narrows root tools to ``task`` on first hop."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = UnifiedClassification(
+        task_complexity="medium",
+        preferred_subagent="browser",
+        routing_hint="subagent",
+    )
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="search_web"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="latest news")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={"unified_classification": classification},
+    )
+    modified = middleware.modify_request(request)
+    assert len(modified.tools) == 1
+    assert getattr(modified.tools[0], "name", None) == "task"
+    assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
+    assert "MUST use" in modified.system_message.content
+
+
+def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
+    """After the first model reply, restore full tools and omit routing directive."""
+    config = SootheConfig()
+    middleware = SystemPromptOptimizationMiddleware(config=config)
+    classification = UnifiedClassification(
+        task_complexity="medium",
+        preferred_subagent="browser",
+        routing_hint="subagent",
+    )
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="search_web"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="hi"), AIMessage(content="delegating")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={"unified_classification": classification},
+    )
+    modified = middleware.modify_request(request)
+    assert len(modified.tools) == 2
+    assert "SUBAGENT_ROUTING_DIRECTIVE" not in modified.system_message.content

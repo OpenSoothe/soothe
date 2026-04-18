@@ -12,6 +12,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_cli.shared.subagent_routing import parse_subagent_from_input
+
 if TYPE_CHECKING:
     from rich.console import Console
     from soothe_sdk.client import WebSocketClient
@@ -224,15 +226,19 @@ async def handle_rpc_command(
 
 
 async def handle_routing_command(cmd_input: str, console: Console, client: WebSocketClient) -> None:
-    """Handle daemon routing command by sending plain text input (RFC-404).
+    """Handle daemon routing command by sending input with optional subagent (RFC-404).
+
+    For ``/browser``, ``/claude``, and ``/research``, sets the WebSocket ``subagent``
+    field (same contract as headless ``-p``) so the daemon uses direct subagent routing.
+    Other routing commands (e.g. ``/plan``) are sent as plain text unchanged.
 
     Args:
         cmd_input: Full command input (e.g., "/browser AI trends")
         console: Rich console
         client: WebSocket client
     """
-    # Send as plain text - daemon input parser will route
-    await client.send_input(cmd_input)
+    subagent_name, text = parse_subagent_from_input(cmd_input.strip())
+    await client.send_input(text, subagent=subagent_name)
 
 
 __all__ = [

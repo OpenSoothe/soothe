@@ -239,8 +239,14 @@ class BrowserSubagentConfig(BaseModel):
             profile across invocations (keeps cookies/sessions).  ``ephemeral``
             creates a fresh UUID-named profile per invocation and deletes it on
             exit -- safe for concurrent browser tasks.
+        max_steps: Maximum browser automation steps per delegated task (browser-use
+            loop). Override via ``create_browser_subagent(..., max_steps=...)`` or
+            YAML ``subagents.browser.config.max_steps``.
     """
 
+    max_steps: int = Field(
+        default=10, ge=1, description="Maximum browser automation steps per task."
+    )
     runtime_dir: str = ""
     downloads_dir: str = ""
     user_data_dir: str = ""
