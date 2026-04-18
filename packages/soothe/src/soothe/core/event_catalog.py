@@ -228,6 +228,7 @@ class AgenticStepStartedEvent(LifecycleEvent):
     type: Literal["soothe.cognition.agent_loop.step.started"] = (
         "soothe.cognition.agent_loop.step.started"
     )
+    step_id: str
     description: str
 
 
@@ -237,6 +238,7 @@ class AgenticStepCompletedEvent(LifecycleEvent):
     type: Literal["soothe.cognition.agent_loop.step.completed"] = (
         "soothe.cognition.agent_loop.step.completed"
     )
+    step_id: str
     success: bool
     summary: str
     duration_ms: int

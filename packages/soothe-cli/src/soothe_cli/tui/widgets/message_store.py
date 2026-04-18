@@ -48,6 +48,7 @@ class MessageType(StrEnum):
     ERROR = "error"
     APP = "app"
     SUMMARIZATION = "summarization"
+    STEP_PROGRESS = "step_progress"
     DIFF = "diff"
 
 
@@ -128,6 +129,27 @@ class MessageData:
     skill_expanded: bool = False
     """Whether the skill body is expanded in the UI."""
 
+    step_progress_id: str | None = None
+    """Agent-loop act step id (STEP_PROGRESS only)."""
+
+    step_progress_description: str | None = None
+    """Step description line (STEP_PROGRESS only)."""
+
+    step_progress_phase: str | None = None
+    """Lifecycle: pending, running, success, error, interrupted (STEP_PROGRESS only)."""
+
+    step_success: bool | None = None
+    """Whether the step completed successfully (STEP_PROGRESS only)."""
+
+    step_duration_ms: int | None = None
+    """Step duration in ms (STEP_PROGRESS only)."""
+
+    step_tool_call_count: int | None = None
+    """Tool calls during the step (STEP_PROGRESS only)."""
+
+    step_summary: str | None = None
+    """Result or error summary text (STEP_PROGRESS only)."""
+
     is_streaming: bool = False
     """Whether the message is still being streamed.
 
@@ -171,6 +193,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
             SkillMessage,
@@ -227,6 +250,26 @@ class MessageData:
                     id=self.id,
                 )
 
+            case MessageType.STEP_PROGRESS:
+                w = CognitionStepMessage(
+                    step_id=self.step_progress_id or "",
+                    description=self.step_progress_description or "",
+                    id=self.id,
+                )
+                phase = self.step_progress_phase or "pending"
+                if phase == "running":
+                    w._deferred_running = True
+                elif phase == "interrupted":
+                    w._deferred_interrupted = self.step_summary or "Interrupted"
+                elif phase in ("success", "error") and self.step_success is not None:
+                    w._deferred_complete = (
+                        bool(self.step_success),
+                        int(self.step_duration_ms or 0),
+                        int(self.step_tool_call_count or 0),
+                        str(self.step_summary or ""),
+                    )
+                return w
+
             case _:
                 logger.warning(
                     "Unknown MessageType %r for message %s, falling back to AppMessage",
@@ -250,6 +293,7 @@ class MessageData:
         from soothe_cli.tui.widgets.messages import (
             AppMessage,
             AssistantMessage,
+            CognitionStepMessage,
             DiffMessage,
             ErrorMessage,
             SkillMessage,
@@ -259,6 +303,25 @@ class MessageData:
         )
 
         widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+        if isinstance(widget, CognitionStepMessage):
+            phase = widget._status
+            if widget._interrupt_message:
+                phase = "interrupted"
+            return cls(
+                type=MessageType.STEP_PROGRESS,
+                content="",
+                id=widget_id,
+                step_progress_id=widget._step_id,
+                step_progress_description=widget._description,
+                step_progress_phase=phase,
+                step_success=widget._last_success,
+                step_duration_ms=widget._last_duration_ms,
+                step_tool_call_count=widget._last_tool_call_count,
+                step_summary=(
+                    widget._interrupt_message if widget._interrupt_message else widget._last_summary
+                ),
+            )
 
         if isinstance(widget, SkillMessage):
             return cls(

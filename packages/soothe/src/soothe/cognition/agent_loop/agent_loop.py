@@ -397,7 +397,7 @@ Use all tool results and AI responses available in the conversation history to c
             for step in ready_steps:
                 yield (
                     "step_started",
-                    {"description": step.description},
+                    {"step_id": step.id, "description": step.description},
                 )
 
             step_results = []

@@ -70,12 +70,16 @@ from soothe_cli.tui.tool_display import format_tool_message_content
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
     ToolCallMessage,
 )
 
 logger = logging.getLogger(__name__)
+
+AGENT_LOOP_STEP_STARTED = "soothe.cognition.agent_loop.step.started"
+AGENT_LOOP_STEP_COMPLETED = "soothe.cognition.agent_loop.step.completed"
 
 _hitl_adapter_cache: TypeAdapter | None = None
 """Lazy singleton for the HITL request validator."""
@@ -347,6 +351,9 @@ class TextualUIAdapter:
         self._current_tool_messages: dict[str, ToolCallMessage] = {}
         """Map of tool call IDs to their message widgets."""
 
+        self._current_step_messages: dict[str, CognitionStepMessage] = {}
+        """Map of agent-loop act step IDs to step card widgets."""
+
         # Token display callbacks (set by the app after construction)
         self._on_tokens_update: _TokensUpdateCallback | None = None
         """Called with total context tokens after each LLM response."""
@@ -373,6 +380,12 @@ class TextualUIAdapter:
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
             self._set_active_message(None)
+
+    def finalize_pending_steps_with_error(self, message: str) -> None:
+        """Mark in-flight step cards as interrupted and clear tracking."""
+        for step_msg in list(self._current_step_messages.values()):
+            step_msg.set_interrupted(message)
+        self._current_step_messages.clear()
 
 
 def _build_interrupted_ai_message(
@@ -1069,6 +1082,74 @@ async def execute_task_textual(
                             if adapter._set_spinner:
                                 await adapter._set_spinner(None)
                             continue
+
+                        if event_type == AGENT_LOOP_STEP_STARTED:
+                            step_id = str(data.get("step_id", "")).strip()
+                            description = str(data.get("description", "")).strip()
+                            if step_id:
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                step_widget = CognitionStepMessage(
+                                    step_id=step_id,
+                                    description=description or "(step)",
+                                    id=f"step-{uuid.uuid4().hex[:8]}",
+                                )
+                                await adapter._mount_message(step_widget)
+                                step_widget.set_running()
+                                adapter._current_step_messages[step_id] = step_widget
+                                continue
+
+                        if event_type == AGENT_LOOP_STEP_COMPLETED:
+                            step_id = str(data.get("step_id", "")).strip()
+                            if step_id:
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                success = bool(data.get("success", True))
+                                duration_ms = int(data.get("duration_ms", 0))
+                                tool_call_count = int(data.get("tool_call_count", 0))
+                                summary = str(
+                                    data.get("summary", "") or data.get("output_preview", "") or ""
+                                )
+                                if not summary.strip():
+                                    summary = "Failed" if not success else "Done"
+                                widget = adapter._current_step_messages.pop(step_id, None)
+                                if widget is not None:
+                                    widget.set_complete(
+                                        success,
+                                        duration_ms,
+                                        tool_call_count,
+                                        summary,
+                                    )
+                                else:
+                                    logger.debug(
+                                        "agent_loop.step.completed for unknown step_id=%s; "
+                                        "using pipeline fallback",
+                                        step_id,
+                                    )
+                                    ev = dict(data)
+                                    ev["namespace"] = list(ns_key)
+                                    for line in progress_pipeline.process(ev):
+                                        line_text = _format_display_line_for_tui(line)
+                                        if line_text:
+                                            await adapter._mount_message(AppMessage(line_text))
+                                continue
+
                         progress_lines = _format_progress_event_lines_for_tui(
                             data,
                             ns_key,
@@ -1401,6 +1482,10 @@ async def _handle_interrupt_cleanup(
     for tool_msg in list(adapter._current_tool_messages.values()):
         tool_msg.set_rejected()
     adapter._current_tool_messages.clear()
+
+    for step_msg in list(adapter._current_step_messages.values()):
+        step_msg.set_interrupted("Interrupted by user")
+    adapter._current_step_messages.clear()
 
     # Keep the token count marked stale whenever interrupted state was captured,
     # including tool-only turns after assistant text was already flushed.

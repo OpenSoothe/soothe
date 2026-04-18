@@ -5,6 +5,7 @@ from __future__ import annotations
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionStepMessage,
     DiffMessage,
     ErrorMessage,
     QueuedUserMessage,
@@ -32,6 +33,9 @@ def test_all_message_widgets_have_can_select_enabled() -> None:
     assert AssistantMessage.can_select is True, "AssistantMessage must support text selection"
     assert SkillMessage.can_select is True, "SkillMessage must support text selection"
     assert ToolCallMessage.can_select is True, "ToolCallMessage must support text selection"
+    assert CognitionStepMessage.can_select is True, (
+        "CognitionStepMessage must support text selection"
+    )
 
 
 def test_widget_instances_preserve_can_select() -> None:

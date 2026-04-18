@@ -6,7 +6,8 @@ Textual CSS variables: built-in variables
 (`$primary`, `$background`, `$text-muted`, `$error-muted`, etc.) are set via
 `register_theme()` in `SootheApp.__init__`, while the few app-specific
 variables (`$mode-bash`, `$mode-command`, `$skill`, `$skill-hover`, `$tool`,
-`$tool-hover`) are backed by these constants via `App.get_theme_variable_defaults()`.
+`$tool-hover`, `$cognition`, `$cognition-hover`) are backed by these constants via
+`App.get_theme_variable_defaults()`.
 
 Code that needs custom CSS variable values should call
 `get_css_variable_defaults(dark=...)`. For the full semantic color palette, look
@@ -95,6 +96,12 @@ LC_TOOL = LC_AMBER
 LC_TOOL_HOVER = "#FFCB91"
 """Tool call hover — lighter variant for interactive feedback."""
 
+LC_COGNITION = "#56B6C2"
+"""Agent loop step / cognition progress accent (distinct from tool amber)."""
+
+LC_COGNITION_HOVER = "#7BC9D3"
+"""Cognition progress hover — lighter teal for interactive feedback."""
+
 
 # ---------------------------------------------------------------------------
 # Brand palette — light
@@ -152,6 +159,12 @@ LC_LIGHT_TOOL = LC_LIGHT_AMBER
 
 LC_LIGHT_TOOL_HOVER = "#78350F"
 """Tool call hover (darkened for light bg contrast)."""
+
+LC_LIGHT_COGNITION = "#0F766E"
+"""Cognition progress accent (darkened for light bg contrast)."""
+
+LC_LIGHT_COGNITION_HOVER = "#115E59"
+"""Cognition progress hover (darkened for light bg contrast)."""
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +299,12 @@ class ThemeColors:
     tool_hover: str
     """Tool call hover — contrasting variant for interactive feedback."""
 
+    cognition: str
+    """Agent loop step / cognition progress accent."""
+
+    cognition_hover: str
+    """Cognition progress hover — contrasting variant for interactive feedback."""
+
     foreground: str
     """Primary body text."""
 
@@ -348,6 +367,8 @@ DARK_COLORS = ThemeColors(
     skill_hover=LC_SKILL_HOVER,
     tool=LC_TOOL,
     tool_hover=LC_TOOL_HOVER,
+    cognition=LC_COGNITION,
+    cognition_hover=LC_COGNITION_HOVER,
     foreground=LC_BODY,
     background=LC_DARK,
     surface=LC_CARD,
@@ -369,6 +390,8 @@ LIGHT_COLORS = ThemeColors(
     skill_hover=LC_LIGHT_SKILL_HOVER,
     tool=LC_LIGHT_TOOL,
     tool_hover=LC_LIGHT_TOOL_HOVER,
+    cognition=LC_LIGHT_COGNITION,
+    cognition_hover=LC_LIGHT_COGNITION_HOVER,
     foreground=LC_LIGHT_BODY,
     background=LC_LIGHT_BG,
     surface=LC_LIGHT_SURFACE,
@@ -715,6 +738,8 @@ def get_css_variable_defaults(
         "skill-hover": c.skill_hover,
         "tool": c.tool,
         "tool-hover": c.tool_hover,
+        "cognition": c.cognition,
+        "cognition-hover": c.cognition_hover,
     }
 
 
@@ -790,6 +815,8 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         # No Textual equivalent — always base palette (may diverge from
         # tool in custom themes that override warning).
         tool_hover=base.tool_hover,
+        cognition=base.cognition,
+        cognition_hover=base.cognition_hover,
         foreground=_hex_or(ct.foreground, base.foreground),
         background=_hex_or(ct.background, base.background),
         surface=_hex_or(ct.surface, base.surface),
