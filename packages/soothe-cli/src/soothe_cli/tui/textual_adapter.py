@@ -44,7 +44,10 @@ if TYPE_CHECKING:
 
 
 from soothe_cli.cli.stream.display_line import DisplayLine
-from soothe_cli.shared.essential_events import is_essential_progress_event_type
+from soothe_cli.shared.essential_events import (
+    LOOP_REASON_EVENT_TYPE,
+    is_essential_progress_event_type,
+)
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui._ask_user_types import AskUserRequest
 from soothe_cli.tui._cli_context import CLIContext  # noqa: TC001
@@ -70,6 +73,7 @@ from soothe_cli.tui.tool_display import format_tool_message_content
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionPlanReasonMessage,
     CognitionStepMessage,
     DiffMessage,
     SummarizationMessage,
@@ -1149,6 +1153,37 @@ async def execute_task_textual(
                                         if line_text:
                                             await adapter._mount_message(AppMessage(line_text))
                                 continue
+
+                        if event_type == LOOP_REASON_EVENT_TYPE:
+                            ev_plan = dict(data)
+                            ev_plan["namespace"] = list(ns_key)
+                            plan_lines = progress_pipeline.process(ev_plan)
+                            if not plan_lines:
+                                continue
+                            pending_text = pending_text_by_namespace.get(ns_key, "")
+                            if pending_text:
+                                await _flush_assistant_text_ns(
+                                    adapter,
+                                    pending_text,
+                                    ns_key,
+                                    assistant_message_by_namespace,
+                                )
+                                pending_text_by_namespace[ns_key] = ""
+                                assistant_message_by_namespace.pop(ns_key, None)
+                            pa_raw = data.get("plan_action", "new")
+                            plan_action = pa_raw if pa_raw in ("keep", "new") else "new"
+                            plan_widget = CognitionPlanReasonMessage(
+                                next_action=str(data.get("next_action", "")),
+                                status=str(data.get("status", "")),
+                                iteration=int(data.get("iteration", 0)),
+                                plan_action=str(plan_action),
+                                assessment_reasoning=str(data.get("assessment_reasoning", "")),
+                                plan_reasoning=str(data.get("plan_reasoning", "")),
+                                legacy_reasoning=str(data.get("reasoning", "")),
+                                id=f"plan-{uuid.uuid4().hex[:8]}",
+                            )
+                            await adapter._mount_message(plan_widget)
+                            continue
 
                         progress_lines = _format_progress_event_lines_for_tui(
                             data,

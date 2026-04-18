@@ -98,6 +98,8 @@ class PlanResult(BaseModel):
         goal_progress: Estimated progress toward the goal (0.0-1.0).
         confidence: Model confidence in the assessment (0.0-1.0).
         reasoning: Internal analysis (full text, no truncation for transparency).
+        assessment_reasoning: Phase-1 status justification (StatusAssessment.brief_reasoning).
+        plan_reasoning: Phase-2 plan-strategy text (PlanGeneration.brief_reasoning).
         next_action: User-facing action summary (full text, no truncation).
         full_action: Complete concatenated action from both phases (max 500 chars).
         plan_action: Reuse the in-flight AgentDecision or supply a new one.
@@ -117,6 +119,12 @@ class PlanResult(BaseModel):
     IG-XXX: Increased from 500 to 1000 chars to show complete reasoning without mid-sentence truncation.
     Combined reasoning from both phases (assessment + plan) can be 100-200 chars total.
     """
+
+    assessment_reasoning: str = Field(default="", max_length=500)
+    """Phase-1 status justification (distinct from plan-phase reasoning)."""
+
+    plan_reasoning: str = Field(default="", max_length=500)
+    """Phase-2 plan-strategy justification."""
 
     next_action: str = Field(default="", max_length=500)
     """Complete action text from both phases (no truncation, full reasoning chain visible)."""

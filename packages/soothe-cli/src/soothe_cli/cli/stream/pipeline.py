@@ -15,6 +15,7 @@ from soothe_cli.cli.stream.formatter import (
     format_goal_done,
     format_goal_header,
     format_judgement,
+    format_plan_phase_reasoning,
     format_reasoning,
     format_step_done,
     format_step_header,
@@ -572,25 +573,50 @@ class StreamDisplayPipeline:
         # Determine action type
         action = "complete" if status == "done" else "continue"
 
+        raw_plan_action = event.get("plan_action")
+        plan_action_kw: str | None = raw_plan_action if raw_plan_action in ("keep", "new") else None
+
         lines = [
             format_judgement(
                 action_text,
                 action,
+                plan_action=plan_action_kw,
                 namespace=self._current_namespace,
                 verbosity_tier=self._verbosity_tier,
             )
         ]
 
-        # Add reasoning line if present (IG-XXX: Show internal technical analysis)
-        reasoning = event.get("reasoning", "").strip()
-        if reasoning:
-            lines.append(
-                format_reasoning(
-                    reasoning,
-                    namespace=self._current_namespace,
-                    verbosity_tier=self._verbosity_tier,
+        assessment = event.get("assessment_reasoning", "").strip()
+        plan_reasoning = event.get("plan_reasoning", "").strip()
+        if assessment or plan_reasoning:
+            if assessment:
+                lines.append(
+                    format_plan_phase_reasoning(
+                        "Assessment",
+                        assessment,
+                        namespace=self._current_namespace,
+                        verbosity_tier=self._verbosity_tier,
+                    )
                 )
-            )
+            if plan_reasoning:
+                lines.append(
+                    format_plan_phase_reasoning(
+                        "Plan",
+                        plan_reasoning,
+                        namespace=self._current_namespace,
+                        verbosity_tier=self._verbosity_tier,
+                    )
+                )
+        else:
+            reasoning = event.get("reasoning", "").strip()
+            if reasoning:
+                lines.append(
+                    format_reasoning(
+                        reasoning,
+                        namespace=self._current_namespace,
+                        verbosity_tier=self._verbosity_tier,
+                    )
+                )
 
         return lines
 

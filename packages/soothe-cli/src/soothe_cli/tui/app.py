@@ -54,6 +54,7 @@ from soothe_cli.tui.widgets.message_store import (
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
+    CognitionPlanReasonMessage,
     CognitionStepMessage,
     ErrorMessage,
     QueuedUserMessage,
@@ -3658,7 +3659,12 @@ class SootheApp(App):
 
     async def _mount_message(
         self,
-        widget: Static | AssistantMessage | ToolCallMessage | SkillMessage | CognitionStepMessage,
+        widget: Static
+        | AssistantMessage
+        | ToolCallMessage
+        | SkillMessage
+        | CognitionStepMessage
+        | CognitionPlanReasonMessage,
     ) -> None:
         """Mount a message widget to the messages area.
 
