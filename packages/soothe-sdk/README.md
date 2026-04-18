@@ -232,7 +232,6 @@ soothe_sdk/
 │   ├── display.py
 │   ├── parsing.py
 │   └── workspace.py
-└── types/                # Deprecated (empty)
 ```
 
 **Import Pattern** (v0.4.0):

@@ -12,7 +12,8 @@ from typing import Literal
 VerbosityLevel = Literal["quiet", "minimal", "normal", "detailed", "debug"]
 """User-configured verbosity level for filtering display content.
 
-`minimal` is accepted as a compatibility alias for `normal`.
+Both `minimal` and `normal` are valid verbosity levels that map to VerbosityTier.NORMAL.
+This provides flexibility for user preference without changing behavior.
 """
 
 

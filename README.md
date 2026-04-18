@@ -6,7 +6,10 @@
   #
 
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
-  [![PyPI Version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
+  [![soothe](https://img.shields.io/pypi/v/soothe?label=soothe)](https://pypi.org/project/soothe/)
+  [![soothe-sdk](https://img.shields.io/pypi/v/soothe-sdk?label=soothe-sdk)](https://pypi.org/project/soothe-sdk/)
+  [![soothe-cli](https://img.shields.io/pypi/v/soothe-cli?label=soothe-cli)](https://pypi.org/project/soothe-cli/)
+  [![soothe-community](https://img.shields.io/pypi/v/soothe-community?label=soothe-community)](https://pypi.org/project/soothe-community/)
   [![License](https://img.shields.io/github/license/caesar0301/Soothe)](https://github.com/caesar0301/Soothe/blob/main/LICENSE)
   [![GitHub Stars](https://img.shields.io/github/stars/caesar0301/Soothe)](https://github.com/caesar0301/Soothe)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/caesar0301/Soothe)
