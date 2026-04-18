@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         def __call__(self, *, approximate: bool = False) -> None: ...
 
 
+from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.essential_events import is_essential_progress_event_type
 from soothe_cli.shared.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui._ask_user_types import AskUserRequest
@@ -233,6 +234,15 @@ def _extract_custom_output_text(data: dict[str, Any]) -> str | None:
     return None
 
 
+def _format_display_line_for_tui(line: DisplayLine) -> str:
+    """Serialize pipeline ``DisplayLine`` for TUI widgets.
+
+    Leading spaces encode parent/child layout (step result vs step header, etc.).
+    Strips only newline separators and trailing whitespace.
+    """
+    return line.format().lstrip("\n").rstrip()
+
+
 def _format_progress_event_lines_for_tui(
     event_data: dict[str, Any],
     namespace: tuple[str, ...],
@@ -254,7 +264,7 @@ def _format_progress_event_lines_for_tui(
 
         rendered: list[str] = []
         for line in lines:
-            line_text = line.format().lstrip("\n").strip()
+            line_text = _format_display_line_for_tui(line)
             if line_text:
                 rendered.append(line_text)
         return rendered
@@ -268,7 +278,7 @@ def _format_progress_event_lines_for_tui(
 
         rendered: list[str] = []
         for line in lines:
-            line_text = line.format().lstrip("\n").strip()
+            line_text = _format_display_line_for_tui(line)
             if line_text:
                 rendered.append(line_text)
         return rendered
