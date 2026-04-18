@@ -367,6 +367,8 @@ class LoopState(BaseModel):
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
+        last_execute_assistant_text: Last CoreAgent assistant text from the latest Execute wave (IG-199).
+        last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
     """
 
     goal: str
@@ -401,6 +403,10 @@ class LoopState(BaseModel):
         default_factory=list,
         description="Chronological action descriptions for progression tracking",
     )
+
+    # Last Execute wave assistant text for adaptive final response (IG-199)
+    last_execute_assistant_text: str | None = None
+    last_execute_wave_parallel_multi_step: bool = False
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

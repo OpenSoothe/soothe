@@ -101,6 +101,7 @@ def _suppress_noisy_third_party() -> None:
         "anthropic",
         "langchain_core",
         "langgraph",
+        "langsmith",
         "browser_use",
         "bubus",
         "cdp_use",

@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
+from soothe.cognition.agent_loop.final_response_policy import (
+    assemble_assistant_text_from_stream_messages,
+)
 from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     LoopState,
@@ -104,6 +107,21 @@ class Executor:
                         "total": token_usage.get("total_tokens", 0),
                     }
         return {}
+
+    def _record_execute_wave_for_finalize(
+        self,
+        state: LoopState,
+        messages: list[BaseMessage],
+        *,
+        parallel_multi_step: bool,
+    ) -> None:
+        """Update state with last Execute assistant text for adaptive final response (IG-199)."""
+        state.last_execute_wave_parallel_multi_step = parallel_multi_step
+        if parallel_multi_step:
+            state.last_execute_assistant_text = None
+            return
+        text = assemble_assistant_text_from_stream_messages(messages)
+        state.last_execute_assistant_text = text if text else None
 
     def _aggregate_wave_metrics(
         self,
@@ -342,6 +360,7 @@ class Executor:
 
         # Process results
         all_step_results: list[StepResult] = []
+        single_wave_messages: list[BaseMessage] = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(
@@ -364,13 +383,23 @@ class Executor:
                 all_step_results.append(step_result)
                 yield step_result
             else:
-                events, step_result = result
+                events, step_result, step_messages = result
+                if len(steps) == 1:
+                    single_wave_messages = step_messages
                 all_step_results.append(step_result)
                 # Yield collected events first
                 for event in events:
                     yield event
                 # Then yield the result
                 yield step_result
+
+        parallel_multi = len(steps) > 1
+        if parallel_multi:
+            self._record_execute_wave_for_finalize(state, [], parallel_multi_step=True)
+        else:
+            self._record_execute_wave_for_finalize(
+                state, single_wave_messages, parallel_multi_step=False
+            )
 
         # Aggregate metrics from parallel execution
         if all_step_results:
@@ -514,6 +543,7 @@ class Executor:
 
             # Aggregate metrics into LoopState
             self._aggregate_wave_metrics(step_results, output, messages, state)
+            self._record_execute_wave_for_finalize(state, messages, parallel_multi_step=False)
 
             # Yield step results
             for sr in step_results:
@@ -544,6 +574,7 @@ class Executor:
 
             # Aggregate metrics (includes error count)
             self._aggregate_wave_metrics(step_results, "", [], state)  # No messages on error
+            self._record_execute_wave_for_finalize(state, [], parallel_multi_step=False)
 
             # Yield step results
             for sr in step_results:
@@ -586,7 +617,7 @@ class Executor:
         step: StepAction,
         thread_id: str,
         workspace: str | None = None,
-    ) -> tuple[list[StreamEvent], StepResult]:
+    ) -> tuple[list[StreamEvent], StepResult, list[BaseMessage]]:
         """Execute single step, collecting events for later yielding.
 
         Used for parallel execution where we can't yield in real-time.
@@ -600,7 +631,7 @@ class Executor:
             workspace: Thread-specific workspace path (RFC-103)
 
         Returns:
-            Tuple of (collected events, StepResult with outcome metadata)
+            Tuple of (collected events, StepResult with outcome metadata, AI messages for IG-199)
         """
         from langchain_core.messages import HumanMessage
 
@@ -652,7 +683,8 @@ class Executor:
 
             # Stream events and collect outcome metadata (RFC-211)
             tool_call_count = 0
-            async for final_output, event, tc_count, _msg_list in self._stream_and_collect(
+            messages: list[BaseMessage] = []
+            async for final_output, event, tc_count, msg_list in self._stream_and_collect(
                 stream, budget=budget
             ):
                 if event is not None:
@@ -660,8 +692,7 @@ class Executor:
                 elif final_output is not None:
                     output = final_output
                     tool_call_count = tc_count
-                    # Note: Single step execution doesn't need messages for token tracking
-                    # Token tracking is primarily for sequential Act waves
+                    messages = msg_list
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -693,15 +724,19 @@ class Executor:
                 budget.hit_subagent_cap,
             )
 
-            return events, StepResult(
-                step_id=step.id,
-                success=True,
-                outcome=primary_outcome,  # RFC-211: outcome metadata
-                duration_ms=duration_ms,
-                thread_id=thread_id,
-                tool_call_count=tool_call_count,
-                subagent_task_completions=budget.subagent_task_completions,
-                hit_subagent_cap=budget.hit_subagent_cap,
+            return (
+                events,
+                StepResult(
+                    step_id=step.id,
+                    success=True,
+                    outcome=primary_outcome,  # RFC-211: outcome metadata
+                    duration_ms=duration_ms,
+                    thread_id=thread_id,
+                    tool_call_count=tool_call_count,
+                    subagent_task_completions=budget.subagent_task_completions,
+                    hit_subagent_cap=budget.hit_subagent_cap,
+                ),
+                messages,
             )
 
         except Exception as e:
@@ -716,16 +751,20 @@ class Executor:
 
             error_msg = self._extract_error_message(e, "Step execution failed")
 
-            return events, StepResult(
-                step_id=step.id,
-                success=False,
-                outcome={"type": "error", "error": error_msg},  # RFC-211: error outcome
-                error=error_msg,
-                error_type=self._classify_error_severity(e),
-                duration_ms=duration_ms,
-                thread_id=thread_id,
-                subagent_task_completions=0,
-                hit_subagent_cap=False,
+            return (
+                events,
+                StepResult(
+                    step_id=step.id,
+                    success=False,
+                    outcome={"type": "error", "error": error_msg},  # RFC-211: error outcome
+                    error=error_msg,
+                    error_type=self._classify_error_severity(e),
+                    duration_ms=duration_ms,
+                    thread_id=thread_id,
+                    subagent_task_completions=0,
+                    hit_subagent_cap=False,
+                ),
+                [],
             )
 
     async def _stream_and_collect(

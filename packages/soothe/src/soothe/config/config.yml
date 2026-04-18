@@ -118,6 +118,9 @@ agentic:
   # Ask CoreAgent not to paste full tool output again during AgentLoop Execute phase
   agent_loop_output_contract_enabled: true
 
+  # IG-199: On goal completion — adaptive picks last Execute text vs final CoreAgent report
+  final_response: adaptive  # adaptive | always_synthesize | always_last_execute
+
   # Maximum prior messages to inject into Plan prompts
   # Only used when Execute phase uses isolated threads (no checkpoint access)
   prior_conversation_limit: 10

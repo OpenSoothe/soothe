@@ -21,6 +21,32 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _envelope_langchain_message_dict(message: dict[str, Any]) -> dict[str, Any]:
+    """Wrap flat ``model_dump``-style message dicts for ``messages_from_dict``.
+
+    ``encode()`` / ``_serialize_for_json`` in ``soothe_sdk.client.protocol`` serialize
+    LangChain messages via ``model_dump()``, producing ``{"type": "ai", "content": ...}``
+    without the ``{"type", "data"}`` envelope that :func:`messages_from_dict` expects.
+    The CLI path uses ``EventProcessor._handle_dict_message`` on raw dicts; the TUI
+    normalizes wire payloads back to message objects here.
+
+    Args:
+        message: Decoded JSON object for a single stream message.
+
+    Returns:
+        Either the original dict (already enveloped or not a message body) or the
+        wrapped form suitable for ``messages_from_dict``.
+    """
+    if "data" in message:
+        return message
+    msg_type = message.get("type")
+    if not isinstance(msg_type, str):
+        return message
+    if not any(k in message for k in ("content", "tool_calls", "tool_call_id", "tool_call_chunks")):
+        return message
+    return {"type": msg_type, "data": dict(message)}
+
+
 @dataclass(slots=True)
 class DaemonStateSnapshot:
     """Minimal `aget_state()` compatible wrapper."""
@@ -169,7 +195,8 @@ class TuiDaemonSession:
         message, metadata = data
         if isinstance(message, dict):
             try:
-                restored = messages_from_dict([message])
+                to_restore = _envelope_langchain_message_dict(message)
+                restored = messages_from_dict([to_restore])
                 if restored:
                     message = restored[0]
             except Exception:

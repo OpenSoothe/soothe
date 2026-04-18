@@ -549,6 +549,9 @@ class GoalContextConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable goal context injection")
 
 
+AgenticFinalResponseMode = Literal["adaptive", "always_synthesize", "always_last_execute"]
+
+
 class AgenticLoopConfig(BaseModel):
     """Configuration for agentic loop execution mode (RFC-201).
 
@@ -557,6 +560,8 @@ class AgenticLoopConfig(BaseModel):
         max_iterations: Maximum agentic loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         agent_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
+        final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
+            assistant text when appropriate, or use adaptive heuristics (IG-199).
         planning: Planning configuration.
         early_termination: Early termination configuration.
         working_memory: Working memory / spill configuration (RFC-203).
@@ -584,6 +589,15 @@ class AgenticLoopConfig(BaseModel):
     agent_loop_output_contract_enabled: bool = Field(
         default=True,
         description="Instruct CoreAgent not to paste full tool outputs again during AgentLoop Execute phase",
+    )
+
+    final_response: AgenticFinalResponseMode = Field(
+        default="adaptive",
+        description=(
+            "On goal completion: adaptive uses evidence heuristics to choose last Execute text vs "
+            "a final CoreAgent report; always_synthesize always runs the report; always_last_execute "
+            "skips the report when last Execute text exists (fallback to evidence otherwise)"
+        ),
     )
 
     prior_conversation_limit: int = Field(

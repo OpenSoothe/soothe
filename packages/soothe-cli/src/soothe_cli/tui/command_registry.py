@@ -106,6 +106,27 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.SIDE_EFFECT_FREE,
     ),
     SlashCommand(
+        name="/browser",
+        description="Route prompt to Browser subagent (usage: /browser <query>)",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="web page",
+    ),
+    SlashCommand(
+        name="/claude",
+        description="Route prompt to Claude subagent (usage: /claude <query>)",
+        bypass_tier=BypassTier.QUEUED,
+    ),
+    SlashCommand(
+        name="/research",
+        description="Route prompt to Research subagent (usage: /research <query>)",
+        bypass_tier=BypassTier.QUEUED,
+    ),
+    SlashCommand(
+        name="/plan",
+        description="Send input in plan mode (usage: /plan or /plan <prompt>)",
+        bypass_tier=BypassTier.QUEUED,
+    ),
+    SlashCommand(
         name="/tokens",
         description="Token usage",
         bypass_tier=BypassTier.QUEUED,
