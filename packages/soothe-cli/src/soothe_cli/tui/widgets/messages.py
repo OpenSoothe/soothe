@@ -1051,7 +1051,8 @@ class ToolCallMessage(Vertical):
 
     def toggle_output(self) -> None:
         """Toggle between preview and full output display."""
-        if not self._output:
+        out = (self._output or "").strip()
+        if not out and self._status != "success":
             return
         self._expanded = not self._expanded
         self._update_output_display()
@@ -1059,7 +1060,8 @@ class ToolCallMessage(Vertical):
     def on_click(self, event: Click) -> None:
         """Toggle output expansion, or show timestamp if no output."""
         event.stop()  # Prevent click from bubbling up and scrolling
-        if self._output:
+        out = (self._output or "").strip()
+        if out or self._status == "success":
             self.toggle_output()
         else:
             _show_timestamp_toast(self)
@@ -1482,29 +1484,33 @@ class ToolCallMessage(Vertical):
 
     def _update_output_display(self) -> None:
         """Update the output display based on expanded state."""
-        # Guard: all widgets must be initialized before updating display state
-        if (
-            not self._output
-            or not self._preview_widget
-            or not self._full_widget
-            or not self._hint_widget
-        ):
+        if not self._preview_widget or not self._full_widget or not self._hint_widget:
             return
 
-        output_stripped = self._output.strip()
+        output_stripped = (self._output or "").strip()
+        empty_success = self._status == "success" and not output_stripped
+
+        def _empty_success_content() -> Content:
+            return self._prefix_output(Content.styled("(no tool output)", "dim italic"))
+
         lines = output_stripped.split("\n")
         total_lines = len(lines)
         total_chars = len(output_stripped)
 
         # Truncate if too many lines OR too many characters
-        needs_truncation = total_lines > self._PREVIEW_LINES or total_chars > self._PREVIEW_CHARS
+        needs_truncation = (not empty_success) and (
+            total_lines > self._PREVIEW_LINES or total_chars > self._PREVIEW_CHARS
+        )
 
         if self._expanded:
             # Show full output with formatting
             self._preview_widget.display = False
-            result = self._format_output(self._output, is_preview=False)
-            prefixed = self._prefix_output(result.content)
-            self._full_widget.update(prefixed)
+            if empty_success:
+                self._full_widget.update(_empty_success_content())
+            else:
+                result = self._format_output(self._output, is_preview=False)
+                prefixed = self._prefix_output(result.content)
+                self._full_widget.update(prefixed)
             self._full_widget.display = True
             # Show collapse hint underneath
             self._hint_widget.update(Content.styled("click or Ctrl+O to collapse", "dim italic"))
@@ -1512,7 +1518,11 @@ class ToolCallMessage(Vertical):
         else:
             # Show preview
             self._full_widget.display = False
-            if needs_truncation:
+            if empty_success:
+                self._preview_widget.update(_empty_success_content())
+                self._preview_widget.display = True
+                self._hint_widget.display = False
+            elif needs_truncation:
                 result = self._format_output(self._output, is_preview=True)
                 prefixed = self._prefix_output(result.content)
                 self._preview_widget.update(prefixed)
@@ -1547,7 +1557,9 @@ class ToolCallMessage(Vertical):
         Returns:
             True if there is output content, False otherwise.
         """
-        return bool(self._output)
+        if (self._output or "").strip():
+            return True
+        return self._status == "success"
 
     def _filtered_args(self) -> dict[str, Any]:
         """Filter large tool args for display.
