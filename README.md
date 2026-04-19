@@ -84,7 +84,7 @@ In short, Soothe shifts the paradigm from *human-in-the-loop* to **agent-in-the-
 
 Soothe is published as a monorepo with multiple packages:
 
-- **`soothe`** (PyPI) — Main package: daemon server + CLI
+- **`soothe`** — Core functionalities with daemon
 - **`soothe-cli`** — Standalone WebSocket client
 - **`soothe-sdk`** — Shared SDK for custom clients
 - **`soothe-community`** — Optional community plugins
@@ -92,7 +92,7 @@ Soothe is published as a monorepo with multiple packages:
 Install the main package:
 
 ```bash
-pip install soothe
+pip install -U 'soothe[all]'
 ```
 
 ### Quick Start
