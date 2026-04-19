@@ -9,7 +9,7 @@
 #     -v soothe-data:/var/lib/soothe \
 #     soothe-daemon
 
-FROM python:3.12-slim-bookworm
+FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon (full optional extras)" \

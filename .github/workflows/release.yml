@@ -34,8 +34,7 @@ jobs:
     - name: Get SDK version
       id: sdk-version
       run: |
-        cd packages/soothe-sdk
-        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        VERSION=$(cat VERSION)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Check if SDK version exists on PyPI
@@ -105,8 +104,7 @@ jobs:
     - name: Get CLI version
       id: cli-version
       run: |
-        cd packages/soothe-cli
-        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        VERSION=$(cat VERSION)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Check if CLI version exists on PyPI
@@ -182,8 +180,7 @@ jobs:
     - name: Get daemon version
       id: daemon-version
       run: |
-        cd packages/soothe
-        VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        VERSION=$(cat VERSION)
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Check if daemon version exists on PyPI
