@@ -62,7 +62,7 @@ async def main() -> None:
     print("Example 02: CoreAgent with Tools")
     print("=" * 60)
 
-    # Load configuration from config.dev.yml
+    # Load configuration from config/config.dev.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Built-in tools enabled: execution={config.tools.execution.enabled}")

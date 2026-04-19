@@ -196,7 +196,7 @@ Remove logic that checks `state.act_will_have_checkpoint_access`:
 
 Remove `sequential_act_isolated_thread` configuration:
 ```yaml
-# BEFORE (config.dev.yml)
+# BEFORE (config/config.dev.yml)
 agentic:
   sequential_act_isolated_thread: true
 

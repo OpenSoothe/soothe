@@ -21,7 +21,7 @@
 - Example: This document guides all code changes
 
 ### 2. MUST Keep Config Files Synchronized
-**When updating `packages/soothe/src/soothe/config/config.yml` (template)**, you MUST also update `config.dev.yml` in the project root (dev defaults):
+**When updating `packages/soothe/src/soothe/config/config.yml` (template)**, you MUST also update `config/config.dev.yml` (dev defaults):
 - Both files must have matching structure
 - Dev config should have sensible defaults for local development
 - This ensures developers see the latest configuration options

@@ -2,7 +2,7 @@
 # Soothe Minimal Configuration - For End Users
 # =============================================================================
 # This is a minimal config file for configuring your LLM provider and model router.
-# Use: soothe --config config.minimal.yml
+# Use: soothe --config config/config.minimal.yml
 
 # =============================================================================
 # Model Providers - REQUIRED
@@ -77,6 +77,6 @@ router:
 # 3. Set your router models based on your provider
 #
 # 4. Run Soothe:
-#    soothe --config config.minimal.yml "your query"
+#    soothe --config config/config.minimal.yml "your query"
 #
 # That's it! All other settings have sensible defaults.

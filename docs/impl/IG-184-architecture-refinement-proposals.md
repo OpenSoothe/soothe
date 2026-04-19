@@ -167,7 +167,7 @@ class GoalEngine:
 ### Configuration
 
 ```yaml
-# config.dev.yml
+# config/config.dev.yml
 
 autonomous:
   goal_backoff:
@@ -311,7 +311,7 @@ class Executor:
 ### Configuration
 
 ```yaml
-# config.dev.yml
+# config/config.dev.yml
 
 protocols:
   context:
@@ -503,7 +503,7 @@ class GoalContextManager:
 ### Configuration
 
 ```yaml
-# config.dev.yml
+# config/config.dev.yml
 
 agentic:
   goal_context:

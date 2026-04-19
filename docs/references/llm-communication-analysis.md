@@ -1148,7 +1148,7 @@ Translation scenario (contamination risk):
 
 **System Configuration**:
 - `config/config.yml`: Template configuration
-- `config.dev.yml`: Development defaults
+- `config/config.dev.yml`: Development defaults
 - `config/env.example`: Environment variables
 
 **Protocol Settings**:

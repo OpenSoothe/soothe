@@ -241,7 +241,7 @@ Log: NO entry for research subagent routing
 uv run soothe daemon status
 
 # If not running, start it
-uv run soothe daemon start --config config.dev.yml
+uv run soothe daemon start --config config/config.dev.yml
 
 # Tail the log for verification during run
 tail -f ~/.soothe/logs/soothe.log | grep -E "(Quick path|routing)" &

@@ -66,7 +66,7 @@ def get_base_config() -> SootheConfig:
     """Get base config, loading from file once and caching the result."""
     global _CACHED_BASE_CONFIG
     if _CACHED_BASE_CONFIG is None:
-        config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
+        config_path = Path(__file__).parent.parent.parent / "config" / "config.dev.yml"
         _CACHED_BASE_CONFIG = SootheConfig.from_yaml_file(str(config_path)) if config_path.exists() else SootheConfig()
     return _CACHED_BASE_CONFIG
 
@@ -236,12 +236,12 @@ def _has_valid_api_key() -> bool:
 
 @pytest.fixture
 def test_config() -> SootheConfig:
-    """Load config from config.dev.yml if available, otherwise use defaults.
+    """Load config from config/config.dev.yml if available, otherwise use defaults.
 
     Returns:
         SootheConfig instance without test-specific overrides
     """
-    config_path = Path(__file__).parent.parent.parent / "config.dev.yml"
+    config_path = Path(__file__).parent.parent.parent / "config" / "config.dev.yml"
     if config_path.exists():
         return SootheConfig.from_yaml_file(str(config_path))
     return SootheConfig()
@@ -252,7 +252,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     """Default config for integration tests with reduced limits.
 
     Args:
-        test_config: Base config loaded from config.dev.yml
+        test_config: Base config loaded from config/config.dev.yml
 
     Returns:
         SootheConfig with test-specific overrides
@@ -307,7 +307,7 @@ def web_enabled_config(test_config: SootheConfig) -> SootheConfig:
     """Config with web tools enabled.
 
     Args:
-        test_config: Base config loaded from config.dev.yml
+        test_config: Base config loaded from config/config.dev.yml
 
     Returns:
         SootheConfig with web tools enabled
