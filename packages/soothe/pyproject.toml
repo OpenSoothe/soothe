@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "soothe"
 dynamic = ["version"]
-description = "Soothe - Protocol-driven multi-agent orchestration framework (daemon server, updated for SDK v0.4.0)"
+description = "Soothe - Protocol-driven multi-agent orchestration framework (daemon server)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11,<3.15"
@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe-sdk>=0.4.0,<1.0.0",     # Shared types, protocol (v0.4.0 breaking change)
+    "soothe-sdk>=0.3.3,<1.0.0",     # Shared types, protocol
     "aiohttp>=3.9.0",
     "aiosqlite>=0.22.1",
     "anyio>=3.0.0",
