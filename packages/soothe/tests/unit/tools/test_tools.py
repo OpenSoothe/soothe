@@ -1,5 +1,8 @@
 """Tests for custom Soothe tools."""
 
+import importlib
+import importlib.util
+
 import pytest
 
 from soothe.tools._internal.jina import JinaReaderTool
@@ -18,6 +21,11 @@ from soothe.tools._internal.wizsearch import (
 from soothe.tools.datetime import CurrentDateTimeTool, create_datetime_tools
 from soothe.tools.video import VideoInfoTool, create_video_tools
 from soothe.tools.web_search import CrawlWebTool, SearchWebTool, create_websearch_tools
+
+
+def _has_wizsearch() -> bool:
+    """Check if wizsearch is available."""
+    return importlib.util.find_spec("wizsearch") is not None
 
 
 class TestDatetimeTools:
@@ -103,6 +111,7 @@ class TestWizsearchTools:
         with pytest.raises(ImportError, match="wizsearch package is not installed"):
             tool._run(query="latest ai research")
 
+    @pytest.mark.skipif(not _has_wizsearch(), reason="wizsearch not installed")
     def test_default_engines(self, monkeypatch) -> None:
         import soothe.tools._internal.wizsearch._helpers as wizsearch_helpers
 
@@ -139,6 +148,7 @@ class TestWizsearchTools:
 
         assert captured["enabled_engines"] == ["tavily", "duckduckgo"]
 
+    @pytest.mark.skipif(not _has_wizsearch(), reason="wizsearch not installed")
     def test_custom_engines_via_config(self, monkeypatch) -> None:
         """Test that custom engines can be set via config parameter."""
         import soothe.tools._internal.wizsearch._helpers as wizsearch_helpers

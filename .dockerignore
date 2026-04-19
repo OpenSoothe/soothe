@@ -1,0 +1,28 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+.claude
+.idea
+.vscode
+
+# Python environments and caches
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.egg-info
+
+# Tests and local reference (not needed to install/run daemon)
+**/tests
+docs
+thirdparty
+
+# Build artifacts
+**/dist
+**/build
+
+# Optional large trees
+**/node_modules
