@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-cli"
-version = "0.3.3"
+dynamic = ["version"]
 description = "Soothe CLI client - communicates with daemon via WebSocket (updated for SDK v0.4.0)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -70,6 +70,9 @@ ignore = ["E501"]
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.hatch.version]
+path = "../../VERSION"
 
 [tool.mypy]
 python_version = "3.11"
