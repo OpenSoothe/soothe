@@ -242,8 +242,17 @@ class TuiDaemonSession:
                 logger.debug("Failed to deserialize thread-state messages", exc_info=True)
         return DaemonStateSnapshot(values=values)
 
-    async def aupdate_state(self, config: dict[str, Any], values: dict[str, Any]) -> None:
-        """Persist partial thread state through the daemon."""
+    async def aupdate_state(
+        self, config: dict[str, Any], values: dict[str, Any], timeout: float = 5.0
+    ) -> None:
+        """Persist partial thread state through the daemon.
+
+        Args:
+            config: Thread configuration containing thread_id.
+            values: State values to persist.
+            timeout: Timeout in seconds for daemon response. Default 5.0s.
+                Use shorter timeout (e.g., 2.0s) during interrupt cleanup.
+        """
         thread_id = str(config.get("configurable", {}).get("thread_id", "")).strip()
         if not thread_id:
             return
@@ -255,6 +264,7 @@ class TuiDaemonSession:
                     "values": values,
                 },
                 response_type="thread_update_state_response",
+                timeout=timeout,
             )
 
     async def list_skills(self) -> list[dict[str, Any]]:

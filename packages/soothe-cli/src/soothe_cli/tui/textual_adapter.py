@@ -1808,14 +1808,15 @@ async def _handle_interrupt_cleanup(
 
     # Save accumulated state before marking tools as rejected (best-effort).
     # State update failures shouldn't prevent cleanup.
+    # Use shorter timeout (2s) during interrupt cleanup to avoid blocking detachment.
     try:
         if interrupted_msg:
-            await agent.aupdate_state(config, {"messages": [interrupted_msg]})
+            await agent.aupdate_state(config, {"messages": [interrupted_msg]}, timeout=2.0)
 
         cancellation_msg = HumanMessage(
             content="[SYSTEM] Task interrupted by user. Previous operation was cancelled."
         )
-        await agent.aupdate_state(config, {"messages": [cancellation_msg]})
+        await agent.aupdate_state(config, {"messages": [cancellation_msg]}, timeout=2.0)
     except Exception:
         logger.warning("Failed to save interrupted state", exc_info=True)
 
