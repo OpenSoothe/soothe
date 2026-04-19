@@ -253,23 +253,55 @@ def get_credential_env_var(provider: str) -> str | None:
     return PROVIDER_API_KEY_ENV.get(provider)
 
 
-# Stub functions for thread config (TUI preferences)
-# These should be migrated to use SootheConfig properly
+# Thread configuration for TUI preferences
 
 
-def load_thread_config(thread_id: str | None = None) -> dict:
+@dataclass(frozen=True, slots=True)
+class ThreadConfig:
+    """Thread list display preferences for TUI.
+
+    Attributes:
+        columns: Column visibility settings keyed by column name.
+        relative_time: Whether to show relative timestamps.
+        sort_order: Sort order for thread list ("updated_at" or "created_at").
+    """
+
+    columns: dict[str, bool]
+    relative_time: bool
+    sort_order: str
+
+
+# Default column visibility (all columns visible by default)
+_DEFAULT_COLUMNS = {
+    "thread_id": True,
+    "agent_name": True,
+    "messages": True,
+    "created_at": True,
+    "updated_at": True,
+    "git_branch": True,
+    "cwd": True,
+    "initial_prompt": True,
+}
+
+
+def load_thread_config(thread_id: str | None = None) -> ThreadConfig:
     """Load thread-specific TUI preferences.
 
-    Stub implementation - returns empty dict.
+    Stub implementation - returns default configuration.
     Full implementation should use SootheConfig's persistence.
 
     Args:
         thread_id: Thread identifier. Can be None for default config.
 
     Returns:
-        Thread configuration dictionary.
+        Thread configuration object.
     """
-    return {}
+    # Use existing stub functions for defaults
+    return ThreadConfig(
+        columns=dict(_DEFAULT_COLUMNS),
+        relative_time=load_thread_relative_time(),
+        sort_order=load_thread_sort_order(),
+    )
 
 
 def save_thread_relative_time(thread_id: str, relative_time: str) -> None:
