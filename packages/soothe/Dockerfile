@@ -25,6 +25,11 @@ ENV PYTHONUNBUFFERED=1 \
     SOOTHE_DAEMON__TRANSPORTS__HTTP_REST__ENABLED=true \
     SOOTHE_DAEMON__TRANSPORTS__HTTP_REST__HOST=0.0.0.0
 
+# Configure Aliyun Debian mirror for faster package downloads in China
+RUN echo "deb http://mirrors.aliyun.com/debian/ bookworm main contrib non-free" > /etc/apt/sources.list \
+    && echo "deb http://mirrors.aliyun.com/debian/ bookworm-updates main contrib non-free" >> /etc/apt/sources.list \
+    && echo "deb http://mirrors.aliyun.com/debian-security/ bookworm-security main contrib non-free" >> /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -41,11 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Configure Aliyun Debian mirror for faster package downloads in China
-RUN echo "deb http://mirrors.aliyun.com/debian/ bookworm main contrib non-free" > /etc/apt/sources.list \
-    && echo "deb http://mirrors.aliyun.com/debian/ bookworm-updates main contrib non-free" >> /etc/apt/sources.list \
-    && echo "deb http://mirrors.aliyun.com/debian-security/ bookworm-security main contrib non-free" >> /etc/apt/sources.list
 
 # Workspace root + all member packages (required for uv.lock resolution)
 COPY pyproject.toml uv.lock VERSION ./
