@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe"
-version = "0.3.3"
+dynamic = ["version"]
 description = "Soothe - Protocol-driven multi-agent orchestration framework (daemon server, updated for SDK v0.4.0)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -128,6 +128,9 @@ ignore = ["E501"]
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.hatch.version]
+path = "../../VERSION"
 
 [tool.mypy]
 python_version = "3.11"
