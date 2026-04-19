@@ -97,39 +97,39 @@ pip install -U 'soothe[all]'
 
 ### Quick Start
 
-1. **Configure your LLM provider**:
+**1. Configure your LLM provider**:
 
-   ```bash
-   # Create config directory
-   mkdir -p ~/.soothe/config
+```bash
+# Create config directory
+mkdir -p ~/.soothe/config
 
-   # Copy minimal config template
-   cp config/config.minimal.yml ~/.soothe/config/config.yml
+# Copy minimal config template
+cp config/config.minimal.yml ~/.soothe/config/config.yml
 
-   # Set your API key
-   export OPENAI_API_KEY="sk-..."
-   # or export ANTHROPIC_API_KEY="sk-ant-..."
-   # or export DASHSCOPE_API_KEY="sk-..."
+# Set your API key
+export OPENAI_API_KEY="sk-..."
+# or export ANTHROPIC_API_KEY="sk-ant-..."
+# or export DASHSCOPE_API_KEY="sk-..."
 
-   # Edit config with your preferred models
-   vim ~/.soothe/config/config.yml
-   ```
+# Edit config with your preferred models (optional)
+vim ~/.soothe/config/config.yml
+```
 
-   The minimal config contains just essentials: provider settings and model router. All other settings use sensible defaults.
+The minimal config contains just essentials: provider settings and model router. All other settings use sensible defaults.
 
-2. **Run your first query**:
+**2. Run Soothe**:
 
-   ```bash
-   # Interactive TUI (default)
-   soothe
+**CLI Side**:
 
-   # Single-prompt mode
-   soothe -p "Research the top 5 Python web frameworks and create a comparison table"
-   ```
+```bash
+# Interactive TUI
+soothe
 
-### Daemon Mode
+# Single prompt
+soothe -p "Research the top 5 Python web frameworks and create a comparison table"
+```
 
-For long-running operations and remote access:
+**Daemon Side**:
 
 ```bash
 # Start daemon server
@@ -138,12 +138,17 @@ soothe-daemon start
 # Check daemon status
 soothe-daemon status
 
-# Run client (connects to daemon)
-soothe
-
 # Stop daemon
 soothe-daemon stop
 ```
+
+**Command Reference**:
+
+- `soothe` — Interactive client (TUI by default)
+- `soothe -p "query"` — Single-prompt execution
+- `soothe --help` — View all options
+- `soothe-daemon start|stop|status|logs` — Daemon management
+- `soothe-daemon doctor` — Health diagnostics
 
 ## Learn More
 
