@@ -25,7 +25,7 @@ AgentLoop always invoked a second CoreAgent turn to synthesize a “comprehensiv
 - `packages/soothe/src/soothe/cognition/agent_loop/executor.py`
 - `packages/soothe/src/soothe/cognition/agent_loop/schemas.py`
 - `packages/soothe/src/soothe/cognition/agent_loop/synthesis.py`
-- `packages/soothe/src/soothe/config/models.py`, `config.yml`, `config.dev.yml`
+- `packages/soothe/src/soothe/config/models.py`, `config.yml`, `config/config.dev.yml`
 
 ## Verification
 

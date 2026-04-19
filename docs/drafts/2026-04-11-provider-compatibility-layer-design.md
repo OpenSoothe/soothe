@@ -234,7 +234,7 @@ get_provider_limits(provider: str, model_name: str) -> dict:
   
   Sources:
   1. Known limits database (built-in)
-  2. Config overrides (config.dev.yml)
+  2. Config overrides (config/config.dev.yml)
   3. Heuristic defaults (8000 output tokens for unknown)
   
   Returns: {
@@ -706,7 +706,7 @@ async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
 
 ### 8. Configuration Integration
 
-**Token Limits Configuration** (config.dev.yml):
+**Token Limits Configuration** (config/config.dev.yml):
 
 ```yaml
 providers:

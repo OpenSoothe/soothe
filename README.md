@@ -104,7 +104,7 @@ pip install soothe
    mkdir -p ~/.soothe/config
 
    # Copy minimal config template
-   cp config.minimal.yml ~/.soothe/config/config.yml
+   cp config/config.minimal.yml ~/.soothe/config/config.yml
 
    # Set your API key
    export OPENAI_API_KEY="sk-..."

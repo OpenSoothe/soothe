@@ -3,7 +3,7 @@
 #
 # Usage:
 #   mkdir -p ~/.soothe/config
-#   ln -sf /Users/chenxm/Workspace/Soothe/cli_config.dev.yml ~/.soothe/config/cli_config.yml
+#   ln -sf /Users/chenxm/Workspace/Soothe/config/cli_config.dev.yml ~/.soothe/config/cli_config.yml
 
 # Client verbosity controls what events are DISPLAYED in TUI/CLI
 # Verbosity is a CLIENT-side preference, sent to daemon when subscribing to threads

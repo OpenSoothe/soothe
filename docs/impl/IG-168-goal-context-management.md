@@ -125,7 +125,7 @@ class AgenticConfig(BaseModel):
     goal_context: GoalContextConfig = Field(default_factory=GoalContextConfig)
 ```
 
-**Files**: `config.yml`, `config.dev.yml`
+**Files**: `config.yml`, `config/config.dev.yml`
 
 Add goal_context section:
 ```yaml
@@ -169,7 +169,7 @@ Integration test suite:
 - [ ] AgentLoop injects goal context into LoopState
 - [ ] Executor injects briefing into CoreAgent config
 - [ ] Config schema extended (GoalContextConfig)
-- [ ] Config files updated (config.yml, config.dev.yml)
+- [ ] Config files updated (config.yml, config/config.dev.yml)
 
 ### Unit Tests
 

@@ -1,7 +1,7 @@
 """CoreAgent with subagents example -- Layer 1 runtime with delegation capabilities.
 
 This example demonstrates CoreAgent WITH subagents:
-- Subagent configuration from config.dev.yml
+- Subagent configuration from config/config.dev.yml
 - Delegation to Browser subagent for web tasks
 - Delegation to Claude subagent for CLI tasks
 - Custom ad-hoc subagent creation
@@ -33,7 +33,7 @@ async def main() -> None:
     print("Example 05: CoreAgent with Subagents")
     print("=" * 60)
 
-    # Load configuration from config.dev.yml
+    # Load configuration from config/config.dev.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
 
@@ -98,7 +98,7 @@ async def main() -> None:
     print("\n" + "=" * 60)
     print("Example completed successfully!")
     print("=" * 60)
-    print("\nTip: Enable browser subagent in config.dev.yml for web automation tasks.")
+    print("\nTip: Enable browser subagent in config/config.dev.yml for web automation tasks.")
     print("Set subagents.browser.enabled: true and install browser-use library.")
 
 

@@ -117,7 +117,7 @@ class AgenticLoopConfig(BaseModel):
 - `src/soothe/config/models.py` — Add `context_window_limit` to `AgenticLoopConfig`
 - `src/soothe/cognition/agent_loop/executor.py` — Use config value
 - `config/config.yml` — Add config field
-- `config.dev.yml` — Add dev default
+- `config/config.dev.yml` — Add dev default
 
 ---
 
@@ -150,7 +150,7 @@ def count_tokens(text: str, *, use_tiktoken: bool = True) -> int:
 | Config schema | `src/soothe/config/models.py` | Add `context_window_limit` field |
 | Executor | `src/soothe/cognition/agent_loop/executor.py` | Extract token usage, use config limit, import tiktoken utility |
 | Config template | `config/config.yml` | Add `context_window_limit: 200000` |
-| Dev config | `config.dev.yml` | Add `context_window_limit: 200000` |
+| Dev config | `config/config.dev.yml` | Add `context_window_limit: 200000` |
 | Tests | `tests/unit/test_executor_token_tracking.py` | New test: token extraction and tracking |
 
 ---
@@ -264,7 +264,7 @@ agentic:
     max_entry_chars_before_spill: 1500
 ```
 
-**File**: `config.dev.yml`
+**File**: `config/config.dev.yml`
 
 **Add same section**:
 ```yaml
