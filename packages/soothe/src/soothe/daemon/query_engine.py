@@ -54,9 +54,8 @@ class QueryEngine:
     ) -> None:
         """Stream a query through ``SootheRunner`` and broadcast events."""
         d = self._daemon
-        multi_threading_enabled = getattr(d._config.daemon, "multi_threading_enabled", False)
 
-        if multi_threading_enabled and d._thread_executor:
+        if d._thread_executor:
             await self.run_query_multithreaded(
                 text,
                 autonomous=autonomous,
