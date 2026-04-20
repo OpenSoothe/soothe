@@ -19,7 +19,6 @@ class DisplayLine:
         status: Optional status suffix ("running" for parallel tools).
         duration_ms: Optional duration in milliseconds.
         source_prefix: Optional source identifier for debug mode (e.g., "[main]", "[subagent:research]").
-        newline_before: Add newline separator before this line for improved readability.
     """
 
     level: int
@@ -29,7 +28,6 @@ class DisplayLine:
     status: str | None = None
     duration_ms: int | None = None
     source_prefix: str | None = None
-    newline_before: bool = False
 
     def format(self) -> str:
         """Format the display line as a string.
@@ -38,10 +36,6 @@ class DisplayLine:
             Formatted line ready for output.
         """
         parts = []
-
-        # Add newline separator before if requested (for improved readability)
-        if self.newline_before:
-            parts.append("\n")
 
         # Add source prefix first if present (debug mode)
         if self.source_prefix:
