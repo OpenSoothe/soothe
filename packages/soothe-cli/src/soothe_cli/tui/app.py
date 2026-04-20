@@ -15,6 +15,7 @@ import webbrowser
 from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
@@ -72,6 +73,7 @@ _monotonic = time.monotonic
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from datetime import datetime
 
     from langchain_core.runnables import RunnableConfig
     from langgraph.pregel import Pregel
@@ -3405,7 +3407,14 @@ class SootheApp(App):
         if self._daemon_session is not None:
             config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
             snapshot = await self._daemon_session.aget_state(config)
-            return dict(snapshot.values)
+            values = dict(snapshot.values)
+            recovered = await self._recover_missing_checkpoint_messages(
+                thread_id=thread_id,
+                values=values,
+            )
+            if recovered:
+                values["messages"] = recovered
+            return values
 
         if not self._agent:
             return {}
@@ -3437,6 +3446,79 @@ class SootheApp(App):
             values["_context_tokens"] = fallback_values["_context_tokens"]
         return values
 
+    async def _recover_missing_checkpoint_messages(
+        self,
+        *,
+        thread_id: str,
+        values: dict[str, Any],
+    ) -> list[Any] | None:
+        """Recover missing checkpoint messages from persisted thread conversation rows.
+
+        Args:
+            thread_id: Thread ID being resumed.
+            values: Current checkpoint values from `thread_state`.
+
+        Returns:
+            Recovered LangChain message objects, or `None` when recovery is not possible.
+        """
+        if self._daemon_session is None:
+            return None
+        existing = values.get("messages")
+        if isinstance(existing, list) and existing:
+            return None
+
+        rows = await self._daemon_session.get_thread_messages(
+            thread_id,
+            limit=10000,
+            include_events=True,
+        )
+        recovered_messages = self._conversation_rows_to_langchain_messages(rows)
+        if not recovered_messages:
+            return None
+
+        try:
+            from langchain_core.messages.base import messages_to_dict
+
+            config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+            await self._daemon_session.aupdate_state(
+                config,
+                {"messages": messages_to_dict(recovered_messages)},
+                timeout=10.0,
+            )
+            logger.info(
+                "Recovered %d checkpoint messages from thread log for %s",
+                len(recovered_messages),
+                thread_id,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to persist recovered checkpoint messages for %s",
+                thread_id,
+                exc_info=True,
+            )
+        return recovered_messages
+
+    @staticmethod
+    def _conversation_rows_to_langchain_messages(rows: list[dict[str, Any]]) -> list[Any]:
+        """Convert persisted conversation rows to LangChain message objects."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        messages: list[Any] = []
+        for row in rows:
+            if str(row.get("kind") or "").strip() != "conversation":
+                continue
+            metadata = row.get("metadata")
+            metadata_dict = metadata if isinstance(metadata, dict) else {}
+            role = str(row.get("role") or metadata_dict.get("role") or "").strip().lower()
+            content = str(row.get("content") or metadata_dict.get("text") or "").strip()
+            if not content:
+                continue
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant":
+                messages.append(AIMessage(content=content))
+        return messages
+
     async def _fetch_thread_activity_events(self, thread_id: str) -> list[dict[str, Any]]:
         """Read ThreadLogger JSONL events for thread history recovery via daemon RPC.
 
@@ -3451,121 +3533,226 @@ class SootheApp(App):
             return []
 
         try:
-            client = self._daemon_session._client
-            if client is None:
-                return []
-
-            # Send custom RPC request for full thread history
-            await client.send_json(
-                {
-                    "type": "thread_messages",
-                    "thread_id": thread_id,
-                    "limit": 10000,
-                    "include_events": True,  # Request full history mode
-                }
+            messages = await self._daemon_session.get_thread_messages(
+                thread_id,
+                limit=10000,
+                include_events=True,
             )
-
-            # Wait for response
-            async with asyncio.timeout(10.0):
-                while True:
-                    event = await client.read_event()
-                    if not event:
-                        return []
-                    if event.get("type") == "thread_messages_response":
-                        messages = event.get("messages", [])
-                        # Filter for event types (tool calls, tool results, events)
-                        # The daemon API returns ThreadMessage objects with 'kind' field
-                        events = [
-                            m
-                            for m in messages
-                            if m.get("kind") in ("event", "tool_call", "tool_result")
-                        ]
-                        return events
-
+            # Filter for event types (tool calls, tool results, events).
+            # The daemon API returns ThreadMessage objects with `kind` field.
+            return [m for m in messages if m.get("kind") in ("event", "tool_call", "tool_result")]
         except Exception:
             logger.debug(
                 "Failed to read ThreadLogger events for thread %s", thread_id, exc_info=True
             )
             return []
 
-    def _convert_event_to_message_data(self, event: dict[str, Any]) -> MessageData | None:
-        """Convert ThreadLogger event record to MessageData widget.
+    @staticmethod
+    def _parse_thread_event_timestamp(timestamp: Any) -> datetime | None:
+        """Parse an event timestamp into a UTC-aware datetime.
 
         Args:
-            event: ThreadLogger event dict with kind, timestamp, data fields.
+            timestamp: Event timestamp value from ThreadLogger.
 
         Returns:
-            MessageData for event widget, or None if event type unsupported.
+            Parsed UTC-aware datetime, or `None` when parsing fails.
         """
-        kind = event.get("kind")
-        timestamp_str = event.get("timestamp", "")
+        from datetime import datetime
 
+        if not isinstance(timestamp, str) or not timestamp:
+            return None
         try:
-            # Parse timestamp
-            from datetime import datetime
-
-            timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else None
+            parsed = datetime.fromisoformat(timestamp)
         except (ValueError, TypeError):
-            timestamp = None
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
-        namespace_list = event.get("namespace", [])
-        namespace = tuple(namespace_list) if isinstance(namespace_list, list) else ()
+    def _convert_event_to_message_data(self, event: dict[str, Any]) -> MessageData | None:
+        """Convert one persisted thread-event row to MessageData.
+
+        Args:
+            event: Persisted `thread_messages` row with optional metadata payload.
+
+        Returns:
+            MessageData when a displayable card can be built, else `None`.
+        """
+        from ast import literal_eval
+
+        kind = str(event.get("kind") or "").strip()
+        metadata_raw = event.get("metadata")
+        metadata = metadata_raw if isinstance(metadata_raw, dict) else {}
+        parsed_ts = self._parse_thread_event_timestamp(event.get("timestamp"))
+
+        event_timestamp = parsed_ts.timestamp() if parsed_ts is not None else time.time()
 
         if kind == "tool_call":
+            tool_name = str(event.get("tool_name") or metadata.get("tool_name") or "unknown")
+            args_preview = str(
+                event.get("args_preview")
+                or metadata.get("args_preview")
+                or event.get("content")
+                or ""
+            ).strip()
+            parsed_args: dict[str, Any] | None = None
+            if args_preview:
+                with suppress(ValueError, SyntaxError):
+                    parsed = literal_eval(args_preview)
+                    if isinstance(parsed, dict):
+                        parsed_args = parsed
             return MessageData(
-                message_type=MessageType.TOOL_CALL,
-                tool_name=event.get("tool_name", "unknown"),
-                tool_args={},  # Args preview is truncated string, not full args
-                status=ToolStatus.COMPLETE,  # Historical events are complete
-                timestamp=timestamp,
-                namespace=namespace,
-                result=event.get("args_preview", ""),
+                type=MessageType.TOOL,
+                content="",
+                tool_name=tool_name,
+                tool_args=parsed_args,
+                tool_status=ToolStatus.RUNNING,
+                timestamp=event_timestamp,
             )
 
-        elif kind == "tool_result":
+        if kind == "tool_result":
+            tool_name = str(event.get("tool_name") or metadata.get("tool_name") or "unknown")
+            content = str(event.get("content") or metadata.get("content") or "")
             return MessageData(
-                message_type=MessageType.TOOL_RESULT,
-                tool_name=event.get("tool_name", "unknown"),
-                status=ToolStatus.COMPLETE,
-                timestamp=timestamp,
-                namespace=namespace,
-                result=event.get("content", ""),
+                type=MessageType.TOOL,
+                content="",
+                tool_name=tool_name,
+                tool_status=ToolStatus.SUCCESS,
+                tool_output=content,
+                timestamp=event_timestamp,
             )
 
-        elif kind == "event":
-            # Map custom events to appropriate MessageType based on classification
-            event_data = event.get("data", {})
-            event_type = event_data.get("type", "")
+        if kind == "event":
+            event_data = event.get("data")
+            if not isinstance(event_data, dict):
+                nested_data = metadata.get("data")
+                if isinstance(nested_data, dict):
+                    event_data = nested_data
+                else:
+                    return None
 
-            # Activity/progress events
-            if "goal" in event_type or "step" in event_type:
-                return MessageData(
-                    message_type=MessageType.CUSTOM,
-                    custom_widget_type="activity",
-                    timestamp=timestamp,
-                    namespace=namespace,
-                    content=event_data,
-                )
-
-            # Progress indicators
-            elif "progress" in event_type or "iteration" in event_type:
-                return MessageData(
-                    message_type=MessageType.PROGRESS,
-                    timestamp=timestamp,
-                    namespace=namespace,
-                    content=event_data,
-                )
-
-            # Other structured events
-            else:
-                return MessageData(
-                    message_type=MessageType.CUSTOM,
-                    timestamp=timestamp,
-                    namespace=namespace,
-                    content=event_data,
-                )
+            if isinstance(event_data, dict):
+                event_type = str(event_data.get("type") or "").strip()
+                summary = str(event_data.get("summary") or "").strip()
+                if event_type == "soothe.cognition.agent_loop.reasoned":
+                    plan_action_raw = str(event_data.get("plan_action") or "new").strip()
+                    plan_action = plan_action_raw if plan_action_raw in {"keep", "new"} else "new"
+                    return MessageData(
+                        type=MessageType.COGNITION_PLAN,
+                        content="",
+                        timestamp=event_timestamp,
+                        cognition_plan_next_action=str(event_data.get("next_action") or ""),
+                        cognition_plan_status=str(event_data.get("status") or ""),
+                        cognition_plan_iteration=int(event_data.get("iteration") or 0),
+                        cognition_plan_action=plan_action,
+                        cognition_plan_assessment=str(event_data.get("assessment_reasoning") or ""),
+                        cognition_plan_strategy=str(event_data.get("plan_reasoning") or ""),
+                        cognition_plan_legacy_reasoning=str(event_data.get("reasoning") or ""),
+                    )
+                if event_type == "soothe.cognition.agent_loop.started":
+                    goal_snapshot = {
+                        "goal": str(event_data.get("goal") or "").strip(),
+                        "max_iterations": int(event_data.get("max_iterations") or 0),
+                        "steps": [],
+                        "footer_visible": False,
+                        "footer_text": "",
+                    }
+                    return MessageData(
+                        type=MessageType.COGNITION_GOAL_TREE,
+                        content="",
+                        timestamp=event_timestamp,
+                        cognition_goal_snapshot_json=json.dumps(goal_snapshot),
+                    )
+                if event_type == "soothe.cognition.agent_loop.step.started":
+                    step_id = str(event_data.get("step_id") or "").strip()
+                    if not step_id:
+                        return None
+                    return MessageData(
+                        type=MessageType.STEP_PROGRESS,
+                        content="",
+                        timestamp=event_timestamp,
+                        step_progress_id=step_id,
+                        step_progress_description=str(event_data.get("description") or "(step)"),
+                        step_progress_phase="running",
+                    )
+                if event_type == "soothe.cognition.agent_loop.step.completed":
+                    step_id = str(event_data.get("step_id") or "").strip()
+                    if not step_id:
+                        return None
+                    success = bool(event_data.get("success", True))
+                    summary_text = str(
+                        event_data.get("summary") or event_data.get("output_preview") or ""
+                    ).strip()
+                    if not summary_text:
+                        summary_text = "Done" if success else "Failed"
+                    return MessageData(
+                        type=MessageType.STEP_PROGRESS,
+                        content="",
+                        timestamp=event_timestamp,
+                        step_progress_id=step_id,
+                        step_progress_description=str(event_data.get("description") or "(step)"),
+                        step_progress_phase="success" if success else "error",
+                        step_success=success,
+                        step_duration_ms=int(event_data.get("duration_ms") or 0),
+                        step_tool_call_count=int(event_data.get("tool_call_count") or 0),
+                        step_summary=summary_text,
+                    )
+                if summary:
+                    content = summary
+                elif event_type:
+                    content = f"Event: {event_type}"
+                else:
+                    return None
+            return MessageData(
+                type=MessageType.APP,
+                content=content,
+                timestamp=event_timestamp,
+            )
 
         return None
+
+    def _convert_thread_events_to_data(self, events: list[dict[str, Any]]) -> list[MessageData]:
+        """Convert persisted thread event rows into stable TUI cards.
+
+        This fallback is used only when checkpoint messages are unavailable.
+        """
+        from datetime import datetime
+
+        data: list[MessageData] = []
+        pending_tool_indices: dict[str, list[int]] = {}
+
+        sorted_events = sorted(
+            events,
+            key=lambda event: (
+                self._parse_thread_event_timestamp(event.get("timestamp"))
+                or datetime.min.replace(tzinfo=UTC)
+            ),
+        )
+        for event in sorted_events:
+            kind = str(event.get("kind") or "").strip()
+            msg_data = self._convert_event_to_message_data(event)
+            if msg_data is None:
+                continue
+
+            if kind == "tool_call" and msg_data.type == MessageType.TOOL and msg_data.tool_name:
+                pending_tool_indices.setdefault(msg_data.tool_name, []).append(len(data))
+                data.append(msg_data)
+                continue
+
+            if kind == "tool_result" and msg_data.type == MessageType.TOOL and msg_data.tool_name:
+                tool_name = msg_data.tool_name
+                pending = pending_tool_indices.get(tool_name, [])
+                if pending:
+                    call_idx = pending.pop(0)
+                    data[call_idx].tool_status = ToolStatus.SUCCESS
+                    data[call_idx].tool_output = msg_data.tool_output
+                else:
+                    data.append(msg_data)
+                continue
+
+            data.append(msg_data)
+
+        return data
 
     def _merge_history_sources(
         self,
@@ -3586,21 +3773,18 @@ class SootheApp(App):
         from datetime import datetime
 
         timeline: list[tuple[datetime, str, Any]] = []
+        min_timestamp = datetime.min.replace(tzinfo=UTC)
 
         # Extract timestamps from checkpoint messages
         for msg in checkpoint_messages:
             # LangChain messages don't have explicit timestamps in checkpoint
             # Use message sequence as proxy (they're already ordered)
             # We'll place them relative to events based on tool call matching
-            timeline.append((datetime.min, "message", msg))
+            timeline.append((min_timestamp, "message", msg))
 
         # Add ThreadLogger events with explicit timestamps
         for event in thread_logger_events:
-            timestamp_str = event.get("timestamp", "")
-            try:
-                ts = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.min
-            except (ValueError, TypeError):
-                ts = datetime.min
+            ts = self._parse_thread_event_timestamp(event.get("timestamp")) or min_timestamp
 
             # Convert event to MessageData
             msg_data = self._convert_event_to_message_data(event)
@@ -3624,75 +3808,25 @@ class SootheApp(App):
             List of MessageData widgets for UI rendering.
         """
         data: list[MessageData] = []
+        pending_checkpoint_messages: list[Any] = []
+
+        def flush_checkpoint_messages() -> None:
+            if not pending_checkpoint_messages:
+                return
+            data.extend(self._convert_messages_to_data(pending_checkpoint_messages))
+            pending_checkpoint_messages.clear()
 
         for source_type, item in combined:
-            if source_type == "event":
-                # Already converted to MessageData in merge step
-                if isinstance(item, MessageData):
-                    data.append(item)
-            elif source_type == "message":
-                # Convert LangChain message using existing logic
-                # Reuse _convert_messages_to_data for checkpoint messages
-                msg_data_list = self._convert_single_message_to_data(item)
-                data.extend(msg_data_list)
+            if source_type == "message":
+                pending_checkpoint_messages.append(item)
+                continue
 
+            flush_checkpoint_messages()
+            if source_type == "event" and isinstance(item, MessageData):
+                data.append(item)
+
+        flush_checkpoint_messages()
         return data
-
-    def _convert_single_message_to_data(self, msg: Any) -> list[MessageData]:
-        """Convert single LangChain message to MessageData (helper for combined conversion).
-
-        Args:
-            msg: LangChain message object.
-
-        Returns:
-            List of MessageData widgets (may be multiple for tool calls).
-        """
-        # Extracted from _convert_messages_to_data logic
-        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-        result: list[MessageData] = []
-
-        if isinstance(msg, HumanMessage):
-            result.append(
-                MessageData(
-                    message_type=MessageType.HUMAN,
-                    content=str(msg.content),
-                )
-            )
-
-        elif isinstance(msg, AIMessage):
-            # Check for tool calls
-            tool_calls = msg.tool_calls or []
-            if tool_calls:
-                for tc in tool_calls:
-                    result.append(
-                        MessageData(
-                            message_type=MessageType.TOOL_CALL,
-                            tool_name=tc.get("name", ""),
-                            tool_args=tc.get("args", {}),
-                            status=ToolStatus.COMPLETE,
-                        )
-                    )
-            else:
-                # Regular AI message
-                result.append(
-                    MessageData(
-                        message_type=MessageType.AI,
-                        content=str(msg.content),
-                    )
-                )
-
-        elif isinstance(msg, ToolMessage):
-            result.append(
-                MessageData(
-                    message_type=MessageType.TOOL_RESULT,
-                    tool_name=msg.name or "",
-                    status=ToolStatus.COMPLETE,
-                    result=str(msg.content),
-                )
-            )
-
-        return result
 
     async def _fetch_thread_history_data(self, thread_id: str) -> _ThreadHistoryPayload:
         """Fetch and convert complete thread history (checkpoint + ThreadLogger).
@@ -3713,24 +3847,21 @@ class SootheApp(App):
         context_tokens = raw_tokens if isinstance(raw_tokens, int) and raw_tokens >= 0 else 0
         messages = state_values.get("messages", [])
 
-        # 2. Read ThreadLogger events (NEW)
-        events = await self._fetch_thread_activity_events(thread_id)
-
-        # 3. If no checkpoint messages but have events, use events only
-        if not messages and not events:
-            return _ThreadHistoryPayload([], context_tokens)
-
-        # 4. Convert checkpoint message dicts to LangChain objects if needed
+        # 2. Primary source: checkpoint messages -> canonical TUI cards
         if messages and isinstance(messages[0], dict):
             from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
             messages = messages_from_wire_dicts(messages)
+        if messages:
+            data = await asyncio.to_thread(self._convert_messages_to_data, messages)
+            return _ThreadHistoryPayload(data, context_tokens)
 
-        # 5. Merge sources chronologically (NEW)
-        combined = await asyncio.to_thread(self._merge_history_sources, messages, events)
+        # 3. Fallback source: ThreadLogger events when checkpoints are unavailable.
+        events = await self._fetch_thread_activity_events(thread_id)
+        if not events:
+            return _ThreadHistoryPayload([], context_tokens)
 
-        # 6. Convert combined timeline to MessageData (NEW)
-        data = await asyncio.to_thread(self._convert_combined_to_data, combined)
+        data = await asyncio.to_thread(self._convert_thread_events_to_data, events)
 
         return _ThreadHistoryPayload(data, context_tokens)
 

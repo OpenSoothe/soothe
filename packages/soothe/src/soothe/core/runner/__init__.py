@@ -291,12 +291,14 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         *,
         limit: int = 100,
         offset: int = 0,
+        include_events: bool = False,
     ) -> list[Any]:
         """Load thread messages."""
         return await self.thread_context_manager().get_thread_messages(
             thread_id,
             limit=limit,
             offset=offset,
+            include_events=include_events,
         )
 
     async def get_persisted_thread_artifacts(self, thread_id: str) -> list[Any]:
