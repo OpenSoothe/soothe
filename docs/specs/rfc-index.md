@@ -36,6 +36,7 @@ This index reflects the post-consolidation RFC set and defines which files are c
 | RFC-200 | [RFC-200-autonomous-goal-management.md](./RFC-200-autonomous-goal-management.md) | Layer 3 autonomous goal management |
 | RFC-201 | [RFC-201-agentloop-plan-execute-loop.md](./RFC-201-agentloop-plan-execute-loop.md) | Unified AgentLoop core loop (Layer 2) (merged) |
 | RFC-203 | [RFC-203-agentloop-state-memory.md](./RFC-203-agentloop-state-memory.md) | Unified AgentLoop state and working memory (merged) |
+| RFC-204 | [RFC-204-autopilot-mode.md](./RFC-204-autopilot-mode.md) | Autopilot mode and autonomous execution |
 | RFC-206 | [RFC-206-prompt-architecture.md](./RFC-206-prompt-architecture.md) | Prompt architecture and composition |
 | RFC-207 | [RFC-207-agentloop-thread-context-lifecycle.md](./RFC-207-agentloop-thread-context-lifecycle.md) | Unified thread and context lifecycle (merged) |
 | RFC-211 | [RFC-211-layer2-tool-result-optimization.md](./RFC-211-layer2-tool-result-optimization.md) | Tool result and evidence optimization |
@@ -79,13 +80,18 @@ This index reflects the post-consolidation RFC set and defines which files are c
 
 ---
 
-## Legacy Navigation
+## Deprecated RFCs (Removed)
 
-- Legacy documents remain in `docs/specs/` with descriptive filenames such as:
-  - `RFC-200-autonomous-goal-management.md` (Layer 3)
-  - `RFC-204-autopilot-mode.md` (Autopilot extension)
-  - `RFC-202-dag-execution.md` (superseded by `RFC-201-agentloop-plan-execute-loop.md` / `RFC-203-agentloop-state-memory.md`)
-- Use explicit redirects inside legacy files to find merged RFC targets.
+The following RFCs have been superseded and removed from the repository:
+
+| Deprecated RFC | Superseded By | Reason |
+|----------------|---------------|--------|
+| RFC-202 DAG Execution | RFC-201 + RFC-203 | Merged into unified AgentLoop design |
+| RFC-208 CoreAgent Message Optimization | RFC-207 | Consolidated into thread context lifecycle |
+| RFC-209 Executor Thread Isolation | RFC-207 | Simplified to trust langgraph's atomic state |
+| RFC-210 Dynamic Tool/System Context | RFC-207 | Integrated into unified context lifecycle |
+
+All references in implementation guides and other RFCs should point to the canonical replacement RFCs listed above.
 
 ---
 

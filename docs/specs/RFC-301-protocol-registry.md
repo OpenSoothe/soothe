@@ -471,7 +471,7 @@ plan = await planner.create_plan(
 * **RFC-400/RFC-402 (Context & Memory Protocols)**: Sister RFC set for context/memory interfaces
 * **RFC-102 (Security & Policy)**: PolicyProtocol security details
 * **`RFC-200-autonomous-goal-management.md`**: PlannerProtocol goal lifecycle
-* **`RFC-202-dag-execution.md`**: PlannerProtocol DAG support
+* **`RFC-201-agentloop-plan-execute-loop.md`**: PlannerProtocol DAG support (canonical unified AgentLoop)
 
 ---
 

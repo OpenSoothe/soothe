@@ -962,7 +962,7 @@ class GoalFileWatcher:
 - [RFC-000](./RFC-000-system-conceptual-design.md) - System Conceptual Design
 - [RFC-001](./RFC-001-core-modules-architecture.md) - Core Modules Architecture
 - [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Layer 2: AgentLoop Plan-Execute Loop
-- [RFC-202](./RFC-202-dag-execution.md) - DAG Execution & Failure Recovery
+- [RFC-201](./RFC-201-agentloop-plan-execute-loop.md) - Unified AgentLoop Plan-Execute Loop
 
 ## Changelog
 
