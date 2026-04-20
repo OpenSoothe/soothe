@@ -1,15 +1,13 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
-# This Makefile manages four packages:
+# This Makefile manages three packages:
 # 1. soothe-sdk        - Shared SDK (WebSocket client, protocol, types)
 # 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 3. soothe            - Daemon server (main package)
-# 4. soothe-community  - Community plugins (optional)
 
 .PHONY: sync sync-dev format format-check lint lint-fix test test-unit test-integration test-coverage build publish publish-test clean help \
         sdk-sync sdk-format sdk-lint sdk-test sdk-build sdk-publish sdk-publish-test \
         cli-sync cli-format cli-lint cli-test cli-build cli-publish cli-publish-test \
-        community-sync community-format community-lint community-test community-build community-publish community-publish-test \
         all-sync all-format all-lint all-lint-fix all-test all-build all-publish all-clean
 
 # Default target
@@ -49,15 +47,6 @@ help:
 	@echo "  make publish    - Publish package to PyPI"
 	@echo "  make publish-test - Publish package to TestPyPI"
 	@echo "  make clean      - Clean build artifacts"
-	@echo ""
-	@echo "Community Package (soothe-community):"
-	@echo "  make community-sync    - Sync community dependencies"
-	@echo "  make community-format  - Format community code"
-	@echo "  make community-lint    - Lint community code"
-	@echo "  make community-test    - Run community tests"
-	@echo "  make community-build   - Build community package"
-	@echo "  make community-publish - Publish community package to PyPI"
-	@echo "  make community-publish-test - Publish community package to TestPyPI"
 	@echo ""
 	@echo "Multi-Package Targets:"
 	@echo "  make all-sync    - Sync all packages with all extras (each package individually)"
@@ -233,57 +222,18 @@ cli-publish-test:
 	@echo "✓ CLI package published to TestPyPI"
 
 # ============================================================================
-# Community Package Targets (soothe-community)
-# ============================================================================
-
-community-sync:
-	@echo "Syncing community dependencies..."
-	cd packages/soothe-community && uv sync --all-extras
-	@echo "✓ Community dependencies synced"
-
-community-format: community-sync
-	@echo "Formatting community code..."
-	cd packages/soothe-community && uv run ruff format src/ tests/
-	@echo "✓ Community code formatted"
-
-community-lint: community-sync
-	@echo "Linting community code..."
-	cd packages/soothe-community && uv run ruff check src/ tests/
-	@echo "✓ Community linting complete"
-
-community-test:
-	@echo "Running community tests..."
-	cd packages/soothe-community && uv run pytest tests/ -v
-	@echo "✓ Community tests complete"
-
-community-build:
-	@echo "Building community package..."
-	cd packages/soothe-community && uv build --out-dir dist
-	@echo "✓ Community package built"
-
-community-publish:
-	@echo "Publishing community package to PyPI..."
-	cd packages/soothe-community && uv publish dist/* --native-tls
-	@echo "✓ Community package published to PyPI"
-
-community-publish-test:
-	@echo "Publishing community package to TestPyPI..."
-	cd packages/soothe-community && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-	@echo "✓ Community package published to TestPyPI"
-
-# ============================================================================
 # Multi-Package Targets (all packages)
 # ============================================================================
 
 all-sync:
 	@echo "Syncing all workspace dependencies with extras..."
-	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli --package soothe-community
+	uv sync --all-extras --package soothe --package soothe-sdk --package soothe-cli
 	@echo "✓ All packages synced with all dependencies and extras"
 
-all-format: format sdk-format cli-format community-format
+all-format: format sdk-format cli-format
 	@echo "✓ All packages formatted"
 
-all-lint: lint sdk-lint cli-lint community-lint
+all-lint: lint sdk-lint cli-lint
 	@echo "✓ All packages linted"
 
 all-lint-fix:
@@ -291,16 +241,15 @@ all-lint-fix:
 	cd packages/soothe && uv run ruff check --fix src/
 	cd packages/soothe-sdk && uv run ruff check --fix src/
 	cd packages/soothe-cli && uv run ruff check --fix src/
-	cd packages/soothe-community && uv run ruff check --fix src/ tests/
 	@echo "✓ All packages lint-fixed"
 
-all-test: test-unit sdk-test cli-test community-test
+all-test: test-unit sdk-test cli-test
 	@echo "✓ All packages tested"
 
-all-build: build sdk-build cli-build community-build
+all-build: build sdk-build cli-build
 	@echo "✓ All packages built"
 
-all-publish: publish sdk-publish cli-publish community-publish
+all-publish: publish sdk-publish cli-publish
 	@echo "✓ All packages published"
 
 all-clean: clean

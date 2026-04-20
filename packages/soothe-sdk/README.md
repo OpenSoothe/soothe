@@ -265,4 +265,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Soothe Documentation](https://soothe.readthedocs.io)
 - [Plugin Development Guide](https://soothe.readthedocs.io/plugins/)
-- [GitHub Repository](https://github.com/caesar0301/soothe)
+- [GitHub Repository](https://github.com/OpenSoothe/soothe)

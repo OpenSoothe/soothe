@@ -7,7 +7,6 @@ dependencies = [
     "soothe-sdk",
     "soothe-cli",
     "soothe",
-    "soothe-community",
 ]
 
 [tool.uv.workspace]
@@ -17,4 +16,3 @@ members = ["packages/*"]
 soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
-soothe-community = { workspace = true }

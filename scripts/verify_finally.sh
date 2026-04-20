@@ -6,8 +6,6 @@
 # 1. Workspace integrity check (uv sync)
 # 2. Package dependency validation:
 #    - CLI must NOT import daemon runtime
-#    - Community must NOT import daemon runtime (IG-175: depends only on SDK)
-#    - Community must declare soothe-sdk dependency
 #    - SDK must be independent (no CLI/daemon imports)
 # 3. Code formatting check (make all-format)
 # 4. Linting (make all-lint) - checks ALL packages
@@ -141,39 +139,7 @@ validate_package_dependencies() {
         print_success "CLI package does not import daemon runtime"
     fi
 
-    # Rule 2: soothe-community MUST NOT import soothe daemon runtime (IG-175)
-    print_info "Checking: soothe-community must not import daemon runtime..."
-
-    COMMUNITY_DAEMON_IMPORTS=$(find packages/soothe-community/src -name "*.py" -exec grep -l "from soothe\." {} \; 2>/dev/null | grep -v "from soothe_sdk" || true)
-
-    if [ -n "$COMMUNITY_DAEMON_IMPORTS" ]; then
-        print_failure "Community package imports daemon runtime (violations found)"
-        echo "Violations:"
-        echo "$COMMUNITY_DAEMON_IMPORTS"
-        echo ""
-        echo "Forbidden patterns:"
-        grep -r "from soothe\." packages/soothe-community/src --include="*.py" | grep -v "from soothe_sdk" | head -10 || true
-        return 1
-    else
-        print_success "Community package does not import daemon runtime"
-    fi
-
-    # Rule 3: soothe-community MUST declare soothe-sdk as dependency (IG-175)
-    print_info "Checking: soothe-community pyproject.toml dependency declaration..."
-
-    if grep -q "soothe>=0\." packages/soothe-community/pyproject.toml; then
-        print_failure "Community package declares soothe daemon dependency (should be soothe-sdk only)"
-        echo "Found:"
-        grep "soothe" packages/soothe-community/pyproject.toml || true
-        return 1
-    elif grep -q "soothe-sdk" packages/soothe-community/pyproject.toml; then
-        print_success "Community package declares soothe-sdk dependency"
-    else
-        print_failure "Community package missing soothe-sdk dependency declaration"
-        return 1
-    fi
-
-    # Rule 4: soothe-sdk MUST NOT import any other package
+    # Rule 2: soothe-sdk MUST NOT import any other package
     print_info "Checking: soothe-sdk must be independent (no soothe-cli/soothe imports)..."
 
     SDK_IMPORTS=$(find packages/soothe-sdk/src -name "*.py" -exec grep -l "from soothe_cli\|from soothe_daemon\|import soothe_cli\|import soothe_daemon" {} \; 2>/dev/null || true)
@@ -257,7 +223,7 @@ check_formatting() {
 
         # Sync dev dependencies first so ruff is available
         print_info "  Syncing dev dependencies..."
-        for pkg in soothe-sdk soothe-cli soothe soothe-community; do
+        for pkg in soothe-sdk soothe-cli soothe; do
             cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
         done
 
@@ -294,16 +260,6 @@ check_formatting() {
         fi
         cd - >/dev/null
 
-        # Community package
-        print_info "  Community package..."
-        if cd packages/soothe-community && uv run ruff format --check src/ >/dev/null 2>&1; then
-            print_success "    Community formatting OK"
-        else
-            print_failure "    Community formatting issues found"
-            format_failed=true
-        fi
-        cd - >/dev/null
-
         if $format_failed; then
             print_failure "Code formatting check failed (run with --fix to auto-fix)"
             return 1
@@ -331,7 +287,7 @@ check_linting() {
         print_info "Running linter across all packages..."
 
         # Sync dev dependencies first so ruff is available
-        for pkg in soothe-sdk soothe-cli soothe soothe-community; do
+        for pkg in soothe-sdk soothe-cli soothe; do
             cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
         done
 
@@ -363,16 +319,6 @@ check_linting() {
             print_success "    Daemon linting OK (zero errors)"
         else
             print_failure "    Daemon linting errors found"
-            lint_failed=true
-        fi
-        cd - >/dev/null
-
-        # Community package
-        print_info "  Community package..."
-        if cd packages/soothe-community && uv run ruff check src/ >/dev/null 2>&1; then
-            print_success "    Community linting OK"
-        else
-            print_failure "    Community linting errors found"
             lint_failed=true
         fi
         cd - >/dev/null

@@ -124,9 +124,10 @@ This runs:
 packages/
 ├── soothe-sdk/        # Shared SDK (WebSocket client, protocol, types, decorators)
 ├── soothe-cli/        # CLI client (Typer CLI + Textual TUI)
-├── soothe/            # Daemon server (main package, reuses PyPI name)
-└── soothe-community/  # Community plugins (optional)
+└── soothe/            # Daemon server (main package, reuses PyPI name)
 ```
+
+> **Note**: Community plugins have been moved to a standalone project: [soothe-community](https://github.com/OpenSoothe/soothe-community)
 
 ### soothe Package (Daemon Server)
 | Package | Purpose |
