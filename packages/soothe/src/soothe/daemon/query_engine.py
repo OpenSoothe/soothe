@@ -97,13 +97,9 @@ class QueryEngine:
             }
             d._global_history.add(text, thread_id=thread_id, metadata=metadata)
 
-        query_state_lock = getattr(d, "_query_state_lock", None)
-        if query_state_lock:
-            async with query_state_lock:
-                d._query_running = True
-                d._active_threads[thread_id] = None
-        else:
-            d._query_running = True
+        # No placeholder pattern - set task directly after creation
+        # IG-054: Remove race condition between capacity check and task creation
+        d._query_running = True
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
