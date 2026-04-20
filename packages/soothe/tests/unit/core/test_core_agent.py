@@ -120,8 +120,13 @@ class TestCoreAgentClass:
         async for _ in result:
             pass
 
-        # Should pass empty dict when config is None, and subgraphs=False
-        assert call_args[0] == ("test input", {}, {"subgraphs": False})
+        # String input is normalized to graph state; config is {} when None; subgraphs=False
+        inp, cfg, kw = call_args[0]
+        assert cfg == {}
+        assert kw == {"subgraphs": False}
+        assert isinstance(inp, dict)
+        assert len(inp["messages"]) == 1
+        assert inp["messages"][0].content == "test input"
 
     def test_create_factory_returns_core_agent(self) -> None:
         """create_soothe_agent() returns CoreAgent instance."""

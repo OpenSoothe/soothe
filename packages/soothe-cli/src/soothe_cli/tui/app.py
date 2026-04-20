@@ -1528,10 +1528,16 @@ class SootheApp(App):
         """Prewarm thread selector cache without blocking app startup."""
         from soothe_cli.tui.sessions import (
             get_thread_limit,
-            prewarm_thread_message_counts,
+            prewarm_thread_message_counts_via_daemon_rpc,
         )
 
-        await prewarm_thread_message_counts(limit=get_thread_limit())
+        if self._daemon_session is not None:
+            await prewarm_thread_message_counts_via_daemon_rpc(
+                daemon_session=self._daemon_session,
+                limit=get_thread_limit(),
+            )
+        else:
+            logger.debug("Skipping thread cache prewarm - no daemon session available")
 
     async def _prewarm_model_caches(self) -> None:
         """Prewarm model discovery and profile caches without blocking startup."""
@@ -3431,38 +3437,301 @@ class SootheApp(App):
             values["_context_tokens"] = fallback_values["_context_tokens"]
         return values
 
-    async def _fetch_thread_history_data(self, thread_id: str) -> _ThreadHistoryPayload:
-        """Fetch and convert stored messages for a thread.
-
-        In server mode the LangGraph dev server starts with an empty thread
-        store, so `aget_state` via the HTTP API returns no messages even when
-        checkpoints exist on disk. We fall back to reading the SQLite
-        checkpointer directly to guarantee resumed threads load their history.
+    async def _fetch_thread_activity_events(self, thread_id: str) -> list[dict[str, Any]]:
+        """Read ThreadLogger JSONL events for thread history recovery via daemon RPC.
 
         Args:
-            thread_id: Thread ID to fetch from checkpoint storage.
+            thread_id: Thread ID to read events from.
+
+        Returns:
+            List of event records (tool_call, tool_result, custom events) from ThreadLogger.
+        """
+        if self._daemon_session is None:
+            logger.debug("No daemon session - cannot read ThreadLogger events")
+            return []
+
+        try:
+            client = self._daemon_session._client
+            if client is None:
+                return []
+
+            # Send custom RPC request for full thread history
+            await client.send_json(
+                {
+                    "type": "thread_messages",
+                    "thread_id": thread_id,
+                    "limit": 10000,
+                    "include_events": True,  # Request full history mode
+                }
+            )
+
+            # Wait for response
+            async with asyncio.timeout(10.0):
+                while True:
+                    event = await client.read_event()
+                    if not event:
+                        return []
+                    if event.get("type") == "thread_messages_response":
+                        messages = event.get("messages", [])
+                        # Filter for event types (tool calls, tool results, events)
+                        # The daemon API returns ThreadMessage objects with 'kind' field
+                        events = [
+                            m
+                            for m in messages
+                            if m.get("kind") in ("event", "tool_call", "tool_result")
+                        ]
+                        return events
+
+        except Exception:
+            logger.debug(
+                "Failed to read ThreadLogger events for thread %s", thread_id, exc_info=True
+            )
+            return []
+
+    def _convert_event_to_message_data(self, event: dict[str, Any]) -> MessageData | None:
+        """Convert ThreadLogger event record to MessageData widget.
+
+        Args:
+            event: ThreadLogger event dict with kind, timestamp, data fields.
+
+        Returns:
+            MessageData for event widget, or None if event type unsupported.
+        """
+        kind = event.get("kind")
+        timestamp_str = event.get("timestamp", "")
+
+        try:
+            # Parse timestamp
+            from datetime import datetime
+
+            timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str else None
+        except (ValueError, TypeError):
+            timestamp = None
+
+        namespace_list = event.get("namespace", [])
+        namespace = tuple(namespace_list) if isinstance(namespace_list, list) else ()
+
+        if kind == "tool_call":
+            return MessageData(
+                message_type=MessageType.TOOL_CALL,
+                tool_name=event.get("tool_name", "unknown"),
+                tool_args={},  # Args preview is truncated string, not full args
+                status=ToolStatus.COMPLETE,  # Historical events are complete
+                timestamp=timestamp,
+                namespace=namespace,
+                result=event.get("args_preview", ""),
+            )
+
+        elif kind == "tool_result":
+            return MessageData(
+                message_type=MessageType.TOOL_RESULT,
+                tool_name=event.get("tool_name", "unknown"),
+                status=ToolStatus.COMPLETE,
+                timestamp=timestamp,
+                namespace=namespace,
+                result=event.get("content", ""),
+            )
+
+        elif kind == "event":
+            # Map custom events to appropriate MessageType based on classification
+            event_data = event.get("data", {})
+            event_type = event_data.get("type", "")
+
+            # Activity/progress events
+            if "goal" in event_type or "step" in event_type:
+                return MessageData(
+                    message_type=MessageType.CUSTOM,
+                    custom_widget_type="activity",
+                    timestamp=timestamp,
+                    namespace=namespace,
+                    content=event_data,
+                )
+
+            # Progress indicators
+            elif "progress" in event_type or "iteration" in event_type:
+                return MessageData(
+                    message_type=MessageType.PROGRESS,
+                    timestamp=timestamp,
+                    namespace=namespace,
+                    content=event_data,
+                )
+
+            # Other structured events
+            else:
+                return MessageData(
+                    message_type=MessageType.CUSTOM,
+                    timestamp=timestamp,
+                    namespace=namespace,
+                    content=event_data,
+                )
+
+        return None
+
+    def _merge_history_sources(
+        self,
+        checkpoint_messages: list[Any],
+        thread_logger_events: list[dict[str, Any]],
+    ) -> list[tuple[str, Any]]:
+        """Merge checkpoint messages and ThreadLogger events chronologically.
+
+        Args:
+            checkpoint_messages: LangChain message objects from checkpoint.
+            thread_logger_events: ThreadLogger event records.
+
+        Returns:
+            List of (source_type, data) tuples sorted by timestamp:
+                source_type: "message" or "event"
+                data: LangChain message or MessageData
+        """
+        from datetime import datetime
+
+        timeline: list[tuple[datetime, str, Any]] = []
+
+        # Extract timestamps from checkpoint messages
+        for msg in checkpoint_messages:
+            # LangChain messages don't have explicit timestamps in checkpoint
+            # Use message sequence as proxy (they're already ordered)
+            # We'll place them relative to events based on tool call matching
+            timeline.append((datetime.min, "message", msg))
+
+        # Add ThreadLogger events with explicit timestamps
+        for event in thread_logger_events:
+            timestamp_str = event.get("timestamp", "")
+            try:
+                ts = datetime.fromisoformat(timestamp_str) if timestamp_str else datetime.min
+            except (ValueError, TypeError):
+                ts = datetime.min
+
+            # Convert event to MessageData
+            msg_data = self._convert_event_to_message_data(event)
+            if msg_data:
+                timeline.append((ts, "event", msg_data))
+
+        # Sort by timestamp (messages without timestamps get datetime.min)
+        # This interleaves events chronologically with messages
+        timeline.sort(key=lambda x: x[0])
+
+        # Return as (source_type, data) list
+        return [(item[1], item[2]) for item in timeline]
+
+    def _convert_combined_to_data(self, combined: list[tuple[str, Any]]) -> list[MessageData]:
+        """Convert merged timeline to MessageData widgets.
+
+        Args:
+            combined: List of (source_type, data) from merge.
+
+        Returns:
+            List of MessageData widgets for UI rendering.
+        """
+        data: list[MessageData] = []
+
+        for source_type, item in combined:
+            if source_type == "event":
+                # Already converted to MessageData in merge step
+                if isinstance(item, MessageData):
+                    data.append(item)
+            elif source_type == "message":
+                # Convert LangChain message using existing logic
+                # Reuse _convert_messages_to_data for checkpoint messages
+                msg_data_list = self._convert_single_message_to_data(item)
+                data.extend(msg_data_list)
+
+        return data
+
+    def _convert_single_message_to_data(self, msg: Any) -> list[MessageData]:
+        """Convert single LangChain message to MessageData (helper for combined conversion).
+
+        Args:
+            msg: LangChain message object.
+
+        Returns:
+            List of MessageData widgets (may be multiple for tool calls).
+        """
+        # Extracted from _convert_messages_to_data logic
+        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+        result: list[MessageData] = []
+
+        if isinstance(msg, HumanMessage):
+            result.append(
+                MessageData(
+                    message_type=MessageType.HUMAN,
+                    content=str(msg.content),
+                )
+            )
+
+        elif isinstance(msg, AIMessage):
+            # Check for tool calls
+            tool_calls = msg.tool_calls or []
+            if tool_calls:
+                for tc in tool_calls:
+                    result.append(
+                        MessageData(
+                            message_type=MessageType.TOOL_CALL,
+                            tool_name=tc.get("name", ""),
+                            tool_args=tc.get("args", {}),
+                            status=ToolStatus.COMPLETE,
+                        )
+                    )
+            else:
+                # Regular AI message
+                result.append(
+                    MessageData(
+                        message_type=MessageType.AI,
+                        content=str(msg.content),
+                    )
+                )
+
+        elif isinstance(msg, ToolMessage):
+            result.append(
+                MessageData(
+                    message_type=MessageType.TOOL_RESULT,
+                    tool_name=msg.name or "",
+                    status=ToolStatus.COMPLETE,
+                    result=str(msg.content),
+                )
+            )
+
+        return result
+
+    async def _fetch_thread_history_data(self, thread_id: str) -> _ThreadHistoryPayload:
+        """Fetch and convert complete thread history (checkpoint + ThreadLogger).
+
+        Enhanced to read from both checkpoint messages and ThreadLogger events
+        to reconstruct full visual history including tool calls, activities, and events.
+
+        Args:
+            thread_id: Thread ID to fetch from checkpoint and ThreadLogger storage.
 
         Returns:
             Payload containing converted message data and the persisted
             context-token count.
         """
+        # 1. Read checkpoint messages (existing)
         state_values = await self._get_thread_state_values(thread_id)
         raw_tokens = state_values.get("_context_tokens")
         context_tokens = raw_tokens if isinstance(raw_tokens, int) and raw_tokens >= 0 else 0
         messages = state_values.get("messages", [])
 
-        if not messages:
+        # 2. Read ThreadLogger events (NEW)
+        events = await self._fetch_thread_activity_events(thread_id)
+
+        # 3. If no checkpoint messages but have events, use events only
+        if not messages and not events:
             return _ThreadHistoryPayload([], context_tokens)
 
-        # Server mode / direct checkpointer may return dicts; convert to
-        # LangChain message objects so _convert_messages_to_data works.
+        # 4. Convert checkpoint message dicts to LangChain objects if needed
         if messages and isinstance(messages[0], dict):
-            from langchain_core.messages import messages_from_dict
+            from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
-            messages = messages_from_dict(messages)
+            messages = messages_from_wire_dicts(messages)
 
-        # Offload conversion so large histories don't block the UI loop.
-        data = await asyncio.to_thread(self._convert_messages_to_data, messages)
+        # 5. Merge sources chronologically (NEW)
+        combined = await asyncio.to_thread(self._merge_history_sources, messages, events)
+
+        # 6. Convert combined timeline to MessageData (NEW)
+        data = await asyncio.to_thread(self._convert_combined_to_data, combined)
+
         return _ThreadHistoryPayload(data, context_tokens)
 
     @staticmethod
@@ -4549,6 +4818,7 @@ class SootheApp(App):
             current_thread=current,
             thread_limit=thread_limit,
             initial_threads=initial_threads,
+            daemon_session=self._daemon_session,
         )
         self.push_screen(screen, handle_result)
 

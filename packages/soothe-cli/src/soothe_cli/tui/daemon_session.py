@@ -14,54 +14,12 @@ from soothe_sdk.client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
+from soothe_sdk.langchain_wire import envelope_langchain_message_dict, messages_from_wire_dicts
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-# ``messages_from_dict`` / ``_message_from_dict`` only accept short wire tags (``ai``,
-# ``human``, ``tool``, …) or explicit ``*Chunk`` tags — not Pydantic class names like
-# ``AIMessage``. Some serializers emit class names; normalize before enveloping.
-_LC_MESSAGE_CLASS_TO_WIRE: dict[str, str] = {
-    "AIMessage": "ai",
-    "HumanMessage": "human",
-    "SystemMessage": "system",
-    "ToolMessage": "tool",
-    "FunctionMessage": "function",
-    "ChatMessage": "chat",
-    "RemoveMessage": "remove",
-}
-
-
-def _envelope_langchain_message_dict(message: dict[str, Any]) -> dict[str, Any]:
-    """Wrap flat ``model_dump``-style message dicts for ``messages_from_dict``.
-
-    ``encode()`` / ``_serialize_for_json`` in ``soothe_sdk.client.protocol`` serialize
-    LangChain messages via ``model_dump()``, producing ``{"type": "ai", "content": ...}``
-    without the ``{"type", "data"}`` envelope that :func:`messages_from_dict` expects.
-    The CLI path uses ``EventProcessor._handle_dict_message`` on raw dicts; the TUI
-    normalizes wire payloads back to message objects here.
-
-    Args:
-        message: Decoded JSON object for a single stream message.
-
-    Returns:
-        Either the original dict (already enveloped or not a message body) or the
-        wrapped form suitable for ``messages_from_dict``.
-    """
-    if "data" in message:
-        return message
-    body = dict(message)
-    raw_type = body.get("type")
-    if isinstance(raw_type, str) and raw_type in _LC_MESSAGE_CLASS_TO_WIRE:
-        body["type"] = _LC_MESSAGE_CLASS_TO_WIRE[raw_type]
-    msg_type = body.get("type")
-    if not isinstance(msg_type, str):
-        return message
-    if not any(k in body for k in ("content", "tool_calls", "tool_call_id", "tool_call_chunks")):
-        return message
-    return {"type": msg_type, "data": body}
 
 
 @dataclass(slots=True)
@@ -212,7 +170,7 @@ class TuiDaemonSession:
         message, metadata = data
         if isinstance(message, dict):
             try:
-                to_restore = _envelope_langchain_message_dict(message)
+                to_restore = envelope_langchain_message_dict(message)
                 restored = messages_from_dict([to_restore])
                 if restored:
                     message = restored[0]
@@ -237,7 +195,7 @@ class TuiDaemonSession:
         if isinstance(messages, list) and messages and isinstance(messages[0], dict):
             try:
                 values = dict(values)
-                values["messages"] = messages_from_dict(messages)
+                values["messages"] = messages_from_wire_dicts(messages)
             except Exception:
                 logger.debug("Failed to deserialize thread-state messages", exc_info=True)
         return DaemonStateSnapshot(values=values)

@@ -15,6 +15,12 @@ from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.reason import PlanPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult
 from soothe.cognition.agent_loop.state_manager import AgentLoopStateManager
+from soothe.cognition.agent_loop.stream_chunk_normalize import (
+    FinalReportAccumState,
+    iter_messages_for_act_aggregation,
+    resolve_final_report_text,
+    update_final_report_from_message,
+)
 from soothe.cognition.agent_loop.working_memory import LoopWorkingMemory
 from soothe.config.constants import DEFAULT_AGENT_LOOP_MAX_ITERATIONS
 from soothe.protocols.planner import PlanContext, StepResult
@@ -277,13 +283,12 @@ The report should:
 
 Use all tool results and AI responses available in the conversation history to create a comprehensive, coherent final report."""
 
-                        # Send to CoreAgent — accumulate streaming chunks and final AI text
-                        accumulated_chunks = (
-                            ""  # Accumulate AIMessageChunk content during streaming
+                        logger.debug(
+                            "[Human Message] Final report request: %s",
+                            log_preview(report_request, chars=150),
                         )
-                        final_ai_message_text = ""  # Capture final AIMessage (non-chunk) content
+                        accum = FinalReportAccumState()
                         chunk_count = 0
-                        ai_msg_count = 0
                         async for chunk in self.core_agent.astream(
                             {"messages": [HumanMessage(content=report_request)]},
                             config={"configurable": {"thread_id": state.thread_id}},
@@ -291,51 +296,17 @@ Use all tool results and AI responses available in the conversation history to c
                             subgraphs=False,
                         ):
                             chunk_count += 1
-                            if isinstance(chunk, tuple) and len(chunk) >= 2:
-                                stream_mode_name, data = chunk[0], chunk[1]
-                                if stream_mode_name == "messages":
-                                    from langchain_core.messages import AIMessage, AIMessageChunk
+                            for msg in iter_messages_for_act_aggregation(chunk):
+                                update_final_report_from_message(accum, msg)
 
-                                    if isinstance(data, tuple) and len(data) >= 2:
-                                        msg, _ = data
-                                        if isinstance(msg, (AIMessage, AIMessageChunk)):
-                                            ai_msg_count += 1
-                                            content = msg.content
-                                            # Extract text from content (handle str or list formats)
-                                            extracted_text = ""
-                                            if isinstance(content, str):
-                                                extracted_text = content
-                                            elif isinstance(content, list):
-                                                parts = []
-                                                for block in content:
-                                                    if isinstance(block, dict) and "text" in block:
-                                                        parts.append(block["text"])
-                                                    elif isinstance(block, str):
-                                                        parts.append(block)
-                                                extracted_text = "".join(parts)
-
-                                            # AIMessageChunk: accumulate streaming text
-                                            if isinstance(msg, AIMessageChunk) and extracted_text:
-                                                accumulated_chunks += extracted_text
-                                            # AIMessage (non-chunk): capture final message text
-                                            elif isinstance(msg, AIMessage) and extracted_text:
-                                                final_ai_message_text = extracted_text
-
-                        # Prefer accumulated chunks (streaming content) over final AIMessage
-                        # because streaming sends 100s of AIMessageChunk instances with actual text,
-                        # while final AIMessage may only contain synthesized metadata or minimal content.
-                        last_ai_text = (
-                            accumulated_chunks
-                            if len(accumulated_chunks) >= len(final_ai_message_text)
-                            else final_ai_message_text
-                        )
+                        last_ai_text = resolve_final_report_text(accum)
 
                         logger.info(
                             "Stream completed: %d chunks, %d AI messages, accumulated_chunks=%d chars, final_ai_message=%d chars, selected=%d chars",
                             chunk_count,
-                            ai_msg_count,
-                            len(accumulated_chunks),
-                            len(final_ai_message_text),
+                            accum.ai_msg_count,
+                            len(accum.accumulated_chunks),
+                            len(accum.final_ai_message_text),
                             len(last_ai_text),
                         )
                         if last_ai_text:

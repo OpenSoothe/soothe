@@ -19,7 +19,7 @@ from soothe.cognition.agent_loop.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.utils.text_preview import create_output_summary, preview_first
+from soothe.utils.text_preview import create_output_summary, log_preview, preview_first
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -41,8 +41,6 @@ class _ActStreamBudget:
 
 
 _TUPLE_LEN = 3
-_LIST_MIN_LEN = 2
-_MSG_TUPLE_LEN = 2  # (msg, metadata) tuple from deepagents streaming
 
 # Type for stream events yielded during execution
 StreamEvent = tuple[tuple[str, ...], str, Any]  # (namespace, mode, data)
@@ -500,6 +498,7 @@ class Executor:
                     logger.info("Execute briefing injected (%d chars)", len(goal_briefing))
             configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
+            logger.debug("[Human Message] %s", log_preview(combined_description, chars=150))
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=combined_description)]},
                 config={"configurable": configurable},
@@ -693,6 +692,7 @@ class Executor:
             config = {"configurable": configurable}
 
             step_body = f"Execute: {step.description}"
+            logger.debug("[Human Message] %s", log_preview(step_body, chars=150))
             stream = self.core_agent.astream(
                 {"messages": [HumanMessage(content=step_body)]},
                 config=config,
@@ -810,9 +810,13 @@ class Executor:
             - When event is not None: yield (None, event, 0, []) for immediate display
             - At end: yield (combined_output, None, tool_call_count, messages) for final result
         """
-        from langchain_core.messages import AIMessage, ToolMessage
+        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
         from soothe.cognition.agent_loop.result_cache import ToolResultCache
+        from soothe.cognition.agent_loop.stream_chunk_normalize import (
+            extract_text_from_message_content,
+            iter_messages_for_act_aggregation,
+        )
         from soothe.tools.metadata_generator import generate_outcome_metadata
 
         chunks: list[str] = []
@@ -850,155 +854,66 @@ class Executor:
 
             # Handle tuple format (namespace, mode, data) - deepagents canonical
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
-                namespace, mode, data = chunk
-
                 # Yield event immediately for real-time display
-                # EventProcessor will handle filtering and rendering
                 yield None, chunk, 0, []
 
-                # Also extract content for output collection
-                if mode == "messages" and not namespace:
-                    # Handle tuple format (msg, metadata) from deepagents streaming
-                    if isinstance(data, tuple) and len(data) >= _MSG_TUPLE_LEN:
-                        msg, _metadata = data
-                        if isinstance(msg, ToolMessage):
-                            # Count tool calls
-                            tool_call_count += 1
-                            tool_call_id = msg.tool_call_id
-                            tool_name = msg.name or "unknown"
+            stop_act_stream = False
+            for msg in iter_messages_for_act_aggregation(chunk):
+                if isinstance(msg, ToolMessage):
+                    tool_call_count += 1
+                    tool_call_id = msg.tool_call_id
+                    tool_name = msg.name or "unknown"
 
-                            if _maybe_cap_subagent_tasks(msg):
-                                break
+                    if _maybe_cap_subagent_tasks(msg):
+                        stop_act_stream = True
+                        break
 
-                            # Extract tool result content (still needed for Layer 1)
-                            content = msg.content
-                            if isinstance(content, str) and content:
-                                chunks.append(content)
-                            elif isinstance(content, list):
-                                for c in content:
-                                    if isinstance(c, str):
-                                        chunks.append(c)
-                                    elif isinstance(c, dict) and "text" in c:
-                                        chunks.append(c["text"])
+                    content = msg.content
+                    text_out = extract_text_from_message_content(content)
+                    if text_out:
+                        chunks.append(text_out)
 
-                            # RFC-211: Generate structured metadata for agentic loop
-                            outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
+                    outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
 
-                            # RFC-211: Cache large results
-                            content_str = content if isinstance(content, str) else str(content)
-                            file_ref = cache.save(tool_call_id, content_str, outcome)
-                            if file_ref:
-                                outcome["file_ref"] = file_ref
+                    content_str = content if isinstance(content, str) else str(content)
+                    file_ref = cache.save(tool_call_id, content_str, outcome)
+                    if file_ref:
+                        outcome["file_ref"] = file_ref
 
-                            outcomes.append(outcome)
+                    outcomes.append(outcome)
 
-                            # Compact tool execution log: one line with essential info
-                            logger.debug(
-                                "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
-                                tool_call_count,
-                                tool_name,
-                                tool_call_id,
-                                outcome.get("type", "unknown"),
-                                outcome.get("size_bytes", 0),
-                                f", cached={file_ref}" if file_ref else "",
-                            )
-                        elif isinstance(msg, AIMessage):
-                            # IG-151: Collect AIMessage for token extraction
-                            messages.append(msg)
-                            # Extract AI response content
-                            if isinstance(msg.content, str) and msg.content:
-                                chunks.append(msg.content)
-                            elif isinstance(msg.content, list):
-                                for c in msg.content:
-                                    if isinstance(c, str):
-                                        chunks.append(c)
-                                    elif isinstance(c, dict) and "text" in c:
-                                        chunks.append(c["text"])
-                    # Handle list format [msg, metadata] (legacy compatibility)
-                    elif isinstance(data, list) and len(data) >= _LIST_MIN_LEN:
-                        msg_chunk = data[0]
-                        if isinstance(msg_chunk, ToolMessage):
-                            tool_call_count += 1
-                            tool_call_id = msg_chunk.tool_call_id
-                            tool_name = msg_chunk.name or "unknown"
+                    logger.debug(
+                        "[Act Phase TOOL] #%d %s(%s) → %s, %dB%s",
+                        tool_call_count,
+                        tool_name,
+                        tool_call_id,
+                        outcome.get("type", "unknown"),
+                        outcome.get("size_bytes", 0),
+                        f", cached={file_ref}" if file_ref else "",
+                    )
+                elif isinstance(msg, AIMessageChunk):
+                    t = extract_text_from_message_content(msg.content)
+                    if t:
+                        chunks.append(t)
+                        logger.debug("[AI Message Chunk] %s", log_preview(t, chars=150))
+                elif isinstance(msg, AIMessage):
+                    messages.append(msg)
+                    t = extract_text_from_message_content(msg.content)
+                    if t:
+                        chunks.append(t)
+                        logger.debug("[AI Message] %s", log_preview(t, chars=150))
 
-                            if _maybe_cap_subagent_tasks(msg_chunk):
-                                break
+            if stop_act_stream:
+                break
 
-                        if hasattr(msg_chunk, "content"):
-                            content = msg_chunk.content
-                            if isinstance(content, str):
-                                chunks.append(content)
-                            elif isinstance(content, list):
-                                for c in content:
-                                    if isinstance(c, str):
-                                        chunks.append(c)
-                                    elif isinstance(c, dict) and "text" in c:
-                                        chunks.append(c["text"])
-
-                            # RFC-211: Generate metadata for legacy format
-                            if isinstance(msg_chunk, ToolMessage):
-                                outcome = generate_outcome_metadata(
-                                    tool_name, content, tool_call_id
-                                )
-
-                                content_str = content if isinstance(content, str) else str(content)
-                                file_ref = cache.save(tool_call_id, content_str, outcome)
-                                if file_ref:
-                                    outcome["file_ref"] = file_ref
-
-                                outcomes.append(outcome)
-            # Handle dict chunks (standard LangGraph format)
-            elif isinstance(chunk, dict):
-                if "model" in chunk:
-                    model_data = chunk["model"]
-                    if isinstance(model_data, dict) and "messages" in model_data:
-                        cap_break = False
-                        for msg in model_data["messages"]:
-                            if isinstance(msg, ToolMessage):
-                                tool_call_count += 1
-                                tool_call_id = msg.tool_call_id
-                                tool_name = msg.name or "unknown"
-
-                                if _maybe_cap_subagent_tasks(msg):
-                                    cap_break = True
-                                    break
-
-                            if hasattr(msg, "content"):
-                                content = msg.content
-                                if isinstance(content, str) and content:
-                                    chunks.append(content)
-                                elif isinstance(content, list):
-                                    for c in content:
-                                        if isinstance(c, str):
-                                            chunks.append(c)
-                                        elif isinstance(c, dict) and "text" in c:
-                                            chunks.append(c["text"])
-
-                                # RFC-211: Generate metadata for dict format
-                                if isinstance(msg, ToolMessage):
-                                    outcome = generate_outcome_metadata(
-                                        tool_name, content, tool_call_id
-                                    )
-
-                                    content_str = (
-                                        content if isinstance(content, str) else str(content)
-                                    )
-                                    file_ref = cache.save(tool_call_id, content_str, outcome)
-                                    if file_ref:
-                                        outcome["file_ref"] = file_ref
-
-                                    outcomes.append(outcome)
-
-                        if cap_break:
-                            break
-                elif "content" in chunk:
+            if isinstance(chunk, dict) and "model" not in chunk:
+                if "content" in chunk:
                     chunks.append(str(chunk["content"]))
                 elif "output" in chunk:
                     chunks.append(str(chunk["output"]))
                 elif "text" in chunk:
                     chunks.append(str(chunk["text"]))
-            elif hasattr(chunk, "content"):
+            elif hasattr(chunk, "content") and not isinstance(chunk, (tuple, dict)):
                 chunks.append(str(chunk.content))
 
         # Final yield with combined output and tool call count

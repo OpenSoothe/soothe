@@ -36,8 +36,8 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
         try:
             from soothe.backends.durability.sqlite import SQLiteDurability
 
-            db_path = config.persistence.sqlite_path
-            logger.info("Using SQLite durability backend")
+            db_path = config.persistence.metadata_sqlite_path
+            logger.info("Using SQLite durability backend (metadata.db)")
             return SQLiteDurability(db_path=db_path)
         except Exception as e:
             logger.warning(
@@ -161,14 +161,17 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         import sqlite3
         from pathlib import Path
 
-        db_path = config.persistence.sqlite_path or str(Path(SOOTHE_HOME) / "soothe.db")
+        # Use new checkpoint_sqlite_path for LangGraph checkpoints (checkpoints.db)
+        db_path = config.persistence.checkpoint_sqlite_path or str(
+            Path(SOOTHE_HOME) / "checkpoints.db"
+        )
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False)
     except Exception as exc:
         logger.warning("Failed to create SQLite checkpointer connection: %s", exc)
         return None
 
-    logger.info("SQLite checkpointer connection created at %s", db_path)
+    logger.info("SQLite checkpointer connection created at %s (checkpoints.db)", db_path)
     return (None, conn)
 
 

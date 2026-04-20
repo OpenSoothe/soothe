@@ -43,6 +43,8 @@ if TYPE_CHECKING:
         def __call__(self, *, approximate: bool = False) -> None: ...
 
 
+from soothe_sdk.langchain_wire import envelope_langchain_message_dict
+
 from soothe_cli.cli.stream.display_line import DisplayLine
 from soothe_cli.shared.essential_events import (
     LOOP_REASON_EVENT_TYPE,
@@ -67,7 +69,6 @@ from soothe_cli.tui._session_stats import (
     format_token_count as format_token_count,
 )
 from soothe_cli.tui.config import build_stream_config
-from soothe_cli.tui.daemon_session import _envelope_langchain_message_dict
 from soothe_cli.tui.file_ops import FileOpTracker
 from soothe_cli.tui.formatting import format_duration
 from soothe_cli.tui.hooks import dispatch_hook
@@ -476,7 +477,7 @@ def _normalize_lc_stream_message(message: Any) -> Any:
     try:
         from langchain_core.messages import messages_from_dict
 
-        wrapped = _envelope_langchain_message_dict(message)
+        wrapped = envelope_langchain_message_dict(message)
         restored = messages_from_dict([wrapped])
         if restored:
             return restored[0]
@@ -489,7 +490,7 @@ def _coerce_ai_message_for_blocks(message: Any) -> Any:
     """Best-effort dict → ``AIMessage`` / ``AIMessageChunk`` for block extraction.
 
     If the wire payload uses ``type: \"AIMessage\"`` (class name) instead of ``ai``,
-    :func:`messages_from_dict` would fail; :func:`_envelope_langchain_message_dict`
+    :func:`messages_from_dict` would fail; :func:`envelope_langchain_message_dict`
     canonicalizes first (see ``daemon_session``).
     """
     from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
@@ -499,7 +500,7 @@ def _coerce_ai_message_for_blocks(message: Any) -> Any:
     if not isinstance(message, dict):
         return message
     try:
-        wrapped = _envelope_langchain_message_dict(message)
+        wrapped = envelope_langchain_message_dict(message)
         restored = messages_from_dict([wrapped])
         if restored and isinstance(restored[0], (AIMessage, AIMessageChunk)):
             return restored[0]

@@ -26,6 +26,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _normalize_layer1_input(input_arg: str | dict) -> dict:
+    """Coerce a bare user string to LangGraph state with one HumanMessage.
+
+    AgentLoop and the runner pass ``{\"messages\": [...]}``; string input is
+    supported for convenience and tests.
+    """
+    if isinstance(input_arg, str):
+        from langchain_core.messages import HumanMessage
+
+        return {"messages": [HumanMessage(content=input_arg)]}
+    return input_arg
+
+
 class CoreAgent:
     """Layer 1 CoreAgent runtime interface (RFC-0023).
 
@@ -49,6 +62,12 @@ class CoreAgent:
 
     Execution Interface:
         Use `astream(input, config)` for Layer 1 streaming execution.
+
+        Preferred orchestration input is a LangGraph state dict with a
+        ``messages`` list of :class:`~langchain_core.messages.BaseMessage`
+        instances. A bare string is normalized to a single
+        :class:`~langchain_core.messages.HumanMessage` before invoking the
+        compiled graph.
 
         config.configurable may include Layer 2 hints (advisory):
             - thread_id: Thread identifier for persistence
@@ -156,8 +175,8 @@ class CoreAgent:
         for standard Layer 1 execution from Layer 2 ACT phase or CLI/daemon.
 
         Args:
-            input_arg: User query or execution instruction (str or dict with
-                "messages" key for LangGraph format).
+            input_arg: User text (coerced to one HumanMessage in graph state) or a
+                LangGraph state dict (typically with a ``messages`` key).
             config: RunnableConfig with thread_id and optional Layer 2 hints.
                 Layer 2 hints in config.configurable (advisory):
                 - thread_id: Thread identifier
@@ -198,11 +217,13 @@ class CoreAgent:
         if hints.get("soothe_step_subagent"):
             logger.debug("[Exec] Hint: suggested subagent=%s", hints["soothe_step_subagent"])
 
+        graph_input = _normalize_layer1_input(input_arg)
+
         if stream_mode:
             return self._graph.astream(
-                input_arg, config or {}, stream_mode=stream_mode, subgraphs=subgraphs
+                graph_input, config or {}, stream_mode=stream_mode, subgraphs=subgraphs
             )
-        return self._graph.astream(input_arg, config or {}, subgraphs=subgraphs)
+        return self._graph.astream(graph_input, config or {}, subgraphs=subgraphs)
 
     @classmethod
     def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:
