@@ -204,7 +204,7 @@ TUI inherits `PolicyProtocol` enforcement. HITL interrupts from `HumanInTheLoopM
 - RFC-001: Core modules architecture
 - RFC-400: Context protocol architecture
 - RFC-402: Memory protocol architecture
-- RFC-202: DAG-based execution
+- RFC-201: Unified AgentLoop execution (replaces deprecated RFC-202)
 - RFC-450: Unified daemon communication
 - RFC-501: VerbosityTier unification
 

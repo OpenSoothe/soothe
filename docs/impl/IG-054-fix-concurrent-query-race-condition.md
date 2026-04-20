@@ -63,7 +63,7 @@ Align single-threaded path with multithreaded pattern:
 
 **Goal**: Isolate threads from different clients to prevent cross-contamination.
 
-**Status**: RFC-209 executor thread isolation is **deprecated** (superseded by RFC-207). Current design uses simpler asyncio.Task-based isolation.
+**Current approach**: Uses simpler asyncio.Task-based isolation following RFC-207's thread context lifecycle pattern.
 
 ### Thread Isolation Layers
 
@@ -223,15 +223,13 @@ await task
 - Concurrent capacity enforcement: `len(_active_threads) >= max_concurrent`
 - Task cancellation targets specific thread
 
-### ThreadExecutor Design (Deprecated RFC-209)
-
-**Status**: RFC-209 executor thread isolation is **deprecated**.
+### ThreadExecutor Design (Historical Context)
 
 **Location**: `core/thread/executor.py`
 
-**Original design** (no longer recommended):
-- ThreadExecutor wraps runner.astream in rate-limited context
-- APIRateLimiter controls concurrent API calls
+**Historical design** (superseded by RFC-207):
+- ThreadExecutor wrapped runner.astream in rate-limited context
+- APIRateLimiter controlled concurrent API calls
 - Manual thread context management
 
 **Current best practice** (RFC-207):
@@ -242,9 +240,7 @@ await task
 
 ### Key Insight: Isolation is Layered
 
-Thread isolation is **NOT** just executor-level (RFC-209 was wrong).
-
-True isolation spans **6 layers**:
+Thread isolation spans **6 layers**, not just execution-level:
 1. Client ownership (SessionManager)
 2. Thread state registry (ThreadStateRegistry)
 3. Workspace filesystem context
@@ -254,17 +250,18 @@ True isolation spans **6 layers**:
 
 Each layer provides specific isolation guarantees.
 
-### RFC-209 vs RFC-207
+### Evolution: From Executor-Only to Layered Isolation
 
-**RFC-209** (deprecated):
+**Historical approach** (superseded):
 - Tried to isolate at executor level only
 - Manual thread ID generation/merging
 - Redundant isolation (langgraph already handles it)
 
-**RFC-207** (current):
+**Current approach** (RFC-207):
 - Trusts langgraph atomic state updates
 - Simplifies executor to pure orchestration
 - Task tool handles subagent isolation automatically
+- Isolation distributed across 6 architectural layers
 
 ### Isolation Test Scenarios
 
@@ -350,6 +347,7 @@ Race condition fixed successfully:
 
 ## References
 
-- [RFC-209 Executor Thread Isolation Simplification](../specs/RFC-209-executor-thread-isolation-simplification.md)
-- [RFC-400 Daemon Communication Protocol](../specs/RFC-400-daemon-communication.md)
-- [IG-138 Query Timeout Safeguards](./IG-138-query-timeout-safeguards.md)
+- [RFC-207 AgentLoop Thread Context Lifecycle](../specs/RFC-207-agentloop-thread-context-lifecycle.md) - Unified thread lifecycle
+- [RFC-450 Daemon Communication Protocol](../specs/RFC-450-daemon-communication-protocol.md) - Daemon transport layer
+- [RFC-402 Memory Protocol Architecture](../specs/RFC-402-memory-protocol-architecture.md) - Thread state management
+- [IG-138 Query Timeout Safeguards](./IG-138-query-timeout-safeguards.md) - Timeout mechanisms
