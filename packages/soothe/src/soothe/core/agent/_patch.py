@@ -10,7 +10,7 @@ Note: Do not enable PEP 563 (``from __future__ import annotations``) in this mod
 Pydantic validation and the task tool would fail at runtime.
 """
 
-from typing import Any
+from typing import Annotated, Any
 
 # Used in patched ``task`` / ``atask`` signatures so LangGraph detects injection.
 try:
@@ -73,7 +73,6 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
 
     excluded_state_keys = sm._EXCLUDED_STATE_KEYS
     task_tool_description_template = sm.TASK_TOOL_DESCRIPTION
-    task_tool_schema_cls = sm.TaskToolSchema
 
     def _build_task_tool(  # noqa: C901
         subagents: list[Any],
@@ -126,8 +125,14 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             return subagent, subagent_state
 
         def task(
-            description: str,
-            subagent_type: str,
+            description: Annotated[
+                str,
+                "A detailed description of the task for the subagent to perform autonomously. Include all necessary context and specify the expected output format.",  # noqa: E501
+            ],
+            subagent_type: Annotated[
+                str,
+                "The type of subagent to use. Must be one of the available agent types listed in the tool description.",
+            ],
             runtime: ToolRuntime,
         ) -> Any:
             if subagent_type not in subagent_graphs:
@@ -143,8 +148,14 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             return _return_command_with_state_update(result, runtime.tool_call_id)
 
         async def atask(
-            description: str,
-            subagent_type: str,
+            description: Annotated[
+                str,
+                "A detailed description of the task for the subagent to perform autonomously. Include all necessary context and specify the expected output format.",  # noqa: E501
+            ],
+            subagent_type: Annotated[
+                str,
+                "The type of subagent to use. Must be one of the available agent types listed in the tool description.",
+            ],
             runtime: ToolRuntime,
         ) -> Any:
             if subagent_type not in subagent_graphs:
@@ -164,8 +175,6 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             func=task,
             coroutine=atask,
             description=description,
-            infer_schema=False,
-            args_schema=task_tool_schema_cls,
         )
         return built
 

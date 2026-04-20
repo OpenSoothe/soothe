@@ -328,17 +328,17 @@ class PersistenceConfig(BaseModel):
             durability metadata storage.
         default_backend: Default backend for new protocols (can be overridden).
         metadata_sqlite_path: Path for ThreadInfo metadata storage (SQLitePersistStore).
-            None defaults to $SOOTHE_HOME/metadata.db.
+            None defaults to $SOOTHE_DATA_DIR/metadata.db.
         checkpoint_sqlite_path: Path for LangGraph conversation checkpoints (AsyncSqliteSaver).
-            None defaults to $SOOTHE_HOME/checkpoints.db.
+            None defaults to $SOOTHE_DATA_DIR/checkpoints.db.
     """
 
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
     default_backend: Literal["json", "rocksdb", "postgresql", "sqlite"] = "sqlite"
 
     # Split databases for clear separation (metadata.db + checkpoints.db)
-    metadata_sqlite_path: str | None = None  # None = $SOOTHE_HOME/metadata.db
-    checkpoint_sqlite_path: str | None = None  # None = $SOOTHE_HOME/checkpoints.db
+    metadata_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/metadata.db
+    checkpoint_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/checkpoints.db
 
 
 class MemUConfig(BaseModel):

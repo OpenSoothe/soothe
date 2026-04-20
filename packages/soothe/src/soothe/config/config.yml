@@ -402,7 +402,10 @@ persistence:
   # Default backend for new protocols (can be overridden per-protocol below)
   # Options: json (simple files), rocksdb (embedded KV), sqlite (local default), postgresql (production)
   default_backend: sqlite
-  # sqlite_path: ""  # Empty = SOOTHE_HOME/soothe.db
+
+  # SQLite paths for metadata and checkpoints (used when default_backend is sqlite)
+  # metadata_sqlite_path: ""   # Empty = $SOOTHE_DATA_DIR/metadata.db
+  # checkpoint_sqlite_path: "" # Empty = $SOOTHE_DATA_DIR/checkpoints.db
 
   # PostgreSQL DSN for Soothe metadata backends
   # (checkpointer, durability, memory backends)

@@ -61,6 +61,12 @@ def main() -> None:
             cfg = SootheConfig.from_yaml_file(str(default_config))
 
     setup_logging(cfg)
+
+    # Migrate runtime data files from root to data/ subdirectory
+    from soothe_sdk.client.config import migrate_data_to_subdir
+
+    migrate_data_to_subdir()
+
     run_daemon(cfg, detached=args.detached)
 
 

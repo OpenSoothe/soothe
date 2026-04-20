@@ -11,7 +11,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_HOME, migrate_data_to_subdir
 
 
 def cleanse_deprecated_files() -> None:
@@ -56,4 +56,5 @@ def cleanse_deprecated_files() -> None:
 
 
 if __name__ == "__main__":
+    migrate_data_to_subdir()
     cleanse_deprecated_files()
