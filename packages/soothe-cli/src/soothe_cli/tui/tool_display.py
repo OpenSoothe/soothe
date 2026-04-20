@@ -211,16 +211,16 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "web_search":
-        # Web search: show the query string
+        # Web search: show the query string (no outer quotes)
         if "query" in tool_args:
             query = _sanitize_display_value(tool_args["query"], max_length=100)
-            return f'{prefix} {tool_name}("{query}")'
+            return f"{prefix} {tool_name}({query})"
 
     elif tool_key == "grep":
         pat = _first_nonempty_str_arg(tool_args, ("pattern", "regex", "regexp"))
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=70)
-            return f'{prefix} {tool_name}("{pattern}")'
+            return f"{prefix} {tool_name}({pattern})"
 
     elif tool_key in {"execute", "shell", "bash", "run_command"}:
         # Execute: show the command, and timeout only if non-default
@@ -232,8 +232,9 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
 
             if timeout is not None and timeout != DEFAULT_EXECUTE_TIMEOUT:
                 timeout_str = _format_timeout(timeout)
-                return f'{prefix} {tool_name}("{command}", timeout={timeout_str})'
-            return f'{prefix} {tool_name}("{command}")'
+                return f"{prefix} {tool_name}({command}, timeout={timeout_str})"
+            # Don't add quotes around command - show it directly
+            return f"{prefix} {tool_name}({command})"
 
     elif tool_key in {"ls", "list_files"}:
         # ls / list_files: directory varies by provider (path, directory, …).
@@ -278,7 +279,7 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
         )
         if pat is not None:
             pattern = _sanitize_display_value(pat, max_length=80)
-            return f'{prefix} {tool_name}("{pattern}")'
+            return f"{prefix} {tool_name}({pattern})"
         loc_raw = None
         for k in ("path", "directory", "dir", "root", "cwd", "base_path"):
             if k in tool_args and tool_args[k] is not None:
@@ -298,13 +299,13 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             )
             return f"{prefix} {tool_name}({args_str})"
         # Default glob when the model sends `{}` — show a visible pattern hint.
-        return f'{prefix} {tool_name}("*")'
+        return f"{prefix} {tool_name}(*)"
 
     elif tool_key == "fetch_url":
-        # Fetch URL: show the URL being fetched
+        # Fetch URL: show the URL being fetched (no outer quotes)
         if "url" in tool_args:
             url = _sanitize_display_value(tool_args["url"], max_length=80)
-            return f'{prefix} {tool_name}("{url}")'
+            return f"{prefix} {tool_name}({url})"
 
     elif tool_key == "task":
         # Task: subagent type and optional description inside parentheses (RFC-0020).
@@ -317,11 +318,11 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             agent_shown = _sanitize_display_value(str(agent_type), max_length=40)
             if desc is not None:
                 d = _sanitize_display_value(desc, max_length=80)
-                return f'{prefix} {tool_name}("{agent_shown}", "{d}")'
-            return f'{prefix} {tool_name}("{agent_shown}")'
+                return f"{prefix} {tool_name}({agent_shown}, {d})"
+            return f"{prefix} {tool_name}({agent_shown})"
         if desc is not None:
             d = _sanitize_display_value(desc, max_length=100)
-            return f'{prefix} {tool_name}("{d}")'
+            return f"{prefix} {tool_name}({d})"
         return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "ask_user":

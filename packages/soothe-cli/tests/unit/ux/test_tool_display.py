@@ -62,8 +62,10 @@ def test_read_file_accepts_path_name() -> None:
 
 
 def test_grep_accepts_regex_alias() -> None:
+    """Grep shows pattern without outer quotes."""
     s = format_tool_display("grep", {"regex": "TODO"})
     assert "TODO" in s
+    assert '"' not in s  # No quotes around pattern
 
 
 def test_fallback_shows_kv_when_unknown_tool() -> None:
@@ -105,6 +107,7 @@ def test_unknown_tool_empty_args_shows_ellipsis_not_bare_parens() -> None:
 
 
 def test_task_shows_type_in_parentheses_not_brackets() -> None:
+    """Task shows subagent type and description without outer quotes."""
     s = format_tool_display(
         "task",
         {"subagent_type": "general-purpose", "description": "Do the thing"},
@@ -113,6 +116,9 @@ def test_task_shows_type_in_parentheses_not_brackets() -> None:
     assert "general-purpose" in s
     assert "Do the thing" in s
     assert "(" in s and ")" in s
+    # Should not have quotes around arguments
+    assert '"general-purpose"' not in s
+    assert '"Do the thing"' not in s
 
 
 def test_task_type_only_uses_parentheses() -> None:
