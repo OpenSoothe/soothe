@@ -200,6 +200,48 @@ class TuiDaemonSession:
                 logger.debug("Failed to deserialize thread-state messages", exc_info=True)
         return DaemonStateSnapshot(values=values)
 
+    async def get_thread_messages(
+        self,
+        thread_id: str,
+        *,
+        limit: int = 10000,
+        offset: int = 0,
+        include_events: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Fetch persisted thread messages through the daemon.
+
+        Args:
+            thread_id: Thread identifier to read.
+            limit: Maximum records to return.
+            offset: Pagination offset.
+            include_events: Include non-conversation event records.
+
+        Returns:
+            Wire-safe thread message rows from `thread_messages_response`.
+        """
+        if not thread_id:
+            return []
+
+        payload: dict[str, Any] = {
+            "type": "thread_messages",
+            "thread_id": thread_id,
+            "limit": limit,
+            "offset": offset,
+        }
+        if include_events:
+            payload["include_events"] = True
+
+        async with self._read_lock:
+            response = await self._client.request_response(
+                payload,
+                response_type="thread_messages_response",
+                timeout=10.0,
+            )
+        messages = response.get("messages", [])
+        if not isinstance(messages, list):
+            return []
+        return [m for m in messages if isinstance(m, dict)]
+
     async def aupdate_state(
         self, config: dict[str, Any], values: dict[str, Any], timeout: float = 5.0
     ) -> None:

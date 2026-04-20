@@ -1,5 +1,9 @@
 """Tests for daemon WebSocket message normalization in the TUI."""
 
+import asyncio
+from unittest.mock import AsyncMock
+
+import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
 from soothe_sdk.client.protocol import _serialize_for_json
 from soothe_sdk.langchain_wire import envelope_langchain_message_dict
@@ -71,3 +75,55 @@ def test_normalize_stream_data_restores_ai_message() -> None:
     assert isinstance(msg, AIMessage)
     assert msg.content == "wire"
     assert meta == {"langgraph_step": 1}
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_uses_request_response_and_filters_rows() -> None:
+    """Thread message RPC should run under read lock and return only dict rows."""
+    session = object.__new__(TuiDaemonSession)
+    request_response = AsyncMock(
+        return_value={
+            "messages": [
+                {"kind": "event", "content": "x"},
+                "not-a-dict",
+                {"kind": "conversation", "content": "hello"},
+            ]
+        }
+    )
+    session._client = type("StubClient", (), {"request_response": request_response})()
+    session._read_lock = asyncio.Lock()
+
+    result = await session.get_thread_messages(
+        "thread-123",
+        limit=50,
+        offset=3,
+        include_events=True,
+    )
+
+    request_response.assert_awaited_once_with(
+        {
+            "type": "thread_messages",
+            "thread_id": "thread-123",
+            "limit": 50,
+            "offset": 3,
+            "include_events": True,
+        },
+        response_type="thread_messages_response",
+        timeout=10.0,
+    )
+    assert result == [
+        {"kind": "event", "content": "x"},
+        {"kind": "conversation", "content": "hello"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_thread_messages_returns_empty_without_thread_id() -> None:
+    """Empty thread IDs should short-circuit without RPC."""
+    session = object.__new__(TuiDaemonSession)
+    request_response = AsyncMock()
+    session._client = type("StubClient", (), {"request_response": request_response})()
+    session._read_lock = asyncio.Lock()
+
+    assert await session.get_thread_messages("", include_events=True) == []
+    request_response.assert_not_awaited()
