@@ -21,6 +21,18 @@ _HIDDEN_CHAR_MARKER = " [hidden chars removed]"
 """Marker appended to display values that had dangerous Unicode stripped, so
 users know the value was modified for safety."""
 
+# Path-like argument names for read/write/edit tools (models and hosts vary).
+_FILE_TOOL_PATH_KEYS: tuple[str, ...] = (
+    "file_path",
+    "path",
+    "path_name",
+    "target_file",
+    "file",
+    "filepath",
+    "filename",
+    "relative_path",
+)
+
 
 def _format_timeout(seconds: int) -> str:
     """Format timeout in human-readable units (e.g., 300 -> '5m', 3600 -> '1h').
@@ -168,16 +180,23 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
     # Branch on normalized ``tool_key`` so PascalCase names (``ReadFile``) still match;
     # display the original ``tool_name`` substring for consistency with model output.
     if tool_key in {"read_file", "write_file", "edit_file"}:
-        raw_path = _first_nonempty_str_arg(
-            tool_args,
-            ("file_path", "path", "path_name", "target_file", "file", "filepath"),
-        )
+        raw_path = _first_nonempty_str_arg(tool_args, _FILE_TOOL_PATH_KEYS)
         if raw_path is not None:
             path_raw = strip_dangerous_unicode(raw_path)
             path = abbreviate_path(path_raw)
             if path_raw != raw_path:
                 path += _HIDDEN_CHAR_MARKER
             return f"{prefix} {tool_name}({path})"
+        # No recognized path key: still show other kwargs in the header (was: silent
+        # fallthrough → generic fallback → read_file(…) with no secondary args line
+        # because read_file is in _TOOLS_WITH_HEADER_INFO).
+        if tool_args:
+            args_str = ", ".join(
+                f"{_sanitize_display_value(k, max_length=30)}={_sanitize_display_value(v, max_length=50)}"
+                for k, v in tool_args.items()
+            )
+            return f"{prefix} {tool_name}({args_str})"
+        return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "web_search":
         # Web search: show the query string
@@ -276,11 +295,21 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             return f'{prefix} {tool_name}("{url}")'
 
     elif tool_key == "task":
-        # Task: show subagent type badge
+        # Task: subagent type and optional description inside parentheses (RFC-0020).
         agent_type = tool_args.get("subagent_type", "")
+        desc = _first_nonempty_str_arg(
+            tool_args,
+            ("description", "prompt", "task", "instruction"),
+        )
         if agent_type:
-            agent_type = _sanitize_display_value(agent_type, max_length=40)
-            return f"{prefix} {tool_name} [{agent_type}]"
+            agent_shown = _sanitize_display_value(str(agent_type), max_length=40)
+            if desc is not None:
+                d = _sanitize_display_value(desc, max_length=80)
+                return f'{prefix} {tool_name}("{agent_shown}", "{d}")'
+            return f'{prefix} {tool_name}("{agent_shown}")'
+        if desc is not None:
+            d = _sanitize_display_value(desc, max_length=100)
+            return f'{prefix} {tool_name}("{d}")'
         return f"{prefix} {tool_name}(…)"
 
     elif tool_key == "ask_user":

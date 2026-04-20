@@ -279,7 +279,7 @@ def tool_calls_have_any_arg_dict(tc_list: list[Any]) -> bool:
 # Maps tool name to list of argument keys to display (supports multiple args)
 _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     # File operations — deepagents uses ``file_path`` for read/write/edit (see IG-053)
-    "read_file": ["file_path", "path", "path_name"],
+    "read_file": ["file_path", "path", "path_name", "target_file", "filename", "relative_path"],
     "write_file": ["file_path", "path"],
     "delete_file": ["file_path", "path"],
     "file_info": ["path", "file_path"],
@@ -312,6 +312,8 @@ _ARG_DISPLAY_MAP: dict[str, list[str]] = {
     "create_goal": ["description"],
     "complete_goal": ["goal_id"],
     "fail_goal": ["goal_id"],
+    # Subagent delegation (deepagents ``task`` tool)
+    "task": ["subagent_type", "description", "prompt"],
 }
 
 
@@ -321,6 +323,43 @@ def _normalize_tool_name_for_arg_map(tool_name: str) -> str:
         return tool_name
     # PascalCase / camelCase -> snake_case; already-snake names pass through
     return re.sub(r"(?<!^)(?=[A-Z])", "_", tool_name).lower()
+
+
+_ARG_SUMMARY_SKIP_KEYS: frozenset[str] = frozenset({"_raw", "_internal", "raw_args_str"})
+
+
+def _compact_tool_args_display_values(
+    args: dict[str, Any],
+    *,
+    max_value_length: int = 40,
+    max_items: int = 3,
+) -> str:
+    """Build comma-separated display values from the first tool parameters (values only)."""
+    from soothe_sdk.utils import convert_and_abbreviate_path
+    from soothe_sdk.utils.parsing import is_path_argument as _path_arg_name_pattern
+
+    def _is_path_arg_name(key: str) -> bool:
+        return _path_arg_name_pattern.match(key) is not None
+
+    def _display_path_value(raw: str) -> str:
+        out = convert_and_abbreviate_path(raw)
+        if len(out) > max_value_length:
+            return out[: max_value_length - 3] + "..."
+        return out
+
+    parts: list[str] = []
+    for k, v in args.items():
+        if len(parts) >= max_items:
+            break
+        if k in _ARG_SUMMARY_SKIP_KEYS:
+            continue
+        s = str(v)
+        if _is_path_arg_name(k):
+            s = _display_path_value(s)
+        elif len(s) > max_value_length:
+            s = s[: max_value_length - 3] + "..."
+        parts.append(s)
+    return ", ".join(parts)
 
 
 def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
@@ -340,8 +379,10 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     Returns:
         Formatted argument string like "file_name.md" or "/Users/dev/.../file.md, pattern"
         (without outer parentheses - caller adds them).
-        Returns "..." when args are empty but tool is known.
-        Returns "" if tool is unknown and no args.
+        Returns "..." when args are empty but tool is known (or placeholders while streaming).
+        Returns "…" when the tool is not in the display map and there are no usable args,
+        or when parsed args exist but only contain internal/skip keys.
+        For unmapped tools with parameters, returns a compact comma-separated value summary.
 
     Examples:
         >>> format_tool_call_args("read_file", {"args": {"path": "config.yml"}})
@@ -399,10 +440,13 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
                             val = val[: max_value_length - 3] + "..."
                         return val
             return "..."
-        return ""
+        return "…"
 
     if not key_args:
-        return ""
+        if args:
+            compact = _compact_tool_args_display_values(args, max_value_length=max_value_length)
+            return compact if compact else "…"
+        return "…"
 
     # Extract values for all configured argument keys
     values = []
@@ -420,21 +464,9 @@ def format_tool_call_args(tool_name: str, tool_call: dict[str, Any]) -> str:
     if not values:
         # Model may use different arg names than _ARG_DISPLAY_MAP; still show something useful.
         if args:
-            parts: list[str] = []
-            # Skip internal keys like _raw, _internal, etc.
-            skip_keys = {"_raw", "_internal", "raw_args_str"}
-            for k, v in list(args.items())[:3]:
-                if k in skip_keys:
-                    continue
-                s = str(v)
-                # Convert and abbreviate path arguments
-                if _is_path_arg_name(k):
-                    s = _display_path_value(s)
-                elif len(s) > max_value_length:
-                    s = s[: max_value_length - 3] + "..."
-                parts.append(s)
-            if parts:
-                return ", ".join(parts)
+            compact = _compact_tool_args_display_values(args, max_value_length=max_value_length)
+            if compact:
+                return compact
             # All args were internal keys, check for raw_args_str
             raw = args.get("_raw") or args.get("raw_args_str", "")
             if raw:

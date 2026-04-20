@@ -942,7 +942,8 @@ class ToolCallMessage(Vertical):
             header = self.query_one(".tool-header", Static)
         except Exception:  # noqa: BLE001  # Widget tree not ready or query miss
             return
-        header.update(format_tool_display(self._tool_name, self._args), markup=False)
+        # Textual ``Static.update`` accepts only the new content (no ``markup=`` kwarg).
+        header.update(format_tool_display(self._tool_name, self._args))
 
     def set_running(self) -> None:
         """Mark the tool as running (approved and executing).
