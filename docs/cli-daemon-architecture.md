@@ -361,5 +361,5 @@ See RFC-400 for full protocol specification. Key message types:
 ## Support
 
 For questions or issues:
-- GitHub Issues: https://github.com/caesar0301/soothe/issues
+- GitHub Issues: https://github.com/OpenSoothe/soothe/issues
 - Documentation: https://soothe.readthedocs.io

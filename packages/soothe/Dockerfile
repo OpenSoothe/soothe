@@ -13,7 +13,7 @@ FROM registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 
 LABEL org.opencontainers.image.title="Soothe Daemon" \
     org.opencontainers.image.description="Soothe agent orchestration daemon (full optional extras)" \
-    org.opencontainers.image.source="https://github.com/caesar0301/soothe"
+    org.opencontainers.image.source="https://github.com/OpenSoothe/soothe"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

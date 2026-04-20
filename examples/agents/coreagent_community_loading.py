@@ -4,7 +4,7 @@ This example demonstrates how Soothe core discovers and loads community plugins
 through the RFC-600 entry-point discovery mechanism.
 
 Prerequisites:
-    pip install -e packages/soothe-community/   # installs soothe-community with entry points
+    pip install soothe-community   # installs soothe-community with entry points
 
 Usage:
     python -m examples.agents.coreagent_community_loading
@@ -26,7 +26,7 @@ async def main() -> None:
     config = SootheConfig()
     logger.info("SootheConfig created")
 
-    # 2. Load plugins (discovers entry points from soothe-community)
+    # 2. Load plugins (discovers entry points from soothe-community, if installed)
     from soothe.plugin.global_registry import is_plugins_loaded, load_plugins
 
     await load_plugins(config)

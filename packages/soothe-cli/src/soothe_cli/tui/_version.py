@@ -8,13 +8,13 @@ except PackageNotFoundError:
     # Fallback for development/editable installs
     __version__ = "0.0.0"
 
-DOCS_URL = "https://github.com/caesar0301/soothe/docs"
+DOCS_URL = "https://github.com/OpenSoothe/soothe/docs"
 """URL for Soothe documentation."""
 
 PYPI_URL = "https://pypi.org/pypi/soothe/json"
 """PyPI JSON API endpoint for version checks."""
 
-CHANGELOG_URL = "https://github.com/caesar0301/soothe/blob/main/CHANGELOG.md"
+CHANGELOG_URL = "https://github.com/OpenSoothe/soothe/blob/main/CHANGELOG.md"
 """URL for the full changelog."""
 
 USER_AGENT = f"soothe/{__version__} update-check"

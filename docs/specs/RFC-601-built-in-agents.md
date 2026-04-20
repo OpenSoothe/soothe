@@ -14,7 +14,7 @@
 
 This RFC defines the architecture of Soothe's built-in plugin agent: **Research** (deep information gathering with iterative reflection).
 
-> **Note**: Skillify and Weaver agents have been migrated to the `soothe-community` project as community plugins. Their spec content is maintained in `community/docs/RFC-601-community-agents.md`.
+> **Note**: Skillify and Weaver agents have been migrated to the [soothe-community](https://github.com/OpenSoothe/soothe-community) project as community plugins. Their spec content is maintained in that repository at `docs/RFC-601-community-agents.md`.
 
 ---
 

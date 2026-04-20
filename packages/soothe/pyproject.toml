@@ -103,9 +103,9 @@ all = [
 soothe-daemon = "soothe.cli.daemon_main:app"
 
 [project.urls]
-Homepage = "https://github.com/caesar0301/soothe"
+Homepage = "https://github.com/OpenSoothe/soothe"
 Documentation = "https://soothe.readthedocs.io"
-Repository = "https://github.com/caesar0301/soothe"
+Repository = "https://github.com/OpenSoothe/soothe"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe"]

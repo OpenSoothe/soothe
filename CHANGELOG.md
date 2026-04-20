@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dockerfile for Soothe daemon with full extras and Playwright support
 
 ### Changed
+- Migrated soothe-community to standalone project ([github.com/OpenSoothe/soothe-community](https://github.com/OpenSoothe/soothe-community))
+- Removed soothe-community from monorepo workspace
 - Centralized version management across monorepo packages
 - Simplified version extraction logic
 - Use Chinese Docker registry mirror for builds

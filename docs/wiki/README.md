@@ -124,8 +124,8 @@ Learn more: [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension
 ### 🔗 External Links
 
 - **[PyPI Package](https://pypi.org/project/soothe/)** - Install the latest version
-- **[GitHub Repository](https://github.com/caesar0301/Soothe)** - Source code and issues
-- **[DeepWiki](https://deepwiki.com/caesar0301/Soothe)** - AI-powered documentation search
+- **[GitHub Repository](https://github.com/OpenSoothe/soothe)** - Source code and issues
+- **[DeepWiki](https://deepwiki.com/OpenSoothe/soothe)** - AI-powered documentation search
 
 ---
 
@@ -139,7 +139,7 @@ Learn more: [RFC-600: Plugin Extension System](../specs/RFC-600-plugin-extension
 
 ### Community
 
-- **Report issues**: [GitHub Issues](https://github.com/caesar0301/Soothe/issues)
+- **Report issues**: [GitHub Issues](https://github.com/OpenSoothe/soothe/issues)
 - **Ask questions**: Use GitHub Discussions or check the Troubleshooting guide
 
 ---

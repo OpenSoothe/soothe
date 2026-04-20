@@ -11,7 +11,6 @@ packages/soothe/tests/unit/plugin/          # Plugin system unit tests
 packages/soothe/tests/unit/core/runner/     # Runner bridge tests (GoalEngine → AgentLoop)
 packages/soothe-cli/tests/unit/             # CLI package unit tests
 packages/soothe-sdk/tests/                  # SDK package tests (unit + integration)
-packages/soothe-community/tests/integration/ # Community plugin integration tests
 ```
 
 Unit-level tests have been moved into their respective packages. Integration tests remain here because they test workspace-level functionality requiring a running daemon and external services.
