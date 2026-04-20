@@ -1,14 +1,25 @@
 ---
-name: IG-224 Fix Tool Call JSON Concatenation Bug
+name: IG-224 Fix Tool Call Display Issues
 status: completed
 created: 2026-04-20
 ---
 
-# IG-224: Fix Tool Call JSON Concatenation Bug
+# IG-224: Fix Tool Call Display Issues
 
 ## Problem
 
-Critical bug in `accumulate_tool_call_chunks()` causing tool arguments to never display when providers send mixed dict + string streaming patterns.
+Two critical issues preventing tool arguments from displaying correctly in TUI:
+
+### Issue 1: JSON Concatenation Bug (Fixed)
+
+Providers sending mixed dict + string chunks created invalid JSON by concatenating
+complete JSON objects with partial fragments.
+
+### Issue 2: Line Range Not Displayed (Fixed)
+
+Arguments parsed correctly (streaming overlay showed complete dicts), but tool headers
+didn't display `start_line`/`end_line` parameters, showing only `read_file(executor.py)`
+instead of `read_file(executor.py:1-150)`.
 
 ### Symptoms
 

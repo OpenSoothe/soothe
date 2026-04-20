@@ -186,6 +186,18 @@ def format_tool_display(tool_name: str, tool_args: dict) -> str:
             path = abbreviate_path(path_raw)
             if path_raw != raw_path:
                 path += _HIDDEN_CHAR_MARKER
+
+            # Show line range when present (start_line, end_line)
+            start_line = tool_args.get("start_line")
+            end_line = tool_args.get("end_line")
+            if start_line is not None and end_line is not None:
+                try:
+                    start = int(start_line)
+                    end = int(end_line)
+                    return f"{prefix} {tool_name}({path}:{start}-{end})"
+                except (ValueError, TypeError):
+                    pass  # Fall through to path-only display
+
             return f"{prefix} {tool_name}({path})"
         # No recognized path key: still show other kwargs in the header (was: silent
         # fallthrough → generic fallback → read_file(…) with no secondary args line
