@@ -27,7 +27,14 @@ class SQLiteDurability(BasePersistStoreDurability):
         Args:
             persist_store: Optional PersistStore instance. If None, creates SQLitePersistStore.
             db_path: Database file path. Used only when persist_store is None.
+                Defaults to metadata.db for ThreadInfo storage.
         """
         if persist_store is None:
-            persist_store = SQLitePersistStore(db_path, namespace="durability")
+            # Default to metadata.db for clear separation from checkpoints.db
+            from pathlib import Path
+
+            from soothe_sdk.client.config import SOOTHE_HOME
+
+            actual_path = db_path or str(Path(SOOTHE_HOME) / "metadata.db")
+            persist_store = SQLitePersistStore(actual_path, namespace="durability")
         super().__init__(persist_store)

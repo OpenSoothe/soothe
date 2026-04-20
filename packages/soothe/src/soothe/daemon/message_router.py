@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from langchain_core.messages import messages_from_dict
+from soothe_sdk.langchain_wire import messages_from_wire_dicts
 
 from soothe.core.runner._types import _generate_thread_id
 from soothe.core.workspace import validate_client_workspace
@@ -155,6 +155,9 @@ class MessageRouter:
             return
         if msg_type == "thread_artifacts":
             await self._handle_thread_artifacts(client_id, msg)
+            return
+        if msg_type == "thread_status":
+            await self._handle_thread_status(client_id, msg)
             return
         if msg_type == "thread_state":
             await self._handle_thread_state(client_id, msg)
@@ -463,12 +466,14 @@ class MessageRouter:
         thread_id = msg["thread_id"]
         limit = msg.get("limit", 100)
         offset = msg.get("offset", 0)
+        include_events = msg.get("include_events", False)  # NEW: full history mode
 
         try:
             messages = await d._runner.get_persisted_thread_messages(
                 thread_id,
                 limit=limit,
                 offset=offset,
+                include_events=include_events,
             )
             await d._send_client_message(
                 client_id,
@@ -478,6 +483,7 @@ class MessageRouter:
                     "messages": [m.model_dump(mode="json") for m in messages],
                     "limit": limit,
                     "offset": offset,
+                    "include_events": include_events,
                     "request_id": msg.get("request_id"),
                 },
             )
@@ -517,6 +523,47 @@ class MessageRouter:
                     "request_id": msg.get("request_id"),
                 },
             )
+
+    async def _handle_thread_status(self, client_id: str, msg: dict[str, Any]) -> None:
+        """Query thread runtime status (running vs idle).
+
+        Returns thread state for reconnecting to active threads.
+        """
+        d = self._daemon
+        thread_id = str(msg.get("thread_id", "")).strip()
+
+        if not thread_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "thread_id required",
+                    "request_id": msg.get("request_id"),
+                },
+            )
+            return
+
+        # Check thread registry for runtime state
+        thread_state = d._thread_registry.get(thread_id)
+
+        status = {
+            "thread_id": thread_id,
+            "state": "idle"
+            if not thread_state
+            else ("running" if thread_state.query_running else "idle"),
+            "has_active_query": thread_state.query_running if thread_state else False,
+            "last_activity": thread_state.last_activity if thread_state else None,
+        }
+
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "thread_status_response",
+                **status,
+                "request_id": msg.get("request_id"),
+            },
+        )
 
     async def _handle_thread_state(self, client_id: str, msg: dict[str, Any]) -> None:
         """Return raw checkpoint state values for a thread."""
@@ -579,7 +626,7 @@ class MessageRouter:
         if isinstance(values.get("messages"), list):
             try:
                 values = dict(values)
-                values["messages"] = messages_from_dict(values["messages"])
+                values["messages"] = messages_from_wire_dicts(values["messages"])
             except Exception:
                 logger.debug(
                     "Failed to deserialize thread_update_state messages for %s",

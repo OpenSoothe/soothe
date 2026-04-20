@@ -420,6 +420,7 @@ class ThreadContextManager:
         thread_id: str,
         limit: int = 100,
         offset: int = 0,
+        include_events: bool = False,
     ) -> list[ThreadMessage]:
         """Get thread conversation history.
 
@@ -427,6 +428,7 @@ class ThreadContextManager:
             thread_id: Thread ID
             limit: Maximum messages to return
             offset: Pagination offset
+            include_events: Include all event types (tool calls, events) not just conversation.
 
         Returns:
             List of ThreadMessage
@@ -435,17 +437,33 @@ class ThreadContextManager:
         records = logger_instance.read_recent_records(limit=limit + offset)
 
         # Convert to ThreadMessage format
-        return [
-            ThreadMessage(
-                timestamp=record.get("timestamp"),
-                kind="conversation",
-                role=record.get("role"),
-                content=record.get("text", ""),
-                metadata=record,
-            )
-            for record in records[offset : offset + limit]
-            if record.get("kind") == "conversation"
-        ]
+        if include_events:
+            # Full history mode: preserve all record kinds
+            return [
+                ThreadMessage(
+                    timestamp=record.get("timestamp"),
+                    kind=record.get("kind"),  # Preserve actual kind (event, tool_call, etc)
+                    role=record.get("role"),
+                    content=record.get("text")
+                    or record.get("content")
+                    or str(record.get("data", {})),
+                    metadata=record,
+                )
+                for record in records[offset : offset + limit]
+            ]
+        else:
+            # Legacy mode: conversation only
+            return [
+                ThreadMessage(
+                    timestamp=record.get("timestamp"),
+                    kind="conversation",
+                    role=record.get("role"),
+                    content=record.get("text", ""),
+                    metadata=record,
+                )
+                for record in records[offset : offset + limit]
+                if record.get("kind") == "conversation"
+            ]
 
     async def get_thread_artifacts(self, thread_id: str) -> list[ArtifactEntry]:
         """Get list of artifacts produced by thread.

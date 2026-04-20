@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import sqlite3
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from rich.cells import cell_len
 from textual.binding import Binding, BindingType
@@ -649,6 +649,7 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
         *,
         thread_limit: int | None = None,
         initial_threads: list[ThreadInfo] | None = None,
+        daemon_session: Any | None = None,
     ) -> None:
         """Initialize the `ThreadSelectorScreen`.
 
@@ -656,6 +657,7 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
             current_thread: The currently active thread ID (to highlight).
             thread_limit: Maximum number of rows to fetch when querying DB.
             initial_threads: Optional preloaded rows to render immediately.
+            daemon_session: TuiDaemonSession instance for WebSocket RPC thread listing.
         """
         super().__init__()
         self._current_thread = current_thread
@@ -673,6 +675,7 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
         self._filter_input: Input | None = None
         self._filter_controls: list[Input | Checkbox] | None = None
         self._cell_text: dict[tuple[str, str], str] = {}
+        self._daemon_session = daemon_session
 
         from soothe_cli.tui.model_config import load_thread_config
 
@@ -1291,9 +1294,23 @@ class ThreadSelectorScreen(ModalScreen[str | None]):
 
                 limit = get_thread_limit()
             sort_by = "updated" if self._sort_by_updated else "created"
-            self._threads = await list_threads(
-                limit=limit, include_message_count=False, sort_by=sort_by
-            )
+
+            # Use daemon RPC if available (queries actual thread persistence)
+            if self._daemon_session is not None:
+                from soothe_cli.tui.sessions import list_threads_via_daemon_rpc
+
+                self._threads = await list_threads_via_daemon_rpc(
+                    daemon_session=self._daemon_session,
+                    limit=limit,
+                    include_message_count=False,
+                    sort_by=sort_by,
+                )
+            else:
+                # Fallback to legacy direct database query (returns empty results)
+                logger.warning("No daemon session available, thread listing may be empty")
+                self._threads = await list_threads(
+                    limit=limit, include_message_count=False, sort_by=sort_by
+                )
         except (OSError, sqlite3.Error) as exc:
             logger.exception("Failed to load threads for thread selector")
             await self._show_mount_error(str(exc))

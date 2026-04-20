@@ -2,11 +2,9 @@
 
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
 from soothe_sdk.client.protocol import _serialize_for_json
+from soothe_sdk.langchain_wire import envelope_langchain_message_dict
 
-from soothe_cli.tui.daemon_session import (
-    TuiDaemonSession,
-    _envelope_langchain_message_dict,
-)
+from soothe_cli.tui.daemon_session import TuiDaemonSession
 
 
 def test_envelope_wraps_flat_ai_message_dict() -> None:
@@ -14,7 +12,7 @@ def test_envelope_wraps_flat_ai_message_dict() -> None:
     flat = _serialize_for_json(AIMessage(content="hello", id="m1"))
     assert isinstance(flat, dict)
     assert "data" not in flat
-    wrapped = _envelope_langchain_message_dict(flat)
+    wrapped = envelope_langchain_message_dict(flat)
     assert wrapped["type"] == "ai"
     assert "data" in wrapped
     restored = messages_from_dict([wrapped])
@@ -24,7 +22,7 @@ def test_envelope_wraps_flat_ai_message_dict() -> None:
 
 def test_envelope_wraps_flat_chunk_dict() -> None:
     flat = _serialize_for_json(AIMessageChunk(content="partial"))
-    wrapped = _envelope_langchain_message_dict(flat)
+    wrapped = envelope_langchain_message_dict(flat)
     restored = messages_from_dict([wrapped])
     assert isinstance(restored[0], AIMessageChunk)
     assert restored[0].content == "partial"
@@ -44,7 +42,7 @@ def test_envelope_maps_aimessage_class_name_to_wire_tag() -> None:
             }
         ],
     }
-    wrapped = _envelope_langchain_message_dict(flat)
+    wrapped = envelope_langchain_message_dict(flat)
     assert wrapped["type"] == "ai"
     restored = messages_from_dict([wrapped])
     assert isinstance(restored[0], AIMessage)
@@ -57,7 +55,7 @@ def test_envelope_idempotent_when_data_present() -> None:
     from langchain_core.messages import message_to_dict
 
     good = message_to_dict(m)
-    assert _envelope_langchain_message_dict(good) is good
+    assert envelope_langchain_message_dict(good) is good
 
 
 def test_normalize_stream_data_restores_ai_message() -> None:
