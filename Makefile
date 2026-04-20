@@ -163,12 +163,12 @@ sdk-sync:
 	cd packages/soothe-sdk && uv sync --all-extras
 	@echo "✓ SDK dependencies synced"
 
-sdk-format:
+sdk-format: sdk-sync
 	@echo "Formatting SDK code..."
 	cd packages/soothe-sdk && uv run ruff format src/
 	@echo "✓ SDK code formatted"
 
-sdk-lint:
+sdk-lint: sdk-sync
 	@echo "Linting SDK code..."
 	cd packages/soothe-sdk && uv run ruff check src/
 	@echo "✓ SDK linting complete"
@@ -202,12 +202,12 @@ cli-sync:
 	cd packages/soothe-cli && uv sync --all-extras
 	@echo "✓ CLI dependencies synced"
 
-cli-format:
+cli-format: cli-sync
 	@echo "Formatting CLI code..."
 	cd packages/soothe-cli && uv run ruff format src/
 	@echo "✓ CLI code formatted"
 
-cli-lint:
+cli-lint: cli-sync
 	@echo "Linting CLI code..."
 	cd packages/soothe-cli && uv run ruff check src/
 	@echo "✓ CLI linting complete"
@@ -241,12 +241,12 @@ community-sync:
 	cd packages/soothe-community && uv sync --all-extras
 	@echo "✓ Community dependencies synced"
 
-community-format:
+community-format: community-sync
 	@echo "Formatting community code..."
 	cd packages/soothe-community && uv run ruff format src/ tests/
 	@echo "✓ Community code formatted"
 
-community-lint:
+community-lint: community-sync
 	@echo "Linting community code..."
 	cd packages/soothe-community && uv run ruff check src/ tests/
 	@echo "✓ Community linting complete"

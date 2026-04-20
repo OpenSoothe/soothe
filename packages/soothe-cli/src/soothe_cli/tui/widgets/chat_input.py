@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_DATA_DIR
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.content import Content
@@ -45,7 +45,7 @@ def _default_history_path() -> Path:
     Uses the shared global history file so CLI and TUI navigate the same input
     corpus. Extracted as a function so tests can monkeypatch it to a temp path.
     """
-    return Path(SOOTHE_HOME) / "history.jsonl"
+    return Path(SOOTHE_DATA_DIR) / "history.jsonl"
 
 
 _PASTE_BURST_CHAR_GAP_SECONDS = 0.03

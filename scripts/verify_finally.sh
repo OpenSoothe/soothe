@@ -255,6 +255,12 @@ check_formatting() {
     else
         print_info "Checking code formatting across all packages..."
 
+        # Sync dev dependencies first so ruff is available
+        print_info "  Syncing dev dependencies..."
+        for pkg in soothe-sdk soothe-cli soothe soothe-community; do
+            cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
+        done
+
         # Check each package individually
         local format_failed=false
 
@@ -323,6 +329,11 @@ check_linting() {
         fi
     else
         print_info "Running linter across all packages..."
+
+        # Sync dev dependencies first so ruff is available
+        for pkg in soothe-sdk soothe-cli soothe soothe-community; do
+            cd packages/$pkg && uv sync --all-extras >/dev/null 2>&1 && cd - >/dev/null
+        done
 
         local lint_failed=false
 

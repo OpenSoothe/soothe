@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.client.config import SOOTHE_DATA_DIR
+
 from soothe.config import SOOTHE_HOME, SootheConfig
 
 if TYPE_CHECKING:
@@ -163,7 +165,7 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
 
         # Use new checkpoint_sqlite_path for LangGraph checkpoints (checkpoints.db)
         db_path = config.persistence.checkpoint_sqlite_path or str(
-            Path(SOOTHE_HOME) / "checkpoints.db"
+            Path(SOOTHE_DATA_DIR) / "checkpoints.db"
         )
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_path, check_same_thread=False)

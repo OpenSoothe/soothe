@@ -30,11 +30,11 @@ class SQLiteDurability(BasePersistStoreDurability):
                 Defaults to metadata.db for ThreadInfo storage.
         """
         if persist_store is None:
-            # Default to metadata.db for clear separation from checkpoints.db
+            # Default to data/metadata.db for clear separation from data/checkpoints.db
             from pathlib import Path
 
-            from soothe_sdk.client.config import SOOTHE_HOME
+            from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
-            actual_path = db_path or str(Path(SOOTHE_HOME) / "metadata.db")
+            actual_path = db_path or str(Path(SOOTHE_DATA_DIR) / "metadata.db")
             persist_store = SQLitePersistStore(actual_path, namespace="durability")
         super().__init__(persist_store)

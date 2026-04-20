@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME
+from soothe_sdk.client.config import SOOTHE_DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +18,12 @@ class GlobalInputHistory:
     """Cross-thread global input history stored in JSONL format.
 
     Stores all user inputs from all threads in a single JSONL file at
-    SOOTHE_HOME/history.jsonl. Provides deduplication, size limits, and
+    SOOTHE_DATA_DIR/history.jsonl. Provides deduplication, size limits, and
     cleanup for old entries.
 
     Args:
         history_file: Path to global history JSONL file.
-            Defaults to SOOTHE_HOME/history.jsonl.
+            Defaults to SOOTHE_DATA_DIR/history.jsonl.
         max_size: Maximum number of entries to retain.
         dedup_window: Number of recent entries to check for duplicates.
     """
@@ -41,7 +41,9 @@ class GlobalInputHistory:
             max_size: Maximum entries to retain.
             dedup_window: Recent entries to check for duplicates.
         """
-        self.history_file = Path(history_file or Path(SOOTHE_HOME) / "history.jsonl").expanduser()
+        self.history_file = Path(
+            history_file or Path(SOOTHE_DATA_DIR) / "history.jsonl"
+        ).expanduser()
         self.max_size = max_size
         self.dedup_window = dedup_window
         self._index_counter: int = 0
