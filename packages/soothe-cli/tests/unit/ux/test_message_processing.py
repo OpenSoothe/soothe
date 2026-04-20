@@ -111,6 +111,30 @@ class TestFormatToolCallArgs:
         # Path conversion will convert /pyproject.toml to actual OS path and abbreviate
         assert "pyproject.toml" in result
 
+    def test_task_tool_shows_subagent_and_description(self) -> None:
+        out = format_tool_call_args(
+            "task",
+            {
+                "args": {
+                    "subagent_type": "general-purpose",
+                    "description": "Scan the repo",
+                },
+            },
+        )
+        assert "general-purpose" in out
+        assert "Scan the repo" in out
+
+    def test_unmapped_tool_with_args_shows_compact_values(self) -> None:
+        out = format_tool_call_args(
+            "my_custom_plugin_tool",
+            {"args": {"query": "hello world", "limit": 5}},
+        )
+        assert "hello world" in out
+        assert "5" in out
+
+    def test_unmapped_tool_no_args_shows_ellipsis_placeholder(self) -> None:
+        assert format_tool_call_args("my_custom_plugin_tool", {"args": {}}) == "…"
+
 
 class TestStripInternalTags:
     """Test whitespace normalization in strip_internal_tags()."""

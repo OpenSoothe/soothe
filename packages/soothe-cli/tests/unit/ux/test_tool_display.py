@@ -59,6 +59,13 @@ def test_read_file_unwraps_nested_args_envelope() -> None:
     assert "README.md" in s
 
 
+def test_read_file_without_path_key_shows_other_args_not_placeholder() -> None:
+    """Unknown path keys used to fall through and collapse to read_file(…) (IG-219)."""
+    s = format_tool_display("read_file", {"start_line": 1, "end_line": 10, "encoding": "utf-8"})
+    assert "(…)" not in s
+    assert "start_line=" in s or "1" in s
+
+
 def test_tool_call_message_infers_name_from_tool_call_id() -> None:
     w = ToolCallMessage("tool", {}, tool_call_id="functions.glob:2", id="x")
     assert w._tool_name == "glob"
@@ -77,3 +84,20 @@ def test_glob_empty_args_shows_default_pattern_hint() -> None:
 def test_unknown_tool_empty_args_shows_ellipsis_not_bare_parens() -> None:
     s = format_tool_display("custom_tool", {})
     assert "(…)" in s
+
+
+def test_task_shows_type_in_parentheses_not_brackets() -> None:
+    s = format_tool_display(
+        "task",
+        {"subagent_type": "general-purpose", "description": "Do the thing"},
+    )
+    assert "[" not in s
+    assert "general-purpose" in s
+    assert "Do the thing" in s
+    assert "(" in s and ")" in s
+
+
+def test_task_type_only_uses_parentheses() -> None:
+    s = format_tool_display("task", {"subagent_type": "browser"})
+    assert "[" not in s
+    assert "browser" in s

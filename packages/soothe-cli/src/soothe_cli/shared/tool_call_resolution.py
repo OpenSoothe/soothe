@@ -12,6 +12,7 @@ duplicate precedence rules across merge/backfill helpers.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -21,6 +22,8 @@ from soothe_cli.shared.message_processing import (
     normalize_tool_calls_list,
     try_parse_pending_tool_call_args,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def infer_tool_name_from_call_id(tool_call_id: str) -> str | None:
@@ -243,7 +246,13 @@ def build_streaming_args_overlay(
     message: Any,
     pending_tool_calls_lc: dict[str, dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Map ``tool_call_id`` → parsed args dict from ``tool_call_chunks`` accumulation."""
+    """Map ``tool_call_id`` → parsed args dict from ``tool_call_chunks`` accumulation.
+
+    Updates the overlay on every chunk whenever JSON parses successfully. A prior
+    version stopped after the first parse (``tui_stream_mounted``), which froze the
+    overlay when ``args_str`` grew across chunks so the TUI kept ``read_file(…)``
+    headers even after the path arrived in the accumulated string.
+    """
     from langchain_core.messages import AIMessageChunk
 
     overlay: dict[str, dict[str, Any]] = {}
@@ -252,8 +261,6 @@ def build_streaming_args_overlay(
     )
 
     for tc_id, pend in list(pending_tool_calls_lc.items()):
-        if pend.get("tui_stream_mounted"):
-            continue
         parsed = try_parse_pending_tool_call_args(pend)
         if parsed is None:
             continue
@@ -262,9 +269,18 @@ def build_streaming_args_overlay(
             continue
         if not parsed and not streaming_final:
             continue
-        pend["tui_stream_mounted"] = True
         str_id = str(tc_id)
         overlay[str_id] = parsed
+        if logger.isEnabledFor(logging.DEBUG):
+            args_preview = str(parsed)[:200]
+            logger.debug(
+                "tool_stream_overlay id=%s name=%s keys=%s streaming_final=%s preview=%s",
+                str_id,
+                name,
+                sorted(parsed.keys()) if isinstance(parsed, dict) else "?",
+                streaming_final,
+                args_preview,
+            )
     return overlay
 
 

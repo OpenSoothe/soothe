@@ -360,7 +360,11 @@ class TextualUIAdapter:
 
         # State tracking
         self._current_tool_messages: dict[str, ToolCallMessage] = {}
-        """Map of tool call IDs to their message widgets."""
+        """Map of tool call IDs to widgets still awaiting a ``ToolMessage`` (in-flight)."""
+
+        self._tool_display_by_call_id: dict[str, ToolCallMessage] = {}
+        """Stable tool_call_id → card for header refresh after ``ToolMessage`` (popped from
+        ``_current_tool_messages``). Cleared with the same lifecycle as in-flight tools."""
 
         self._current_step_messages: dict[str, CognitionStepMessage] = {}
         """Map of agent-loop act step IDs to step card widgets."""
@@ -390,6 +394,7 @@ class TextualUIAdapter:
         for tool_msg in list(self._current_tool_messages.values()):
             tool_msg.set_error(error)
         self._current_tool_messages.clear()
+        self._tool_display_by_call_id.clear()
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -1031,6 +1036,7 @@ async def execute_task_textual(
                                 tool_call_id=str(tool_id),
                             )
                             await adapter._mount_message(orphan)
+                            adapter._tool_display_by_call_id[str(tool_id)] = orphan
                             output_str = tool_card.output_display
                             if not tool_card.is_error:
                                 orphan.set_success(output_str)
@@ -1235,13 +1241,13 @@ async def execute_task_textual(
                                 )
                                 continue
 
-                            if (
-                                lookup_id
-                                and args_meaningful
-                                and lookup_id in adapter._current_tool_messages
-                            ):
-                                existing = adapter._current_tool_messages[lookup_id]
-                                existing.refresh_tool_args(parsed_args)
+                            existing_tool = None
+                            if lookup_id:
+                                existing_tool = adapter._current_tool_messages.get(
+                                    lookup_id
+                                ) or adapter._tool_display_by_call_id.get(lookup_id)
+                            if lookup_id and args_meaningful and existing_tool is not None:
+                                existing_tool.refresh_tool_args(parsed_args)
                                 logger.debug(
                                     "Tool call args refreshed on existing card: id=%s name=%s",
                                     lookup_id,
@@ -1286,6 +1292,7 @@ async def execute_task_textual(
                                     )
                                     await adapter._mount_message(tool_msg)
                                     adapter._current_tool_messages[lookup_id] = tool_msg
+                                    adapter._tool_display_by_call_id[lookup_id] = tool_msg
                                 else:
                                     logger.debug(
                                         "Tool call block not shown as card (tool UI off): "
@@ -1697,6 +1704,7 @@ async def execute_task_textual(
                                 for tool_msg in tool_msgs:
                                     tool_msg.set_rejected()
                                 adapter._current_tool_messages.clear()
+                                adapter._tool_display_by_call_id.clear()
                                 any_rejected = True
                             else:
                                 logger.warning(
@@ -1707,6 +1715,7 @@ async def execute_task_textual(
                                 for tool_msg in list(adapter._current_tool_messages.values()):
                                     tool_msg.set_rejected()
                                 adapter._current_tool_messages.clear()
+                                adapter._tool_display_by_call_id.clear()
                                 any_rejected = True
                         else:
                             logger.warning(
@@ -1717,6 +1726,7 @@ async def execute_task_textual(
                             for tool_msg in list(adapter._current_tool_messages.values()):
                                 tool_msg.set_rejected()
                             adapter._current_tool_messages.clear()
+                            adapter._tool_display_by_call_id.clear()
                             any_rejected = True
 
                         resume_payload[interrupt_id] = {"decisions": decisions}
@@ -1825,6 +1835,7 @@ async def _handle_interrupt_cleanup(
     for tool_msg in list(adapter._current_tool_messages.values()):
         tool_msg.set_rejected()
     adapter._current_tool_messages.clear()
+    adapter._tool_display_by_call_id.clear()
 
     for step_msg in list(adapter._current_step_messages.values()):
         step_msg.set_interrupted("Interrupted by user")

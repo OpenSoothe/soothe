@@ -31,6 +31,46 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_CLAUDE_TOOL_PREVIEW_MAX_LEN = 120
+
+
+def _preview_claude_tool_input(
+    tool_input: Any, *, max_len: int = _CLAUDE_TOOL_PREVIEW_MAX_LEN
+) -> str:
+    """Compact tool arguments for progress summaries (parentheses content).
+
+    Args:
+        tool_input: SDK ``ToolUseBlock.input`` (often a dict).
+        max_len: Maximum length of the returned preview string.
+
+    Returns:
+        Human-readable summary, or "…" when there is nothing to show.
+    """
+    if tool_input is None:
+        return "…"
+    if isinstance(tool_input, dict):
+        if not tool_input:
+            return "…"
+        parts: list[str] = []
+        for k in sorted(tool_input.keys()):
+            if len(parts) >= 3:
+                break
+            v = tool_input[k]
+            vs = str(v).replace("\n", " ").strip()
+            if len(vs) > 40:
+                vs = vs[:37] + "..."
+            parts.append(f"{k}={vs}")
+        out = ", ".join(parts)
+        if len(out) > max_len:
+            return out[: max_len - 1] + "…"
+        return out
+    s = str(tool_input).replace("\n", " ").strip()
+    if not s:
+        return "…"
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
 
 def _resolve_claude_cwd(fallback: str) -> str:
     """Pick Claude Code CLI working directory (RFC-103, multi-client daemon).
@@ -241,7 +281,10 @@ def _build_claude_graph(
                                 str(tool_input)[:200] if tool_input else "<none>",
                             )
                             _emit(
-                                ClaudeToolUseEvent(tool=block.name).to_dict(),
+                                ClaudeToolUseEvent(
+                                    tool=block.name,
+                                    args_preview=_preview_claude_tool_input(tool_input),
+                                ).to_dict(),
                                 logger,
                             )
                 elif isinstance(message, ResultMessage):

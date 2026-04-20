@@ -36,6 +36,7 @@ class ClaudeToolUseEvent(SubagentEvent):
 
     type: Literal["soothe.capability.claude.tool.running"] = "soothe.capability.claude.tool.running"
     tool: str = ""
+    args_preview: str = "…"
 
     model_config = ConfigDict(extra="allow")
 
@@ -70,7 +71,7 @@ register_event(
 register_event(
     ClaudeToolUseEvent,
     verbosity=VerbosityTier.DETAILED,
-    summary_template="Tool: {tool}",
+    summary_template="Tool: {tool}({args_preview})",
 )
 register_event(
     ClaudeResultEvent,
