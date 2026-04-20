@@ -52,6 +52,97 @@ class TestAccumulateToolCallChunks:
         assert pending["call-a"]["args_str"] == '{"file_path": "/tmp/x.md"}'
         assert pending["call-b"]["args_str"] == '{"directory": "/proj"}'
 
+    def test_dict_then_string_replaces_not_concatenates(self) -> None:
+        """Non-empty dict on first chunk + string fragments must REPLACE (not concatenate).
+
+        This is the critical bug fix: if args_str already contains complete JSON from a
+        dict, subsequent string fragments should restart accumulation, not concatenate.
+
+        Provider pattern: sends initial dict with provisional args, then refines with strings.
+        """
+        pending: dict[str, Any] = {}
+
+        # Chunk 1: non-empty dict (complete JSON)
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-1", "name": "read_file", "args": {"file_path": "/old.txt"}}],
+        )
+        assert pending["call-1"]["args_str"] == '{"file_path": "/old.txt"}'
+        assert pending["call-1"]["is_complete_json"] is True
+
+        # Chunk 2: string fragment (provider refined args)
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-1", "args": '{"path": "'}],
+        )
+        # Should REPLACE, not concatenate: '{"file_path": "/old.txt"}{"path": "' would be invalid
+        assert pending["call-1"]["args_str"] == '{"path": "'
+        assert pending["call-1"]["is_complete_json"] is False
+
+        # Chunk 3: more string
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-1", "args": '/new.md"}'}],
+        )
+        assert pending["call-1"]["args_str"] == '{"path": "/new.md"}'
+        assert pending["call-1"]["is_complete_json"] is False
+
+        # Verify parse succeeds (would fail if concatenation bug present)
+        parsed = try_parse_pending_tool_call_args(pending["call-1"])
+        assert parsed == {"path": "/new.md"}
+
+    def test_empty_dict_then_string_accumulates_normally(self) -> None:
+        """Empty dict on first chunk + strings should work (not affected by fix)."""
+        pending: dict[str, Any] = {}
+
+        # Chunk 1: empty dict (falls to else → args_str = "")
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-2", "name": "ls", "args": {}}],
+        )
+        assert pending["call-2"]["args_str"] == ""
+        assert pending["call-2"]["is_complete_json"] is False
+
+        # Chunk 2: string fragment
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-2", "args": '{"directory": "'}],
+        )
+        assert pending["call-2"]["args_str"] == '{"directory": "'
+
+        # Chunk 3: more string
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-2", "args": '/proj"}'}],
+        )
+        assert pending["call-2"]["args_str"] == '{"directory": "/proj"}'
+
+        parsed = try_parse_pending_tool_call_args(pending["call-2"])
+        assert parsed == {"directory": "/proj"}
+
+    def test_dict_replacement_clears_string_accumulation(self) -> None:
+        """String → dict replacement should work (existing behavior, preserved)."""
+        pending: dict[str, Any] = {}
+
+        # Chunk 1: string (partial)
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-3", "name": "read_file", "args": '{"old": "'}],
+        )
+        assert pending["call-3"]["args_str"] == '{"old": "'
+        assert pending["call-3"]["is_complete_json"] is False
+
+        # Chunk 2: complete dict (replaces)
+        accumulate_tool_call_chunks(
+            pending,
+            [{"id": "call-3", "args": {"new": "/final"}}],
+        )
+        assert pending["call-3"]["args_str"] == '{"new": "/final"}'
+        assert pending["call-3"]["is_complete_json"] is True
+
+        parsed = try_parse_pending_tool_call_args(pending["call-3"])
+        assert parsed == {"new": "/final"}
+
 
 class TestExtractToolArgsDict:
     """``extract_tool_args_dict`` normalizes provider-specific shapes."""
