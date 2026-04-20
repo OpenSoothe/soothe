@@ -6,6 +6,24 @@ from soothe_cli.tui.tool_display import format_tool_display
 from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 
+def test_read_file_shows_line_range_when_present() -> None:
+    """read_file with start_line and end_line should show 'filename:start-end'."""
+    s = format_tool_display("read_file", {
+        "path": "/Users/dev/project/src/module.py",
+        "start_line": 100,
+        "end_line": 250
+    })
+    assert "module.py:100-250" in s
+    assert "read_file" in s
+
+
+def test_read_file_shows_only_path_when_no_lines() -> None:
+    """read_file without line params should show just filename."""
+    s = format_tool_display("read_file", {"path": "/tmp/README.md"})
+    assert "README.md" in s
+    assert ":" not in s  # No line range
+
+
 def test_read_file_accepts_pascal_case_and_file_path() -> None:
     s = format_tool_display("ReadFile", {"file_path": "/tmp/README.md"})
     assert "README.md" in s
