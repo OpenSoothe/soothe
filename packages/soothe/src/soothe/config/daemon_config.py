@@ -81,8 +81,7 @@ class DaemonConfig(BaseModel):
 
     Args:
         transports: Transport layer configuration.
-        max_concurrent_threads: Maximum concurrent threads for multi-threading (RFC-402).
-        multi_threading_enabled: Enable multi-threaded execution (RFC-402).
+        max_concurrent_threads: Maximum concurrent threads (0 = unlimited).
         max_query_duration_minutes: Maximum query duration in minutes (0 = unlimited).
         query_timeout_action: Action on timeout (cancel | suspend).
         thread_max_age_hours: Auto-cancel incomplete threads older than N hours.
@@ -90,9 +89,8 @@ class DaemonConfig(BaseModel):
     """
 
     transports: TransportConfig = Field(default_factory=TransportConfig)
-    max_concurrent_threads: int = Field(default=100, description="Maximum concurrent threads")
-    multi_threading_enabled: bool = Field(
-        default=False, description="Enable multi-threaded execution"
+    max_concurrent_threads: int = Field(
+        default=100, description="Maximum concurrent threads (0 = unlimited)"
     )
     # Query timeout safeguards (IG-138)
     max_query_duration_minutes: int = Field(

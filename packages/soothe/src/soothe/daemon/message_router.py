@@ -49,20 +49,17 @@ class MessageRouter:
         if msg_type == "input":
             text = msg.get("text", "").strip()
             if text:
-                multi_threading_enabled = getattr(
-                    d._config.daemon, "multi_threading_enabled", False
-                )
-                has_active_threads = bool(d._active_threads)
-                has_active_query = has_active_threads or d._query_running
-                if has_active_query and not multi_threading_enabled:
+                max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+                at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+                if at_capacity:
                     await d._send_client_message(
                         client_id,
                         {
                             "type": "error",
                             "code": "DAEMON_BUSY",
                             "message": (
-                                "Daemon is already processing another query. "
-                                "Wait for it to finish or cancel it before starting a new one."
+                                f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                                "Wait for a query to finish or cancel one before starting a new one."
                             ),
                             "thread_id": d._runner.current_thread_id if d._runner else "",
                         },
@@ -792,18 +789,17 @@ class MessageRouter:
             resolve_skill_directory,
         )
 
-        multi_threading_enabled = getattr(d._config.daemon, "multi_threading_enabled", False)
-        has_active_threads = bool(d._active_threads)
-        has_active_query = has_active_threads or d._query_running
-        if has_active_query and not multi_threading_enabled:
+        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        if at_capacity:
             await d._send_client_message(
                 client_id,
                 {
                     "type": "error",
                     "code": "DAEMON_BUSY",
                     "message": (
-                        "Daemon is already processing another query. "
-                        "Wait for it to finish or cancel it before starting a new one."
+                        f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                        "Wait for a query to finish or cancel one before starting a new one."
                     ),
                     "thread_id": d._runner.current_thread_id if d._runner else "",
                     "request_id": msg.get("request_id"),

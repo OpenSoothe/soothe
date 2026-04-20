@@ -184,9 +184,10 @@ async def test_non_cancel_command_still_enqueues() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_input_message_returns_busy_error_while_query_running() -> None:
+async def test_daemon_input_message_returns_busy_error_at_concurrency_limit() -> None:
     daemon = SootheDaemon(SootheConfig())
-    daemon._query_running = True
+    daemon._config.daemon.max_concurrent_threads = 1
+    daemon._active_threads = {"thread-busy": SimpleNamespace()}
     daemon._runner = SimpleNamespace(current_thread_id="thread-busy")
 
     transport = SimpleNamespace(send=AsyncMock())
@@ -205,8 +206,8 @@ async def test_daemon_input_message_returns_busy_error_while_query_running() -> 
             "type": "error",
             "code": "DAEMON_BUSY",
             "message": (
-                "Daemon is already processing another query. "
-                "Wait for it to finish or cancel it before starting a new one."
+                "Daemon has reached its concurrent query limit (1). "
+                "Wait for a query to finish or cancel one before starting a new one."
             ),
             "thread_id": "thread-busy",
         },
