@@ -49,22 +49,33 @@ def accumulate_tool_call_chunks(
         if tc_name and tc_id and tc_id not in pending_tool_calls:
             if isinstance(tc_args, str):
                 args_str = tc_args
+                is_complete = False  # String may be partial JSON
             elif isinstance(tc_args, dict) and tc_args:
                 args_str = json.dumps(tc_args)
+                is_complete = True  # Dict yields complete JSON
             else:
                 args_str = ""
+                is_complete = False  # Empty or missing args
             pending_tool_calls[tc_id] = {
                 "name": tc_name,
                 "args_str": args_str,
+                "is_complete_json": is_complete,
                 "emitted": False,
                 "is_main": is_main,
             }
-        # Some providers send final args as a dict on a later chunk
+        # Some providers send final args as a dict on a later chunk (replace previous)
         elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, dict) and tc_args:
             pending_tool_calls[tc_id]["args_str"] = json.dumps(tc_args)
+            pending_tool_calls[tc_id]["is_complete_json"] = True
         # Subsequent chunks: accumulate partial JSON strings for this tool call id
         elif tc_id and tc_id in pending_tool_calls and isinstance(tc_args, str) and tc_args:
-            pending_tool_calls[tc_id]["args_str"] += tc_args
+            # If args_str already contains complete JSON, provider refined args → restart
+            if pending_tool_calls[tc_id].get("is_complete_json"):
+                pending_tool_calls[tc_id]["args_str"] = tc_args
+                pending_tool_calls[tc_id]["is_complete_json"] = False
+            else:
+                # Normal partial accumulation
+                pending_tool_calls[tc_id]["args_str"] += tc_args
         elif tc_args and isinstance(tc_args, str) and tc_args:
             # Legacy: chunks missing ``id`` — attach to the first non-emitted pending call
             for pending in pending_tool_calls.values():
