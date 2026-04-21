@@ -106,6 +106,13 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
     await daemon._run_query("download skills", autonomous=True, max_iterations=42)
 
+    # IG-054: run_query now creates background task, wait for it to complete
+    if daemon._active_threads:
+        tasks = list(daemon._active_threads.values())
+        for task in tasks:
+            if task and not task.done():
+                await task
+
     assert daemon._runner.calls  # type: ignore[attr-defined]
     call = daemon._runner.calls[0]  # type: ignore[attr-defined]
     assert call["text"] == "download skills"
@@ -184,7 +191,14 @@ async def test_non_cancel_command_still_enqueues() -> None:
 
 
 @pytest.mark.asyncio
-async def test_daemon_input_message_returns_busy_error_at_concurrency_limit() -> None:
+async def test_daemon_input_message_queued_at_capacity() -> None:
+    """IG-054: Capacity check moved to query_engine to eliminate race condition.
+
+    The message router no longer checks capacity - it only queues the input.
+    The capacity check happens later in query_engine.run_query() right before
+    creating the task, which eliminates the race window between checking
+    len(_active_threads) and actually creating the task.
+    """
     daemon = SootheDaemon(SootheConfig())
     daemon._config.daemon.max_concurrent_threads = 1
     daemon._active_threads = {"thread-busy": SimpleNamespace()}
@@ -195,23 +209,21 @@ async def test_daemon_input_message_returns_busy_error_at_concurrency_limit() ->
     session = SimpleNamespace(transport=transport, transport_client=transport_client)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
 
+    # Input should be queued (no immediate DAEMON_BUSY error at router level)
     await daemon._handle_client_message(
         "client-1",
         {"type": "input", "text": "crawl", "autonomous": True, "max_iterations": 12},
     )
 
-    transport.send.assert_awaited_once_with(
-        transport_client,
-        {
-            "type": "error",
-            "code": "DAEMON_BUSY",
-            "message": (
-                "Daemon has reached its concurrent query limit (1). "
-                "Wait for a query to finish or cancel one before starting a new one."
-            ),
-            "thread_id": "thread-busy",
-        },
-    )
+    # Message should be queued, not rejected immediately
+    queued = await daemon._current_input_queue.get()
+    assert queued["type"] == "input"
+    assert queued["text"] == "crawl"
+    assert queued["autonomous"] is True
+    assert queued["max_iterations"] == 12
+
+    # No DAEMON_BUSY error sent at routing level (happens later in query_engine)
+    transport.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -257,6 +269,13 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
 
     # Run a query
     await daemon._run_query("Hello, assistant")
+
+    # IG-054: run_query now creates background task, wait for it to complete
+    if daemon._active_threads:
+        tasks = list(daemon._active_threads.values())
+        for task in tasks:
+            if task and not task.done():
+                await task
 
     # Verify thread was logged
     records = thread_logger.read_recent_records(limit=20)
@@ -476,6 +495,13 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
 
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
     await daemon._run_query("analyze project structure")
+
+    # IG-054: run_query now creates background task, wait for it to complete
+    if daemon._active_threads:
+        tasks = list(daemon._active_threads.values())
+        for task in tasks:
+            if task and not task.done():
+                await task
 
     status_messages = [msg for msg in sent if msg.get("type") == "status"]
     assert status_messages[0]["state"] == "running"

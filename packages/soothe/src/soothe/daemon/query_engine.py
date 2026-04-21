@@ -13,7 +13,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe.core.event_catalog import ERROR
 from soothe.core.workspace_resolution import resolve_workspace_for_stream
 from soothe.foundation import extract_text_from_ai_message, strip_internal_tags
 from soothe.logging import ThreadLogger
@@ -97,8 +96,41 @@ class QueryEngine:
             }
             d._global_history.add(text, thread_id=thread_id, metadata=metadata)
 
+        # IG-054: Check capacity BEFORE creating task (not at message routing time)
+        # This eliminates race window between capacity check and task creation
+        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        if at_capacity:
+            logger.warning(
+                "Daemon at capacity (%d/%d threads), rejecting query for thread %s",
+                len(d._active_threads),
+                max_concurrent,
+                thread_id,
+            )
+            from soothe.core.event_catalog import ERROR
+
+            await d._broadcast(
+                {
+                    "type": "event",
+                    "thread_id": thread_id,
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": {
+                        "type": ERROR,
+                        "error": (
+                            f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                            "Wait for a query to finish or cancel one before starting a new one."
+                        ),
+                        "code": "DAEMON_BUSY",
+                    },
+                }
+            )
+            await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+            if client_id:
+                await d._session_manager.release_thread_ownership(client_id)
+            return
+
         # No placeholder pattern - set task directly after creation
-        # IG-054: Remove race condition between capacity check and task creation
         d._query_running = True
 
         if client_id:
@@ -328,36 +360,51 @@ class QueryEngine:
                 d._active_threads.pop(thread_id, None)
                 d._pending_interrupt_responses.pop(thread_id, None)
 
+                # IG-054: Moved post-query logic here since we don't await task
+                final_thread_id = d._runner.current_thread_id or ""
+                if final_thread_id and final_thread_id != thread_id:
+                    d._thread_logger = ThreadLogger(
+                        thread_id=final_thread_id,
+                        retention_days=d._config.logging.thread_logging.retention_days,
+                        max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                    )
+                    d._thread_logger.log_user_input(text)
+
+                if full_response:
+                    d._thread_logger.log_assistant_response("".join(full_response))
+
+                if final_thread_id:
+                    await d._runner.touch_thread_activity_timestamp(final_thread_id)
+
+                completion_thread_id = thread_id or final_thread_id
+                await d._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                )
+
+                # Release thread ownership
+                if client_id:
+                    await d._session_manager.release_thread_ownership(client_id)
+                d._current_query_task = None
+
         try:
             task = asyncio.create_task(_run_stream())
             d._current_query_task = task
             d._active_threads[thread_id] = task
-            await task
+            # IG-054: DO NOT await task - let it run in background
+            # This allows the input loop to process concurrent queries
+            # The task's internal finally block handles cleanup
         except asyncio.CancelledError:
-            logger.info("Query task cancelled")
+            logger.info("Query task cancelled during creation")
             d._runner.set_current_thread_id(None)
-        finally:
-            d._current_query_task = None
+            raise
+        except Exception:
+            logger.exception("Failed to create query task")
+            d._query_running = False
+            if thread_id in d._active_threads:
+                d._active_threads.pop(thread_id, None)
             if client_id:
                 await d._session_manager.release_thread_ownership(client_id)
-
-        final_thread_id = d._runner.current_thread_id or ""
-        if final_thread_id and final_thread_id != thread_id:
-            d._thread_logger = ThreadLogger(
-                thread_id=final_thread_id,
-                retention_days=d._config.logging.thread_logging.retention_days,
-                max_size_mb=d._config.logging.thread_logging.max_size_mb,
-            )
-            d._thread_logger.log_user_input(text)
-
-        if full_response:
-            d._thread_logger.log_assistant_response("".join(full_response))
-
-        if final_thread_id:
-            await d._runner.touch_thread_activity_timestamp(final_thread_id)
-
-        completion_thread_id = thread_id or final_thread_id
-        await d._broadcast({"type": "status", "state": "idle", "thread_id": completion_thread_id})
+            raise
 
     async def run_query_multithreaded(
         self,
@@ -405,6 +452,40 @@ class QueryEngine:
                 "subagent": subagent,
             }
             d._global_history.add(text, thread_id=thread_id, metadata=metadata)
+
+        # IG-054: Check capacity BEFORE creating task (not at message routing time)
+        # This eliminates race window between capacity check and task creation
+        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        if at_capacity:
+            logger.warning(
+                "Daemon at capacity (%d/%d threads), rejecting multithreaded query for thread %s",
+                len(d._active_threads),
+                max_concurrent,
+                thread_id,
+            )
+            from soothe.core.event_catalog import ERROR
+
+            await d._broadcast(
+                {
+                    "type": "event",
+                    "thread_id": thread_id,
+                    "namespace": [],
+                    "mode": "custom",
+                    "data": {
+                        "type": ERROR,
+                        "error": (
+                            f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                            "Wait for a query to finish or cancel one before starting a new one."
+                        ),
+                        "code": "DAEMON_BUSY",
+                    },
+                }
+            )
+            await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+            if client_id:
+                await d._session_manager.release_thread_ownership(client_id)
+            return
 
         if client_id:
             await d._session_manager.claim_thread_ownership(client_id, thread_id)
@@ -509,36 +590,51 @@ class QueryEngine:
                 d._query_running = False
                 d._active_threads.pop(thread_id, None)
 
+                # IG-054: Moved post-query logic here since we don't await task
+                final_thread_id = d._runner.current_thread_id or ""
+                if final_thread_id and final_thread_id != thread_id:
+                    d._thread_logger = ThreadLogger(
+                        thread_id=final_thread_id,
+                        retention_days=d._config.logging.thread_logging.retention_days,
+                        max_size_mb=d._config.logging.thread_logging.max_size_mb,
+                    )
+                    d._thread_logger.log_user_input(text)
+
+                if full_response:
+                    d._thread_logger.log_assistant_response("".join(full_response))
+
+                if final_thread_id:
+                    await d._runner.touch_thread_activity_timestamp(final_thread_id)
+
+                completion_thread_id = thread_id or final_thread_id
+                await d._broadcast(
+                    {"type": "status", "state": "idle", "thread_id": completion_thread_id}
+                )
+
+                # Release thread ownership
+                if client_id:
+                    await d._session_manager.release_thread_ownership(client_id)
+                d._current_query_task = None
+
         try:
             task = asyncio.create_task(_run_stream())
             d._current_query_task = task
             d._active_threads[thread_id] = task
-            await task
+            # IG-054: DO NOT await task - let it run in background
+            # This allows the input loop to process concurrent queries
+            # The task's internal finally block handles cleanup
         except asyncio.CancelledError:
-            logger.info("Query task cancelled for thread %s", thread_id)
+            logger.info("Query task cancelled during creation for thread %s", thread_id)
             d._runner.set_current_thread_id(None)
-        finally:
-            d._current_query_task = None
+            raise
+        except Exception:
+            logger.exception("Failed to create multithreaded query task for thread %s", thread_id)
+            d._query_running = False
+            if thread_id in d._active_threads:
+                d._active_threads.pop(thread_id, None)
             if client_id:
                 await d._session_manager.release_thread_ownership(client_id)
-
-        final_thread_id = d._runner.current_thread_id or ""
-        if final_thread_id and final_thread_id != thread_id:
-            d._thread_logger = ThreadLogger(
-                thread_id=final_thread_id,
-                retention_days=d._config.logging.thread_logging.retention_days,
-                max_size_mb=d._config.logging.thread_logging.max_size_mb,
-            )
-            d._thread_logger.log_user_input(text)
-
-        if full_response:
-            d._thread_logger.log_assistant_response("".join(full_response))
-
-        if final_thread_id:
-            await d._runner.touch_thread_activity_timestamp(final_thread_id)
-
-        completion_thread_id = thread_id or final_thread_id
-        await d._broadcast({"type": "status", "state": "idle", "thread_id": completion_thread_id})
+            raise
 
     async def cancel_current_query(self) -> None:
         """Cancel the currently running query if any."""
