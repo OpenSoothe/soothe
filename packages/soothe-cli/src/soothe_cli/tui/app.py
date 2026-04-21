@@ -720,6 +720,7 @@ class SootheApp(App):
         self._thread_switching = False
 
         self._model_switching = False
+        self._detaching = False
 
         self._deferred_actions: list[DeferredAction] = []
         """Deferred actions executed after the current busy state resolves."""
@@ -4598,11 +4599,31 @@ class SootheApp(App):
             return
         if isinstance(self.screen, DeleteThreadConfirmScreen):
             if self._quit_pending:
-                self.exit()
+                self._detach_or_exit()
                 return
             self._arm_quit_pending("Ctrl+D")
             return
-        self.exit()
+        self._detach_or_exit()
+
+    async def _detach_then_exit(self) -> None:
+        """Detach from daemon, then exit the app."""
+        if self._detaching:
+            return
+        self._detaching = True
+        try:
+            if self._daemon_session is not None:
+                await self._daemon_session.detach()
+            self.exit()
+        finally:
+            self._detaching = False
+
+    def _detach_or_exit(self) -> None:
+        """Exit immediately, or detach first when daemon-backed."""
+        if self._daemon_session is None:
+            self.exit()
+            return
+        self.notify("Detaching from daemon...", severity="info")
+        self.run_worker(self._detach_then_exit(), exclusive=False, group="daemon-detach")
 
     def exit(
         self,
@@ -5446,11 +5467,7 @@ class SootheApp(App):
 
     def action_detach(self) -> None:
         """Exit TUI but leave daemon running."""
-        self.notify("Detaching from daemon...", severity="info")
-        if self._daemon_session is not None:
-            self.run_worker(self._daemon_session.detach(), exclusive=False)
-        # Exit without stopping daemon
-        self.exit()
+        self._detach_or_exit()
 
 
 @dataclass(frozen=True)
