@@ -8,54 +8,73 @@ created: 2026-04-20
 
 ## Problem
 
-Critical race condition in single-threaded query path causing capacity check to incorrectly block concurrent queries when only one query is starting.
+Critical race condition in concurrent query handling causing capacity limit violations.
 
-### Race Window
+### Race Window (Actual Problem)
 
-```python
-# Single-threaded path (buggy):
-Line 104: _active_threads[thread_id] = None  # Placeholder under lock
-Line 332: _active_threads.pop(thread_id)     # Removed in finally
-Line 338: _active_threads[thread_id] = task  # Set AFTER finally
-
-# Window between 104-338:
-# - Dict has None placeholder counting toward capacity
-# - Capacity check sees active thread
-# - No actual task exists to cancel/monitor
-# - Concurrent query blocked with DAEMON_BUSY
-```
-
-### Comparison with Multithreaded Path
+The capacity check in `message_router.py` happens **before** messages are queued, but tasks are only added to `_active_threads` **after** the input loop processes them from the queue. This creates a race window where multiple messages can pass the capacity check before any tasks are created.
 
 ```python
-# Multithreaded path (correct):
-Line 519: _active_threads[thread_id] = task  # Set immediately
-Line 514: _active_threads.pop(thread_id)     # Remove in finally
+# Buggy flow:
+Message Router (line 52-53):
+  max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+  at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+  if at_capacity:  # ← CHECK HAPPENS HERE
+      await d._send_client_message(client_id, {"type": "error", "code": "DAEMON_BUSY", ...})
+      return
+
+  await d._current_input_queue.put(msg)  # ← QUEUE MESSAGE
+
+Input Loop (line 178):
+  msg = await self._current_input_queue.get()  # ← PROCESS MESSAGE
+  await self._query_engine.run_query(...)  # ← EXECUTE
+
+Query Engine (line 334):
+  task = asyncio.create_task(_run_stream())
+  d._active_threads[thread_id] = task  # ← TASK ADDED HERE (after queue processing)
 ```
 
-## Root Cause
+### Timeline Example
 
-Placeholder pattern in single-threaded path creates race window:
-1. Placeholder set under lock (line 104)
-2. Placeholder removed in finally (line 332)
-3. Actual task set AFTER finally (line 338)
+```python
+# Two clients sending queries when max_concurrent_threads = 1:
 
-Between steps 2-3, dict is empty but capacity check already counted placeholder.
+T0: Client A sends input
+    - message_router checks: len(_active_threads) = 0 ✓
+    - message queued
+
+T1: Client B sends input
+    - message_router checks: len(_active_threads) = still 0 ✓ (no task created yet!)
+    - message queued
+
+T2: Input loop processes A
+    - query_engine creates task
+    - len(_active_threads) = 1
+
+T3: Input loop processes B
+    - query_engine creates task
+    - len(_active_threads) = 2 ← EXCEEDS LIMIT!
+```
+
+### Root Cause
+
+**Capacity check at wrong stage**: Checking at message routing time (before queueing) instead of at task creation time (after queue processing) allows multiple messages to slip through before any task is actually created.
 
 ## Fix Strategy
 
-Align single-threaded path with multithreaded pattern:
+Move capacity check from message routing to task creation time:
 
-1. **Remove placeholder pattern** (lines 100-107)
-2. **Set task immediately** after creating it
-3. **Remove in finally** (already correct at line 332)
+1. **Remove capacity checks** in `message_router.py` (happens too early)
+2. **Add capacity check** in `query_engine.py` right before task creation
+3. **Ensures atomicity**: Check → Create task → Add to dict (no race window)
 
 ### Implementation Steps
 
-1. Remove placeholder assignment under lock (lines 100-107)
-2. Move task creation before _active_threads assignment
-3. Set _active_threads[thread_id] = task immediately
-4. Keep finally cleanup (line 332)
+1. Remove capacity checks in message_router.py (lines 52-67 and 777-793)
+2. Add capacity check in query_engine.py before task creation (lines 100-129)
+3. Add same check to multithreaded path (lines 409-437)
+4. Broadcast DAEMON_BUSY error when at capacity
+5. Release thread ownership if client_id present
 
 ## Thread Isolation Analysis
 
@@ -206,20 +225,35 @@ if should_show(event_meta.verbosity, client_session.verbosity):
 #### 6. Execution Task Isolation (Fixed in IG-054)
 ```python
 # Before (buggy):
-d._active_threads[thread_id] = None  # Placeholder
-# ... finally removes placeholder ...
-d._active_threads[thread_id] = task  # Set after finally
+# message_router checks capacity BEFORE queuing:
+at_capacity = len(d._active_threads) >= max_concurrent
+if not at_capacity:
+    await d._current_input_queue.put(msg)
+
+# Input loop processes queued messages:
+msg = await d._current_input_queue.get()
+await d._query_engine.run_query(...)  # ← Task created AFTER queue processing
 
 # After (fixed):
+# message_router queues directly without capacity check:
+await d._current_input_queue.put(msg)
+
+# Input loop processes message:
+msg = await d._current_input_queue.get()
+
+# Query engine checks capacity RIGHT BEFORE task creation:
+at_capacity = len(d._active_threads) >= max_concurrent
+if at_capacity:
+    await d._broadcast(DAEMON_BUSY error)
+    return
+
 task = asyncio.create_task(_run_stream())
-d._active_threads[thread_id] = task  # Set immediately
-await task
-# ... finally removes task ...
+d._active_threads[thread_id] = task  # ← Atomic: check → create → add
 ```
 
 **Key properties**:
-- Each query runs in isolated asyncio.Task
-- Task set immediately after creation (no race)
+- Capacity check happens immediately before task creation (no queue delay)
+- Multiple queued messages won't exceed limit (check happens at execution time)
 - Concurrent capacity enforcement: `len(_active_threads) >= max_concurrent`
 - Task cancellation targets specific thread
 
@@ -274,59 +308,105 @@ Each layer provides specific isolation guarantees.
 
 ## Testing Strategy
 
-1. **Unit test**: Verify no placeholder in _active_threads during single query
-2. **Integration test**: Verify concurrent queries don't hang at capacity check
-3. **Race test**: Verify capacity check sees accurate active thread count
+1. **Updated existing test**: Changed `test_daemon_input_message_returns_busy_error_at_concurrency_limit` to `test_daemon_input_message_queued_at_capacity` to reflect that capacity check now happens in query_engine, not message_router
+2. **Test validates**: Messages are queued at router level, DAEMON_BUSY error sent at query_engine execution level
+3. **Integration test**: Run concurrent queries to verify accurate capacity enforcement at execution time
 
 ## Implementation
 
+### Root Cause Analysis
+
+The race condition was **NOT** in the placeholder pattern as initially documented. The actual race was:
+
+**Timeline**:
+1. Client A sends input → `message_router.py` checks capacity (len = 0) → message queued
+2. Client B sends input → `message_router.py` checks capacity (len still 0) → message queued
+3. Input loop processes A → creates task in `query_engine.py` (len = 1)
+4. Input loop processes B → creates task in `query_engine.py` (len = 2)
+5. **Result**: Both queries execute, exceeding the limit
+
+The capacity check at message routing time was **too early** - before tasks were created.
+
 ### File: `packages/soothe/src/soothe/daemon/query_engine.py`
 
-#### Changes in `run_query()` (single-threaded path)
+**Added capacity check at task creation time** (lines 100-129):
+
+```python
+# IG-054: Check capacity BEFORE creating task (not at message routing time)
+# This eliminates race window between capacity check and task creation
+max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+if at_capacity:
+    logger.warning(
+        "Daemon at capacity (%d/%d threads), rejecting query for thread %s",
+        len(d._active_threads),
+        max_concurrent,
+        thread_id,
+    )
+    from soothe.core.event_catalog import ERROR
+
+    await d._broadcast(
+        {
+            "type": "event",
+            "thread_id": thread_id,
+            "namespace": [],
+            "mode": "custom",
+            "data": {
+                "type": ERROR,
+                "error": (
+                    f"Daemon has reached its concurrent query limit ({max_concurrent}). "
+                    "Wait for a query to finish or cancel one before starting a new one."
+                ),
+                "code": "DAEMON_BUSY",
+            },
+        }
+    )
+    await d._broadcast({"type": "status", "state": "idle", "thread_id": thread_id})
+    if client_id:
+        await d._session_manager.release_thread_ownership(client_id)
+    return
+```
+
+**Added same check to multithreaded path** (lines 409-437):
+
+Same capacity check logic added to `run_query_multithreaded()` to ensure both paths have the check.
+
+### File: `packages/soothe/src/soothe/daemon/message_router.py`
+
+**Removed premature capacity checks** (lines 49-67 and 777-793):
+
+Removed the capacity checks that happened at message routing time, which created the race window.
 
 **Before (buggy)**:
 ```python
-query_state_lock = getattr(d, "_query_state_lock", None)
-if query_state_lock:
-    async with query_state_lock:
-        d._query_running = True
-        d._active_threads[thread_id] = None  # ← PLACEHOLDER
-else:
-    d._query_running = True
+if msg_type == "input":
+    text = msg.get("text", "").strip()
+    if text:
+        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
+        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
+        if at_capacity:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "DAEMON_BUSY",
+                    ...
+                },
+            )
+            return
 
-# ... setup code ...
-
-async def _run_stream() -> None:
-    try:
-        # ... streaming ...
-    finally:
-        d._active_threads.pop(thread_id, None)  # ← REMOVES PLACEHOLDER
-
-try:
-    task = asyncio.create_task(_run_stream())
-    d._current_query_task = task
-    d._active_threads[thread_id] = task  # ← SET AFTER FINALLY
-    await task
+        # Queue message...
 ```
 
 **After (fixed)**:
 ```python
-# Remove placeholder pattern entirely
-d._query_running = True  # No lock needed, just flag
+if msg_type == "input":
+    text = msg.get("text", "").strip()
+    if text:
+        # IG-054: Capacity check moved to query_engine.py to eliminate race
+        # between checking len(_active_threads) and actually creating the task
 
-# ... setup code ...
-
-async def _run_stream() -> None:
-    try:
-        # ... streaming ...
-    finally:
-        d._active_threads.pop(thread_id, None)  # ← REMOVES TASK
-
-try:
-    task = asyncio.create_task(_run_stream())
-    d._current_query_task = task
-    d._active_threads[thread_id] = task  # ← SET IMMEDIATELY
-    await task
+        # Queue message directly without premature capacity check...
 ```
 
 ## Verification
@@ -340,10 +420,20 @@ try:
 ## Implementation Complete
 
 Race condition fixed successfully:
-- Removed placeholder pattern (lines 100-107)
-- Task set immediately after creation (line 338)
-- No race window between capacity check and task creation
-- Concurrent query hang resolved
+- Removed premature capacity checks from message_router.py (2 locations)
+- Added capacity check to query_engine.py right before task creation (both single-threaded and multithreaded paths)
+- Made run_query() non-blocking: creates background task and returns immediately (fire-and-forget)
+- Moved post-query cleanup logic into task's finally block
+- Input loop can now process concurrent queries in parallel
+
+**Key insight**: The input loop was blocking because it awaited `run_query()` which awaited the task. Making queries run in background allows true concurrency.
+
+## Files Modified
+
+1. `packages/soothe/src/soothe/daemon/query_engine.py` - Added capacity checks + made run_query non-blocking
+2. `packages/soothe/src/soothe/daemon/message_router.py` - Removed premature capacity checks
+3. `packages/soothe/src/soothe/cognition/agent_loop/executor.py` - Fixed import sorting and variable naming (unrelated linting fix)
+4. `packages/soothe/tests/unit/cli/test_cli_daemon.py` - Updated 4 tests to wait for background tasks
 
 ## References
 

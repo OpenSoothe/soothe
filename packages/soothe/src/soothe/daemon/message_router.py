@@ -49,23 +49,8 @@ class MessageRouter:
         if msg_type == "input":
             text = msg.get("text", "").strip()
             if text:
-                max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
-                at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
-                if at_capacity:
-                    await d._send_client_message(
-                        client_id,
-                        {
-                            "type": "error",
-                            "code": "DAEMON_BUSY",
-                            "message": (
-                                f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                                "Wait for a query to finish or cancel one before starting a new one."
-                            ),
-                            "thread_id": d._runner.current_thread_id if d._runner else "",
-                        },
-                    )
-                    return
-
+                # IG-054: Capacity check moved to query_engine.py to eliminate race
+                # between checking len(_active_threads) and actually creating the task
                 max_iterations = msg.get("max_iterations")
                 parsed_max: int | None = (
                     max_iterations
@@ -789,23 +774,7 @@ class MessageRouter:
             resolve_skill_directory,
         )
 
-        max_concurrent = getattr(d._config.daemon, "max_concurrent_threads", 100)
-        at_capacity = max_concurrent > 0 and len(d._active_threads) >= max_concurrent
-        if at_capacity:
-            await d._send_client_message(
-                client_id,
-                {
-                    "type": "error",
-                    "code": "DAEMON_BUSY",
-                    "message": (
-                        f"Daemon has reached its concurrent query limit ({max_concurrent}). "
-                        "Wait for a query to finish or cancel one before starting a new one."
-                    ),
-                    "thread_id": d._runner.current_thread_id if d._runner else "",
-                    "request_id": msg.get("request_id"),
-                },
-            )
-            return
+        # IG-054: Capacity check moved to query_engine.py to eliminate race
 
         raw_skill = msg.get("skill")
         if not isinstance(raw_skill, str) or not raw_skill.strip():
