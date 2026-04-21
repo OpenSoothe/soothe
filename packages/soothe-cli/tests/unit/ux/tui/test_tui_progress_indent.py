@@ -8,7 +8,10 @@ from soothe_cli.tui.textual_adapter import _format_progress_event_lines_for_tui
 
 
 def test_tui_progress_preserves_hierarchy_indent() -> None:
-    """Child rows (step done, reasoning, subagent done) keep leading spaces vs parents."""
+    """Child rows (step done, reasoning, subagent done) keep leading spaces vs parents.
+
+    IG-225: Assessment/Plan reasoning now use level=2 (flat, no indent) for prominence.
+    """
     pipeline = StreamDisplayPipeline(verbosity="normal")
 
     header = _format_progress_event_lines_for_tui(
@@ -36,19 +39,22 @@ def test_tui_progress_preserves_hierarchy_indent() -> None:
     assert done
     assert done[0].startswith("  ")
 
+    # IG-225: Assessment/Plan reasoning now use level=2 (no indent) for prominence
     reason = _format_progress_event_lines_for_tui(
         {
             "type": LOOP_REASON_EVENT_TYPE,
             "next_action": "Continue with analysis",
-            "reasoning": "Need more context",
+            "assessment_reasoning": "Progress check",
+            "plan_reasoning": "Keep current plan",
             "status": "working",
         },
         (),
         pipeline=pipeline,
     )
-    assert len(reason) >= 2
-    assert not reason[0].startswith(" ")
-    assert reason[1].startswith("  ")
+    assert len(reason) >= 3
+    assert not reason[0].startswith(" ")  # Judgement line (level=2)
+    assert not reason[1].startswith(" ")  # Assessment line (level=2, IG-225)
+    assert not reason[2].startswith(" ")  # Plan line (level=2, IG-225)
 
     sub_start = _format_progress_event_lines_for_tui(
         {

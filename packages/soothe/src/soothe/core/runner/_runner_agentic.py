@@ -311,20 +311,82 @@ class AgenticMixin:
         recent_for_thread = await self._load_recent_messages(tid, limit=16)  # Load more for routing
         plan_excerpts = self._format_thread_messages_for_plan(recent_for_thread, limit=prior_limit)
 
-        # Classify the query to check for chitchat
-        if self._unified_classifier:
+        # IG-226: Intent classification (priority over routing)
+        intent_classification = None
+        active_goal_id = None
+        active_goal_description = None
+
+        if self._intent_classifier:
             limit = _RECENT_MESSAGES_FOR_CLASSIFY_LIMIT
             recent_for_classify = (
                 recent_for_thread[-limit:] if len(recent_for_thread) > limit else recent_for_thread
             )
-            classification = await self._unified_classifier.classify_routing(
-                user_input, recent_messages=recent_for_classify
+
+            # Get active goal if available (for thread continuation)
+            if self._goal_engine:
+                try:
+                    # Find active goal in current thread
+                    goals = await self._goal_engine.list_goals(status="active")
+                    if goals:
+                        active_goal_id = goals[0].id
+                        active_goal_description = goals[0].description
+                except Exception:
+                    logger.debug(
+                        "Failed to get active goal for intent classification", exc_info=True
+                    )
+
+            # IG-226: Intent classification determines goal handling strategy
+            intent_classification = await self._intent_classifier.classify_intent(
+                user_input,
+                recent_messages=recent_for_classify,
+                active_goal_id=active_goal_id,
+                active_goal_description=active_goal_description,
+                thread_id=tid,
             )
-            if classification.task_complexity == "chitchat":
-                logger.info("[Router] Chitchat detected → fast path")
-                async for chunk in self._run_chitchat(user_input, tid, classification):
+
+            logger.info(
+                "[Intent] Classified as %s (reuse_goal=%s)",
+                intent_classification.intent_type,
+                intent_classification.reuse_current_goal,
+            )
+
+            # Yield intent event for observability (IG-226)
+            yield _custom(
+                {"type": "soothe.intent.classified", "data": intent_classification.model_dump()}
+            )
+
+            # Handle chitchat intent
+            if intent_classification.intent_type == "chitchat":
+                logger.info("[Intent] Chitchat → direct response")
+                async for chunk in self._run_chitchat(user_input, tid, intent_classification):
                     yield chunk
                 return
+
+            # Handle thread continuation intent
+            if intent_classification.intent_type == "thread_continuation":
+                if intent_classification.reuse_current_goal and active_goal_id:
+                    logger.info(
+                        "[Intent] Thread continuation → reusing goal %s: %s",
+                        active_goal_id,
+                        preview_first(active_goal_description or "", 50),
+                    )
+                    # Thread continuation with active goal: continue execution without new goal
+                    # AgentLoop will handle thread context continuation
+                else:
+                    logger.info(
+                        "[Intent] Thread continuation → no active goal, pure conversation flow"
+                    )
+                    # Thread continuation without goal: normal flow but skip goal creation
+                # Proceed to AgentLoop execution with intent context
+
+            # Handle new_goal intent (default)
+            elif intent_classification.intent_type == "new_goal":
+                logger.info(
+                    "[Intent] New goal → creating goal: %s",
+                    preview_first(intent_classification.goal_description or user_input, 50),
+                )
+                # Proceed to AgentLoop execution, goal creation handled by GoalEngine if autonomous mode
+                # For agentic loop, goal description is passed as-is
 
         # Emit loop started event (Level 1)
         yield _custom(
@@ -367,6 +429,7 @@ class AgenticMixin:
             git_status=git_status,
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
+            intent=intent_classification,  # IG-226: Pass intent classification to AgentLoop
         ):
             if event_type == "iteration_started":
                 # Internal event - not shown to user

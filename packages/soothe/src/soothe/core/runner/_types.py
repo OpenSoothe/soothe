@@ -90,6 +90,27 @@ class GoalResult(BaseModel):
 
 @dataclass
 class RunnerState:
+    """Runner state for protocol pre/post-processing (IG-226: added intent_classification).
+
+    Attributes:
+        thread_id: Thread context for execution
+        workspace: Thread-specific workspace path (RFC-103)
+        recalled_memories: Memory items recalled for this query
+        recalled_memory_count: Number of memories recalled
+        unified_classification: Routing classification (deprecated, use intent_classification)
+        intent_classification: IG-226 Intent classification with goal handling strategy
+        git_status: Git snapshot for planner prompts
+        protocol_summary: Protocol backend summary for system prompt
+        thread_context: Thread metadata for system prompt
+        workspace_size_bytes: Workspace size in bytes (RFC-104)
+        workspace_file_count: Workspace file count (RFC-104)
+        plan: Current plan from planner
+        artifact_store: Store for artifacts and evidence
+        stream_error: Error message if stream failed
+        prior_messages: Prior conversation excerpts for subagent context
+        langgraph_thread_id: LangGraph thread ID override
+    """
+
     """Mutable state accumulated during a single query execution."""
 
     thread_id: str = ""
@@ -102,6 +123,9 @@ class RunnerState:
     seen_message_ids: set[str] = field(default_factory=set)
     stream_error: str | None = None
     unified_classification: Any = None  # Type: UnifiedClassification
+    intent_classification: Any = (
+        None  # IG-226: Type: IntentClassification with goal handling strategy
+    )
     cached_routing: Any = None  # Cached classification result for reuse
     iteration_records: list[Any] = field(default_factory=list)  # AgenticIterationRecord list
     observation_refresh_needed: bool = False

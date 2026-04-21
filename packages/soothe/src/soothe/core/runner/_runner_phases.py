@@ -130,12 +130,8 @@ class PhasesMixin:
         # Safety net: should not be reached if classifier post-processing works.
         logger.warning("Chitchat classification missing piggybacked response, using canned reply")
         name = self._config.assistant_name
-        from soothe.core.unified_classifier import _looks_chinese
-
-        if _looks_chinese(user_input):
-            fallback = f"你好! 我是 {name}, 有什么可以帮你的吗?"
-        else:
-            fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
+        # Pure fallback - LLM handles language detection in classification prompt
+        fallback = f"Hello! I'm {name}, your AI assistant. How can I help you today?"
         yield _custom(ChitchatResponseEvent(content=fallback).to_dict())
         logger.debug("Chitchat completed (canned fallback) for query: %s", user_input[:50])
 
@@ -154,17 +150,17 @@ class PhasesMixin:
             subagent_name: Name of the subagent to route to.
             state: Runner state (for thread_id tracking).
         """
-        from soothe.core.unified_classifier import RoutingResult, UnifiedClassification
+        from soothe.cognition.intention import RoutingClassification  # IG-226: New intention module
 
         logger.debug("Direct subagent routing: %s - %s", subagent_name, user_input[:50])
 
         # Create minimal classification that routes to the specified subagent
-        routing = RoutingResult(
+        routing = RoutingClassification(
             task_complexity="medium",
             preferred_subagent=subagent_name,
             routing_hint="subagent",
         )
-        state.unified_classification = UnifiedClassification.from_routing(routing)
+        state.unified_classification = routing  # Direct assignment (no conversion needed)
 
         # Inject prior thread messages into subagent context (IG-140)
         prior_messages = getattr(state, "prior_messages", "")

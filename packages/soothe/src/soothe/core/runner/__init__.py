@@ -82,6 +82,7 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         """Initialize the runner with optional config."""
         import time
 
+        from soothe.cognition.intention import IntentClassifier
         from soothe.core.agent import create_soothe_agent
         from soothe.core.concurrency import ConcurrencyController
         from soothe.core.resolver import (
@@ -89,14 +90,13 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
             resolve_durability,
             resolve_goal_engine,
         )
-        from soothe.core.unified_classifier import UnifiedClassifier
 
         init_start = time.perf_counter()
 
         self._config = config or SootheConfig()
         self._checkpointer_pool = None  # Will be set if using PostgreSQL
 
-        # Initialize unified classifier (RFC-0012)
+        # Initialize intent classifier (IG-226: cognition.intention module)
         if self._config.performance.enabled and self._config.performance.unified_classification:
             fast_model = None
             supports_advanced_tool_choice = True  # Default assumption
@@ -123,22 +123,18 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
                 fast_model = None
 
             if fast_model:
-                self._unified_classifier = UnifiedClassifier(
-                    fast_model=fast_model,
-                    classification_mode=self._config.performance.classification_mode,
+                self._intent_classifier = IntentClassifier(
+                    model=fast_model,
                     assistant_name=self._config.assistant_name,
                     config=self._config,  # IG-143: Pass config for LLM tracing
                     supports_advanced_tool_choice=supports_advanced_tool_choice,  # LMStudio compatibility
                 )
-                logger.info(
-                    "Unified classifier initialized in %s mode",
-                    self._config.performance.classification_mode,
-                )
+                logger.info("[IntentClassifier] Initialized in LLM mode")
             else:
                 logger.warning("No fast model available, classification disabled")
-                self._unified_classifier = None
+                self._intent_classifier = None
         else:
-            self._unified_classifier = None
+            self._intent_classifier = None
 
         checkpointer_start = time.perf_counter()
         checkpointer_result = resolve_checkpointer(self._config)

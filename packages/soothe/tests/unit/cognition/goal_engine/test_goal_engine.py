@@ -81,24 +81,30 @@ class TestGoalEngine:
         engine = GoalEngine(max_retries=2)
         g = await engine.create_goal("Retryable")
 
-        failed = await engine.fail_goal(g.id, error="first failure")
-        assert failed.status == "pending"
-        assert failed.retry_count == 1
+        # RFC-200: fail_goal now returns BackoffDecision | None
+        result = await engine.fail_goal(g.id, error="first failure")
+        assert result is None  # No backoff decision applied (backward compatibility)
+        # Check goal status from engine
+        assert g.status == "pending"
+        assert g.retry_count == 1
 
-        failed = await engine.fail_goal(g.id, error="second failure")
-        assert failed.status == "pending"
-        assert failed.retry_count == 2
+        result = await engine.fail_goal(g.id, error="second failure")
+        assert result is None
+        assert g.status == "pending"
+        assert g.retry_count == 2
 
-        failed = await engine.fail_goal(g.id, error="third failure")
-        assert failed.status == "failed"
-        assert failed.retry_count == 2
+        result = await engine.fail_goal(g.id, error="third failure")
+        assert result is None  # Permanent failure, no backoff
+        assert g.status == "failed"
+        assert g.retry_count == 2
 
     @pytest.mark.asyncio
     async def test_fail_goal_no_retry(self) -> None:
         engine = GoalEngine()
         g = await engine.create_goal("No retry")
-        failed = await engine.fail_goal(g.id, error="fail", allow_retry=False)
-        assert failed.status == "failed"
+        result = await engine.fail_goal(g.id, error="fail", allow_retry=False)
+        assert result is None  # No backoff decision
+        assert g.status == "failed"
 
     @pytest.mark.asyncio
     async def test_list_goals_all(self) -> None:

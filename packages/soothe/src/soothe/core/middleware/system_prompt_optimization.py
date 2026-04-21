@@ -16,10 +16,10 @@ from soothe.utils.text_preview import preview_first
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from soothe.cognition.intention import RoutingClassification  # IG-226
     from soothe.config import SootheConfig
     from soothe.core.tool_context_registry import ToolContextRegistry
     from soothe.core.tool_trigger_registry import ToolTriggerRegistry
-    from soothe.core.unified_classifier import UnifiedClassification
     from soothe.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
@@ -64,13 +64,13 @@ class _OptimizationState(TypedDict):
     """
 
     messages: Annotated[list[AnyMessage], add_messages]
-    unified_classification: NotRequired[Any]  # Type: UnifiedClassification
+    unified_classification: NotRequired[Any]  # Type: RoutingClassification (deprecated field name)
 
 
 class SystemPromptOptimizationMiddleware(AgentMiddleware):
     """Dynamically adjust system prompts based on LLM query classification.
 
-    Uses task_complexity from UnifiedClassification (determined by fast LLM)
+    Uses task_complexity from RoutingClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
     - chitchat: Minimal prompt for greetings and quick questions
     - medium: Standard prompt with guidelines
@@ -361,7 +361,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             return static_content + "\n\n" + date_line
 
     def _get_domain_scoped_prompt(
-        self, classification: UnifiedClassification, state: dict[str, Any] | None = None
+        self, classification: RoutingClassification, state: dict[str, Any] | None = None
     ) -> str:
         """Build a prompt for the given classification.
 
@@ -551,7 +551,7 @@ class SystemPromptOptimizationMiddleware(AgentMiddleware):
             )
             return request
 
-        classification: UnifiedClassification | None = request.state.get("unified_classification")
+        classification: RoutingClassification | None = request.state.get("unified_classification")
         if not classification:
             return request
 

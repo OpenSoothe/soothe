@@ -132,47 +132,125 @@ class AutonomousMixin(GoalDirectivesMixin):
                     }
                 )
                 return
-        if self._unified_classifier:
-            from soothe.core.unified_classifier import UnifiedClassification
-
-            # Load recent messages for conversation context
+        if self._intent_classifier:
+            # IG-226: Load recent messages for conversation context
             await self._ensure_checkpointer_initialized()
             thread_id_for_context = state.thread_id or self._current_thread_id or ""
             recent = await self._load_recent_messages(thread_id_for_context, limit=6)
-            routing = await self._unified_classifier.classify_routing(
-                user_input, recent_messages=recent
+
+            # Get active goal if available (for thread continuation)
+            active_goal_id = None
+            active_goal_description = None
+            if self._goal_engine:
+                try:
+                    goals = await self._goal_engine.list_goals(status="active")
+                    if goals:
+                        active_goal_id = goals[0].id
+                        active_goal_description = goals[0].description
+                except Exception:
+                    logger.debug(
+                        "Failed to get active goal for intent classification", exc_info=True
+                    )
+
+            # IG-226: Intent classification (priority over routing)
+            intent_classification = await self._intent_classifier.classify_intent(
+                user_input,
+                recent_messages=recent,
+                active_goal_id=active_goal_id,
+                active_goal_description=active_goal_description,
+                thread_id=thread_id_for_context,
             )
+
             logger.info(
-                "Autonomous mode: unified classification task_complexity=%s - %s",
-                routing.task_complexity,
+                "[IG-226] Autonomous mode: intent_type=%s reuse_goal=%s - %s",
+                intent_classification.intent_type,
+                intent_classification.reuse_current_goal,
                 user_input[:50],
             )
 
+            # Store intent classification on state for goal creation logic
+            state.intent_classification = intent_classification
+
+            # Yield intent event for observability
+            yield _custom(
+                {"type": "soothe.intent.classified", "data": intent_classification.model_dump()}
+            )
+
             # Fast path for chitchat - skip goal engine and planning
-            if routing.task_complexity == "chitchat":
+            if intent_classification.intent_type == "chitchat":
                 async for chunk in self._run_chitchat(
-                    user_input, state.thread_id or "", classification=routing
+                    user_input, state.thread_id or "", classification=intent_classification
                 ):
                     yield chunk
                 return
 
-            state.unified_classification = UnifiedClassification.from_routing(routing)
+            # Convert IntentClassification to RoutingClassification for compatibility
+            state.unified_classification = intent_classification.to_routing_classification()
         else:
             state.unified_classification = None
+            state.intent_classification = None
 
         async for chunk in self._pre_stream_independent(user_input, state):
             yield chunk
         async for chunk in self._pre_stream_planning(user_input, state):
             yield chunk
 
-        goal = await self._goal_engine.create_goal(user_input, priority=80)
-        yield _custom(
-            GoalCreatedEvent(
-                goal_id=goal.id,
-                description=goal.description,
-                priority=goal.priority,
-            ).to_dict()
-        )
+        # IG-226: Intent-based goal creation
+        # In autonomous mode, intent classification determines goal creation strategy
+        intent = getattr(state, "intent_classification", None)
+
+        goal = None
+        if intent and hasattr(intent, "intent_type"):
+            if intent.intent_type == "thread_continuation":
+                # Thread continuation: reuse active goal if available
+                if intent.reuse_current_goal:
+                    # Find active goal
+                    active_goals = await self._goal_engine.list_goals(status="active")
+                    if active_goals:
+                        goal = active_goals[0]
+                        logger.info(
+                            "[IG-226] Thread continuation: reusing active goal %s",
+                            goal.id,
+                        )
+                        yield _custom(
+                            {
+                                "type": "soothe.intent.goal_reused",
+                                "goal_id": goal.id,
+                                "description": goal.description,
+                            }
+                        )
+                    else:
+                        # No active goal, create new goal despite thread_continuation
+                        logger.info(
+                            "[IG-226] Thread continuation but no active goal, creating new goal"
+                        )
+                        goal = await self._goal_engine.create_goal(
+                            intent.goal_description or user_input, priority=80
+                        )
+                else:
+                    # Thread continuation without goal reuse - skip goal creation
+                    logger.info("[IG-226] Thread continuation without goal, skipping goal creation")
+                    # Proceed without goal lifecycle management
+                    # AgentLoop will handle thread context continuation
+
+            elif intent.intent_type == "new_goal":
+                # New goal: create goal via GoalEngine
+                goal_description = intent.goal_description or user_input
+                goal = await self._goal_engine.create_goal(goal_description, priority=80)
+                logger.info("[IG-226] New goal: created goal %s", goal.id)
+        else:
+            # No intent classification (disabled or fallback): create goal as before
+            goal = await self._goal_engine.create_goal(user_input, priority=80)
+
+        # Only emit goal created event if goal was actually created
+        if goal and (not intent or intent.intent_type == "new_goal"):
+            yield _custom(
+                GoalCreatedEvent(
+                    goal_id=goal.id,
+                    description=goal.description,
+                    priority=goal.priority,
+                ).to_dict()
+            )
 
         from soothe.cognition.goal_engine.proposal_queue import ProposalQueue
 

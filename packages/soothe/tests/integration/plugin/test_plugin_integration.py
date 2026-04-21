@@ -33,7 +33,7 @@ def test_manifest_has_config_requirements():
 
 def test_plugin_decorator_accepts_config_requirements():
     """@plugin decorator should accept config_requirements parameter."""
-    from soothe_sdk.decorators.plugin import plugin
+    from soothe_sdk.plugin.decorators import plugin
 
     @plugin(
         name="test-config-plugin",
