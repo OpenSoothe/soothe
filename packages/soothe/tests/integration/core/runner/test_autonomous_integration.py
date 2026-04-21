@@ -8,6 +8,7 @@ import pytest
 
 # Integration test placeholder (requires full setup)
 @pytest.mark.integration
+@pytest.mark.asyncio
 async def test_full_goalengine_to_agentloop_flow():
     """Full integration test: GoalEngine creates goal → delegates to AgentLoop → reflection."""
     # This test would require:

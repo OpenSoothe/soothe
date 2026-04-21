@@ -484,25 +484,15 @@ def resolve_goal_engine(config: SootheConfig) -> GoalEngine:
         config: Soothe configuration.
 
     Returns:
-        A configured GoalEngine.
+        A configured GoalEngine with backoff reasoner support.
     """
     from soothe.cognition import GoalEngine
 
-    return GoalEngine(max_retries=config.autonomous.max_retries)
-
-
-def resolve_goal_tools(goal_engine: GoalEngine) -> list[BaseTool]:
-    """Create goal management tools bound to a GoalEngine.
-
-    Args:
-        goal_engine: The engine to bind.
-
-    Returns:
-        List of goal management BaseTool instances.
-    """
-    from soothe.tools.goals import create_goals_tools
-
-    return create_goals_tools(goal_engine)
+    # RFC-200: Pass config for GoalBackoffReasoner initialization
+    return GoalEngine(
+        max_retries=config.autonomous.max_retries,
+        config=config,  # Enable LLM-driven backoff reasoning
+    )
 
 
 # ---------------------------------------------------------------------------

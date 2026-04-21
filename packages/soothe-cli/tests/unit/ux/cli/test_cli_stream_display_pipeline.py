@@ -84,8 +84,9 @@ class TestIndentForLevel:
     def test_level2_flat_indent(self) -> None:
         assert indent_for_level(2) == ""
 
-    def test_level3_flat_indent(self) -> None:
-        assert indent_for_level(3) == ""
+    def test_level3_tree_indent(self) -> None:
+        """IG-182: Level 3 uses 2-space indent for tree children (step results)."""
+        assert indent_for_level(3) == "  "
 
 
 class TestFormatters:
@@ -162,28 +163,37 @@ class TestFormatters:
         assert line.duration_ms == 45200
 
     def test_format_step_done(self) -> None:
-        line = format_step_done("Read files", 3.2)
-        assert line.level == 2
-        assert line.content == "✅ Read files"
-        assert line.icon == "●"  # Solid circle for completed
-        assert line.duration_ms == 3200
+        """IG-182: Step done shows as level-3 tree child with duration."""
+        lines = format_step_done(3.2)
+        assert len(lines) == 1
+        assert lines[0].level == 3
+        assert "Done" in lines[0].content
+        assert lines[0].icon == "|__"  # Tree connector (IG-182)
+        assert lines[0].duration_ms == 3200
 
-    def test_format_step_done_with_long_description(self) -> None:
-        """Long step descriptions are abbreviated."""
-        description = "Run cloc on src/ and tests/ directories to count Soothe source and test code"
-        line = format_step_done(description, 11.4, tool_call_count=1)
+    def test_format_step_done_with_tool_calls(self) -> None:
+        """IG-182: Step done shows tool call count when > 0."""
+        lines = format_step_done(11.4, tool_call_count=1)
+        assert len(lines) == 1
+        assert "Done" in lines[0].content
+        assert "[1 tools]" in lines[0].content
+        assert lines[0].duration_ms == 11400
 
-        assert "Run cloc on src/ and" in line.content
-        assert "... test code" in line.content
-        assert "[1 tools]" in line.content
-        assert len(line.content) < len(description) + 20  # Should be shorter
+    def test_format_step_done_without_tool_calls(self) -> None:
+        """IG-182: Step done without tool calls shows just Done."""
+        lines = format_step_done(3.2, tool_call_count=0)
+        assert len(lines) == 1
+        assert "Done" in lines[0].content
+        assert "[0 tools]" not in lines[0].content
+        assert lines[0].duration_ms == 3200
 
-    def test_format_step_done_with_short_description(self) -> None:
-        """Short step descriptions are not abbreviated."""
-        line = format_step_done("Read config", 3.2, tool_call_count=2)
-
-        assert "Read config" in line.content
-        assert "..." not in line.content
+    def test_format_step_done_with_error(self) -> None:
+        """IG-182: Step done with error shows Failed line."""
+        lines = format_step_done(2.1, success=False, error_msg="File not found")
+        assert len(lines) == 2
+        assert "Failed" in lines[0].content
+        assert lines[0].icon == "|__"
+        assert "Error: File not found" in lines[1].content
 
     def test_format_goal_done(self) -> None:
         line = format_goal_done("Analyze codebase", 3, 38.1)
@@ -254,11 +264,12 @@ class TestStreamDisplayPipeline:
         assert lines[0].icon == "●"
 
     def test_step_started(self) -> None:
+        """IG-182: Step started shows hollow circle icon."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         pipeline.process({"type": "soothe.cognition.agent_loop.started", "goal": "test"})
 
         event = {
-            "type": "soothe.cognition.plan.step_started",
+            "type": "soothe.cognition.plan.step.started",
             "step_id": "s1",
             "description": "Read config",
         }
@@ -267,6 +278,7 @@ class TestStreamDisplayPipeline:
         assert len(lines) == 1
         assert lines[0].icon == "○"  # Hollow circle for started step
         assert lines[0].content == "⏩ Read config"
+        assert lines[0].indent == ""  # Level 2: flat layout
 
     def test_subagent_dispatched(self) -> None:
         """Test subagent dispatch shows as tool call."""
@@ -430,47 +442,65 @@ class TestStreamDisplayPipeline:
         assert lines[0].duration_ms == 45200
 
     def test_loop_agent_reason_shown_at_normal(self) -> None:
-        """Loop agent Reason event emits one concise summary line (RFC-603: no percentage)."""
+        """IG-225: Loop agent Reason event with split reasoning shows assessment/plan lines."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.agent_loop.reason",
+            "type": "soothe.cognition.agent_loop.reasoned",
             "status": "continue",
             "progress": 0.5,
             "confidence": 0.8,
             "next_action": "I'll check your config files next.",
             "iteration": 1,
+            "assessment_reasoning": "Progress looks good",
+            "plan_reasoning": "Continue checking files",
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
+        # IG-225: Should show 3 lines: judgement + assessment + plan
+        assert len(lines) == 3
         assert "I'll check your config files next." in lines[0].content
+        assert "Assessment:" in lines[1].content
+        assert "Progress looks good" in lines[1].content
+        assert "Plan:" in lines[2].content
+        assert "Continue checking files" in lines[2].content
         # RFC-603: Percentage display removed per user request
         assert "80% sure" not in lines[0].content
         assert lines[0].icon == "→"
+        # IG-225: Assessment and Plan use level=2 (no indent)
+        assert lines[1].indent == ""
+        assert lines[2].indent == ""
 
     def test_loop_agent_reason_done_shows_checkmark(self) -> None:
-        """Reason event with status=done shows checkmark icon."""
+        """IG-225: Reason event with status=done shows checkmark and split reasoning."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         event = {
-            "type": "soothe.cognition.agent_loop.reason",
+            "type": "soothe.cognition.agent_loop.reasoned",
             "status": "done",
             "progress": 1.0,
             "confidence": 0.95,
             "next_action": "I'm sharing the final result now.",
             "iteration": 3,
+            "assessment_reasoning": "Goal is complete",
+            "plan_reasoning": "Share results",
         }
         lines = pipeline.process(event)
 
-        assert len(lines) == 1
+        # IG-225: Should show 3 lines for done status
+        assert len(lines) == 3
         assert "I'm sharing the final result now." in lines[0].content
+        assert "Assessment:" in lines[1].content
+        assert "Plan:" in lines[2].content
         # RFC-603: Percentage display removed per user request
         assert "95% sure" not in lines[0].content
-        assert lines[0].icon == "✓"
+        assert lines[0].icon == "✓"  # Checkmark for done status
+        # IG-225: Assessment and Plan use level=2 (no indent)
+        assert lines[1].indent == ""
+        assert lines[2].indent == ""
 
     def test_step_completed_with_tool_call_count(self) -> None:
-        """Step completion shows tool call count when > 0."""
+        """IG-182: Step completion shows tree child with tool count."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         pipeline._context.current_step_description = "Explore project structure"
 
@@ -485,13 +515,14 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Explore project structure" in lines[0].content
+        assert "Done" in lines[0].content
         assert "[5 tools]" in lines[0].content
-        assert lines[0].icon == "●"  # Solid circle for completed
+        assert lines[0].icon == "|__"  # Tree connector (IG-182)
+        assert lines[0].indent == "  "  # Level 3: tree child indent (IG-182)
         assert lines[0].duration_ms == 1500
 
     def test_step_completed_without_tool_calls(self) -> None:
-        """Step completion without tool calls shows just description."""
+        """IG-182: Step completion without tool calls shows just Done."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         pipeline._context.current_step_description = "Analyze config"
 
@@ -506,11 +537,12 @@ class TestStreamDisplayPipeline:
         lines = pipeline.process(event)
 
         assert len(lines) == 1
-        assert "Analyze config" in lines[0].content
+        assert "Done" in lines[0].content
         assert "[0 tools]" not in lines[0].content  # Should not show when 0
+        assert lines[0].icon == "|__"  # Tree connector (IG-182)
 
     def test_step_completed_uses_tracked_description_by_step_id(self) -> None:
-        """Step completion keeps description when current step context has moved."""
+        """IG-182: Step completion shows Done regardless of tracked description."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
 
         pipeline.process(
@@ -538,23 +570,29 @@ class TestStreamDisplayPipeline:
         )
 
         assert len(lines) == 1
-        assert "Search root directory" in lines[0].content
+        assert "Done" in lines[0].content  # IG-182: Just shows "Done"
         assert "[2 tools]" in lines[0].content
+        assert lines[0].icon == "|__"  # Tree connector
 
     def test_loop_agent_reason_deduped_in_short_window(self) -> None:
+        """IG-225: Duplicate reason events show lines on first call only."""
         pipeline = StreamDisplayPipeline(verbosity="normal")
         event = {
-            "type": "soothe.cognition.agent_loop.reason",
+            "type": "soothe.cognition.agent_loop.reasoned",
             "status": "continue",
             "progress": 0.4,
             "confidence": 0.8,
             "next_action": "I'm searching for README files.",
             "iteration": 1,
+            "assessment_reasoning": "Progress check",
+            "plan_reasoning": "Continue search",
         }
 
         lines1 = pipeline.process(event)
         lines2 = pipeline.process(event)
-        assert len(lines1) == 1
+        # IG-225: First call shows 3 lines (judgement + assessment + plan)
+        assert len(lines1) == 3
+        # Second call should be deduped (no lines)
         assert lines2 == []
 
     def test_capability_browser_step_suppressed_at_normal_verbosity(self) -> None:

@@ -6,9 +6,9 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from soothe.cognition.intention import RoutingClassification
 from soothe.config import SootheConfig
 from soothe.core.middleware import SystemPromptOptimizationMiddleware
-from soothe.core.unified_classifier import UnifiedClassification
 
 
 class MockModelRequest(ModelRequest[dict]):
@@ -72,7 +72,7 @@ def test_simple_query_gets_minimal_prompt():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     # LLM classified this as "chitchat"
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="chitchat",
         reasoning="Greeting/quick question",
     )
@@ -96,7 +96,7 @@ def test_medium_query_gets_medium_prompt():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     # LLM classified this as "medium"
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="medium",
         reasoning="Multi-step task",
     )
@@ -120,7 +120,7 @@ def test_complex_query_gets_full_prompt():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     # LLM classified this as "complex"
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="complex",
         reasoning="Architectural decision",
     )
@@ -160,7 +160,7 @@ def test_optimization_disabled_uses_default_prompt():
     config.performance.optimize_system_prompts = False
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="chitchat",
         reasoning="Greeting",
     )
@@ -182,7 +182,7 @@ def test_performance_disabled_uses_default_prompt():
     config.performance.enabled = False
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="chitchat",
         reasoning="Greeting",
     )
@@ -204,7 +204,7 @@ def test_custom_system_prompt_for_complex_queries():
     config.system_prompt = "You are a custom assistant for {assistant_name}."
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="complex",
         reasoning="Complex task",
     )
@@ -233,7 +233,7 @@ def test_all_prompts_include_current_date():
 
     # Test all complexity levels
     for complexity in ["chitchat", "medium", "complex"]:
-        classification = UnifiedClassification(
+        classification = RoutingClassification(
             task_complexity=complexity,
             reasoning="Test",
         )
@@ -253,7 +253,7 @@ def test_chitchat_query_treated_as_chitchat():
     middleware = SystemPromptOptimizationMiddleware(config=config)
 
     # Chitchat complexity maps to simple prompt
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="chitchat",
         reasoning="Chitchat greeting",
     )
@@ -274,7 +274,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     """Explicit /browser-style routing narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="medium",
         preferred_subagent="browser",
         routing_hint="subagent",
@@ -299,7 +299,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     """After the first model reply, restore full tools and omit routing directive."""
     config = SootheConfig()
     middleware = SystemPromptOptimizationMiddleware(config=config)
-    classification = UnifiedClassification(
+    classification = RoutingClassification(
         task_complexity="medium",
         preferred_subagent="browser",
         routing_hint="subagent",

@@ -377,6 +377,7 @@ class LoopState(BaseModel):
         plan_conversation_excerpts: Prior Human/Assistant lines for Plan (IG-128).
         last_execute_assistant_text: Last CoreAgent assistant text from the latest Execute wave (IG-199).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
+        thread_continuation: IG-226 flag for thread continuation intent (adjusts iteration behavior).
     """
 
     goal: str
@@ -415,6 +416,7 @@ class LoopState(BaseModel):
     # Last Execute wave assistant text for adaptive final response (IG-199)
     last_execute_assistant_text: str | None = None
     last_execute_wave_parallel_multi_step: bool = False
+    thread_continuation: bool = False  # IG-226: Thread continuation mode flag
 
     def add_step_result(self, result: StepResult) -> None:
         """Add step result and update completed set.

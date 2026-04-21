@@ -95,7 +95,7 @@ def format_goal_header(
         DisplayLine for goal header.
     """
     # Add inline symbol for goal marker
-    content = f"🚩 {goal}"
+    content = f"⌯⌲ {goal}"
     return DisplayLine(
         level=1,
         content=content,
@@ -265,13 +265,16 @@ def format_plan_phase_reasoning(
     namespace: tuple[str, ...] = (),
     verbosity_tier: VerbosityTier = VerbosityTier.NORMAL,
 ) -> DisplayLine:
-    """Format a labeled plan-phase reasoning line (assessment vs plan strategy)."""
+    """Format a labeled plan-phase reasoning line (assessment vs plan strategy).
+
+    IG-225: Uses level=2 (flat, no indent) for prominent visibility alongside step headers.
+    """
     content = f"💭 {label}: {text}"
     return DisplayLine(
-        level=3,
+        level=2,
         content=content,
         icon="•",
-        indent=indent_for_level(3),
+        indent=indent_for_level(2),
         source_prefix=_derive_source_prefix(namespace, verbosity_tier),
     )
 

@@ -1,4 +1,4 @@
-"""Goal lifecycle manager for autonomous iteration (RFC-0007, RFC-204)."""
+"""Goal lifecycle manager for autonomous iteration (RFC-0007, RFC-204, RFC-200)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.cognition.goal_engine.models import TERMINAL_STATES, Goal, GoalStatus
+from soothe.cognition.goal_engine.backoff_reasoner import GoalBackoffReasoner
+from soothe.cognition.goal_engine.models import (
+    TERMINAL_STATES,
+    BackoffDecision,
+    EvidenceBundle,
+    Goal,
+    GoalStatus,
+)
 from soothe.protocols.planner import GoalReport
 from soothe.utils.text_preview import preview_first
 
@@ -25,20 +32,38 @@ class GoalEngine:
     Goals are stored in memory and persisted via DurabilityProtocol.
     Scheduling: highest priority first, oldest creation time as tiebreaker.
 
+    RFC-200: Integrates GoalBackoffReasoner for LLM-driven backoff decisions.
+
     Args:
         max_retries: Default max retries for new goals.
+        max_send_backs: Default max consensus send-back rounds (RFC-204).
+        config: Optional SootheConfig for backoff reasoning (RFC-200).
     """
 
-    def __init__(self, max_retries: int = 2, max_send_backs: int = 3) -> None:
+    def __init__(
+        self,
+        max_retries: int = 2,
+        max_send_backs: int = 3,
+        config: Any = None,  # SootheConfig type hint avoided for circular dependency
+    ) -> None:
         """Initialize the goal engine.
 
         Args:
             max_retries: Default max retries for new goals.
             max_send_backs: Default max consensus send-back rounds (RFC-204).
+            config: Optional SootheConfig for backoff reasoning (RFC-200).
         """
         self._goals: dict[str, Goal] = {}
         self._max_retries = max_retries
         self._max_send_backs = max_send_backs
+        # RFC-200: Optional backoff reasoner (initialized if config provided)
+        self._backoff_reasoner: GoalBackoffReasoner | None = None
+        if config:
+            try:
+                self._backoff_reasoner = GoalBackoffReasoner(config)
+                logger.info("GoalBackoffReasoner initialized for LLM-driven backoff")
+            except Exception:
+                logger.warning("Failed to initialize GoalBackoffReasoner", exc_info=True)
 
     async def create_goal(
         self,
@@ -369,21 +394,26 @@ class GoalEngine:
         self,
         goal_id: str,
         *,
-        error: str = "",
+        evidence: EvidenceBundle | None = None,
+        error: str = "",  # Backward compatibility (deprecated)
         allow_retry: bool = True,
-    ) -> Goal:
-        """Mark a goal as failed, with optional retry.
+    ) -> BackoffDecision | None:
+        """Mark a goal as failed with evidence, apply backoff reasoning.
+
+        RFC-200 §14-22, §205-541: Receives EvidenceBundle from Layer 2,
+        applies GoalBackoffReasoner for LLM-driven DAG restructuring.
 
         If ``allow_retry`` and retries remain, resets to pending.
         Otherwise marks permanently failed.
 
         Args:
             goal_id: Goal to fail.
-            error: Error description.
+            evidence: EvidenceBundle from Layer 2 execution (RFC-200 contract).
+            error: Error description (deprecated, for backward compatibility).
             allow_retry: Whether to allow retry if retries remain.
 
         Returns:
-            The updated Goal (may be pending if retrying, failed otherwise).
+            BackoffDecision if backoff reasoning applied, None if no retry.
 
         Raises:
             KeyError: If goal not found.
@@ -393,23 +423,62 @@ class GoalEngine:
             msg = f"Goal {goal_id} not found"
             raise KeyError(msg)
 
+        # RFC-200: Build EvidenceBundle from error string if not provided (backward compatibility)
+        if not evidence and error:
+            logger.warning(
+                "Using deprecated error string for goal failure. "
+                "EvidenceBundle should be provided per RFC-200."
+            )
+            evidence = EvidenceBundle(
+                structured={"error_message": error},
+                narrative=error,
+                source="layer2_execute",
+            )
+
+        # RFC-200: Apply backoff reasoning if reasoner available
+        backoff_decision = None
+        if self._backoff_reasoner and evidence:
+            try:
+                backoff_decision = await self._backoff_reasoner.reason_backoff(
+                    goal_id=goal_id,
+                    goals=self._goals,
+                    failed_evidence=evidence,
+                )
+                logger.info(
+                    "Backoff decision for goal %s: backoff to %s - %s",
+                    goal_id,
+                    backoff_decision.backoff_to_goal_id,
+                    backoff_decision.reason,
+                )
+
+                # Apply backoff decision
+                await self._apply_backoff_decision(backoff_decision, goal_id)
+                return backoff_decision
+            except Exception:
+                logger.warning(
+                    "Backoff reasoning failed, using fallback retry logic",
+                    exc_info=True,
+                )
+
+        # Fallback: Simple retry logic (backward compatible)
         if allow_retry and goal.retry_count < goal.max_retries:
             goal.retry_count += 1
             goal.status = "pending"
             goal.updated_at = datetime.now(UTC)
+            error_text = evidence.narrative if evidence else error
             logger.info(
                 "Goal %s retry %d/%d: %s%s",
                 goal_id,
                 goal.retry_count,
                 goal.max_retries,
                 goal.description,
-                f" - {error}" if error else "",
+                f" - {error_text}" if error_text else "",
             )
             logger.debug(self._format_goal_dag())
-            return goal
+            return None
 
         goal.status = "failed"
-        goal.error = error  # IG-155: Store error message
+        goal.error = evidence.narrative if evidence else error  # IG-155: Store error message
         goal.updated_at = datetime.now(UTC)
 
         # IG-155: Update source file status if available
@@ -419,7 +488,8 @@ class GoalEngine:
 
                 from soothe.cognition.goal_engine.writer import update_goal_status
 
-                update_goal_status(Path(goal.source_file), "failed", error=error)
+                error_text = evidence.narrative if evidence else error
+                update_goal_status(Path(goal.source_file), "failed", error=error_text)
                 logger.debug("Updated goal file status for failed %s", goal_id)
             except Exception:
                 logger.debug("Failed to update goal file status", exc_info=True)
@@ -443,10 +513,10 @@ class GoalEngine:
             goal.priority,
             goal.retry_count,
             goal.max_retries,
-            f" - {error}" if error else "",
+            f" - {goal.error}" if goal.error else "",
         )
         logger.debug(self._format_goal_dag())
-        return goal
+        return None  # RFC-200: Return None for permanent failure (BackoffDecision | None)
 
     async def list_goals(self, status: GoalStatus | None = None) -> list[Goal]:
         """List goals, optionally filtered by status.
@@ -636,6 +706,53 @@ class GoalEngine:
             context_parts.append(f"depends_on: [{', '.join(dep_descs)}]")
 
         return " | ".join(context_parts)
+
+    async def _apply_backoff_decision(
+        self,
+        decision: BackoffDecision,
+        failed_goal_id: str,
+    ) -> None:
+        """Apply backoff decision to goal DAG.
+
+        RFC-200: Resets backoff target goal to "pending" and applies new directives.
+
+        Args:
+            decision: BackoffDecision from GoalBackoffReasoner.
+            failed_goal_id: ID of the goal that failed.
+        """
+        backoff_target = self._goals.get(decision.backoff_to_goal_id)
+        if not backoff_target:
+            logger.warning(
+                "Backoff target %s not found in DAG",
+                decision.backoff_to_goal_id,
+            )
+            return
+
+        # Reset backoff target to pending
+        backoff_target.status = "pending"
+        backoff_target.updated_at = datetime.now(UTC)
+
+        # Mark failed goal as failed (not retrying)
+        failed_goal = self._goals.get(failed_goal_id)
+        if failed_goal:
+            failed_goal.status = "failed"
+            failed_goal.error = decision.evidence_summary
+            failed_goal.updated_at = datetime.now(UTC)
+
+        logger.info(
+            "Applied backoff: resetting goal %s to pending, marking %s as failed",
+            decision.backoff_to_goal_id,
+            failed_goal_id,
+        )
+
+        # Apply new directives if provided
+        if decision.new_directives:
+            logger.info(
+                "Applying %d new directives from backoff decision",
+                len(decision.new_directives),
+            )
+            # TODO: Implement directive application logic
+            # Future: Use goal directive processor from _runner_goal_directives.py
 
     def _format_goal_dag(self) -> str:
         """Format the current goal DAG state for logging.

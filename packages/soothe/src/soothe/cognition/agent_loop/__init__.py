@@ -8,6 +8,7 @@ from .checkpoint import (
     StepExecutionRecord,
     WorkingMemoryState,
 )
+from .communication import GoalCommunicationHelper
 from .schemas import (
     AgentDecision,
     LoopState,
@@ -24,6 +25,7 @@ __all__ = [
     "AgentLoop",
     "AgentLoopCheckpoint",
     "AgentLoopStateManager",
+    "GoalCommunicationHelper",
     "LoopState",
     "LoopWorkingMemory",
     "PlanResult",

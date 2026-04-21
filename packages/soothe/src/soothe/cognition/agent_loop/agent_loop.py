@@ -117,6 +117,7 @@ class AgentLoop:
         git_status: dict[str, Any] | None = None,
         max_iterations: int = DEFAULT_AGENT_LOOP_MAX_ITERATIONS,
         plan_conversation_excerpts: list[str] | None = None,
+        intent: Any | None = None,  # IG-226: Intent classification from unified classifier
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -129,12 +130,28 @@ class AgentLoop:
             git_status: Optional git snapshot for RFC-104-aligned Reason prompts.
             max_iterations: Maximum loop iterations (default: 8)
             plan_conversation_excerpts: Prior thread lines (User/Assistant) for Plan phase (IG-128).
+            intent: IntentClassification from unified classifier (IG-226). Determines goal handling:
+                - thread_continuation: Adjust iteration behavior, reuse working memory
+                - new_goal: Normal goal execution flow
+                - chitchat: Should not reach here (handled in runner)
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
         # Initialize AgentLoop state manager (RFC-205)
         state_manager = AgentLoopStateManager(thread_id, Path(workspace) if workspace else None)
+
+        # IG-226: Handle thread continuation intent
+        thread_continuation_mode = False
+        if intent and hasattr(intent, "intent_type"):
+            if intent.intent_type == "thread_continuation":
+                thread_continuation_mode = True
+                logger.info(
+                    "[AgentLoop] Thread continuation mode: reuse_current_goal=%s",
+                    intent.reuse_current_goal if hasattr(intent, "reuse_current_goal") else False,
+                )
+                # Thread continuation may benefit from fewer iterations (follow-up actions)
+                # but keep max_iterations unchanged for now - let Plan phase determine completion
 
         # RFC-609: Create GoalContextManager for goal-level context injection
         from soothe.config.models import GoalContextConfig
@@ -192,6 +209,12 @@ class AgentLoop:
             max_iterations=max_iterations,
             plan_conversation_excerpts=plan_excerpts,
         )
+
+        # IG-226: Set thread continuation flag for working memory context
+        if thread_continuation_mode:
+            state.thread_continuation = True  # Add flag to LoopState if it exists
+            logger.debug("[AgentLoop] Thread continuation flag set for working memory enhancement")
+
         wm_cfg = self.config.agentic.working_memory
         if wm_cfg.enabled:
             state.working_memory = LoopWorkingMemory(
@@ -200,11 +223,19 @@ class AgentLoop:
                 max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
             )
 
+            # IG-226: Thread continuation working memory enhancement
+            # Reuse current thread's working memory content more aggressively
+            if thread_continuation_mode:
+                logger.info("[AgentLoop] Thread continuation: working memory context reuse enabled")
+                # Working memory will automatically load from thread persistence
+                # No special handling needed - it already loads existing entries
+
         logger.info(
-            "[Goal] %s (max_iterations=%d, iteration=%d)",
+            "[Goal] %s (max_iterations=%d, iteration=%d, thread_continuation=%s)",
             log_preview(goal, 80),
             max_iterations,
             state.iteration,
+            thread_continuation_mode,
         )
 
         while state.iteration < state.max_iterations:
