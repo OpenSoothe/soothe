@@ -13,9 +13,10 @@
   [![GitHub Stars](https://img.shields.io/github/stars/OpenSoothe/soothe)](https://github.com/OpenSoothe/soothe)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OpenSoothe/soothe)
 
+  🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
 </div>
 
-Soothe is **not** another Claude Code / OpenClaw clone.
+Soothe is **not** another Claude Code / OpenClaw clone. 
 
 Its ambition is to become an **agent-harnessing framework**, an *Agentic OS*, designed to push humans **out of the execution loop**.
 
