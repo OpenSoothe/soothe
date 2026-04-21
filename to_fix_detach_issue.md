@@ -1,11 +1,20 @@
 # Fix thread detach issue
 
-1. Run a long task in TUI, e.g., soothe -p "analyze this project arch"
+## Current issues
 
-2. Detach the thread via Ctrl+d
+1. `Ctrl+D` previously exited the TUI immediately and could race with websocket shutdown, so detach was not always delivered before close.
+2. This race could make daemon treat the disconnect as a normal client drop and stop the active run instead of keeping it alive for later reattach.
+3. The issue is most visible on long-running turns where users expect `soothe thread continue` to reattach to an in-progress thread.
 
-3. Make sure the thread is still running
+## Repro / validation checklist
 
-4. Run soothe thread continue to attach
+1. Run a long task in TUI, e.g. `soothe -p "analyze this project arch"`.
+2. Press `Ctrl+D` to detach.
+3. Confirm the thread is still running in daemon (for example via `soothe thread list` status).
+4. Run `soothe thread continue` to reattach.
+5. Confirm prior history is restored and new streamed events continue in the same thread.
 
-5. Make sure the history of running thread restored and new events updated
+## Notes
+
+1. `Ctrl+D` and explicit detach should share the same detach-before-exit path.
+2. If daemon is not used (local/non-daemon mode), `Ctrl+D` should keep normal immediate-exit behavior.

@@ -298,6 +298,8 @@ class Glyphs:
     arrow_down: str  # down arrow vs v
     bullet: str  # bullet vs -
     cursor: str  # cursor vs >
+    user: str  # User/human icon
+    assistant: str  # AI/assistant icon
 
     # Box-drawing characters
     box_vertical: str  # │ vs |
@@ -328,6 +330,8 @@ UNICODE_GLYPHS = Glyphs(
     arrow_down="↓",
     bullet="•",
     cursor="›",  # noqa: RUF001  # Intentional Unicode glyph
+    user="👤",  # User/human icon
+    assistant="🤖",  # AI/assistant icon
     # Box-drawing characters
     box_vertical="│",
     box_horizontal="─",
@@ -354,6 +358,8 @@ ASCII_GLYPHS = Glyphs(
     arrow_down="v",
     bullet="-",
     cursor=">",
+    user="[U]",  # User/human icon (ASCII)
+    assistant="[A]",  # AI/assistant icon (ASCII)
     # Box-drawing characters
     box_vertical="|",
     box_horizontal="-",
