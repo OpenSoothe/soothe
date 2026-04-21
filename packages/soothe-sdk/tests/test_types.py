@@ -1,8 +1,8 @@
 """Tests for type definitions."""
 
-import pytest
 
-from soothe_sdk.plugin import Health as PluginHealth, Manifest as PluginManifest
+from soothe_sdk.plugin import Health as PluginHealth
+from soothe_sdk.plugin import Manifest as PluginManifest
 
 
 def test_plugin_manifest():

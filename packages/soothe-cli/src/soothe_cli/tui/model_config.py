@@ -24,6 +24,17 @@ DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
 _ENV_PREFIX = "SOOTHE_"
 
 
+def _in_running_loop() -> bool:
+    """Return whether current thread is already running an asyncio loop."""
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
 # Model configuration error (stub for now)
 class ModelConfigError(Exception):
     """Error in model configuration."""
@@ -234,7 +245,7 @@ def get_credential_env_var(provider: str) -> str | None:
     Per IG-174, fetches provider config from daemon via RPC.
     Falls back to hardcoded env var mapping if daemon not reachable.
     """
-    if provider:
+    if provider and not _in_running_loop():
         # Try to fetch from daemon
         try:
             import asyncio
@@ -518,29 +529,32 @@ def has_provider_credentials(provider: str) -> bool | None:
             return bool(proj and proj.strip())
         return None
 
-    # Try to fetch from daemon
-    try:
-        import asyncio
+    # Try to fetch from daemon only when no event loop is active in this thread.
+    if not _in_running_loop():
+        try:
+            import asyncio
 
-        provider_data = asyncio.run(_fetch_provider_config(provider))
-        if provider_data is not None:
-            provider_type = provider_data.get("provider_type", "")
-            if provider_type in IMPLICIT_AUTH_PROVIDERS or provider_type == "ollama":
-                return None
-            if provider_data.get("api_key"):
-                try:
-                    from soothe_sdk.utils import resolve_provider_env
-
-                    v = resolve_provider_env(
-                        provider_data["api_key"], provider_name=provider, field_name="api_key"
-                    )
-                except Exception:
-                    logger.debug("resolve api_key failed for provider %r", provider, exc_info=True)
+            provider_data = asyncio.run(_fetch_provider_config(provider))
+            if provider_data is not None:
+                provider_type = provider_data.get("provider_type", "")
+                if provider_type in IMPLICIT_AUTH_PROVIDERS or provider_type == "ollama":
                     return None
-                return bool(v and str(v).strip())
-            return False
-    except Exception:
-        logger.debug("Could not fetch provider config from daemon", exc_info=True)
+                if provider_data.get("api_key"):
+                    try:
+                        from soothe_sdk.utils import resolve_provider_env
+
+                        v = resolve_provider_env(
+                            provider_data["api_key"], provider_name=provider, field_name="api_key"
+                        )
+                    except Exception:
+                        logger.debug(
+                            "resolve api_key failed for provider %r", provider, exc_info=True
+                        )
+                        return None
+                    return bool(v and str(v).strip())
+                return False
+        except Exception:
+            logger.debug("Could not fetch provider config from daemon", exc_info=True)
 
     # Fallback to environment variable check
     env_name = PROVIDER_API_KEY_ENV.get(provider)

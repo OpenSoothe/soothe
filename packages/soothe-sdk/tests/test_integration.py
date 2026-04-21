@@ -2,7 +2,8 @@
 
 import pytest
 
-from soothe_sdk.plugin import plugin, subagent, tool, Context as PluginContext
+from soothe_sdk.plugin import Context as PluginContext
+from soothe_sdk.plugin import plugin, subagent, tool
 
 
 @pytest.mark.asyncio

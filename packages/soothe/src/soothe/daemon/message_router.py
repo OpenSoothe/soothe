@@ -238,21 +238,55 @@ class MessageRouter:
             if d._global_history:
                 global_history_list = d._global_history.get_recent(limit=100)
 
+            # IG-228: Check if thread is actively running in background (after detach)
+            is_active = resumed_thread_id in d._active_threads
+            thread_status = "running" if is_active else "idle"
+
             session = await d._session_manager.get_session(client_id)
             logger.info("resume_thread: session for client %s = %s", client_id, session is not None)
             if session:
+                # Subscribe client to thread events if thread is running
+                # Avoid duplicate subscription if client already subscribed via bootstrap
+                if is_active and resumed_thread_id not in session.subscriptions:
+                    try:
+                        await d._session_manager.subscribe_thread(
+                            client_id, resumed_thread_id, verbosity=session.verbosity
+                        )
+                        logger.info(
+                            "Client %s subscribed to active thread %s",
+                            client_id,
+                            resumed_thread_id,
+                        )
+                        # Send subscription confirmation so client bootstrap completes
+                        await session.transport.send(
+                            session.transport_client,
+                            {
+                                "type": "subscription_confirmed",
+                                "thread_id": resumed_thread_id,
+                                "client_id": client_id,
+                                "verbosity": session.verbosity,
+                            },
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to subscribe client %s to active thread %s",
+                            client_id,
+                            resumed_thread_id,
+                            exc_info=True,
+                        )
+
                 await session.transport.send(
                     session.transport_client,
                     {
                         "type": "status",
-                        "state": "idle",
+                        "state": thread_status,
                         "thread_id": resumed_thread_id,
                         "thread_resumed": True,
                         "input_history": global_history_list,
                         "conversation_history": conversation_history,
                     },
                 )
-            logger.info("Resumed thread %s", resumed_thread_id)
+            logger.info("Resumed thread %s (status=%s)", resumed_thread_id, thread_status)
         except KeyError as e:
             logger.warning("resume_thread: KeyError for %r: %s", thread_id, e)
             session = await d._session_manager.get_session(client_id)
@@ -589,7 +623,11 @@ class MessageRouter:
         )
 
     async def _handle_thread_update_state(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Persist partial checkpoint state values for a thread."""
+        """Persist partial checkpoint state values for a thread.
+
+        Responds immediately before performing the state update to avoid timeout
+        during interrupt cleanup (IG-228).
+        """
         d = self._daemon
         thread_id = str(msg.get("thread_id", "")).strip()
         values = msg.get("values")
@@ -605,6 +643,18 @@ class MessageRouter:
             )
             return
 
+        # Respond immediately to avoid client timeout during interrupt cleanup
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "thread_update_state_response",
+                "thread_id": thread_id,
+                "success": True,
+                "request_id": msg.get("request_id"),
+            },
+        )
+
+        # Deserialize messages if present
         if isinstance(values.get("messages"), list):
             try:
                 values = dict(values)
@@ -616,16 +666,17 @@ class MessageRouter:
                     exc_info=True,
                 )
 
-        await d._runner.update_thread_state_values(thread_id, values)
-        await d._send_client_message(
-            client_id,
-            {
-                "type": "thread_update_state_response",
-                "thread_id": thread_id,
-                "success": True,
-                "request_id": msg.get("request_id"),
-            },
-        )
+        # Perform state update in background after responding
+        try:
+            await d._runner.update_thread_state_values(thread_id, values)
+        except (RuntimeError, OSError, ValueError, KeyError) as e:
+            # Catch specific exceptions from checkpoint/IO errors, not system interrupts
+            logger.warning(
+                "Failed to persist thread state for %s after acknowledgment: %s",
+                thread_id,
+                e,
+                exc_info=True,
+            )
 
     async def _handle_resume_interrupts(self, client_id: str, msg: dict[str, Any]) -> None:
         """Resume an interactive daemon turn paused on HITL or ask_user."""
@@ -702,10 +753,12 @@ class MessageRouter:
             return
 
         try:
+            # IG-228: Subscribe even if already subscribed (client expects confirmation)
             await d._session_manager.subscribe_thread(client_id, thread_id, verbosity=verbosity)
 
             session = await d._session_manager.get_session(client_id)
             if session:
+                # Always send subscription confirmation so client bootstrap completes
                 await session.transport.send(
                     session.transport_client,
                     {

@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from soothe.cognition.agent_loop.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.schemas import LoopState, PlanResult
 
 if TYPE_CHECKING:
@@ -173,9 +174,8 @@ class SynthesisPhase:
         )
 
         # Call LLM for synthesis
-        from langchain_core.messages import HumanMessage
-
-        response = await self.llm.ainvoke([HumanMessage(content=synthesis_prompt)])
+        human_msg = LoopHumanMessage(content=synthesis_prompt)  # No thread context
+        response = await self.llm.ainvoke([human_msg])
 
         synthesis_text = response.content or ""
 

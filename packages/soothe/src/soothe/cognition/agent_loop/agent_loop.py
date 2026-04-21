@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.cognition.agent_loop.executor import Executor
 from soothe.cognition.agent_loop.final_response_policy import needs_final_thread_synthesis
 from soothe.cognition.agent_loop.goal_context_manager import GoalContextManager
+from soothe.cognition.agent_loop.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.planning_utils import _default_agent_decision
 from soothe.cognition.agent_loop.reason import PlanPhase
 from soothe.cognition.agent_loop.schemas import AgentDecision, LoopState, PlanResult
@@ -301,8 +302,6 @@ class AgentLoop:
                     )
 
                     try:
-                        from langchain_core.messages import HumanMessage
-
                         # Agentic loop sends message to core agent requesting final report
                         report_request = f"""Based on the complete execution history in this thread, generate a comprehensive final report for the goal: {goal}
 
@@ -318,10 +317,17 @@ Use all tool results and AI responses available in the conversation history to c
                             "[Human Message] Final report request: %s",
                             log_preview(report_request, chars=150),
                         )
+                        human_msg = LoopHumanMessage(
+                            content=report_request,
+                            thread_id=state.thread_id,
+                            iteration=state.iteration,  # Final iteration
+                            goal_summary=state.goal[:200] if state.goal else None,
+                            phase="final_report",
+                        )
                         accum = FinalReportAccumState()
                         chunk_count = 0
                         async for chunk in self.core_agent.astream(
-                            {"messages": [HumanMessage(content=report_request)]},
+                            {"messages": [human_msg]},
                             config={"configurable": {"thread_id": state.thread_id}},
                             stream_mode=["messages"],
                             subgraphs=False,

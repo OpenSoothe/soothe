@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +14,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from soothe.cognition.agent_loop.final_response_policy import (
     assemble_assistant_text_from_stream_messages,
 )
+from soothe.cognition.agent_loop.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.schemas import (
     AgentDecision,
     LoopState,
@@ -458,8 +460,6 @@ class Executor:
         Yields:
             StreamEvent during execution, then one StepResult per step in ``steps``.
         """
-        from langchain_core.messages import HumanMessage
-
         combined_description = self._build_sequential_input(steps)
 
         # Compact input summary log
@@ -482,6 +482,7 @@ class Executor:
         output = ""
         event_count = 0  # Track events for debugging
         budget = _ActStreamBudget(max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave())
+        wave_id = str(uuid.uuid4())[:8]  # IG-XXX: Unique wave ID for tracking
 
         try:
             configurable: dict[str, Any] = {"thread_id": state.thread_id}
@@ -499,8 +500,17 @@ class Executor:
             configurable.update(await self._claude_runner_config_extras(state.thread_id))
 
             logger.debug("[Human Message] %s", log_preview(combined_description, chars=150))
+            human_msg = LoopHumanMessage(
+                content=combined_description,
+                thread_id=state.thread_id,
+                iteration=state.iteration,
+                goal_summary=state.goal[:200] if state.goal else None,
+                workspace=state.workspace,
+                phase="execute_wave",
+                wave_id=wave_id,
+            )
             stream = self.core_agent.astream(
-                {"messages": [HumanMessage(content=combined_description)]},
+                {"messages": [human_msg]},
                 config={"configurable": configurable},
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
@@ -650,8 +660,6 @@ class Executor:
         Returns:
             Tuple of (collected events, StepResult with outcome metadata, AI messages for IG-199)
         """
-        from langchain_core.messages import HumanMessage
-
         start = time.perf_counter()
         events: list[StreamEvent] = []
         output = ""  # Still collect for Layer 1 final report
@@ -693,8 +701,16 @@ class Executor:
 
             step_body = f"Execute: {step.description}"
             logger.debug("[Human Message] %s", log_preview(step_body, chars=150))
+            human_msg = LoopHumanMessage(
+                content=step_body,
+                thread_id=thread_id,
+                iteration=None,  # Single step doesn't have iteration context
+                goal_summary=None,  # Could extract from goal_briefing if needed
+                workspace=workspace,
+                phase="execute_step",
+            )
             stream = self.core_agent.astream(
-                {"messages": [HumanMessage(content=step_body)]},
+                {"messages": [human_msg]},
                 config=config,
                 stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
@@ -907,7 +923,6 @@ class Executor:
                     t = extract_text_from_message_content(msg.content)
                     if t:
                         chunks.append(t)
-                        logger.debug("[AI Message Chunk] %s", log_preview(t, chars=150))
                 elif isinstance(msg, AIMessage):
                     messages.append(msg)
                     t = extract_text_from_message_content(msg.content)

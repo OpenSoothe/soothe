@@ -164,7 +164,7 @@ def _strip_success_exit_line(text: str) -> str:
 
 
 class UserMessage(_TimestampClickMixin, Static):
-    """Widget displaying a user message."""
+    """Widget displaying a user message with enhanced styling."""
 
     can_select = True
     """Enable text selection for copy functionality."""
@@ -173,11 +173,24 @@ class UserMessage(_TimestampClickMixin, Static):
     UserMessage {
         height: auto;
         padding: 0 1;
-        margin: 0 0 1 0;
-        background: transparent;
+        margin: 1 0;
+        background: $surface;
         border-left: wide $primary;
     }
+
+    UserMessage.-mode-shell {
+        border-left: wide $mode-bash;
+    }
+
+    UserMessage.-mode-command {
+        border-left: wide $mode-command;
+    }
+
+    UserMessage:hover {
+        background: $surface-darken-1;
+    }
     """
+    """Enhanced styling with role indicator, background tint, and mode-specific borders."""
 
     def __init__(self, content: str, **kwargs: Any) -> None:
         """Initialize a user message.
@@ -198,14 +211,19 @@ class UserMessage(_TimestampClickMixin, Static):
             self.add_class("-ascii")
 
     def render(self) -> Content:
-        """Render the styled user message.
+        """Render the styled user message with role indicator.
 
         Returns:
-            Styled Content with mode prefix and highlighted mentions.
+            Styled Content with role header, mode prefix, and highlighted mentions.
         """
         colors = theme.get_theme_colors(self)
         parts: list[str | tuple[str, str]] = []
         content = self._content
+
+        # Add "Human" role indicator header
+        glyphs = get_glyphs()
+        role_icon = glyphs.user if not is_ascii_mode() else ">"
+        parts.append((f"{role_icon} Human  ", f"bold {colors.primary}"))
 
         # Use mode-specific prefix indicator when content starts with a
         # mode trigger character (e.g. "!" for shell, "/" for commands).
@@ -216,7 +234,8 @@ class UserMessage(_TimestampClickMixin, Static):
             parts.append((f"{glyph} ", f"bold {_mode_color(mode, self)}"))
             content = content[1:]
         else:
-            parts.append(("> ", f"bold {colors.primary}"))
+            # Add subtle separator for non-mode messages
+            parts.append(("│ ", f"dim {colors.muted}"))
 
         # Highlight @mentions and /commands in the content
         last_end = 0
@@ -571,7 +590,7 @@ class SkillMessage(Vertical):
 
 
 class AssistantMessage(_TimestampClickMixin, Vertical):
-    """Widget displaying an assistant message with markdown support.
+    """Widget displaying an assistant message with markdown support and enhanced styling.
 
     Uses MarkdownStream for smoother streaming instead of re-rendering
     the full content on each update.
@@ -584,14 +603,26 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
     AssistantMessage {
         height: auto;
         padding: 0 1;
-        margin: 0 0 1 0;
+        margin: 1 0;
+        background: $background-darken-1;
+        border-left: wide $secondary;
+    }
+
+    AssistantMessage .assistant-header {
+        height: auto;
+        margin-bottom: 1;
     }
 
     AssistantMessage Markdown {
         padding: 0;
         margin: 0;
     }
+
+    AssistantMessage:hover {
+        background: $background-darken-2;
+    }
     """
+    """Enhanced styling with role indicator, secondary border, and background tint."""
 
     def __init__(self, content: str = "", **kwargs: Any) -> None:
         """Initialize an assistant message.
@@ -609,8 +640,18 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
         """Compose the assistant message layout.
 
         Yields:
-            Markdown widget for rendering assistant content.
+            Header widget with role indicator and Markdown widget for content.
         """
+        colors = theme.get_theme_colors()
+        glyphs = get_glyphs()
+        is_ascii = is_ascii_mode()
+        role_icon = glyphs.assistant if not is_ascii else "◆"
+
+        # Add role header
+        yield Static(
+            Content.styled(f"{role_icon} AI  ", f"bold {colors.secondary}"),
+            classes="assistant-header",
+        )
         from textual.widgets import Markdown
 
         yield Markdown("", id="assistant-content")

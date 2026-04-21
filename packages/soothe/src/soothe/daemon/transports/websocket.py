@@ -135,6 +135,14 @@ class WebSocketTransport(TransportServer):
         try:
             data = encode(message)
             await client.send(data)
+        except (
+            websockets.exceptions.ConnectionClosed,
+            websockets.exceptions.ConnectionClosedOK,
+            websockets.exceptions.ConnectionClosedError,
+        ) as e:
+            logger.debug("WebSocket client already closed while sending: %s", e)
+            error_msg = f"Failed to send: {e}"
+            raise ConnectionError(error_msg) from e
         except Exception as e:
             logger.exception("Failed to send to WebSocket client")
             error_msg = f"Failed to send: {e}"

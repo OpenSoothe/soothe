@@ -8,11 +8,10 @@ from soothe_cli.tui.widgets.messages import ToolCallMessage
 
 def test_read_file_shows_line_range_when_present() -> None:
     """read_file with start_line and end_line should show 'filename:start-end'."""
-    s = format_tool_display("read_file", {
-        "path": "/Users/dev/project/src/module.py",
-        "start_line": 100,
-        "end_line": 250
-    })
+    s = format_tool_display(
+        "read_file",
+        {"path": "/Users/dev/project/src/module.py", "start_line": 100, "end_line": 250},
+    )
     assert "module.py:100-250" in s
     assert "read_file" in s
 
