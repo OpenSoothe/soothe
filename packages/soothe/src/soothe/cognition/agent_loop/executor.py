@@ -19,7 +19,7 @@ from soothe.cognition.agent_loop.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.utils.text_preview import create_output_summary, log_preview, preview_first
+from soothe.utils.text_preview import create_output_summary, log_preview, preview_first, preview
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -871,7 +871,19 @@ class Executor:
                     content = msg.content
                     text_out = extract_text_from_message_content(content)
                     if text_out:
-                        chunks.append(text_out)
+                        # Truncate large tool outputs to prevent context window overflow
+                        # Full content is preserved in cache via cache.save() below
+                        MAX_TOOL_OUTPUT_CHARS = 10_000
+                        if len(text_out) > MAX_TOOL_OUTPUT_CHARS:
+                            truncated = preview(
+                                text_out,
+                                mode="chars",
+                                first=MAX_TOOL_OUTPUT_CHARS // 2,
+                                last=MAX_TOOL_OUTPUT_CHARS // 2,
+                            )
+                            chunks.append(truncated)
+                        else:
+                            chunks.append(text_out)
 
                     outcome = generate_outcome_metadata(tool_name, content, tool_call_id)
 
