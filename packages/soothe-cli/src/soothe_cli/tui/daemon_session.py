@@ -34,9 +34,13 @@ class TuiDaemonSession:
 
     def __init__(self, cfg: Any) -> None:
         self._cfg = cfg
-        self._client = WebSocketClient(url=websocket_url_from_config(cfg))
+        ws_url = websocket_url_from_config(cfg)
+        self._client = WebSocketClient(url=ws_url)
+        self._rpc_client = WebSocketClient(url=ws_url)
         self._thread_id: str | None = None
         self._read_lock = asyncio.Lock()
+        self._rpc_lock = asyncio.Lock()
+        self._rpc_connected = False
         self._streaming = False
 
     @property
@@ -73,6 +77,8 @@ class TuiDaemonSession:
     async def close(self) -> None:
         """Close the daemon websocket."""
         await self._client.close()
+        await self._rpc_client.close()
+        self._rpc_connected = False
 
     async def detach(self) -> None:
         """Detach this client from the daemon."""
@@ -183,8 +189,9 @@ class TuiDaemonSession:
         thread_id = str(config.get("configurable", {}).get("thread_id", "")).strip()
         if not thread_id:
             return DaemonStateSnapshot(values={})
-        async with self._read_lock:
-            response = await self._client.request_response(
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            response = await self._rpc_client.request_response(
                 {"type": "thread_state", "thread_id": thread_id},
                 response_type="thread_state_response",
             )
@@ -231,8 +238,9 @@ class TuiDaemonSession:
         if include_events:
             payload["include_events"] = True
 
-        async with self._read_lock:
-            response = await self._client.request_response(
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            response = await self._rpc_client.request_response(
                 payload,
                 response_type="thread_messages_response",
                 timeout=10.0,
@@ -256,8 +264,9 @@ class TuiDaemonSession:
         thread_id = str(config.get("configurable", {}).get("thread_id", "")).strip()
         if not thread_id:
             return
-        async with self._read_lock:
-            await self._client.request_response(
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            await self._rpc_client.request_response(
                 {
                     "type": "thread_update_state",
                     "thread_id": thread_id,
@@ -269,8 +278,9 @@ class TuiDaemonSession:
 
     async def list_skills(self) -> list[dict[str, Any]]:
         """Return skill rows from the daemon catalog (no filesystem paths)."""
-        async with self._read_lock:
-            response = await self._client.list_skills(timeout=15.0)
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            response = await self._rpc_client.list_skills(timeout=15.0)
         skills = response.get("skills", [])
         if not isinstance(skills, list):
             return []
@@ -278,10 +288,19 @@ class TuiDaemonSession:
 
     async def list_models(self) -> dict[str, Any]:
         """Return daemon ``models_list_response`` (models + default_model from server config)."""
-        async with self._read_lock:
-            return await self._client.list_models(timeout=15.0)
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            return await self._rpc_client.list_models(timeout=15.0)
 
     async def invoke_skill(self, skill: str, args: str = "") -> dict[str, Any]:
         """Resolve ``SKILL.md`` on the daemon and receive UI echo before the turn streams."""
-        async with self._read_lock:
-            return await self._client.invoke_skill(skill, args, timeout=120.0)
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            return await self._rpc_client.invoke_skill(skill, args, timeout=120.0)
+
+    async def _ensure_rpc_connected(self) -> None:
+        """Ensure dedicated RPC client is connected."""
+        if self._rpc_connected:
+            return
+        await connect_websocket_with_retries(self._rpc_client)
+        self._rpc_connected = True

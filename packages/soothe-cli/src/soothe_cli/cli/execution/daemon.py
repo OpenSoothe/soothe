@@ -180,7 +180,7 @@ async def run_headless_via_daemon(
         logger.exception("Daemon connection failed")
         from soothe_sdk.utils import format_cli_error
 
-        typer.echo(f"Error: {format_cli_error(e, context='daemon connection')}", err=True)
+        typer.echo(f"Error: {format_cli_error(e)}", err=True)
         return _DAEMON_FALLBACK_EXIT_CODE
     except Exception as e:
         logger.exception("Failed to run via daemon")

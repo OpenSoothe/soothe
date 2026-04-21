@@ -3,12 +3,16 @@
 import pytest
 
 from soothe_sdk.plugin import (
+    Health as PluginHealth,
+)
+from soothe_sdk.plugin import (
+    Manifest as PluginManifest,
+)
+from soothe_sdk.plugin import (
     plugin,
     subagent,
     tool,
     tool_group,
-    Health as PluginHealth,
-    Manifest as PluginManifest,
 )
 
 

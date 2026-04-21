@@ -11,14 +11,13 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import HumanMessage
-
 from soothe.cognition.agent_loop.checkpoint import (
     AgentLoopCheckpoint,
     GoalExecutionRecord,
     GoalThreadRelevanceAnalysis,
     ThreadSwitchPolicy,
 )
+from soothe.cognition.agent_loop.messages import LoopHumanMessage
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -99,7 +98,8 @@ async def analyze_goal_thread_relevance(
 
     # Call LLM for analysis
     try:
-        response = await model.ainvoke([HumanMessage(content=analysis_prompt)])
+        human_msg = LoopHumanMessage(content=analysis_prompt)  # No thread context
+        response = await model.ainvoke([human_msg])
         analysis_result = parse_llm_analysis_response(response.content)
 
         # Determine should_switch_thread

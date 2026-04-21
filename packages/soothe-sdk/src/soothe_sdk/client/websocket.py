@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
+from collections import deque
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
@@ -39,6 +40,7 @@ class WebSocketClient:
         self._url = url
         self._ws: websockets.asyncio.client.ClientConnection | None = None
         self._connected = False
+        self._pending_events: deque[dict[str, Any]] = deque()
 
     async def connect(self) -> None:
         """Connect to the daemon.
@@ -68,6 +70,7 @@ class WebSocketClient:
                 await self._ws.close()
             self._ws = None
             self._connected = False
+            self._pending_events.clear()
 
     async def send(self, message: dict[str, Any]) -> None:
         """Send a message to the daemon.
@@ -352,10 +355,11 @@ class WebSocketClient:
 
         async with asyncio.timeout(timeout):
             while True:
-                event = await self.read_event()
+                event = await self._read_from_socket()
                 if not event:
                     raise TimeoutError(f"Timed out waiting for {response_type}")
                 if event.get("request_id") != request_id:
+                    self._pending_events.append(event)
                     continue
                 if event.get("type") == "error":
                     raise RuntimeError(str(event.get("message", "daemon error")))
@@ -490,16 +494,41 @@ class WebSocketClient:
         """
         async with asyncio.timeout(ready_timeout_s):
             while True:
-                event = await self.read_event()
+                event = self._pop_pending_event_by_type("daemon_ready")
+                if event is None:
+                    if self._ws and self._connected:
+                        event = await self._read_from_socket()
+                    else:
+                        # Test/mocked clients may not initialize websocket transport.
+                        event = await self.read_event()
                 if not event:
                     raise ValueError("No event received")
                 if event.get("type") != "daemon_ready":
+                    self._pending_events.append(event)
                     continue
                 state = event.get("state")
                 if state == "ready":
                     return event
                 message = event.get("message") or f"Daemon state is {state}"
                 raise RuntimeError(str(message))
+
+    def _pop_pending_event_by_type(self, event_type: str) -> dict[str, Any] | None:
+        """Pop the first pending event of ``event_type`` while preserving queue order."""
+        if not self._pending_events:
+            return None
+
+        kept_events: deque[dict[str, Any]] = deque()
+        matched: dict[str, Any] | None = None
+
+        while self._pending_events:
+            event = self._pending_events.popleft()
+            if matched is None and event.get("type") == event_type:
+                matched = event
+                continue
+            kept_events.append(event)
+
+        self._pending_events = kept_events
+        return matched
 
     async def subscribe_thread(
         self,
@@ -544,30 +573,29 @@ class WebSocketClient:
             ValueError: If confirmation has different thread_id or verbosity
         """
         async with asyncio.timeout(timeout):
-            event = await self.read_event()
-
-        if not event:
-            raise ValueError("No event received")
-
-        if event.get("type") != "subscription_confirmed":
-            msg = f"Expected subscription_confirmed, got {event.get('type')}"
-            raise ValueError(msg)
-
-        if event.get("thread_id") != thread_id:
-            msg = f"Subscription thread_id mismatch: expected {thread_id}, got {event.get('thread_id')}"
-            raise ValueError(msg)
-
-        echoed_verbosity = event.get("verbosity", "normal")
-        if echoed_verbosity != verbosity:
-            logger.warning(
-                "Verbosity mismatch: requested=%s, received=%s",
-                verbosity,
-                echoed_verbosity,
-            )
-
-        logger.debug(
-            "Subscription confirmed for thread %s with verbosity=%s", thread_id, echoed_verbosity
-        )
+            while True:
+                event = await self._read_from_socket()
+                if not event:
+                    raise ValueError("No event received")
+                if event.get("type") != "subscription_confirmed":
+                    self._pending_events.append(event)
+                    continue
+                if event.get("thread_id") != thread_id:
+                    self._pending_events.append(event)
+                    continue
+                echoed_verbosity = event.get("verbosity", "normal")
+                if echoed_verbosity != verbosity:
+                    logger.warning(
+                        "Verbosity mismatch: requested=%s, received=%s",
+                        verbosity,
+                        echoed_verbosity,
+                    )
+                logger.debug(
+                    "Subscription confirmed for thread %s with verbosity=%s",
+                    thread_id,
+                    echoed_verbosity,
+                )
+                return
 
     async def read_event(self) -> dict[str, Any] | None:
         """Read the next event from the daemon.
@@ -575,6 +603,14 @@ class WebSocketClient:
         Returns:
             Parsed event dict, or ``None`` on EOF.
         """
+        if self._pending_events:
+            return self._pending_events.popleft()
+
+        return await self._read_from_socket()
+
+    async def _read_from_socket(self) -> dict[str, Any] | None:
+        """Read one event directly from the websocket transport."""
+
         if not self._ws or not self._connected:
             return None
 

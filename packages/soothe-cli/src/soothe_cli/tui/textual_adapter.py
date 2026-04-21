@@ -677,6 +677,8 @@ async def execute_task_textual(
         agent: The LangGraph agent to execute
         daemon_session: Optional daemon-backed session for direct websocket
             streaming. When provided, this becomes the primary execution path.
+            When thread is already running and skip_daemon_send_turn=True,
+            starts event consumption loop for subscribed thread.
         assistant_id: The agent identifier
         session_state: Session state with auto_approve flag
         adapter: The TextualUIAdapter for UI operations
@@ -696,7 +698,8 @@ async def execute_task_textual(
             If `None`, a new instance is created internally.
         skip_daemon_send_turn: When ``True`` with ``daemon_session`` set, skip
             ``send_turn`` and only consume chunks (daemon already queued the
-            prompt, e.g. after ``invoke_skill``).
+            prompt, e.g. after ``invoke_skill``). Also used for consuming
+            events from already-running threads.
 
     Note:
         Progress verbosity (``quiet`` … ``debug``) for tool UI and the stream
@@ -1754,6 +1757,7 @@ async def execute_task_textual(
             adapter=adapter,
             agent=agent,
             config=config,
+            daemon_session=daemon_session,
             pending_text_by_namespace=pending_text_by_namespace,
             captured_input_tokens=captured_input_tokens,
             captured_output_tokens=captured_output_tokens,
@@ -1779,6 +1783,7 @@ async def _handle_interrupt_cleanup(
     adapter: TextualUIAdapter,
     agent: Any,  # noqa: ANN401  # Dynamic agent graph type
     config: RunnableConfig,
+    daemon_session: Any = None,  # noqa: ANN401  # Daemon-backed TUI session
     pending_text_by_namespace: dict[tuple, str],
     captured_input_tokens: int,
     captured_output_tokens: int,
@@ -1791,6 +1796,8 @@ async def _handle_interrupt_cleanup(
         adapter: UI adapter with display callbacks.
         agent: The LangGraph agent.
         config: Runnable config with `thread_id`.
+        daemon_session: Optional daemon-backed session. When provided, sends
+            detach message before disconnect so thread continues running.
         pending_text_by_namespace: Accumulated text per namespace.
         captured_input_tokens: Input tokens captured before interrupt.
         captured_output_tokens: Output tokens captured before interrupt.
@@ -1859,6 +1866,16 @@ async def _handle_interrupt_cleanup(
         shield=True,
         approximate=approximate,
     )
+
+    # IG-228: Send detach message to daemon before disconnect (RFC-0013)
+    # This signals the daemon to let the thread continue running in background
+    # instead of cancelling it as an unexpected disconnect.
+    if daemon_session is not None:
+        try:
+            await daemon_session.detach()
+            logger.info("Sent detach message to daemon - thread will continue running")
+        except Exception:
+            logger.warning("Failed to send detach message during interrupt cleanup", exc_info=True)
 
 
 async def _persist_context_tokens(

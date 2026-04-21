@@ -317,6 +317,7 @@ class ClientSessionManager:
         Args:
             session: ClientSession to send events for
         """
+        logger.debug("Sender loop started for client %s", session.client_id[:8])
         try:
             while True:
                 # Get event data (may be tuple with metadata)
@@ -364,7 +365,7 @@ class ClientSessionManager:
                     break
 
         except asyncio.CancelledError:
-            logger.debug("Sender task cancelled for client %s", session.client_id)
+            logger.debug("Sender task cancelled for client %s", session.client_id[:8])
             raise
 
     @property

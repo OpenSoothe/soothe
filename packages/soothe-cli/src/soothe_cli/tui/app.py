@@ -45,6 +45,12 @@ from soothe_cli.tui._session_stats import (
 # after user interaction begins.
 from soothe_cli.tui._version import CHANGELOG_URL, DOCS_URL
 from soothe_cli.tui.config import is_ascii_mode
+from soothe_cli.tui.message_display_filter import (
+    extract_ai_text_for_display,
+    extract_message_tool_calls,
+    extract_user_text_for_display,
+    normalize_stream_message,
+)
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.message_store import (
@@ -1417,6 +1423,19 @@ class SootheApp(App):
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 
+        # IG-228: Start background event reader if thread is already running
+        thread_state = event.status_event.get("state", "")
+        if thread_state == "running" and self._daemon_session is not None:
+            logger.info(
+                "Thread %s is running, starting background event reader",
+                status_thread_id[:8] if status_thread_id else "?",
+            )
+            self.run_worker(
+                self._consume_daemon_events_background(),
+                exclusive=False,
+                group="daemon-event-reader",
+            )
+
         if not self._schedule_initial_submission() and self._lc_thread_id:
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
@@ -1543,6 +1562,9 @@ class SootheApp(App):
 
     async def _prewarm_model_caches(self) -> None:
         """Prewarm model discovery and profile caches without blocking startup."""
+        if self._daemon_config is not None and self._daemon_session is None:
+            logger.debug("Skipping model cache prewarm - daemon session not ready")
+            return
         try:
             from soothe_cli.tui.model_config import (
                 get_available_models,
@@ -3283,7 +3305,7 @@ class SootheApp(App):
         Returns:
             Ordered list of `MessageData` ready for `MessageStore.bulk_load`.
         """
-        from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+        from langchain_core.messages import AIMessage, ToolMessage
 
         from soothe_cli.shared.message_processing import (
             extract_tool_args_dict,
@@ -3295,11 +3317,9 @@ class SootheApp(App):
         pending_tool_indices: dict[str, int] = {}
 
         for msg in messages:
-            if isinstance(msg, HumanMessage):
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                if content.startswith("[SYSTEM]"):
-                    continue
-
+            msg = normalize_stream_message(msg)
+            user_text = extract_user_text_for_display(msg)
+            if user_text is not None:
                 # Detect skill invocations persisted via additional_kwargs
                 skill_meta = (msg.additional_kwargs or {}).get("__skill")
                 if isinstance(skill_meta, dict) and skill_meta.get("name"):
@@ -3311,26 +3331,14 @@ class SootheApp(App):
                             skill_description=str(skill_meta.get("description", "")),
                             skill_source=str(skill_meta.get("source", "")),
                             skill_args=str(skill_meta.get("args", "")),
-                            skill_body=content,
+                            skill_body=user_text,
                         )
                     )
                 else:
-                    result.append(MessageData(type=MessageType.USER, content=content))
+                    result.append(MessageData(type=MessageType.USER, content=user_text))
 
             elif isinstance(msg, AIMessage):
-                # Extract text content
-                content = msg.content
-                text = ""
-                if isinstance(content, str):
-                    text = content.strip()
-                elif isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            text += block.get("text", "")
-                        elif isinstance(block, str):
-                            text += block
-                    text = text.strip()
-
+                text = extract_ai_text_for_display(msg)
                 if text:
                     result.append(MessageData(type=MessageType.ASSISTANT, content=text))
 
@@ -3964,6 +3972,140 @@ class SootheApp(App):
             exclusive=False,
         )
 
+    async def _consume_daemon_events_background(self) -> None:
+        """Consume events from daemon when subscribed to a running thread.
+
+        IG-228: This background task reads events from the daemon websocket
+        when the thread is already running passively (not during an active
+        turn). It uses the same event processing pipeline as active queries.
+        """
+        if not self._daemon_session:
+            return
+
+        logger.info("Starting background event consumer for subscribed thread")
+        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+
+        from soothe_cli.cli.stream.pipeline import StreamDisplayPipeline
+        from soothe_cli.shared.config_loader import load_config
+        from soothe_cli.shared.display_policy import normalize_verbosity
+        from soothe_cli.shared.message_processing import extract_tool_args_dict
+
+        pv = normalize_verbosity(load_config().verbosity)
+        progress_pipeline = StreamDisplayPipeline(verbosity=pv)
+        tool_cards: dict[str, ToolCallMessage] = {}
+        assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
+        last_user_text_by_ns: dict[tuple[Any, ...], str] = {}
+        last_ai_chunk_by_ns: dict[tuple[Any, ...], str] = {}
+
+        try:
+            # Use iter_turn_chunks to read events (same as active turn execution)
+            chunk_source = self._daemon_session.iter_turn_chunks()
+            async for chunk in chunk_source:
+                if not isinstance(chunk, tuple) or len(chunk) != 3:
+                    logger.debug("Skipping non-3-tuple chunk: %s", type(chunk).__name__)
+                    continue
+
+                namespace, mode, data = chunk
+                ns_key = tuple(namespace) if namespace else ()
+
+                async def _flush_assistant_ns(key: tuple[Any, ...]) -> None:
+                    card = assistant_cards_by_ns.pop(key, None)
+                    if card is not None:
+                        await card.stop_stream()
+
+                if mode == "messages":
+                    if not isinstance(data, tuple) or len(data) != 2:
+                        continue
+                    message, _metadata = data
+                    message = normalize_stream_message(message)
+
+                    user_text = extract_user_text_for_display(message)
+                    if user_text is not None:
+                        # Deduplicate immediate replayed user rows after reconnect/resubscribe.
+                        if last_user_text_by_ns.get(ns_key) == user_text:
+                            continue
+                        await _flush_assistant_ns(ns_key)
+                        await self._mount_message(UserMessage(user_text))
+                        last_user_text_by_ns[ns_key] = user_text
+                        continue
+
+                    if isinstance(message, ToolMessage):
+                        call_id = str(getattr(message, "tool_call_id", "") or "").strip()
+                        if call_id and call_id in tool_cards:
+                            tool_cards[call_id].set_success(
+                                str(getattr(message, "content", "") or "")
+                            )
+                        continue
+
+                    # Render tool calls as cards in background mode too.
+                    for raw_call in extract_message_tool_calls(message):
+                        call_id = str(
+                            raw_call.get("id") or raw_call.get("tool_call_id") or ""
+                        ).strip()
+                        tool_name = str(raw_call.get("name") or "").strip()
+                        if not call_id or not tool_name or call_id in tool_cards:
+                            continue
+                        tool_msg = ToolCallMessage(
+                            tool_name,
+                            extract_tool_args_dict(raw_call),
+                            tool_call_id=call_id,
+                        )
+                        tool_msg.set_running()
+                        await self._mount_message(tool_msg)
+                        tool_cards[call_id] = tool_msg
+
+                    if isinstance(message, (AIMessage, AIMessageChunk)):
+                        extracted = extract_ai_text_for_display(message)
+                        if extracted:
+                            # Deduplicate immediate replayed AI chunks after reconnect/resubscribe.
+                            if last_ai_chunk_by_ns.get(ns_key) == extracted:
+                                if getattr(message, "chunk_position", None) == "last":
+                                    await _flush_assistant_ns(ns_key)
+                                continue
+                            asst = assistant_cards_by_ns.get(ns_key)
+                            if asst is None:
+                                asst = AssistantMessage(id=f"asst-{uuid.uuid4().hex[:8]}")
+                                await self._mount_message(asst)
+                                assistant_cards_by_ns[ns_key] = asst
+                            await asst.append_content(extracted)
+                            last_ai_chunk_by_ns[ns_key] = extracted
+
+                        if getattr(message, "chunk_position", None) == "last":
+                            await _flush_assistant_ns(ns_key)
+                            last_ai_chunk_by_ns.pop(ns_key, None)
+                        continue
+                    continue
+
+                if mode != "updates" or not isinstance(data, dict):
+                    continue
+
+                await _flush_assistant_ns(ns_key)
+                payloads: list[dict[str, Any]] = []
+                if isinstance(data.get("type"), str):
+                    payloads.append(data)
+                for value in data.values():
+                    if isinstance(value, dict) and isinstance(value.get("type"), str):
+                        payloads.append(value)
+
+                for event_payload in payloads:
+                    event_for_pipeline = dict(event_payload)
+                    event_for_pipeline["namespace"] = list(namespace)
+                    lines = progress_pipeline.process(event_for_pipeline)
+                    for line in lines:
+                        rendered = line.format().lstrip("\n").rstrip()
+                        if rendered:
+                            await self._mount_message(AppMessage(rendered))
+
+        except asyncio.CancelledError:
+            logger.info("Background event consumer cancelled")
+        except Exception as exc:
+            logger.warning("Background event consumer error: %s", exc)
+        finally:
+            for card in assistant_cards_by_ns.values():
+                with suppress(Exception):
+                    await card.stop_stream()
+            logger.info("Background event consumer stopped")
+
     async def _load_thread_history(
         self,
         *,
@@ -3972,7 +4114,7 @@ class SootheApp(App):
     ) -> None:
         """Load and render message history when resuming a thread.
 
-        When `preloaded_payload` is provided (e.g., from `_resume_thread`),
+        When `preloaded_payload` is provided (e.g. from `_resume_thread`),
         this reuses that data. Otherwise, it fetches checkpoint state from the
         agent and converts stored messages into lightweight `MessageData`
         objects. The method then bulk-loads into the `MessageStore` and mounts

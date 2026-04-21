@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langchain_core.messages import HumanMessage
+
+from soothe.cognition.agent_loop.messages import LoopHumanMessage
 from soothe.cognition.agent_loop.planning_utils import (
     _default_agent_decision,
     _extract_balanced_json_object,
@@ -514,10 +517,9 @@ class LLMPlanner:
         Returns:
             The LLM's response as a string.
         """
-        from langchain_core.messages import HumanMessage
-
         try:
-            response = await self._model.ainvoke([HumanMessage(content=prompt)])
+            human_msg = LoopHumanMessage(content=prompt)  # No thread context
+            response = await self._model.ainvoke([human_msg])
             content = getattr(response, "content", str(response))
             return _extract_text_content(content)
         except Exception as e:
@@ -896,11 +898,10 @@ class LLMPlanner:
 
         # Compact input summary
         msg_types = [type(m).__name__ for m in messages]
-        from langchain_core.messages import HumanMessage
 
         human_preview = ""
         for msg in messages:
-            if isinstance(msg, HumanMessage):
+            if isinstance(msg, HumanMessage):  # Works for LoopHumanMessage too
                 human_preview = create_output_summary(msg.content, first_chars=200, last_chars=100)
                 break
         logger.debug("[Plan] msgs=%d types=%s human=%s", len(messages), msg_types, human_preview)
