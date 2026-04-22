@@ -139,10 +139,9 @@ class SootheRunner(CheckpointMixin, StepLoopMixin, AutonomousMixin, AgenticMixin
         checkpointer_start = time.perf_counter()
         checkpointer_result = resolve_checkpointer(self._config)
         if isinstance(checkpointer_result, tuple):
-            from langgraph.checkpoint.memory import MemorySaver
-
             self._checkpointer_pool = checkpointer_result[1]
-            self._checkpointer = MemorySaver()  # Temporary checkpointer
+            # Checkpointer will be created from pool in async context (_runner_phases.py)
+            self._checkpointer = None  # Placeholder, set during async initialization
             self._checkpointer_initialized = False
         else:
             self._checkpointer = checkpointer_result

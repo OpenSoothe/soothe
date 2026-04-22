@@ -5,24 +5,6 @@ from soothe.daemon.health.formatters import aggregate_status
 from soothe.daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
-def _check_inmemory_vectorstore() -> CheckResult:
-    """Check in-memory vector store."""
-    try:
-        from soothe.backends.vector_store.in_memory import InMemoryVectorStore  # noqa: F401
-
-        return CheckResult(
-            name="inmemory_vectorstore",
-            status=CheckStatus.OK,
-            message="In-memory vector store ready",
-        )
-    except ImportError as e:
-        return CheckResult(
-            name="inmemory_vectorstore",
-            status=CheckStatus.ERROR,
-            message=f"In-memory vector store import failed: {e}",
-        )
-
-
 def _check_pgvector(config: SootheConfig | None) -> CheckResult:
     """Check PGVector vector store if configured."""
     # Check if PGVector is configured
@@ -109,6 +91,46 @@ def _check_weaviate(config: SootheConfig | None) -> CheckResult:
         )
 
 
+def _check_sqlite_vec(config: SootheConfig | None) -> CheckResult:
+    """Check sqlite_vec vector store if configured."""
+    if config is None:
+        return CheckResult(
+            name="sqlite_vec",
+            status=CheckStatus.INFO,
+            message="Skipped (no config loaded)",
+        )
+
+    uses_sqlite_vec = False
+    if hasattr(config, "vector_stores"):
+        for vs in config.vector_stores:
+            if vs.provider_type == "sqlite_vec":
+                uses_sqlite_vec = True
+                break
+
+    if not uses_sqlite_vec:
+        return CheckResult(
+            name="sqlite_vec",
+            status=CheckStatus.INFO,
+            message="sqlite_vec not configured",
+        )
+
+    try:
+        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore  # noqa: F401
+
+        return CheckResult(
+            name="sqlite_vec",
+            status=CheckStatus.OK,
+            message="sqlite_vec backend ready",
+        )
+    except ImportError as e:
+        return CheckResult(
+            name="sqlite_vec",
+            status=CheckStatus.ERROR,
+            message=f"sqlite_vec import failed: {e}",
+            details={"remediation": "Install sqlite-vec package"},
+        )
+
+
 async def check_vector_stores(config: SootheConfig | None = None) -> CategoryResult:
     """Check vector store backends.
 
@@ -119,9 +141,9 @@ async def check_vector_stores(config: SootheConfig | None = None) -> CategoryRes
         CategoryResult with vector store check results
     """
     checks = [
-        _check_inmemory_vectorstore(),
         _check_pgvector(config),
         _check_weaviate(config),
+        _check_sqlite_vec(config),
     ]
 
     overall_status = aggregate_status([check.status for check in checks])
