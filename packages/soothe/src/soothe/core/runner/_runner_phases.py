@@ -190,7 +190,7 @@ class PhasesMixin:
         """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
 
         The checkpointer is created from ``self._checkpointer_pool`` and replaces
-        the placeholder on ``self._agent``.  Must be called before
+        the placeholder on ``self._agent.graph``.  Must be called before
         any ``core_agent.astream()`` that needs persistent thread state.
 
         Raises ConfigurationError if checkpointer initialization fails.
@@ -199,22 +199,26 @@ class PhasesMixin:
             return
 
         try:
-            import sqlite3
-
-            is_sqlite_conn = isinstance(self._checkpointer_pool, sqlite3.Connection)
+            # Check if pool is a string (SQLite path) or an object (PostgreSQL pool)
+            is_sqlite = isinstance(self._checkpointer_pool, str)
         except Exception:
-            is_sqlite_conn = False
+            is_sqlite = False
 
         try:
-            if is_sqlite_conn:
+            if is_sqlite:
+                import aiosqlite
                 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-                checkpointer = AsyncSqliteSaver(self._checkpointer_pool)
+                # Create async connection from path
+                conn = await aiosqlite.connect(self._checkpointer_pool)
+                checkpointer = AsyncSqliteSaver(conn)
+                await checkpointer.setup()
+
                 self._checkpointer = checkpointer
-                self._agent.checkpointer = checkpointer
+                self._agent.graph.checkpointer = checkpointer
                 self._checkpointer_initialized = True
                 logger.info(
-                    "AsyncSqliteSaver created and tables initialized, checkpointer replaced"
+                    "AsyncSqliteSaver created and tables initialized at %s", self._checkpointer_pool
                 )
             else:
                 await self._checkpointer_pool.open()
@@ -225,7 +229,7 @@ class PhasesMixin:
                 await checkpointer.setup()
 
                 self._checkpointer = checkpointer
-                self._agent.checkpointer = checkpointer
+                self._agent.graph.checkpointer = checkpointer
 
                 self._checkpointer_initialized = True
                 logger.info(
@@ -257,8 +261,11 @@ class PhasesMixin:
         Returns:
             List of recent BaseMessage instances, empty if unavailable.
         """
-        if not thread_id or not self._checkpointer_initialized:
+        if not thread_id:
             return []
+
+        # Ensure checkpointer is initialized before accessing it
+        await self._ensure_checkpointer_initialized()
 
         config = {"configurable": {"thread_id": thread_id}}
 

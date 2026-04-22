@@ -220,10 +220,10 @@ class UserMessage(_TimestampClickMixin, Static):
         parts: list[str | tuple[str, str]] = []
         content = self._content
 
-        # Add "Human" role indicator header
+        # Add role indicator header
         glyphs = get_glyphs()
         role_icon = glyphs.user if not is_ascii_mode() else ">"
-        parts.append((f"{role_icon} Human  ", f"bold {colors.primary}"))
+        parts.append((f"{role_icon}  ", f"bold {colors.primary}"))
 
         # Use mode-specific prefix indicator when content starts with a
         # mode trigger character (e.g. "!" for shell, "/" for commands).
@@ -649,7 +649,7 @@ class AssistantMessage(_TimestampClickMixin, Vertical):
 
         # Add role header
         yield Static(
-            Content.styled(f"{role_icon} AI  ", f"bold {colors.secondary}"),
+            Content.styled(f"{role_icon}  ", f"bold {colors.secondary}"),
             classes="assistant-header",
         )
         from textual.widgets import Markdown

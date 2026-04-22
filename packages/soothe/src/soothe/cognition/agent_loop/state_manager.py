@@ -122,7 +122,7 @@ class AgentLoopStateManager:
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 # Load loop metadata
-                row = await db.execute_fetchone(
+                cursor = await db.execute(
                     """
                     SELECT thread_ids, current_thread_id, status, current_goal_index,
                            working_memory_state, thread_health_metrics,
@@ -133,6 +133,7 @@ class AgentLoopStateManager:
                     """,
                     (self.loop_id,),
                 )
+                row = await cursor.fetchone()
 
                 if not row:
                     return None
@@ -164,7 +165,7 @@ class AgentLoopStateManager:
                 schema_version = row[13]
 
                 # Load goal_history from goal_records table
-                goal_rows = await db.execute_fetchall(
+                cursor = await db.execute(
                     """
                     SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
                            reason_history, act_history, final_report, evidence_summary,
@@ -174,6 +175,7 @@ class AgentLoopStateManager:
                     """,
                     (self.loop_id,),
                 )
+                goal_rows = await cursor.fetchall()
 
                 goal_history = []
                 for goal_row in goal_rows:
