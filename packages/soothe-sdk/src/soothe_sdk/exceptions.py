@@ -41,3 +41,9 @@ class SubagentCreationError(PluginError):
     """Error during subagent instance creation."""
 
     pass
+
+
+class ConfigurationError(Exception):
+    """Error in configuration validation or backend initialization."""
+
+    pass

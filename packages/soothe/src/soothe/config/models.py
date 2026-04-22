@@ -334,7 +334,7 @@ class PersistenceConfig(BaseModel):
     """
 
     soothe_postgres_dsn: str = "postgresql://postgres:postgres@localhost:5432/soothe"
-    default_backend: Literal["json", "rocksdb", "postgresql", "sqlite"] = "sqlite"
+    default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
     # Split databases for clear separation (metadata.db + langgraph_checkpoints.db + loop_checkpoints.db)
     metadata_sqlite_path: str | None = None  # None = $SOOTHE_DATA_DIR/metadata.db
@@ -411,7 +411,7 @@ class DurabilityProtocolConfig(BaseModel):
         thread_inactivity_timeout_hours: Hours before an active thread with no updates is marked as suspended.
     """
 
-    backend: Literal["json", "rocksdb", "postgresql", "sqlite"] = "sqlite"
+    backend: Literal["postgresql", "sqlite"] = "sqlite"
     checkpointer: Literal["postgresql", "sqlite", "memory"] = "sqlite"
     persist_dir: str | None = None
     thread_inactivity_timeout_hours: int = Field(default=72, ge=1, le=720)

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Interrupt
+from soothe_sdk.exceptions import ConfigurationError
 
 from soothe.core.event_catalog import (
     ChitchatResponseEvent,
@@ -189,8 +190,10 @@ class PhasesMixin:
         """Lazily initialize the async checkpointer (AsyncSqliteSaver / AsyncPostgresSaver).
 
         The checkpointer is created from ``self._checkpointer_pool`` and replaces
-        the temporary ``MemorySaver`` on ``self._agent``.  Must be called before
+        the placeholder on ``self._agent``.  Must be called before
         any ``core_agent.astream()`` that needs persistent thread state.
+
+        Raises ConfigurationError if checkpointer initialization fails.
         """
         if self._checkpointer_initialized or self._checkpointer_pool is None:
             return
@@ -229,10 +232,11 @@ class PhasesMixin:
                     "AsyncPostgresSaver pool open and tables initialized, checkpointer replaced"
                 )
         except Exception as exc:
-            logger.warning("Failed to initialize async checkpointer: %s", exc)
-            self._checkpointer_pool = None
-            self._checkpointer_initialized = True
-            logger.info("Using MemorySaver as fallback")
+            logger.error("Failed to initialize async checkpointer: %s", exc)
+            raise ConfigurationError(
+                f"Checkpointer initialization failed: {exc}\n"
+                f"Persistent storage required - no fallback available."
+            )
 
     async def _load_recent_messages(
         self,

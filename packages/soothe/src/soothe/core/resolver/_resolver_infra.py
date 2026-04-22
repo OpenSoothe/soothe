@@ -10,8 +10,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.client.config import SOOTHE_DATA_DIR
+from soothe_sdk.exceptions import ConfigurationError
 
-from soothe.config import SOOTHE_HOME, SootheConfig
+from soothe.config import SootheConfig
 
 if TYPE_CHECKING:
     from langgraph.types import Checkpointer
@@ -29,24 +30,8 @@ logger = logging.getLogger(__name__)
 def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     """Instantiate the DurabilityProtocol implementation from config.
 
-    Supports: json, rocksdb, postgresql, sqlite backends.
-    Falls back to json durability when other backends fail.
+    Supports: postgresql, sqlite backends (binary choice).
     """
-    from pathlib import Path
-
-    if config.protocols.durability.backend == "sqlite":
-        try:
-            from soothe.backends.durability.sqlite import SQLiteDurability
-
-            db_path = config.persistence.metadata_sqlite_path
-            logger.info("Using SQLite durability backend (metadata.db)")
-            return SQLiteDurability(db_path=db_path)
-        except Exception as e:
-            logger.warning(
-                "SQLite durability requested but failed: %s. Falling back to json durability.",
-                e,
-            )
-
     if config.protocols.durability.backend == "postgresql":
         try:
             from soothe.backends.durability.postgresql import PostgreSQLDurability
@@ -60,54 +45,38 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             logger.info("Using PostgreSQL durability backend")
             return PostgreSQLDurability(persist_store=persist_store)
         except Exception as e:
-            logger.warning(
+            logger.error(
                 "PostgreSQL durability requested but failed: %s. "
-                "Falling back to json durability. "
+                "Check PostgreSQL configuration and connectivity. "
                 "Install with: pip install 'soothe[postgres]'",
                 e,
             )
-
-    if config.protocols.durability.backend == "rocksdb":
-        try:
-            from soothe.backends.durability.rocksdb import RocksDBDurability
-            from soothe.backends.persistence import create_persist_store
-
-            persist_dir = config.protocols.durability.persist_dir or str(
-                Path(SOOTHE_HOME) / "durability" / "data"
+            raise ConfigurationError(
+                f"PostgreSQL durability backend unavailable: {e}\n"
+                f"Verify postgres_base_dsn configuration and PostgreSQL connectivity."
             )
-            persist_store = create_persist_store(persist_dir, backend="rocksdb")
 
-            if persist_store is None:
-                msg = f"Failed to create RocksDB store at {persist_dir}"
-                raise ValueError(msg)
+    if config.protocols.durability.backend == "sqlite":
+        try:
+            from soothe.backends.durability.sqlite import SQLiteDurability
 
-            logger.info("Using RocksDB durability backend at %s", persist_dir)
-            return RocksDBDurability(persist_store)
-        except (ImportError, RuntimeError, ValueError) as e:
-            logger.warning(
-                "RocksDB durability requested but dependencies unavailable: %s. "
-                "Falling back to json durability. "
-                "Install with: pip install soothe[rocksdb]",
+            db_path = config.persistence.metadata_sqlite_path
+            logger.info("Using SQLite durability backend (metadata.db)")
+            return SQLiteDurability(db_path=db_path)
+        except Exception as e:
+            logger.error(
+                "SQLite durability requested but failed: %s. "
+                "Check sqlite3 installation and path configuration.",
                 e,
             )
+            raise ConfigurationError(
+                f"SQLite durability backend unavailable: {e}\nVerify database path configuration."
+            )
 
-    if config.protocols.durability.backend in ("json", "postgresql", "rocksdb", "sqlite"):
-        from soothe.backends.durability.json import JsonDurability
-
-        persist_dir = config.protocols.durability.persist_dir or str(
-            Path(SOOTHE_HOME) / "durability"
-        )
-        logger.info("Using json durability backend at %s", persist_dir)
-        return JsonDurability(persist_dir=persist_dir)
-
-    logger.warning(
-        "Unknown durability backend '%s'; using json durability",
-        config.protocols.durability.backend,
+    raise ConfigurationError(
+        f"Unknown durability backend: {config.protocols.durability.backend}\n"
+        f"Supported backends: postgresql, sqlite"
     )
-    from soothe.backends.durability.json import JsonDurability
-
-    persist_dir = str(Path(SOOTHE_HOME) / "durability")
-    return JsonDurability(persist_dir=persist_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -118,36 +87,42 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 def resolve_checkpointer(config: SootheConfig) -> tuple[Checkpointer, Any] | Checkpointer:
     """Resolve a LangGraph checkpointer from config.
 
-    Uses persistence.soothe_postgres_dsn for PostgreSQL connection.
-    Uses SQLite for SQLite checkpointer via langgraph-checkpoint-sqlite.
-    Falls back to MemorySaver when backends are unavailable.
+    Uses persistence configuration for PostgreSQL or SQLite connection.
+    No fallback to in-memory storage - persistent storage required.
 
     Returns:
-        A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for MemorySaver/SQLite.
+        A tuple of (checkpointer, connection_resource) for PostgreSQL, or just the checkpointer for SQLite.
         The connection_resource must be closed during cleanup (e.g., via runner.cleanup()).
     """
-    from langgraph.checkpoint.memory import MemorySaver
-
     backend = config.protocols.durability.checkpointer
     if backend == "postgresql":
         dsn = config.resolve_persistence_postgres_dsn()
         result = _resolve_postgres_checkpointer(dsn)
         if result:
             return result  # (None, pool)
-        logger.info("PostgreSQL checkpointer unavailable, falling back")
-        return _resolve_sqlite_checkpointer(config) or MemorySaver()
+        logger.error("PostgreSQL checkpointer unavailable")
+        raise ConfigurationError(
+            "PostgreSQL checkpointer requested but failed.\n"
+            "Check DSN configuration and PostgreSQL connectivity.\n"
+            "No fallback - production requires persistent storage."
+        )
+
     if backend == "sqlite":
         result = _resolve_sqlite_checkpointer(config)
         if result:
             return result
-        logger.info("SQLite checkpointer unavailable, using MemorySaver")
-        return MemorySaver()
-    if backend == "memory":
-        logger.debug("Using memory checkpointer")
-    else:
-        logger.warning("Unknown checkpointer backend '%s'; using memory saver", backend)
+        logger.error("SQLite checkpointer unavailable")
+        raise ConfigurationError(
+            "SQLite checkpointer requested but failed.\n"
+            "Check sqlite3 installation and path configuration.\n"
+            "No fallback - persistent storage required."
+        )
 
-    return MemorySaver()
+    raise ConfigurationError(
+        f"Unknown checkpointer backend: {backend}\n"
+        f"Supported: postgresql, sqlite\n"
+        f"No in-memory fallback - persistent storage required."
+    )
 
 
 def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | None, Any] | None:

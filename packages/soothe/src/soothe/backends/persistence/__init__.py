@@ -7,7 +7,7 @@ from soothe.protocols.persistence import PersistStore
 
 def create_persist_store(
     persist_dir: str | None = None,
-    backend: str = "json",
+    backend: str = "sqlite",
     dsn: str | None = None,
     namespace: str = "default",
     db_path: str | None = None,
@@ -15,8 +15,8 @@ def create_persist_store(
     """Factory for persistence backends.
 
     Args:
-        persist_dir: Root directory for file-based backends (json/rocksdb). None disables file persistence.
-        backend: Backend type (``json``, ``rocksdb``, ``postgresql``, or ``sqlite``).
+        persist_dir: Root directory for file-based backends. None disables file persistence.
+        backend: Backend type (``postgresql`` or ``sqlite``).
         dsn: PostgreSQL DSN (required for backend="postgresql").
         namespace: Namespace for key isolation (PostgreSQL and SQLite).
         db_path: SQLite database file path (SQLite only).
@@ -36,14 +36,4 @@ def create_persist_store(
 
         return SQLitePersistStore(db_path, namespace=namespace)
 
-    if not persist_dir:
-        return None
-
-    if backend == "rocksdb":
-        from soothe.backends.persistence.rocksdb_store import RocksDBPersistStore
-
-        return RocksDBPersistStore(persist_dir)
-
-    from soothe.backends.persistence.json_store import JsonPersistStore
-
-    return JsonPersistStore(persist_dir)
+    raise ValueError(f"Unknown persistence backend: {backend!r}. Supported: 'postgresql', 'sqlite'")

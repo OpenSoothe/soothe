@@ -45,8 +45,9 @@ async def test_directory_manager_creates_directories(tmp_path):
 async def test_directory_manager_paths(tmp_path):
     """Test directory manager returns correct paths."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR
@@ -128,8 +129,9 @@ async def test_sqlite_backend_initialize_database(tmp_path):
 async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
     """Test persistence manager saves checkpoint anchor."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR
@@ -171,8 +173,9 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
 async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path):
     """Test persistence manager saves checkpoint anchor with execution summary."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR
@@ -221,8 +224,9 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
 async def test_persistence_manager_save_failed_branch(tmp_path):
     """Test persistence manager saves failed branch."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR
@@ -273,8 +277,9 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
 async def test_persistence_manager_update_branch_analysis(tmp_path):
     """Test persistence manager updates branch with analysis."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR
@@ -343,8 +348,9 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
 async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
     """Test persistence manager gets thread checkpoint cross-reference."""
 
-    import soothe.config as config
     import soothe_sdk.client.config as sdk_config
+
+    import soothe.config as config
 
     original_home = config.SOOTHE_HOME
     original_data_dir = sdk_config.SOOTHE_DATA_DIR

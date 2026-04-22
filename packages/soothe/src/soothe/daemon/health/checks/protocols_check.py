@@ -48,14 +48,13 @@ async def check_protocols(config: SootheConfig | None = None) -> CategoryResult:
     checks.append(_check_import("soothe.backends.memory.memu_adapter", "MemU Memory"))
 
     # Durability protocol backends
-    checks.append(_check_import("soothe.backends.durability.json", "JSON Durability"))
-    checks.append(_check_import("soothe.backends.durability.rocksdb", "RocksDB Durability"))
     checks.append(_check_import("soothe.backends.durability.postgresql", "PostgreSQL Durability"))
+    checks.append(_check_import("soothe.backends.durability.sqlite", "SQLite Durability"))
 
     # Vector store protocol backends
-    checks.append(_check_import("soothe.backends.vector_store.in_memory", "InMemory VectorStore"))
     checks.append(_check_import("soothe.backends.vector_store.pgvector", "PGVector"))
     checks.append(_check_import("soothe.backends.vector_store.weaviate", "Weaviate"))
+    checks.append(_check_import("soothe.backends.vector_store.sqlite_vec", "sqlite_vec"))
 
     # Remote agent protocol backend
     checks.append(_check_import("soothe.core.remote_agent.langgraph", "LangGraph RemoteAgent"))

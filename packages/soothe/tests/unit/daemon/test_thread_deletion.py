@@ -15,7 +15,7 @@ class TestThreadDeletion:
         """Verify thread deletion removes the entire runs/{thread_id}/ directory."""
         import shutil
 
-        from soothe.backends.durability.json import JsonDurability
+        from soothe.backends.durability.sqlite import SQLiteDurability
         from soothe.protocols.durability import ThreadMetadata
 
         # Create a thread with artifacts
@@ -37,12 +37,13 @@ class TestThreadDeletion:
         assert (goals_dir / "report.json").exists()
 
         # Simulate thread deletion (same logic as in main.py)
-        durability = JsonDurability(persist_dir=str(tmp_path))
+        db_path = tmp_path / "durability.db"
+        durability = SQLiteDurability(db_path=str(db_path))
         metadata = ThreadMetadata(plan_summary="Test thread")
-        await durability.create_thread(metadata)
+        thread = await durability.create_thread(metadata)
 
         # Archive thread metadata
-        await durability.archive_thread(thread_id)
+        await durability.archive_thread(thread.thread_id)
 
         # Remove runs directory
         if runs_dir.exists():
