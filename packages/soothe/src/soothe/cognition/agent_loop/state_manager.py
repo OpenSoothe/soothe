@@ -96,7 +96,7 @@ class AgentLoopStateManager:
             total_tokens_used=0,
             created_at=now,
             updated_at=now,
-            schema_version="2.0",
+            schema_version="3.1",  # Match SCHEMA_VERSION constant
         )
 
         self._checkpoint = checkpoint
@@ -121,6 +121,10 @@ class AgentLoopStateManager:
 
         try:
             async with aiosqlite.connect(self.db_path) as db:
+                # Enable FK constraints and WAL mode
+                await db.execute("PRAGMA foreign_keys=ON")
+                await db.execute("PRAGMA journal_mode=WAL")
+
                 # Load loop metadata
                 cursor = await db.execute(
                     """
@@ -246,6 +250,10 @@ class AgentLoopStateManager:
 
         # Database already initialized globally
         async with aiosqlite.connect(self.db_path) as db:
+            # Enable FK constraints and WAL mode
+            await db.execute("PRAGMA foreign_keys=ON")
+            await db.execute("PRAGMA journal_mode=WAL")
+
             # Update agentloop_loops table
             await db.execute(
                 """

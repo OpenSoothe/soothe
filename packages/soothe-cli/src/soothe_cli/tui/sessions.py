@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sqlite3
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -111,6 +110,28 @@ class ThreadInfo(TypedDict):
 
     cwd: NotRequired[str | None]
     """Working directory where the thread was last used."""
+
+
+class LoopInfo(TypedDict):
+    """Loop metadata returned by `list_loops_via_daemon_rpc`."""
+
+    loop_id: str
+    """Unique identifier for the AgentLoop."""
+
+    status: str
+    """Loop status (running, paused, completed, etc.)."""
+
+    threads: int
+    """Number of threads in the loop."""
+
+    goals: int
+    """Total goals completed in the loop."""
+
+    switches: int
+    """Total thread switches in the loop."""
+
+    created: str
+    """ISO timestamp of loop creation (truncated to [:16])."""
 
 
 class _CheckpointSummary(NamedTuple):
@@ -238,8 +259,8 @@ def get_db_path() -> Path:
     return _db_path
 
 
-def generate_thread_id() -> str:
-    """Generate a new thread ID as a full UUID7 string.
+def generate_loop_id() -> str:
+    """Generate a new loop ID as a full UUID7 string.
 
     Returns:
         UUID7 string (time-ordered for natural sort by creation time).
@@ -359,94 +380,77 @@ async def list_threads_via_daemon_rpc(
     return threads
 
 
-async def list_threads(
-    agent_name: str | None = None,
+async def list_loops_via_daemon_rpc(
+    daemon_session: Any,
     limit: int = 20,
     include_message_count: bool = False,
     sort_by: str = "updated",
-    branch: str | None = None,
-) -> list[ThreadInfo]:
-    """List threads from checkpoints table (deprecated - use daemon RPC).
+) -> list[LoopInfo]:
+    """List AgentLoop instances via daemon WebSocket RPC (RFC-504).
 
-    **Note**: This function queries an empty SQLite database and returns no results.
-    Use `list_threads_via_daemon_rpc()` instead for actual thread listing.
+    Queries daemon's loop persistence (per-loop metadata.json files)
+    instead of thread persistence.
 
     Args:
-        agent_name: Optional filter by agent name.
-        limit: Maximum number of threads to return.
-        include_message_count: Whether to include message counts.
+        daemon_session: TuiDaemonSession instance for WebSocket RPC.
+        limit: Maximum number of loops to return.
+        include_message_count: Ignored (loops don't have message counts).
         sort_by: Sort field — `"updated"` or `"created"`.
-        branch: Optional filter by git branch name.
 
     Returns:
-        Empty list (database has no checkpoints table).
+        List of `LoopInfo` dicts with `loop_id`, `status`, `threads`,
+            `goals`, `switches`, `created`.
 
     Raises:
         ValueError: If `sort_by` is not `"updated"` or `"created"`.
+        RuntimeError: If daemon session is not available.
     """
-    # Legacy implementation kept for backwards compatibility
-    # but returns empty results due to database mismatch
-    async with _connect() as conn:
-        if not await _table_exists(conn, "checkpoints"):
-            return []
+    if daemon_session is None:
+        raise RuntimeError("Daemon session required for loop listing")
 
-        if sort_by not in {"updated", "created"}:
-            msg = f"Invalid sort_by {sort_by!r}; expected 'updated' or 'created'"
-            raise ValueError(msg)
-        order_col = "created_at" if sort_by == "created" else "updated_at"
+    if sort_by not in {"updated", "created"}:
+        msg = f"Invalid sort_by {sort_by!r}; expected 'updated' or 'created'"
+        raise ValueError(msg)
 
-        where_clauses: list[str] = []
-        params_list: list[str | int] = []
+    # Use daemon session's WebSocket client
+    client = daemon_session._client
+    if client is None:
+        raise RuntimeError("Daemon WebSocket client not connected")
 
-        if agent_name:
-            where_clauses.append("json_extract(metadata, '$.agent_name') = ?")
-            params_list.append(agent_name)
-        if branch:
-            where_clauses.append("json_extract(metadata, '$.git_branch') = ?")
-            params_list.append(branch)
+    # Send loop_list RPC to daemon
+    await client.send_loop_list(limit=limit)
 
-        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    # Wait for response
+    import asyncio
 
-        query = f"""
-            SELECT thread_id,
-                   json_extract(metadata, '$.agent_name') as agent_name,
-                   MAX(json_extract(metadata, '$.updated_at')) as updated_at,
-                   MAX(checkpoint_id) as latest_checkpoint_id,
-                   MIN(json_extract(metadata, '$.updated_at')) as created_at,
-                   MAX(json_extract(metadata, '$.git_branch')) as git_branch,
-                   MAX(json_extract(metadata, '$.cwd')) as cwd
-            FROM checkpoints
-            {where_sql}
-            GROUP BY thread_id
-            ORDER BY {order_col} DESC
-            LIMIT ?
-        """  # noqa: S608  # where_sql/order_col derived from controlled internal values; user values use ? placeholders
-        params: tuple = (*params_list, limit)
+    async with asyncio.timeout(10.0):
+        while True:
+            event = await client.read_event()
+            if not event:
+                logger.warning("No response from daemon for loop_list RPC")
+                return []
+            if event.get("type") == "loop_list_response":
+                loops_data = event.get("loops", [])
+                if not isinstance(loops_data, list):
+                    loops_data = []
+                break
 
-        async with conn.execute(query, params) as cursor:
-            rows = await cursor.fetchall()
-            threads: list[ThreadInfo] = [
-                ThreadInfo(
-                    thread_id=r[0],
-                    agent_name=r[1],
-                    updated_at=r[2],
-                    latest_checkpoint_id=r[3],
-                    created_at=r[4],
-                    git_branch=r[5],
-                    cwd=r[6],
-                )
-                for r in rows
-            ]
+    # Convert daemon response to LoopInfo format
+    loops: list[LoopInfo] = []
+    for loop_data in loops_data[:limit]:  # Apply limit
+        if not isinstance(loop_data, dict):
+            continue
+        loop_info = LoopInfo(
+            loop_id=str(loop_data.get("loop_id", "")),
+            status=str(loop_data.get("status", "unknown")),
+            threads=int(loop_data.get("threads", 0)),
+            goals=int(loop_data.get("goals", 0)),
+            switches=int(loop_data.get("switches", 0)),
+            created=str(loop_data.get("created", "")),
+        )
+        loops.append(loop_info)
 
-        # Fetch message counts if requested
-        if include_message_count and threads:
-            await _populate_message_counts(conn, threads)
-
-        # Only cache unfiltered results so the thread selector modal
-        # doesn't receive branch-filtered or differently-sorted data.
-        if sort_by == "updated" and branch is None:
-            _cache_recent_threads(agent_name, limit, threads)
-        return threads
+    return loops
 
 
 async def populate_thread_message_counts(threads: list[ThreadInfo]) -> list[ThreadInfo]:
@@ -536,40 +540,6 @@ async def prewarm_thread_message_counts_via_daemon_rpc(
     except Exception:
         logger.warning(
             "Unexpected error while prewarming thread selector cache via daemon RPC",
-            exc_info=True,
-        )
-
-
-async def prewarm_thread_message_counts(limit: int | None = None) -> None:
-    """Prewarm thread selector cache for faster `/threads` open (deprecated).
-
-    **Note**: This function queries an empty SQLite database.
-    Use `prewarm_thread_message_counts_via_daemon_rpc()` instead.
-
-    Args:
-        limit: Maximum threads to prewarm. Uses `get_thread_limit()` when `None`.
-    """
-    thread_limit = limit if limit is not None else get_thread_limit()
-    if thread_limit < 1:
-        return
-
-    try:
-        from soothe_cli.tui.model_config import load_thread_config
-
-        cfg = load_thread_config()
-        threads = await list_threads(limit=thread_limit, include_message_count=False)
-        if threads:
-            await populate_thread_checkpoint_details(
-                threads,
-                include_message_count=cfg.columns.get("messages", False),
-                include_initial_prompt=cfg.columns.get("initial_prompt", False),
-            )
-        _cache_recent_threads(None, thread_limit, threads)
-    except (OSError, sqlite3.Error):
-        logger.debug("Could not prewarm thread selector cache", exc_info=True)
-    except Exception:
-        logger.warning(
-            "Unexpected error while prewarming thread selector cache",
             exc_info=True,
         )
 
@@ -1236,10 +1206,11 @@ async def list_threads_command(
 
     limit = get_thread_limit() if limit is None else max(1, limit)
 
-    threads = await list_threads(
-        agent_name,
+    threads = await list_threads_via_daemon_rpc(
+        daemon_session=None,  # CLI command mode - no TUI session
+        agent_name=agent_name,
         limit=limit,
-        include_message_count=True,
+        include_message_count=True,  # Always include for CLI output
         sort_by=sort_by,
         branch=branch,
     )

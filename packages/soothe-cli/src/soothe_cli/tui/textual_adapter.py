@@ -767,10 +767,10 @@ async def execute_task_textual(
     else:
         message_content = final_input
 
-    thread_id = session_state.thread_id
-    config = build_stream_config(thread_id, assistant_id, sandbox_type=sandbox_type)
+    loop_id = session_state.loop_id
+    config = build_stream_config(loop_id, assistant_id, sandbox_type=sandbox_type)
 
-    await dispatch_hook("session.start", {"thread_id": thread_id})
+    await dispatch_hook("session.start", {"loop_id": loop_id})
 
     captured_input_tokens = 0
     captured_output_tokens = 0
@@ -1749,7 +1749,7 @@ async def execute_task_textual(
 
                 stream_input = Command(resume=resume_payload)
             else:
-                await dispatch_hook("task.complete", {"thread_id": thread_id})
+                await dispatch_hook("task.complete", {"loop_id": loop_id})
                 break
 
     except (asyncio.CancelledError, KeyboardInterrupt):
@@ -1795,7 +1795,7 @@ async def _handle_interrupt_cleanup(
     Args:
         adapter: UI adapter with display callbacks.
         agent: The LangGraph agent.
-        config: Runnable config with `thread_id`.
+        config: Runnable config with loop_id mapped to thread_id in configurable.
         daemon_session: Optional daemon-backed session. When provided, sends
             detach message before disconnect so thread continues running.
         pending_text_by_namespace: Accumulated text per namespace.
@@ -1887,7 +1887,7 @@ async def _persist_context_tokens(
 
     Args:
         agent: The LangGraph agent (must support `aupdate_state`).
-        config: Runnable config with `thread_id`.
+        config: Runnable config with loop_id mapped to thread_id in configurable.
         tokens: Total context tokens to persist.
     """
     try:
@@ -1915,7 +1915,7 @@ async def _report_and_persist_tokens(
     Args:
         adapter: UI adapter with token callbacks.
         agent: The LangGraph agent.
-        config: Runnable config with `thread_id` in its configurable dict.
+        config: Runnable config with loop_id mapped to thread_id in configurable.
         captured_input_tokens: Total input tokens captured during the turn.
         captured_output_tokens: Total output tokens captured during the turn.
         shield: When `True`, suppress exceptions and `CancelledError` from the

@@ -377,15 +377,15 @@ class _ThreadHistoryPayload:
     """Persisted `_context_tokens` from the checkpoint (0 if absent)."""
 
 
-def _new_thread_id() -> str:
-    """Deferred-import wrapper around `sessions.generate_thread_id`.
+def _new_loop_id() -> str:
+    """Deferred-import wrapper around `sessions.generate_loop_id`.
 
     Returns:
         UUID7 string.
     """
-    from soothe_cli.tui.sessions import generate_thread_id
+    from soothe_cli.tui.sessions import generate_loop_id
 
-    return generate_thread_id()
+    return generate_loop_id()
 
 
 class TextualSessionState:
@@ -395,25 +395,25 @@ class TextualSessionState:
         self,
         *,
         auto_approve: bool = False,
-        thread_id: str | None = None,
+        loop_id: str | None = None,
     ) -> None:
         """Initialize session state.
 
         Args:
             auto_approve: Whether to auto-approve tool calls
-            thread_id: Optional thread ID (generates UUID7 if not provided)
+            loop_id: Optional loop ID (generates UUID7 if not provided)
         """
         self.auto_approve = auto_approve
-        self.thread_id = thread_id or _new_thread_id()
+        self.loop_id = loop_id or _new_loop_id()
 
-    def reset_thread(self) -> str:
-        """Reset to a new thread.
+    def reset_loop(self) -> str:
+        """Reset to a new loop.
 
         Returns:
-            The new thread_id.
+            The new loop_id.
         """
-        self.thread_id = _new_thread_id()
-        return self.thread_id
+        self.loop_id = _new_loop_id()
+        return self.loop_id
 
 
 _COMMAND_URLS: dict[str, str] = {
@@ -596,10 +596,11 @@ class SootheApp(App):
 
         self._cwd = str(cwd) if cwd else str(Path.cwd())
 
-        self._lc_thread_id = thread_id
-        """LangChain thread identifier.
+        self._lc_loop_id = thread_id
+        """LangChain loop identifier (thread_id in langgraph internals).
 
-        Named `_lc_thread_id` to avoid collision with Textual's `App._thread_id`.
+        Named `_lc_loop_id` to reflect RFC-503 loop-first UX while avoiding
+        collision with Textual's `App._thread_id`.
         """
 
         self._resume_thread_intent = resume_thread
@@ -780,7 +781,7 @@ class SootheApp(App):
         # VerticalScroll tracks user scroll intent for better auto-scroll behavior
         with VerticalScroll(id="chat"):
             yield WelcomeBanner(
-                thread_id=self._lc_thread_id,
+                thread_id=self._lc_loop_id,
                 mcp_tool_count=self._mcp_tool_count,
                 connecting=self._connecting,
                 resuming=self._resume_thread_intent is not None,
@@ -972,7 +973,7 @@ class SootheApp(App):
         )
 
         # Auto-submit initial prompt or skill if provided via -m / --skill.
-        # This check must come first because _lc_thread_id and _agent are
+        # This check must come first because _lc_loop_id and _agent are
         # always set (even for brand-new sessions), so an elif after the
         # thread-history branch would never execute.
         # When connecting, defer until the ready message handler fires.
@@ -982,7 +983,7 @@ class SootheApp(App):
         if (
             not self._connecting
             and not self._schedule_initial_submission()
-            and self._lc_thread_id
+            and self._lc_loop_id
             and self._runtime_backend_ready()
         ):
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
@@ -993,7 +994,7 @@ class SootheApp(App):
         def _create() -> TextualSessionState:
             return TextualSessionState(
                 auto_approve=self._auto_approve,
-                thread_id=self._lc_thread_id,
+                thread_id=self._lc_loop_id,
             )
 
         try:
@@ -1191,13 +1192,13 @@ class SootheApp(App):
         """Resolve a `-r` resume intent into a concrete thread ID.
 
         Consumes `self._resume_thread_intent` and resolves it into a concrete
-        thread ID. Mutates `self._lc_thread_id` and optionally
+        thread ID. Mutates `self._lc_loop_id` and optionally
         `self._assistant_id` / `self._server_kwargs`. Falls back to a fresh
         thread on any DB error.
         """
         from soothe_cli.tui.sessions import (
             find_similar_threads,
-            generate_thread_id,
+            generate_loop_id,
             get_most_recent,
             get_thread_agent,
             thread_exists,
@@ -1225,16 +1226,16 @@ class SootheApp(App):
                         self._assistant_id = agent_name
                         if self._server_kwargs:
                             self._server_kwargs["assistant_id"] = agent_name
-                    self._lc_thread_id = thread_id
+                    self._lc_loop_id = thread_id
                 else:
-                    self._lc_thread_id = generate_thread_id()
+                    self._lc_loop_id = generate_loop_id()
                     if agent_filter:
                         msg = f"No previous threads for '{agent_filter}', starting new."
                     else:
                         msg = "No previous threads, starting new."
                     self.notify(msg, severity="warning", markup=False)
             elif await thread_exists(resume):
-                self._lc_thread_id = resume
+                self._lc_loop_id = resume
                 if self._assistant_id == default_agent:
                     agent_name = await get_thread_agent(resume)
                     if agent_name:
@@ -1243,7 +1244,7 @@ class SootheApp(App):
                             self._server_kwargs["assistant_id"] = agent_name
             else:
                 # Thread not found — notify + fall back to new thread
-                self._lc_thread_id = generate_thread_id()
+                self._lc_loop_id = generate_loop_id()
                 similar = await find_similar_threads(resume)
                 hint = f"Thread '{resume}' not found."
                 if similar:
@@ -1251,7 +1252,7 @@ class SootheApp(App):
                 self.notify(hint, severity="warning", timeout=6, markup=False)
         except Exception:
             logger.exception("Failed to resolve resume thread %r", resume)
-            self._lc_thread_id = generate_thread_id()
+            self._lc_loop_id = generate_loop_id()
             self.notify(
                 "Could not look up thread history. Starting new session.",
                 severity="warning",
@@ -1260,7 +1261,7 @@ class SootheApp(App):
         # Update session state if ready (may still be initializing in a
         # concurrent worker)
         if self._session_state:
-            self._session_state.thread_id = self._lc_thread_id
+            self._session_state.loop_id = self._lc_loop_id
 
     async def _start_server_background(self) -> None:
         """Background worker: resolve resume-thread intent, start server + MCP preload.
@@ -1352,7 +1353,7 @@ class SootheApp(App):
                 )
 
             session = TuiDaemonSession(self._daemon_config)
-            status_event = await session.connect(resume_thread_id=self._lc_thread_id)
+            status_event = await session.connect(resume_thread_id=self._lc_loop_id)
         except Exception as exc:
             self.post_message(self.ServerStartFailed(error=exc))
             return
@@ -1376,7 +1377,7 @@ class SootheApp(App):
 
         # Handle deferred initial prompt, skill, or thread history
         if not self._schedule_initial_submission() and (
-            self._lc_thread_id and self._runtime_backend_ready()
+            self._lc_loop_id and self._runtime_backend_ready()
         ):
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
@@ -1412,15 +1413,15 @@ class SootheApp(App):
 
         status_thread_id = event.status_event.get("thread_id")
         if isinstance(status_thread_id, str) and status_thread_id:
-            self._lc_thread_id = status_thread_id
+            self._lc_loop_id = status_thread_id
             if self._session_state is not None:
-                self._session_state.thread_id = status_thread_id
+                self._session_state.loop_id = status_thread_id
 
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
             banner.set_connected(self._mcp_tool_count)
-            if self._lc_thread_id:
-                banner.update_thread_id(self._lc_thread_id)
+            if self._lc_loop_id:
+                banner.update_loop_id(self._lc_loop_id)
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 
@@ -1437,7 +1438,7 @@ class SootheApp(App):
                 group="daemon-event-reader",
             )
 
-        if not self._schedule_initial_submission() and self._lc_thread_id:
+        if not self._schedule_initial_submission() and self._lc_loop_id:
             self.call_after_refresh(lambda: asyncio.create_task(self._load_thread_history()))
 
         if self._deferred_actions and not self._agent_running:
@@ -2687,7 +2688,7 @@ class SootheApp(App):
             await self._mount_message(UserMessage(command))
             await self._mount_message(AppMessage("No active session."))
             return
-        thread_id = self._session_state.thread_id
+        thread_id = self._session_state.loop_id
         try:
             url = await asyncio.to_thread(build_langsmith_thread_url, thread_id)
         except Exception:
@@ -2758,7 +2759,7 @@ class SootheApp(App):
         if first_word:
             entry = _RFC404_COMMANDS.get(first_word)
             if entry and entry.get("location") == "daemon" and entry.get("type") == "routing":
-                thread_id = self._session_state.thread_id if self._session_state else None
+                thread_id = self._session_state.loop_id if self._session_state else None
                 ok, err = validate_command(entry, first_word, query, thread_id)
                 if not ok:
                     await self._mount_message(UserMessage(command))
@@ -2784,7 +2785,7 @@ class SootheApp(App):
                 "Commands: /quit, /clear, /editor, /autopilot, /mcp, "
                 "/model [--model-params JSON] [--default], /notifications, "
                 "/reload, /skill:<name>, /remember, /theme, "
-                "/tokens, /threads, /trace, "
+                "/tokens, /loops, /trace, "
                 "/browser, /claude, /research, /plan (subagent routing), "
                 "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
                 "Interactive Features:\n"
@@ -2853,21 +2854,21 @@ class SootheApp(App):
                     new_thread_id = (
                         str(status_event.get("thread_id", "")) or self._session_state.reset_thread()
                     )
-                    self._session_state.thread_id = new_thread_id
-                    self._lc_thread_id = new_thread_id
+                    self._session_state.loop_id = new_thread_id
+                    self._lc_loop_id = new_thread_id
                 else:
                     new_thread_id = self._session_state.reset_thread()
                 try:
                     banner = self.query_one("#welcome-banner", WelcomeBanner)
-                    banner.update_thread_id(new_thread_id)
+                    banner.update_loop_id(new_thread_id)
                 except NoMatches:
                     pass
                 self._clear_thread_model_override()
                 await self._mount_message(AppMessage(f"Started new thread: {new_thread_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
-        elif cmd == "/threads":
-            await self._show_thread_selector()
+        elif cmd == "/loops":
+            await self._show_loop_selector()
         elif cmd == "/trace":
             await self._handle_trace_command(command)
         elif cmd == "/update":
@@ -3089,7 +3090,7 @@ class SootheApp(App):
             )
 
             config: RunnableConfig = {
-                "configurable": {"thread_id": self._lc_thread_id},
+                "configurable": {"thread_id": self._lc_loop_id},
             }
             state = await self._agent.aget_state(config)
             if not state or not state.values:
@@ -4129,7 +4130,7 @@ class SootheApp(App):
             preloaded_payload: Optional pre-fetched history payload for the
                 thread.
         """
-        history_thread_id = thread_id or self._lc_thread_id
+        history_thread_id = thread_id or self._lc_loop_id
         if not history_thread_id:
             logger.debug("Skipping history load: no thread ID available")
             return
@@ -5080,41 +5081,142 @@ class SootheApp(App):
 
         self.push_screen(screen, handle_result)
 
-    async def _show_thread_selector(self) -> None:
-        """Show interactive thread selector as a modal screen."""
+    async def _show_loop_selector(self) -> None:
+        """Show interactive loop selector as a modal screen."""
         from functools import partial
 
-        from soothe_cli.tui.sessions import get_cached_threads, get_thread_limit
-        from soothe_cli.tui.widgets.thread_selector import ThreadSelectorScreen
+        from soothe_cli.tui.sessions import get_thread_limit
+        from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
 
-        current = self._session_state.thread_id if self._session_state else None
-        thread_limit = get_thread_limit()
-
-        initial_threads = get_cached_threads(limit=thread_limit)
+        current = self._session_state.loop_id if self._session_state else None
+        loop_limit = get_thread_limit()  # Reuse thread limit config
 
         def handle_result(result: str | None) -> None:
-            """Handle the thread selector result."""
+            """Handle the loop selector result."""
             if result is not None:
                 if self._agent_running or self._shell_running or self._connecting:
                     self._defer_action(
                         DeferredAction(
-                            kind="thread_switch",
-                            execute=partial(self._resume_thread, result),
+                            kind="loop_switch",
+                            execute=partial(self._resume_loop_via_daemon, result),
                         )
                     )
-                    self.notify("Thread will switch after current task completes.", timeout=3)
+                    self.notify("Loop will switch after current task completes.", timeout=3)
                 else:
-                    self.call_later(self._resume_thread, result)
+                    self.call_later(self._resume_loop_via_daemon, result)
             if self._chat_input:
                 self._chat_input.focus_input()
 
-        screen = ThreadSelectorScreen(
-            current_thread=current,
-            thread_limit=thread_limit,
-            initial_threads=initial_threads,
+        screen = LoopSelectorScreen(
+            current_loop=current,
+            loop_limit=loop_limit,
             daemon_session=self._daemon_session,
         )
         self.push_screen(screen, handle_result)
+
+    async def _resume_loop_via_daemon(self, loop_id: str) -> None:
+        """Resume a loop by subscribing to daemon events (RFC-503).
+
+        Similar to thread resume, but uses loop_subscribe RPC to attach
+        to the loop's event stream.
+
+        Args:
+            loop_id: The loop ID to resume/attach.
+        """
+        if not self._daemon_session:
+            await self._mount_message(AppMessage("Cannot switch loops: no daemon connection"))
+            return
+
+        if not self._session_state:
+            await self._mount_message(AppMessage("Cannot switch loops: no active session"))
+            return
+
+        # Skip if already on this loop
+        if self._session_state.loop_id == loop_id:
+            await self._mount_message(AppMessage(f"Already on loop: {loop_id}"))
+            return
+
+        if self._thread_switching:
+            await self._mount_message(AppMessage("Loop switch already in progress."))
+            return
+
+        # Save previous state for rollback on failure
+        prev_loop_id = self._lc_loop_id
+        prev_session_loop = self._session_state.loop_id
+        self._thread_switching = True
+        if self._chat_input:
+            self._chat_input.set_cursor_active(active=False)
+
+        try:
+            self._update_status(f"Attaching to loop: {loop_id}")
+
+            # Clear conversation (similar to /clear, without creating new thread)
+            self._pending_messages.clear()
+            self._queued_widgets.clear()
+            await self._clear_messages()
+            self._context_tokens = 0
+            self._tokens_approximate = False
+            self._update_tokens(0)
+            self._update_status("")
+
+            # Subscribe to loop via daemon RPC
+            client = self._daemon_session._client
+            if client is None:
+                raise RuntimeError("Daemon WebSocket client not connected")
+
+            await client.send_loop_subscribe(loop_id)
+
+            # Wait for response
+            import asyncio
+
+            async with asyncio.timeout(10.0):
+                while True:
+                    event = await client.read_event()
+                    if not event:
+                        logger.warning("No response from daemon for loop_subscribe RPC")
+                        break
+                    if event.get("type") == "loop_subscribe_response":
+                        # Update session state
+                        self._session_state.loop_id = loop_id
+                        self._lc_loop_id = loop_id
+                        self._clear_thread_model_override()
+
+                        self._update_welcome_banner(
+                            loop_id,
+                            missing_message="Welcome banner not found during loop switch to %s",
+                            warn_if_missing=False,
+                        )
+                        break
+
+            # Start consuming daemon events for this loop
+            self.run_worker(
+                self._consume_daemon_events_background(),
+                exclusive=False,
+                group="daemon-event-reader",
+            )
+
+        except Exception as exc:
+            logger.exception("Failed to attach to loop %s", loop_id)
+            # Restore previous loop ID so the user can retry
+            self._session_state.loop_id = prev_session_loop
+            self._lc_loop_id = prev_loop_id
+            self._update_welcome_banner(
+                prev_session_loop,
+                missing_message=(
+                    "Welcome banner not found during rollback to loop %s; banner may display stale loop ID"
+                ),
+                warn_if_missing=True,
+            )
+            await self._mount_message(
+                AppMessage(
+                    f"Failed to attach to loop {loop_id}: {exc}. Use /loops to try again."
+                )
+            )
+        finally:
+            self._thread_switching = False
+            if self._chat_input:
+                self._chat_input.set_cursor_active(active=True)
+                self._chat_input.focus_input()
 
     def _update_welcome_banner(
         self,
@@ -5132,7 +5234,7 @@ class SootheApp(App):
         """
         try:
             banner = self.query_one("#welcome-banner", WelcomeBanner)
-            banner.update_thread_id(thread_id)
+            banner.update_loop_id(thread_id)
         except NoMatches:
             if warn_if_missing:
                 logger.warning(missing_message, thread_id)
@@ -5158,7 +5260,7 @@ class SootheApp(App):
             return
 
         # Skip if already on this thread
-        if self._session_state.thread_id == thread_id:
+        if self._session_state.loop_id == thread_id:
             await self._mount_message(AppMessage(f"Already on thread: {thread_id}"))
             return
 
@@ -5167,8 +5269,8 @@ class SootheApp(App):
             return
 
         # Save previous state for rollback on failure
-        prev_thread_id = self._lc_thread_id
-        prev_session_thread = self._session_state.thread_id
+        prev_thread_id = self._lc_loop_id
+        prev_session_thread = self._session_state.loop_id
         self._thread_switching = True
         if self._chat_input:
             self._chat_input.set_cursor_active(active=False)
@@ -5190,8 +5292,8 @@ class SootheApp(App):
             # Switch to the selected thread
             if self._daemon_session is not None:
                 await self._daemon_session.switch_thread(thread_id)
-            self._session_state.thread_id = thread_id
-            self._lc_thread_id = thread_id
+            self._session_state.loop_id = thread_id
+            self._lc_loop_id = thread_id
             self._clear_thread_model_override()
 
             self._update_welcome_banner(
@@ -5216,8 +5318,8 @@ class SootheApp(App):
                 return
             logger.exception("Failed to switch to thread %s", thread_id)
             # Restore previous thread IDs so the user can retry
-            self._session_state.thread_id = prev_session_thread
-            self._lc_thread_id = prev_thread_id
+            self._session_state.loop_id = prev_session_thread
+            self._lc_loop_id = prev_thread_id
             self._update_welcome_banner(
                 prev_session_thread,
                 missing_message=(
@@ -5575,7 +5677,7 @@ async def run_textual_app(
 
     return AppResult(
         return_code=app.return_code or 0,
-        thread_id=app._lc_thread_id,
+        thread_id=app._lc_loop_id,
         session_stats=app._session_stats,
         update_available=app._update_available,
     )

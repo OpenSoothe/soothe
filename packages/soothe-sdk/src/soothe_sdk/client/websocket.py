@@ -443,6 +443,88 @@ class WebSocketClient:
             payload["request_id"] = request_id
         await self.send(payload)
 
+    async def send_loop_subscribe(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Subscribe client to loop events via daemon RPC (RFC-503 ``loop_subscribe``).
+
+        Subscribes client to loop topic for real-time event streaming.
+        Used by loop continue and loop attach commands.
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_subscribe", "loop_id": loop_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_detach(
+        self,
+        loop_id: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Detach loop via daemon RPC (RFC-503 ``loop_detach``).
+
+        Unsubscribes client from loop events while loop continues running.
+        Saves detachment checkpoint for later reattachment.
+
+        Args:
+            loop_id: Loop identifier.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_detach", "loop_id": loop_id}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_new(
+        self,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Create new loop via daemon RPC (RFC-503 ``loop_new``).
+
+        Creates fresh loop with new loop_id for new query/conversation.
+
+        Args:
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {"type": "loop_new"}
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
+    async def send_loop_input(
+        self,
+        loop_id: str,
+        content: str,
+        *,
+        request_id: str | None = None,
+    ) -> None:
+        """Send input to loop via daemon RPC (RFC-503 ``loop_input``).
+
+        Sends user prompt/input to active loop for processing.
+
+        Args:
+            loop_id: Loop identifier.
+            content: User input/prompt content.
+            request_id: Optional request correlation ID.
+        """
+        payload: dict[str, Any] = {
+            "type": "loop_input",
+            "loop_id": loop_id,
+            "content": content,
+        }
+        if request_id is not None:
+            payload["request_id"] = request_id
+        await self.send(payload)
+
     async def send_resume_interrupts(
         self,
         thread_id: str,

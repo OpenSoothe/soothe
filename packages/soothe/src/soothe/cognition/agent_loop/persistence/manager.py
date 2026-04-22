@@ -40,6 +40,30 @@ class AgentLoopCheckpointPersistenceManager:
         # Initialize global database
         db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
         SQLitePersistenceBackend.initialize_database_sync(db_path)
+        # Initialize connection (to be opened on first use)
+        self._connection: aiosqlite.Connection | None = None
+        self._db_path = db_path
+
+    async def _get_connection(self) -> aiosqlite.Connection:
+        """Get database connection with FK/WAL pragmas enabled.
+
+        Ensures all operations enforce FK constraints and use WAL mode.
+        Uses a single persistent connection for the manager's lifetime.
+
+        Returns:
+            aiosqlite connection with FK/WAL pragmas enabled.
+        """
+        if self._connection is None:
+            self._connection = await aiosqlite.connect(self._db_path)
+            await self._connection.execute("PRAGMA foreign_keys=ON")
+            await self._connection.execute("PRAGMA journal_mode=WAL")
+        return self._connection
+
+    async def close(self) -> None:
+        """Close the database connection."""
+        if self._connection is not None:
+            await self._connection.close()
+            self._connection = None
 
     async def save_checkpoint_anchor(
         self,
@@ -62,35 +86,34 @@ class AgentLoopCheckpointPersistenceManager:
             checkpoint_ns: CoreAgent checkpoint namespace.
             execution_summary: Optional execution metadata.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+        db = await self._get_connection()
 
         # Insert anchor
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                INSERT OR REPLACE INTO checkpoint_anchors
-                (loop_id, iteration, thread_id, checkpoint_id, checkpoint_ns,
-                 anchor_type, timestamp, iteration_status, next_action_summary,
-                 tools_executed, reasoning_decision)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    loop_id,
-                    iteration,
-                    thread_id,
-                    checkpoint_id,
-                    checkpoint_ns,
-                    anchor_type,
-                    datetime.now(UTC).isoformat(),
-                    execution_summary.get("status") if execution_summary else None,
-                    execution_summary.get("next_action_summary") if execution_summary else None,
-                    json.dumps(execution_summary.get("tools_executed", []))
-                    if execution_summary
-                    else None,
-                    execution_summary.get("reasoning_decision") if execution_summary else None,
-                ),
-            )
-            await db.commit()
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO checkpoint_anchors
+            (loop_id, iteration, thread_id, checkpoint_id, checkpoint_ns,
+             anchor_type, timestamp, iteration_status, next_action_summary,
+             tools_executed, reasoning_decision)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                loop_id,
+                iteration,
+                thread_id,
+                checkpoint_id,
+                checkpoint_ns,
+                anchor_type,
+                datetime.now(UTC).isoformat(),
+                execution_summary.get("status") if execution_summary else None,
+                execution_summary.get("next_action_summary") if execution_summary else None,
+                json.dumps(execution_summary.get("tools_executed", []))
+                if execution_summary
+                else None,
+                execution_summary.get("reasoning_decision") if execution_summary else None,
+            ),
+        )
+        await db.commit()
 
         logger.debug(
             "Saved checkpoint anchor: loop=%s iteration=%d thread=%s checkpoint=%s type=%s",
@@ -117,40 +140,38 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             List of checkpoint anchors with metadata.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        if not db_path.exists():
+        if not self._db_path.exists():
             return []
 
-        async with aiosqlite.connect(db_path) as db:
-            async with db.execute(
-                """
-                SELECT iteration, thread_id, checkpoint_id, checkpoint_ns,
-                       anchor_type, timestamp, iteration_status,
-                       next_action_summary, tools_executed, reasoning_decision
-                FROM checkpoint_anchors
-                WHERE loop_id = ? AND iteration BETWEEN ? AND ?
-                ORDER BY iteration, anchor_type
-            """,
-                (loop_id, start_iteration, end_iteration),
-            ) as cursor:
-                rows = await cursor.fetchall()
+        db = await self._get_connection()
+        async with db.execute(
+            """
+            SELECT iteration, thread_id, checkpoint_id, checkpoint_ns,
+                   anchor_type, timestamp, iteration_status,
+                   next_action_summary, tools_executed, reasoning_decision
+            FROM checkpoint_anchors
+            WHERE loop_id = ? AND iteration BETWEEN ? AND ?
+            ORDER BY iteration, anchor_type
+        """,
+            (loop_id, start_iteration, end_iteration),
+        ) as cursor:
+            rows = await cursor.fetchall()
 
-                return [
-                    {
-                        "iteration": row[0],
-                        "thread_id": row[1],
-                        "checkpoint_id": row[2],
-                        "checkpoint_ns": row[3],
-                        "anchor_type": row[4],
-                        "timestamp": row[5],
-                        "iteration_status": row[6],
-                        "next_action_summary": row[7],
-                        "tools_executed": json.loads(row[8]) if row[8] else [],
-                        "reasoning_decision": row[9],
-                    }
-                    for row in rows
-                ]
+            return [
+                {
+                    "iteration": row[0],
+                    "thread_id": row[1],
+                    "checkpoint_id": row[2],
+                    "checkpoint_ns": row[3],
+                    "anchor_type": row[4],
+                    "timestamp": row[5],
+                    "iteration_status": row[6],
+                    "next_action_summary": row[7],
+                    "tools_executed": json.loads(row[8]) if row[8] else [],
+                    "reasoning_decision": row[9],
+                }
+                for row in rows
+            ]
 
     async def get_thread_checkpoints_for_loop(
         self,
@@ -164,33 +185,31 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             Dict: {thread_id: [checkpoint_id_1, checkpoint_id_2, ...]}
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        if not db_path.exists():
+        if not self._db_path.exists():
             return {}
 
-        async with aiosqlite.connect(db_path) as db:
-            async with db.execute(
-                """
-                SELECT thread_id, checkpoint_id, iteration, anchor_type
-                FROM checkpoint_anchors
-                WHERE loop_id = ?
-                ORDER BY thread_id, iteration, anchor_type
-            """,
-                (loop_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
+        db = await self._get_connection()
+        async with db.execute(
+            """
+            SELECT thread_id, checkpoint_id, iteration, anchor_type
+            FROM checkpoint_anchors
+            WHERE loop_id = ?
+            ORDER BY thread_id, iteration, anchor_type
+        """,
+            (loop_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
 
-                # Group by thread_id
-                thread_checkpoints: dict[str, list[str]] = {}
-                for row in rows:
-                    thread_id = row[0]
-                    checkpoint_id = row[1]
-                    if thread_id not in thread_checkpoints:
-                        thread_checkpoints[thread_id] = []
-                    thread_checkpoints[thread_id].append(checkpoint_id)
+            # Group by thread_id
+            thread_checkpoints: dict[str, list[str]] = {}
+            for row in rows:
+                thread_id = row[0]
+                checkpoint_id = row[1]
+                if thread_id not in thread_checkpoints:
+                    thread_checkpoints[thread_id] = []
+                thread_checkpoints[thread_id].append(checkpoint_id)
 
-                return thread_checkpoints
+            return thread_checkpoints
 
     async def save_failed_branch(
         self,
@@ -215,29 +234,27 @@ class AgentLoopCheckpointPersistenceManager:
             failure_reason: High-level failure reason.
             execution_path: List of checkpoint_ids from root → failure.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                INSERT INTO failed_branches
-                (branch_id, loop_id, iteration, thread_id, root_checkpoint_id,
-                 failure_checkpoint_id, failure_reason, execution_path, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    branch_id,
-                    loop_id,
-                    iteration,
-                    thread_id,
-                    root_checkpoint_id,
-                    failure_checkpoint_id,
-                    failure_reason,
-                    json.dumps(execution_path),
-                    datetime.now(UTC).isoformat(),
-                ),
-            )
-            await db.commit()
+        db = await self._get_connection()
+        await db.execute(
+            """
+            INSERT INTO failed_branches
+            (branch_id, loop_id, iteration, thread_id, root_checkpoint_id,
+             failure_checkpoint_id, failure_reason, execution_path, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            (
+                branch_id,
+                loop_id,
+                iteration,
+                thread_id,
+                root_checkpoint_id,
+                failure_checkpoint_id,
+                failure_reason,
+                json.dumps(execution_path),
+                datetime.now(UTC).isoformat(),
+            ),
+        )
+        await db.commit()
 
         logger.info(
             "Saved failed branch: branch=%s loop=%s iteration=%d thread=%s reason=%s",
@@ -265,28 +282,26 @@ class AgentLoopCheckpointPersistenceManager:
             avoid_patterns: Patterns to avoid in retry.
             suggested_adjustments: Retry suggestions.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
         analyzed_at = datetime.now(UTC)
 
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                UPDATE failed_branches
-                SET failure_insights = ?, avoid_patterns = ?,
-                    suggested_adjustments = ?, analyzed_at = ?
-                WHERE branch_id = ? AND loop_id = ?
-            """,
-                (
-                    json.dumps(failure_insights),
-                    json.dumps(avoid_patterns),
-                    json.dumps(suggested_adjustments),
-                    analyzed_at.isoformat(),
-                    branch_id,
-                    loop_id,
-                ),
-            )
-            await db.commit()
+        db = await self._get_connection()
+        await db.execute(
+            """
+            UPDATE failed_branches
+            SET failure_insights = ?, avoid_patterns = ?,
+                suggested_adjustments = ?, analyzed_at = ?
+            WHERE branch_id = ? AND loop_id = ?
+        """,
+            (
+                json.dumps(failure_insights),
+                json.dumps(avoid_patterns),
+                json.dumps(suggested_adjustments),
+                analyzed_at.isoformat(),
+                branch_id,
+                loop_id,
+            ),
+        )
+        await db.commit()
 
         logger.info(
             "Updated branch analysis: branch=%s loop=%s patterns=%d adjustments=%d",
@@ -310,44 +325,42 @@ class AgentLoopCheckpointPersistenceManager:
         Returns:
             List of failed branch records.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        if not db_path.exists():
+        if not self._db_path.exists():
             return []
 
-        async with aiosqlite.connect(db_path) as db:
-            query = """
-                SELECT branch_id, iteration, thread_id, root_checkpoint_id,
-                       failure_checkpoint_id, failure_reason, execution_path,
-                       failure_insights, avoid_patterns, suggested_adjustments,
-                       created_at, analyzed_at, pruned_at
-                FROM failed_branches
-                WHERE loop_id = ?
-            """
-            if not include_pruned:
-                query += " AND pruned_at IS NULL"
+        db = await self._get_connection()
+        query = """
+            SELECT branch_id, iteration, thread_id, root_checkpoint_id,
+                   failure_checkpoint_id, failure_reason, execution_path,
+                   failure_insights, avoid_patterns, suggested_adjustments,
+                   created_at, analyzed_at, pruned_at
+            FROM failed_branches
+            WHERE loop_id = ?
+        """
+        if not include_pruned:
+            query += " AND pruned_at IS NULL"
 
-            async with db.execute(query, (loop_id,)) as cursor:
-                rows = await cursor.fetchall()
+        async with db.execute(query, (loop_id,)) as cursor:
+            rows = await cursor.fetchall()
 
-                return [
-                    {
-                        "branch_id": row[0],
-                        "iteration": row[1],
-                        "thread_id": row[2],
-                        "root_checkpoint_id": row[3],
-                        "failure_checkpoint_id": row[4],
-                        "failure_reason": row[5],
-                        "execution_path": json.loads(row[6]) if row[6] else [],
-                        "failure_insights": json.loads(row[7]) if row[7] else {},
-                        "avoid_patterns": json.loads(row[8]) if row[8] else [],
-                        "suggested_adjustments": json.loads(row[9]) if row[9] else [],
-                        "created_at": datetime.fromisoformat(row[10]) if row[10] else None,
-                        "analyzed_at": datetime.fromisoformat(row[11]) if row[11] else None,
-                        "pruned_at": datetime.fromisoformat(row[12]) if row[12] else None,
-                    }
-                    for row in rows
-                ]
+            return [
+                {
+                    "branch_id": row[0],
+                    "iteration": row[1],
+                    "thread_id": row[2],
+                    "root_checkpoint_id": row[3],
+                    "failure_checkpoint_id": row[4],
+                    "failure_reason": row[5],
+                    "execution_path": json.loads(row[6]) if row[6] else [],
+                    "failure_insights": json.loads(row[7]) if row[7] else {},
+                    "avoid_patterns": json.loads(row[8]) if row[8] else [],
+                    "suggested_adjustments": json.loads(row[9]) if row[9] else [],
+                    "created_at": datetime.fromisoformat(row[10]) if row[10] else None,
+                    "analyzed_at": datetime.fromisoformat(row[11]) if row[11] else None,
+                    "pruned_at": datetime.fromisoformat(row[12]) if row[12] else None,
+                }
+                for row in rows
+            ]
 
     async def prune_old_branches(
         self,
@@ -367,32 +380,30 @@ class AgentLoopCheckpointPersistenceManager:
 
         threshold = datetime.now(UTC) - timedelta(days=retention_days)
 
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        if not db_path.exists():
+        if not self._db_path.exists():
             return 0
 
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                UPDATE failed_branches
-                SET pruned_at = ?
-                WHERE loop_id = ? AND created_at < ? AND pruned_at IS NULL
-            """,
-                (datetime.now(UTC).isoformat(), loop_id, threshold.isoformat()),
-            )
-            await db.commit()
+        db = await self._get_connection()
+        await db.execute(
+            """
+            UPDATE failed_branches
+            SET pruned_at = ?
+            WHERE loop_id = ? AND created_at < ? AND pruned_at IS NULL
+        """,
+            (datetime.now(UTC).isoformat(), loop_id, threshold.isoformat()),
+        )
+        await db.commit()
 
-            # Count pruned branches
-            async with db.execute(
-                """
-                SELECT COUNT(*) FROM failed_branches
-                WHERE loop_id = ? AND pruned_at = ?
-            """,
-                (loop_id, datetime.now(UTC).isoformat()),
-            ) as cursor:
-                count_row = await cursor.fetchone()
-                count = count_row[0] if count_row else 0
+        # Count pruned branches
+        async with db.execute(
+            """
+            SELECT COUNT(*) FROM failed_branches
+            WHERE loop_id = ? AND pruned_at = ?
+        """,
+            (loop_id, datetime.now(UTC).isoformat()),
+        ) as cursor:
+            count_row = await cursor.fetchone()
+            count = count_row[0] if count_row else 0
 
         logger.info(
             "Pruned %d old branches for loop=%s (retention=%d days)",
@@ -424,20 +435,18 @@ class AgentLoopCheckpointPersistenceManager:
             status: Goal status ("running", "completed", "failed").
             started_at: Goal start timestamp.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
         started_at_iso = (started_at or datetime.now(UTC)).isoformat()
 
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                INSERT OR REPLACE INTO goal_records
-                (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-                (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at_iso),
-            )
-            await db.commit()
+        db = await self._get_connection()
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO goal_records
+            (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at_iso),
+        )
+        await db.commit()
 
         logger.debug(
             "Saved goal record: goal=%s loop=%s thread=%s status=%s",
@@ -472,35 +481,33 @@ class AgentLoopCheckpointPersistenceManager:
             tokens_used: Tokens consumed.
             completed_at: Goal completion timestamp.
         """
-        db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
-
-        if not db_path.exists():
-            logger.warning("Goal record database not found: %s", db_path)
+        if not self._db_path.exists():
+            logger.warning("Goal record database not found: %s", self._db_path)
             return
 
         completed_at_iso = (completed_at or datetime.now(UTC)).isoformat()
 
-        async with aiosqlite.connect(db_path) as db:
-            await db.execute(
-                """
-                UPDATE goal_records
-                SET status = ?, iteration = ?, final_report = ?, evidence_summary = ?,
-                    duration_ms = ?, tokens_used = ?, completed_at = ?
-                WHERE goal_id = ? AND loop_id = ?
-            """,
-                (
-                    status,
-                    iteration,
-                    final_report,
-                    evidence_summary,
-                    duration_ms,
-                    tokens_used,
-                    completed_at_iso,
-                    goal_id,
-                    loop_id,
-                ),
-            )
-            await db.commit()
+        db = await self._get_connection()
+        await db.execute(
+            """
+            UPDATE goal_records
+            SET status = ?, iteration = ?, final_report = ?, evidence_summary = ?,
+                duration_ms = ?, tokens_used = ?, completed_at = ?
+            WHERE goal_id = ? AND loop_id = ?
+        """,
+            (
+                status,
+                iteration,
+                final_report,
+                evidence_summary,
+                duration_ms,
+                tokens_used,
+                completed_at_iso,
+                goal_id,
+                loop_id,
+            ),
+        )
+        await db.commit()
 
         logger.info(
             "Updated goal record: goal=%s loop=%s status=%s duration=%dms tokens=%d",

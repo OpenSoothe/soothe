@@ -295,6 +295,23 @@ _DEFAULT_COLUMNS = {
 }
 
 
+def load_loop_config() -> ThreadConfig:
+    """Load loop display configuration (stub: reuse thread config).
+
+    Args:
+        None (loop config is global).
+
+    Returns:
+        ThreadConfig instance with columns, relative_time, sort_order.
+    """
+    # Use thread config defaults for now
+    return ThreadConfig(
+        columns=dict(_DEFAULT_COLUMNS),
+        relative_time=load_loop_relative_time(),
+        sort_order=load_loop_sort_order(),
+    )
+
+
 def load_thread_config(thread_id: str | None = None) -> ThreadConfig:
     """Load thread-specific TUI preferences.
 
@@ -352,8 +369,57 @@ def load_thread_sort_order() -> str:
     return "updated_at"
 
 
+def load_loop_sort_order() -> str:
+    """Return persisted loop list sort key (stub: most recently updated first)."""
+    return "updated_at"
+
+
 def load_thread_relative_time() -> bool:
     """Return whether thread list uses relative timestamps (stub: on)."""
+    return True
+
+
+def load_loop_relative_time() -> bool:
+    """Return whether loop list uses relative timestamps (stub: on)."""
+    return True
+
+
+def save_loop_sort_order(sort_order: str) -> bool:
+    """Save loop list sort order preference (stub: no-op success).
+
+    Args:
+        sort_order: Sort order ("updated_at" or "created_at").
+
+    Returns:
+        True (success stub).
+    """
+    # Stub - implement with SootheConfig persistence later
+    return True
+
+
+def save_loop_relative_time(relative_time: bool) -> bool:
+    """Save loop list relative time preference (stub: no-op success).
+
+    Args:
+        relative_time: Whether to use relative timestamps.
+
+    Returns:
+        True (success stub).
+    """
+    # Stub - implement with SootheConfig persistence later
+    return True
+
+
+def save_loop_columns(columns: dict[str, bool]) -> bool:
+    """Save loop column visibility preferences (stub: no-op success).
+
+    Args:
+        columns: Column visibility dict.
+
+    Returns:
+        True (success stub).
+    """
+    # Stub - implement with SootheConfig persistence later
     return True
 
 

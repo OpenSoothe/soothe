@@ -171,6 +171,20 @@ class MessageRouter:
             await self._handle_loop_reattach(client_id, msg)
             return
 
+        # Loop lifecycle RPC handlers (RFC-503 Loop-First UX)
+        if msg_type == "loop_subscribe":
+            await self._handle_loop_subscribe(client_id, msg)
+            return
+        if msg_type == "loop_detach":
+            await self._handle_loop_detach(client_id, msg)
+            return
+        if msg_type == "loop_new":
+            await self._handle_loop_new(client_id, msg)
+            return
+        if msg_type == "loop_input":
+            await self._handle_loop_input(client_id, msg)
+            return
+
         if msg_type == "detach":
             session = await d._session_manager.get_session(client_id)
             if session:
@@ -1462,3 +1476,336 @@ class MessageRouter:
 
         # Execute reattachment handler
         await handle_loop_reattach(loop_id, d, client_id)
+
+    async def _handle_loop_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_subscribe RPC request (RFC-503).
+
+        Subscribe client to loop topic for real-time event streaming.
+        Used by loop continue and loop attach commands.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id.
+        """
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+        from soothe.daemon.reattachment_handler import handle_loop_reattach
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Check loop exists
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Reattachment handler handles subscription and history replay
+        await handle_loop_reattach(loop_id, d, client_id)
+
+        # Send subscribe response
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_subscribe_response",
+                "loop_id": loop_id,
+                "success": True,
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_loop_detach(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_detach RPC request (RFC-503).
+
+        Unsubscribe client from loop events while loop continues running.
+        Saves detachment checkpoint for later reattachment.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id.
+        """
+        import json
+        from datetime import UTC, datetime
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Check loop exists
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Update metadata with detachment timestamp
+        metadata_file = loop_dir / "metadata.json"
+        if metadata_file.exists():
+            try:
+                metadata = json.loads(metadata_file.read_text())
+                metadata["detached_at"] = datetime.now(UTC).isoformat()
+                metadata["status"] = "detached"
+                metadata_file.write_text(json.dumps(metadata, indent=2))
+            except Exception as e:
+                logger.warning("Failed to update metadata for detachment: %s", str(e))
+
+        # Unsubscribe client from loop topic (if subscribed)
+        session = await d._session_manager.get_session(client_id)
+        if session and hasattr(session, "loop_subscription"):
+            if session.loop_subscription:
+                await d._event_bus.unsubscribe(session.loop_subscription, session.event_queue)
+                session.loop_subscription = None
+                logger.info("Client %s unsubscribed from loop %s", client_id, loop_id)
+
+        # Send detach response
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_detach_response",
+                "loop_id": loop_id,
+                "success": True,
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_loop_new(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_new RPC request (RFC-503).
+
+        Create fresh loop with new loop_id for new query/conversation.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message (no parameters required).
+        """
+        import json
+        from datetime import UTC, datetime
+
+        from uuid_utils import uuid7
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        # Generate new loop_id
+        loop_id = str(uuid7())
+
+        # Create loop directory
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        loop_dir.mkdir(parents=True, exist_ok=True)
+
+        # Initialize metadata
+        metadata = {
+            "loop_id": loop_id,
+            "status": "created",
+            "thread_ids": [],
+            "current_thread_id": None,
+            "total_goals_completed": 0,
+            "total_thread_switches": 0,
+            "created_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+
+        metadata_file = loop_dir / "metadata.json"
+        metadata_file.write_text(json.dumps(metadata, indent=2))
+
+        logger.info("Created new loop %s", loop_id)
+
+        # Send response
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_new_response",
+                "loop_id": loop_id,
+                "success": True,
+                "request_id": request_id,
+            },
+        )
+
+    async def _handle_loop_input(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle loop_input RPC request (RFC-503).
+
+        Send user input/prompt to active loop for processing.
+        Integrates with QueryEngine by queueing input to daemon's input queue
+        with thread_id from loop metadata.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with loop_id and content.
+        """
+        import json
+        from datetime import UTC, datetime
+        from pathlib import Path
+
+        from soothe.cognition.agent_loop.persistence.directory_manager import (
+            PersistenceDirectoryManager,
+        )
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        content = msg.get("content")
+
+        if not loop_id or not content:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "INVALID_REQUEST",
+                    "message": "loop_id and content required",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Check loop exists
+        loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)
+        if not loop_dir.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_NOT_FOUND",
+                    "message": f"Loop {loop_id} not found",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Load loop metadata to get current_thread_id
+        metadata_file = loop_dir / "metadata.json"
+        if not metadata_file.exists():
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_METADATA_MISSING",
+                    "message": f"No metadata found for loop {loop_id}",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        try:
+            metadata = json.loads(metadata_file.read_text())
+        except Exception as e:
+            await d._send_client_message(
+                client_id,
+                {
+                    "type": "error",
+                    "code": "LOOP_METADATA_PARSE_ERROR",
+                    "message": f"Failed to read metadata: {str(e)}",
+                    "request_id": request_id,
+                },
+            )
+            return
+
+        # Get or create thread_id for execution
+        thread_id = metadata.get("current_thread_id")
+
+        if not thread_id:
+            # Generate new thread_id if loop has no current thread
+            from uuid_utils import uuid7
+
+            thread_id = str(uuid7())
+
+            # Update metadata with new thread
+            metadata["current_thread_id"] = thread_id
+            if thread_id not in metadata.get("thread_ids", []):
+                metadata.setdefault("thread_ids", []).append(thread_id)
+            metadata["status"] = "running"
+            metadata["updated_at"] = datetime.now(UTC).isoformat()
+
+            try:
+                metadata_file.write_text(json.dumps(metadata, indent=2))
+            except Exception as e:
+                logger.warning("Failed to update loop metadata: %s", str(e))
+
+        # Register thread in daemon's thread registry
+        d._thread_registry.ensure(thread_id, is_draft=False)
+        workspace = Path(d._daemon_workspace)
+        d._thread_registry.set_workspace(thread_id, workspace)
+
+        # Set runner's current thread to loop's thread
+        d._runner.set_current_thread_id(thread_id)
+
+        logger.info(
+            "Queueing input for loop %s (thread %s): %s",
+            loop_id,
+            thread_id,
+            preview_first(content, 50),
+        )
+
+        # Queue input for QueryEngine execution
+        await d._current_input_queue.put(
+            {
+                "type": "input",
+                "text": content,
+                "autonomous": bool(msg.get("autonomous", False)),
+                "max_iterations": msg.get("max_iterations"),
+                "subagent": msg.get("subagent"),
+                "client_id": client_id,
+                "interactive": bool(msg.get("interactive", False)),
+                "model": msg.get("model"),
+                "model_params": msg.get("model_params"),
+            }
+        )
+
+        # Send response (execution will happen asynchronously via QueryEngine)
+        await d._send_client_message(
+            client_id,
+            {
+                "type": "loop_input_response",
+                "loop_id": loop_id,
+                "thread_id": thread_id,
+                "success": True,
+                "request_id": request_id,
+            },
+        )

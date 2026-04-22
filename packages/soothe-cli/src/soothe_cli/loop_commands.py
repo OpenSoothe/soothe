@@ -197,11 +197,12 @@ def describe_loop(
     )
 
     # Thread context (internal, shown for debugging)
+    # RFC-503: Hide thread IDs, show only thread count
     console.print(
         Panel(
-            f"Current Thread: {loop.get('current_thread_id', 'unknown')}\n"
-            f"Span: {', '.join(loop.get('thread_ids', []))}",
-            title="Threads (Internal)",
+            f"Internal Threads: {len(loop.get('thread_ids', []))}\n"
+            f"Thread Switches: {loop.get('total_thread_switches', 0)}",
+            title="Thread Context (Internal)",
             border_style="dim",
         )
     )
@@ -404,9 +405,7 @@ def delete_loop(
         console.print(
             f"[warning]Warning: This will permanently delete {loop_id} and all associated data:[/warning]"
         )
-        console.print(
-            f"  - {len(loop.get('thread_ids', []))} thread checkpoints ([dim]{', '.join(loop.get('thread_ids', []))}[/dim])"
-        )
+        console.print(f"  - {len(loop.get('thread_ids', []))} internal thread contexts")
         console.print(f"  - {loop.get('total_goals_completed', 0)} goal execution records")
         console.print("  - Working memory spills")
 
@@ -519,13 +518,13 @@ def format_anchor_summary(anchors: list[dict[str, Any]]) -> str:
     lines = []
     for anchor in anchors:
         line = f"  iteration {anchor['iteration']}: [dim]{anchor['checkpoint_id']}[/dim] "
-        line += f"([dim]{anchor['thread_id']}[/dim], {anchor['anchor_type']})"
+        line += f"({anchor['anchor_type']})"
 
-        # Check for thread switch
+        # Check for thread switch (RFC-503: show context refreshed without thread ID)
         if anchor["iteration"] > 0:
             prev_anchors = [a for a in anchors if a["iteration"] == anchor["iteration"] - 1]
             if prev_anchors and prev_anchors[0]["thread_id"] != anchor["thread_id"]:
-                line += " [cyan][thread switch][/cyan]"
+                line += " [cyan][context refreshed][/cyan]"
 
         lines.append(line)
     return "\n".join(lines)
@@ -538,9 +537,13 @@ def render_ascii_tree(tree: dict[str, Any]) -> None:
     main_line = tree.get("main_line", [])
     for iteration in main_line:
         iter_num = iteration["iteration"]
-        thread_id = iteration.get("thread_id", "unknown")
 
-        console.print(f"  iteration {iter_num} ([dim]{thread_id}[/dim])")
+        # RFC-503: Hide thread ID, show context refresh notification
+        console.print(f"  iteration {iter_num}")
+
+        # Show context refresh note if thread switch occurred
+        if iteration.get("thread_switch"):
+            console.print("    [cyan][context refreshed][/cyan]")
 
         if iteration.get("start_checkpoint"):
             console.print(f"    ├─ [dim]{iteration['start_checkpoint']}[/dim] [start]")
@@ -558,9 +561,8 @@ def render_ascii_tree(tree: dict[str, Any]) -> None:
         console.print("\n[bold red]Failed Branches:[/bold red]")
 
         for branch in branches:
-            console.print(
-                f"  [dim]{branch['branch_id']}[/dim] (iteration {branch['iteration']}, [dim]{branch['thread_id']}[/dim])"
-            )
+            # RFC-503: Hide thread ID in failed branches
+            console.print(f"  [dim]{branch['branch_id']}[/dim] (iteration {branch['iteration']})")
             console.print(f"    ├─ [dim]{branch['root_checkpoint']}[/dim] [root] ← Rewind point")
 
             if branch.get("execution_path") and len(branch["execution_path"]) > 2:
@@ -628,6 +630,231 @@ def render_dot_tree(tree: dict[str, Any]) -> None:
     console.print("\n[cyan]To render: save to file and run `dot -Tpng tree.dot -o tree.png`[/cyan]")
 
 
+@loop_app.command("continue")
+def continue_loop(
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier to continue")],
+    prompt: Annotated[
+        str | None,
+        typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
+    ] = None,
+) -> None:
+    """Continue execution on existing loop.
+
+    Replaces: soothe thread continue <thread_id>
+
+    Behavior:
+    - Load loop checkpoint by loop_id
+    - Attach TUI to loop (subscribe to loop events)
+    - Execute optional prompt on current thread (internal)
+    - Display loop status
+
+    Example:
+        soothe loop continue loop_abc123
+        soothe loop continue loop_abc123 --prompt "translate to chinese"
+    """
+    config = load_config()
+    ws_url = websocket_url_from_config(config)
+    _require_daemon(ws_url)
+
+    # Subscribe to loop
+    response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_subscribe",
+            {"loop_id": loop_id},
+            "loop_subscribe_response",
+        )
+    )
+
+    if "error" in response:
+        typer.echo(f"Error: {response['error']}", err=True)
+        sys.exit(1)
+
+    console.print(f"[success]Attached to loop {loop_id}[/success]")
+
+    # Show loop status
+    status_response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_get",
+            {"loop_id": loop_id, "verbose": False},
+            "loop_get_response",
+        )
+    )
+
+    loop = status_response.get("loop", {})
+    console.print(
+        Panel(
+            f"Status: {loop.get('status', 'unknown')}\n"
+            f"Goals: {loop.get('total_goals_completed', 0)} completed\n"
+            f"Internal Threads: {len(loop.get('thread_ids', []))}",
+            title=f"Loop: {loop_id}",
+        )
+    )
+
+    # Execute prompt if provided
+    if prompt:
+        input_response = asyncio.run(
+            _rpc(
+                ws_url,
+                "send_loop_input",
+                {"loop_id": loop_id, "content": prompt},
+                "loop_input_response",
+            )
+        )
+        if "error" in input_response:
+            typer.echo(f"Error: {input_response['error']}", err=True)
+            sys.exit(1)
+        console.print("[info]Prompt sent to loop[/info]")
+
+
+@loop_app.command("detach")
+def detach_loop(
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier to detach")],
+) -> None:
+    """Detach loop (keep running in background).
+
+    Behavior:
+    - Unsubscribe client from loop events
+    - Loop continues executing (all threads continue)
+    - Loop checkpoint saved at detachment point
+    - Client can reattach later with 'soothe loop attach'
+
+    Example:
+        soothe loop detach loop_abc123
+    """
+    config = load_config()
+    ws_url = websocket_url_from_config(config)
+    _require_daemon(ws_url)
+
+    response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_detach",
+            {"loop_id": loop_id},
+            "loop_detach_response",
+        )
+    )
+
+    if "error" in response:
+        typer.echo(f"Error: {response['error']}", err=True)
+        sys.exit(1)
+
+    console.print(f"[success]Detached loop {loop_id}[/success]")
+    console.print("[info]Loop continues running in background[/info]")
+    console.print("[dim]To reattach: soothe loop attach {loop_id}[/dim]")
+
+
+@loop_app.command("attach")
+def attach_loop(
+    loop_id: Annotated[str, typer.Argument(help="Loop identifier to attach")],
+) -> None:
+    """Attach to detached loop (reattach capability).
+
+    Behavior:
+    - Subscribe client to loop events
+    - Reconstruct full history from loop checkpoint
+    - Send history replay to client
+    - Show current loop status
+
+    Example:
+        soothe loop attach loop_abc123
+    """
+    config = load_config()
+    ws_url = websocket_url_from_config(config)
+    _require_daemon(ws_url)
+
+    # Subscribe to loop (same as continue)
+    response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_subscribe",
+            {"loop_id": loop_id},
+            "loop_subscribe_response",
+        )
+    )
+
+    if "error" in response:
+        typer.echo(f"Error: {response['error']}", err=True)
+        sys.exit(1)
+
+    console.print(f"[success]Attached to loop {loop_id}[/success]")
+
+    # Show reattachment status
+    status_response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_get",
+            {"loop_id": loop_id, "verbose": False},
+            "loop_get_response",
+        )
+    )
+
+    loop = status_response.get("loop", {})
+    detached_at = loop.get("detached_at")
+    if detached_at:
+        console.print(f"[dim]Previously detached at: {detached_at}[/dim]")
+
+    console.print(
+        Panel(
+            f"Status: {loop.get('status', 'unknown')}\n"
+            f"Goals: {loop.get('total_goals_completed', 0)} completed\n"
+            f"Internal Threads: {len(loop.get('thread_ids', []))}",
+            title=f"Loop: {loop_id} (Reattached)",
+        )
+    )
+
+
+@loop_app.command("new")
+def new_loop(
+    prompt: Annotated[
+        str | None,
+        typer.Option("--prompt", "-p", help="Optional prompt to send on new loop."),
+    ] = None,
+) -> None:
+    """Create fresh loop for new query.
+
+    Example:
+        soothe loop new
+        soothe loop new --prompt "analyze performance"
+    """
+    config = load_config()
+    ws_url = websocket_url_from_config(config)
+    _require_daemon(ws_url)
+
+    # Create new loop
+    response = asyncio.run(
+        _rpc(
+            ws_url,
+            "send_loop_new",
+            {},
+            "loop_new_response",
+        )
+    )
+
+    if "error" in response:
+        typer.echo(f"Error: {response['error']}", err=True)
+        sys.exit(1)
+
+    loop_id = response.get("loop_id")
+    console.print(f"[success]Created new loop: {loop_id}[/success]")
+
+    # Execute prompt if provided
+    if prompt:
+        input_response = asyncio.run(
+            _rpc(
+                ws_url,
+                "send_loop_input",
+                {"loop_id": loop_id, "content": prompt},
+                "loop_input_response",
+            )
+        )
+        if "error" in input_response:
+            typer.echo(f"Error: {input_response['error']}", err=True)
+            sys.exit(1)
+        console.print("[info]Prompt sent to new loop[/info]")
+
+
 __all__ = [
     "loop_app",
     "list_loops",
@@ -635,4 +862,8 @@ __all__ = [
     "visualize_loop_tree",
     "prune_loop_branches",
     "delete_loop",
+    "continue_loop",
+    "detach_loop",
+    "attach_loop",
+    "new_loop",
 ]

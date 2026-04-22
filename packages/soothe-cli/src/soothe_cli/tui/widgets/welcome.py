@@ -25,7 +25,7 @@ from soothe_cli.tui.widgets._links import open_style_link
 
 _TIPS: list[str] = [
     "Use @ to reference files and / for commands",
-    "Try /threads to resume a previous conversation",
+    "Try /loops to resume a previous AgentLoop instance",
     "Use /tokens to check context usage",
     "Use /mcp to see your loaded tools and servers",
     "Use /remember to save learnings from this conversation",
@@ -74,7 +74,7 @@ class WelcomeBanner(Static):
         """Initialize the welcome banner.
 
         Args:
-            thread_id: Optional thread ID to display in the banner.
+            thread_id: Optional loop ID to display in the banner (mapped from loop_id).
             mcp_tool_count: Number of MCP tools loaded at startup.
             connecting: When `True`, show a "Connecting..." footer instead of
                 the normal ready prompt. Call `set_connected` to transition.
@@ -88,7 +88,9 @@ class WelcomeBanner(Static):
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
-        self._cli_thread_id: str | None = thread_id
+        # Note: Parameter named thread_id for backward compatibility with build_stream_config
+        # which maps loop_id to thread_id in langgraph's configurable dict
+        self._cli_loop_id: str | None = thread_id
         self._mcp_tool_count = mcp_tool_count
         self._connecting = connecting
         self._resuming = resuming
@@ -99,13 +101,13 @@ class WelcomeBanner(Static):
 
         super().__init__(self._build_banner(), **kwargs)
 
-    def update_thread_id(self, thread_id: str) -> None:
-        """Update the displayed thread ID and re-render the banner.
+    def update_loop_id(self, loop_id: str) -> None:
+        """Update the displayed loop ID and re-render the banner.
 
         Args:
-            thread_id: The new thread ID to display.
+            loop_id: The new loop ID to display (mapped to thread_id internally).
         """
-        self._cli_thread_id = thread_id
+        self._cli_loop_id = loop_id
         self.update(self._build_banner())
 
     def set_connected(self, mcp_tool_count: int = 0) -> None:
@@ -174,8 +176,8 @@ class WelcomeBanner(Static):
         if editable_path:
             parts.extend([("Installed from: ", "dim"), (editable_path, "dim"), "\n"])
 
-        if self._cli_thread_id:
-            parts.append((f"Thread: {self._cli_thread_id}\n", "dim"))
+        if self._cli_loop_id:
+            parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
 
         if self._mcp_tool_count > 0:
             parts.append((f"{get_glyphs().checkmark} ", success_color))

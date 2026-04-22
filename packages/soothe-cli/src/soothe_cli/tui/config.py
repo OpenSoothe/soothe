@@ -1399,9 +1399,9 @@ class SessionState:
         self.no_splash = no_splash
         self.exit_hint_until: float | None = None
         self.exit_hint_handle = None
-        from soothe_cli.tui.sessions import generate_thread_id
+        from soothe_cli.tui.sessions import generate_loop_id
 
-        self.thread_id = generate_thread_id()
+        self.loop_id = generate_loop_id()
 
     def toggle_auto_approve(self) -> bool:
         """Toggle auto-approve and return the new state.
