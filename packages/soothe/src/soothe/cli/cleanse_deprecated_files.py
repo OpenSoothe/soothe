@@ -2,7 +2,7 @@
 
 Removes:
 - sessions.db (empty, deprecated)
-- soothe.db (replaced by metadata.db + checkpoints.db)
+- soothe.db (replaced by metadata.db + langgraph_checkpoints.db)
 - threads/ directory (JsonPersistStore replaced by thread_history.jsonl)
 """
 
@@ -19,7 +19,7 @@ def cleanse_deprecated_files() -> None:
 
     Removes:
     - sessions.db (empty, deprecated)
-    - soothe.db (replaced by metadata.db + checkpoints.db)
+    - soothe.db (replaced by metadata.db + langgraph_checkpoints.db)
     - threads/ directory (JsonPersistStore replaced by thread_history.jsonl)
     """
     soothe_db = Path(SOOTHE_HOME) / "soothe.db"

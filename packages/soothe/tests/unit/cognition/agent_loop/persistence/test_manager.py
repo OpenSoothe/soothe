@@ -6,6 +6,8 @@ Tests for:
 - Persistence manager (anchor/branch operations)
 """
 
+import uuid
+
 import pytest
 
 from soothe.cognition.agent_loop.persistence.directory_manager import PersistenceDirectoryManager
@@ -44,9 +46,12 @@ async def test_directory_manager_paths(tmp_path):
     """Test directory manager returns correct paths."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -58,24 +63,26 @@ async def test_directory_manager_paths(tmp_path):
         thread_checkpoint = PersistenceDirectoryManager.get_thread_checkpoint_path("thread_001")
         assert thread_checkpoint == tmp_path / "data" / "threads" / "thread_001" / "checkpoint.db"
 
-        # Loop paths
+        # Loop paths (now global database)
         loop_dir = PersistenceDirectoryManager.get_loop_directory("loop_abc")
         assert loop_dir == tmp_path / "data" / "loops" / "loop_abc"
 
-        loop_checkpoint = PersistenceDirectoryManager.get_loop_checkpoint_path("loop_abc")
-        assert loop_checkpoint == tmp_path / "data" / "loops" / "loop_abc" / "checkpoint.db"
+        loop_checkpoint = PersistenceDirectoryManager.get_loop_checkpoint_path()
+        assert loop_checkpoint == tmp_path / "data" / "loop_checkpoints.db"
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir
 
 
 @pytest.mark.asyncio
 async def test_sqlite_backend_initialize_database(tmp_path):
     """Test SQLite backend initializes database schema."""
 
-    db_path = tmp_path / "test_loop" / "checkpoint.db"
+    db_path = tmp_path / "loop_checkpoints.db"
 
-    await SQLitePersistenceBackend.initialize_database(db_path)
+    # Use synchronous initialization
+    SQLitePersistenceBackend.initialize_database_sync(db_path)
 
     # Verify database created
     assert db_path.exists()
@@ -122,18 +129,24 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
     """Test persistence manager saves checkpoint anchor."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
         manager = AgentLoopCheckpointPersistenceManager("sqlite")
 
+        # Use unique loop_id to avoid global database conflicts
+        unique_loop_id = f"test_loop_{uuid.uuid4().hex[:8]}"
+
         # Save checkpoint anchor
         await manager.save_checkpoint_anchor(
-            loop_id="test_loop",
+            loop_id=unique_loop_id,
             iteration=0,
             thread_id="thread_001",
             checkpoint_id="checkpoint_abc",
@@ -141,7 +154,7 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
         )
 
         # Verify anchor saved
-        anchors = await manager.get_checkpoint_anchors_for_range("test_loop", 0, 0)
+        anchors = await manager.get_checkpoint_anchors_for_range(unique_loop_id, 0, 0)
 
         assert len(anchors) == 1
         assert anchors[0]["iteration"] == 0
@@ -151,6 +164,7 @@ async def test_persistence_manager_save_checkpoint_anchor(tmp_path):
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir
 
 
 @pytest.mark.asyncio
@@ -158,9 +172,12 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
     """Test persistence manager saves checkpoint anchor with execution summary."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
@@ -174,8 +191,11 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
             "reasoning_decision": "Analyze project structure",
         }
 
+        # Use unique loop_id to avoid conflicts across tests
+        unique_loop_id = f"test_loop_summary_{uuid.uuid4().hex[:8]}"
+
         await manager.save_checkpoint_anchor(
-            loop_id="test_loop",
+            loop_id=unique_loop_id,
             iteration=0,
             thread_id="thread_001",
             checkpoint_id="checkpoint_def",
@@ -184,7 +204,7 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
         )
 
         # Verify anchor with summary
-        anchors = await manager.get_checkpoint_anchors_for_range("test_loop", 0, 0)
+        anchors = await manager.get_checkpoint_anchors_for_range(unique_loop_id, 0, 0)
 
         assert len(anchors) == 1
         assert anchors[0]["iteration_status"] == "success"
@@ -194,6 +214,7 @@ async def test_persistence_manager_save_checkpoint_anchor_with_summary(tmp_path)
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir
 
 
 @pytest.mark.asyncio
@@ -201,18 +222,26 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
     """Test persistence manager saves failed branch."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
         manager = AgentLoopCheckpointPersistenceManager("sqlite")
 
+        # Use unique IDs to avoid global database conflicts
+        unique_id = uuid.uuid4().hex[:8]
+        branch_id = f"branch_abc_{unique_id}"
+        loop_id = f"test_loop_{unique_id}"
+
         await manager.save_failed_branch(
-            branch_id="branch_abc",
-            loop_id="test_loop",
+            branch_id=branch_id,
+            loop_id=loop_id,
             iteration=3,
             thread_id="thread_001",
             root_checkpoint_id="checkpoint_root",
@@ -222,10 +251,10 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
         )
 
         # Verify branch saved
-        branches = await manager.get_failed_branches_for_loop("test_loop")
+        branches = await manager.get_failed_branches_for_loop(loop_id)
 
         assert len(branches) == 1
-        assert branches[0]["branch_id"] == "branch_abc"
+        assert branches[0]["branch_id"] == branch_id
         assert branches[0]["iteration"] == 3
         assert branches[0]["thread_id"] == "thread_001"
         assert branches[0]["failure_reason"] == "Tool execution timeout"
@@ -237,6 +266,7 @@ async def test_persistence_manager_save_failed_branch(tmp_path):
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir
 
 
 @pytest.mark.asyncio
@@ -244,19 +274,27 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
     """Test persistence manager updates branch with analysis."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
         manager = AgentLoopCheckpointPersistenceManager("sqlite")
 
+        # Use unique IDs to avoid conflicts across tests
+        unique_id = uuid.uuid4().hex[:8]
+        branch_id = f"branch_analysis_test_{unique_id}"
+        loop_id = f"test_loop_analysis_{unique_id}"
+
         # Create branch first
         await manager.save_failed_branch(
-            branch_id="branch_abc",
-            loop_id="test_loop",
+            branch_id=branch_id,
+            loop_id=loop_id,
             iteration=3,
             thread_id="thread_001",
             root_checkpoint_id="checkpoint_root",
@@ -280,15 +318,15 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
         ]
 
         await manager.update_branch_analysis(
-            branch_id="branch_abc",
-            loop_id="test_loop",
+            branch_id=branch_id,
+            loop_id=loop_id,
             failure_insights=failure_insights,
             avoid_patterns=avoid_patterns,
             suggested_adjustments=suggested_adjustments,
         )
 
         # Verify analysis updated
-        branches = await manager.get_failed_branches_for_loop("test_loop")
+        branches = await manager.get_failed_branches_for_loop(loop_id)
 
         assert len(branches) == 1
         assert branches[0]["failure_insights"]["root_cause"] == "Subagent timeout after 30s"
@@ -298,6 +336,7 @@ async def test_persistence_manager_update_branch_analysis(tmp_path):
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir
 
 
 @pytest.mark.asyncio
@@ -305,32 +344,38 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
     """Test persistence manager gets thread checkpoint cross-reference."""
 
     import soothe.config as config
+    import soothe_sdk.client.config as sdk_config
 
     original_home = config.SOOTHE_HOME
+    original_data_dir = sdk_config.SOOTHE_DATA_DIR
     config.SOOTHE_HOME = str(tmp_path)
+    sdk_config.SOOTHE_DATA_DIR = str(tmp_path / "data")
 
     try:
         PersistenceDirectoryManager.ensure_directories_exist()
 
         manager = AgentLoopCheckpointPersistenceManager("sqlite")
 
+        # Use unique loop_id to avoid global database conflicts
+        unique_loop_id = f"test_loop_threads_{uuid.uuid4().hex[:8]}"
+
         # Save anchors for multiple threads
         await manager.save_checkpoint_anchor(
-            loop_id="test_loop",
+            loop_id=unique_loop_id,
             iteration=0,
             thread_id="thread_001",
             checkpoint_id="checkpoint_a",
             anchor_type="iteration_start",
         )
         await manager.save_checkpoint_anchor(
-            loop_id="test_loop",
+            loop_id=unique_loop_id,
             iteration=0,
             thread_id="thread_001",
             checkpoint_id="checkpoint_b",
             anchor_type="iteration_end",
         )
         await manager.save_checkpoint_anchor(
-            loop_id="test_loop",
+            loop_id=unique_loop_id,
             iteration=1,
             thread_id="thread_002",
             checkpoint_id="checkpoint_c",
@@ -338,7 +383,7 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
         )
 
         # Get thread checkpoints map
-        thread_checkpoints = await manager.get_thread_checkpoints_for_loop("test_loop")
+        thread_checkpoints = await manager.get_thread_checkpoints_for_loop(unique_loop_id)
 
         assert "thread_001" in thread_checkpoints
         assert "thread_002" in thread_checkpoints
@@ -349,3 +394,4 @@ async def test_persistence_manager_get_thread_checkpoints_for_loop(tmp_path):
 
     finally:
         config.SOOTHE_HOME = original_home
+        sdk_config.SOOTHE_DATA_DIR = original_data_dir

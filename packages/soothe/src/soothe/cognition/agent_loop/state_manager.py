@@ -2,7 +2,7 @@
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-608: Multi-thread spanning with loop_id as primary key.
-RFC-409: SQLite persistence backend (checkpoint.db).
+RFC-409: Unified global SQLite persistence backend (loop_checkpoints.db).
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 class AgentLoopStateManager:
     """Manages AgentLoop checkpoint lifecycle (RFC-608: loop-scoped, multi-thread).
 
-    Uses SQLite backend (checkpoint.db) per RFC-409.
+    Uses unified global SQLite backend (loop_checkpoints.db) per RFC-409.
     """
 
     def __init__(self, loop_id: str | None = None, workspace: Path | None = None) -> None:  # noqa: ARG002
@@ -59,9 +59,11 @@ class AgentLoopStateManager:
             workspace: Optional workspace path (not used for checkpoint storage)
         """
         self.loop_id = loop_id or str(uuid.uuid4())
-        # Checkpoint stored in data/loops/{loop_id}/checkpoint.db per RFC-409
-        self.run_dir = PersistenceDirectoryManager.get_loop_directory(self.loop_id)
-        self.db_path = self.run_dir / "checkpoint.db"
+        # Checkpoint stored in global loop_checkpoints.db (loop_id as partition key)
+        self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
+        self.run_dir = PersistenceDirectoryManager.get_loop_directory(
+            self.loop_id
+        )  # For reports/working_memory
         self._checkpoint: AgentLoopCheckpoint | None = None
 
     async def initialize(self, thread_id: str, max_iterations: int = 10) -> AgentLoopCheckpoint:
@@ -74,8 +76,8 @@ class AgentLoopStateManager:
         Returns:
             New AgentLoopCheckpoint instance (status=ready_for_next_goal)
         """
-        # Initialize database schema
-        await SQLitePersistenceBackend.initialize_database(self.db_path)
+        # Initialize global database schema
+        SQLitePersistenceBackend.initialize_database_sync(self.db_path)
 
         now = datetime.now(UTC)
 
@@ -240,9 +242,7 @@ class AgentLoopStateManager:
         """Save checkpoint to SQLite database."""
         checkpoint.updated_at = datetime.now(UTC)
 
-        # Ensure database exists
-        await SQLitePersistenceBackend.initialize_database(self.db_path)
-
+        # Database already initialized globally
         async with aiosqlite.connect(self.db_path) as db:
             # Update agentloop_loops table
             await db.execute(
@@ -291,8 +291,8 @@ class AgentLoopStateManager:
                         goal_record.thread_id,
                         goal_record.iteration,
                         goal_record.status,
-                        json.dumps([r.model_dump() for r in goal_record.reason_history]),
-                        json.dumps([a.model_dump() for a in goal_record.act_history]),
+                        json.dumps([r.model_dump(mode="json") for r in goal_record.reason_history]),
+                        json.dumps([a.model_dump(mode="json") for a in goal_record.act_history]),
                         goal_record.final_report,
                         goal_record.evidence_summary,
                         goal_record.duration_ms,
